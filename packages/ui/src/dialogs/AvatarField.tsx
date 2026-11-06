@@ -1,11 +1,11 @@
 import { ImageUp, X } from "lucide-react";
 import React, { useRef } from "react";
 
-import { Button } from "../components/controls/Button";
 import { handFocusOff } from "../components/focus/handFocusOff";
 import { TitledControl } from "../components/hint/TitledControl";
 import { useT } from "../i18n/react";
 import type { Console } from "../protocol";
+import { Button } from "../primitives";
 
 /** The console dialog's avatar field: one round control, the whole field. With no image it is an
  * upload glyph to press, on the same fill as the dialog's text fields, so an optional field shows
@@ -23,14 +23,12 @@ export function AvatarField({
   icon,
   onPick,
   onRemove,
-  isDisabled,
   isPending,
 }: {
   /** The avatar's image, `null` with none picked. */
   icon: Console["icon"];
   onPick: (file: File) => void;
   onRemove: () => void;
-  isDisabled?: boolean;
   isPending?: boolean;
 }): React.ReactElement {
   const t = useT();
@@ -45,11 +43,10 @@ export function AvatarField({
         <Button
           ref={uploadButton}
           type="button"
-          isIconOnly
+          iconOnly
           variant={icon ? "ghost" : "tertiary"}
-          aria-label={choose}
-          isDisabled={isDisabled}
-          isPending={isPending}
+          label={choose}
+          pending={isPending}
           onPress={() => fileInput.current?.click()}
           className="size-12 overflow-hidden rounded-full p-0"
         >
@@ -65,11 +62,10 @@ export function AvatarField({
           <Button
             ref={removeButton}
             type="button"
-            isIconOnly
+            iconOnly
             size="xs"
             variant="secondary"
-            aria-label={remove}
-            isDisabled={isDisabled}
+            label={remove}
             onPress={() => {
               // This button is gone once the image is, and focus on it would fall to `<body>`,
               // taking the dialog's Escape and Tab along.

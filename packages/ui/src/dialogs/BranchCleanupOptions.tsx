@@ -54,7 +54,6 @@ function BranchOption({
   hint,
   isSelected,
   onChange,
-  isReadOnly,
 }: {
   items: SessionBranchItem[];
   groups: BranchGroup[];
@@ -62,7 +61,6 @@ function BranchOption({
   hint: React.ReactNode;
   isSelected: boolean;
   onChange: (selected: boolean) => void;
-  isReadOnly: boolean;
 }): React.ReactElement {
   const t = useT();
   const optionId = useId();
@@ -71,7 +69,7 @@ function BranchOption({
       {items.length > 0 && (
         <div className="flex flex-col gap-2">
           <div id={optionId}>
-            <ConfirmOption isSelected={isSelected} onChange={onChange} isReadOnly={isReadOnly} label={label} hint={hint} />
+            <ConfirmOption isSelected={isSelected} onChange={onChange} label={label} hint={hint} />
           </div>
           <div className="ps-7">
             <BranchDisclosure groups={groups} describedBy={optionId} name={t("branchCleanup.details")} />
@@ -107,7 +105,7 @@ export function useBranchCleanup({ items, pending }: Inspected): {
   /** Whether there is a checkbox to show, for a caller that heads them with a section of its own. */
   offered: boolean;
   consequences: ConsequenceLine[];
-  extraControl: (busy: boolean) => React.ReactNode;
+  extraControl: React.ReactNode;
 } {
   const t = useT();
   const rows = useRows();
@@ -130,7 +128,7 @@ export function useBranchCleanup({ items, pending }: Inspected): {
       ...(force ? [{ key: "force", text: <Message id="branchCleanup.consequence.force" params={{ count: forcible.length }} /> }] : []),
       ...(removeLocked ? [{ key: "locked", text: <Message id="branchCleanup.consequence.locked" params={{ count: locked.length }} /> }] : []),
     ],
-    extraControl: (busy) => (
+    extraControl: (
       <>
         <BranchOption
           items={forcible}
@@ -143,7 +141,6 @@ export function useBranchCleanup({ items, pending }: Inspected): {
           hint={t("dialog.sessionBranches.forceHint", { count: forcible.length })}
           isSelected={force}
           onChange={setForce}
-          isReadOnly={busy}
         />
         <BranchOption
           items={locked}
@@ -152,7 +149,6 @@ export function useBranchCleanup({ items, pending }: Inspected): {
           hint={t("dialog.lockedWorktrees.removeHint", { count: locked.length })}
           isSelected={removeLocked}
           onChange={setRemoveLocked}
-          isReadOnly={busy}
         />
       </>
     ),
@@ -175,7 +171,7 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
   /** Asks again what goes along, as after a refused removal, so that a retry carries out what is shown. */
   reinspect: () => void;
   consequences: ConsequenceLine[];
-  extraControl: (busy: boolean) => React.ReactNode;
+  extraControl: React.ReactNode;
 } {
   const t = useT();
   const rows = useRows();
@@ -201,11 +197,11 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
         ...(removeLocked ? [{ key: "lockedTrash", text: t("branchCleanup.consequence.lockedTrash", { count: locked.length }) }] : []),
       ]
       : [],
-    extraControl: (busy) => (
+    extraControl: (
       <>
         <div className="flex flex-col gap-2">
           <div id={trashId}>
-            <ConfirmOption isSelected={trash} onChange={setTrash} isReadOnly={busy} label={t("dialog.removeProject.trash")} hint={<Message id="dialog.removeProject.trashHint" />}
+            <ConfirmOption isSelected={trash} onChange={setTrash} label={t("dialog.removeProject.trash")} hint={<Message id="dialog.removeProject.trashHint" />}
               mark={trash && found.failed ? <StatusMark tone="warning" label={t("dialog.removeProject.alongUnknownMark")}>{t("dialog.removeProject.alongUnknown")}</StatusMark> : undefined} />
           </div>
           <KeepFocusInDialog>
@@ -242,7 +238,6 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
             hint={t("dialog.removeProject.alongLockedHint", { count: locked.length })}
             isSelected={removeLocked}
             onChange={setRemoveLocked}
-            isReadOnly={busy}
           />
         )}
       </>

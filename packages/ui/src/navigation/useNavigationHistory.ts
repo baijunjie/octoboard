@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { setInteractionModality } from "react-aria";
 import { flushSync } from "react-dom";
 
 import { refocusIfLost } from "../components/focus/refocusIfLost";
@@ -11,6 +10,7 @@ import { useDaemon, useDaemonStore } from "../store";
 import { IS_MAC } from "../input/keys";
 import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
 import { canGo, EMPTY_HISTORY, go, type Location, locationKey, push, replaceCurrent } from "./history";
+import { setKeyboardModality } from "../primitives";
 
 /** Back and Forward, ⌘[ and ⌘] unless rebound, matched on the physical key so a keyboard layout does not move
  * them. Alt+arrow is not used, being the word motions in a terminal. */
@@ -110,7 +110,7 @@ export function useNavigationHistory({
   const move = (direction: -1 | 1, byKey = false) => {
     const target = go(history, direction, (target) => isLive(target, store.getState().sessions));
     if (!target) return;
-    if (byKey) setInteractionModality("keyboard");
+    if (byKey) setKeyboardModality();
     moving.current = true;
     flushSync(() => {
       setHistory(target.history);

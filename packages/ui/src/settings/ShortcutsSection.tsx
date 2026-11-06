@@ -1,6 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 
-import { Button } from "../components/controls/Button";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useShortcutScopeDescription } from "../components/hooks/useShortcutScopeDescription";
 import { useT } from "../i18n/react";
@@ -14,6 +13,7 @@ import type { ShortcutProblem } from "../shortcuts/validate";
 import { IS_MAC } from "../input/keys";
 import { SettingRow } from "./SettingRow";
 import { SettingsGroup } from "./SettingsGroup";
+import { Button } from "../primitives";
 
 /**
  * The keyboard shortcuts: every key the app has, grouped, with the app's own commands rebindable. A
@@ -216,8 +216,8 @@ function ShortcutRow({
               data-shortcut-change=""
               size="xs"
               variant="secondary"
-              aria-label={t(recording ? "settings.shortcuts.cancelLabel" : "settings.shortcuts.changeLabel", { command: label })}
-              aria-describedby={problem ? problemId : undefined}
+              label={t(recording ? "settings.shortcuts.cancelLabel" : "settings.shortcuts.changeLabel", { command: label })}
+              describedBy={problem ? problemId : undefined}
               onPress={() => (recording ? onCancel() : onRecord(id))}
             >
               {t(recording ? "settings.shortcuts.cancel" : "settings.shortcuts.change")}
@@ -226,8 +226,8 @@ function ShortcutRow({
               <Button
                 size="xs"
                 variant="ghost"
-                aria-label={t("settings.shortcuts.resetLabel", { command: label })}
-                aria-describedby={problem ? problemId : undefined}
+                label={t("settings.shortcuts.resetLabel", { command: label })}
+                describedBy={problem ? problemId : undefined}
                 onPress={() => {
                   // The button goes away with the change, so focus is handed to this row's Change
                   // first; a reset that is refused leaves the button where it is.

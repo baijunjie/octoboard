@@ -1,7 +1,7 @@
-import { ToggleButton } from "@heroui/react";
 import React from "react";
 
 import { TitledControl } from "../hint/TitledControl";
+import { ToggleButton } from "../../primitives";
 import { ROW_ICON_BUTTON_CLASS } from "./RowControls";
 
 /**
@@ -39,18 +39,18 @@ export function IconToggle({
     <TitledControl title={label}>
       <ToggleButton
         ref={ref}
-        excludeFromTabOrder={inHeader}
+        tabStop={!inHeader}
         data-section-heading-control={inHeader ? "" : undefined}
-        isIconOnly
+        iconOnly
         size="sm"
         variant="ghost"
         className={`icon-toggle row-icon-control ${ROW_ICON_BUTTON_CLASS}`}
-        aria-label={label}
-        aria-expanded={expanded}
+        label={label}
+        expanded={expanded}
         data-region-landing={landing || undefined}
-        isSelected={isSelected}
-        onChange={onChange}
-        preventFocusOnPress
+        selected={isSelected}
+        onSelectedChange={onChange}
+        focusOnPress={false}
       >
         {children}
       </ToggleButton>

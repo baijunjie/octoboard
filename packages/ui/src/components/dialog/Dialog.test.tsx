@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, StrictMode } from "react";
+import { act, StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
@@ -13,7 +13,8 @@ import { useDialogAction } from "./dialogHooks";
 import { framesAsTimers, settleFrames } from "./dialogTestSupport";
 import { TextInput } from "../form/TextInput";
 import { TitledControl } from "../hint/TitledControl";
-import { Button } from "../controls/Button";
+import { Button, Checkbox, Input, Switch } from "../../primitives";
+import { ExternalLink } from "../text/ExternalLink";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -605,22 +606,22 @@ it("does not close on Escape while the keyboard dismissal is held, with a toolti
 });
 
 // A busy dialog cannot be left: Escape is ignored where react-aria handles it and where a tooltip made the dialog
-// handle it itself. The pending submit button stays focusable, so the key arrives from there, and so does a body
-// control with a tooltip, where the dialog handles the key; the close button is disabled and cannot take focus.
+// handle it itself. The pending submit button stays focusable, so the key arrives from there, and so does a pending
+// body button with a tooltip, where the dialog handles the key; every other control is disabled and cannot take focus.
 it("does not close on Escape while busy, with a tooltip open or not", () => {
   const submit = (dialog: Element) => [...dialog.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent?.includes("Save"));
   expect(escapeFrom(submit, { busy: true }).closes).toBe(0);
   expect(escapeFrom(submit, { busy: true, alert: true }).closes).toBe(0);
   expect(escapeFrom(submit).closes).toBe(1);
 
-  const body = (
+  const body = (pending: boolean) => (
     <TitledControl title="Explained">
-      <Button>Extra</Button>
+      <Button pending={pending}>Extra</Button>
     </TitledControl>
   );
   const extra = (dialog: Element) => [...dialog.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent === "Extra");
-  expect(escapeFrom(extra, { busy: true, body })).toEqual({ closes: 0, tooltip: true });
-  expect(escapeFrom(extra, { body })).toEqual({ closes: 1, tooltip: true });
+  expect(escapeFrom(extra, { busy: true, body: body(true) })).toEqual({ closes: 0, tooltip: true });
+  expect(escapeFrom(extra, { body: body(false) })).toEqual({ closes: 1, tooltip: true });
 });
 
 /** Renders a dialog whose body measures `scrollHeight` tall in a `clientHeight` box (jsdom has no
@@ -875,4 +876,457 @@ it("sets the foreground colour on the body of every frame, so prose does not inh
       container.remove();
     }
   }
+});
+
+/** A dialog with a field, a switch, a checkbox, a link and a button of its own in its body, rendered `busy` or not,
+ * with the frame's own footer or a footer of its own. `show` renders it again. */
+function withBodyControls(
+  props: { busy: boolean; footer?: React.ReactNode },
+  check: (dialog: { show: (props: { busy: boolean; footer?: React.ReactNode }) => void }) => void,
+): void {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  const show = (next: { busy: boolean; footer?: React.ReactNode }) => act(() => {
+    root.render(
+      <DaemonProvider value={testDaemon()}>
+        <Dialog title="Edit" onClose={() => {}} {...(next.footer === undefined ? { submitLabel: "Save", onSubmit: () => {} } : { footer: next.footer })} busy={next.busy}>
+          <Input label="Name" value="" onChange={() => {}} />
+          <Switch label="Share" selected={false} onSelectedChange={() => {}} />
+          <Checkbox selected={false} onSelectedChange={() => {}}>Include</Checkbox>
+          <ExternalLink href="https://example.com/guide">Guide</ExternalLink>
+          <Button>Elsewhere</Button>
+        </Dialog>
+      </DaemonProvider>,
+    );
+  });
+  try {
+    show(props);
+    check({ show });
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+  }
+}
+
+const bodyControls = () => ({
+  input: document.querySelector<HTMLInputElement>('input[aria-label="Name"]')!,
+  share: document.querySelector<HTMLInputElement>("input[role=switch]")!,
+  checkbox: document.querySelector<HTMLInputElement>("input[type=checkbox]")!,
+  link: [...document.querySelectorAll<HTMLElement>("a")].find((a) => a.textContent === "Guide")!,
+  elsewhere: [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Elsewhere")!,
+});
+
+// The whole body is held while a request runs, not only the buttons of the footer: a field edited or a switch flipped
+// under a request that is already out would change nothing of it. Assistive technology still reads them, so they are
+// disabled, never `inert`.
+it("disables every control and link of the body while busy, which stay in the page for assistive technology", () => {
+  withBodyControls({ busy: true }, () => {
+    const { input, share, checkbox, link, elsewhere } = bodyControls();
+    expect([input.disabled, share.disabled, checkbox.disabled, elsewhere.disabled]).toEqual([true, true, true, true]);
+    // A link with no destination is not followed and takes no focus, and is still read as a link, unavailable.
+    expect(link.hasAttribute("href")).toBe(false);
+    expect(link.hasAttribute("tabindex")).toBe(false);
+    act(() => link.focus());
+    expect(document.activeElement).not.toBe(link);
+    expect(link.getAttribute("role")).toBe("link");
+    expect(link.getAttribute("aria-disabled")).toBe("true");
+    expect(document.querySelector("[inert]")).toBeNull();
+  });
+  withBodyControls({ busy: false }, () => {
+    const { input, share, checkbox, link, elsewhere } = bodyControls();
+    expect([input.disabled, share.disabled, checkbox.disabled, elsewhere.disabled]).toEqual([false, false, false, false]);
+    expect(link.getAttribute("href")).toBe("https://example.com/guide");
+  });
+});
+
+it("keeps the pending submit button enabled and in the tab order while the rest of a busy dialog is disabled", () => {
+  withBodyControls({ busy: true }, () => {
+    const submit = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Save")!;
+    expect(submit.disabled).toBe(false);
+    expect(submit.getAttribute("data-pending")).toBe("true");
+    expect(submit.tabIndex).toBe(0);
+  });
+});
+
+// A natively disabled control cannot keep focus, and a dialog whose focus falls to `<body>` loses its Escape and Tab.
+it("moves focus from a body control that busy disables to the pending submit button, or to the dialog with none", () => {
+  withBodyControls({ busy: false }, ({ show }) => {
+    const { input } = bodyControls();
+    act(() => input.focus());
+    expect(document.activeElement).toBe(input);
+    show({ busy: true });
+    expect(document.activeElement).toBe([...document.querySelectorAll("button")].find((b) => b.textContent === "Save"));
+  });
+  withBodyControls({ busy: false, footer: <span>own footer</span> }, ({ show }) => {
+    const { elsewhere } = bodyControls();
+    act(() => elsewhere.focus());
+    show({ busy: true, footer: <span>own footer</span> });
+    expect(document.activeElement).toBe(document.querySelector("[role=dialog]"));
+  });
+});
+
+/** Makes `document` behave as in a browser that blurs `element` to `<body>` as an attribute change disables it, which
+ * jsdom never does (it leaves a disabled element focused, and treats an anchor without `href` as unfocusable, so no
+ * blur of one can be real): each time `change` says an attribute of `element` was just set (`"set"`) or removed
+ * (`"remove"`) the event is raised and `element` is hidden as the active element, right after the attribute has changed
+ * and before React's layout effects run. React 19 sets `disabled` with `setAttribute`, and a link's `href` goes with
+ * `removeAttribute`. `unmarked` names an attribute that is left off `element` while the event is raised, as where the
+ * engine blurs it before that attribute is set. Returns what puts it back. */
+function blurToBodyOnChange(
+  element: Element,
+  change: (operation: "set" | "remove", name: string) => boolean,
+  unmarked?: string,
+): () => void {
+  const active = Object.getOwnPropertyDescriptor(Document.prototype, "activeElement")!.get!;
+  let blurred = false;
+  Object.defineProperty(document, "activeElement", { configurable: true, get: () => (blurred && active.call(document) === element ? document.body : active.call(document)) });
+  const setAttribute = Element.prototype.setAttribute;
+  const removeAttribute = Element.prototype.removeAttribute;
+  const blur = () => {
+    blurred = true;
+    const mark = unmarked === undefined ? null : element.getAttribute(unmarked);
+    if (mark !== null) removeAttribute.call(element, unmarked!);
+    element.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    if (mark !== null) setAttribute.call(element, unmarked!, mark);
+  };
+  const setSpy = vi.spyOn(Element.prototype, "setAttribute").mockImplementation(function (this: Element, name: string, value: string) {
+    setAttribute.call(this, name, value);
+    if (this === element && change("set", name)) blur();
+  });
+  const removeSpy = vi.spyOn(Element.prototype, "removeAttribute").mockImplementation(function (this: Element, name: string) {
+    removeAttribute.call(this, name);
+    if (this === element && change("remove", name)) blur();
+  });
+  return () => {
+    setSpy.mockRestore();
+    removeSpy.mockRestore();
+    delete (document as { activeElement?: unknown }).activeElement;
+  };
+}
+
+const savingButton = () => [...document.querySelectorAll("button")].find((b) => b.textContent === "Save");
+
+it("hands focus on even where the browser has already blurred the control to the body as it was disabled", () => {
+  withBodyControls({ busy: false }, ({ show }) => {
+    const { input } = bodyControls();
+    act(() => input.focus());
+    // WebKit blurs a control as it becomes disabled, before the layout effects run; jsdom never does.
+    const restore = blurToBodyOnChange(input, (operation, name) => operation === "set" && name === "disabled");
+    try {
+      show({ busy: true });
+      expect(input.disabled).toBe(true);
+      expect(document.activeElement).toBe(savingButton());
+    } finally {
+      restore();
+    }
+  });
+});
+
+it("moves focus from a link that loses its destination, even where the browser blurs it to the body as it does", () => {
+  withBodyControls({ busy: false }, ({ show }) => {
+    const { link } = bodyControls();
+    act(() => link.focus());
+    expect(document.activeElement).toBe(link);
+    show({ busy: true });
+    expect(document.activeElement).toBe(savingButton());
+  });
+  withBodyControls({ busy: false }, ({ show }) => {
+    const { link } = bodyControls();
+    act(() => link.focus());
+    // An anchor that loses its `href` is not `:disabled`, and an engine may blur it to `<body>` as it does.
+    const restore = blurToBodyOnChange(link, (operation, name) => operation === "remove" && name === "href");
+    try {
+      show({ busy: true });
+      expect(link.hasAttribute("href")).toBe(false);
+      expect(document.activeElement).toBe(savingButton());
+    } finally {
+      restore();
+    }
+  });
+});
+
+it("moves focus from a link blurred to the body before it is marked disabled, as a link that lost its href is", () => {
+  withBodyControls({ busy: false }, ({ show }) => {
+    const { link } = bodyControls();
+    act(() => link.focus());
+    // Nothing yet says the link is disabled when the blur arrives; only that it has no destination.
+    const restore = blurToBodyOnChange(link, (operation, name) => operation === "remove" && name === "href", "aria-disabled");
+    try {
+      show({ busy: true });
+      expect(link.getAttribute("aria-disabled")).toBe("true");
+      expect(document.activeElement).toBe(savingButton());
+    } finally {
+      restore();
+    }
+  });
+});
+
+it("keeps focus on a pending button of the footer rather than moving it to another one", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  const show = (busy: boolean) => act(() => {
+    root.render(
+      <DaemonProvider value={testDaemon()}>
+        <Dialog title="Edit" onClose={() => {}} busy={busy} footer={<><Button pending={busy}>First</Button><Button pending={busy}>Second</Button></>}>
+          <span>body</span>
+        </Dialog>
+      </DaemonProvider>,
+    );
+  });
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  show(false);
+  const second = [...document.querySelectorAll("button")].find((b) => b.textContent === "Second")!;
+  act(() => second.focus());
+  show(true);
+  expect(document.activeElement).toBe(second);
+});
+
+it("moves focus to the dialog when the pending submit button becomes disabled while busy, as Cancel is disabled too", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  const show = (submitDisabled: boolean) => act(() => {
+    root.render(
+      <DaemonProvider value={testDaemon()}>
+        <Dialog title="Edit" onClose={() => {}} submitLabel="Save" busy submitDisabled={submitDisabled} autoFocusSubmit onSubmit={() => {}}>
+          <span>body</span>
+        </Dialog>
+      </DaemonProvider>,
+    );
+  });
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  show(false);
+  const save = savingButton()!;
+  act(() => save.focus());
+  expect(document.activeElement).toBe(save);
+  show(true);
+  expect(save.disabled).toBe(true);
+  expect(document.activeElement).toBe(document.querySelector("[role=dialog]"));
+});
+
+/** A dialog with a field whose submit starts a request the test settles. `fail` rejects it, first opening an alert
+ * dialog over it where `withAlert` says so, as the error alert does (it is raised before the dialog stops being busy,
+ * and takes focus); `acknowledge` closes that alert, which gives focus back to what had it when it opened. */
+function withFailingRequest(check: (dialog: { field: () => HTMLInputElement; save: () => HTMLButtonElement; fail: (withAlert: boolean) => Promise<void>; acknowledge: () => Promise<void> }) => Promise<void>): Promise<void> {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  framesAsTimers();
+  let rejectRequest!: (error: Error) => void;
+  let showAlert!: (shown: boolean) => void;
+  function Subject() {
+    const { busy, run } = useDialogAction(undefined, "Could not save");
+    const [alerting, setAlerting] = useState(false);
+    showAlert = setAlerting;
+    return (
+      <>
+        <Dialog title="Edit" onClose={() => {}} submitLabel="Save" busy={busy} onSubmit={() => void run(() => new Promise<void>((_, reject) => { rejectRequest = reject; }))}>
+          <Input label="Name" value="" onChange={() => {}} />
+        </Dialog>
+        {alerting && <Dialog alert title="Could not save" onClose={() => setAlerting(false)} footer={<Button onPress={() => setAlerting(false)}>Acknowledge</Button>}><span>failed</span></Dialog>}
+      </>
+    );
+  }
+  act(() => root.render(<DaemonProvider value={testDaemon()}><Subject /></DaemonProvider>));
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  });
+  const dialogButton = (label: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === label)!;
+  return check({
+    field: () => document.querySelector<HTMLInputElement>('input[aria-label="Name"]')!,
+    save: () => dialogButton("Save"),
+    fail: async (withAlert) => {
+      if (withAlert) act(() => showAlert(true));
+      await settleFrames();
+      await act(async () => rejectRequest(new Error("Something failed")));
+      await settleFrames();
+    },
+    acknowledge: async () => {
+      act(() => dialogButton("Acknowledge").click());
+      await settleFrames();
+    },
+  });
+}
+
+it("returns focus to the field it was on when a failed request leaves the dialog, once its error alert is acknowledged", () =>
+  withFailingRequest(async ({ field, save, fail, acknowledge }) => {
+    act(() => field().focus());
+    act(() => save().click());
+    expect(field().disabled).toBe(true);
+    expect(document.activeElement).toBe(save());
+    await fail(true);
+    // The alert holds focus: the dialog does not take it.
+    expect(document.activeElement?.closest("[role=alertdialog]")).not.toBeNull();
+    expect(field().disabled).toBe(false);
+    await acknowledge();
+    expect(document.activeElement).toBe(field());
+  }));
+
+it("returns focus to the field right away when a failed request raises no alert over the dialog", () =>
+  withFailingRequest(async ({ field, save, fail }) => {
+    act(() => field().focus());
+    act(() => save().click());
+    expect(document.activeElement).toBe(save());
+    await fail(false);
+    expect(document.activeElement).toBe(field());
+  }));
+
+/** A dialog with a field and, unless `named` is false, a named return target (`returnFocusRef`, the field): `start`
+ * makes it busy, `end` stops it being busy, with the submit button disabled where `refuse` says so (as a refusal that
+ * asks again does), which moves focus to Cancel in the same commit. `refuseWhileBusy` disables the submit button while
+ * busy instead, which moves focus to the dialog, and `removeField` takes the field out. `start` returns a button outside
+ * the dialog, standing for an error alert. */
+function withNamedReturn(check: (dialog: { field: () => HTMLInputElement; save: () => HTMLButtonElement; end: (refuse: boolean) => void; start: () => HTMLElement; refuseWhileBusy: () => void; removeField: () => void }) => void, named = true): void {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  framesAsTimers();
+  const returnFocusRef = { current: null as HTMLElement | null };
+  let hasField = true;
+  const show = (busy: boolean, refuse: boolean) => act(() => {
+    root.render(
+      <DaemonProvider value={testDaemon()}>
+        <Dialog title="Edit" onClose={() => {}} submitLabel="Save" busy={busy} submitDisabled={refuse} returnFocusRef={named ? returnFocusRef : undefined} onSubmit={() => {}}>
+          {hasField && <Input label="Name" value="" onChange={() => {}} />}
+        </Dialog>
+      </DaemonProvider>,
+    );
+  });
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  show(false, false);
+  const field = () => document.querySelector<HTMLInputElement>('input[aria-label="Name"]')!;
+  const outside = container.appendChild(document.createElement("button"));
+  check({
+    field,
+    save: () => savingButton() as HTMLButtonElement,
+    end: (refuse) => show(false, refuse),
+    start: () => {
+      if (named) returnFocusRef.current = field();
+      show(true, false);
+      return outside;
+    },
+    refuseWhileBusy: () => show(true, true),
+    removeField: () => {
+      hasField = false;
+    },
+  });
+}
+
+it("returns focus to the named element at once when busy ends with focus moved to Cancel in the same commit", () => {
+  withNamedReturn(({ field, save, end, start }) => {
+    act(() => save().focus());
+    start();
+    expect(document.activeElement).toBe(savingButton());
+    end(true);
+    expect(document.activeElement).toBe(field());
+  });
+});
+
+it("returns focus at once when busy ends on <body>, and does not hold the return for a later focus", () => {
+  withNamedReturn(({ field, save, end, start }) => {
+    act(() => save().focus());
+    const outside = start();
+    act(() => (document.activeElement as HTMLElement).blur());
+    expect(document.activeElement).toBe(document.body);
+    end(false);
+    expect(document.activeElement).toBe(field());
+    act(() => outside.focus());
+    act(() => save().focus());
+    expect(document.activeElement).toBe(save());
+  });
+});
+
+it("returns focus to the remembered field when busy ends with the submit button disabled in the same commit", () => {
+  withNamedReturn(({ field, end, start }) => {
+    act(() => field().focus());
+    start();
+    end(true);
+    expect(document.activeElement).toBe(field());
+  }, false);
+});
+
+it("returns focus to the remembered field when the submit button was disabled while busy, which moved focus to the dialog", () => {
+  withNamedReturn(({ field, end, start, refuseWhileBusy }) => {
+    act(() => field().focus());
+    start();
+    refuseWhileBusy();
+    expect(document.activeElement).not.toBe(field());
+    end(false);
+    expect(document.activeElement).toBe(field());
+  }, false);
+});
+
+it("does not return focus at busy end after a Tab inside the dialog while busy", () => {
+  withNamedReturn(({ field, end, start }) => {
+    act(() => field().focus());
+    start();
+    act(() => savingButton()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })));
+    end(false);
+    expect(document.activeElement).toBe(savingButton());
+  }, false);
+});
+
+it("puts focus on the pending button, not the page, when busy ends on <body> and the control to return to is gone", () => {
+  withNamedReturn(({ field, end, start, removeField }) => {
+    act(() => field().focus());
+    start();
+    act(() => (document.activeElement as HTMLElement).blur());
+    expect(document.activeElement).toBe(document.body);
+    removeField();
+    end(false);
+    expect(document.activeElement).toBe(savingButton());
+  }, false);
+});
+
+it("does not redirect a press inside the dialog while the return is held back for an alert", () => {
+  withNamedReturn(({ field, save, end, start }) => {
+    act(() => save().focus());
+    const outside = start();
+    act(() => outside.focus());
+    end(false);
+    expect(document.activeElement).toBe(outside);
+    act(() => save().dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
+    act(() => save().focus());
+    expect(document.activeElement).toBe(save());
+    expect(document.activeElement).not.toBe(field());
+  });
+});
+
+it("forgets the control focus was taken from when the dialog is reused for another subject", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  framesAsTimers();
+  let moveTo!: (subject: string) => void;
+  function Subject() {
+    const [subject, setSubject] = useState("one");
+    moveTo = setSubject;
+    const { busy, run } = useDialogAction(subject, "Could not save");
+    return (
+      <Dialog title="Edit" resetKey={subject} onClose={() => {}} submitLabel="Save" busy={busy} onSubmit={() => void run(() => new Promise<void>(() => {}))}>
+        <Input label="Name" value="" onChange={() => {}} />
+      </Dialog>
+    );
+  }
+  act(() => root.render(<DaemonProvider value={testDaemon()}><Subject /></DaemonProvider>));
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const field = document.querySelector<HTMLInputElement>('input[aria-label="Name"]')!;
+  act(() => field.focus());
+  act(() => savingButton()!.click());
+  expect(field.disabled).toBe(true);
+  expect(document.activeElement).toBe(savingButton());
+  // The request is still out for the old subject, but the dialog is no longer busy for the new one.
+  act(() => moveTo("two"));
+  expect(field.disabled).toBe(false);
+  expect(document.activeElement).toBe(savingButton());
 });

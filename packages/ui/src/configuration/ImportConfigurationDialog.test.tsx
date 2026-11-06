@@ -872,6 +872,10 @@ it("names the result step in its title and takes focus to the dialog, wherever f
 it("can be dismissed while the open dialog has not answered", async () => {
   const mounted = mount({ unanswered: true });
   await press("Choose file");
+  // Waiting on the system's picker is not busy: Cancel and the close button stay operable.
+  const buttons = Array.from(document.body.querySelectorAll<HTMLButtonElement>("[role=dialog] button"));
+  expect(buttons.find((b) => b.textContent === "Cancel")!.disabled).toBe(false);
+  expect(buttons.find((b) => b.getAttribute("aria-label") === "Close")!.disabled).toBe(false);
   await act(async () => {
     document.body.querySelector("[role=dialog]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });
@@ -945,6 +949,9 @@ it.each([
 it("cannot be dismissed while the import is running", async () => {
   const mounted = await reviewing({ reply: (body) => (body.type === "import_configuration" ? new Promise<Event>(() => {}) : reply(body)) });
   await press("Import");
+  const buttons = Array.from(document.body.querySelectorAll<HTMLButtonElement>("[role=dialog] button"));
+  expect(buttons.find((b) => b.textContent === "Cancel")!.disabled).toBe(true);
+  expect(buttons.find((b) => b.getAttribute("aria-label") === "Close")!.disabled).toBe(true);
   await act(async () => {
     document.body.querySelector("[role=dialog]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });

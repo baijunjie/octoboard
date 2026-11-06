@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import { Button } from "../components/controls/Button";
 import { InlineReference } from "../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { afterFrames } from "../components/focus/afterFrames";
@@ -19,18 +18,19 @@ import { AccountQuotaSummary, QuotaStaleMark } from "./AccountQuotaSummary";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { expiryLine, nextResetCredit, quotaNaming, resetCreditsSummary, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
 import { useAccountQuota, type QuotaReading } from "./useAccountQuota";
+import { Button } from "../primitives";
 
 /** An account's rate limit reset credits (a provider's "usage limit resets") in one line, with the action that redeems
  * one, beneath the account's quota windows: "1 usage limit reset available · expires in 6d 3h" and "Redeem reset".
  * Nothing for an account with no credit to use, which is every account of a provider that does not offer them
  * (`capabilities.reset_credits`) and any account holding none. `onUse`
  * opens `UseResetCreditDialog`, which the surface holds itself (a panel that closes when a modal opens cannot hold
- * it). `preventFocusOnPress` is for a surface that closes on a press here, so the press moves no focus into it. */
-export function ResetCreditsLine({ quota, accountName, onUse, preventFocusOnPress }: {
+ * it). `focusOnPress={false}` is for a surface that closes on a press here, so the press moves no focus into it. */
+export function ResetCreditsLine({ quota, accountName, onUse, focusOnPress }: {
   quota: QuotaReading;
   accountName: string;
   onUse: () => void;
-  preventFocusOnPress?: boolean;
+  focusOnPress?: boolean;
 }): React.ReactElement | null {
   const t = useT();
   const now = useNow();
@@ -40,7 +40,7 @@ export function ResetCreditsLine({ quota, accountName, onUse, preventFocusOnPres
   return (
     <div className="flex min-w-0 items-center gap-3 text-sm">
       <FadeOverflow className="min-w-0 flex-1 text-app-muted" titleWhenClipped={summary}>{summary}</FadeOverflow>
-      <Button size="xs" variant="secondary" className="shrink-0" preventFocusOnPress={preventFocusOnPress} aria-label={t("quota.resetCredits.useFor", { account: isolate(accountName) })} onPress={onUse}>
+      <Button size="xs" variant="secondary" className="shrink-0" focusOnPress={focusOnPress} label={t("quota.resetCredits.useFor", { account: isolate(accountName) })} onPress={onUse}>
         {t("quota.resetCredits.use")}
       </Button>
     </div>

@@ -16,7 +16,7 @@ import { useDirectoryBrowse } from "./DirectoryPicker";
 
 function Field({ value = " ~/code ", onPick = () => {}, onBlur = () => {} }: { value?: string; onPick?: (path: string) => void; onBlur?: (picking: boolean) => void }) {
   const browse = useDirectoryBrowse(value, onPick);
-  return <><input aria-label="Path" value={value} readOnly onBlur={() => onBlur(browse.picking)} />{browse.browseButton({ preventFocusOnPress: true })}<output>{String(browse.picking)}</output>{browse.picker}</>;
+  return <><input aria-label="Path" value={value} readOnly onBlur={() => onBlur(browse.picking)} />{browse.browseButton({ focusOnPress: false })}<output>{String(browse.picking)}</output>{browse.picker}</>;
 }
 
 function deferred<T>() {

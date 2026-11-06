@@ -13,6 +13,12 @@ const ALERT_PATHS = [
   },
   { name: "@heroui/react/alert", message: ALERT_MESSAGE },
 ];
+// The wrapper layer's alert parts are the same Alert, for AlertFrame and ErrorAlert alone.
+const ALERT_WRAPPER = {
+  group: ["**/primitives"],
+  importNames: ["Alert", "AlertIndicator", "AlertContent", "AlertTitle", "AlertDescription"],
+  message: ALERT_MESSAGE,
+};
 const ALERT_FRAME = {
   group: ["**/AlertFrame"],
   message: "AlertFrame draws an Alert with no title; use ErrorAlert, FailureAlert or ChoiceWarning.",
@@ -26,7 +32,7 @@ const GENERATED_PROTOCOL = {
 };
 const uiImports = (patterns = [], { alerts = true, generated = true } = {}) => {
   const all = generated ? [GENERATED_PROTOCOL, ...patterns] : patterns;
-  return ["error", alerts ? { paths: ALERT_PATHS, patterns: [ALERT_FRAME, ...all] } : { patterns: all }];
+  return ["error", alerts ? { paths: ALERT_PATHS, patterns: [ALERT_WRAPPER, ALERT_FRAME, ...all] } : { patterns: all }];
 };
 
 const UI_SRC = "packages/ui/src";
@@ -41,18 +47,28 @@ const onlyInto = (depth, allowed, message) =>
   ({ regex: `^(?:\\.\\./){${depth}}(?!(?:${allowed.join("|")})/)[^/]+/`, message });
 const notInto = (depth, denied, message) =>
   ({ regex: `^(?:\\.\\./){${depth}}(?:${denied.join("|")})(?:/|$)`, message });
+// The bottom layer: the wrapper layer over the third-party UI libraries, which every other directory may import, by its
+// barrel (a directory with an index, imported without a trailing slash, as the rule sees a root file).
+const PRIMITIVES = "primitives";
+const PRIMITIVES_NOTE = "Every layer may also import primitives, the wrapper layer.";
+// The barrel only: a layer block's whitelist already refuses a file inside primitives/, and the blocks without one say so
+// here. `primitives/` followed by a path, so the barrel itself, imported as `primitives`, stays allowed.
+const PRIMITIVES_FILE_MESSAGE = "Import the wrapper layer from its barrel, primitives, never a file inside it.";
+const primitivesFile = (depth) => ({ regex: `^(?:\\.\\./){${depth}}${PRIMITIVES}/.`, message: PRIMITIVES_FILE_MESSAGE });
+const ROOT_PRIMITIVES_FILE = { regex: `^\\./${PRIMITIVES}/.`, message: PRIMITIVES_FILE_MESSAGE };
 // What code below src/ may import from src/'s root: the daemon contract, the app's configuration mirror, and the
-// barrels of store/ and platform/ (a directory with an index, imported without a trailing slash). The rest of the root
-// (the entry, App, the screens, style.css) is imported by nothing below src/.
-const ROOT_SHARED = ["protocol", "requests", "daemon", "daemon-client", "appConfig", "store", "platform"];
-const ROOT_MESSAGE = "Below src/, only protocol, requests, daemon, daemon-client, appConfig and the store and platform barrels are imported from src/'s root.";
+// barrels of store/, platform/ and primitives/. The rest of the root (the entry, App, the screens, style.css) is
+// imported by nothing below src/.
+const ROOT_SHARED = ["protocol", "requests", "daemon", "daemon-client", "appConfig", "store", "platform", PRIMITIVES];
+const ROOT_MESSAGE = "Below src/, only protocol, requests, daemon, daemon-client, appConfig and the store, platform and primitives barrels are imported from src/'s root.";
 const onlyRoot = (depth, message, roots = ROOT_SHARED) =>
   ({ regex: `^(?:\\.\\./){${depth}}(?!(?:${roots.join("|")})$)[^/]+$`, message });
-/** Outside itself, `dir` imports only the `allowed` top-level directories and the `roots` files at src/'s root. */
+/** Outside itself, `dir` imports only the `allowed` top-level directories, the `roots` files at src/'s root, and the
+ * barrel of primitives/. */
 const layer = (dir, allowed, message, roots = ROOT_SHARED) => DEPTHS.map((depth) => ({
   files: [below(dir, depth)],
   ignores: UI_TESTS,
-  rules: { "no-restricted-imports": uiImports([onlyInto(depth, allowed, message), onlyRoot(depth, message, roots)]) },
+  rules: { "no-restricted-imports": uiImports([onlyInto(depth, allowed, message), onlyRoot(depth, `${message} ${PRIMITIVES_NOTE}`, [PRIMITIVES, ...roots])]) },
 }));
 // The pure layers, which import no component, no store and no feature directory.
 const PURE_LAYERS = ["values", "providers", "i18n", "platform", "preferences", "input", "format", "agents", "git", "sessions", "errors", "browse"];
@@ -67,6 +83,18 @@ const GALLERY_MESSAGE = "gallery/ is the dev-only gallery: the website preview a
 const PROTOCOL_MESSAGE = "protocol.ts imports only protocol.generated, the wire types it is the one door to.";
 const ROOT_PRODUCTION_IMPORT = { regex: "^\\./(?:fixtures|gallery)(?:/|$)", message: PRODUCTION_MESSAGE };
 const notIntoApp = (depth) => ({ ...notInto(depth, ["app"], APP_MESSAGE), caseSensitive: true });
+
+// The third-party UI libraries that reach the application only through the wrapper layer, `src/primitives/`
+// (docs/ui-standard.md, "Third-party UI components come through the wrapper layer"). The rule is typescript-eslint's
+// `no-restricted-imports`, not the core one the blocks above replace among themselves, so it holds alongside them. Like
+// them it sees import and export declarations, not `import("…")` calls or type expressions. Tests and test support, the
+// gallery, the shared fixtures and the website preview are not application source and may import the libraries.
+const WRAPPED_LIBRARIES = [
+  "@heroui/react", "@heroui/react/*", "@heroui/styles", "@heroui/styles/*",
+  "react-aria-components", "react-aria-components/*", "react-aria", "react-aria/*",
+  "@react-aria/*", "@react-stately/*", "@react-types/*",
+];
+const WRAPPED_MESSAGE = "Third-party UI components, hooks and utilities reach the application only through the wrapper layer: import them from primitives, adding a wrapper there if it lacks one.";
 
 export default [
   {
@@ -83,38 +111,38 @@ export default [
   ...DEPTHS.map((depth) => ({
     files: [below("*", depth)],
     ignores: [...UI_TESTS, `${UI_SRC}/{shell,app,gallery,fixtures,website-preview,test}/**`],
-    rules: { "no-restricted-imports": uiImports([notInto(depth, ["shell"], SHELL_MESSAGE), notIntoApp(depth), notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE), onlyRoot(depth, ROOT_MESSAGE)]) },
+    rules: { "no-restricted-imports": uiImports([notInto(depth, ["shell"], SHELL_MESSAGE), notIntoApp(depth), notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE), onlyRoot(depth, ROOT_MESSAGE), primitivesFile(depth)]) },
   })),
   ...DEPTHS.map((depth) => ({
     files: [below("shell", depth)],
     ignores: UI_TESTS,
-    rules: { "no-restricted-imports": uiImports([notIntoApp(depth), notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE)]) },
+    rules: { "no-restricted-imports": uiImports([notIntoApp(depth), notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE), primitivesFile(depth)]) },
   })),
   ...DEPTHS.map((depth) => ({
     files: [below("app", depth)],
     ignores: UI_TESTS,
-    rules: { "no-restricted-imports": uiImports([notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE)]) },
+    rules: { "no-restricted-imports": uiImports([notInto(depth, ["fixtures", "gallery"], PRODUCTION_MESSAGE), primitivesFile(depth)]) },
   })),
   ...DEPTHS.map((depth) => ({
     files: [below("{gallery,test}", depth)],
     ignores: UI_TESTS,
-    rules: { "no-restricted-imports": uiImports([notIntoApp(depth)]) },
+    rules: { "no-restricted-imports": uiImports([notIntoApp(depth), primitivesFile(depth)]) },
   })),
   // The fixtures and the preview do not depend on the dev-only gallery. The fixtures keep the window shell's rule.
   ...DEPTHS.map((depth) => ({
     files: [below("website-preview", depth)],
     ignores: UI_TESTS,
-    rules: { "no-restricted-imports": uiImports([notIntoApp(depth), notInto(depth, ["gallery"], GALLERY_MESSAGE)]) },
+    rules: { "no-restricted-imports": uiImports([notIntoApp(depth), notInto(depth, ["gallery"], GALLERY_MESSAGE), primitivesFile(depth)]) },
   })),
   ...DEPTHS.map((depth) => ({
     files: [below("fixtures", depth)],
     ignores: UI_TESTS,
-    rules: { "no-restricted-imports": uiImports([notInto(depth, ["shell"], SHELL_MESSAGE), notIntoApp(depth), notInto(depth, ["gallery"], GALLERY_MESSAGE)]) },
+    rules: { "no-restricted-imports": uiImports([notInto(depth, ["shell"], SHELL_MESSAGE), notIntoApp(depth), notInto(depth, ["gallery"], GALLERY_MESSAGE), primitivesFile(depth)]) },
   })),
   {
     files: [`${UI_SRC}/*.{ts,tsx}`],
     ignores: [...UI_TESTS, `${UI_SRC}/App.tsx`],
-    rules: { "no-restricted-imports": uiImports([APP_ROOT_IMPORT, ROOT_PRODUCTION_IMPORT]) },
+    rules: { "no-restricted-imports": uiImports([APP_ROOT_IMPORT, ROOT_PRODUCTION_IMPORT, ROOT_PRIMITIVES_FILE]) },
   },
   {
     // protocol.ts is the one door to the generated wire types and holds nothing else of the UI.
@@ -124,8 +152,15 @@ export default [
   {
     // App.tsx is the one root file that may import app/, and is production code like the rest.
     files: [`${UI_SRC}/App.tsx`],
-    rules: { "no-restricted-imports": uiImports([ROOT_PRODUCTION_IMPORT]) },
+    rules: { "no-restricted-imports": uiImports([ROOT_PRODUCTION_IMPORT, ROOT_PRIMITIVES_FILE]) },
   },
+  // The wrapper layer, below everything: it imports the third-party UI libraries and nothing else of the application.
+  // Its Alert wraps HeroUI's.
+  ...DEPTHS.map((depth) => ({
+    files: [below(PRIMITIVES, depth)],
+    ignores: UI_TESTS,
+    rules: { "no-restricted-imports": uiImports([{ regex: `^(?:\\.\\./){${depth}}`, message: "primitives/ imports nothing else below src/: only the third-party UI libraries it wraps." }], { alerts: false }) },
+  })),
   // Leaf layer: shared building blocks depend on no feature directory.
   ...layer("components", PURE_LAYERS, LEAF_MESSAGE),
   // Domain layers: each sits below every feature, and imports only the layers beneath it, plus the root files it lists.
@@ -154,7 +189,7 @@ export default [
   // The project browser builds on the viewer and on no other feature.
   ...layer("project-browser", ["components", "viewer", ...PURE_LAYERS], `project-browser/ imports, outside itself, only components/, viewer/, ${PURE_MESSAGE}, and the shared root files.`),
   {
-    // ErrorAlert composes HeroUI's Alert through AlertFrame; both stay in the leaf layer.
+    // ErrorAlert composes the wrapper layer's Alert through AlertFrame; both stay in the leaf layer.
     files: [`${UI_SRC}/components/alerts/AlertFrame.tsx`, `${UI_SRC}/components/alerts/ErrorAlert.tsx`],
     rules: { "no-restricted-imports": uiImports([onlyInto(2, PURE_LAYERS, LEAF_MESSAGE), onlyRoot(2, LEAF_MESSAGE)], { alerts: false }) },
   },
@@ -162,5 +197,10 @@ export default [
     // Its test compares ErrorAlert with the stock Alert.
     files: [`${UI_SRC}/components/alerts/ErrorAlert.test.tsx`],
     rules: { "no-restricted-imports": "off" },
+  },
+  {
+    files: [`${UI_SRC}/**/*.{ts,tsx}`],
+    ignores: [...UI_TESTS, `${UI_SRC}/{primitives,gallery,fixtures,website-preview,test}/**`],
+    rules: { "@typescript-eslint/no-restricted-imports": ["error", { patterns: [{ group: WRAPPED_LIBRARIES, message: WRAPPED_MESSAGE }] }] },
   },
 ];

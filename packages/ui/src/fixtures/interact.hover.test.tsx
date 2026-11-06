@@ -4,7 +4,6 @@ import React, { act } from "react";
 import { useHover } from "react-aria";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { Button } from "../components/controls/Button";
 import { change, changeViewFixture, mountRows } from "../project-browser/browserTestSupport";
 import { ChangeList } from "../project-browser/git/ChangeList";
 import { changeItems } from "../project-browser/git/changes";
@@ -30,6 +29,7 @@ import { testDaemon } from "../test/testDaemon";
 import { accountOf, gitStatusOf, sessionOf } from "./builders";
 import { createUi } from "./interact";
 import { FIXTURE_PROVIDERS } from "./fixtureProviders";
+import { Button } from "../primitives";
 
 /** The tooltip of a Claude Code session's agent mark, drawn by the app's own `SessionAgentTooltip`: the
  * agent's name, then the account the session runs under as a badge or, given `launch`, a list of the
@@ -105,10 +105,10 @@ function mountWindow(): void {
         </ul>
       </div>
       <TitledControl title="Operations, a session is working" placement="end">
-        <Button isIconOnly aria-label="Operations, a session is working" />
+        <Button iconOnly label="Operations, a session is working" />
       </TitledControl>
       <TitledControl title="Billing" placement="end" focusOnly>
-        <Button isIconOnly aria-label="Billing" />
+        <Button iconOnly label="Billing" />
       </TitledControl>
       <HelpTip label="About Billing">Billing is charged monthly.</HelpTip>
       <div role="button" aria-label="Card, Claude Code, Idle">

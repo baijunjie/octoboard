@@ -3,21 +3,21 @@
 ## Focus dropped to `<body>`: a HeroUI control's press, a hidden pane, a reordered list
 
 Clicking around the terminal must not move keyboard focus off it (see the "Rows, names and keyboard focus" section of
-`docs/product/sidebar.md`). In `packages/ui` every pressable HeroUI 3 control (`Button`,
-`Dropdown.Trigger` and the rest, all built on react-aria's press handling) focuses itself when pressed with the
+`docs/product/sidebar.md`). In `packages/ui` every pressable HeroUI 3 control (the wrapper layer's `Button`,
+`MenuTrigger` and the rest, all built on react-aria's press handling) focuses itself when pressed with the
 mouse. For a control that unmounts right after the press, such as a list item's × or a toast's Dismiss, focus then
 falls to `<body>` and the terminal silently stops receiving keystrokes.
 
-So give `preventFocusOnPress` to every pressable control in the sidebar, the toasts, the banners and the terminal's
+So give `focusOnPress={false}` to every pressable control in the sidebar, the toasts, the banners and the terminal's
 surroundings, unless its handler puts focus back on the terminal itself. A menu also needs it on its trigger, and on
 top of that react-aria moves focus back to the trigger when the menu closes. Build every "⋯"-style menu on
-`packages/ui/src/components/menus/ActionMenu.tsx`, which handles both, rather than on a bare `Dropdown`.
+`packages/ui/src/components/menus/ActionMenu.tsx`, which handles both, rather than on a bare `Menu`.
 
 Nothing in the markup gives this away — a plain `<button>` never takes focus on click in WKWebView — so the defect
 only appears in the running page.
 
 Hiding a region with CSS (`hidden`, a `docked:hidden` variant) while focus is inside it drops focus to `<body>` the
-same way, with no event, and `preventFocusOnPress` does not help there: focus reaches a pane by Tab or by a click into
+same way, with no event, and `focusOnPress={false}` does not help there: focus reaches a pane by Tab or by a click into
 an iframe. So every code path that hides a region able to hold focus — a toggle, a scrim, Escape, a breakpoint change
 — first hands focus to the terminal if the region contains `document.activeElement`. The sidebar does this through
 `releaseFocus` in `packages/ui/src/layout/usePaneToggles.ts`, and a right-pane card through the `HandoffOnUnmount`
@@ -42,7 +42,7 @@ and Tab as well — and for any control a handler of its own takes away, call `h
 (`packages/ui/src/components/focus/handFocusOff.ts`) before the removal, as `RowMarkButton` in
 `packages/ui/src/components/rows/RowMarkButton.tsx` and `AvatarField` in `packages/ui/src/dialogs/AvatarField.tsx` do. Where the
 element goes away from a state change rather than from a handler of its own — a region closed by a toggle pressed
-with `preventFocusOnPress`, a control removed or disabled by the answer it was waiting for — there is no removal
+with `focusOnPress={false}`, a control removed or disabled by the answer it was waiting for — there is no removal
 handler to put focus back from, so wrap it in `useFocusHandoff` (`packages/ui/src/components/focus/useFocusHandoff.ts`),
 which after each render notices that the element focus was on has left the document or turned disabled. Use it rather
 than a check of your own: the browser blurs a control as it is disabled, before the render's effect runs, so a
@@ -242,12 +242,13 @@ outgoing one's soon-detached element as its focus-restore target, so focus is lo
 mounted and reset the per-item state from `resetKey` instead (`useDialogAction(resetKey)` does that for the busy
 state).
 
-A control that stays mounted costs the same when it turns disabled: react-aria's `isDisabled` puts the native
-`disabled` attribute on the element, which blurs the control the user has just pressed. So a button disabled for
-the duration of its own action — the obvious way to keep a slow request from being sent twice — drops focus to
-`<body>` and takes the dialog's Escape and Tab with it until the action ends. Mark it `isPending` instead: that blocks
-press and hover, keeps the control focusable, and announces the pending state. Keep `isDisabled` for a control
-that is unavailable for a reason outside the action itself (a field not filled in yet), where focus is not on it.
+A control that stays mounted costs the same when it turns disabled: the wrapper layer's `Button` `disabled` (react-aria's
+`isDisabled`) puts the native `disabled` attribute on the element, which blurs the control the user has just pressed.
+So a button disabled for the duration of its own action — the obvious way to keep a slow request from being sent
+twice — drops focus to `<body>` and takes the dialog's Escape and Tab with it until the action ends. Mark it `pending`
+(react-aria's `isPending`) instead: that blocks press and hover, keeps the control focusable, and announces the pending
+state. Keep `disabled` for a control that is unavailable for a reason outside the action itself (a field not filled in
+yet), where focus is not on it.
 When such an outside change can still land while focus is on a button (a quota reading arriving under an open
 dialog), hand focus on with `useFocusLeavingWhenDisabled` from `packages/ui/src/components/dialog/dialogHooks.ts`, as the shared
 dialog footer and `ConfirmDialog` do, rather than testing `document.activeElement` against the control in an effect:

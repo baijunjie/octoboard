@@ -1,4 +1,3 @@
-import { Badge } from "@heroui/react";
 import { Bell } from "lucide-react";
 import React from "react";
 
@@ -6,6 +5,7 @@ import { useT } from "../i18n/react";
 import { useNotificationPermission } from "../lifecycle/useNotificationPermission";
 import { ChromeButton } from "./ChromeButton";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
+import { Badge } from "../primitives";
 
 /** The invitation to turn notifications on, where the platform wants the ask to come from a user
  * gesture (a browser) and the answer is still undecided; gone once the answer is given, whichever
@@ -23,7 +23,7 @@ export function NotificationsBell({ focusTerminal }: { focusTerminal: () => void
   return (
     <span className="contents" {...held}>
       <ChromeButton label={t("rail.notifications.enable")} onPress={() => void request()} tooltipPlacement="end"
-        badge={<Badge inert aria-hidden="true" color="accent" variant="primary" size="sm" />}>
+        badge={<Badge color="accent" />}>
         <Bell aria-hidden="true" className="size-4" />
       </ChromeButton>
     </span>

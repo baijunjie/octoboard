@@ -2,15 +2,16 @@ import { useLayoutEffect, type RefObject } from "react";
 
 import { TOAST_BREAKPOINT, TOAST_MARGIN, TOAST_WIDTH } from "./toastGeometry";
 import { dialogAround } from "./dialogElement";
+import { partSelector } from "../../primitives";
 
 /** The custom property `style.css` lifts the toast region by, from the window's bottom edge. */
 const PROPERTY = "--dialog-footer-clearance";
 
-const REGION = '[data-slot="toast-region"]';
-const TOAST = '[data-slot="toast"]';
+const REGION = partSelector.toastRegion;
+const TOAST = partSelector.toast;
 const STRIPS = ["--connection-banner-height", "--update-notice-height"];
 
-const FOOTER = '[data-slot="modal-footer"], [data-slot="alert-dialog-footer"]';
+const FOOTER = partSelector.dialogFooter;
 
 type Entry = { measure: () => void };
 

@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { Key } from "react-aria-components";
 
 import { useStableHandler } from "../../components/hooks/useLatest";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
@@ -44,7 +43,7 @@ export interface FilesMode {
   /** The rows on screen, and the row keys of the folders open among them. */
   tree: ReturnType<typeof buildTree>;
   expandedKeys: ReadonlySet<string>;
-  onExpandedChange: (keys: Set<Key>) => void;
+  onExpandedChange: (keys: Set<string>) => void;
   treeRef: React.RefObject<HTMLDivElement | null>;
   /** Whether a folder is open to fold, and folding them all. */
   canCollapseAll: boolean;
@@ -98,7 +97,7 @@ export function useFilesMode(project: string, browser: ProjectBrowserState, filt
 
   const directoryExpandedKeys = useMemo(() => new Set([...browser.expanded].map(rowKey)), [browser.expanded]);
   const expandedKeys = searching ? resultModel.expanded : directoryExpandedKeys;
-  const onExpandedChange = (keys: Set<Key>) => {
+  const onExpandedChange = (keys: Set<string>) => {
     if (searching) {
       const next = new Set(collapsedFiles);
       for (const dir of resultDirectories(resultPaths)) {
@@ -108,7 +107,7 @@ export function useFilesMode(project: string, browser: ProjectBrowserState, filt
       setCollapsedFiles(next);
       return;
     }
-    const paths = new Set([...keys].map((key) => String(key).slice(rowKey("").length)));
+    const paths = new Set([...keys].map((key) => key.slice(rowKey("").length)));
     // A directory listed before is listed again as it opens; one never listed is asked for as it
     // comes on screen.
     const opened = [...paths].filter((path) => !browser.expanded.has(path) && dirs.listings.has(path));

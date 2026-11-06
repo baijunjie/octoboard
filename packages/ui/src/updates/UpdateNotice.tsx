@@ -1,9 +1,7 @@
-import { Label, ProgressBar } from "@heroui/react";
 import { Download, X } from "lucide-react";
 import React from "react";
 
 import { AttendedStatusAnnouncer } from "../components/announce/AttendedStatusAnnouncer";
-import { Button } from "../components/controls/Button";
 import { ExternalLink } from "../components/text/ExternalLink";
 import { TitledControl } from "../components/hint/TitledControl";
 import { useBottomStrip } from "../components/panel/useBottomStrip";
@@ -12,6 +10,7 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import { releaseUrl } from "../components/text/releaseUrl";
 import { updateNoticeKind } from "./noticeKind";
 import { useUpdates } from "./UpdatesProvider";
+import { Button, Label, ProgressBar, ProgressBarOutput, ProgressBarTrack } from "../primitives";
 
 /** The CSS custom property this notice publishes its own height to, which `--bottom-chrome-height` in `style.css`
  * adds to the connection banner's, so what overlays the content area ends above it. */
@@ -74,12 +73,12 @@ export function UpdateNotice({ focusTerminal }: { focusTerminal: () => void }): 
               <ProgressBar
                 className="flex min-w-0 max-w-96 flex-1 items-center gap-2 text-accent-foreground [--progress-bar-fill:var(--accent-foreground)]"
                 value={percent === undefined ? undefined : percent * 100}
-                isIndeterminate={percent === undefined}
+                indeterminate={percent === undefined}
                 valueLabel={percentText}
               >
                 <Label className="shrink-0 whitespace-nowrap text-xs text-accent-foreground">{message}</Label>
-                {percentText && <ProgressBar.Output className="order-last shrink-0 text-xs text-accent-foreground" />}
-                <ProgressBar.Track className="min-w-8 flex-1 bg-accent-foreground/25"><ProgressBar.Fill /></ProgressBar.Track>
+                {percentText && <ProgressBarOutput className="order-last shrink-0 text-xs text-accent-foreground" />}
+                <ProgressBarTrack className="min-w-8 flex-1 bg-accent-foreground/25" />
               </ProgressBar>
             ) : (
               <span>{message}</span>
@@ -91,11 +90,11 @@ export function UpdateNotice({ focusTerminal }: { focusTerminal: () => void }): 
             )}
             {kind === "available" && (
               <>
-                <Button size="xs" variant="outline" className={BUTTON_CLASS} preventFocusOnPress onPress={() => void store.install()}>
+                <Button size="xs" variant="outline" className={BUTTON_CLASS} focusOnPress={false} onPress={() => void store.install()}>
                   {t("updates.notice.install")}
                 </Button>
                 <TitledControl title={t("updates.notice.dismiss")}>
-                  <Button size="xs" variant="ghost" isIconOnly className={BUTTON_CLASS} aria-label={t("updates.notice.dismiss")} preventFocusOnPress onPress={store.dismissNotice}>
+                  <Button size="xs" variant="ghost" iconOnly className={BUTTON_CLASS} label={t("updates.notice.dismiss")} focusOnPress={false} onPress={store.dismissNotice}>
                     <X aria-hidden="true" className="size-3.5" />
                   </Button>
                 </TitledControl>
@@ -103,10 +102,10 @@ export function UpdateNotice({ focusTerminal }: { focusTerminal: () => void }): 
             )}
             {kind === "installed" && (
               <>
-                <Button size="xs" variant="outline" className={BUTTON_CLASS} preventFocusOnPress onPress={store.restart}>
+                <Button size="xs" variant="outline" className={BUTTON_CLASS} focusOnPress={false} onPress={store.restart}>
                   {t("updates.notice.restart")}
                 </Button>
-                <Button size="xs" variant="outline" className={BUTTON_CLASS} preventFocusOnPress onPress={store.hideRestartNotice}>
+                <Button size="xs" variant="outline" className={BUTTON_CLASS} focusOnPress={false} onPress={store.hideRestartNotice}>
                   {t("updates.notice.later")}
                 </Button>
               </>

@@ -1,7 +1,5 @@
-import { AlertDialog, Modal } from "@heroui/react";
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
-import { Button } from "../controls/Button";
 import { takeMenuFocusToRestore } from "../focus/menuFocus";
 import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
 import { TitledControl } from "../hint/TitledControl";
@@ -14,11 +12,8 @@ import { useHeightMotion } from "./useHeightMotion";
 import { useToastClearance } from "./useToastClearance";
 import { useTopLayerAtMount } from "./useTopLayerAtMount";
 import { useFocusLeavingWhenDisabled, useRefocusIfLost } from "./dialogHooks";
-
-/** The children HeroUI's modal parts accept. Their typings resolve `ReactNode` against the React 18
- * types that react-aria pulls in, which `React.ReactNode` from this package's React 19 does not
- * satisfy. */
-type BodyChildren = React.ComponentProps<typeof Modal.Footer>["children"];
+import { useFocusLeavingWhenBusy } from "./useFocusLeavingWhenBusy";
+import { Button, Modal, ModalBody, ModalCloseButton, ModalFooter, ModalHeader, ModalHeading, ModalStatusIcon } from "../../primitives";
 
 const NOT_TYPED_INTO = new Set(["checkbox", "radio", "button", "submit", "image", "reset", "range", "color", "file"]);
 
@@ -66,13 +61,14 @@ let openDialogs = 0;
  * any step where a pressed button has to keep focus. The footer is Cancel plus a submit button
  * labelled `submitLabel`, unless the dialog brings its own `footer`.
  *
- * While `busy`, the submit button is marked pending rather than disabled: a disabled attribute would
- * blur the button the user has just pressed and take the dialog's Tab with it for as long as the
- * request runs, where pending blocks press and hover, keeps the button focusable and announces
- * itself. Cancel is disabled instead, and so is the close button: a busy dialog cannot be left at
- * all. That costs nothing when the request starts from submit, since pressing it puts focus on it. A
- * dialog whose own controls start the request without taking focus (`preventFocusOnPress`) hands
- * focus on itself, as `AddAgentDialog` does, so it never falls to `<body>`.
+ * While `busy`, the submit button is marked pending rather than disabled: a disabled attribute would blur the button
+ * the user has just pressed and take the dialog's Tab with it for as long as the request runs, where pending blocks
+ * press and hover, keeps the button focusable and announces itself. Every other control in the dialog is disabled (the
+ * wrappers read `Modal`'s `busy`, so Cancel, the close button, the fields and the links of the body all are), and a
+ * busy dialog cannot be left at all. Assistive technology still reads the disabled controls: the dialog is never
+ * `inert`. Focus that was on a control the request has just disabled moves to the pending button, else to the dialog
+ * (`useFocusLeavingWhenBusy`), so it never falls to `<body>`; a pending button of the dialog's own, in its own `footer`
+ * or its body, takes it the same.
  *
  * `submitDisabled` disables the submit button alone, before any action, Cancel stays pressable, and
  * since it is the form's only submit control this also suppresses implicit submission from Enter in a
@@ -100,6 +96,7 @@ function DialogFrame({
   alert,
   failing,
   resetKey,
+  returnFocusRef,
   dismissable = true,
   keyboardDismissHeld = false,
   focusesItselfOnOpen,
@@ -114,16 +111,17 @@ function DialogFrame({
    * it reads after the title and is never clipped by the body's scroller. It brings its own height. */
   subtitle?: React.ReactElement;
   onClose: () => void;
-  children: BodyChildren;
+  children: React.ReactNode;
   /** `wide` is `lg` widened for content laid out across it: a list of rows that each carry a path,
    * or groups of fields side by side; `viewer` is a frame for content rather than a form: it fills
    * the window on phones, and otherwise keeps a margin and a maximum readable width. */
   size?: "sm" | "md" | "lg" | "wide" | "viewer";
   /** Uses the modal's native full size, including its edge-to-edge transition. */
   fullScreen?: boolean;
-  /** A request the dialog started is out and cannot be taken back, so the dialog cannot be left: the close button is
-   * disabled, and Escape and a click outside do not call `onClose`. With `submitLabel` the submit button is also
-   * marked pending; a dialog with its own `footer` shows the wait itself. */
+  /** A request the dialog started is out and cannot be taken back, so the dialog cannot be left: every control in it is
+   * disabled but a pending button (the close button and Cancel included), and Escape and a click outside do not call
+   * `onClose`. With `submitLabel` the submit button is marked pending; a dialog with its own `footer` shows the wait
+   * itself, with a pending button of its own where it has an action that is running. */
   busy?: boolean;
   /** A confirmation that interrupts the user: HeroUI's `AlertDialog`, announced as an alert dialog. */
   alert?: boolean;
@@ -135,6 +133,10 @@ function DialogFrame({
    * open; the Close button and a click outside still do. For a dialog whose content takes Escape for something of its
    * own, closing it from a listener on the dialog element: the dialog must not also close from the same press. */
   keyboardDismissHeld?: boolean;
+  /** Where focus goes back to when the busy period ends, in place of the control it was moved from (see
+   * `useFocusLeavingWhenBusy`): the dialog sets it while the request runs, for a refusal that is about one field, and
+   * the frame clears it. */
+  returnFocusRef?: React.MutableRefObject<HTMLElement | null>;
   /** Names what a dialog reused across subjects currently asks about; when it changes and focus
    * was lost with the old content, it is put back on the dialog. */
   resetKey?: string;
@@ -159,7 +161,7 @@ function DialogFrame({
 } & (
   | {
     /** `null` for a dialog without a footer. */
-    footer: BodyChildren | null;
+    footer: React.ReactNode | null;
     submitLabel?: never;
     submitDisabled?: never;
     autoFocusSubmit?: never;
@@ -191,18 +193,20 @@ function DialogFrame({
   const markerRef = useRef<HTMLSpanElement>(null);
   const submitRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
-  useFocusLeavingWhenDisabled(submitRef, submitDisabled === true, cancelRef);
-  useRefocusIfLost(() => (focusesItselfOnOpen ? null : dialogAround(markerRef)), [resetKey]);
+  const ownReturnFocus = useRef<HTMLElement | null>(null);
+  const dialog = () => dialogAround(markerRef);
+  useFocusLeavingWhenDisabled(submitRef, submitDisabled === true, cancelRef, dialog);
+  useFocusLeavingWhenBusy(dialog, busy, returnFocusRef ?? ownReturnFocus, resetKey);
+  useRefocusIfLost(() => (focusesItselfOnOpen ? null : dialog()), [resetKey]);
   const landingRef = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
     landingRef.current?.focus({ preventScroll: true });
   }, []);
   useToastClearance(markerRef, footer !== null);
   useHeightMotion(markerRef);
-  useEscapeWhileTooltipOpen(() => dialogAround(markerRef), dismissable && !keyboardDismissHeld && !busy ? onClose : () => {});
+  useEscapeWhileTooltipOpen(dialog, dismissable && !keyboardDismissHeld && !busy ? onClose : () => {});
   const topLayer = useTopLayerAtMount(topLayerAtMount === true, markerRef);
 
-  const Frame = alert ? AlertDialog : Modal;
   const alerting = alert || failing;
   // An alert dialog is described by its whole body, so a screen reader announces what is asked
   // together with the title; react-aria only wires up a `slot="description"` Text, which this body
@@ -233,7 +237,7 @@ function DialogFrame({
       {/* Size the body from its content: a percentage flex basis can leave WebKit holding the body at
           an intermediate size after the dialog's height animation, even while a disclosure grows.
           The viewer keeps its fixed-height layout. */}
-      <Frame.Body
+      <ModalBody
         id={bodyId}
         className={`text-foreground ${size === "viewer" ? `relative m-0 flex flex-col overflow-hidden p-0 ${region.overlayRing}` : `flex basis-auto flex-col overflow-y-visible rounded-lg ${region.ring}`}`}
       >
@@ -243,31 +247,31 @@ function DialogFrame({
               cursor does not stop on it: it holds focus only within the task that mounts the dialog. */}
           {focusesItselfOnOpen && <span ref={landingRef} tabIndex={-1} aria-hidden="true" className="absolute" />}
         </FadedScroller>
-      </Frame.Body>
+      </ModalBody>
       {footer !== null && (
-        <Frame.Footer className="flex-wrap">
+        <ModalFooter className="flex-wrap">
           {footer ?? (
             <>
-              <Button ref={cancelRef} type="button" variant="secondary" onPress={onClose} isDisabled={busy} autoFocus={autoFocusSubmit && submitDisabled}>
+              <Button ref={cancelRef} type="button" variant="secondary" onPress={onClose} autoFocus={autoFocusSubmit && submitDisabled}>
                 {t("common.cancel")}
               </Button>
-              <Button ref={submitRef} type="submit" isPending={busy} isDisabled={submitDisabled} autoFocus={autoFocusSubmit && !submitDisabled}>
+              <Button ref={submitRef} type="submit" pending={busy} disabled={submitDisabled} autoFocus={autoFocusSubmit && !submitDisabled}>
                 {submitLabel}
               </Button>
             </>
           )}
-        </Frame.Footer>
+        </ModalFooter>
       )}
     </>
   );
 
-  const heading = <Frame.Heading className="min-w-0 [overflow-wrap:anywhere]">{title as BodyChildren}</Frame.Heading>;
+  const heading = <ModalHeading className="min-w-0 [overflow-wrap:anywhere]">{title}</ModalHeading>;
   // The fullscreen viewer pulls its close button closer to the corner, so its heading keeps the
   // same gap to it with a narrower inset and a wider end padding. Only one end padding is emitted:
   // HeroUI merges the header's classes and would keep just the last.
-  // HeroUI's alert dialog has no `full` size, so the union of the two containers' props rejects it;
-  // only the viewer, never an alert, goes full screen, and its frame is then the modal.
-  const containerSize = (fullScreen ? "full" : size === "viewer" || size === "wide" ? "lg" : size) as React.ComponentProps<typeof AlertDialog.Container>["size"];
+  // HeroUI's alert dialog has no `full` size: only the viewer, never an alert, goes full screen, and its frame is then
+  // the modal.
+  const containerSize = fullScreen ? "full" : size === "viewer" || size === "wide" ? "lg" : size;
   const headerInset = size !== "viewer" ? "" : fullScreen ? "mx-3 mt-3 " : "mx-6 mt-6 ";
   const headerEndPadding = size === "viewer" && fullScreen ? "pe-8" : "pe-6";
   // Keep the modal parts together: HeroUI spaces them through adjacent-sibling selectors.
@@ -276,75 +280,72 @@ function DialogFrame({
       {/* HeroUI places the close button over the header's end without reserving room for it, so
           the heading is padded clear of it; a long title (a session's name, say) has to wrap
           anywhere, since a name with no place to break would run out of the dialog. */}
-      <Frame.Header className={`${headerInset}${headerLeading ? "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 " : subtitle ? "gap-1 " : ""}${headerEndPadding}`}>
+      <ModalHeader className={`${headerInset}${headerLeading ? "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 " : subtitle ? "gap-1 " : ""}${headerEndPadding}`}>
         {headerLeading}
         {heading}
         {subtitle}
-      </Frame.Header>
+      </ModalHeader>
       {body}
     </>
   );
 
   return (
-    <Frame.Backdrop
-      isOpen
-      isDismissable={dismissable && !alert}
-      isKeyboardDismissDisabled={!dismissable || keyboardDismissHeld || busy}
-      onOpenChange={(open) => !open && dismissable && !busy && onClose()}
-      data-react-aria-top-layer={topLayer ? "true" : undefined}
+    // The viewer fills narrow screens. Between tablet and desktop it keeps a 16px margin; from desktop up HeroUI supplies
+    // 40px. Its height also leaves room for the bottom banners, matching the container's inset in `style.css`.
+    <Modal
+      alert={alert}
+      busy={busy}
+      size={containerSize}
+      outsideDismissable={dismissable && !alert}
+      keyboardDismissDisabled={!dismissable || keyboardDismissHeld || busy}
+      onClose={() => dismissable && !busy && onClose()}
+      topLayer={topLayer}
+      containerClassName={!fullScreen && size === "viewer" ? "max-desktop:p-4" : undefined}
+      role={failing ? "alertdialog" : undefined}
+      describedBy={alerting ? bodyId : undefined}
+      className={
+        fullScreen
+          ? "control-fills bg-panel-sidebar overflow-hidden p-0"
+          : size === "viewer"
+            ? "control-fills bg-panel-sidebar overflow-hidden p-0 h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none desktop:h-[calc(100dvh-80px-var(--bottom-chrome-height))] desktop:w-[min(1440px,calc(100vw-80px))]"
+            : size === "wide"
+              ? "control-fills max-w-3xl"
+              : "control-fills"
+      }
     >
-      {/* The viewer fills narrow screens. Between tablet and desktop it keeps a 16px margin;
-          from desktop up HeroUI supplies 40px. Its height also leaves room for the bottom
-          banners, matching the container's inset in `style.css`. */}
-      <Frame.Container size={containerSize} className={!fullScreen && size === "viewer" ? "max-desktop:p-4" : undefined}>
-        <Frame.Dialog
-          {...(failing && { role: "alertdialog" })}
-          aria-describedby={alerting ? bodyId : undefined}
-          className={
-            fullScreen
-              ? "control-fills bg-panel-sidebar overflow-hidden p-0"
-              : size === "viewer"
-                ? "control-fills bg-panel-sidebar overflow-hidden p-0 h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none desktop:h-[calc(100dvh-80px-var(--bottom-chrome-height))] desktop:w-[min(1440px,calc(100vw-80px))]"
-                : size === "wide"
-                  ? "control-fills max-w-3xl"
-                  : "control-fills"
-          }
+      <span ref={markerRef} hidden />
+      {dismissable && <TitledControl title={t("common.close")}>
+        {/* Named explicitly so it always matches the tooltip. */}
+        <ModalCloseButton label={t("common.close")} className={fullScreen ? "top-2 end-3" : undefined} />
+      </TitledControl>}
+      {onSubmit ? (
+      // A key held down repeats: the press that opened the dialog (a menu item takes Enter and
+      // Space on keydown) would otherwise go on to submit it before the user has read it, Enter
+      // on a repeat, Space on its release. Caught on the way down, since react-aria's buttons
+      // stop the keydown from bubbling. Where text is typed the repeats are the user's own, so
+      // they stay: Space in any text field, Enter in a textarea.
+        <form
+          className="contents"
+          onKeyDownCapture={(e) => {
+            if (submitsFromChoice(e)) return;
+            if (!e.repeat) return;
+            const enter = e.key === "Enter" && !(e.target instanceof HTMLTextAreaElement);
+            if (enter || (e.key === " " && !isTextEntry(e.target))) e.preventDefault();
+          }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            // React bubbles a submit through portals, so a form in a dialog opened from inside
+            // this one would otherwise submit this one too.
+            e.stopPropagation();
+            onSubmit();
+          }}
         >
-          <span ref={markerRef} hidden />
-          {dismissable && <TitledControl title={t("common.close")}>
-            {/* Named explicitly so it always matches the tooltip. */}
-            <Frame.CloseTrigger aria-label={t("common.close")} isDisabled={busy} className={fullScreen ? "top-2 end-3" : undefined} />
-          </TitledControl>}
-          {onSubmit ? (
-            // A key held down repeats: the press that opened the dialog (a menu item takes Enter and
-            // Space on keydown) would otherwise go on to submit it before the user has read it, Enter
-            // on a repeat, Space on its release. Caught on the way down, since react-aria's buttons
-            // stop the keydown from bubbling. Where text is typed the repeats are the user's own, so
-            // they stay: Space in any text field, Enter in a textarea.
-            <form
-              className="contents"
-              onKeyDownCapture={(e) => {
-                if (submitsFromChoice(e)) return;
-                if (!e.repeat) return;
-                const enter = e.key === "Enter" && !(e.target instanceof HTMLTextAreaElement);
-                if (enter || (e.key === " " && !isTextEntry(e.target))) e.preventDefault();
-              }}
-              onSubmit={(e) => {
-                e.preventDefault();
-                // React bubbles a submit through portals, so a form in a dialog opened from inside
-                // this one would otherwise submit this one too.
-                e.stopPropagation();
-                onSubmit();
-              }}
-            >
-              {content}
-            </form>
-          ) : (
-            content
-          )}
-        </Frame.Dialog>
-      </Frame.Container>
-    </Frame.Backdrop>
+          {content}
+        </form>
+      ) : (
+        content
+      )}
+    </Modal>
   );
 }
 
@@ -373,7 +374,7 @@ export function Dialog({ failure, ...props }: DialogFrameProps & {
       resetKey={failure.message}
       dismissable={false}
       onClose={props.onClose}
-      headerLeading={<AlertDialog.Icon status="danger" />}
+      headerLeading={<ModalStatusIcon status="danger" />}
       title={alertTitle(t, failure)}
       footer={<Button autoFocus variant="danger" onPress={props.onClose}>{t("error.acknowledge")}</Button>}
     >

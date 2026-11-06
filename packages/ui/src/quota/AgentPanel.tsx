@@ -1,9 +1,9 @@
-import { Tabs } from "@heroui/react";
 import React, { useLayoutEffect, useRef } from "react";
 
 import { defaultAccountName } from "../agents/agents";
 import { FADE_SIZE, FadedScroller, type FadeRegion, useFadeRegion } from "../components/scroll/scrollFade";
 import { useListMotion } from "../components/motion/useListMotion";
+import { TabPanel } from "../primitives";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { useT } from "../i18n/react";
 import type { Agent } from "../protocol";
@@ -30,18 +30,18 @@ export function AgentPanel({ agent, rows, currentAccount, dimOthers, onUseReset 
   const t = useT();
   const region = useFadeRegion({ label: t("rail.quota.accounts") });
   return (
-    <Tabs.Panel
+    <TabPanel
       id={agent}
       // Kept mounted while unselected, in the grid cell every panel shares, and invisible (react-aria
       // also makes it inert, out of the tab order and of assistive technology), so the cell keeps the
       // height of the tallest list.
-      shouldForceMount
+      keepMounted
       // No padding or margin of its own, which would make this panel's height differ from the others',
       // and not the library's exit placement out of the flow, which would drop the cell's height.
       className="col-start-1 row-start-1 m-0 self-start p-0 data-[exiting=true]:static data-[inert=true]:invisible"
     >
       <AgentAccountList agent={agent} rows={rows} currentAccount={currentAccount} dimOthers={dimOthers} region={region} onUseReset={onUseReset} />
-    </Tabs.Panel>
+    </TabPanel>
   );
 }
 

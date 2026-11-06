@@ -4,10 +4,10 @@
 
 import React, { useEffect, useRef, useState } from "react";
 
-import { Button } from "../components/controls/Button";
 import type { ViewerSubject } from "../viewer/content";
 import { FileViewer } from "../viewer/FileViewer";
 import { displayWirePath } from "../format/wirePath";
+import { Button } from "../primitives";
 
 export function ViewerGallery({ subjects, loadDelay }: { subjects: ViewerSubject[]; loadDelay?: number }): React.ReactElement {
   const [open, setOpen] = useState<number | null>(0);

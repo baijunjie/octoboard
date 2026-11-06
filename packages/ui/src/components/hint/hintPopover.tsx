@@ -1,12 +1,10 @@
-import { Popover } from "@heroui/react";
 import React, { useEffect, useId, useRef, useState } from "react";
-import type { PressEvent } from "react-aria";
-import { Dialog, Popover as SurfacePopover } from "react-aria-components";
 
 import { isImeKey } from "../../input/imeKey";
 import { keepsEscape } from "../focus/keepsEscape";
 import { OFFSET, PLACEMENT, TOOLTIP_SURFACE } from "./hintSurface";
 import { useStableHandler } from "../hooks/useLatest";
+import { type ButtonPress, FloatingPopover, type OverlayPlacement, Popover, PopoverDialog } from "../../primitives";
 
 /** How long the pointer rests on the trigger before the panel floats in. */
 export const HOVER_OPEN_DELAY_MS = 250;
@@ -155,16 +153,14 @@ function useHoverPopover({
  * `press` is a tap, a pen, assistive technology or the keyboard (focus inside, modal). */
 type HoverPopoverForm = "hover" | "press";
 
-/** What the trigger is wired with: spread on a react-aria button (`ref`, `preventFocusOnPress`,
- * `onPress`, `onHoverStart`, `onHoverEnd`), or picked from for a wrapper that names them its own way. */
+/** What the trigger is wired with: spread on a `Button` (`ref`, `focusOnPress`, `onPress`, `onMouseHoverChange`,
+ * `expanded`; not `popupId`), or picked from for a wrapper that names them its own way. */
 interface HoverPopoverTrigger {
   ref: React.RefObject<HTMLButtonElement | null>;
   /** Nothing a press does takes focus: a mouse click does nothing, and a tap must not pull focus off
    * the terminal or an editor. */
-  preventFocusOnPress: true;
-  onPress: (event: PressEvent) => void;
-  onHoverStart: (event: { pointerType: string }) => void;
-  onHoverEnd: (event: { pointerType: string }) => void;
+  focusOnPress: false;
+  onPress: (press: ButtonPress) => void;
   onMouseHoverChange: (hovered: boolean) => void;
   expanded: boolean;
   /** The id of the surface's dialog. */
@@ -213,7 +209,7 @@ export function PopoverHint({
 }: {
   trigger: (wiring: HoverPopoverTrigger) => React.ReactElement;
   label: string;
-  placement?: React.ComponentProps<typeof Popover.Content>["placement"];
+  placement?: OverlayPlacement;
   offset?: number;
   contentClassName?: string;
   bodyClassName?: string;
@@ -260,10 +256,10 @@ export function PopoverHint({
     return () => document.removeEventListener("pointermove", onPointerMove, true);
   }, [open]);
 
-  const onPress = (event: PressEvent) => {
+  const onPress = (press: ButtonPress) => {
     // Where a pointer can hover, the surface is the hover's: a mouse click does nothing (and does not
     // cancel a pending hover-open).
-    if (event.pointerType === "mouse") return;
+    if (press.pointerType === "mouse") return;
     if (pressed) {
       close();
       return;
@@ -279,13 +275,11 @@ export function PopoverHint({
   return (
     // The popover root only supplies the panel's styling and the trigger's popup attributes: the state is
     // held here, since the trigger's own press would toggle it where this opens by the kind of press.
-    <Popover isOpen={open} onOpenChange={() => {}}>
+    <Popover open={open} onOpenChange={() => {}}>
       {trigger({
         ref: triggerRef,
-        preventFocusOnPress: true,
+        focusOnPress: false,
         onPress,
-        onHoverStart: (event) => event.pointerType === "mouse" && onMouseHoverChange(true),
-        onHoverEnd: (event) => event.pointerType === "mouse" && onMouseHoverChange(false),
         onMouseHoverChange,
         expanded: open,
         popupId,
@@ -293,11 +287,11 @@ export function PopoverHint({
       {/* Keyed by the form so that a turn from hover to press mounts the overlay afresh: its focus scope
           then records the trigger as the place to give focus back to, as for a press from scratch,
           rather than whatever held focus while the surface was hover-opened. */}
-      <SurfacePopover
+      <FloatingPopover
         key={form}
-        isOpen={open}
-        isNonModal={form === "hover"}
-        triggerRef={triggerRef}
+        open={open}
+        nonModal={form === "hover"}
+        anchor={triggerRef}
         placement={placement ?? PLACEMENT}
         offset={offset ?? OFFSET}
         {...contentProps}
@@ -315,11 +309,11 @@ export function PopoverHint({
             {children({ close, form, popupId })}
           </div>
         ) : (
-          <Dialog id={popupId} aria-label={label} className={`outline-none ${bodyClassName ?? ""}`}>
+          <PopoverDialog id={popupId} label={label} className={`outline-none ${bodyClassName ?? ""}`}>
             {children({ close, form, popupId })}
-          </Dialog>
+          </PopoverDialog>
         )}
-      </SurfacePopover>
+      </FloatingPopover>
     </Popover>
   );
 }

@@ -1,11 +1,8 @@
-import { Tabs } from "@heroui/react";
 import { TriangleAlert } from "lucide-react";
 import React, { useRef, useState } from "react";
-import { useFocusVisible } from "react-aria";
 
 import { AnchoredTooltip } from "../components/hint/AnchoredTooltip";
-import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
-import { TEXT_TAB_CLASS, TEXT_TAB_CONTAINER_CLASS, TEXT_TAB_LIST_CLASS } from "../components/tabs/textTabClasses";
+import { Tab, TabList, TabListContainer, TabPanel, Tabs, useKeyboardModality } from "../primitives";
 import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
 
@@ -50,18 +47,18 @@ export function RegionTabs({
   const current = regions.some((region) => region.id === selected) ? selected : regions[0].id;
   return (
     <Tabs selectedKey={current} onSelectionChange={(key) => onSelect(key as Region)} className="gap-4">
-      <LocalizedTabListContainer className={TEXT_TAB_CONTAINER_CLASS}>
+      <TabListContainer fit="content">
         {/* Positioned, so a departing tab's visual stays in the strip's scroll. */}
-        <Tabs.List ref={listRef} aria-label={label} className={`relative ${TEXT_TAB_LIST_CLASS}`}>
+        <TabList ref={listRef} label={label} fit="content" className="relative">
           {regions.map((region) => (
             <RegionTab key={region.id} region={region} />
           ))}
-        </Tabs.List>
-      </LocalizedTabListContainer>
+        </TabList>
+      </TabListContainer>
       {regions.map((region) => (
-        <Tabs.Panel key={region.id} id={region.id} className={PANEL_CLASS}>
+        <TabPanel key={region.id} id={region.id} className={PANEL_CLASS}>
           {region.content}
-        </Tabs.Panel>
+        </TabPanel>
       ))}
     </Tabs>
   );
@@ -79,17 +76,18 @@ function RegionTab({ region }: { region: RegionPanel }): React.ReactElement {
   const ref = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
-  const { isFocusVisible } = useFocusVisible();
+  const isFocusVisible = useKeyboardModality();
   return (
-    <Tabs.Tab
+    <Tab
       ref={ref}
       id={region.id}
       data-list-motion={region.id}
-      aria-label={region.attention ? t("configuration.import.tab.attention", { tab: region.label }) : undefined}
+      label={region.attention ? t("configuration.import.tab.attention", { tab: region.label }) : undefined}
       onHoverChange={setHovered}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      className={`gap-2 ${TEXT_TAB_CLASS}`}
+      size="content"
+      className="gap-2"
     >
       {region.label}
       {region.attention && (
@@ -98,7 +96,6 @@ function RegionTab({ region }: { region: RegionPanel }): React.ReactElement {
           <AnchoredTooltip tooltip={t("configuration.import.tab.attentionTip")} anchor={ref} placement="end" hovered={hovered || (focused && isFocusVisible)} immediate={focused} />
         </>
       )}
-      <Tabs.Indicator />
-    </Tabs.Tab>
+    </Tab>
   );
 }

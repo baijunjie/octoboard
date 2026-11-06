@@ -1,4 +1,3 @@
-import { Checkbox, Label } from "@heroui/react";
 import React from "react";
 
 import { useShortcutScopeDescription } from "../components/hooks/useShortcutScopeDescription";
@@ -10,6 +9,7 @@ import type { Inspection, shortcutsReview } from "./importPlan";
 import { ClientSettingLine, SettingLine } from "./importParts";
 import { shortcutChangeValues } from "./importValues";
 import { SettingsGroups, type CurrentSettings } from "./SettingsGroups";
+import { Checkbox } from "../primitives";
 
 /** This machine's values of the application settings the document carries that the daemon holds, in the shape of the
  * document's own. */
@@ -43,13 +43,8 @@ function CloneDirLine({
             ? <Message id="configuration.import.settingValueChange" params={{ value: fileDir, current: currentDir }} />
             : <Message id="configuration.import.cloneDir.kept" params={{ value: fileDir, current: currentDir }} />}
         </div>
-        <Checkbox variant="secondary" isSelected={use} onChange={onUse}>
-          <Checkbox.Content className="min-h-6">
-            <Checkbox.Control>
-              <Checkbox.Indicator />
-            </Checkbox.Control>
-            <Label className="text-foreground">{t("configuration.import.cloneDir.use")}</Label>
-          </Checkbox.Content>
+        <Checkbox variant="secondary" selected={use} onSelectedChange={onUse} contentClassName="min-h-6" labelClassName="text-foreground">
+          {t("configuration.import.cloneDir.use")}
         </Checkbox>
       </div>
     </SettingLine>

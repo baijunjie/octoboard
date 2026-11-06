@@ -1,7 +1,5 @@
-import { Tabs } from "@heroui/react";
 import { TriangleAlert } from "lucide-react";
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useFocusVisible, useObjectRef } from "react-aria";
 
 import { isolate } from "../../i18n/isolate";
 import { providerLabel } from "../../agents/providers";
@@ -12,8 +10,7 @@ import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { beginTabDrag, DRAG_THRESHOLD } from "./tabDrag";
 import { useLatest, useStableHandler } from "../hooks/useLatest";
 import { DURATION, releaseListMotion, useListMotion } from "../motion/useListMotion";
-import { LocalizedTabListContainer } from "./LocalizedTabListContainer";
-import { TEXT_TAB_CLASS, TEXT_TAB_LIST_CLASS } from "./textTabClasses";
+import { partSelector, Tab, TabList, TabListContainer, useKeyboardModality, useObjectRef } from "../../primitives";
 
 /** How long after keyboard focus arrives to wait for the scroll that reveals the tab to begin, and how long a
  * scroll has to be quiet before it counts as over. A tooltip is closed by a scroll under it, so one opened
@@ -24,7 +21,7 @@ const REVEAL_QUIET_MS = 100;
 /** The underline strip of agent tabs, one per agent in `agents`, for the `Tabs` it sits in: each tab
  * the agent's icon and name at its content's width, from the strip's start, and the strip scrolls with
  * its edge labels when the tabs do not fit. Its container takes `className` and the other props of
- * `Tabs.ListContainer`. `tabRef` gives a tab's element a ref callback, for the one a caller means to
+ * `TabListContainer`. `tabRef` gives a tab's element a ref callback, for the one a caller means to
  * focus. `notInstalledTip` marks the agents that are not installed: it returns the tooltip content for
  * such an agent and nothing for any other. That agent's tab gets a warning glyph after its name, "not
  * installed" in its accessible name, and the tooltip over the tab, opened by pointer hover and by
@@ -100,7 +97,7 @@ export function AgentTabList({
     overlay.current?.querySelector<HTMLElement>(`[data-tab-actions="${agent}"] button:not([hidden])`)?.focus();
   }, [order]);
   return (
-    <LocalizedTabListContainer
+    <TabListContainer
       {...container}
       data-trailing-control={trailing ? "" : undefined}
       className={`min-w-0 max-w-full ${trailing ? trailingWidth : spanning ? "" : "w-max self-start"} ${container.className ?? ""}`}
@@ -124,7 +121,7 @@ export function AgentTabList({
                     onBlur={(event) => {
                       // Focus going into this control's own menu is still its focus; going anywhere else is the user's.
                       const to = event.relatedTarget;
-                      if (to instanceof Element && !to.closest("[data-slot=dropdown-popover]")) heldFocus.current = undefined;
+                      if (to instanceof Element && !to.closest(partSelector.menuPopover)) heldFocus.current = undefined;
                       if (!(to instanceof Element && event.currentTarget.contains(to))) setFocusedAgent((now) => (now === agent ? undefined : now));
                     }}
                   >
@@ -139,12 +136,12 @@ export function AgentTabList({
       )}
     >
       {/* Positioned, so a departing tab's visual stays in the strip's scroll. */}
-      <Tabs.List ref={listRef} aria-label={label} className={`relative ${TEXT_TAB_LIST_CLASS}`}>
+      <TabList ref={listRef} label={label} fit="content" className="relative">
         {agents.map((agent) => (
           <AgentTab key={agent} providers={providers} agent={agent} tabRef={tabRef?.(agent)} notInstalledTip={notInstalledTip?.(agent)} elements={elements} onDragStart={onReorder && dragStart} onElementChange={tabsChanged} reserve={tabActions !== undefined} />
         ))}
-      </Tabs.List>
-    </LocalizedTabListContainer>
+      </TabList>
+    </TabListContainer>
   );
 }
 
@@ -206,7 +203,7 @@ function AgentTab({ providers, agent, tabRef, notInstalledTip, elements, onDragS
   // press that flips react-aria's modality also moves focus before React renders again, so `isFocusVisible`
   // read in the handler would still be the previous one. The modality update and the focus count are
   // batched into that one render, which sees both.
-  const { isFocusVisible } = useFocusVisible();
+  const isFocusVisible = useKeyboardModality();
   // `hasFocus` is the last of `onFocus` and `onBlur`, so a focus and a blur in one batch leave it false.
   const [hasFocus, setHasFocus] = useState(false);
   const [focusCount, setFocusCount] = useState(0);
@@ -244,11 +241,11 @@ function AgentTab({ providers, agent, tabRef, notInstalledTip, elements, onDragS
     };
   }, [focused, settled, dismissed, latestRef]);
   return (
-    <Tabs.Tab
+    <Tab
       id={agent}
       ref={attach}
       data-list-motion={agent}
-      aria-label={notInstalledTip ? t("agents.notInstalled", { agent: isolate(providerLabel(t, providers, agent)) }) : undefined}
+      label={notInstalledTip ? t("agents.notInstalled", { agent: isolate(providerLabel(t, providers, agent)) }) : undefined}
       onHoverChange={setHovered}
       onFocus={() => {
         setHasFocus(true);
@@ -258,7 +255,9 @@ function AgentTab({ providers, agent, tabRef, notInstalledTip, elements, onDragS
         setHasFocus(false);
         setFocusCount((count) => count + 1);
       }}
-      className={`gap-2 ${TEXT_TAB_CLASS} ${reserve ? "pe-9" : ""}`}
+      size="content"
+      indicatorClassName="-bottom-1.5"
+      className={reserve ? "gap-2 pe-9" : "gap-2"}
     >
       <AgentIcon agent={agent} />
       {providerLabel(t, providers, agent)}
@@ -274,8 +273,7 @@ function AgentTab({ providers, agent, tabRef, notInstalledTip, elements, onDragS
           />
         </>
       )}
-      <Tabs.Indicator className="-bottom-1.5" />
-    </Tabs.Tab>
+    </Tab>
   );
 }
 
@@ -309,7 +307,7 @@ function useTabActionPlaces(overlay: React.RefObject<HTMLElement | null>, agents
       const tab = frame.parentElement?.querySelector<HTMLElement>(`[role="tab"][data-key="${agent}"]`);
       if (!tab) continue;
       const box = tab.getBoundingClientRect();
-      const scroller = tab.closest(".scroll-shadow")?.getBoundingClientRect();
+      const scroller = tab.closest(partSelector.scrollShadow)?.getBoundingClientRect();
       const left = (rtl ? box.left + TAB_ACTION_INSET : box.right - TAB_ACTION_SIZE - TAB_ACTION_INSET) - origin.left;
       const top = box.top + (box.height - TAB_ACTION_SIZE) / 2 - origin.top;
       const absolute = left + origin.left;

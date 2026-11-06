@@ -1,10 +1,9 @@
-import { ColorSwatchPicker } from "@heroui/react";
-import { ListBoxContext, parseColor } from "react-aria-components";
 import React from "react";
 
 import { type ConsoleSessionColour } from "../protocol";
 import { sessionColourHex, CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
 import { useOctoboardTheme } from "../preferences/theme";
+import { ColorSwatch, ColorSwatchPicker } from "../primitives";
 
 /** How many swatches a row holds; `grid-cols-8` below. */
 const COLUMNS = 8;
@@ -62,27 +61,22 @@ export function SessionColourSwatches({
       onClickCapture={closeOnCurrent}
       onKeyDownCapture={(event) => (event.key === "Enter" || event.key === " ") && closeOnCurrent(event)}
     >
-      {/* The picker is a list box: this puts focus into it, on the current swatch, where the arrow
-          keys go on from, rather than on the dialog around it. */}
-      <ListBoxContext value={{ autoFocus }}>
-        <ColorSwatchPicker
-          aria-labelledby={labelledBy}
-          size="sm"
-          className="grid grid-cols-8 gap-1.5 p-2"
-          value={current ? parseColor(current) : undefined}
-          onChange={(picked) => {
-            const chosen = swatches.find((swatch) => swatch.value === picked.toString("hex").toLowerCase());
-            if (chosen) onChoose(chosen.entry);
-          }}
-        >
-          {swatches.map(({ entry, value }, index) => (
-            <ColorSwatchPicker.Item key={entry} color={value} data-panel-edge={index % COLUMNS === 0 ? "start" : undefined}>
-              <ColorSwatchPicker.Swatch className="session-colour-ring" />
-              <ColorSwatchPicker.Indicator />
-            </ColorSwatchPicker.Item>
-          ))}
-        </ColorSwatchPicker>
-      </ListBoxContext>
+      {/* `autoFocus` puts focus into the picker, on the current swatch, where the arrow keys go on from, rather than
+          on the dialog around it. */}
+      <ColorSwatchPicker
+        labelledBy={labelledBy}
+        autoFocus={autoFocus}
+        className="grid grid-cols-8 gap-1.5 p-2"
+        value={current}
+        onChange={(picked) => {
+          const chosen = swatches.find((swatch) => swatch.value === picked);
+          if (chosen) onChoose(chosen.entry);
+        }}
+      >
+        {swatches.map(({ entry, value }, index) => (
+          <ColorSwatch key={entry} color={value} swatchClassName="session-colour-ring" data-panel-edge={index % COLUMNS === 0 ? "start" : undefined} />
+        ))}
+      </ColorSwatchPicker>
     </div>
   );
 }

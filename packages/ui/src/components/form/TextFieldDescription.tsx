@@ -1,4 +1,4 @@
-import { Description } from "@heroui/react";
+import { Description } from "../../primitives";
 
 import { Message, useT } from "../../i18n/react";
 import { textLength } from "./textLength";

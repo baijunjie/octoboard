@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { CircleCheck } from "lucide-react";
 
 import { AttendedStatusAnnouncer } from "../components/announce/AttendedStatusAnnouncer";
-import { Button } from "../components/controls/Button";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { InlineReference } from "../i18n/InlineReference";
 import { StatusBadge } from "../components/status/StatusBadge";
@@ -16,6 +15,7 @@ import { LeadRows, SettingsLead } from "./SettingsLead";
 import { useMacosPermissions } from "./useMacosPermissions";
 import { useSectionRefocus } from "./useSectionRefocus";
 import { raiseError } from "../components/alerts/raiseError";
+import { Button } from "../primitives";
 
 const PERMISSIONS = [
   {
@@ -205,11 +205,11 @@ export function PermissionsSection(): React.ReactElement {
                   {t("settings.permissions.grantedBadge")}
                 </StatusBadge>
               ) : (refused[kind] ? (
-                <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => void openPane(kind, systemPane)}>
+                <Button size="sm" variant="secondary" focusOnPress={false} onPress={() => void openPane(kind, systemPane)}>
                   {t("settings.permissions.openSettings")}
                 </Button>
               ) : (
-                <Button size="sm" variant="primary" preventFocusOnPress isPending={pending[kind]} onPress={() => void grant(kind, label, systemPane)}>
+                <Button size="sm" variant="primary" focusOnPress={false} pending={pending[kind]} onPress={() => void grant(kind, label, systemPane)}>
                   {t("settings.permissions.grant")}
                 </Button>
               ))}

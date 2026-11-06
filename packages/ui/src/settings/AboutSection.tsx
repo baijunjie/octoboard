@@ -3,7 +3,6 @@ import React, { useState } from "react";
 import appIcon from "../../../../apps/desktop/src-tauri/icons/128x128.png?inline";
 import { ThirdPartyLicensesDialog } from "../about/ThirdPartyLicensesDialog";
 import { appConfig } from "../appConfig";
-import { Button } from "../components/controls/Button";
 import { ExternalLink } from "../components/text/ExternalLink";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
@@ -11,6 +10,7 @@ import { usePlatform } from "../platform/react";
 import { useUpdateSelector } from "../updates/UpdatesProvider";
 import { SettingRow } from "./SettingRow";
 import { UpdatesSetting } from "./UpdatesSetting";
+import { Button } from "../primitives";
 
 /** A web address as people write it, without its scheme. */
 const shown = (address: string) => address.replace(/^https?:\/\//, "");

@@ -12,7 +12,6 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 
 import { useExternalLinkAction } from "../../components/text/ExternalLink";
-import { useFocusVisibleProps } from "../../components/focus/useFocusVisibleProps";
 import { textDirection } from "../../i18n/languages";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import { type Direction, type DirectionNode, firstStrongDirection } from "./blockDirection";
@@ -25,6 +24,7 @@ import { headingIds, limitRenderings, prepareMarkdown } from "./markdownPlugins"
 import { markdownStyle, type MarkdownStyle } from "./markdownStyle";
 import { MermaidBlock } from "./MermaidBlock";
 import { resolveProjectAddress } from "./projectAddress";
+import { useFocusVisibleProps } from "../../primitives";
 
 export { openableAddress } from "./projectAddress";
 

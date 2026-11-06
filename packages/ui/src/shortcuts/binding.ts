@@ -1,5 +1,6 @@
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { IS_MAC } from "../input/keys";
+import type { KbdKey } from "../primitives";
 
 /**
  * A key combination in the form it is stored and exported in. `code` is the physical key
@@ -69,8 +70,8 @@ export function parseBinding(value: unknown): Binding | undefined {
   return normalize(record as unknown as Binding);
 }
 
-/** The key names HeroUI's `Kbd.Abbr` draws as a symbol. */
-const SYMBOL_KEYS: Record<string, "tab" | "enter" | "space" | "delete" | "up" | "down" | "left" | "right" | "home" | "end" | "pageup" | "pagedown"> = {
+/** The key names HeroUI's key caps draw as a symbol (`KbdAbbr`). */
+const SYMBOL_KEYS: Record<string, KbdKey> = {
   Tab: "tab",
   Enter: "enter",
   Space: "space",
@@ -107,8 +108,8 @@ function keyText(code: string): string {
 }
 
 export interface BindingPart {
-  /** A modifier or a key `Kbd.Abbr` has a symbol for. */
-  abbr?: "command" | "shift" | "ctrl" | "option" | "win" | "alt" | NonNullable<(typeof SYMBOL_KEYS)[string]>;
+  /** A modifier or a key `KbdAbbr` has a symbol for. */
+  abbr?: KbdKey;
   /** The key's own text, where it has no symbol. */
   text?: string;
 }
@@ -130,7 +131,7 @@ export function bindingParts(binding: Binding): BindingPart[] {
   return parts;
 }
 
-/** What a screen reader says for each `Kbd.Abbr` key: macOS says Control for its ⌃, and Ctrl is the key of that name elsewhere. */
+/** What a screen reader says for each `KbdAbbr` key: macOS says Control for its ⌃, and Ctrl is the key of that name elsewhere. */
 const SPOKEN_NAMES = {
   command: "settings.shortcuts.key.command",
   shift: "settings.shortcuts.key.shift",

@@ -1,6 +1,4 @@
-import { Toast, toast, type ToastContentValue } from "@heroui/react";
 import React, { useCallback, useEffect } from "react";
-import type { QueuedToast } from "react-aria-components";
 
 import { CodeToneContext } from "../i18n/codeTone";
 import { DaemonErrorMessage, DaemonErrorTitle } from "../components/alerts/DaemonErrorMessage";
@@ -15,6 +13,7 @@ import { TOAST_BREAKPOINT } from "../components/dialog/toastGeometry";
 import { TitledControl } from "../components/hint/TitledControl";
 import { useMediaQuery } from "../components/hooks/breakpoint";
 import { useLatest } from "../components/hooks/useLatest";
+import { closeToast, partSelector, showToast as queueToast, Toast, ToastCloseButton, ToastContent, ToastDescription, type ToastEntry, ToastIndicator, ToastRegion, ToastTitle } from "../primitives";
 
 /** How long a notice stays before it dismisses itself. */
 const NOTICE_DURATION_MS = 5000;
@@ -74,7 +73,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
 
     region.addEventListener("mousedown", (event) => {
       const target = event.target as Element;
-      if (!target.closest('[data-slot="toast-title"], [data-slot="toast-description"]')) {
+      if (!target.closest(partSelector.toastText)) {
         event.preventDefault();
         return;
       }
@@ -133,9 +132,9 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
   const narrow = !useMediaQuery(() => WIDE_QUERY);
 
   return (
-    <Toast.Provider ref={keepFocus} hotkey={[]} placement={narrow ? "top" : "bottom end"}>
+    <ToastRegion ref={keepFocus} hotkey={[]} placement={narrow ? "top" : "bottom end"}>
       {renderToast}
-    </Toast.Provider>
+    </ToastRegion>
   );
 }
 
@@ -162,28 +161,27 @@ function showToast({ kind, message, session, daemonError, daemonTitle, content }
   };
 
   const existing = shownToasts.get(signature);
-  if (existing) toast.close(existing);
+  if (existing) closeToast(existing);
   // Closing the old copy fires its `onClose` synchronously, which forgets the signature, before
   // the new copy is registered below, so a copy's `onClose` never sees a newer copy's entry.
-  const key: string = toast(title, { ...options, onClose: () => shownToasts.delete(signature) });
+  const key = queueToast(title, { ...options, onClose: () => shownToasts.delete(signature) });
   shownToasts.set(signature, key);
 }
 
 /** HeroUI's default toast, with a close button that does not take focus on a press. */
-function renderToast({ toast: queued }: { toast: QueuedToast<ToastContentValue> }): React.ReactElement {
-  const { title, description, variant } = queued.content;
+function renderToast({ title, description, variant }: ToastEntry): React.ReactElement {
   return (
-    <Toast toast={queued} variant={variant}>
-      <Toast.Indicator variant={variant} />
-      <Toast.Content>
+    <Toast variant={variant}>
+      <ToastIndicator variant={variant} />
+      <ToastContent>
         {/* The title is the toast's own tone, so a literal in it takes that tone; the description stays neutral. */}
         {!!title && (
           <CodeToneContext.Provider value={variant === "danger" ? "danger" : "accent"}>
-            <Toast.Title>{title}</Toast.Title>
+            <ToastTitle>{title}</ToastTitle>
           </CodeToneContext.Provider>
         )}
-        {!!description && <Toast.Description elementType="div">{description}</Toast.Description>}
-      </Toast.Content>
+        {!!description && <ToastDescription>{description}</ToastDescription>}
+      </ToastContent>
       <ToastClose />
     </Toast>
   );
@@ -193,7 +191,7 @@ function ToastClose(): React.ReactElement {
   const t = useT();
   return (
     <TitledControl title={t("common.close")}>
-      <Toast.CloseButton aria-label={t("common.close")} preventFocusOnPress />
+      <ToastCloseButton label={t("common.close")} focusOnPress={false} />
     </TitledControl>
   );
 }

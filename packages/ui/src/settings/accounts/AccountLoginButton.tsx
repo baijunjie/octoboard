@@ -2,7 +2,6 @@ import { LogIn } from "lucide-react";
 import React, { useEffect, useId, useRef, useState } from "react";
 
 import { ICON_TRIGGER_BASE_CLASS, ICON_TRIGGER_CLASS } from "../../components/controls/iconTrigger";
-import { Button } from "../../components/controls/Button";
 import { TitledControl } from "../../components/hint/TitledControl";
 import { isolate } from "../../i18n/isolate";
 import { useT } from "../../i18n/react";
@@ -15,6 +14,7 @@ import { canTakeFocus } from "../../components/focus/regionFocus";
 import { useLatest } from "../../components/hooks/useLatest";
 import { ringForAutomaticFocus } from "../../input/touchInput";
 import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
+import { Button } from "../../primitives";
 
 /** Told, as the login dialog a Log in button opened closes, whether the login succeeded, and the cancel closing it
  * sent, if any. */
@@ -117,10 +117,10 @@ export function AccountLoginButton({ agent, account, name, quota, turnedOff, onL
       <Button
         ref={button}
         variant="ghost"
-        preventFocusOnPress
-        aria-disabled={active ? true : undefined}
-        aria-describedby={active ? reasonId : undefined}
-        aria-label={t("settings.accounts.login.open", { name: isolate(name) })}
+        focusOnPress={false}
+        unavailable={active}
+        describedBy={active ? reasonId : undefined}
+        label={t("settings.accounts.login.open", { name: isolate(name) })}
         className={active ? UNAVAILABLE_CLASS : ICON_TRIGGER_CLASS}
         onPress={() => {
           if (active) return;

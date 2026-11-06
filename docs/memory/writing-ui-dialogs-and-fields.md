@@ -99,7 +99,8 @@ typed. Gate the submit on what `attempt` answers rather than re-checking the val
 Marking a field invalid yourself carries two conditions wherever that field is built — `TextInput` already meets
 both, a field assembled anywhere else has to:
 
-- Pass `validationBehavior="aria"` to the react-aria-components field. It defaults to `"native"`, which feeds a
+- Keep `validationBehavior="aria"` on the react-aria-components field; the wrapper layer's `TextField` and `Select`
+  set it for every field built from them. It defaults to `"native"`, which feeds a
   controlled `isInvalid` to the browser's own constraint validation (`setCustomValidity`); the browser then refuses
   the `<form>` submit before the dialog's `onSubmit` runs, and since the mark only ever appears from that handler,
   the dialog locks itself out of submitting at all.
@@ -154,8 +155,8 @@ because of one above it is fine.
 
 `Dialog` (`packages/ui/src/components/dialog/Dialog.tsx`) is a titled frame around a single scrolling body, plus an optional
 footer, and every modal in `packages/ui` whose content is one body is built on it. A modal whose content is a set of
-panels that each scroll on their own is the other shape: it keeps a frame of its own, assembled from HeroUI's
-`Modal.*` parts, and takes the fade inside each panel. The settings dialog
+panels that each scroll on their own is the other shape: it keeps a frame of its own, assembled from the wrapper layer's
+`Modal` and its parts, and takes the fade inside each panel. The settings dialog
 (`packages/ui/src/settings/SettingsDialog.tsx`) is that, deliberately — not a surface left behind waiting to be moved
 onto `Dialog`. Do not widen `Dialog` with an absent header, a mode where the content is panels rather than one body,
 or a size of its own in order to take such a modal in.

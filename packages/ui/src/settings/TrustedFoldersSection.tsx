@@ -1,7 +1,6 @@
 import { FolderOpen } from "lucide-react";
 import React, { useState } from "react";
 
-import { Button } from "../components/controls/Button";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { InlineReference } from "../i18n/InlineReference";
 import { MarkedPath } from "../components/text/MarkedPath";
@@ -16,6 +15,7 @@ import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow } from "./SettingRow";
 import { LeadRows, SettingsLead } from "./SettingsLead";
 import { useSectionRefocus } from "./useSectionRefocus";
+import { Button } from "../primitives";
 
 /** The folders under which Octoboard presses every agent's trust confirmation for every project —
  * the parent-directory form of the one permission all agents share — with a way to stop each.
@@ -53,10 +53,10 @@ export function TrustedFoldersSection(): React.ReactElement {
                   <Button
                     size="sm"
                     variant="danger-soft"
-                    preventFocusOnPress
+                    focusOnPress={false}
                     // The tooltip nearly repeats the accessible name; an empty description keeps it from being read twice.
-                    aria-describedby=""
-                    aria-label={t("settings.trusted.removeLabel", { path: isolate(path) })}
+                    describedBy=""
+                    label={t("settings.trusted.removeLabel", { path: isolate(path) })}
                     onPress={() => setRemoving(path)}
                   >
                     {t("common.remove")}

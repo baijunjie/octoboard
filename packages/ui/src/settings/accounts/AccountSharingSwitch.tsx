@@ -1,4 +1,3 @@
-import { Label, ProgressBar } from "@heroui/react";
 import React, { useId, useRef, useState } from "react";
 
 import { ProviderMessage } from "../../agents/ProviderMessage";
@@ -16,6 +15,7 @@ import type { Account, AccountSharing } from "../../protocol";
 import { useDaemon, useDaemonStore, useProviders } from "../../store";
 import { SettingRow, SettingSwitch } from "../SettingRow";
 import { alertFailure } from "../../components/alerts/raiseError";
+import { Label, ProgressBar, ProgressBarTrack } from "../../primitives";
 
 /** An account's Share default configuration switch (see "The sharing choice" in
  * `docs/product/sharing-the-default-configuration.md`), shown for every account but the agent's default one, in the
@@ -190,15 +190,15 @@ function SharingProgress({ id, progress }: { id: string; progress: NonNullable<A
       <ProgressBar
         value={progress.done}
         maxValue={Math.max(progress.total, 1)}
-        isIndeterminate={!entries}
+        indeterminate={!entries}
         valueLabel={count}
-        aria-describedby={entries ? undefined : `${id}-value`}
+        describedBy={entries ? undefined : `${id}-value`}
       >
         <div className="flex items-baseline justify-between gap-2">
           <span id={`${id}-label`}><Label>{label}</Label></span>
           <span id={`${id}-value`} className="text-app-muted">{entries ? count : wait}</span>
         </div>
-        <ProgressBar.Track><ProgressBar.Fill /></ProgressBar.Track>
+        <ProgressBarTrack />
       </ProgressBar>
       {entries && (
         <p id={`${id}-current`} className="[overflow-wrap:anywhere]">

@@ -42,7 +42,7 @@ export function DeleteArchivedDialog({ dialog, onClose }: {
       confirmLabel={t("dialog.deleteArchived.confirm")}
       destructive
       waiting={cleanup.pending}
-      extraControl={(busy) => extraControl(busy, { label: t("dialog.deleteArchived.trashRecords"), hint: t("dialog.deleteArchived.trashRecordsNote") })}
+      extraControl={extraControl({ label: t("dialog.deleteArchived.trashRecords"), hint: t("dialog.deleteArchived.trashRecordsNote") })}
       onCancel={onClose}
       onConfirm={async () => {
         // Built outside the `try`: the React Compiler leaves a component with optional chaining inside one uncompiled.

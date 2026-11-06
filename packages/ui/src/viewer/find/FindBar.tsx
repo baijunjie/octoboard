@@ -1,15 +1,14 @@
-import { Input, ToggleButton } from "@heroui/react";
 import { CaseSensitive, ChevronDown, ChevronUp, Regex, Search, SearchX, WholeWord, X } from "lucide-react";
 import React, { useId } from "react";
 
 import { StatusAnnouncer, AFTER_FOCUS_MOVE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
-import { Button } from "../../components/controls/Button";
 import { IconToggle } from "../../components/controls/IconToggle";
 import { ROW_ICON_BUTTON_CLASS } from "../../components/controls/RowControls";
 import { TitledControl } from "../../components/hint/TitledControl";
 import { isImeKey } from "../../input/imeKey";
 import { useT } from "../../i18n/react";
 import type { FindOptions } from "./find";
+import { Button, Input, ToggleButton } from "../../primitives";
 
 /** How a search stands, for the count beside the query. */
 export type FindStatus =
@@ -99,10 +98,9 @@ export function FindBar({
       <Input
         ref={inputRef}
         data-1p-ignore
-        aria-label={t("viewer.find")}
-        aria-describedby={countId}
-        aria-invalid={invalid || undefined}
-        data-invalid={invalid ? "true" : undefined}
+        label={t("viewer.find")}
+        describedBy={countId}
+        invalid={invalid}
         value={query}
         placeholder={t("viewer.find.placeholder")}
         dir="auto"
@@ -112,7 +110,7 @@ export function FindBar({
         autoCorrect="off"
         variant="secondary"
         className="h-6 w-48 min-w-12 shrink text-sm"
-        onChange={(event) => onQueryChange(event.target.value)}
+        onChange={onQueryChange}
         onKeyDown={(event) => {
           if (event.key !== "Enter" || isImeKey(event.nativeEvent)) return;
           event.preventDefault();
@@ -127,31 +125,31 @@ export function FindBar({
       {OPTIONS.map(({ option, label, Icon }) => (
         <TitledControl key={option} title={t(label)}>
           <ToggleButton
-            isIconOnly
+            iconOnly
             size="sm"
             variant="ghost"
             className={TOGGLE_CLASS}
-            aria-label={t(label)}
-            isSelected={options[option]}
-            onChange={(selected) => onOptionsChange({ ...options, [option]: selected })}
-            preventFocusOnPress
+            label={t(label)}
+            selected={options[option]}
+            onSelectedChange={(selected) => onOptionsChange({ ...options, [option]: selected })}
+            focusOnPress={false}
           >
             <Icon aria-hidden="true" className="size-4" />
           </ToggleButton>
         </TitledControl>
       ))}
       <TitledControl title={t("viewer.find.previous")}>
-        <Button isIconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} aria-label={t("viewer.find.previous")} isDisabled={stepDisabled} onPress={() => onStep("previous")} preventFocusOnPress>
+        <Button iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.previous")} disabled={stepDisabled} onPress={() => onStep("previous")} focusOnPress={false}>
           <ChevronUp aria-hidden="true" className="size-4" />
         </Button>
       </TitledControl>
       <TitledControl title={t("viewer.find.next")}>
-        <Button isIconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} aria-label={t("viewer.find.next")} isDisabled={stepDisabled} onPress={() => onStep("next")} preventFocusOnPress>
+        <Button iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.next")} disabled={stepDisabled} onPress={() => onStep("next")} focusOnPress={false}>
           <ChevronDown aria-hidden="true" className="size-4" />
         </Button>
       </TitledControl>
       <TitledControl title={t("viewer.find.close")}>
-        <Button isIconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} aria-label={t("viewer.find.close")} onPress={onClose}>
+        <Button iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.close")} onPress={onClose}>
           <X aria-hidden="true" className="size-4" />
         </Button>
       </TitledControl>

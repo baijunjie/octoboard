@@ -1,6 +1,6 @@
 import React from "react";
 
-import { Button } from "../components/controls/Button";
+import { Button } from "../primitives";
 import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
 import { ExternalLink } from "../components/text/ExternalLink";
 import { AvatarField } from "../dialogs/AvatarField";
@@ -30,7 +30,7 @@ export function ButtonsGallery(): React.ReactElement {
                   {VARIANTS.map((variant) => (
                     <span key={variant} className="flex items-center gap-2">
                       <Button size={size} variant={variant}>Save</Button>
-                      <Button size={size} variant={variant} isPending>Save</Button>
+                      <Button size={size} variant={variant} pending>Save</Button>
                     </span>
                   ))}
                 </div>

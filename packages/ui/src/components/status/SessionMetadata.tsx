@@ -1,4 +1,3 @@
-import { Meter, ProgressCircle } from "@heroui/react";
 import React from "react";
 
 import { isolate } from "../../i18n/isolate";
@@ -9,6 +8,7 @@ import { formatRelativeTime } from "../../format/relativeTime";
 import { useNow } from "../../format/useNow";
 import { IndicatorTooltip } from "../hint/IndicatorTooltip";
 import { StatusBadge } from "./StatusBadge";
+import { Meter, ProgressCircle } from "../../primitives";
 
 export function hasVisibleContext(context: SessionContext | null | undefined): context is SessionContext {
   return (context?.tokens ?? 0) > 0;
@@ -26,12 +26,7 @@ function contextTone(percent: number): string {
  * its badge, its arc in the tone of how full the window is. */
 function ContextRing({ label, percent }: { label: string; percent: number }): React.ReactElement {
   return (
-    <ProgressCircle aria-label={label} value={percent} className={`context-ring shrink-0 ${contextTone(percent)}`}>
-      <ProgressCircle.Track className="size-3">
-        <ProgressCircle.TrackCircle />
-        <ProgressCircle.FillCircle />
-      </ProgressCircle.Track>
-    </ProgressCircle>
+    <ProgressCircle label={label} value={percent} className={`context-ring shrink-0 ${contextTone(percent)}`} trackClassName="size-3" />
   );
 }
 
@@ -55,11 +50,7 @@ function ContextTooltip({ title, amount, usage }: { title: string; amount: strin
       {usage && (
         <>
           <div aria-hidden="true">
-            <Meter aria-label={title} value={usage.percent} className={`gap-0 ${contextTone(usage.percent)}`}>
-              <Meter.Track>
-                <Meter.Fill />
-              </Meter.Track>
-            </Meter>
+            <Meter label={title} value={usage.percent} className={`gap-0 ${contextTone(usage.percent)}`} />
           </div>
           <div className="flex items-baseline justify-between gap-x-6 text-app-muted tabular-nums">
             <span>{usage.used}</span>

@@ -1,13 +1,11 @@
-import { Tooltip } from "@heroui/react";
-import React, { useContext, useEffect, useRef, useState } from "react";
-import { mergeProps, useFocusable } from "react-aria";
-import { Popover as SurfacePopover, TooltipContext, TooltipTriggerStateContext, useSlottedContext } from "react-aria-components";
+import React, { useEffect, useRef, useState } from "react";
 
 import { useT } from "../../i18n/react";
 import { isImeKey } from "../../input/imeKey";
 import { interactionIsTouch } from "../../input/touchInput";
 import { useLatest } from "../hooks/useLatest";
 import { OFFSET, PLACEMENT, TOOLTIP_SURFACE } from "./hintSurface";
+import { FloatingPopover, Tooltip, TooltipContent, TooltipTrigger, useTooltipState } from "../../primitives";
 
 // The tooltip kinds of `Hint` (see Hint.tsx): `control`, `indicator` and `anchored`, and the touch popover
 // they open in place of a tooltip, which a finger has no hover to answer with.
@@ -19,32 +17,8 @@ import { OFFSET, PLACEMENT, TOOLTIP_SURFACE } from "./hintSurface";
 function TooltipSurface({
   placement = PLACEMENT,
   ...props
-}: Omit<React.ComponentProps<typeof Tooltip.Content>, "className">): React.ReactElement {
-  const trigger = useSlottedContext(TooltipContext);
-  useCloseWhenTriggerInert(props.triggerRef ?? trigger?.triggerRef);
-  return <Tooltip.Content {...props} placement={placement} offset={OFFSET} className="control-fills pointer-events-none" />;
-}
-
-/** Closes the open tooltip once what it belongs to is inside an inert region: a modal overlay opening over it (a
- * dialog, or a modal popover such as a menu), which react-aria marks with `inert` as it opens (`ariaHideOutside`), or
- * a region the app makes inert itself. The overlay covers the trigger without the pointer leaving it, so a pointer at
- * rest sends no `pointerleave`, and the tooltip would stay drawn over the overlay, naming a control that can no longer
- * be reached, until the pointer next moves. A combo box's open list hides the page with `aria-hidden` instead, which
- * leaves it usable, so it does not close the tooltip. */
-function useCloseWhenTriggerInert(triggerRef: React.RefObject<Element | null> | undefined): void {
-  const state = useContext(TooltipTriggerStateContext);
-  const close = useLatest(state?.close);
-  const isOpen = state?.isOpen ?? false;
-  useEffect(() => {
-    if (!isOpen || !triggerRef) return;
-    const closeIfInert = () => {
-      if (triggerRef.current?.closest("[inert]")) close.current?.(true);
-    };
-    closeIfInert();
-    const observer = new MutationObserver(closeIfInert);
-    observer.observe(document.body, { attributes: true, attributeFilter: ["inert"], subtree: true });
-    return () => observer.disconnect();
-  }, [isOpen, triggerRef, close]);
+}: Omit<React.ComponentProps<typeof TooltipContent>, "className" | "offset">): React.ReactElement {
+  return <TooltipContent {...props} placement={placement} offset={OFFSET} className="control-fills pointer-events-none" />;
 }
 
 /** The open state of a touch popover and the element it is placed against, which the press that
@@ -91,27 +65,27 @@ function TouchPopover({
   const t = useT();
   const named = label && label !== children && !labelRepeatsTooltip;
   return (
-    <SurfacePopover
-      isOpen={state.isOpen}
+    <FloatingPopover
+      open={state.isOpen}
       onOpenChange={state.setOpen}
-      triggerRef={state.anchor}
+      anchor={state.anchor}
       placement={placement ?? PLACEMENT}
       offset={OFFSET}
-      aria-label={named ? label : t("hint.name")}
+      label={named ? label : t("hint.name")}
       className={TOOLTIP_SURFACE}
     >
       {children}
-    </SurfacePopover>
+    </FloatingPopover>
   );
 }
 
 /** Gives a control a HeroUI tooltip, which shows on hover and on keyboard focus. HeroUI's buttons
  * are react-aria-components', which drop a native `title` prop (`filterDOMProps`). The child must
- * be a single react-aria-components control (a HeroUI `Button`, `CloseButton`, `Dropdown.Trigger`,
- * `Modal.CloseTrigger`); any other child silently gets no tooltip. Such a control picks the
- * tooltip's trigger behaviour up from context, so no element is added around it, which keeps a
- * mouse press from taking focus (`preventFocusOnPress` still holds) and leaves layout alone.
- * `Tooltip.Trigger` is deliberately not used: it renders a focusable `role="button"` wrapper.
+ * be a single layer control (a `Button`, `ToggleButton`, `MenuTrigger`, `ModalCloseButton`); any
+ * other child silently gets no tooltip. Such a control picks the tooltip's trigger behaviour up
+ * from context, so no element is added around it, which keeps a mouse press from taking focus
+ * (`focusOnPress={false}` still holds) and leaves layout alone. `TooltipTrigger` is deliberately
+ * not used: it renders a trigger element of its own.
  *
  * A tooltip is a label, not a surface to interact with: it closes the instant the pointer leaves
  * the trigger (`--tooltip-close-delay: 0s` in `style.css`, where HeroUI's default lingers), and it
@@ -121,8 +95,8 @@ function TouchPopover({
  *
  * While a tooltip is open react-aria links it to the control as its description
  * (`aria-describedby`), and VoiceOver speaks a description after the name. A tooltip that only
- * repeats the control's `aria-label` would thus be heard twice, so such a control is given an empty
- * `aria-describedby`, which wins over the tooltip's and refers to nothing. A tooltip that says more
+ * repeats the control's accessible name (its `label`) would thus be heard twice, so such a control is given an empty
+ * `aria-describedby` (`describedBy=""`), which wins over the tooltip's and refers to nothing. A tooltip that says more
  * than the name stays its description, and a control that sets its own `aria-describedby` keeps
  * it.
  *
@@ -140,7 +114,7 @@ export function ControlHint({
 }: {
   /** What the tooltip says. */
   tooltip: React.ReactNode;
-  children: React.ReactElement<{ "aria-label"?: string; "aria-describedby"?: string }>;
+  children: React.ReactElement<{ label?: string; describedBy?: string }>;
   /** Where the tooltip opens relative to the control; HeroUI's default is above it. `end` is the
    * reading direction's, so a control on a vertical strip at the window's start edge opens it
    * toward the content under either direction. `bottom` keeps a header control's tooltip below
@@ -159,11 +133,11 @@ export function ControlHint({
 }): React.ReactElement {
   if (!title) return children;
   const own = children.props;
-  const repeatsName = own["aria-label"] === title && own["aria-describedby"] === undefined;
   const extra: Partial<typeof own> = {};
-  if (repeatsName) extra["aria-describedby"] = "";
+  // The layer's controls (`Button`, `ModalCloseButton`) take the name and the description as `label` and `describedBy`.
+  if (own.label === title && own.describedBy === undefined) extra.describedBy = "";
   return (
-    <Tooltip trigger={focusOnly ? "focus" : undefined} isDisabled={isDisabled} shouldCloseOnPress={keepOpenOnPress ? false : undefined} onOpenChange={onOpenChange}>
+    <Tooltip focusOnly={focusOnly} disabled={isDisabled} keepOpenOnPress={keepOpenOnPress} onOpenChange={onOpenChange}>
       {Object.keys(extra).length > 0 ? React.cloneElement(children, extra) : children}
       <TooltipSurface placement={placement}>{title}</TooltipSurface>
     </Tooltip>
@@ -174,18 +148,16 @@ export function ControlHint({
  * A tooltip on a non-control indicator (a badge, a mark): it shows on pointer hover only, and a
  * touch or pen tap on it opens the same content in a popover drawn like the tooltip
  * (`TOOLTIP_SURFACE`), since a finger has no hover. The indicator is no control, so it is no tab
- * stop (`tabIndex={-1}`, which `Tooltip.Trigger` lets a prop override: its own is a focusable
- * `role="button"` `div`) and a press does not focus it, which would take focus off the terminal.
- * That is why it is `Tooltip.Trigger` rather than the `control` kind, which needs a
- * react-aria-components control as its child. With a `label` the trigger is a named `role="img"`;
+ * stop and a press does not focus it, which would take focus off the terminal (`TooltipTrigger`).
+ * That is why it is `TooltipTrigger` rather than the `control` kind, which needs a layer control
+ * as its child. With a `label` the trigger is a named `role="img"`;
  * without one it is `role="presentation"`, for an indicator whose meaning reaches assistive
  * technology some other way (the row's own accessible name); browsers ignore that role on a
  * focusable element, so the trigger is still exposed as a generic one, which is harmless.
  * `className` lays out the trigger around `children`.
  *
  * The trigger is a `div`, which is not valid inside a paragraph or a heading; `phrasing` makes it a `span`
- * for an indicator in one (the viewer title's status chip). `Tooltip.Trigger` has no element choice, so that form is the same trigger
- * built on `useFocusable`, which is where `Tooltip.Trigger` takes the tooltip's trigger props from.
+ * for an indicator in one (the viewer title's status chip).
  *
  * The trigger takes no `aria-hidden`: `role="presentation"` keeps the trigger itself out of the
  * way, but not what it wraps, so an indicator carrying text rather than a hidden glyph has to hide
@@ -231,36 +203,26 @@ export function IndicatorHint({
   children: React.ReactNode;
 }): React.ReactElement {
   const popover = useTouchPopover();
-  const Trigger = phrasing ? PhrasingTrigger : Tooltip.Trigger;
-  const naming = label ? ({ role: "img", "aria-label": label } as const) : ({ role: "presentation" } as const);
   // The click that ends a press does not carry the pointer; what the interaction came from is
   // recorded at its pointerdown.
-  const touch = touchPopover ? { onClick: (event: React.MouseEvent<HTMLElement>) => interactionIsTouch() && popover.open(event.currentTarget) } : undefined;
+  const onClick = touchPopover ? (element: HTMLElement) => interactionIsTouch() && popover.open(element) : undefined;
   return (
     <>
-      <Tooltip isDisabled={popover.isOpen}>
-        <Trigger
-          {...naming}
-          {...touch}
-          tabIndex={-1}
+      <Tooltip disabled={popover.isOpen}>
+        <TooltipTrigger
+          phrasing={phrasing}
+          role={label ? "img" : "presentation"}
+          label={label}
+          onClick={onClick}
           className={touchPopover ? `touch-target ${className ?? ""}` : className}
-          onMouseDown={(event) => event.preventDefault()}
         >
           {children}
-        </Trigger>
+        </TooltipTrigger>
         <TooltipSurface>{tooltip}</TooltipSurface>
       </Tooltip>
       {touchPopover && <TouchPopover state={popover} label={label} labelRepeatsTooltip={labelRepeatsTooltip}>{tooltip}</TouchPopover>}
     </>
   );
-}
-
-/** `Tooltip.Trigger` as a `span`: the tooltip's trigger props come from context through `useFocusable`,
- * and the caller's own props win, as they do on `Tooltip.Trigger`. */
-function PhrasingTrigger(props: React.ComponentProps<"span">): React.ReactElement {
-  const ref = useRef<HTMLSpanElement>(null);
-  const { focusableProps } = useFocusable({}, ref);
-  return <span ref={ref} {...mergeProps(focusableProps, props)} />;
 }
 
 /**
@@ -324,7 +286,7 @@ export function AnchoredHint({
   return (
     <Tooltip>
       <OpenWhileMounted immediate={immediate} anchor={anchor} />
-      <TooltipSurface triggerRef={anchor} placement={placement} data-anchored-tooltip="">
+      <TooltipSurface anchor={anchor} placement={placement} data-anchored-tooltip="">
         {tooltip}
       </TooltipSurface>
     </Tooltip>
@@ -334,7 +296,7 @@ export function AnchoredHint({
 /** Reports to the tooltip's own state the hover that a trigger element would have reported, and takes the
  * Escape that one would have taken inside a popup holding focus. */
 function OpenWhileMounted({ immediate, anchor }: { immediate: boolean; anchor: React.RefObject<Element | null> }): null {
-  const state = useContext(TooltipTriggerStateContext);
+  const state = useTooltipState();
   const isOpen = useLatest(state?.isOpen ?? false);
   useEffect(() => {
     state?.open(immediate);

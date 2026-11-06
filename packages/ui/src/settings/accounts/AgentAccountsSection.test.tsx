@@ -8,6 +8,7 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { ErrorAlertBody } from "../../components/dialog/ErrorAlertBody";
 import { CodedError } from "../../errors/codedError";
+import { partSelector } from "../../primitives";
 import { isolate } from "../../i18n/isolate";
 import { currentLanguage, setLanguage, t } from "../../i18n/language";
 import type { Console, Project, Session } from "../../protocol";
@@ -660,7 +661,7 @@ it("offers no per-tab actions while the list is undecided", () => {
 
 it("puts Add agent and Add account at the end of the tab row as icon-only buttons, and Add account adds to the tab in view", () => {
   const { container } = mount("Codex");
-  const strip = container.querySelector('[role="tablist"]')!.closest(".tabs__list-container")!;
+  const strip = container.querySelector('[role="tablist"]')!.closest(partSelector.tabListContainer)!;
   const add = buttonNamed(strip, "Add account")!;
   const addAgent = buttonNamed(strip, "Add agent")!;
   expect(add.textContent).toBe("");

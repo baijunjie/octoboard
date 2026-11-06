@@ -1,12 +1,9 @@
-import { Description, Input, ListBox } from "@heroui/react";
 import { CornerLeftUp, Folder, FolderX } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { Button } from "../controls/Button";
 import { EmptyPanel } from "../panel/EmptyPanel";
 import { FailureAlert } from "../alerts/FailureAlert";
 import { PathText } from "../text/PathText";
-import { openingFocus } from "../focus/modalFocus";
 import { useStickyHeadingFocus } from "../scroll/stickyHeadingFocus";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 import { StatusBadge } from "../status/StatusBadge";
@@ -26,6 +23,7 @@ import { raiseError } from "../alerts/raiseError";
 import { useOptionalPlatform } from "../../platform/react";
 import type { DirectoryPickerCapability } from "../../platform";
 import { useLatest } from "../hooks/useLatest";
+import { Button, Description, Input, ListBox, ListBoxItem, openingFocus } from "../../primitives";
 
 /** The ids of the list's two entries that are not a directory. A real entry's id is its absolute
  * path, which neither of these can be. */
@@ -158,7 +156,7 @@ export function DirectoryPicker({
       <Button type="button" variant="secondary" onPress={onClose}>
         {t("common.cancel")}
       </Button>
-      <Button type="button" isDisabled={!canSelect} onPress={() => resolvedPath && onPick(resolvedPath)}>
+      <Button type="button" disabled={!canSelect} onPress={() => resolvedPath && onPick(resolvedPath)}>
         {t("directoryPicker.select")}
       </Button>
     </>
@@ -167,7 +165,7 @@ export function DirectoryPicker({
   return (
     <Dialog title={title} onClose={onClose} footer={footer} onSubmit={() => void load(path)}>
       <div className="flex gap-2">
-        <Input ref={pathRef} {...openingFocus(true)} fullWidth variant="secondary" dir="ltr" aria-label={t("directoryPicker.path")} placeholder={t("directoryPicker.pathExample")} {...pathField} />
+        <Input ref={pathRef} {...openingFocus(true)} fullWidth variant="secondary" dir="ltr" label={t("directoryPicker.path")} placeholder={t("directoryPicker.pathExample")} {...pathField} />
         <Button type="submit" variant="secondary">
           {t("directoryPicker.go")}
         </Button>
@@ -230,10 +228,9 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
       {wrap(
         <ListBox
           {...fade}
-          aria-label={t("directoryPicker.subdirectories")}
-          // `selectionMode` stays `none`: an entry is only ever entered, never picked. Activating
-          // one (click, Enter) calls `onAction`.
-          onAction={(key) => onOpen(String(key))}
+          label={t("directoryPicker.subdirectories")}
+          // An entry is only ever entered, never picked. Activating one (click, Enter) calls `onAction`.
+          onAction={onOpen}
         >
           {showParent && (
             // Pinned at the list's top, opaque so the entries scrolling under it do not show
@@ -242,24 +239,24 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
             // strip either and the ring stays whole. Of the sticky-heading props only the scroll
             // hold of the focus handlers does anything here: the scroll margin and the heading
             // marker are for a heading's inner controls and for `FadedScroller`.
-            <ListBox.Item
+            <ListBoxItem
               {...pinnedFocus}
               data-marquee-scope
               id={PARENT_KEY}
               textValue={t("directoryPicker.parent")}
-              aria-label={t("directoryPicker.parent")}
+              label={t("directoryPicker.parent")}
               className={`sticky top-0 z-3 bg-overlay shadow-[0_-4px_0_0_var(--overlay)] data-[hovered=true]:bg-default ${pinnedFocus.className}`}
             >
               <CornerLeftUp aria-hidden="true" className="size-4 shrink-0 text-app-muted rtl:-scale-x-100" />
               <FadeOverflow className="min-w-0 flex-1 text-app-muted" titleWhenClipped={t("directoryPicker.parent")}>{t("directoryPicker.parent")}</FadeOverflow>
-            </ListBox.Item>
+            </ListBoxItem>
           )}
           {entries.map((entry) => (
             // The name and the path under it are two labels, so each runs its own marquee rather
             // than the row being one marquee scope. The row is named by the directory's name and
             // its git badge, leaving the path out of the name; the path is its description. That
             // label already joins the name and the badge, so the badge adds no comma of its own.
-            <ListBox.Item key={entry.path} id={entry.path} textValue={entry.name} aria-label={entry.is_git_repo ? joinPhrases(language, [entry.name, "git"]) : entry.name}>
+            <ListBoxItem key={entry.path} id={entry.path} textValue={entry.name} label={entry.is_git_repo ? joinPhrases(language, [entry.name, "git"]) : entry.name}>
               {/* Centred on the name's 20px line rather than on the two-line row. */}
               <Folder aria-hidden="true" className="mt-0.5 size-4 shrink-0 self-start text-app-muted" />
               <span className="flex min-w-0 flex-1 flex-col">
@@ -273,7 +270,7 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
                 </Description>
               </span>
               {entry.is_git_repo && <StatusBadge separated={false}>git</StatusBadge>}
-            </ListBox.Item>
+            </ListBoxItem>
           ))}
           {entries.length === 0 && (
           // Inside the list, as an option that cannot be acted on: arrow keys skip it, and the
@@ -282,9 +279,9 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
           // so a message too long for the dialog wraps rather than being clipped; the option drops
           // its own padding and dimming, as the row carries the padding and its message is no
           // disabled control.
-            <ListBox.Item id={EMPTY_KEY} isDisabled textValue={t("directoryPicker.empty")} className="p-0 data-[disabled=true]:opacity-100">
+            <ListBoxItem id={EMPTY_KEY} disabled textValue={t("directoryPicker.empty")} className="p-0 data-[disabled=true]:opacity-100">
               <EmptyPanel compact icon={FolderX} message={t("directoryPicker.empty")} />
-            </ListBox.Item>
+            </ListBoxItem>
           )}
         </ListBox>,
       )}
@@ -307,7 +304,7 @@ export function useDirectoryBrowse(
   value: string,
   onPick: (path: string) => void,
 ): {
-  browseButton: (options?: { isDisabled?: boolean; preventFocusOnPress?: boolean }) => React.ReactElement;
+  browseButton: (options?: { disabled?: boolean; focusOnPress?: boolean }) => React.ReactElement;
   picker: React.ReactElement | null;
   picking: boolean;
 } {
@@ -374,8 +371,8 @@ export function useDirectoryBrowse(
   };
   const picking = !!pending;
   return {
-    browseButton: ({ isDisabled, preventFocusOnPress } = {}) => (
-      <Button type="button" variant="secondary" isDisabled={isDisabled} isPending={picking} preventFocusOnPress={preventFocusOnPress} onPress={() => {
+    browseButton: ({ disabled, focusOnPress } = {}) => (
+      <Button type="button" variant="secondary" disabled={disabled} pending={picking} focusOnPress={focusOnPress} onPress={() => {
         if (busy.current) return;
         busy.current = true;
         setPending({ value, daemon, native, title: t("dialog.chooseDirectory"), failureTitle: t("directoryPicker.navigationFailedTitle"), focus: document.activeElement instanceof HTMLElement ? document.activeElement : null });

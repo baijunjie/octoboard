@@ -4,6 +4,7 @@ import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 
 import { LabelledGroup } from "../components/form/LabelledGroup";
 import { OptionSelect, type Option } from "../components/form/OptionSelect";
+import { partSelector } from "../primitives";
 
 /** An agent picker, joined to an account picker with it when `account` is given. The agent and its
  * account read as one setting, so they are one input group under one label: the agent at the start
@@ -39,7 +40,7 @@ export function AgentAccountField<T extends string>({
   const errorId = useId();
   const controls = useRef<HTMLDivElement>(null);
   const invalid = errorMessage ? { isInvalid: true, describedBy: errorId } : undefined;
-  const agentTrigger = () => controls.current?.querySelector<HTMLElement>('[data-slot="select-trigger"]');
+  const agentTrigger = () => controls.current?.querySelector<HTMLElement>(partSelector.selectTrigger);
   const focusHandoff = useFocusHandoff(() => agentTrigger()?.focus());
   return (
     <LabelledGroup label={label} help={help} description={account ? description : undefined} isDisabled={isDisabled} errorMessage={errorMessage} errorId={errorId}>

@@ -1,8 +1,6 @@
-import { Spinner } from "@heroui/react";
 import { Archive, RotateCcw, Trash2, X } from "lucide-react";
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
-import { Button } from "../components/controls/Button";
 import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { PANE_HEADER_FRAME_CLASS } from "../components/panel/paneHeaderFrame";
@@ -27,6 +25,7 @@ import { NESTED_ROW_CLASS, TreeRow } from "../components/rows/TreeRow";
 import { useListMotion } from "../components/motion/useListMotion";
 import { sessionRowModel } from "../sessions/sessionRowModel";
 import { ringForAutomaticFocus } from "../input/touchInput";
+import { Button, Spinner } from "../primitives";
 
 /** How many rows the list adds each time its end scrolls into view. */
 const PAGE = 30;
@@ -202,13 +201,13 @@ export function ArchiveView({
           overline={t("archive.count", { count: archived.length })}
         />
         {archived.length > 0 && (
-          <Button size="sm" variant="danger-soft" preventFocusOnPress onPress={deleteAll} isDisabled={archived.some(({ session }) => session.locked)}>
+          <Button size="sm" variant="danger-soft" focusOnPress={false} onPress={deleteAll} disabled={archived.some(({ session }) => session.locked)}>
             <Trash2 aria-hidden="true" className="size-4" />
             {t("archive.deleteAll")}
           </Button>
         )}
         <TitledControl title={t("common.close")}>
-          <Button ref={closeRef} isIconOnly size="sm" variant="ghost" aria-label={t("common.close")} onPress={onClose}>
+          <Button ref={closeRef} iconOnly size="sm" variant="ghost" label={t("common.close")} onPress={onClose}>
             <X aria-hidden="true" className="size-4" />
           </Button>
         </TitledControl>
@@ -238,7 +237,7 @@ export function ArchiveView({
             ))}
             {more && (
               <li ref={sentinelRef} className="flex justify-center py-4">
-                <Spinner size="sm" aria-label={t("archive.loadingMore")} />
+                <Spinner size="sm" label={t("archive.loadingMore")} />
               </li>
             )}
           </ul>
@@ -322,12 +321,12 @@ function ArchiveRow({
               </Button>
               <TitledControl title={<Message id="archive.delete" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}>
                 <Button
-                  isIconOnly
+                  iconOnly
                   size="sm"
                   variant="danger-soft"
-                  isDisabled={session.locked}
-                  aria-label={t("archive.delete", { title: isolate(sessionDisplayTitle(t, session)) })}
-                  aria-describedby=""
+                  disabled={session.locked}
+                  label={t("archive.delete", { title: isolate(sessionDisplayTitle(t, session)) })}
+                  describedBy=""
                   onPress={() => onOpenDialog({ kind: "delete-session", session })}
                 >
                   <Trash2 aria-hidden="true" className="size-4" />

@@ -1,9 +1,6 @@
-import { Tabs } from "@heroui/react";
 import { Pencil, Plus, SquareTerminal, X } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useFocusVisible } from "react-aria";
 
-import { Button } from "../../components/controls/Button";
 import type { ViewedFile } from "../../viewer/viewedFile";
 import { ActionMenu } from "../../components/menus/ActionMenu";
 import type { ActionMenuEntry } from "../../components/menus/menuEntries";
@@ -19,7 +16,7 @@ import { focusFellToPage } from "../../components/focus/regionFocus";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../../components/controls/RowControls";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { INACTIVE_VEIL_CLASS } from "../../components/status/inactiveVeil";
-import { LocalizedTabListContainer } from "../../components/tabs/LocalizedTabListContainer";
+import { Button, partSelector, Tab, TabList, TabListContainer, Tabs, useKeyboardModality } from "../../primitives";
 import { TitledControl } from "../../components/hint/TitledControl";
 import { useLatest, useStableHandler } from "../../components/hooks/useLatest";
 import { useListMotion } from "../../components/motion/useListMotion";
@@ -120,7 +117,7 @@ export function ShellTerminalPanel({
   const activeTab = activeId === undefined ? undefined : tabNodes.get(activeId);
   useLayoutEffect(() => {
     if (!activeTab) return;
-    const scroller = activeTab.closest<HTMLElement>(".tabs__list-container__scroller");
+    const scroller = activeTab.closest<HTMLElement>(partSelector.tabScroller);
     if (!scroller) return;
     const reveal = () => revealInScroller(scroller, activeTab);
     reveal();
@@ -128,7 +125,7 @@ export function ShellTerminalPanel({
     resize.observe(scroller);
     return () => resize.disconnect();
   }, [activeTab]);
-  const latest = useLatest({ activeId, keyboard: useFocusVisible().isFocusVisible });
+  const latest = useLatest({ activeId, keyboard: useKeyboardModality() });
 
   const { focusShown, focusShownTabNow, focusShownTab } = useShellTabFocus({ latest, views, tabs, newRef });
 
@@ -247,7 +244,7 @@ export function ShellTerminalPanel({
 
   const newTerminalButton = (
     <TitledControl title={t("shellTerminal.new")}>
-      <Button ref={newRef} data-region-landing={terminals.length === 0 ? "" : undefined} isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("shellTerminal.new")} preventFocusOnPress onPress={() => void start()}>
+      <Button ref={newRef} data-region-landing={terminals.length === 0 ? "" : undefined} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("shellTerminal.new")} focusOnPress={false} onPress={() => void start()}>
         <Plus aria-hidden="true" className="size-4" />
       </Button>
     </TitledControl>
@@ -264,31 +261,32 @@ export function ShellTerminalPanel({
           <PanelHeader title={t("panel.terminal.name")} />
           <div className="flex min-h-11 min-w-0 items-center groove-b px-[calc(var(--pane-inset)-6px)]">
             {terminals.length > 0 && (
-              <LocalizedTabListContainer
-                // HeroUI lays its scroll buttons over the strip's ends, which here would cover a
-                // tab's close mark: reserve space only at an edge that has a scroll button.
-                className="min-w-0 flex-initial rounded-none bg-transparent has-[>:is([data-left-scroll=true],[data-left-right-scroll=true])]:ps-6 has-[>:is([data-right-scroll=true],[data-left-right-scroll=true])]:pe-6">
+              <TabListContainer
+                // The scroll buttons would cover a tab's close mark at the strip's ends.
+                reserveScrollButtons
+                className="min-w-0 flex-initial rounded-none bg-transparent">
                 {/* The scroller clips outside this padding; leave room for the focus ring and its offset.
                     Positioned, so a departing tab's visual stays in the strip's scroll. */}
-                <Tabs.List ref={stripRef} aria-label={t("shellTerminal.tabs")} className="relative w-max min-w-0 gap-1 p-1.5">
+                <TabList ref={stripRef} label={t("shellTerminal.tabs")} className="relative w-max min-w-0 gap-1 p-1.5">
                   {terminals.map((terminal) => (
-                    <Tabs.Tab
+                    <Tab
                       key={terminal.id}
                       id={terminal.id}
-                      aria-label={tabLabel(terminal, terminal.title)}
+                      label={tabLabel(terminal, terminal.title)}
                       ref={registerTab}
                       data-list-motion={terminal.id}
                       data-closing={closingIds.has(terminal.id) || undefined}
+                      indicator={false}
                       className={tabClass(terminal)}
                     >
                       {/* First among what goes away with the tab, so focus inside it is still found. */}
                       <HandoffOnUnmount from={`[data-key="${CSS.escape(terminal.id)}"]`} to={focusShownTab} />
                       <FadeOverflow as="span" dir="auto" className="max-w-40 min-w-0" title={shellTerminalTitle(terminal) !== terminal.title ? tabLabel(terminal, terminal.title) : undefined} titleWhenClipped={tabLabel(terminal)}>{tabLabel(terminal)}</FadeOverflow>
                       <TabCloseMark title={t("shellTerminal.close")} onClose={() => requestClose(terminal, "terminal")} />
-                    </Tabs.Tab>
+                    </Tab>
                   ))}
-                </Tabs.List>
-              </LocalizedTabListContainer>
+                </TabList>
+              </TabListContainer>
             )}
             <RowIconGroup className="ms-auto px-1.5">
               {newTerminalButton}

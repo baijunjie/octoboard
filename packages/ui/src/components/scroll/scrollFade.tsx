@@ -1,9 +1,7 @@
-import { ScrollShadow, scrollShadowVariants, useScrollShadow, type ScrollShadowVisibility } from "@heroui/react";
 import type React from "react";
 import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type Ref, type RefObject } from "react";
-import { useObjectRef } from "react-aria";
 
-import { useFocusVisibleProps } from "../focus/useFocusVisibleProps";
+import { ScrollShadow, scrollShadowAutoProps, scrollShadowClassName, scrollShadowStripStyle, type ScrollShadowVisibility, useFocusVisibleProps, useObjectRef, useScrollShadow } from "../../primitives";
 
 /** The fade's size in pixels. A row scrolled to the list's edge has to stop this far short of it to
  * be clear of the fade, so whatever scrolls the list by hand keeps this margin too. */
@@ -135,9 +133,7 @@ function useScrollbarStrips(ref: RefObject<HTMLElement | null>, orientation: Ori
   });
   return {
     marker: sideways ? { "data-scrolls-sideways": true } : {},
-    style: orientation === "vertical"
-      ? { "--scroll-shadow-scrollbar-size": `${inline}px`, "--scroll-shadow-scrollbar-block-size": `${block}px` } as CSSProperties
-      : { "--scroll-shadow-scrollbar-size": `${block}px` } as CSSProperties,
+    style: orientation === "vertical" ? scrollShadowStripStyle({ size: inline, blockSize: block }) : scrollShadowStripStyle({ size: block }),
     inline,
     sideways,
   };
@@ -220,7 +216,7 @@ export function useFadeRegion(
   };
 }
 
-type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size" | "offset" | "visibility" | "isEnabled" | "variant" | "onVisibilityChange"> & {
+type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size" | "onVisibilityChange"> & {
   region?: FadeRegion;
   /** Sticky headings paint above overlay fades; a mask would dim every descendant regardless of z-index. The
    * top fade follows the first element marked `data-sticky-heading` (see `useStickyHeadingFocus`). */
@@ -355,7 +351,7 @@ export function useStickyScrollFade({ ref: forwarded, className, stickyHeadingHe
   const [visibility, setVisibility] = useState<ScrollShadowVisibility>("none");
   const [gutter, setGutter] = useState(0);
   const [bottomGutter, setBottomGutter] = useState(0);
-  useScrollShadow({ containerRef: ref as RefObject<HTMLElement>, isEnabled: true, offset: 0, orientation: "vertical", visibility: "auto", onVisibilityChange: setVisibility });
+  useScrollShadow({ ref, orientation: "vertical", onVisibilityChange: setVisibility });
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
@@ -387,11 +383,11 @@ export function useStickyScrollFade({ ref: forwarded, className, stickyHeadingHe
  *   on the animations of its own element, so the fade goes on the scrolling list inside a popover,
  *   never on the popover.
  *
- * HeroUI's mask comes from its classes, so this applies those to the element itself. Where
- * `animation-timeline: scroll()` is supported the fade is pure CSS, keyed on the
- * `data-scroll-shadow-mode="auto"` this sets; `useScrollShadow` is called for the engines without
- * scroll timelines (an older WKWebView, say), whose `data-*` attributes the fade follows there, and in
- * every engine for the overflow that takes the animation off at rest (`useFadeAtRest`).
+ * The scroll shadow's mask comes from its classes, so this applies those to the element itself. Where
+ * `animation-timeline: scroll()` is supported the fade is pure CSS, switched on by the automatic mode that
+ * `scrollShadowAutoProps` sets; `useScrollShadow` is called for the engines without scroll timelines (an
+ * older WKWebView, say), whose `data-*` attributes the fade follows there, and in every engine for the
+ * overflow that takes the animation off at rest (`useFadeAtRest`).
  *
  * The element is a `div` unless the type parameter says otherwise (a `pre` of preformatted text).
  *
@@ -420,26 +416,20 @@ export function useScrollFade<T extends HTMLElement = HTMLDivElement>({
   ref: RefObject<T | null>;
   className: string;
   style: CSSProperties;
-  "data-scroll-shadow-mode": "auto";
   "data-scrolls-sideways"?: true;
-} & RegionProps {
+} & Omit<ReturnType<typeof scrollShadowAutoProps>, "style"> &
+  RegionProps {
   const ref = useObjectRef(forwarded);
   const rest = useFadeAtRest(ref as RefObject<HTMLElement | null>, region?.onVisibilityChange);
-  useScrollShadow({
-    containerRef: rest.watchRef as RefObject<HTMLElement>,
-    isEnabled: true,
-    offset: 0,
-    onVisibilityChange: rest.onVisibilityChange,
-    orientation,
-    visibility: "auto",
-  });
+  useScrollShadow({ ref: rest.watchRef, orientation, onVisibilityChange: rest.onVisibilityChange });
   const strips = useScrollbarStrips(ref, orientation);
+  const { style: autoStyle, ...autoAttributes } = scrollShadowAutoProps(FADE_SIZE);
   return {
     ...region?.props,
     ...strips.marker,
     ref,
-    className: joinClasses(scrollShadowVariants({ orientation }).base(), MASKED_FADE_CLASS, className, region?.className),
-    style: { "--scroll-shadow-size": `${FADE_SIZE}px`, ...scrollPadding(orientation), ...style, ...strips.style, ...rest.style } as CSSProperties,
-    "data-scroll-shadow-mode": "auto",
+    className: joinClasses(scrollShadowClassName(orientation), MASKED_FADE_CLASS, className, region?.className),
+    style: { ...autoStyle, ...scrollPadding(orientation), ...style, ...strips.style, ...rest.style } as CSSProperties,
+    ...autoAttributes,
   };
 }

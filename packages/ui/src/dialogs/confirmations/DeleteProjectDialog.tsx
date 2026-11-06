@@ -45,13 +45,13 @@ export function DeleteProjectDialog({ project, onClose }: { project: Project; on
       confirmLabel={t(running.length > 0 ? "dialog.removeProject.confirmRunning" : "common.remove")}
       destructive
       waiting={cleanup.pending || projectProcesses.pending}
-      extraControl={(busy) => (
+      extraControl={(
         <>
           <ConfirmSection heading={t("dialog.removeProject.runningHeading", { count: running.length })} shown={showRunning} divided={false}>
             <SessionList sessions={running} />
           </ConfirmSection>
           <ConfirmSection heading={t("dialog.removeProject.folderHeading")} shown divided={showRunning}>
-            {cleanup.extraControl(busy)}
+            {cleanup.extraControl}
             <ConsequenceLines lines={cleanup.consequences} />
           </ConfirmSection>
           <ProjectProcessesSection processes={projectProcesses} divided />

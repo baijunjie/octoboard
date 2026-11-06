@@ -13,6 +13,7 @@ import { personal, work } from "../fixtures/accountTestSupport";
 import { ConsoleDialog } from "./ConsoleDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
+import { partSelector } from "../primitives";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -116,7 +117,7 @@ export const groupPicker = (group: string, name: string) =>
   })!;
 /** The console session picker of the Advanced setting `name`. */
 export const pickerNamed = (name: string) => groupPicker("Console sessions", name);
-export const clearButton = (name: string) => pickerNamed(name).parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]');
+export const clearButton = (name: string) => pickerNamed(name).parentElement!.querySelector<HTMLElement>(partSelector.selectClearButton);
 
 export const stored = consoleOf("c-1", "Main", {
   launch: { claude: { model: "alpha", effort: "high" }, codex: { model: "retired" } },

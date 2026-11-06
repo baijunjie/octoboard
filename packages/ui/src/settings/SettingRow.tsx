@@ -1,7 +1,7 @@
-import { Switch } from "@heroui/react";
-import React, { useEffect, useRef } from "react";
+import React, { useRef } from "react";
 
 import { MarkLineBox } from "../components/status/MarkLineBox";
+import { Switch } from "../primitives";
 
 /** One setting: its name and, when it has one, a line saying what it does at the start, its control
  * at the end, with a thin divider under every row but the last (the copy of a row a list motion is
@@ -85,7 +85,6 @@ export function SettingSwitch({
   /** The switch is where the dialog around it puts focus on opening (see `openingFocus`). */
   opensFocused?: boolean;
 }): React.ReactElement {
-  const root = useRef<HTMLDivElement>(null);
   const saving = useRef(false);
   const change = (value: boolean) => {
     if (isUnavailable || saving.current) return;
@@ -96,35 +95,16 @@ export function SettingSwitch({
     const release = () => { saving.current = false; };
     void save.then(release, release);
   };
-  // The library puts `isReadOnly` on the input as `aria-readonly` and leaves out `aria-disabled`, which says it is
-  // unavailable rather than merely fixed.
-  useEffect(() => {
-    const input = root.current?.querySelector("input");
-    if (isUnavailable) input?.setAttribute("aria-disabled", "true");
-    else input?.removeAttribute("aria-disabled");
-  }, [isUnavailable]);
-  // The library gives the input no way to take the mark as a prop.
-  useEffect(() => {
-    const input = root.current?.querySelector("input");
-    if (opensFocused) input?.setAttribute("data-opening-focus", "");
-    else input?.removeAttribute("data-opening-focus");
-  }, [opensFocused]);
   return (
     <Switch
-      ref={root}
-      aria-label={label}
-      aria-describedby={describedBy}
-      isReadOnly={isUnavailable}
-      isSelected={isSelected}
-      onChange={change}
+      label={label}
+      describedBy={describedBy}
+      unavailable={isUnavailable}
+      opensFocused={opensFocused}
+      selected={isSelected}
+      onSelectedChange={change}
       className={isUnavailable ? "opacity-(--disabled-opacity)" : undefined}
-    >
-      <Switch.Content>
-        <Switch.Control>
-          <Switch.Thumb />
-        </Switch.Control>
-      </Switch.Content>
-    </Switch>
+    />
   );
 }
 

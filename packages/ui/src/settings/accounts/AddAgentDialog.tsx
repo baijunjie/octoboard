@@ -1,18 +1,18 @@
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 
-import { Button } from "../../components/controls/Button";
 import { providerLabel } from "../../agents/providers";
 import { AgentIcon } from "../../components/icons/AgentIcon";
 import { ExternalLink } from "../../components/text/ExternalLink";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { StatusBadge } from "../../components/status/StatusBadge";
 import { Dialog } from "../../components/dialog/Dialog";
-import { useDialogAction, useFocusLeavingWhenDisabled, useRefocusIfLost } from "../../components/dialog/dialogHooks";
+import { useDialogAction, useRefocusIfLost } from "../../components/dialog/dialogHooks";
 import { appDataRecovery } from "../../errors/errorRecovery";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
 import { isolate } from "../../i18n/isolate";
 import { useDaemon, useDaemonStore, useProviders } from "../../store";
+import { Button } from "../../primitives";
 
 /** Every served agent with whether it is installed, to add the installed ones that are not added yet: the dialog stays
  * open for more, and an agent added shows as such in place. An agent that is not installed offers its provider's
@@ -30,17 +30,6 @@ export function AddAgentDialog({ onClose }: { onClose: () => void }): React.Reac
   // An agent just added takes its button with it, and focus with that. Close is disabled until the request
   // settles, so focus goes back when `busy` ends too.
   useRefocusIfLost(() => closeRef.current, [added, busy]);
-  // Add is pressed with `preventFocusOnPress`, so focus can still be on Close, or on the dialog's close button, as
-  // both turn disabled for the request: it moves to the pending Add button, which stays focusable, rather than
-  // falling to `<body>` where the dialog's Escape and Tab stop working.
-  const pendingRef = useRef<HTMLButtonElement>(null);
-  const closeTriggerRef = useRef<HTMLElement | null>(null);
-  // Above the two hooks below: they read the ref when they mount.
-  useLayoutEffect(() => {
-    closeTriggerRef.current = closeRef.current?.closest("[role=dialog]")?.querySelector<HTMLElement>("[data-slot$=close-trigger]") ?? null;
-  }, []);
-  useFocusLeavingWhenDisabled(closeRef, busy, pendingRef);
-  useFocusLeavingWhenDisabled(closeTriggerRef, busy, pendingRef);
 
   const add = (agent: Agent) => {
     setPending(agent);
@@ -55,7 +44,7 @@ export function AddAgentDialog({ onClose }: { onClose: () => void }): React.Reac
       onClose={onClose}
       busy={busy}
       footer={
-        <Button ref={closeRef} type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
+        <Button ref={closeRef} type="button" variant="secondary" onPress={onClose}>
           {t("common.close")}
         </Button>
       }
@@ -84,13 +73,12 @@ export function AddAgentDialog({ onClose }: { onClose: () => void }): React.Reac
               )}
               {status !== "added" && status !== "notInstalled" && (
                 <Button
-                  ref={pending === agent ? pendingRef : undefined}
                   size="sm"
                   variant="outline"
-                  preventFocusOnPress
-                  aria-label={t("settings.addAgent.addLabel", { agent: isolate(label) })}
-                  isDisabled={status !== "installed" || added === null || (busy && pending !== agent)}
-                  isPending={pending === agent}
+                  focusOnPress={false}
+                  label={t("settings.addAgent.addLabel", { agent: isolate(label) })}
+                  disabled={status !== "installed" || added === null}
+                  pending={pending === agent}
                   onPress={() => add(agent)}
                 >
                   {t("common.add")}

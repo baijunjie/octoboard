@@ -1,10 +1,9 @@
-import { Input, InputGroup, Label, TextField } from "@heroui/react";
 import React from "react";
 
-import { openingFocus } from "../focus/modalFocus";
 import { useTrimmedField } from "./useTrimmedField";
 import { FieldErrorMessage } from "./FieldErrorMessage";
 import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
+import { Input, Label, TextField } from "../../primitives";
 
 /** A labelled single-line text field, in HeroUI's variant for a field on a surface, since it is
  * always in a dialog. `ltr` lays out a value that always reads left to right (a
@@ -55,28 +54,22 @@ export function TextInput({
   const field = useTrimmedField(value, onChange);
   const invalid = errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "";
   // Dialog fields hold application metadata, so 1Password must not offer identity or login fills.
+  // With an adornment the direction is the input group's, so the affix stays on the input's side whatever the UI's
+  // direction.
   const input = endAdornment !== undefined ? (
-    // The direction is the group's, so the affix stays on the input's side whatever the UI's direction.
-    <InputGroup variant="secondary" fullWidth dir={dir} className={trailing ? "min-w-0 flex-1" : undefined}>
-      <InputGroup.Input data-1p-ignore {...openingFocus(autoFocus)} placeholder={placeholder} />
-      <InputGroup.Suffix>{endAdornment}</InputGroup.Suffix>
-    </InputGroup>
+    <Input data-1p-ignore variant="secondary" fullWidth dir={dir} placeholder={placeholder} end={endAdornment} className={trailing ? "min-w-0 flex-1" : undefined} />
   ) : (
-    <Input data-1p-ignore {...openingFocus(autoFocus)} dir={dir} placeholder={placeholder} className={trailing ? "min-w-0 flex-1" : undefined} />
+    <Input data-1p-ignore dir={dir} placeholder={placeholder} className={trailing ? "min-w-0 flex-1" : undefined} />
   );
   return (
     <TextField
       fullWidth
-      aria-describedby={describedBy}
+      describedBy={describedBy}
       variant="secondary"
       {...field}
       autoFocus={autoFocus}
-      isDisabled={isDisabled}
-      isInvalid={invalid}
-      // Whether to submit is the dialog's own decision: react-aria's default behaviour hands a
-      // field marked invalid to the browser's constraint validation, which then refuses the submit
-      // before the dialog's handler — and the mark itself only ever appears from that handler.
-      validationBehavior="aria"
+      disabled={isDisabled}
+      invalid={invalid}
     >
       {/* The visible text is hidden from the name and the plain label stands in for it, so the name
           is exactly `label` and not the two put together (react-aria names the input by the label

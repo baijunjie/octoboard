@@ -30,6 +30,9 @@ export const FOCUSABLE =
 /** A modal dialog or alert dialog; a toast is an `alertdialog` too, but a non-modal one. */
 export const MODAL_DIALOG = '[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]:not([aria-modal="false"])';
 
+/** What disables a control, natively or as a state the control reports. */
+export const DISABLED_CONTROL = ':disabled, [aria-disabled="true"], [data-disabled="true"]';
+
 /** A dialog or a menu is open: ordinary regions stay unavailable. */
 export const MODAL_OPEN = `${MODAL_DIALOG}, [role="menu"]`;
 

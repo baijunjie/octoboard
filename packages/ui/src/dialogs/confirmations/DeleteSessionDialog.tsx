@@ -49,12 +49,10 @@ function DeleteSessionConfirmation({ session, onClose }: { session: Session; onC
       confirmLabel={t(moveRecords || cleanup.forcing ? "dialog.deleteSession.confirmAll" : "common.delete")}
       destructive
       waiting={cleanup.pending}
-      extraControl={(busy) =>
-        extraControl(busy, {
-          label: t("dialog.deleteSession.trashRecords"),
-          hint: t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsNoteBound" : "dialog.deleteSession.trashRecordsNote"),
-        })
-      }
+      extraControl={extraControl({
+        label: t("dialog.deleteSession.trashRecords"),
+        hint: t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsNoteBound" : "dialog.deleteSession.trashRecordsNote"),
+      })}
       onCancel={onClose}
       onConfirm={async () => {
         await request({ type: "delete_session", session: session.id, trash_agent_records: moveRecords, ...cleanup.choices });

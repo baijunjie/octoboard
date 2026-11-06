@@ -1,7 +1,6 @@
-import { Surface } from "@heroui/react";
 import React from "react";
 
-import { Button } from "../components/controls/Button";
+import { Button, Surface } from "../primitives";
 
 /**
  * The bar that floats over a terminal whose process has ended and says so, with the one button that
@@ -27,7 +26,7 @@ export function TerminalNoticeBar({
       <span aria-hidden="true" className="text-app-muted">
         {sentence}
       </span>
-      <Button size="sm" variant={variant} preventFocusOnPress onPress={onPress}>
+      <Button size="sm" variant={variant} focusOnPress={false} onPress={onPress}>
         {action}
       </Button>
     </Surface>

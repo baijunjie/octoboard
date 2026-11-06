@@ -1,9 +1,7 @@
-import { Badge } from "@heroui/react";
 import React from "react";
-import type { PressEvent } from "react-aria";
 
-import { Button } from "../components/controls/Button";
 import { TitledControl } from "../components/hint/TitledControl";
+import { BadgeAnchor, Button, type ButtonPress } from "../primitives";
 
 /** The hover and pressed fills of a control on the window chrome: translucent tints (`style.css`), so
  * they read on the native material as well as on the browser's opaque chrome colour. HeroUI's button
@@ -42,7 +40,7 @@ export function ChromeButton({
   id?: string;
   label: string;
   /** Called with the press, so a caller can tell a keyboard activation from a pointer's. */
-  onPress: (event: PressEvent) => void;
+  onPress: (event: ButtonPress) => void;
   children: React.ReactNode;
   badge?: React.ReactNode;
   isDisabled?: boolean;
@@ -80,24 +78,23 @@ export function ChromeButton({
       <Button
         id={id}
         ref={buttonRef}
-        isIconOnly
-        isDisabled={isDisabled}
+        iconOnly
+        disabled={isDisabled}
         size="sm"
         variant="ghost"
-        aria-label={label}
-        aria-expanded={expanded}
-        aria-controls={controls ?? regionId ?? popupId}
+        label={label}
+        expanded={expanded}
+        controls={controls ?? regionId ?? popupId}
         data-pane-toggle={paneToggle ?? controls}
-        preventFocusOnPress
+        focusOnPress={false}
         onBlur={onBlur}
         className={`${selected ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS} ${className}`}
         onPress={onPress}
-        onHoverStart={(event) => event.pointerType === "mouse" && onMouseHoverChange?.(true)}
-        onHoverEnd={(event) => event.pointerType === "mouse" && onMouseHoverChange?.(false)}
+        onMouseHoverChange={onMouseHoverChange}
       >
         {children}
       </Button>
     </TitledControl>
   );
-  return badge ? <Badge.Anchor>{control}{badge}</Badge.Anchor> : control;
+  return badge ? <BadgeAnchor>{control}{badge}</BadgeAnchor> : control;
 }

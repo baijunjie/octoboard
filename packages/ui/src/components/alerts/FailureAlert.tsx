@@ -59,7 +59,7 @@ export function FailureAlert({
       remedy={errorRemedy(message)}
       details={errorDetails(message)}
       actions={onRetry && retryCanHelp(message) && (
-        <AlertButton kind="action" size="sm" preventFocusOnPress isPending={pending} onPress={onRetry}>
+        <AlertButton kind="action" size="sm" focusOnPress={false} pending={pending} onPress={onRetry}>
           {t("error.tryAgain")}
         </AlertButton>
       )}

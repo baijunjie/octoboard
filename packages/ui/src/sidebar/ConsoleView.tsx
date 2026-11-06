@@ -115,7 +115,7 @@ export function ConsoleBody({
   const noMatch = projects.length > 0 && ordered.length === 0 ? t("sidebar.filter.noMatch") : undefined;
 
   // Collapsing takes away what a project row holds below it (`data-sessions`), and a keyboard user
-  // may be standing in there: a mouse press leaves focus where it is (`preventFocusOnPress`), so
+  // may be standing in there: a mouse press leaves focus where it is (`focusOnPress={false}`), so
   // focus would drop to `<body>` with no blur event and the terminal would stop receiving
   // keystrokes. It is handed to the button that did it, with its ring showing, since whoever was
   // down there got there from the keyboard. The project rows themselves stay, so focus on one of

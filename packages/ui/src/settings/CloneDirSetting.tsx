@@ -1,4 +1,3 @@
-import { InputGroup, TextField } from "@heroui/react";
 import { Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
@@ -8,6 +7,7 @@ import { useLatest } from "../components/hooks/useLatest";
 import { useDirectoryBrowse } from "../components/dialog/DirectoryPicker";
 import { useTrimmedField } from "../components/form/useTrimmedField";
 import { Message, useT } from "../i18n/react";
+import { Input, TextField } from "../primitives";
 import { isImeKey } from "../input/imeKey";
 import { abbreviateHome } from "../format/pathDisplay";
 import { useDaemon, useDaemonStore } from "../store";
@@ -65,7 +65,7 @@ export function CloneDirSetting(): React.ReactElement {
       >
         <div className="flex w-80 items-center gap-2">
           <TextField
-            aria-label={t("settings.cloneDir.label")}
+            label={t("settings.cloneDir.label")}
             variant="secondary"
             {...draftField}
             onBlur={() => {
@@ -79,26 +79,24 @@ export function CloneDirSetting(): React.ReactElement {
             {/* The whole group reads left to right, not just the input: a path is an LTR value, and
                 in a right-to-left interface the folder mark would otherwise sit against the far edge
                 with the text pushed away from it, the two no longer reading as one control. */}
-            <InputGroup dir="ltr" onHoverChange={setHovered}>
-              <InputGroup.Prefix>
-                <Folder size={14} aria-hidden />
-              </InputGroup.Prefix>
-              {/* The key handler is on the input rather than on `TextField`, which stops every key it is
-                  handed a handler for: Escape would never reach the dialog around the field. */}
-              <InputGroup.Input
-                ref={input}
-                className="font-mono"
-                placeholder={t("settings.cloneDir.placeholder")}
-                onKeyDown={(event) => event.key === "Enter" && !isImeKey(event.nativeEvent) && save(draft)}
-              />
-            </InputGroup>
+            {/* The key handler is on the input rather than on `TextField`, which stops every key it is handed a
+                handler for: Escape would never reach the dialog around the field. */}
+            <Input
+              dir="ltr"
+              onHoverChange={setHovered}
+              start={<Folder size={14} aria-hidden />}
+              ref={input}
+              inputClassName="font-mono"
+              placeholder={t("settings.cloneDir.placeholder")}
+              onKeyDown={(event) => event.key === "Enter" && !isImeKey(event.nativeEvent) && save(draft)}
+            />
           </TextField>
           {/* The field says the whole path while the pointer is on it, the hover being the group's
               and the tooltip anchored to the input inside it. */}
           {stored !== storedFull && <AnchoredTooltip tooltip={<ValueTooltipText label={input} dir="ltr">{storedFull}</ValueTooltipText>} anchor={input} hovered={hovered} />}
           {/* A mouse press on Browse leaves focus in the field until the picker opens, and a cancelled
               picker hands it back to the field rather than to Browse. */}
-          {directoryBrowse.browseButton({ preventFocusOnPress: true })}
+          {directoryBrowse.browseButton({ focusOnPress: false })}
         </div>
       </SettingRow>
       {directoryBrowse.picker}

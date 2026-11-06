@@ -1,7 +1,7 @@
-import { Tabs } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { FadeOverflow } from "../components/text/FadeOverflow";
+import { TabPanel, Tabs } from "../primitives";
 import { TextTabStrip } from "../components/tabs/TextTabStrip";
 import { CodedError } from "../errors/codedError";
 import { ActionableError } from "../errors/actionableError";
@@ -32,9 +32,10 @@ import { alertFailure } from "../components/alerts/raiseError";
 
 type Conversation = "new" | "resume";
 
-/** The daemon's refusals that are about the conversation to resume. They arrive after the submit, so
- * they are the error alert dialog's like any other; the Session ID field takes focus back, and the
- * answer the lookup holds is asked for again where it may be stale. */
+/** The daemon's refusals that are about the conversation to resume. They arrive after the submit, so they are the error
+ * alert dialog's like any other; the dialog names the Session ID field as where focus returns (`returnFocusRef`,
+ * however the request was submitted), once the alert is acknowledged, and the answer the lookup holds is asked for
+ * again where it may be stale. */
 const RESUME_REFUSALS = new Set([
   "conversation_to_resume_not_found",
   "conversation_in_session",
@@ -127,6 +128,7 @@ export function SessionDialog({
   // The name typed over an archived session's own, for that session only; unedited, the field shows its title.
   const [heldName, setHeldName] = useState<{ session: string; value: string }>();
   const { busy, run } = useDialogAction(undefined, t("dialog.session.failedTitle"));
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
 
   // A resumed conversation is always a plain session, so choosing to resume takes the choice of
@@ -216,11 +218,10 @@ export function SessionDialog({
         appearance,
       })).catch((err: unknown) => {
         if (err instanceof CodedError && resuming && RESUME_REFUSALS.has(err.code)) {
+          returnFocusRef.current = resumeFieldRef.current?.querySelector("input") ?? null;
           // Anything but a conversation that is not there at all may mean the answer held is stale
           // (it was taken into a session, say), so the daemon is asked again.
           if (err.code !== "conversation_to_resume_not_found") resume.reask();
-          // Where focus returns to once the alert is acknowledged.
-          resumeFieldRef.current?.querySelector("input")?.focus();
         }
         throw err;
       });
@@ -287,6 +288,7 @@ export function SessionDialog({
       failure={failure}
       submitLabel={t(target ? SUBMIT_LABEL[target.kind] : "dialog.session.open")}
       busy={busy}
+      returnFocusRef={returnFocusRef}
       submitDisabled={accountUnavailable !== undefined || (resuming && resume.idProblem === undefined && target === undefined)}
       onSubmit={submit}
     >
@@ -305,10 +307,10 @@ export function SessionDialog({
               ID, then the fields that what the lookup found calls for. Only the selected tab's
               panel is mounted, so what the form remembers lives in this dialog's state; only
               whether Advanced is unfolded is the section's own, and it folds back on a switch. */}
-          <Tabs.Panel id="new" className={PANEL_CLASS}>
+          <TabPanel id="new" className={PANEL_CLASS}>
             {sharedFields}
-          </Tabs.Panel>
-          <Tabs.Panel id="resume" className={PANEL_CLASS}>
+          </TabPanel>
+          <TabPanel id="resume" className={PANEL_CLASS}>
             <ResumeConversationFields
               idFieldRef={resumeFieldRef}
               resumeId={resumeId}
@@ -321,7 +323,7 @@ export function SessionDialog({
               launch={launch}
               accountError={accountUnavailable}
             />
-          </Tabs.Panel>
+          </TabPanel>
         </Tabs>
       )}
       {!resumable && sharedFields}

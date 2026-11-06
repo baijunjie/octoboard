@@ -3,15 +3,14 @@
 // collection the list is built on does not reach itself.
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, GitCommitVertical, Layers } from "lucide-react";
 import React, { useRef } from "react";
-import { Button } from "react-aria-components";
 
-import { Button as IconButton } from "../../components/controls/Button";
 import { IconToggle } from "../../components/controls/IconToggle";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../../components/controls/RowControls";
 import { TitledControl } from "../../components/hint/TitledControl";
 import { handFocusOff } from "../../components/focus/handFocusOff";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import { SECTION_LABELS, sectionKey, type ChangeSection } from "./changes";
+import { BareButton, Button } from "../../primitives";
 
 /** Every section heading is one line of this height, which, with the rows' (`ROW_HEIGHT`), is what
  * lets the list be virtualized. */
@@ -122,12 +121,12 @@ export function ChangeSectionHeading({
     onCollapsedChange(next);
   };
   const band = (
-    <Button
+    <BareButton
       ref={button}
       data-section-heading
-      aria-expanded={!isCollapsed}
-      excludeFromTabOrder
-      preventFocusOnPress
+      expanded={!isCollapsed}
+      tabStop={false}
+      focusOnPress={false}
       onPress={toggle}
       className={`flex h-full w-full min-w-0 items-center gap-2 border-t border-transparent ${topDivider ? "groove-t" : ""} px-(--pane-inset) text-start outline-none ${mark || byCommit ? "pe-2" : ""} data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset`}
     >
@@ -138,7 +137,7 @@ export function ChangeSectionHeading({
         <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
       )}
       <SectionHeadingText section={section} count={count} />
-    </Button>
+    </BareButton>
   );
   if (!mark && !byCommit) return band;
   const hasOpenCommit = commitKeys.some((key) => !collapsed.has(key));
@@ -149,10 +148,10 @@ export function ChangeSectionHeading({
       <RowIconGroup>
         {byCommit?.value && (
           <TitledControl title={foldLabel}>
-            <IconButton
-              isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS}
-              aria-label={foldLabel} excludeFromTabOrder data-section-heading-control=""
-              isDisabled={commitKeys.length === 0} preventFocusOnPress
+            <Button
+              iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS}
+              label={foldLabel} tabStop={false} data-section-heading-control=""
+              disabled={commitKeys.length === 0} focusOnPress={false}
               onPress={() => {
                 const next = new Set(collapsed);
                 for (const key of commitKeys) {
@@ -163,7 +162,7 @@ export function ChangeSectionHeading({
               }}
             >
               {hasOpenCommit ? <ChevronsDownUp aria-hidden="true" className="size-4" /> : <ChevronsUpDown aria-hidden="true" className="size-4" />}
-            </IconButton>
+            </Button>
           </TitledControl>
         )}
         {byCommit && (
@@ -204,7 +203,7 @@ export function ChangeSectionHeading({
  * collection's to make.
  *
  * react-aria tracks the interaction modality from a capture-phase listener on the document, which
- * runs before this one, so what this focuses draws its ring without `setInteractionModality`.
+ * runs before this one, so what this focuses draws its ring without `setKeyboardModality`.
  */
 function moveAcrossSectionHeadings(event: React.KeyboardEvent<HTMLElement>): void {
   const target = event.target as HTMLElement;

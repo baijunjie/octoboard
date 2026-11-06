@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { Tabs } from "@heroui/react";
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
@@ -7,6 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import type { Agent } from "../../protocol";
 import { AgentTabList } from "./AgentTabList";
 import { presence, stubListMotion } from "../motion/listMotionTestSupport";
+import { Tabs } from "../../primitives";
 import { TEST_PROVIDERS } from "../../test/testProviders";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

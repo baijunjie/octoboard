@@ -1,5 +1,6 @@
-import { Label, TextArea, TextField } from "@heroui/react";
 import React from "react";
+
+import { Label, TextArea, TextField } from "../../primitives";
 
 import { FieldErrorMessage } from "./FieldErrorMessage";
 import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
@@ -32,7 +33,7 @@ export function TextAreaInput({
 }): React.ReactElement {
   const invalid = !!errorMessage;
   return (
-    <TextField fullWidth variant="secondary" value={value} onChange={onChange} isDisabled={isDisabled} isInvalid={invalid} validationBehavior="aria">
+    <TextField fullWidth variant="secondary" value={value} onChange={onChange} disabled={isDisabled} invalid={invalid}>
       <Label>{label}</Label>
       <TextArea rows={rows} placeholder={placeholder} />
       <TextFieldDescription value={value} characterLimit={characterLimit} description={description} />

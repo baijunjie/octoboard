@@ -1,5 +1,6 @@
-import { Chip } from "@heroui/react";
 import React from "react";
+
+import { Chip } from "../../primitives";
 
 export type StatusBadgeColor = "default" | "accent" | "help" | "success" | "warning" | "danger";
 export type StatusBadgeVariant = "soft" | "bordered";
@@ -79,20 +80,19 @@ export function StatusBadge({ children, className = "", color = "default", varia
   return (
     <>
       {separated && <span className="sr-only">, </span>}
-      <Chip<"span">
+      <Chip
         {...rest}
         size={size}
         color={color === "help" ? "default" : color}
-        variant="soft"
         dir={dir}
         data-color={color}
         data-variant={variant}
         data-size={size}
         className={`inline w-auto font-[weight:inherit] ${overflow === "wrap" ? `min-w-0 shrink ${SIZES[size].wrapRadius} whitespace-normal [overflow-wrap:anywhere]` : "shrink-0 whitespace-nowrap rounded-full"} ${colorClasses(color, variant)} ${SIZES[size].spacing} ${single ? `inline-block ${SIZES[size].single} px-0 text-center` : ""} ${className}`}
       >
-        {/* Keep content directly in the badge: Chip's automatic text label adds padding that a
-            single-character badge and the compact metadata badges cannot take. */}
-        <>{children}</>
+        {/* Content goes directly in the badge, with no chip label: its padding is more than a
+            single-character badge and the compact metadata badges can take. */}
+        {children}
       </Chip>
     </>
   );

@@ -1,6 +1,4 @@
-import { Spinner } from "@heroui/react";
 import React, { useEffect, useId, useMemo, useRef } from "react";
-import { Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
 
 import { failureParam } from "../../components/alerts/errorParts";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
@@ -19,6 +17,7 @@ import { RowActions } from "../RowActions";
 import { FileIcon } from "./FileIcon";
 import type { TreeNode } from "../tree";
 import { BrowserListMotion, useBrowserListMotion } from "../useBrowserListMotion";
+import { Spinner, Tree, TreeCollection, TreeItem } from "../../primitives";
 import { collectionIndex } from "../collectionIndex";
 import { DirectoryRow, IGNORED_ROW_CLASS, ROW_CLASS, ROW_HEIGHT, RowContent, RowName } from "../treeRow";
 
@@ -84,8 +83,7 @@ function sameNode(before: TreeNode, next: TreeNode): boolean {
 export const TREE_PADDING = 4;
 
 /**
- * A project's files as a tree: react-aria-components' `Tree`, virtualized. HeroUI 3 has no tree, so
- * this is built on the react-aria component HeroUI itself builds on, which brings the treegrid
+ * A project's files as a tree: the wrapper layer's virtualized `Tree`, which brings the treegrid
  * keyboard model (arrows, Home / End, type-ahead, Left / Right to collapse and expand). A row's
  * action is the one thing it does: a directory opens or closes, a file opens in the viewer; each file
  * or directory row carries at its end the button of the others (`RowActions`), the same menu a change's
@@ -112,7 +110,7 @@ export function FileTree({
   /** Row keys of the expanded directories. */
   expanded: ReadonlySet<string>;
   label: string;
-  onExpandedChange: (keys: Set<Key>) => void;
+  onExpandedChange: (keys: Set<string>) => void;
   onOpenFile: (path: string) => void;
   /** Try again was pressed in the mark of a directory that could not be listed: list it again. */
   onRetry: (dir: string) => void;
@@ -140,12 +138,12 @@ export function FileTree({
   const motion = useBrowserListMotion(treeRef, visibleKeys, folds);
   const collectionRef = useCollectionOptionTab(motion.ref);
   const fade = useScrollFade({ ref: collectionRef, className: "min-h-0 flex-1 overflow-auto py-1 outline-none" });
-  // react-aria-components 1.21.1 decides whether a row can expand — its `aria-expanded` and Left /
-  // Right — from the children it holds, not from `hasChildItems`, which it hands only to the
-  // chevron slot. So a collapsed directory, whose rows are not built, holds one
+  // The tree (react-aria-components 1.21.1 under the wrapper) decides whether a row can expand — its
+  // `aria-expanded` and Left / Right — from the children it holds, not from `expandable`, which it
+  // hands only to the chevron. So a collapsed directory, whose rows are not built, holds one
   // stand-in row that is never on screen (a collapsed row's children are not rows of the tree), the
   // same object every time. It costs the tree's `aria-rowcount` one row per collapsed directory.
-  // TODO: drop the stand-ins once react-aria-components hands `hasChildItems` to `useTreeItem`.
+  // TODO: drop the stand-ins once react-aria-components hands `hasChildItems` (`expandable`) to `useTreeItem`.
   const standIns = useMemo(() => new Map<string, TreeNode[]>(), []);
   const childrenOf = (node: Extract<TreeNode, { type: "directory" }>): TreeNode[] => {
     if (node.children.length > 0) return node.children;
@@ -155,16 +153,16 @@ export function FileTree({
   const failed = useMemo(() => new Set([...byKey].filter(([, node]) => node.type === "directory" && node.failure !== undefined).map(([key]) => key)), [byKey]);
   const shownExpanded = useMemo(() => new Set([...expanded].filter((key) => !failed.has(key))), [expanded, failed]);
   // Opening a failed directory asks for its listing again; nothing else about `expanded` changes.
-  const retryOpened = (keys: Iterable<Key>) => {
+  const retryOpened = (keys: Iterable<string>) => {
     for (const key of keys) {
       const node = byKey.get(key);
       if (node?.type === "directory" && retryCanHelp(node.failure)) onRetry(node.path);
     }
   };
-  const changeExpanded = (keys: Set<Key>) => {
+  const changeExpanded = (keys: Set<string>) => {
     retryOpened([...keys].filter((key) => failed.has(key)));
     // The failed ones were left out of what the tree was given and stay expanded in `expanded`.
-    onExpandedChange(new Set([...keys, ...[...failed].filter((key) => expanded.has(String(key)))]));
+    onExpandedChange(new Set([...keys, ...[...failed].filter((key) => expanded.has(key))]));
   };
 
   // ArrowRight (Left, right to left) on a failed folder's row walks to its mark. React-aria's row
@@ -187,13 +185,13 @@ export function FileTree({
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, []);
 
-  const onAction = (key: Key) => {
+  const onAction = (key: string) => {
     const node = byKey.get(key);
     if (!node) return;
     if (node.type === "file") onOpenFile(node.path);
     else if (node.type === "directory" && failed.has(key)) retryOpened([key]);
     else if (node.type === "directory") {
-      const next = new Set<Key>(expanded);
+      const next = new Set(expanded);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       onExpandedChange(next);
@@ -204,27 +202,26 @@ export function FileTree({
     if (node.type === "status") return <StatusItem node={node} />;
     return (
       <FileNodeRow node={node} onRetry={onRetry}>
-        {node.type === "directory" && <Collection items={childrenOf(node)} dependencies={[language]}>{renderNode}</Collection>}
+        {node.type === "directory" && <TreeCollection items={childrenOf(node)} dependencies={[language]}>{renderNode}</TreeCollection>}
       </FileNodeRow>
     );
   };
 
   return (
     <BrowserListMotion keys={visibleKeys} folds={folds} prepare={motion.prepare}>
-      <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT }}>
-        <Tree
-          {...fade}
-          aria-label={label}
-          data-file-tree={treeId}
-          items={items}
-          expandedKeys={shownExpanded}
-          onExpandedChange={changeExpanded}
-          onAction={onAction}
-          dependencies={[language]}
-        >
-          {renderNode}
-        </Tree>
-      </Virtualizer>
+      <Tree
+        {...fade}
+        label={label}
+        data-file-tree={treeId}
+        items={items}
+        rowHeight={ROW_HEIGHT}
+        expandedKeys={shownExpanded}
+        onExpandedChange={changeExpanded}
+        onAction={onAction}
+        dependencies={[language]}
+      >
+        {renderNode}
+      </Tree>
     </BrowserListMotion>
   );
 }
@@ -262,20 +259,28 @@ function FileNodeRow({ node, onRetry, children }: {
         ? <StatusMark tone="warning" label={t("browser.partial")} />
         : undefined;
     return (
-      <TreeItem data-list-motion={node.key} id={node.key} textValue={name} aria-label={ignored ? t("browser.tree.row.ignored", { name: isolate(name) }) : undefined} hasChildItems data-ignored={ignored || undefined} data-listing-failed={node.failure !== undefined || undefined} className={`${ROW_CLASS} ${IGNORED_ROW_CLASS}`} ref={rowRef}>
-        <TreeItemContent>
-          {({ isExpanded }) => (
-            <DirectoryRow name={name} isExpanded={isExpanded} link={link} nameGrows={!mark}>
-              {mark && (
-                <>
-                  {mark}
-                  <span className="min-w-0 flex-1" />
-                </>
-              )}
-              <RowActions contextTargetRef={rowRef} path={node.path} name={name} directory />
-            </DirectoryRow>
-          )}
-        </TreeItemContent>
+      <TreeItem
+        data-list-motion={node.key}
+        id={node.key}
+        textValue={name}
+        label={ignored ? t("browser.tree.row.ignored", { name: isolate(name) }) : undefined}
+        expandable
+        data-ignored={ignored || undefined}
+        data-listing-failed={node.failure !== undefined || undefined}
+        className={`${ROW_CLASS} ${IGNORED_ROW_CLASS}`}
+        ref={rowRef}
+        content={({ expanded }) => (
+          <DirectoryRow name={name} isExpanded={expanded} link={link} nameGrows={!mark}>
+            {mark && (
+              <>
+                {mark}
+                <span className="min-w-0 flex-1" />
+              </>
+            )}
+            <RowActions contextTargetRef={rowRef} path={node.path} name={name} directory />
+          </DirectoryRow>
+        )}
+      >
         {children}
       </TreeItem>
     );
@@ -297,16 +302,24 @@ function FileNodeRow({ node, onRetry, children }: {
   // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
   // `data-selected` itself, from a selection the tree does not have.
   return (
-    <TreeItem data-list-motion={node.key} id={node.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} data-ignored={ignored || undefined} className={`${ROW_CLASS} ${IGNORED_ROW_CLASS}`} ref={rowRef}>
-      <TreeItemContent>
+    <TreeItem
+      data-list-motion={node.key}
+      id={node.key}
+      textValue={name}
+      label={ariaLabel}
+      data-current={isSelected || undefined}
+      data-ignored={ignored || undefined}
+      className={`${ROW_CLASS} ${IGNORED_ROW_CLASS}`}
+      ref={rowRef}
+      content={
         <RowContent>
           <FileIcon entry={node.entry} path={node.path} />
           <RowName name={name} className={missing ? "text-app-muted line-through" : undefined} />
           {missing && <span className="shrink-0 text-xs text-app-muted">{missing}</span>}
           <RowActions contextTargetRef={rowRef} path={node.path} name={name} />
         </RowContent>
-      </TreeItemContent>
-    </TreeItem>
+      }
+    />
   );
 }
 
@@ -324,15 +337,19 @@ function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): 
   const t = useT();
   const text = node.status === "loading" ? t("browser.tree.loading") : t("browser.tree.empty");
   return (
-    <TreeItem data-list-motion={node.key} id={node.key} textValue={text} className={ROW_CLASS}>
-      <TreeItemContent>
+    <TreeItem
+      data-list-motion={node.key}
+      id={node.key}
+      textValue={text}
+      className={ROW_CLASS}
+      content={
         <RowContent>
-          {node.status === "loading" ? <Spinner size="sm" aria-hidden="true" className="size-4 shrink-0" /> : <span className="size-4 shrink-0" />}
+          {node.status === "loading" ? <Spinner size="sm" className="size-4 shrink-0" /> : <span className="size-4 shrink-0" />}
           <FadeOverflow as="span" className="min-w-0 flex-1 text-app-muted italic" titleWhenClipped={text}>
             {text}
           </FadeOverflow>
         </RowContent>
-      </TreeItemContent>
-    </TreeItem>
+      }
+    />
   );
 }

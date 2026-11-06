@@ -6,7 +6,7 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { focusAfterLoss } from "./modalFocus";
-import { useFocusVisibleProps } from "./useFocusVisibleProps";
+import { useFocusVisibleProps } from "../../primitives";
 
 beforeEach(() => {
   const globals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };

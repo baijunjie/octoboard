@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { setInteractionModality } from "react-aria";
 
 import { useFocusHandoff } from "../../components/focus/useFocusHandoff";
 import { useLatest } from "../../components/hooks/useLatest";
@@ -10,6 +9,7 @@ import type { FindBar, FindStatus } from "./FindBar";
 import { clearMatches, findMatches, findRegions, hasPlaceholder, paintMatches, revealMatch } from "./findDom";
 import { findSelection } from "./findSelection";
 import { shadowRootsIn } from "../code/rendererDom";
+import { setKeyboardModality } from "../../primitives";
 
 /** How long the query rests before the search runs, so typing in a large file is not a search per
  * key; and how long a burst of changes to the drawn text rests before the search runs again. */
@@ -283,7 +283,7 @@ export function useFind({
         if (!latest.current.open && (!container || findRegions(container).length === 0)) return;
         event.preventDefault();
         event.stopPropagation();
-        setInteractionModality("keyboard");
+        setKeyboardModality();
         // Match pasting into the single-line query: its value cannot contain CR or LF.
         const selected = container && !barRef.current?.contains(document.activeElement) ? findSelection(container).replace(/[\r\n]/g, "") : "";
         if (selected) {

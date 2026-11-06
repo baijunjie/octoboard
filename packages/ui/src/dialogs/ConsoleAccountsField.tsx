@@ -1,7 +1,6 @@
 import { KeyRound } from "lucide-react";
 import React, { useId, useRef, useState } from "react";
 
-import { Button } from "../components/controls/Button";
 import { choiceGroups, choiceKey, findEntry } from "../accounts/choiceEntries";
 import { storedAccount } from "../accounts/accountInheritance";
 import { agentChoiceBadge, defaultAccountName, isAgentPickable, listedPickerAgents } from "../agents/agents";
@@ -19,6 +18,7 @@ import { useDaemonStore, useProviders } from "../store";
 import { offeredAccountOptions } from "./accountOptions";
 import { LabelledGroup } from "../components/form/LabelledGroup";
 import { OptionSelect } from "../components/form/OptionSelect";
+import { Button, partSelector } from "../primitives";
 
 /**
  * The account a console's sessions use, for each agent that can be used: one row per added agent, in the
@@ -68,7 +68,7 @@ export function ConsoleAccountsField({
   const manageRef = useRef<HTMLButtonElement>(null);
   // A row's control can go away under the user: a row once its agent is missing or not added and
   // moved off its account. Focus goes to the first picker left.
-  const focusHandoff = useFocusHandoff(() => rowsRef.current?.querySelector<HTMLElement>('[data-slot="select-trigger"]')?.focus());
+  const focusHandoff = useFocusHandoff(() => rowsRef.current?.querySelector<HTMLElement>(partSelector.selectTrigger)?.focus());
   const idPrefix = useId();
   if (rows.length === 0) return null;
   return (
@@ -78,10 +78,10 @@ export function ConsoleAccountsField({
       help={
         <TitledControl title={t("dialog.console.manageAccounts")}>
           <Button
-            isIconOnly
+            iconOnly
             size="xs"
             variant="ghost"
-            aria-label={t("dialog.console.manageAccounts")}
+            label={t("dialog.console.manageAccounts")}
             className={HELP_TIP_BUTTON_CLASS}
             ref={manageRef}
             onPress={() => {

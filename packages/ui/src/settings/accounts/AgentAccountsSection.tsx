@@ -1,5 +1,3 @@
-import { Button } from "../../components/controls/Button";
-import { Tabs } from "@heroui/react";
 import { ArrowUp, ArrowDown, Bot, Info, LogIn, Pencil, Settings, Trash2, UserPlus, type LucideIcon } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
 
@@ -8,6 +6,7 @@ import { defaultProviderAgent } from "../../agents/providers";
 import { ICON_TRIGGER_CLASS } from "../../components/controls/iconTrigger";
 import { takeMenuFocusToRestore } from "../../components/focus/menuFocus";
 import type { ActionMenuEntry } from "../../components/menus/menuEntries";
+import { Button, TabPanel, Tabs } from "../../primitives";
 import { AgentTabList } from "../../components/tabs/AgentTabList";
 import { EmptyPanel } from "../../components/panel/EmptyPanel";
 import { TitledControl } from "../../components/hint/TitledControl";
@@ -79,7 +78,7 @@ function handFocusOnceClosed(find: () => HTMLElement | null | undefined): void {
 function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; icon: LucideIcon; onPress: () => void; buttonRef?: React.Ref<HTMLButtonElement> }): React.ReactElement {
   return (
     <TitledControl title={label}>
-      <Button ref={buttonRef} variant="ghost" preventFocusOnPress aria-label={label} className={ICON_TRIGGER_CLASS} onPress={onPress}>
+      <Button ref={buttonRef} variant="ghost" focusOnPress={false} label={label} className={ICON_TRIGGER_CLASS} onPress={onPress}>
         <Icon aria-hidden="true" className="size-4" />
       </Button>
     </TitledControl>
@@ -246,12 +245,12 @@ export function AgentAccountsSection(): React.ReactElement {
           actionRef={addAgentButton}
         />
       ) : (
-        /* The secondary variant is an underline strip, unlike the filled tabs that switch the
-            sections. Its list drops the padding the focus ring needs, so it is given back here, and its underline is
-            drawn as a groove like the rows' dividers instead of HeroUI's plain border. The strip pins
-            itself to the top of the section's scroller over the rows, opaque on the dialog's own surface and flush
-            with the scroller's edge (`--section-padding` is the padding the Settings dialog gives the section). */
-        <Tabs variant="secondary" selectedKey={selected} onSelectionChange={(key) => setChosen(key as Agent)}>
+        /* This is the underline strip, unlike the filled tabs that switch the sections. Its list drops the padding
+            the focus ring needs, so it is given back here, and its underline is drawn as a groove like the rows'
+            dividers instead of HeroUI's plain border. The strip pins itself to the top of the section's scroller
+            over the rows, opaque on the dialog's own surface and flush with the scroller's edge
+            (`--section-padding` is the padding the Settings dialog gives the section). */
+        <Tabs variant="underline" selectedKey={selected} onSelectionChange={(key) => setChosen(key as Agent)}>
           <AgentTabList
             {...pinnedFocus}
             providers={providers}
@@ -351,9 +350,9 @@ export function AgentAccountsSection(): React.ReactElement {
 function AgentAccountsPanel(props: AgentAccountsPanelProps): React.ReactElement {
   const order = useAccountOrder(props.agent, props.owned);
   return (
-    <Tabs.Panel id={props.agent} className="px-0 pt-0">
+    <TabPanel id={props.agent} className="px-0 pt-0">
       <AgentAccountsPanelContent {...props} order={order} />
-    </Tabs.Panel>
+    </TabPanel>
   );
 }
 

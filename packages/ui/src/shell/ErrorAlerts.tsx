@@ -1,7 +1,5 @@
-import { AlertDialog } from "@heroui/react";
 import React, { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import { Button } from "../components/controls/Button";
 import { recoveryAction } from "../components/alerts/ErrorGuidance";
 import { alertFailures, errorAlerts } from "../components/alerts/errorAlerts";
 import { useT } from "../i18n/react";
@@ -12,6 +10,7 @@ import { dialogAround } from "../components/dialog/dialogElement";
 import { Dialog } from "../components/dialog/Dialog";
 import { openSessionModelFromAnywhere } from "../dialogs/sessionModelLauncher";
 import { ErrorAlertBody, alertTitle } from "../components/dialog/ErrorAlertBody";
+import { Button, ModalStatusIcon } from "../primitives";
 
 /** Mounted outside the application boundary, so an alert raised while the application is not on screen can still be
  * acknowledged. */
@@ -66,7 +65,7 @@ function ErrorAlertHost(): React.ReactElement | null {
       key={error.id}
       alert
       dismissable={false}
-      headerLeading={<AlertDialog.Icon status="danger" />}
+      headerLeading={<ModalStatusIcon status="danger" />}
       title={alertTitle(t, error)}
       onClose={() => {}}
       focusesItselfOnOpen

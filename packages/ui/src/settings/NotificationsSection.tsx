@@ -1,6 +1,5 @@
 import React from "react";
 
-import { Button } from "../components/controls/Button";
 import { InlineReference } from "../i18n/InlineReference";
 import { ActionableError } from "../errors/actionableError";
 import { Message, useT } from "../i18n/react";
@@ -9,6 +8,7 @@ import { usePlatform } from "../platform/react";
 import { SettingRow } from "./SettingRow";
 import { useSectionRefocus } from "./useSectionRefocus";
 import { raiseError } from "../components/alerts/raiseError";
+import { Button } from "../primitives";
 
 /** Whether Octoboard may notify when a session raises its hand, with the ask where the platform
  * wants it made from a user gesture (a browser). Pressing the Enable button is that gesture. The macOS
@@ -38,12 +38,12 @@ export function NotificationsSection(): React.ReactElement {
   return (
     <SettingRow compact label={t("settings.notifications.label")} description={state}>
       {request && status === "undecided" && (
-        <Button size="sm" variant="primary" preventFocusOnPress onPress={() => void request()}>
+        <Button size="sm" variant="primary" focusOnPress={false} onPress={() => void request()}>
           {t("settings.notifications.enable")}
         </Button>
       )}
       {notifications?.openSystemSettings && status === undefined && (
-        <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => void open()}>
+        <Button size="sm" variant="secondary" focusOnPress={false} onPress={() => void open()}>
           {t("settings.notifications.openSettings")}
         </Button>
       )}

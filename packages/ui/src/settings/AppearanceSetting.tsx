@@ -1,10 +1,10 @@
-import { ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import React from "react";
 
 import { TitledControl } from "../components/hint/TitledControl";
 import { useT } from "../i18n/react";
 import { useOctoboardTheme } from "../preferences/theme";
+import { ToggleButton, ToggleButtonGroup } from "../primitives";
 import { SettingRow } from "./SettingRow";
 
 const OPTIONS = [
@@ -24,18 +24,15 @@ export function AppearanceSetting(): React.ReactElement {
   return (
     <SettingRow label={t("settings.appearance.label")} description={t("settings.appearance.description")}>
       <ToggleButtonGroup
-        aria-label={t("settings.appearance.label")}
-        selectionMode="single"
-        disallowEmptySelection
-        selectedKeys={[choice]}
-        onSelectionChange={(keys) => {
-          const [key] = keys;
+        label={t("settings.appearance.label")}
+        selectedKey={choice}
+        onSelectionChange={(key) => {
           if (key === "light" || key === "dark" || key === "system") setChoice(key);
         }}
       >
         {OPTIONS.map(({ key, label, Icon }) => (
           <TitledControl key={key} title={t(label)}>
-            <ToggleButton id={key} size="sm" isIconOnly aria-label={t(label)} preventFocusOnPress>
+            <ToggleButton id={key} size="sm" iconOnly label={t(label)} focusOnPress={false}>
               <Icon aria-hidden="true" className="size-4" />
             </ToggleButton>
           </TitledControl>

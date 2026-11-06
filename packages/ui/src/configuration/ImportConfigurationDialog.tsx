@@ -1,5 +1,3 @@
-import { Button } from "../components/controls/Button";
-
 import React, { useEffect, useRef, useState } from "react";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
@@ -41,6 +39,7 @@ import { ImportResult, type Imported } from "./ImportResult";
 import { ImportReview } from "./ImportReview";
 import type { Region } from "./RegionTabs";
 import { raiseError } from "../components/alerts/raiseError";
+import { Button } from "../primitives";
 
 type Stage =
   | { kind: "choose" }
@@ -300,10 +299,10 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   // pending Import, and the Import button that was pressed stays the same element and keeps focus as it turns pending.
   const importFooter = (
     <>
-      <Button key="cancel" type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
+      <Button key="cancel" type="button" variant="secondary" onPress={onClose}>
         {t("common.cancel")}
       </Button>
-      <Button key="import" type="submit" isPending={busy} isDisabled={nothingToImport}>
+      <Button key="import" type="submit" pending={busy} disabled={nothingToImport}>
         {t("configuration.import.review.submit")}
       </Button>
     </>
@@ -311,11 +310,11 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
 
   const chooseFooter = (
     <>
-      <Button key="cancel" type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
+      <Button key="cancel" type="button" variant="secondary" onPress={onClose}>
         {t("common.cancel")}
       </Button>
       {/* Pending rather than disabled, so the button keeps focus and the dialog its Escape. */}
-      <Button key="import" type="submit" isPending={busy || waiting} autoFocus>
+      <Button key="import" type="submit" pending={busy || waiting} autoFocus>
         {t("configuration.import.choose.submit")}
       </Button>
     </>

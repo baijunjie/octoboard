@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
-import { useFocusVisibleProps } from "../focus/useFocusVisibleProps";
 import { useLatest } from "../hooks/useLatest";
 import { startResizeDrag } from "./resizeDrag";
+import { useFocusVisibleProps } from "../../primitives";
 
 /** Pixels an arrow key press moves the edge; Shift multiplies it. */
 const KEY_STEP = 16;

@@ -1,4 +1,3 @@
-import { Description, Tabs } from "@heroui/react";
 import React, { useId, useRef, useState } from "react";
 
 import { storedAccount } from "../accounts/accountInheritance";
@@ -7,8 +6,7 @@ import { providerLabel } from "../agents/providers";
 import { AgentIcon } from "../components/icons/AgentIcon";
 import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
 import { StatusBadge } from "../components/status/StatusBadge";
-import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
-import { TEXT_TAB_CLASS, TEXT_TAB_CONTAINER_CLASS, TEXT_TAB_LIST_CLASS } from "../components/tabs/textTabClasses";
+import { Description, partSelector, Tab, TabList, TabListContainer, TabPanel, Tabs } from "../primitives";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
@@ -82,24 +80,23 @@ export function ConsoleLaunchFields({
     <AdvancedSection expanded={expanded} onExpandedChange={setExpanded} status={launch.modelText}>
       <div ref={rootRef} {...focusHandoff} className="rounded-xl border border-separator p-4">
         <Tabs selectedKey={agent} onSelectionChange={(key) => setPicked(key as Agent)} className="gap-4">
-          <LocalizedTabListContainer className={TEXT_TAB_CONTAINER_CLASS}>
+          <TabListContainer fit="content">
             {/* Positioned, so a departing tab's visual stays in the strip's scroll. */}
-            <Tabs.List ref={tabsRef} aria-label={t("dialog.console.launchAgent")} className={`relative ${TEXT_TAB_LIST_CLASS}`}>
+            <TabList ref={tabsRef} label={t("dialog.console.launchAgent")} fit="content" className="relative">
               {listed.map((option) => {
                 const badge = agentChoiceBadge(t, agentAvailability, addedAgents, option);
                 return (
-                  <Tabs.Tab key={option} id={option} data-list-motion={option} className={`gap-2 ${TEXT_TAB_CLASS}`}>
+                  <Tab key={option} id={option} data-list-motion={option} size="content" className="gap-2">
                     <AgentIcon agent={option} />
                     {providerLabel(t, providers, option)}
                     {badge && <StatusBadge>{badge}</StatusBadge>}
-                    <Tabs.Indicator />
-                  </Tabs.Tab>
+                  </Tab>
                 );
               })}
-            </Tabs.List>
-          </LocalizedTabListContainer>
+            </TabList>
+          </TabListContainer>
           {listed.map((option) => (
-            <Tabs.Panel key={option} id={option} className="mt-0 p-0">
+            <TabPanel key={option} id={option} className="mt-0 p-0">
               <LaunchMatrix
                 launch={launch}
                 consoleSessions={values.launch[agent]}
@@ -107,7 +104,7 @@ export function ConsoleLaunchFields({
                 onConsoleChange={(key, value) => onChange("launch", agent, key, value)}
                 onProjectChange={(key, value) => onChange("project_session_launch", agent, key, value)}
               />
-            </Tabs.Panel>
+            </TabPanel>
           ))}
         </Tabs>
       </div>
@@ -164,7 +161,7 @@ export function LaunchMatrix({
   const consoleModelCell = useRef<HTMLDivElement>(null);
   // When the mark goes while it holds focus, the console's Model picker takes it, as a labelled field's trigger does. The
   // handoff sits before the first of the mark's places, so it runs while the others are still in the document.
-  const handoffFrom = useHandoffAfterRemoval(() => consoleModelCell.current?.querySelector<HTMLElement>('[data-slot="select-trigger"]'));
+  const handoffFrom = useHandoffAfterRemoval(() => consoleModelCell.current?.querySelector<HTMLElement>(partSelector.selectTrigger));
   const modelMarkHandoff = launch.modelFailure !== undefined && handoffFrom(`[data-status-mark-id="${modelMarkId}"]`);
   return (
     <div className="flex flex-col gap-3">

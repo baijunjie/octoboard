@@ -2,10 +2,10 @@ import React from "react";
 
 import { useT } from "../../i18n/react";
 import { FailureBody } from "../alerts/errorParts";
-import { Button } from "../controls/Button";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
 import { retryCanHelp } from "../../errors/errorRecovery";
 import { StatusMark, type MarkTone } from "./StatusMark";
+import { Button } from "../../primitives";
 
 /**
  * The mark of something that failed to be read, beside what is still shown: a glyph named by `label`
@@ -46,7 +46,7 @@ export function RetryStatusMark({
       inHeader={inHeader}
       markId={markId}
       actions={retryCanHelp(error) ? (close) => (
-        <Button size="sm" variant="secondary" preventFocusOnPress isPending={retrying} onPress={() => { close(); onRetry(); }}>
+        <Button size="sm" variant="secondary" focusOnPress={false} pending={retrying} onPress={() => { close(); onRetry(); }}>
           {t("error.tryAgain")}
         </Button>
       ) : undefined}

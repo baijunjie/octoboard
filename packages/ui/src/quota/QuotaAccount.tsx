@@ -27,7 +27,7 @@ export function QuotaAccount({ agent, account, name, plainName, rowRef, dimmed, 
     <div ref={rowRef} data-list-motion={account ?? `default:${agent}`} data-dimmed={dimmed || undefined} className={`${INACTIVE_VEIL_CLASS} flex flex-col gap-2 groove-b py-3 data-dimmed:after:bg-overlay/55 [&:not(:has(~[data-list-motion]))]:border-b-0`}>
       <AccountNameLine name={name} quota={quota} usedUp={usedUp} disabled={disabled} />
       <AccountQuotaSummary quota={quota} single usedUp={usedUp} />
-      <ResetCreditsLine quota={quota} accountName={plainName} onUse={() => onUseReset(agent, account, plainName)} preventFocusOnPress />
+      <ResetCreditsLine quota={quota} accountName={plainName} onUse={() => onUseReset(agent, account, plainName)} focusOnPress={false} />
     </div>
   );
 }

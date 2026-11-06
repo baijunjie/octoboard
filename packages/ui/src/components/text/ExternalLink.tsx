@@ -1,15 +1,13 @@
-import { buttonVariants } from "@heroui/styles";
 import React, { useRef, useState } from "react";
 
 import { ActionableError } from "../../errors/actionableError";
 import type { Translate } from "../../i18n/catalog";
 import { useT } from "../../i18n/react";
 import { useOptionalPlatform } from "../../platform/react";
-import { DecorativeSpinner } from "../controls/DecorativeSpinner";
 import { ExternalLinkIcon } from "./ExternalLinkIcon";
-import { useFocusVisibleProps } from "../focus/useFocusVisibleProps";
 import { settle } from "../hooks/settle";
 import { raiseError } from "../alerts/raiseError";
+import { buttonClassName, Spinner, useBusy, useFocusVisibleProps } from "../../primitives";
 
 export { ExternalLinkIcon } from "./ExternalLinkIcon";
 
@@ -79,28 +77,33 @@ export function useExternalLinkAction({ href, onOpen, onFailure, isPending = fal
   };
 }
 
-/** A browser destination stays a real anchor while native shells open it outside the application. */
+/** A browser destination stays a real anchor while native shells open it outside the application. In a busy modal it is
+ * a link that cannot be followed: no `href`, so neither a click, a middle click nor the keyboard reaches the address,
+ * and no tab stop, while it is still read as a link, unavailable. */
 export function ExternalLink({ href, appearance = "text", size, variant = "secondary", onOpen, onFailure, isPending = false, children, className = "", ...props }: Props): React.ReactElement {
   const t = useT();
   const focus = useFocusVisibleProps();
   const action = useExternalLinkAction({ href, onOpen, onFailure, isPending });
+  const unfollowable = useBusy();
   if (!action.address) return <span>{children}</span>;
-  const spinner = appearance === "button" && action.busy && <DecorativeSpinner className={size === "xs" ? "size-3" : undefined} />;
+  const spinner = appearance === "button" && action.busy && <Spinner size="sm" color="current" className={size === "xs" ? "size-3" : undefined} />;
   const label = <>{spinner}{children}<ExternalLinkIcon className={appearance === "button" ? "size-3.5" : "ms-1 size-[0.85em]"} /></>;
   return (
     <a
       {...props}
       {...focus}
-      href={action.address}
+      role={unfollowable ? "link" : undefined}
+      aria-disabled={action.busy || unfollowable || undefined}
+      // After the disabled mark, so a browser that blurs the link as its `href` goes finds it already marked.
+      href={unfollowable ? undefined : action.address}
       target="_blank"
       rel="noopener noreferrer"
       aria-description={props["aria-description"] ?? t("common.opensExternally")}
-      aria-disabled={action.busy || undefined}
       aria-busy={action.busy || undefined}
       data-external-link=""
-      className={`outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${appearance === "button" ? `${buttonVariants({ variant, size: size === "xs" ? "sm" : size })} ${size === "xs" ? "app-button--xs" : ""}` : "rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2"} ${className}`}
-      onClick={action.onClick}
-      onAuxClick={action.onAuxClick}
+      className={`outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus ${appearance === "button" ? `${buttonClassName({ variant, size })}` : unfollowable ? "rounded-sm break-words cursor-default text-app-muted" : "rounded-sm break-words text-(--tint-accent-fg) underline underline-offset-2"} ${className}`}
+      onClick={unfollowable ? undefined : action.onClick}
+      onAuxClick={unfollowable ? undefined : action.onAuxClick}
     >
       {label}
     </a>

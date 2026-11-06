@@ -5,13 +5,14 @@
 A surface in `packages/ui` that hides content behind its own edge fades that edge, and no site works out how: the fade
 comes from `packages/ui/src/components/scroll/scrollFade.tsx`, which supplies the fade's size and the matching scroll padding
 (the "Focus scrolled to the edge of a scroller that fades there" section of `docs/ui-standard.md`), so no site
-states either. Never reach for HeroUI's `ScrollShadow` directly and never hand-build a fade: HeroUI's own default size
+states either. Never reach for the scroll shadow it wraps (`ScrollShadow`, the wrapper layer's over HeroUI's) directly
+and never hand-build a fade: HeroUI's own default size
 is a larger one (40px) that nothing here uses, and a bare `ScrollShadow` carries no scroll padding at all. The library
 fades exactly one thing of its own — a `Tabs` tab strip, over a size nothing outside it can configure — and that one is
 left as it is; every other faded surface here is the project's own and goes through the module.
 
 Both halves of that are enforced by `pnpm --filter ui test`, which fails on a scroll container in `packages/ui/src`
-that does not take its fade from the module and on `ScrollShadow` named anywhere outside it. A surface that genuinely
+that does not take its fade from the module and on `ScrollShadow` named anywhere outside it and the wrapper layer. A surface that genuinely
 cannot take the fade is declared, with its reason, in the `EXEMPTIONS` list of
 `packages/ui/src/components/scroll/scrollFadeCoverage.test.ts` — that list is the whole account of what the rule leaves
 alone, so a scroller the check cannot see (one whose overflow comes from a library's stylesheet or another package's

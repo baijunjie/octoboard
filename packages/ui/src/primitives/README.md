@@ -1,0 +1,66 @@
+# The wrapper layer (`primitives/`)
+
+The one place in the application that imports `@heroui/react`, `@heroui/styles`, `react-aria-components`, `react-aria`
+and the `@react-aria/*`, `@react-stately/*` and `@react-types/*` packages. Everything else — feature code and the
+project's own composite components alike — uses what this layer exports. The rule and its reasons are in
+[`docs/ui-standard.md`](../../../../docs/ui-standard.md), "Third-party UI components come through the wrapper layer";
+lint enforces it (`packages/ui/eslint.layers.mjs`).
+
+It is the bottom layer of `src/`: every other directory, the pure layers included, may import it, and it imports
+nothing else of the application — only the third-party libraries and React. What a wrapper needs from the application
+(a translated label, a preference) comes in through its props or a context the application provides, never by an
+import.
+
+## Using it
+
+Import from the entry point, `primitives` (its `index.ts`), never from a file inside it. A component that
+has no wrapper yet gets one here first, in the same change that uses it.
+
+Code that has to find a component's part in the DOM (a focus hand-off, a measurement, a test fixture's target) uses
+`partSelector` (`parts.ts`), never the library's `data-slot` names or classes; a part not listed there is added to it.
+Where the application writes such a part itself (a tag drawn outside a tag group, a group's error message), the layer
+draws it (`StaticTag`, `GroupFieldError`), marks and all.
+
+## Writing a wrapper
+
+- **One wrapper per third-party component.** A wrapper covers one component and the parts it is assembled from (a tab
+  strip with its list, tab, indicator and panel), in a file named after the project's component. A composite that
+  combines several components, or adds behaviour of the project's own, is not a wrapper: it lives in its kind's
+  directory under `components/` and builds on the wrappers.
+- **The props are the project's.** Name and shape them for what the application does with the component, and expose only
+  what it uses today; add a prop when a call site needs one, not in case one might. A variant is a union of the
+  project's own names, even where it matches HeroUI's.
+- **No third-party type in the public API.** A wrapper's props, return types and exports name no type from the libraries
+  (`ComponentProps<typeof Button>`, `Key`, `Selection`, `PressEvent` and the like) and do not pass a compound API
+  through (`Tabs.List`, `Popover.Trigger`): define the type the project needs here, and convert at the wrapper. So
+  replacing the library changes only this directory.
+- **Appearance stays HeroUI's.** Render HeroUI's own component and pick its look through its variants and slots, as
+  `docs/ui-standard.md` requires; a wrapper adds no styling the standard does not already approve.
+- **A treatment the standard approves lives in the wrapper.** A fix or approved departure that every instance of the
+  component needs (a WebKit compositing treatment, a size the standard confirms) is applied inside the wrapper, with a
+  comment naming the heading of `docs/ui-standard.md` or the reason it rests on, and is removed from the call sites
+  and the stylesheet. A treatment that only some uses need is a prop of the wrapper, not a class each call site
+  repeats.
+- **Hooks and utilities.** A `react-aria` hook the application uses is wrapped by a project hook with the project's
+  arguments and results (`useKeyboardModality`, `useFocusVisibleProps`, `useObjectRef`, `useTooltipState`). A utility
+  that is neither a component nor a hook (`mergeRefs`) is re-exported from the entry point, with its type redefined
+  here where it would otherwise bring a third-party type into a consumer's code; only the ones the application uses
+  are exported, and one only a wrapper needs (`mergeProps`, `parseColor`) stays inside it.
+- **Class and style helpers.** Where a consumer has to give its own element the look of a wrapped component (a button
+  drawn as a link, a scroller with HeroUI's scroll shadow, a tooltip's surface), the layer exports the helper instead
+  of the class names: `buttonClassName`, `scrollShadowClassName`, `scrollShadowStripStyle`, `scrollShadowAutoProps`,
+  `tooltipSurfaceClassName`.
+- **Honour a busy modal.** A `Modal` given `busy` disables every control in it but a `pending` `Button`, and the
+  wrappers do it themselves: each interactive wrapper takes its `disabled` from `useDisabled` (`busy.ts`), which reads
+  the modal's busy state, and a new interactive wrapper does the same (a pending action passes `exempt`). A container
+  (`ListBox`, `Tree`, `TagGroup`, `ColorSwatchPicker`) leaves it to its items and buttons, which take it. A control
+  drawn without a wrapper reads `useBusy` and renders itself unavailable. Never `inert`: assistive technology still
+  reads the disabled controls. A call site does not disable its own controls for a busy dialog.
+- **Tests sit beside the wrapper**, covering what it adds or translates (prop mapping, a treatment, focus or press
+  behaviour it must keep); the component's own behaviour is HeroUI's to test. `testSupport.tsx` holds the helpers they
+  share (`mount`, `pressWithMouse`), self-contained like the rest of the layer.
+- **Internal modules stay off the barrel.** `props.ts` (`DataAttributes`, `definedProps`) is what the wrappers share
+  among themselves; a consumer has no use for it.
+
+Tests and test support, the gallery, the shared fixtures and the website preview may import the libraries directly;
+they are not application source.

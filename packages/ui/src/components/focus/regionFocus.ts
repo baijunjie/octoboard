@@ -1,5 +1,6 @@
 import { TEXT_ENTRY } from "../../input/touchInput";
 import { FOCUSABLE } from "./selectors";
+import { partSelector } from "../../primitives";
 
 /** A window region, named by its `data-region`. */
 export type Region = string;
@@ -44,7 +45,7 @@ export function focusTopBar(): void {
 }
 
 /** A toast that is on screen, not one fading out. */
-const LIVE_TOAST = '[data-slot="toast"]:not([data-exiting="true"]):not([data-hidden="true"])';
+const LIVE_TOAST = partSelector.liveToast;
 
 export function regionElements(region: Region): Element[] {
   return Array.from(document.querySelectorAll(`[data-region=${region}]`));

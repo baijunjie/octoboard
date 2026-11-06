@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 
-import { Button } from "../components/controls/Button";
 import { ExportConfigurationDialog } from "../configuration/ExportConfigurationDialog";
 import { openDialogFromAnywhere } from "../dialogs/dialogLauncher";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { useCurrentConsole } from "../store";
 import { SettingRow } from "./SettingRow";
+import { Button } from "../primitives";
 
 /** Moving configuration between computers: exporting consoles and projects, the application settings
  * or the account structure to a file, and importing a file exported elsewhere (see
@@ -24,7 +24,7 @@ export function ConfigurationSection(): React.ReactElement {
   return (
     <>
       <SettingRow compact label={t("settings.configuration.export.label")} description={t("settings.configuration.export.description")}>
-        <Button size="sm" variant="outline" preventFocusOnPress onPress={() => setExporting(true)}>
+        <Button size="sm" variant="outline" focusOnPress={false} onPress={() => setExporting(true)}>
           {t("settings.configuration.export.button")}
         </Button>
       </SettingRow>

@@ -1,8 +1,6 @@
-import { Switch } from "@heroui/react";
 import { ArrowLeft, FolderPlus, List, MessageSquarePlus } from "lucide-react";
 import React, { memo, useId, useLayoutEffect, useRef } from "react";
 
-import { Button } from "../components/controls/Button";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { TopStatusMarker } from "../components/status/TopStatusMarker";
 import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
@@ -42,6 +40,7 @@ import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import { hasSessionMarks, PinButton, SessionMarkButtons } from "./MarkButtons";
 import { useSessionRowModel } from "./sessionRowModel";
 import type { SidebarHandlers } from "./types";
+import { Button, Switch } from "../primitives";
 
 /** The top of either focus view: the back button that leaves focus mode, then whatever the view
  * puts after it. Both views are built from this header, the session cards and the archived list
@@ -64,12 +63,12 @@ function FocusHeader({
     <div ref={ref} className={`${PANE_HEADER_FRAME_CLASS} gap-1 ps-(--row-fill-inset) pe-(--pane-inset)`}>
       <TitledControl title={t("sidebar.focus.exit")} placement="bottom">
         <Button
-          isIconOnly
+          iconOnly
           size="sm"
           variant="ghost"
-          aria-label={t("sidebar.focus.exit")}
+          label={t("sidebar.focus.exit")}
           data-focus-exit
-          preventFocusOnPress
+          focusOnPress={false}
           onPress={() => handlers.onFocus(undefined)}
         >
           <ArrowLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
@@ -176,17 +175,11 @@ export function ProjectFocusView({
                 <IndicatorTooltip tooltip={t("sidebar.focus.includeConsoleSessions")} touchPopover={false}>
                   <Switch
                     size="sm"
-                    aria-label={t("sidebar.focus.includeConsoleSessions")}
-                    aria-describedby=""
-                    isSelected={includeConsoleSessions}
-                    onChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
-                  >
-                    <Switch.Content>
-                      <Switch.Control>
-                        <Switch.Thumb />
-                      </Switch.Control>
-                    </Switch.Content>
-                  </Switch>
+                    label={t("sidebar.focus.includeConsoleSessions")}
+                    describedBy=""
+                    selected={includeConsoleSessions}
+                    onSelectedChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
+                  />
                 </IndicatorTooltip>
               </span>
             )}
@@ -397,9 +390,9 @@ function ConsoleSessionChip({
       data-list-motion={session.id}
       size="xs"
       variant="tertiary"
-      preventFocusOnPress
-      aria-label={ariaLabel}
-      aria-current={current ? "true" : undefined}
+      focusOnPress={false}
+      label={ariaLabel}
+      current={current}
       data-switch-current={current || undefined}
       onPress={onPress}
       className={`rounded-full font-medium ${className}`}

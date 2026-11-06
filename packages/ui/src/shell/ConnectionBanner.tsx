@@ -1,11 +1,11 @@
 import { RefreshCw, Unplug } from "lucide-react";
 import React, { useEffect, useState } from "react";
 
-import { Button } from "../components/controls/Button";
 import type { ConnectionState } from "../daemon-client";
 import { useT } from "../i18n/react";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useBottomStrip } from "../components/panel/useBottomStrip";
+import { Button } from "../primitives";
 
 /** The CSS custom property this banner publishes its own height to. `style.css` exposes it as
  * `--bottom-chrome-height`, the offset that everything overlaying the content area ends above, so
@@ -104,7 +104,7 @@ export function ConnectionBanner({
                 size="xs"
                 variant="outline"
                 className={RETRY_CLASS}
-                preventFocusOnPress
+                focusOnPress={false}
                 onPress={onRetry}
               >
                 {t("connection.retry")}

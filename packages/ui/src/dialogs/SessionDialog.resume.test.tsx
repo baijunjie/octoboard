@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { ErrorAlerts } from "../shell/ErrorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Session } from "../protocol";
 import { accountOf, type ProjectExtra, projectOf, sessionOf } from "../fixtures/builders";
@@ -145,23 +147,72 @@ it.each([
   for (const code of document.body.querySelectorAll('[role="alert"] code')) expect(code.getAttribute("data-color")).toBe("danger");
 });
 
-it("reports the daemon's refusal of the conversation in the error alert dialog and keeps the field as it was", async () => {
+/** Mounts the application's error alert host, so an alert raised by the dialog is shown and takes focus as it does in
+ * the application, and returns what acknowledges the one shown. */
+function mountAlertHost(daemon: Daemon): () => Promise<void> {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  act(() => root.render(<ErrorAlerts daemon={daemon} />));
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+    act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+  });
+  return async () => {
+    const acknowledge = [...document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')].find((button) => button.textContent === "OK");
+    act(() => acknowledge!.click());
+    await settle();
+  };
+}
+
+it.each([
+  { how: "Enter in the field", press: async (field: HTMLInputElement) => { act(() => field.focus()); await act(async () => field.form!.requestSubmit()); } },
+  { how: "a press on Open", press: async () => { act(() => openButton().focus()); await submit(); } },
+])("reports the daemon's refusal of the conversation in the error alert dialog and keeps the field as it was, and focus returns to the field once it is acknowledged, after $how", async ({ press }) => {
   const { daemon } = renderForResume();
   answerRequests(daemon, record("claude", null), () => Promise.reject(
     new CodedError("plain", "conversation_to_resume_not_found", { agent: "Claude Code", path: "/Users/dev/.claude", id: UUID }),
   ));
+  const acknowledge = mountAlertHost(daemon);
   await chooseResume();
   typeResumeId(UUID);
   await settle();
-  await submit();
   const field = resumeField()!;
+  await press(field);
+  await settle();
   // It comes after the submit, so it is the error alert dialog's, not a mark on the field.
   expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof CodedError && alert.error.code === "conversation_to_resume_not_found")).toBe(true);
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   expect(field.getAttribute("aria-invalid")).not.toBe("true");
   expect(resumeAlert()).toBeNull();
   expect(field.value).toBe(UUID);
-  // Where focus returns once the alert is acknowledged.
+  // The alert holds focus until it is acknowledged, and then it is the field's, whatever focus was on when the
+  // request started.
+  expect(document.activeElement?.closest('[role="alertdialog"]')).not.toBeNull();
+  expect(field.disabled).toBe(false);
+  await acknowledge();
+  expect(document.activeElement).toBe(field);
+});
+
+// A refusal that asks the daemon again leaves nothing to submit while the alert is up, so the Open button the busy
+// dialog gave focus to is disabled when the alert is acknowledged and cannot take focus back; focus goes back to the
+// field wherever it next comes back into the dialog.
+it("returns focus to the field after a refusal that asks again leaves Open disabled when the alert is acknowledged", async () => {
+  const { daemon } = renderForResume();
+  let asked = 0;
+  answerRequests(daemon, () => (asked++ === 0 ? Promise.resolve(record("claude", null)) : new Promise(() => {})) as never, () => Promise.reject(
+    new CodedError("plain", "conversation_in_session", {}),
+  ));
+  const acknowledge = mountAlertHost(daemon);
+  await chooseResume();
+  typeResumeId(UUID);
+  await settle();
+  const field = resumeField()!;
+  await submit();
+  await act(async () => {});
+  expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof CodedError && alert.error.code === "conversation_in_session")).toBe(true);
+  expect(openDisabled()).toBe(true);
+  expect(document.activeElement?.closest('[role="alertdialog"]')).not.toBeNull();
+  await acknowledge();
   expect(document.activeElement).toBe(field);
 });
 

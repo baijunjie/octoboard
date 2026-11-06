@@ -10,7 +10,6 @@ import { PaneFailure } from "../../components/alerts/PaneFailure";
 import { PaneTitle } from "../../components/panel/PaneTitle";
 import { ArchivedSessionMetadata, SessionContextLabel } from "../../components/status/SessionMetadata";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
-import { useFocusVisibleProps } from "../../components/focus/useFocusVisibleProps";
 import { useFocusHandoff } from "../../components/focus/useFocusHandoff";
 import { useFadeRegion, useScrollFade } from "../../components/scroll/scrollFade";
 import { isolate } from "../../i18n/isolate";
@@ -23,6 +22,7 @@ import { useOctoboardTheme } from "../../preferences/theme";
 import { RendererBoundary } from "../../viewer/code/codeRenderer";
 import { FencedCode } from "../../viewer/markdown/FencedCode";
 import { useSessionHistory } from "./useSessionHistory";
+import { useFocusVisibleProps } from "../../primitives";
 
 type ConversationMessage = Omit<HistoryMessage, "speaker"> & { speaker: "user" | "agent" };
 

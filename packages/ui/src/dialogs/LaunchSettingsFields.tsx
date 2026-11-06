@@ -1,4 +1,3 @@
-import { Description } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { effortLevels, type LaunchSettingOption, launchSettingOptions, shownModel } from "../agents/agentLaunchSettings";
@@ -17,6 +16,7 @@ import { useDaemon, useDaemonStore, useProviders } from "../store";
 import { AdvancedSection, type AdvancedTab, AdvancedTabs } from "../components/form/AdvancedSection";
 import { OptionSelect } from "../components/form/OptionSelect";
 import { useAgentModels } from "./useAgentModels";
+import { Description, partSelector } from "../primitives";
 
 /** A listed model as a picker option: its name, with the concrete version it stands for under it
  * where the daemon knows it, and an "Unavailable" badge where the account cannot use it. The
@@ -267,17 +267,17 @@ export function LaunchSettingsFields({
   const setExpanded = onExpandedChange ?? setOwnExpanded;
   const launch = useLaunchModels(agent, account, expanded);
   const pickers = useRef<HTMLDivElement>(null);
-  // A reload (the account the form refers to going away elsewhere) takes the Model field's mark away and locks
-  // its picker in the same render, so focus that was on the mark has no enabled picker to go to: it goes to the
-  // Model picker if that is operable, and else to the selected tab, where the section has tabs, or the section's
-  // trigger, both of which stay operable.
+  // A reload (the account the form refers to going away elsewhere) takes the Model field's mark away and locks its
+  // picker in the same render, so focus that was on the mark has no enabled picker to go to: it goes to the Model
+  // picker if that is operable, and else to the selected tab, where the section has tabs, or the section's trigger,
+  // both of which stay operable outside a busy dialog.
   const focusHandoff = useFocusHandoff(() => {
-    const modelTrigger = pickers.current?.querySelector<HTMLElement>("[data-slot=select-trigger]");
-    const section = pickers.current?.closest("[data-slot=disclosure]");
+    const modelTrigger = pickers.current?.querySelector<HTMLElement>(partSelector.selectTrigger);
+    const section = pickers.current?.closest(partSelector.disclosure);
     const target = modelTrigger && !modelTrigger.matches(":disabled")
       ? modelTrigger
       : (section?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ??
-        section?.querySelector<HTMLElement>("[data-slot=disclosure-trigger]"));
+        section?.querySelector<HTMLElement>(partSelector.disclosureTrigger));
     target?.focus();
   });
   const launchFields = (

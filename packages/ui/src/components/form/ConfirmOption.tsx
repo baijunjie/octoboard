@@ -1,7 +1,7 @@
-import { Checkbox, Description, Label } from "@heroui/react";
 import React, { useId } from "react";
 
 import { MarkLineBox } from "../status/MarkLineBox";
+import { Checkbox, Description } from "../../primitives";
 
 /** A dialog's option checkbox with its note: what a confirmation offers for widening what it does
  * (moving something outside Octoboard's own records to the Trash, or taking along what git refuses
@@ -10,7 +10,6 @@ import { MarkLineBox } from "../status/MarkLineBox";
 export function ConfirmOption({
   isSelected,
   onChange,
-  isReadOnly,
   label,
   hint,
   mark,
@@ -18,8 +17,6 @@ export function ConfirmOption({
 }: {
   isSelected: boolean;
   onChange: (selected: boolean) => void;
-  /** Frozen while the request runs. */
-  isReadOnly: boolean;
   label: React.ReactNode;
   hint: React.ReactNode;
   /** A mark beside the checkbox, for a warning about the state of what the option acts on (a check that failed), never
@@ -37,11 +34,8 @@ export function ConfirmOption({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-start gap-1">
-        <Checkbox variant="secondary" className="w-fit min-w-0" isSelected={isSelected} onChange={onChange} isReadOnly={isReadOnly} aria-describedby={describedBy ? `${hintId} ${describedBy}` : hintId}>
-          <Checkbox.Content className="min-h-6">
-            <Checkbox.Control><Checkbox.Indicator /></Checkbox.Control>
-            <Label>{label}</Label>
-          </Checkbox.Content>
+        <Checkbox variant="secondary" className="w-fit min-w-0" contentClassName="min-h-6" selected={isSelected} onSelectedChange={onChange} describedBy={describedBy ? `${hintId} ${describedBy}` : hintId}>
+          {label}
         </Checkbox>
         {mark && <MarkLineBox size="text-sm">{mark}</MarkLineBox>}
       </div>

@@ -1,4 +1,3 @@
-import { Description } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import { ActionableError } from "../errors/actionableError";
@@ -20,6 +19,7 @@ import { Dialog } from "../components/dialog/Dialog";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { LaunchPickers, useLaunchModels } from "./LaunchSettingsFields";
 import { useFailureWhenBlocked } from "../components/dialog/useFailureWhenBlocked";
+import { Description, partSelector } from "../primitives";
 
 /** What the dialog sends: each value the user moved off what the session runs with, `null` for the
  * agent's own default. */
@@ -105,10 +105,10 @@ function SessionModelForm({
   const pickers = useRef<HTMLDivElement>(null);
   // An account change can remove the focused failure mark and disable both pickers in one render.
   const focusHandoff = useFocusHandoff(() => {
-    const trigger = pickers.current?.querySelector<HTMLButtonElement>("[data-slot=select-trigger]");
+    const trigger = pickers.current?.querySelector<HTMLButtonElement>(partSelector.selectTrigger);
     const target = trigger && !trigger.disabled
       ? trigger
-      : dialogAround(pickers)?.querySelector<HTMLButtonElement>('[data-slot="modal-footer"] button[type="button"]');
+      : dialogAround(pickers)?.querySelector<HTMLButtonElement>(`:is(${partSelector.dialogFooter}) button[type="button"]`);
     target?.focus();
   });
   const edits = changedFrom(start, picked);

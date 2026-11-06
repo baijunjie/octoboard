@@ -1,7 +1,7 @@
 import { Component, useMemo, type ReactNode, type Ref } from "react";
-import { mergeRefs } from "react-aria";
 
 import { useListMotion, type ListFolds } from "../components/motion/useListMotion";
+import { mergeRefs } from "../primitives";
 
 /** The ref of the browser's scroll container, merged with the list motion's, and the `prepare` that
  * `BrowserListMotion` calls. The list is virtualized, so the motion is told the keys of the rows

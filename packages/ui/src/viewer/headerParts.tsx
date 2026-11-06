@@ -1,7 +1,6 @@
 import { FolderOpen, SquareArrowOutUpRight } from "lucide-react";
 import React from "react";
 
-import { Button } from "../components/controls/Button";
 import { CopyButton } from "../components/controls/CopyButton";
 import { FileTypeIcon } from "../components/icons/FileTypeIcon";
 import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
@@ -14,6 +13,7 @@ import { displayWirePath } from "../format/wirePath";
 import { ChangeStatusBadge } from "./ChangeStatusBadge";
 import type { ViewerChange } from "./content";
 import type { StatusKey } from "./statusMarks";
+import { Button } from "../primitives";
 
 /** Copy path leads the view controls at the detail row's end, an icon button that
  * takes no focus from a press, as the view controls do. */
@@ -28,7 +28,7 @@ export function CopyPathButton({ path }: { path: string }): React.ReactElement {
       size="xs"
       variant="ghost"
       className={ROW_ICON_BUTTON_CLASS}
-      preventFocusOnPress
+      focusOnPress={false}
     />
   );
 }
@@ -48,7 +48,7 @@ export function HostPathButtons({ host }: { host: HostPath }): React.ReactElemen
     <>
       {buttons.map(({ type, title, name, Icon }) => (
         <TitledControl key={type} title={title}>
-          <Button isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={name} onPress={() => act(type, host)} preventFocusOnPress>
+          <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={name} onPress={() => act(type, host)} focusOnPress={false}>
             <Icon aria-hidden="true" className="size-4" />
           </Button>
         </TitledControl>

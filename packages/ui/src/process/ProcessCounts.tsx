@@ -4,7 +4,6 @@ import React, { useEffect, useRef } from "react";
 import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { errorDetails } from "../components/alerts/errorParts";
-import { Button } from "../components/controls/Button";
 import { useHasPainted } from "../components/motion/useHasPainted";
 import { useListMotion } from "../components/motion/useListMotion";
 import { FadedScroller } from "../components/scroll/scrollFade";
@@ -16,6 +15,7 @@ import { isUncataloguedFailure } from "../errors/uncataloguedFailure";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { ProcessJump } from "./processJump";
+import { Button } from "../primitives";
 
 /** The attribute that marks the panel's root, for finding what holds focus. */
 export const PANEL_ATTRIBUTE = "data-rail-processes-panel";
@@ -60,7 +60,7 @@ export function ProcessCounts({ rows, error, focusFirst, onPress }: {
         {rows.map((row) => (
           <li key={row.key} data-list-motion={row.key} className="min-w-0">
             <Button variant="ghost" size="sm" className="h-auto min-h-0 w-full justify-start gap-2 rounded-lg px-2 py-1.5 font-normal"
-              aria-label={row.context === undefined
+              label={row.context === undefined
                 ? t("processes.global.show", { name: isolate(row.title), count: row.count })
                 : t("processes.global.showIn", { name: isolate(row.title), console: isolate(row.context), count: row.count })}
               onPress={() => onPress(row.target)}>

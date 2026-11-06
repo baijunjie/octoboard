@@ -1,8 +1,7 @@
-import { Disclosure, Tabs } from "@heroui/react";
-import { buttonVariants } from "@heroui/styles";
 import React from "react";
 
 import { StatusAnnouncer } from "../announce/StatusAnnouncer";
+import { buttonClassName, Disclosure, DisclosureBody, DisclosureContent, DisclosureHeading, DisclosureIndicator, DisclosureTrigger, TabPanel, Tabs } from "../../primitives";
 import { TextTabStrip } from "../tabs/TextTabStrip";
 import { useT } from "../../i18n/react";
 
@@ -25,13 +24,13 @@ export function AdvancedSection({
 }): React.ReactElement {
   const t = useT();
   return (
-    <Disclosure isExpanded={expanded} onExpandedChange={onExpandedChange}>
-      <Disclosure.Heading>
-        <Disclosure.Trigger className={`${buttonVariants({ variant: "ghost", size: "sm" })} text-app-muted hover:text-foreground data-[focus-visible=true]:text-foreground`}>
+    <Disclosure expanded={expanded} onExpandedChange={onExpandedChange}>
+      <DisclosureHeading>
+        <DisclosureTrigger className={`${buttonClassName({ variant: "ghost", size: "sm" })} text-app-muted hover:text-foreground data-[focus-visible=true]:text-foreground`}>
           {t("dialog.agentSettings.advanced")}
-          <Disclosure.Indicator className="ms-0" />
-        </Disclosure.Trigger>
-      </Disclosure.Heading>
+          <DisclosureIndicator className="ms-0" />
+        </DisclosureTrigger>
+      </DisclosureHeading>
       {/* Outside the folded body, and only while the section is open. The body stays mounted while
           folded, so a region inside it would be past its first write delay by the time the section
           opens again, and the note kept from before would be written in the very render that shows
@@ -45,11 +44,11 @@ export function AdvancedSection({
           frame around the tabs) in line with the fields above with 2px of ring to spare inside the
           clip. The padding left above the first note and below the last field is HeroUI's own, the
           same on both sides. */}
-      <Disclosure.Content className="-mx-1">
-        <Disclosure.Body className="-mx-1 flex flex-col gap-4">
+      <DisclosureContent className="-mx-1">
+        <DisclosureBody className="-mx-1 flex flex-col gap-4">
           {children}
-        </Disclosure.Body>
-      </Disclosure.Content>
+        </DisclosureBody>
+      </DisclosureContent>
     </Disclosure>
   );
 }
@@ -68,7 +67,7 @@ export function AdvancedTabs({ tabs }: { tabs: AdvancedTab[] }): React.ReactElem
       <Tabs defaultSelectedKey={tabs[0]?.id} className="gap-4">
         <TextTabStrip label={t("dialog.agentSettings.advanced")} tabs={tabs} />
         {tabs.map((tab) => (
-          <Tabs.Panel key={tab.id} id={tab.id} className="mt-0 flex flex-col gap-4 p-0">{tab.content}</Tabs.Panel>
+          <TabPanel key={tab.id} id={tab.id} className="mt-0 flex flex-col gap-4 p-0">{tab.content}</TabPanel>
         ))}
       </Tabs>
     </div>

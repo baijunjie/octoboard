@@ -1,7 +1,7 @@
-import { Description, Label } from "@heroui/react";
 import React, { useId } from "react";
 
 import { CodeToneContext } from "../../i18n/codeTone";
+import { Description, GroupFieldError, Label } from "../../primitives";
 
 /** A label over a group of controls that read as one field, visible unless `hideLabel`, named for assistive technology
  * as the group, with an optional `description` under them that the group is described by and an optional `help` tip at
@@ -57,10 +57,10 @@ export function LabelledGroup({
       {children}
       {description && !errorMessage && <Description id={descriptionId}>{description}</Description>}
       {errorMessage && (
-        // Drawn as a field's `FieldError` is (a group is no field to hold one), and announced as a field's is.
-        <div id={errorId} data-slot="field-error" className="px-1 text-xs wrap-break-word text-danger">
+        // A group is no field to hold a `FieldError`; announced as a field's is.
+        <GroupFieldError id={errorId}>
           <CodeToneContext.Provider value="danger"><span role="alert">{errorMessage}</span></CodeToneContext.Provider>
-        </div>
+        </GroupFieldError>
       )}
     </div>
   );

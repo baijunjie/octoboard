@@ -1,6 +1,6 @@
 import React, { useMemo, useSyncExternalStore } from "react";
-import { I18nProvider } from "react-aria-components";
 
+import { LocaleProvider, type PrimitiveLabels, PrimitiveLabelsProvider } from "../primitives";
 import { InlineReference } from "./InlineReference";
 
 import { globalParam, messageText, type MessageArgs, type MessageKey, splitPlaceholders, translatorFor, type Translate } from "./catalog";
@@ -85,5 +85,18 @@ function fill(value: React.ReactNode, name: string, language: Language): React.R
  * formatting. */
 export function LanguageProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const language = useCurrentLanguage();
-  return <I18nProvider locale={language}>{children}</I18nProvider>;
+  const labels = usePrimitiveLabelsFor(language);
+  return (
+    <LocaleProvider locale={language}>
+      <PrimitiveLabelsProvider labels={labels}>{children}</PrimitiveLabelsProvider>
+    </LocaleProvider>
+  );
+}
+
+/** The names of the controls the wrapper layer's components render themselves, in `language`. */
+function usePrimitiveLabelsFor(language: Language): PrimitiveLabels {
+  return useMemo(() => {
+    const t = translatorFor(language);
+    return { scrollTabs: { up: t("tabs.scroll.up"), down: t("tabs.scroll.down"), left: t("tabs.scroll.left"), right: t("tabs.scroll.right") } };
+  }, [language]);
 }

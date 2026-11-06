@@ -1,4 +1,4 @@
-import { setInteractionModality } from "react-aria";
+import { setKeyboardModality } from "../primitives";
 
 /** A device whose primary input cannot hover: a phone, or a tablet's touch screen. What depends on
  * the device's pointer rather than on one interaction keys on this query: no pane floats in on a
@@ -61,5 +61,5 @@ export function interactionIsTouch(): boolean {
  * guard: called earlier, it sets the keyboard modality even when nothing moves, and a dialog's later
  * restore after a pointer close then shows a ring. */
 export function ringForAutomaticFocus(): void {
-  if (!interactionIsTouch()) setInteractionModality("keyboard");
+  if (!interactionIsTouch()) setKeyboardModality();
 }

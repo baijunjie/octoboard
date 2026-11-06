@@ -1,7 +1,7 @@
 import React from "react";
 
-import { useFocusVisibleProps } from "../focus/useFocusVisibleProps";
 import { FadeOverflow } from "../text/FadeOverflow";
+import { useFocusVisibleProps } from "../../primitives";
 
 /** Stops a row's own mousedown from moving focus off whatever had it (typically the terminal) —
  * click still fires normally afterward. Shared by every row. */

@@ -245,7 +245,7 @@ it("reaches the mark on a heading with Right from its band and goes back with Le
 it("does not take focus from a mouse press on the mark, which the list would answer by sending it to its first row", () => {
   const { band, mark, focusBand } = headingWithMark();
   focusBand();
-  // The press down: a control without `preventFocusOnPress` takes focus here.
+  // The press down: a control without `focusOnPress={false}` takes focus here.
   act(() => void mark.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, pointerId: 1, pointerType: "mouse" })));
   expect(document.activeElement).toBe(band);
 });

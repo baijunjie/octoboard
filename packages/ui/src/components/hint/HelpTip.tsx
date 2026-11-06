@@ -1,8 +1,8 @@
 import { CircleHelp } from "lucide-react";
 import React from "react";
 
-import { Button } from "../controls/Button";
 import { Hint } from "./Hint";
+import { Button } from "../../primitives";
 
 /** The size, colour and hit area of the "?" beside a title, for another icon-only control that sits there. */
 export const HELP_TIP_BUTTON_CLASS = "shrink-0 -my-0.5 rounded-full text-app-muted";
@@ -23,8 +23,8 @@ export function HelpTip({ label, children }: { label: string; children: React.Re
     <Hint
       kind="popover"
       label={label}
-      trigger={({ onMouseHoverChange: _, expanded: __, popupId: ___, ...wiring }) => (
-        <Button {...wiring} isIconOnly size="xs" variant="ghost" aria-label={label} className={HELP_TIP_BUTTON_CLASS}>
+      trigger={({ expanded: _, popupId: __, ...wiring }) => (
+        <Button {...wiring} iconOnly size="xs" variant="ghost" label={label} className={HELP_TIP_BUTTON_CLASS}>
           <CircleHelp className="size-3.5" aria-hidden />
         </Button>
       )}

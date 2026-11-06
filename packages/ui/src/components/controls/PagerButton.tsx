@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import React from "react";
 
 import { TitledControl } from "../hint/TitledControl";
-import { Button } from "./Button";
+import { Button, type ButtonBlur } from "../../primitives";
 import { ROW_ICON_BUTTON_CLASS } from "./RowControls";
 
 /** A previous / next icon button, the pair of a pager. The chevron mirrors with the interface
@@ -23,20 +23,20 @@ export function PagerButton({
   isDisabled: boolean;
   onPress: () => void;
   onFocus?: () => void;
-  onBlur?: (event: React.FocusEvent) => void;
+  onBlur?: (blur: ButtonBlur) => void;
 }): React.ReactElement {
   const Icon = direction === "previous" ? ChevronLeft : ChevronRight;
   return (
     <TitledControl title={label}>
       <Button
         ref={ref}
-        isIconOnly
+        iconOnly
         size="xs"
         variant="ghost"
         className={ROW_ICON_BUTTON_CLASS}
-        aria-label={label}
-        preventFocusOnPress
-        isDisabled={isDisabled}
+        label={label}
+        focusOnPress={false}
+        disabled={isDisabled}
         onPress={onPress}
         onFocus={onFocus}
         onBlur={onBlur}

@@ -16,7 +16,7 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 |---|---|
 | `index.html`, `src/main.tsx` | The window's entry: startup (platform, daemon location, connection, native window reveal, global error handlers), mounting `App` under `AppRoot` |
 | `package.json` `exports` | The files `apps/web/` imports by package name: `./agent-marks`, `./languages`, `./match-language`, `./preview-messages`; nothing else of the package is importable from outside |
-| `eslint.layers.mjs` | The import-layering blocks (see "Dependency direction"), spread into the root `eslint.config.mjs` |
+| `eslint.layers.mjs` | The import-layering blocks and the rule that confines the third-party UI libraries to `src/primitives/` (see "Dependency direction"), spread into the root `eslint.config.mjs` |
 | `vite.config.ts`, `typography.mjs`, `tsconfig.json`, `tsconfig.app.json` | Vite and Vitest configuration; `tsconfig.app.json` is the production type check, which leaves out tests, `src/gallery/`, `src/fixtures/` and `src/website-preview/` |
 | `gallery.html`, `gallery-frame.html` | Entries of the gallery |
 | `website-preview.html`, `feature-preview.html`, `vite.preview.config.ts` | Entries and build of the website preview and the feature views (`pnpm build:preview` writes into `dist-preview/`; the site's `build-preview` passes `--outDir`) |
@@ -42,7 +42,13 @@ and `RequestSender` type a request's result from it, and `looseRequestSender` ad
 client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/app.json`);
 `style.css` (Tailwind theme and the design tokens).
 
-### Pure domain layers (bottom)
+### Wrapper layer (bottom)
+
+- `src/primitives/` — the wrapper layer, the one importer of HeroUI and React Aria in application source: one project
+  wrapper per third-party component, the project hooks over React Aria's and the utilities it re-exports, all from its
+  `index.ts` (see its README). It imports nothing else of the application, and every other directory may import it.
+
+### Pure domain layers
 
 - `src/values/` — `sameValue`, the structural equality the store keeps unchanged data by; imports nothing.
 - `src/platform/` — `PlatformAdapter`, the interface to everything native, made of optional capabilities: `tauri.ts`
@@ -147,6 +153,8 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
 tests and test-support files are exempt). A layer imports only the directories and root files its block names, so the exact allowed set is in the config;
 the shape is:
 
+- `primitives/` imports nothing else below `src/`, and every other layer may import its barrel (`primitives`, never a
+  file inside it), on top of what its own rule below allows.
 - `protocol` imports only `protocol.generated`, and nothing but `protocol` imports that file (`GENERATED_PROTOCOL` in
   `eslint.layers.mjs`; the rule sees import declarations, not `import("…")` type expressions);
   `values/`, `providers/` and `preferences/` import nothing else below `src/`; `platform/` imports only `protocol`. Each other pure layer imports only layers beneath it: `input/` only the `platform/` barrel; `i18n/` only
@@ -162,11 +170,16 @@ the shape is:
   `accounts/`; `statusItem/` also `accounts/` and `quota/`) and no other feature directory; `project-browser/` additionally imports `viewer/`. The remaining feature
   directories import one another freely.
 - From below `src/`, the root files that may be imported are `protocol`, `requests`, `daemon`, `daemon-client`, `appConfig` and the
-  `store/` and `platform/` barrels. The entry, `App` and the screens are imported by nothing below them.
+  `store/`, `platform/` and `primitives/` barrels. The entry, `App` and the screens are imported by nothing below them.
 - `shell/` is imported only by root files, `app/`, the gallery and the website preview; `app/` only by `App.tsx`.
 - Production code imports neither `fixtures/` nor `gallery/`; `fixtures/` and `website-preview/` never import
   `gallery/`; `fixtures/` does not import `shell/`.
-- HeroUI's `Alert` is imported only by `components/alerts/AlertFrame.tsx` and `ErrorAlert.tsx` (lint), so every alert
+- `@heroui/react`, `@heroui/styles`, `react-aria-components`, `react-aria` and the `@react-aria/*`, `@react-stately/*`
+  and `@react-types/*` packages are imported only by `primitives/` in application source; tests, test support,
+  `gallery/`, `fixtures/` and `website-preview/` are exempt (`WRAPPED_LIBRARIES` in `eslint.layers.mjs`, a
+  typescript-eslint rule of its own so the layer blocks above do not replace it).
+- The alert parts (`Alert` and the parts named after it, from `primitives` or HeroUI) are imported only by
+  `components/alerts/AlertFrame.tsx` and `ErrorAlert.tsx` (lint), so every alert
   has a title.
 
 Other checks that hold structure: `src/errorModulesCycle.test.ts` (the error modules do not import each other in a
@@ -177,6 +190,9 @@ dependency).
 
 ## Where new code goes
 
+- A third-party UI component, hook or utility the application needs and `src/primitives/` does not export yet gets its
+  wrapper there first, in the same change, and is used from the barrel; application code never imports the libraries
+  (see the layer's README).
 - A screen-level concern of `App` is a hook in `app/`; the window chrome is in `shell/`; a new feature is a feature
   directory importing the leaf and pure layers (and other features only where the rules above allow it).
 - Pure rules and wording about sessions, accounts, agents, git or formatting go in the matching pure layer, not in a
@@ -226,7 +242,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Keep unchanged data by identity when a reducer rebuilds it | `sameValue` (`src/values/sameValue.ts`), as the `settings_updated` reducer does |
 | A tree row in a list, with its icon and mark buttons | `TreeRow`, `RowIconButton`, `RowMarkButton` and `HOVER_ACTIONS_CLASS` in `src/components/rows/`; a list that animates its reordering uses `useListMotion` (`src/components/motion/`), not a row-level FLIP |
 | A section heading that pins while its section scrolls (sidebar row groups, Settings section groups, a side pane's categories with a note) | `StickyHeading` with `variant` `list`, `group` or `category`, and `STICKY_HEADING_HEIGHT` for the scroller that pins it (`src/components/scroll/StickyHeading.tsx`); a plain section heading over a scroller goes through it, as `SettingsGroup` and the Processes panel do. The exception is the virtualized Git change list, whose foldable section headings are positioned by the virtualizer (`ChangeSectionHeading`, `src/project-browser/git/changeSectionHeading.tsx`). A pinned row or strip that is not a heading (the `DirectoryPicker`'s parent-directory row, the agent strip in `src/settings/accounts/AgentAccountsSection.tsx`) calls `useStickyHeadingFocus` (`src/components/scroll/stickyHeadingFocus.ts`) directly |
-| A strip of text tabs | the class constants in `src/components/tabs/textTabClasses.ts`, shared by every such strip (`TextTabStrip`, `RegionTabs`, `AgentTabList`, the console launch fields, the project browser); `TEXT_TAB_CLASS` is the tab for every strip, `TEXT_TAB_COMPACT_CLASS` only for a strip in a pane header beside the pane's title, as the project browser's Files / Changes tabs |
+| A strip of text tabs | the tab wrappers in `src/primitives/Tabs.tsx`, with `fit="content"` on `TabListContainer` and `TabList`, shared by every such strip (`TextTabStrip`, `RegionTabs`, `AgentTabList`, the console launch fields, the project browser); `Tab size="content"` is the tab for every strip, `size="compact"` only for a strip in a pane header beside the pane's title, as the project browser's Files / Changes tabs |
 | The frame of the sidebar's console and focus headers and the archive header | `PANE_HEADER_FRAME_CLASS` (`src/components/panel/paneHeaderFrame.ts`) |
 | A previous / next pager button | `PagerButton` (`src/components/controls/PagerButton.tsx`) |
 | A block of code shown as text | `CodeBlock`, or `SurfaceCodeBlock` for a wrapping block on its own surface (`src/components/text/CodeBlock.tsx`); a flush `CodeBlock` built on a surface of its own, such as inside a scroller as `DiagnosticBlock` does, puts `CODE_SURFACE_CLASS` (the classes of the secondary `Surface` it sits on) on that surface |
@@ -249,8 +265,8 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Open a dialog from a control outside its window | `createLauncher` (`src/components/hooks/createLauncher.ts`) |
 | Open an App-level dialog (a `RequestedDialog`) from a control inside another dialog, so the dialog's lifetime is the window's and not the opener's | `openDialogFromAnywhere` (`src/dialogs/dialogLauncher.ts`), registered in `App.tsx` through `createLauncher`, as Settings → Configuration → Import does |
 | Follow a running configuration import | `Daemon.onImportProgress` (`src/store/connection.ts`), which delivers the `configuration_import_progress` events of one import (named by the `import_id` the request sent) to its listener outside the store and reducer, through `createImportProgressListeners` (`src/store/importProgressListeners.ts`); the fixture daemon implements it too |
-| A dialog whose work cannot be left while it runs | `Dialog`'s `busy` prop (`src/components/dialog/Dialog.tsx`): the close button is disabled and Escape and an outside click are ignored |
-| A decorative spinner beside a label that already says what runs | `DecorativeSpinner` (`src/components/controls/DecorativeSpinner.tsx`), which `Button` (while `isPending`, which also sets `aria-busy`), `ExternalLink` and the import progress view use; never HeroUI's `Spinner` directly, which is announced as a status |
+| A dialog whose work cannot be left while it runs | `Dialog`'s `busy` prop (`src/components/dialog/Dialog.tsx`), which sets `Modal`'s `busy` (`src/primitives/Modal.tsx`): Escape and an outside click are ignored, and every control in the dialog is disabled but a `pending` `Button`, which takes the focus from a control that busy disables and gives it back to the control it was taken from when the request is over (`useFocusLeavingWhenBusy`, `src/components/dialog/useFocusLeavingWhenBusy.ts`). The wrappers read the state through `useDisabled` (`src/primitives/busy.ts`), and code that draws a control of its own (a link) reads `useBusy`; a dialog does not disable its own controls for it |
+| A decorative spinner beside a label that already says what runs | the layer's `Spinner` without a `label` (`src/primitives/Spinner.tsx`), which `Button` (while `pending`, which also sets `aria-busy`), `ExternalLink` and the import progress view use; never one with a `label` there, which is announced as a status |
 | Load a component lazily, with a way to load it again after a failed import | `retryableLazy` (`src/components/hooks/retryableLazy.ts`), not `React.lazy`, which keeps the rejection |
 | Poll a daemon answer that is shown or counted (process trees, the global process counts), publishing only a changed one | `usePolled` (`src/components/hooks/usePoll.ts`), under `useProcessTrees` and `useAllProcesses` at the paces in `src/process/processPolling.ts`, rather than a timer of its own |
 | A count in a row, or on a rail control | `CountBadge` (`src/components/status/CountBadge.tsx`), reusing `StatusBadge`, in a row; `RailCountBadge` (`src/shell/RailCountBadge.tsx`) through `ChromeButton`'s `badge` prop on a rail control |

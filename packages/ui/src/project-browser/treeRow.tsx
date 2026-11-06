@@ -1,10 +1,10 @@
 import { ChevronDown, ChevronRight, Folder, FolderOpen, FolderSymlink } from "lucide-react";
 import React from "react";
-import { Button } from "react-aria-components";
 
 import { FADE_SIZE } from "../components/scroll/scrollFade";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { useT } from "../i18n/react";
+import { TreeExpandButton } from "../primitives";
 
 /** Every row, of the Files tree and of the Git mode's changes tree, is one line of this
  * height, which is what lets the tree be virtualized and a row be scrolled into view from its
@@ -28,14 +28,12 @@ export function scrollRowIntoView(list: HTMLElement, top: number, { stickyTop = 
 export function ExpandChevron({ isExpanded }: { isExpanded: boolean }): React.ReactElement {
   const t = useT();
   return (
-    // React Aria's Button, not HeroUI's, which would add a hover fill and press shrink. React Aria
-    // appends the row's name through aria-labelledby; its default translation of Expand is replaced
-    // with the app's own word from the catalog.
-    <Button slot="chevron" aria-label={isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand")} className="flex size-4 shrink-0 items-center justify-center text-app-muted outline-none">
+    // The tree's default translation of Expand is replaced with the app's own word from the catalog.
+    <TreeExpandButton label={isExpanded ? t("browser.tree.collapse") : t("browser.tree.expand")} className="flex size-4 shrink-0 items-center justify-center text-app-muted outline-none">
       {isExpanded
         ? <ChevronDown aria-hidden="true" className="size-3.5" />
         : <ChevronRight aria-hidden="true" className="size-3.5 rtl:-scale-x-100" />}
-    </Button>
+    </TreeExpandButton>
   );
 }
 

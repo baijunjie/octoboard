@@ -21,7 +21,7 @@ export function useSessionDeletionOptions(ids: string[]): {
   moveRecords: boolean;
   cleanup: ReturnType<typeof useBranchCleanup>;
   lines: (recordsLine: string) => ConsequenceLine[];
-  extraControl: (busy: boolean, option: { label: string; hint: string }) => React.ReactNode;
+  extraControl: (option: { label: string; hint: string }) => React.ReactNode;
 } {
   const [trash, setTrash] = useState(false);
   const presence = useSessionRecords(ids);
@@ -32,10 +32,10 @@ export function useSessionDeletionOptions(ids: string[]): {
     moveRecords,
     cleanup,
     lines: (recordsLine) => [...cleanup.consequences, ...(moveRecords ? [{ key: "records", text: recordsLine }] : [])],
-    extraControl: (busy, { label, hint }) => (
+    extraControl: ({ label, hint }) => (
       <>
-        {cleanup.extraControl(busy)}
-        <SessionRecordsTrashOption visible={canTrash} isSelected={trash} onChange={setTrash} isReadOnly={busy} label={label} hint={hint} />
+        {cleanup.extraControl}
+        <SessionRecordsTrashOption visible={canTrash} isSelected={trash} onChange={setTrash} label={label} hint={hint} />
       </>
     ),
   };

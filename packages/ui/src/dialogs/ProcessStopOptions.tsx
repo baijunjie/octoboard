@@ -1,4 +1,3 @@
-import { Checkbox, Label } from "@heroui/react";
 import React, { useId, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
@@ -8,26 +7,23 @@ import type { ProcessTree } from "../protocol";
 import { useDaemonStore } from "../store";
 import type { ConsequenceLine } from "../components/dialog/ConfirmConsequences";
 import { OptionDetails } from "../components/form/OptionDetails";
+import { Checkbox } from "../primitives";
 
 /** One process tree an archive stops while selected: the command on one line is the checkbox's
  * label, with the whole command as its tooltip when the line cuts it, and under it a disclosure of
  * where it works and what it is doing. */
-function StopOption({ tree, isSelected, onChange, isReadOnly }: {
+function StopOption({ tree, isSelected, onChange }: {
   tree: ProcessTree;
   isSelected: boolean;
   onChange: (selected: boolean) => void;
-  isReadOnly: boolean;
 }): React.ReactElement {
   const t = useT();
   const optionId = useId();
   return (
     <div className="flex flex-col gap-1">
       <div id={optionId}>
-        <Checkbox variant="secondary" className="w-full min-w-0 max-w-full" isSelected={isSelected} onChange={onChange} isReadOnly={isReadOnly}>
-          <Checkbox.Content className="min-h-6 w-full min-w-0">
-            <Checkbox.Control><Checkbox.Indicator /></Checkbox.Control>
-            <Label className="min-w-0 flex-1"><ProcessCommand tree={tree} leading={isSelected ? <StopGlyph /> : undefined} /></Label>
-          </Checkbox.Content>
+        <Checkbox variant="secondary" className="w-full min-w-0 max-w-full" contentClassName="min-h-6 w-full min-w-0" labelClassName="min-w-0 flex-1" selected={isSelected} onSelectedChange={onChange}>
+          <ProcessCommand tree={tree} leading={isSelected ? <StopGlyph /> : undefined} />
         </Checkbox>
       </div>
       {/* Under the command's text: the checkbox, its gap and the glyph come before it. */}
@@ -67,7 +63,7 @@ export function StoppedRow({ tree }: { tree: ProcessTree }): React.ReactElement 
 export function useProcessStopping(processes: ProcessTree[]): {
   choices: { keep_process_ids?: string[] };
   consequences: ConsequenceLine[];
-  extraControl: (busy: boolean) => React.ReactNode;
+  extraControl: React.ReactNode;
 } {
   const t = useT();
   const alwaysIds = useDaemonStore(useShallow((s) => processes
@@ -84,7 +80,7 @@ export function useProcessStopping(processes: ProcessTree[]): {
       ...(stopped > 0 ? [{ key: "processesStopped", text: t("dialog.archiveSession.processesStopped", { count: stopped }) }] : []),
       ...(kept.length > 0 ? [{ key: "processesKept", text: t("dialog.archiveSession.processesKept", { count: kept.length }) }] : []),
     ],
-    extraControl: (busy) => (
+    extraControl: (
       <div className="flex min-w-0 flex-col gap-3">
         {keepable.length > 0 && (
           <div className="flex min-w-0 flex-col gap-2">
@@ -95,7 +91,6 @@ export function useProcessStopping(processes: ProcessTree[]): {
                   key={tree.id}
                   tree={tree}
                   isSelected={!keptIds.has(tree.id)}
-                  isReadOnly={busy}
                   onChange={(selected) => setKeptIds((current) => {
                     const next = new Set(current);
                     if (selected) next.delete(tree.id);

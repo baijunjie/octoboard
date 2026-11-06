@@ -266,11 +266,11 @@ export function useSessionRequestDialogProps(request: SessionRequest | undefined
     title: t(ACTION_TEXT[action].title),
     message: <SessionRequestMessage key={request.requestId} request={request} />,
     extraControl: isChangeRequest(request)
-      ? (busy: boolean) => (
+      ? (
         <div key={request.requestId} className="flex flex-col gap-4">
           {request.action === "switch"
-            ? <SwitchRequestForm request={request} onReport={setReported} isDisabled={busy} />
-            : <HandoffRequestForm request={request} onReport={setReported} isDisabled={busy} />}
+            ? <SwitchRequestForm request={request} onReport={setReported} />
+            : <HandoffRequestForm request={request} onReport={setReported} />}
         </div>
       )
       : undefined,

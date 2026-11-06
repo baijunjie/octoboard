@@ -1,5 +1,4 @@
 import { ActionableError } from "../errors/actionableError";
-import { Checkbox, Description, Label } from "@heroui/react";
 import React, { useId, useState } from "react";
 
 import { ProviderMessage } from "../agents/ProviderMessage";
@@ -14,6 +13,7 @@ import { abbreviateHome } from "../format/pathDisplay";
 import { useDaemon, useDaemonStore, type TrustPrompt, useProviders } from "../store";
 import { ProviderName } from "../components/text/ProviderName";
 import type { ConfirmDialogProps } from "../components/dialog/ConfirmDialog";
+import { Checkbox } from "../primitives";
 
 function Path({ children }: { children: string }): React.ReactElement {
   return <InlineReference monospace wrap>{children}</InlineReference>;
@@ -67,28 +67,25 @@ function TrustDirCheckbox({
   const warningId = useId();
   return (
     <>
-      <Checkbox variant="secondary" isSelected={checked} onChange={onChange} aria-describedby={checked ? warningId : undefined}>
-        {/* The pressable part is one line of `text-sm`, so an `::after` lifts what the pointer hits to
-            the 24-pixel floor without changing what is drawn. */}
-        <Checkbox.Content className="relative after:absolute after:-inset-y-0.5 after:inset-x-0 after:content-['']">
-          <Checkbox.Control>
-            <Checkbox.Indicator />
-          </Checkbox.Control>
-          <Label>
-            <Message
-              id="dialog.trust.parent"
-              params={{
-                directory: (
-                  <InlineReference monospace wrap>{directory}</InlineReference>
-                ),
-              }}
-            />
-          </Label>
-        </Checkbox.Content>
-        {/* A direct child of `Checkbox`, beside `Checkbox.Content`: from there it indents under the
-            label and react-aria folds its id into the box's own `aria-describedby`, after which the
-            Alert's id comes while it is shown. */}
-        <Description>{t(checked ? "dialog.trust.parentNote.on" : "dialog.trust.parentNote.off")}</Description>
+      {/* The pressable part is one line of `text-sm`, so an `::after` lifts what the pointer hits to the 24-pixel
+          floor without changing what is drawn. The note's id comes first in the box's description, the Alert's after
+          it while it is shown. */}
+      <Checkbox
+        variant="secondary"
+        selected={checked}
+        onSelectedChange={onChange}
+        describedBy={checked ? warningId : undefined}
+        contentClassName="relative after:absolute after:-inset-y-0.5 after:inset-x-0 after:content-['']"
+        description={t(checked ? "dialog.trust.parentNote.on" : "dialog.trust.parentNote.off")}
+      >
+        <Message
+          id="dialog.trust.parent"
+          params={{
+            directory: (
+              <InlineReference monospace wrap>{directory}</InlineReference>
+            ),
+          }}
+        />
       </Checkbox>
       {checked && (
         <ChoiceWarning

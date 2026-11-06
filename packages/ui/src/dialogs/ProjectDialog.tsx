@@ -298,7 +298,7 @@ export function ProjectDialog({
               errorMessage={shown(pathError) ?? (locationProblem && <DaemonErrorMessage error={locationProblem} part="summary" />)}
               describedBy={[directoryDescription && directoryDescriptionId, source === "local" && !shown(pathError) && detectionAlert && detectionAlertId].filter(Boolean).join(" ") || undefined}
               isDisabled={source === "git" && locked}
-              trailing={directoryBrowse.browseButton({ isDisabled: source === "git" && locked })}
+              trailing={directoryBrowse.browseButton({ disabled: source === "git" && locked })}
             />
             {source === "local" && !shown(pathError) && detectionAlert}
           </div>

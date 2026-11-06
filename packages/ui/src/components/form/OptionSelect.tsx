@@ -1,6 +1,4 @@
-import { Description, Label, ListBox, Select } from "@heroui/react";
 import React, { useId, useRef } from "react";
-import { ButtonContext, Text } from "react-aria-components";
 
 import { FieldErrorMessage } from "./FieldErrorMessage";
 import { FadeOverflow } from "../text/FadeOverflow";
@@ -11,6 +9,7 @@ import { MotionListBox } from "../motion/MotionListBox";
 import { ReasonText } from "../text/ReasonText";
 import type { Reason } from "../../format/reason";
 import { StatusBadge } from "../status/StatusBadge";
+import { Description, Label, ListBoxItem, ListBoxItemLabel, OutsideFieldParts, Select, SelectClearButton, SelectPopover, SelectTrigger } from "../../primitives";
 
 /** One choice of an `OptionSelect`. */
 export type Option<T extends string> = {
@@ -45,14 +44,6 @@ const FADED = "opacity-(--disabled-opacity)";
 
 /** The colour of a disabled option's name. */
 const DISABLED_NAME = "text-app-muted";
-
-/** react-aria-components drops an `aria-disabled` given to a list box item, and under `disabledBehavior="selection"`
- * sets none itself, so a disabled option is announced as one that can be chosen; it is set on the element here. */
-function markDisabled(node: HTMLElement | null, disabled: boolean | undefined) {
-  if (!node) return;
-  if (disabled) node.setAttribute("aria-disabled", "true");
-  else node.removeAttribute("aria-disabled");
-}
 
 /** An option's label, followed by its badge when the badge is drawn inside the label's fade. The two sit in a row
  * centred on one line, as an inline pill aligned to the baseline would sit off-centre beside CJK text and lengthen
@@ -198,15 +189,13 @@ export function OptionSelect<T extends string>({
       // is on the flex item, the root, which a trigger's own `z-index` would not be.
       // Both halves may carry a badge. Share the width so either name gives way within its own half.
       className={inline ? "w-48" : joined ? "min-w-0 basis-0 flex-1 has-[[data-focus-visible=true]]:z-10" : undefined}
-      aria-label={(inline || joined || hideLabel) && !labelledBy ? label : undefined}
-      aria-labelledby={labelledBy}
+      label={(inline || joined || hideLabel) && !labelledBy ? label : undefined}
+      labelledBy={labelledBy}
       // react-aria drops the slot's id when no note exists on mount and does not restore it when
       // children alone change. Keep the association stable for notes that appear dynamically.
-      aria-describedby={[description ? descriptionId : undefined, describedBy].filter(Boolean).join(" ") || undefined}
-      isDisabled={isDisabled}
-      isInvalid={invalid}
-      // As in `TextInput`: whether the dialog goes ahead is its own decision, not the browser's.
-      validationBehavior="aria"
+      describedBy={[description ? descriptionId : undefined, describedBy].filter(Boolean).join(" ") || undefined}
+      disabled={isDisabled}
+      invalid={invalid}
       value={value}
       placeholder={placeholder}
       // Clearing arrives as a `null` key. Without a placeholder the caller has no way to take it,
@@ -215,23 +204,14 @@ export function OptionSelect<T extends string>({
         if (placeholder !== undefined) (onChange as (value: T | null) => void)(key as T | null);
         else if (key !== null) onChange(key as T);
       }}
-      // react-aria's keyboard delegate defaults to skipping a disabled item in arrow-key traversal
-      // (`disabledBehavior="all"`), which would make the reason a user cannot pick it invisible to
-      // anyone not reading the popover by mouse or in screen-reader browse mode. `"selection"`
-      // keeps it focusable and announced while still refusing the choice. It belongs on the
-      // `Select`, not the `ListBox`: the list renders the state the `Select` builds
-      // (`useSelectState`) and ignores its own. Neither HeroUI's nor react-aria's `SelectProps`
-      // declares it, though `useSelectState` passes its props through to react-stately's
-      // `useListState`, which reads it — hence the cast.
-      {...({ disabledBehavior: "selection" } as React.ComponentProps<typeof Select>)}
     >
       {!inline && !joined && !hideLabel && (labelMark ? (
         <div className="flex items-start gap-1">
           <Label>{label}</Label>
           {handoffToTrigger(labelMarkId)}
-          {/* The select's `ButtonContext` is for its trigger; reset around the mark as for `mark` below. */}
+          {/* The mark is not a part of the select, as for `mark` below. */}
           <MarkLineBox size="text-sm">
-            <ButtonContext.Provider value={{}}>{labelMark(labelMarkId)}</ButtonContext.Provider>
+            <OutsideFieldParts>{labelMark(labelMarkId)}</OutsideFieldParts>
           </MarkLineBox>
         </div>
       ) : <Label>{label}</Label>)}
@@ -241,7 +221,7 @@ export function OptionSelect<T extends string>({
             them: a gap shows the dialog's surface through in the light theme, and a border would sit close to this
             variant's fill in the dark one, and HeroUI's own input group draws no boundary between its parts
             either. */}
-        <Select.Trigger
+        <SelectTrigger
           ref={trigger}
           data-marquee-scope
           data-region-landing={landing || undefined}
@@ -252,71 +232,53 @@ export function OptionSelect<T extends string>({
                 ? "w-full flex-1 rounded-s-none"
                 : "w-full"
           }
+          valueClassName="flex min-w-0 flex-1 items-center gap-2 text-clip"
+          value={<>
+            {current?.icon && <span aria-hidden="true" className="flex shrink-0">{current.icon}</span>}
+            <FadeLabel as="span" lang={current?.lang} className={!badge || badgeInLabel ? "min-w-0 flex-1" : "min-w-0"} label={current?.labelContent ?? current?.label ?? placeholder} badge={badgeInLabel ? badge : undefined} />
+            {badge && !badgeInLabel && <StatusBadge>{badge}</StatusBadge>}
+          </>}
         >
-          <Select.Value className="flex min-w-0 flex-1 items-center gap-2 text-clip">
-            {() => <>
-              {current?.icon && <span aria-hidden="true" className="flex shrink-0">{current.icon}</span>}
-              <FadeLabel as="span" lang={current?.lang} className={!badge || badgeInLabel ? "min-w-0 flex-1" : "min-w-0"} label={current?.labelContent ?? current?.label ?? placeholder} badge={badgeInLabel ? badge : undefined} />
-              {badge && !badgeInLabel && <StatusBadge>{badge}</StatusBadge>}
-            </>}
-          </Select.Value>
           {/* The room for the mark, after the value and before the clear button. */}
           {mark && <span aria-hidden="true" className="w-6 shrink-0" />}
           {placeholder !== undefined && <span aria-hidden="true" className="ms-2 w-6 shrink-0" />}
-          <Select.Indicator />
-        </Select.Trigger>
+        </SelectTrigger>
         {placeholder !== undefined && (
-          // A real button must be a sibling of the trigger, never nested inside it. Keep HeroUI's
-          // clear action and shortcut registration while drawing the shared ghost button.
-          <ButtonContext.Provider value={{}}>
-            <Select.ClearButton<"button">
-              onClick={() => trigger.current?.focus()}
-              // The native button props target the same button rendered by FieldClearButton; react-aria
-              // types its click target more broadly and its unused value prop more narrowly.
-              render={(props) => (
-                <FieldClearButton
-                  {...(props as React.ComponentProps<typeof FieldClearButton>)}
-                  aria-hidden={undefined}
-                  isDisabled={isDisabled}
-                  className="absolute end-7 top-1/2 -translate-y-1/2 data-[empty=true]:invisible"
-                />
-              )}
-            />
-          </ButtonContext.Provider>
+          // The shared ghost button, as HeroUI's clear action, beside the trigger.
+          <SelectClearButton onClear={() => trigger.current?.focus()}>
+            <FieldClearButton disabled={isDisabled} className="absolute end-7 top-1/2 -translate-y-1/2 data-[empty=true]:invisible" />
+          </SelectClearButton>
         )}
         {mark && (
           <>
             {handoffToTrigger(markId)}
-            {/* The select gives its trigger's behaviour to every button inside it through `ButtonContext`;
-                the mark is not that button, so it is reset around the mark. The select's other contexts (text,
-                label, list state) are not reset and still reach the popover's body, which holds no such parts. */}
-            <ButtonContext.Provider value={{}}>
+            {/* The mark is not the select's trigger, which the select's behaviour is for. */}
+            <OutsideFieldParts>
               <span className={`absolute inset-y-0 flex items-center ${placeholder !== undefined ? "end-15" : "end-7"}`}>{mark(markId)}</span>
-            </ButtonContext.Provider>
+            </OutsideFieldParts>
           </>
         )}
       </div>
-      <Select.Popover
+      <SelectPopover
         // Options with a reason widen the popover to fit it; the others keep the trigger's width.
         placement={hasReason ? "bottom start" : undefined}
         className={hasReason ? "w-max max-w-[min(20rem,calc(100vw-2rem))]" : "w-(--trigger-width) max-w-[calc(100vw-2rem)]"}
       >
         <MotionListBox className="relative">
           {options.map((option) => (
-            <ListBox.Item
+            <ListBoxItem
               data-list-motion={option.value}
               data-marquee-scope
               // A disabled option is dimmed by its name taking the secondary text colour and its icon fading;
               // react-aria marks no option disabled under `disabledBehavior="selection"`, so nothing fades the row.
               className="pe-7"
-              // A new callback each render, so the attribute follows `isDisabled` as it changes.
-              ref={(node: HTMLElement | null) => markDisabled(node, option.isDisabled)}
               key={option.value}
               id={option.value}
               // Type-to-select matches on, and the hidden native option reads, "label, badge";
               // the option's own accessible name comes from its content, where the badge's hidden comma separates them.
               textValue={option.badge ? `${option.label}, ${option.badge}` : option.label}
-              isDisabled={option.isDisabled}
+              disabled={option.isDisabled}
+              indicator
             >
               {option.icon && (
                 <span aria-hidden="true" className={`flex shrink-0 ${option.isDisabled ? FADED : ""}`}>
@@ -327,10 +289,10 @@ export function OptionSelect<T extends string>({
                 <span className="flex min-w-0 flex-1 flex-col">
                   {/* The option's name is its label and badge alone: the `label` slot keeps the description
                       (and the note under the label) out of it, so a screen reader does not say it twice. */}
-                  <Text slot="label" className="flex min-w-0 items-center gap-2">
+                  <ListBoxItemLabel className="flex min-w-0 items-center gap-2">
                     <FadeLabel as="span" lang={option.lang} className={option.isDisabled ? `min-w-0 ${DISABLED_NAME}` : "min-w-0"} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
                     {option.badge && !option.badgeInLabel && <StatusBadge>{option.badge}</StatusBadge>}
-                  </Text>
+                  </ListBoxItemLabel>
                   <Description className="sr-only">{option.detail}</Description>
                   {option.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={option.reason} /></span>}
                 </span>
@@ -338,11 +300,10 @@ export function OptionSelect<T extends string>({
                 <FadeLabel lang={option.lang} className={`${option.badge && !option.badgeInLabel ? "min-w-0" : "min-w-0 flex-1"}${option.isDisabled ? ` ${DISABLED_NAME}` : ""}`} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
               )}
               {option.badge && !option.badgeInLabel && !option.detail && <StatusBadge>{option.badge}</StatusBadge>}
-              <ListBox.ItemIndicator />
-            </ListBox.Item>
+            </ListBoxItem>
           ))}
         </MotionListBox>
-      </Select.Popover>
+      </SelectPopover>
       {description && <Description id={descriptionId}>{description}</Description>}
       {errorMessage !== undefined && (
         <FieldErrorMessage>{invalid ? errorMessage : null}</FieldErrorMessage>

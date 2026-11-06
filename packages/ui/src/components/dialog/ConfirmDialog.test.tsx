@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../alerts/errorAlerts";
 import { currentLanguage, setLanguage } from "../../i18n/language";
@@ -10,6 +10,7 @@ import { testDaemon } from "../../test/testDaemon";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
 import { framesAsTimers, settleFrames } from "./dialogTestSupport";
+import { Checkbox } from "../../primitives";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -143,4 +144,49 @@ it("joins a string message to the subject with no space in Chinese", () => {
   onTestFinished(() => setLanguage(before));
   mount({ subject: "它将被归档。", message: "它将只听从你。" });
   expect(document.body.querySelector("[role=alertdialog] p")!.textContent).toBe("它将被归档。它将只听从你。");
+});
+
+// A confirmation that waits for a lookup before its action starts (`waiting`) holds Confirm pending but is not busy:
+// the options can still be changed and the question still answered, unlike once `onConfirm` is running.
+it("leaves its options operable and its Cancel pressable while it waits for a lookup, and holds them once confirmed", async () => {
+  let finish!: () => void;
+  const onCancel = vi.fn();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const show = (waiting: boolean) => act(() => {
+    root.render(
+      <DaemonProvider value={testDaemon()}>
+        <ConfirmDialog
+          title="Remove"
+          message="Remove it?"
+          confirmLabel="Remove"
+          errorTitle="Could not remove"
+          waiting={waiting}
+          extraControl={<Checkbox selected={false} onSelectedChange={() => {}}>Trash</Checkbox>}
+          onConfirm={() => new Promise<void>((resolve) => { finish = resolve; })}
+          onCancel={onCancel}
+        />
+      </DaemonProvider>,
+    );
+  });
+  const button = (label: string) => [...document.querySelectorAll("button")].find((b) => b.textContent === label)!;
+  show(true);
+  expect(button("Remove").getAttribute("data-pending")).toBe("true");
+  expect(document.querySelector<HTMLInputElement>("input[type=checkbox]")!.disabled).toBe(false);
+  expect(button("Cancel").disabled).toBe(false);
+  const close = document.querySelector<HTMLButtonElement>('button[aria-label="Close"]');
+  expect(close).not.toBeNull();
+  expect(close!.disabled).toBe(false);
+  act(() => button("Cancel").click());
+  expect(onCancel).toHaveBeenCalledOnce();
+
+  show(false);
+  await act(async () => void button("Remove").click());
+  expect(document.querySelector<HTMLInputElement>("input[type=checkbox]")!.disabled).toBe(true);
+  expect(button("Cancel").disabled).toBe(true);
+  await act(async () => finish());
 });

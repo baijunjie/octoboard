@@ -1,6 +1,5 @@
 import React, { useId, useRef, useState } from "react";
 
-import { Button } from "../components/controls/Button";
 import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
 import { InlineReference } from "../i18n/InlineReference";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
@@ -15,6 +14,7 @@ import { updateChannel } from "../updates/updateChannel";
 import type { UpdateState } from "../updates/updateStore";
 import { useUpdates } from "../updates/UpdatesProvider";
 import { SettingRow } from "./SettingRow";
+import { Button } from "../primitives";
 
 /** The sentence under "Updates": what the application's update is up to, in the order of what the user most needs
  * to know — a restart waiting, a download under way, a check running, a newer version, then how the last check
@@ -112,11 +112,11 @@ export function UpdatesSetting(): React.ReactElement | null {
       <Button ref={actionButton} size="sm" variant="primary" onPress={store.restart}>{t("settings.updates.restart")}</Button>
     ) : state.update ? (
       // Pending rather than disabled while a check runs: a disabled button would drop the focus it holds.
-      <Button ref={actionButton} size="sm" variant="primary" isPending={state.phase !== "idle"} onPress={() => void store.install()}>
+      <Button ref={actionButton} size="sm" variant="primary" pending={state.phase !== "idle"} onPress={() => void store.install()}>
         {t("settings.updates.install")}
       </Button>
     ) : (
-      <Button ref={actionButton} size="sm" variant="secondary" isPending={state.phase === "checking"} onPress={() => { setPressed(true); void store.check("manual"); }}>
+      <Button ref={actionButton} size="sm" variant="secondary" pending={state.phase === "checking"} onPress={() => { setPressed(true); void store.check("manual"); }}>
         {t("settings.updates.check")}
       </Button>
     );

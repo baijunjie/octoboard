@@ -1,4 +1,3 @@
-import { Badge } from "@heroui/react";
 import { Check, Hand, MessageCircleMore, Pause } from "lucide-react";
 import React from "react";
 
@@ -7,6 +6,7 @@ import { useCurrentLanguage } from "../../i18n/react";
 import { type ShownStatusKind } from "../../sessions/sessionStatus";
 import { BUBBLE_SHIFT, HAND_SHIFT, shiftedViewBox } from "./opticalCentring";
 import { StatusIcon } from "./StatusIcon";
+import { Badge } from "../../primitives";
 
 /** The marker a collapsed project row shows for the sessions beneath it, and focus mode's
  * console-switch chip for the sessions of that console session: the glyph of the top status among
@@ -53,7 +53,7 @@ export function AvatarStatusBadge({ status }: { status: ShownStatusKind | undefi
       return null;
   }
   return (
-    <Badge inert aria-hidden="true" color={status === "waiting_user" ? "warning" : "success"} variant="primary" size="sm" placement={rtl ? "bottom-left" : "bottom-right"}>
+    <Badge color={status === "waiting_user" ? "warning" : "success"} placement={rtl ? "bottom-left" : "bottom-right"}>
       {icon}
     </Badge>
   );

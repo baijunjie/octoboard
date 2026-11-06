@@ -1,7 +1,6 @@
 import { FolderOpen, Plus, Zap } from "lucide-react";
 import React, { useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { setInteractionModality } from "react-aria";
 import { useShallow } from "zustand/react/shallow";
 
 import { ActionMenu } from "../components/menus/ActionMenu";
@@ -15,6 +14,7 @@ import { useWindowShortcut } from "../shortcuts/useWindowShortcut";
 import { sortProjects } from "../sessions/order";
 import { RowIconButton } from "../components/rows/RowIconButton";
 import { useNewSessionMode } from "./useNewSessionMode";
+import { setKeyboardModality } from "../primitives";
 
 /**
  * A "+" that is a menu of `projects`, for a view with no project of its own to open a session in.
@@ -51,7 +51,7 @@ export function NewSessionMenu({
   }, ({ action, repeat }) => {
     if (repeat || blocked || projects.length === 0) return;
     flushSync(() => setShortcutMode(action));
-    setInteractionModality("keyboard");
+    setKeyboardModality();
     triggerRef.current?.focus();
     triggerRef.current?.click();
   });

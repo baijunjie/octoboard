@@ -1,5 +1,6 @@
-import { Kbd } from "@heroui/react";
 import type { ReactElement } from "react";
+
+import { Kbd, KbdAbbr, KbdContent } from "../primitives";
 
 import { bindingParts, type Binding } from "./binding";
 import type { CommandId } from "./commands";
@@ -13,7 +14,7 @@ import { useBinding } from "./store";
 export function BindingKbd({ binding, className, slot }: { binding: Binding; className?: string; slot?: string }): ReactElement {
   return (
     <Kbd dir="ltr" slot={slot} className={className}>
-      {bindingParts(binding).map((part) => (part.abbr ? <Kbd.Abbr key={part.abbr} keyValue={part.abbr} /> : <Kbd.Content key={part.text}>{part.text}</Kbd.Content>))}
+      {bindingParts(binding).map((part) => (part.abbr ? <KbdAbbr key={part.abbr} keyValue={part.abbr} /> : <KbdContent key={part.text}>{part.text}</KbdContent>))}
     </Kbd>
   );
 }

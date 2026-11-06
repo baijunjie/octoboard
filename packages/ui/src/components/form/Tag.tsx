@@ -1,10 +1,10 @@
-import { Tag as HeroUITag, tagVariants } from "@heroui/react";
 import React from "react";
 
 import { textDirection } from "../../i18n/languages";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { TitledControl } from "../hint/TitledControl";
+import { StaticTag, Tag as TagItem, TagRemoveButton } from "../../primitives";
 
 /** HeroUI has no accent variant for a removable tag, so this takes its selected tag's fill and the
  * shared accent text colour (`--tint-accent-fg`, a text on `--accent-soft` as a badge's is) without
@@ -73,20 +73,19 @@ type RemovableTagProps = TagProps & {
   removeTitle: React.ReactNode;
 };
 
-/** A picked tag, either removable in a HeroUI TagGroup or static in a read-only summary. */
+/** A picked tag, either removable in a `TagGroup` or static in a read-only summary. */
 export function Tag(props: ReadOnlyTagProps | RemovableTagProps): React.ReactElement {
   if (props.isReadOnly) return <ReadOnlyTag {...props} />;
   return <RemovableTag {...props} />;
 }
 
-/** HeroUI's Tag requires a collection and adds row focus even without selection or removal.
- * Its official variants keep this static branch visually identical without introducing a grid or
- * a disabled control. The containing summary owns clipping and marquees, never an individual tag. */
+/** A tag group's tag requires a collection and adds row focus even without selection or removal.
+ * The layer's `StaticTag` keeps this static branch visually identical without introducing a grid or a disabled
+ * control. The containing summary owns clipping and marquees, never an individual tag. */
 function ReadOnlyTag({ tag, tone = "accent", wrap = false, motionKey }: ReadOnlyTagProps): React.ReactElement {
-  const slots = tagVariants({ size: "sm" });
   const colour = tone === "accent" ? `${ACCENT_CLASS} hover:bg-accent-soft` : "bg-default text-default-foreground hover:bg-default";
   const fit = wrap ? "min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]" : "shrink-0 whitespace-nowrap";
-  return <span data-slot="tag" data-list-motion={motionKey} dir="auto" className={slots.base({ className: `cursor-default ${colour} ${fit}` })}>{tag}</span>;
+  return <StaticTag data-list-motion={motionKey} dir="auto" className={`cursor-default ${colour} ${fit}`}>{tag}</StaticTag>;
 }
 
 /** A removable tag's label fades and runs as a marquee when clipped. The remove button overlays
@@ -95,46 +94,36 @@ function RemovableTag({ tag, removeTitle, motionKey }: RemovableTagProps): React
   const t = useT();
   const dir = tagDirection(tag, textDirection(useCurrentLanguage()));
   return (
-    <HeroUITag
+    <TagItem
       id={tag}
       data-list-motion={motionKey ?? `tag:${tag}`}
       dir={dir}
-      textValue={tag}
       data-marquee-scope
       className={TAG_CLASS}
     >
-      {/* The function form: TagRoot only finds a remove button among its direct children, and would add
-          a default one beside a wrapped button. */}
-      {() => (
-        <>
-          <span className={LABEL_CLASS}>
-            {/* A cut label fades at its end and runs as a marquee while the pointer is over the tag
-                (`data-marquee-scope`). While the remove button shows, the spacer after the text,
-                positioned so it adds to the scrollable width but not to the tag's, lets the marquee
-                carry the text's end out from under the button and its fade: a label whose end the
-                button covers is then cut, and scrolls until that end is clear; one that ends well
-                short of the button (in a tag held wider by the active minimum) does not move. The title
-                is for where the marquee does not run (reduced motion); being cut on hover, a label that
-                fits also gets it then. */}
-            <FadeOverflow as="span" className="min-w-0 flex-1" titleWhenClipped={tag}>
-              <span className="relative">
-                {tag}
-                <span aria-hidden="true" className="absolute start-full top-0 hidden h-px w-5 group-hover/tag:block" />
-              </span>
-            </FadeOverflow>
+      <span className={LABEL_CLASS}>
+        {/* A cut label fades at its end and runs as a marquee while the pointer is over the tag
+            (`data-marquee-scope`). While the remove button shows, the spacer after the text,
+            positioned so it adds to the scrollable width but not to the tag's, lets the marquee
+            carry the text's end out from under the button and its fade: a label whose end the
+            button covers is then cut, and scrolls until that end is clear; one that ends well
+            short of the button (in a tag held wider by the active minimum) does not move. The title
+            is for where the marquee does not run (reduced motion); being cut on hover, a label that
+            fits also gets it then. */}
+        <FadeOverflow as="span" className="min-w-0 flex-1" titleWhenClipped={tag}>
+          <span className="relative">
+            {tag}
+            <span aria-hidden="true" className="absolute start-full top-0 hidden h-px w-5 group-hover/tag:block" />
           </span>
-          <TitledControl title={removeTitle}>
-            {/* Out of the tab order, so the tag group stays one tab stop: a tag is removed from the
-                keyboard with Delete or Backspace on the tag itself, which react-aria describes on it. */}
-            <HeroUITag.RemoveButton
-              excludeFromTabOrder
-              aria-label={t("common.removeTag")}
-              aria-describedby=""
-              className={`${REMOVE_CLASS} ${REMOVE_COLOUR_CLASS}`}
-            />
-          </TitledControl>
-        </>
-      )}
-    </HeroUITag>
+        </FadeOverflow>
+      </span>
+      <TitledControl title={removeTitle}>
+        <TagRemoveButton
+          label={t("common.removeTag")}
+          describedBy=""
+          className={`${REMOVE_CLASS} ${REMOVE_COLOUR_CLASS}`}
+        />
+      </TitledControl>
+    </TagItem>
   );
 }

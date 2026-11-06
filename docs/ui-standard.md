@@ -74,7 +74,7 @@ gives its modal and alert-dialog bodies `text-muted`; the shared modal frame (`D
 `packages/ui/src/components/dialog/Dialog.tsx`) sets its body back to the foreground, so nothing in a modal turns grey
 by inheritance (the user's decision). Text inside a modal that is secondary — a field's note, an eligibility hint, a
 line saying what an option leaves out — takes the secondary text colour above, `--app-muted` (`text-app-muted`),
-explicitly on its own element; a HeroUI part that colours itself (`Description`, `Alert.Description`) keeps its own.
+explicitly on its own element; a HeroUI part that colours itself (`Description`, `AlertDescription`) keeps its own.
 
 The user accepts that HeroUI's accent, used as the solid accent and the focus ring, falls below 3:1 on some light
 surfaces — a selected sidebar row, a control fill and its hover, the window chrome — in exchange for one accent colour
@@ -91,11 +91,11 @@ glyph-sized mark such as the waiting session's disc; no surface holding copy, ap
 An Alert's only custom visual treatments are its status background, HeroUI's `--{colour}-soft` for its status, and its
 shadow: HeroUI's `--surface-shadow` keeps its shape but takes the status colour instead of grey, so a tinted Alert has
 no grey rim. All other styles and component structure stay stock HeroUI 3, as specified under "Errors shown among other
-content". The stock `Alert.Description` keeps its colour on that fill; where it measures below 4.5:1 it is HeroUI's own
+content". The stock `AlertDescription` keeps its colour on that fill; where it measures below 4.5:1 it is HeroUI's own
 text on HeroUI's own fill, not recoloured.
 
-Every unselected, enabled HeroUI tab keeps its label fully opaque on hover instead of dimming, by one shared rule in
-`packages/ui/src/style.css`. The tab strips
+Every unselected, enabled HeroUI tab keeps its label fully opaque on hover instead of dimming, by the Tab wrapper
+(`packages/ui/src/primitives/Tabs.tsx`). The tab strips
 in the app also take the foreground colour on hover. Preserve this shared visual treatment as an explicit product
 choice, while retaining the component's layout, selection and keyboard behaviour.
 
@@ -108,7 +108,7 @@ which reuses the default small bordered `StatusBadge`: green (`success`) in the 
 view chip.
 
 Rail counts, notification dots and console avatar markers use HeroUI `Badge` with its default typography, sizing,
-border and colours, selected through its semantic props. Neither `Badge` nor `Badge.Anchor` has a style override.
+border and colours, selected through its semantic props. Neither `Badge` nor `BadgeAnchor` has a style override.
 The anchor wraps the complete control, with the decorative badge beside the button so it does not inherit the
 button's pressed scale or descendant icon styles. The badges are inert, so they do not intercept interaction with
 the control underneath. Process counts are green (`success`); waiting counts are orange (`warning`).
@@ -252,6 +252,32 @@ highlights in the project's `--find-match-bg`, with the current match in `--find
 `--find-current-fg` and underlined, so the current one is not told by colour alone; code and document text keep 4.5:1
 on the match fill. The bar floats over its content as a `floating-surface`.
 
+## Third-party UI components come through the wrapper layer
+
+Every component of `@heroui/react` and `react-aria-components` reaches the application through the project's wrapper
+layer, `packages/ui/src/primitives/`, whether or not the project changes anything about it. That layer alone
+imports the two libraries, HeroUI's style recipes (`@heroui/styles`), and the `react-aria` hooks and utilities
+(`useFocusRing`, `useHover`, `setInteractionModality`, `mergeProps` and the like, and the `@react-aria/*`,
+`@react-stately/*` and `@react-types/*` packages behind them). Business code and the project's own composite
+components — option pickers, menus, the dialog frame, form sections — are consumers like any other and use the
+wrappers, so a treatment every instance of a component needs is made once, in its wrapper, and no call site can miss it.
+
+A wrapper defines the project's API: its props are named and shaped by the project and expose only what the application
+uses; a third-party type or compound part is never passed through. A wrapper keeps HeroUI's default appearance through
+the component's variants and slots, as "Do not change how a HeroUI component looks" requires, and carries only the
+treatments this standard already approves; moving a treatment into a wrapper is not a licence for new styling. The
+layer's own conventions are in its `README.md`.
+
+Code outside the layer does not depend on the libraries' DOM either: where it has to find a component's part in the
+page (a focus hand-off to a select's trigger, the toast region measured against a dialog's footer), it uses the
+layer's `partSelector`, never HeroUI's `data-slot` names or classes, so only the layer knows how the library marks its
+parts. The application stylesheet, which themes HeroUI's own stylesheet, is the exception: its rules over HeroUI's
+parts are written against HeroUI's classes and slots.
+
+Tests and test support, the gallery, the shared fixtures and the website preview may import the libraries directly
+(setting the input modality in a test, say); the rule is for application source. Lint enforces it, with no exceptions in
+application source (`packages/ui/eslint.layers.mjs`).
+
 ## Machine and platform perspective in copy
 
 Prefer wording that is accurate both in the desktop app and in a browser connected to a server. Describe the
@@ -330,7 +356,7 @@ A picked tag's remove button (`Tag`) is out of the tab order (`excludeFromTabOrd
 stop and arrows move between its tags: react-aria's tag group would otherwise send Tab from a tag into its button. The
 keyboard removes a tag with Delete or Backspace on the tag, which react-aria describes on it.
 
-`preventFocusOnPress` only keeps a *mouse* press from taking focus; the control still has to be reachable.
+`focusOnPress={false}` only keeps a *mouse* press from taking focus; the control still has to be reachable.
 
 A control revealed only on hover or focus has to be reachable by touch too. `RowControls`
 (`packages/ui/src/components/controls/RowControls.tsx`), which holds the hover-revealed actions of sidebar and Files
@@ -358,7 +384,7 @@ The change list's section heading — the band that folds the section away
 controls, and they are reached by this application extending the collection's own walk: Up and Down step through the
 rows **and the headings between them**, Right moves from the band through its controls in their displayed order and Left
 moves back (mirrored in a right-to-left reading direction), while Home and End still move between rows alone. Such a
-control takes no tab stop of its own and must not take focus on a press (`preventFocusOnPress`), or a mouse press on it
+control takes no tab stop of its own and must not take focus on a press (`focusOnPress={false}`), or a mouse press on it
 sends focus to the list's first row; a popover opened from it hands focus back to its heading when it closes.
 
 The band is react-aria's `rowheader` inside a `role="row"`, not an `<h1>`-`<h6>`, so the rule under "A visual heading
@@ -385,18 +411,20 @@ end rather than off its start), except that a field (a select, a text field, a p
 the buttons beside it. Whatever the alignment, a group has at most one primary button, and a centred row holds at most
 two buttons: a third way out becomes a mark or goes.
 
-Every button is HeroUI's `Button`. A native `<button>` is allowed only where a custom button is needed that HeroUI's
-cannot be, with the reason in a comment there. A hand-built `role="button"` element needs `tabIndex={0}` and its own
-Enter / Space handling.
+Every button is the wrapper layer's `Button` (HeroUI's, through `primitives`). A custom-drawn button, such as a whole
+band or row that is itself the control, uses the layer's `BareButton`, which sets the state attributes React Aria's
+buttons set (such as `data-hovered`, `data-pressed` and `data-focus-visible`) for the caller's classes to draw. A
+native `<button>` is allowed only where a custom button is needed that HeroUI's cannot be, with the reason in a comment
+there. A hand-built `role="button"` element needs `tabIndex={0}` and its own Enter / Space handling.
 
-Files and Git tree chevrons are also an exception to HeroUI's `Button`: they are React Aria's `Button` in
-`slot="chevron"`, drawn as a bare glyph with no hover fill, press shrink or tooltip, keeping the collection's
-expansion, focus and Tab exclusion (their target size is under "Pointer target size"). A whole row runs its action on
-Enter and expands or folds with Left / Right (reversed under RTL); a pointer press on the chevron expands or folds it
-too. React Aria 3.52.1's `useSelectableItem` maps Enter to the row's action (`onAction`, which includes the tree's
-expansion) and Space to selection; selection is disabled in these trees, so Space on a row does nothing. Keep that
-supported collection behavior rather than translating Space locally. The custom Git section-heading band retains its
-documented primitive exception and acts on both Enter and Space.
+Files and Git tree chevrons are also an exception to HeroUI's `Button`: they are the layer's `TreeExpandButton`
+(React Aria's `Button` in `slot="chevron"`), drawn as a bare glyph with no hover fill, press shrink or tooltip,
+keeping the collection's expansion, focus and Tab exclusion (their target size is under "Pointer target size"). A
+whole row runs its action on Enter and expands or folds with Left / Right (reversed under RTL); a pointer press on the
+chevron expands or folds it too. React Aria 3.52.1's `useSelectableItem` maps Enter to the row's action (`onAction`,
+which includes the tree's expansion) and Space to selection; selection is disabled in these trees, so Space on a row
+does nothing. Keep that supported collection behavior rather than translating Space locally. The Git section-heading
+band (a `BareButton`, above) acts on both Enter and Space.
 
 A button that is unavailable for a reason the user needs to learn (the quick-create "+" while every account of its agent
 is used up) is not natively disabled, which would take it out of the Tab order and keep its tooltip from ever opening:
@@ -438,16 +466,36 @@ the full name, and pressing it runs nothing. Under that setting react-aria sets 
 `aria-disabled` on a select option, so the option gets it by hand.
 
 **A running action holds its button pending.** A button whose action is running is pending, not relabelled and not
-merely disabled: it sets `isPending` on the shared `Button` (`components/controls/Button.tsx`). It keeps its label and
+merely disabled: it sets `pending` on the wrapper layer's `Button` (`primitives/Button.tsx`). It keeps its label and
 shows a decorative spinner before it (in place of the content of an icon-only button), is reported busy (`aria-busy`),
 takes no further press, and keeps focus, so a dialog's Escape and Tab containment survive; the button grows by the
 spinner's width. The label never changes to a progressive form ("Saving…", "Importing…"), so no catalog carries a
 pending variant of a button's label. A link drawn as a button (`ExternalLink`) shows the same spinner while its target
-opens. While a dialog's action runs the dialog is busy and cannot be left: Cancel and the other buttons beside the
-pending one stay in place but disabled, the close button is disabled, and Escape and a press outside do nothing
-(`busy` on the shared `Dialog`). Two pending holds are not such a time and leave the dialog leavable: waiting for a
-system picker the dialog opened, and a quick lookup that holds the confirm button pending before the action itself
-starts.
+opens.
+
+**A busy dialog disables everything in it but the pending action.** While a dialog's action runs the dialog is busy
+(`busy` on the shared `Dialog`, which gives it to the layer's `Modal`) and cannot be left: every control in it is
+disabled, Cancel and the close button included, and so is every link (`ExternalLink` then has no `href` and no tab stop,
+and is still read as a link, unavailable), while the pending button stays enabled and keeps the focus, which moves to it
+from a control the request has just disabled (to the dialog where there is no pending button). Focus goes back to that
+control when the request is over and the dialog is still open. While busy, focus inside the dialog is not the user's own
+choice unless they pressed or tabbed in it, so it goes back at once wherever it is in the dialog or on `<body>` when
+busy ends, Cancel included where a refusal that asks again has disabled the submit button (a move the dialog itself
+makes keeps the return); if that control is gone or disabled, focus on `<body>` goes to the pending button, or the
+dialog, instead of staying on the page. Only where an error alert has opened over the dialog, so that focus is outside
+it, does the return wait for the alert to be acknowledged and focus to come back into the dialog, wherever it comes
+back. A press in the dialog, or a Tab in it while busy, is the user's own move: it forgets the remembered control and is
+never redirected (a field the dialog names, below, is still where focus returns). A dialog whose refusal is about one
+field may name that field as where focus returns instead (`returnFocusRef` on `Dialog`: the Session ID field after a
+refused conversation), however the request was submitted. A dialog may hold more than one pending button (the console
+dialog counts reading a picked avatar image as busy too), and focus then stays on the one that was pressed. The wrapper
+layer's components read the dialog's busy state themselves, so a dialog does not freeze its own fields, and a new
+interactive wrapper honours it too (`primitives/README.md`). The disabled controls stay in the page and are read by
+assistive technology, so the dialog is never made `inert`; they show their own disabled styling, and nothing is laid
+over the body. Two pending holds are not such a time and leave the dialog leavable, with its controls operable: waiting
+for the file picker of a configuration import, and a quick lookup that holds the confirm button pending before the
+action itself starts (`waiting` on `ConfirmDialog`); neither passes `busy`. (Export's save picker runs inside its
+action, so that dialog is busy while the picker is open.)
 
 ### A control inside a rendering library's shadow root
 
@@ -519,7 +567,7 @@ reads both a dialog's name and its content as focus enters it, so a dialog named
 | Touch or pen tap, assistive technology's activation (virtual press) | Opens it with focus moved in: the press form |
 | Keyboard Enter or Space | Opens it with focus moved in: the press form |
 
-No press takes focus on its own (`preventFocusOnPress`): a click does nothing, and a tap must not pull focus off the
+No press takes focus on its own (`focusOnPress={false}`): a click does nothing, and a tap must not pull focus off the
 terminal or an editor before the surface decides where focus goes.
 
 - **The hover form** is `role="dialog"` with `aria-modal="false"`. The window's check for an open modal matches every
@@ -595,7 +643,7 @@ value and raw submission unchanged.
 HeroUI controls draw their own focus ring.
 
 A scrollable tab list leaves enough inner padding for the full focus ring and its offset on every side.
-`Tabs.ListContainer` clips its child list through a scroll container, so this clearance belongs to `Tabs.List` itself;
+`TabListContainer` clips its child list through a scroll container, so this clearance belongs to `TabList` itself;
 padding outside the scroller does not protect the ring. Each tab also needs matching horizontal scroll margin so
 keyboard navigation reveals the ring as well as the tab border. Suppress the tab scroller’s fade mask while a tab has
 visible keyboard focus, so it cannot fade out the ring.
@@ -606,7 +654,7 @@ overrides WebKit's native inset without changing the component's colours or ring
 ### A hand-built focusable element
 
 An element that removes the outline puts a ring back, never `outline-none` alone, and takes it from
-`useFocusVisibleProps` (`packages/ui/src/components/focus/useFocusVisibleProps.ts`): spread its props on the element and
+`useFocusVisibleProps` (the wrapper layer's, `packages/ui/src/primitives/focus.ts`): spread its props on the element and
 style with `data-focus-visible:ring-2 data-focus-visible:ring-focus` (`group-data-focus-visible:` from a child).
 The application's custom ring uses HeroUI's `--focus`, the same token HeroUI controls use.
 
@@ -625,7 +673,7 @@ into that root (`[data-expand-button][data-focus-visible]` and `[data-separator-
 ### Focus moved by a change the user did not make
 
 A handoff that runs because what held focus went away — a pane hidden, a panel closed, a region unmounted by a daemon
-event — also calls `setInteractionModality("keyboard")` before it focuses the destination. The user did not ask for the
+event — also calls `setKeyboardModality()` before it focuses the destination. The user did not ask for the
 move, so they have to be able to see where focus went, and the previous input was often a pointer press, which leaves
 the destination without a ring. `handFocusOff` takes a `showRing` flag for the handoff whose trigger is a press, where
 the ring follows how the press came; `HandoffOnUnmount` sets it by default, its trigger being a render, and so does
@@ -681,7 +729,7 @@ control that did not have focus still takes none.
 
 A dialog opened from a control that never took focus, is disabled, or is gone by the time it closes cannot always hand
 focus back to it: React Aria restores focus to what held it when the dialog opened, which is not the control after an
-accessibility activation or a `preventFocusOnPress` press, and finds nothing that takes it when the control is disabled
+accessibility activation or a `focusOnPress={false}` press, and finds nothing that takes it when the control is disabled
 or gone, so focus ends on `<body>`, where VoiceOver reads the whole web area instead of the control the user was on.
 Four handoffs repair it. The login handoff (`useLoginFocusReturn` in
 `packages/ui/src/settings/accounts/AccountLoginButton.tsx`): the row's own Log in button is shown only while the account
@@ -696,7 +744,7 @@ one asked from the terminal itself; the ring is turned on only as it moves focus
 focus where the dialog put it back, ringed or not as the press was. The archive view
 (`packages/ui/src/archive/ArchiveView.tsx`) sends focus to its header's Close, with the ring turned on, once a deletion
 has taken the control focus would go back to (a row's Delete, or Delete all), or after a deletion confirmed from a Delete
-all whose `preventFocusOnPress` press had its dialog hand focus back to the ring-less view itself. All four wait at least a frame past React Aria's restore and leave
+all whose `focusOnPress={false}` press had its dialog hand focus back to the ring-less view itself. All four wait at least a frame past React Aria's restore and leave
 a restore that landed right alone; they act where focus is on `<body>`, the login handoff also where it is on its going
 button, and the archive view also where it is on the view itself after a dialog that deleted rows.
 
@@ -720,9 +768,12 @@ control the press ended on (a menu's trigger, for a dialog opened from its menu)
 the restore lands back on it. At the `tablet` breakpoint and below the rail is part of the drawer's card, so a dialog opened
 from the rail there (Settings included, by press or by key) is the same case and returns to the rail's control.
 
-A dialog's submit or confirm button that becomes disabled while it holds focus (a quota reading landing under an
-open dialog) hands focus to Cancel, also when WebKit has already blurred the button to `<body>`; a dialog that opens
-with its submit refused puts its autofocus on Cancel instead of the disabled button.
+A dialog's submit or confirm button that becomes disabled while it holds focus (a quota reading landing under an open
+dialog) hands focus to Cancel, also when WebKit has already blurred the button to `<body>` (to the dialog instead while
+the dialog is busy, as Cancel is disabled too; when busy ends, the move to Cancel or the dialog keeps the remembered
+control, which gets focus back unless the user pressed or tabbed in the meantime, and focus found on `<body>` with that
+control gone or disabled goes to the pending button, or the dialog); a dialog that opens with its submit refused puts
+its autofocus on Cancel instead of the disabled button.
 
 ### Focus scrolled to the edge of a scroller that fades there
 
@@ -732,7 +783,7 @@ the user was sent to arrives underneath it (the first invalid field a submit sen
 the scroller rather than on what it holds, so nothing put inside has to know about it. Every scroller that takes the
 fade gets it, a dialog's body and a list in a popover alike, and neither shape of the project's own capability leaves it
 to the site: the padding comes with the fade. A fade the library draws for its own component is the one exception, and
-not one to copy — a HeroUI `Tabs.ListContainer` uses its own 64 px fade. Suppress that mask while a tab has visible
+not one to copy — a HeroUI `TabListContainer` uses its own 64 px fade. Suppress that mask while a tab has visible
 keyboard focus, as specified under "Visible focus", so the revealed tab and its full ring stay visible.
 
 Where a sticky heading occupies the top of a faded list, the top scroll padding includes both the heading's height
@@ -770,7 +821,7 @@ something of its own stays; one that only scrolls comes and goes with the overfl
 
 ### A keyboard handler that moves focus itself
 
-Such a handler calls react-aria's `setInteractionModality("keyboard")` first when the handler sits on the window's
+Such a handler calls the wrapper layer's `setKeyboardModality()` first when the handler sits on the window's
 capture phase and stops propagation. react-aria tracks modality from a capture-phase listener on the document, which
 the key then never reaches; without the call, what the handler focuses draws no ring when the previous input was a
 pointer. A handler for a chord with ⌘ or Ctrl (or Alt outside macOS) calls it too, whether or not it stops the key:
@@ -838,14 +889,15 @@ the content it shows (the file's name and its status), which is what the viewer 
 
 ### An icon-only control: tooltip and `aria-label`
 
-Every control that shows only an icon — a HeroUI `Button` with `isIconOnly`, a `CloseButton` or `Modal.CloseTrigger`, a
-menu trigger — carries both a tooltip and an accessible name. The name is what assistive technology announces, and it
-has to tell the control apart from its neighbours even where the tooltip's text cannot, so the two are not always the
-same text. Which control's tooltip repeats its name and which one's is the shorter of the two is settled per control in
-the "Tooltips on icon-only controls" section of `docs/product/labels-and-tooltips.md`; `ActionMenu` gives its trigger a
-name of that shape by default. The exception is a button whose hover opens a floating panel that shows what
-its tooltip would say — the rail's Account usage and Processes buttons (above), a status mark, the help tip's "?": it
-carries only its accessible name. So does a Files or Git tree chevron, whose whole row does what it does (see "Buttons").
+Every control that shows only an icon — the application's `Button` with `iconOnly`, a `ModalCloseButton`,
+`ToastCloseButton` or `TagRemoveButton`, a menu trigger — carries both a tooltip and an accessible name. The name is
+what assistive technology announces, and it has to tell the control apart from its neighbours even where the tooltip's
+text cannot, so the two are not always the same text. Which control's tooltip repeats its name and which one's is the
+shorter of the two is settled per control in the "Tooltips on icon-only controls" section of
+`docs/product/labels-and-tooltips.md`; `ActionMenu` gives its trigger a name of that shape by default. The exception is
+a button whose hover opens a floating panel that shows what its tooltip would say — the rail's Account usage and
+Processes buttons (above), a status mark, the help tip's "?": it carries only its accessible name. So does a Files or
+Git tree chevron, whose whole row does what it does (see "Buttons").
 
 A tap does not open that tooltip, and on such a control it must not: a tap on an icon-only button or a menu trigger runs
 its action, so `TitledControl` has no touch popover. A control whose only action is to show its text is a popover hint
@@ -1242,21 +1294,23 @@ refusal through `StatusAnnouncer` instead, again on a repeated refusal in the sa
 
 Every asynchronous refusal or failure reported in reply to an operation the user started opens the dedicated error alert
 dialog and remains there until the user presses its acknowledgement button. Errors never use toasts, timeouts, an
-outside press, Escape or a close button for dismissal. Use HeroUI's `AlertDialog` with its `Icon` set to
-`status="danger"` and a danger acknowledgement button, retaining the library's default visual treatment. The alert takes
-focus and announces its title and body through `role="alertdialog"`, without a second live announcement inside it; the
-body's opening sentence is optional, never restating the title, so an alert without one announces its title and remedy;
-focus lands on the alert itself, not on its first control, also when it opens over a dialog that a press without a
-pointer opened (an assistive technology's press), where Enter on a first control such as Manage accounts would act.
-Distinct failures wait in a queue; repeated copies of a pending failure do not multiply it. An error above a form leaves
-that form available after acknowledgement, with its values and retry action intact. Acknowledging it returns focus to
-where it was; where that is gone, or the dialog under the alert never had focus (the alert came in the same moment as
-the press that opened it), focus goes where that dialog's own opening focus goes — never to the page (see "The error
+outside press, Escape or a close button for dismissal. Use HeroUI's `AlertDialog` (the wrapper layer's `Modal` with
+`alert`) with its icon (`ModalStatusIcon`) set to `status="danger"` and a danger acknowledgement button, retaining the
+library's default visual treatment. The alert takes focus and announces its title and body through `role="alertdialog"`,
+without a second live announcement inside it; the body's opening sentence is optional, never restating the title, so an
+alert without one announces its title and remedy; focus lands on the alert itself, not on its first control, also when
+it opens over a dialog that a press without a pointer opened (an assistive technology's press), where Enter on a first
+control such as Manage accounts would act. Distinct failures wait in a queue; repeated copies of a pending failure do
+not multiply it. An error above a form leaves that form available after acknowledgement, with its values and retry
+action intact. Acknowledging it returns focus to where it was (over a busy dialog, the pending button, from which focus
+then goes on to the control the busy dialog took it from or to the field the dialog names: see the busy dialog paragraph
+under "Buttons"); where that is gone, or the dialog under the alert never had focus (the alert came in the same moment
+as the press that opened it), focus goes where that dialog's own opening focus goes — never to the page (see "The error
 alert" in `docs/product/error-alerts.md` for the full order). The control a dialog opens on is marked for this with
-`openingFocus` (`packages/ui/src/components/focus/modalFocus.ts`), which `Button` and `TextInput` set from their
-`autoFocus`; a dialog that puts its opening focus anywhere else by hand marks that control itself. A pending question (a
-trust prompt, a session request) that closes with nowhere to return focus to lands the same way, and so does Settings
-closing with no opener left to return to.
+`openingFocus` (`packages/ui/src/primitives/focus.ts`), which the wrapper layer's `Button`, text fields and search field
+set from their `autoFocus`; a dialog that puts its opening focus anywhere else by hand marks that control itself. A
+pending question (a trust prompt, a session request) that closes with nowhere to return focus to lands the same way, and
+so does Settings closing with no opener left to return to.
 
 The alert, and a pending question, stay usable whatever comes up with them. One that comes up in the same moment as
 another modal — a dialog that a dialog opens as it mounts, or the alert and a question together — is on top and holds
@@ -1334,8 +1388,8 @@ field's value wrong is that field's `FieldError` (rule 2) — while one that lea
 list) is a warning mark after the field's label; a reason a dialog cannot proceed that lies outside its fields sits in
 an Alert at the top of its body.
 
-The Alert holds, beside `Alert.Indicator`: an `Alert.Title` saying what happened, then at most two sentences in the
-application's own words: an `Alert.Description` saying why, when that is known, and a second one with the one main thing
+The Alert holds, beside `AlertIndicator`: an `AlertTitle` saying what happened, then at most two sentences in the
+application's own words: an `AlertDescription` saying why, when that is known, and a second one with the one main thing
 to do about it. At its end, in the place HeroUI's own Alert puts its action button, stand at most two buttons:
 **Details** when there is more to show, then the recovery action when there is one (Try again, or the action that fixes
 it) at the trailing edge, where the primary button of a trailing-aligned group goes (see "Button order follows the
@@ -1367,9 +1421,9 @@ are not part of the Alert and stand around it, as below.
 
 The Alert is HeroUI's `Alert`, through `ErrorAlert`, for danger and for a warning alike. It takes its status background
 fill and status-coloured shadow (see "Confirmed visual choices") as its only custom visual treatments;
-indicator, typography, spacing, radius and component structure stay stock HeroUI. A danger title uses `Alert.Title` with
-its original status colour; `Alert.Description` keeps its default colour. Do not apply `text-foreground` or another
-colour override to either part, override text sizes, or replace `Alert.Title` with a heading element. Neutral absence,
+indicator, typography, spacing, radius and component structure stay stock HeroUI. A danger title uses `AlertTitle` with
+its original status colour; `AlertDescription` keeps its default colour. Do not apply `text-foreground` or another
+colour override to either part, override text sizes, or replace `AlertTitle` with a heading element. Neutral absence,
 loading and unsupported content keep their state presentations.
 
 #### A whole subject that failed
@@ -1583,8 +1637,8 @@ failure in a row is a mark.
 ### References in copy use `InlineReference`
 
 `InlineReference`, backed by HeroUI Chip, has one job: marking a reference mixed into running copy, where Markdown would
-write `` `xxx` `` and plain prose would use quotation marks. It is the only component for that; do not use HeroUI's
-`Typography.Code`, a raw `code` element, HeroUI `Chip` directly or a hand-built pill for a reference in copy. It is not
+write `` `xxx` `` and plain prose would use quotation marks. It is the only component for that; do not use a raw
+`code` element, the layer's `Code` or `Chip` directly, or a hand-built pill for a reference in copy. It is not
 a badge: a status or qualifier after a name is a `StatusBadge` (see "Confirmed visual choices"), and a name shown on
 its own is plain text.
 
@@ -1681,10 +1735,12 @@ Syntax-highlighted source and foreign renderer markup retain their own palettes.
 ### External links
 
 Application-authored links that leave the app use `ExternalLink` with a real destination and a visible trailing
-external-link icon. The destination remains available to keyboard users and the browser's link actions. The icon
-is decorative; the localized accessible description explains that the link opens in the browser. Browser links
-open a new tab with `noopener noreferrer`; the desktop app uses its platform link adapter. An unavailable or failed
-opener produces the dedicated actionable error alert rather than navigating the desktop window.
+external-link icon. The destination remains available to keyboard users and the browser's link actions, except while its
+dialog is busy (see the busy dialog paragraph under "Buttons"), when the link has no destination: one in the text
+appearance takes the secondary text colour without its underline, and one in the button appearance takes the button's
+disabled look. The icon is decorative; the localized accessible description explains that the link opens in the browser.
+Browser links open a new tab with `noopener noreferrer`; the desktop app uses its platform link adapter. An unavailable
+or failed opener produces the dedicated actionable error alert rather than navigating the desktop window.
 
 The appearance follows the context the link stands in, not a fixed list of places. A link inside prose, or one standing
 on its own where nothing beside it is a button (a settings row's View license, the About section's Website, GitHub
@@ -1709,7 +1765,7 @@ markup retain their renderer's content model.
 ### A visual heading is a heading element
 
 Text drawn to read as a heading is `<h1>`-`<h6>`, never a `<p>` carrying a heavier weight: the structure a screen
-reader navigates by is the element, not the look. HeroUI's `Alert.Title` keeps its original element and styling as
+reader navigates by is the element, not the look. HeroUI's `AlertTitle` keeps its original element and styling as
 part of the stock Alert structure; it is not a page or section heading. Put a page or section heading outside the
 Alert when the surrounding content needs one.
 
@@ -1720,7 +1776,7 @@ it carries its own size and colour instead. `EmptyPanel`'s full panel is the cas
 
 A heading also never outranks the one above it. `EmptyPanel` takes `headingLevel` for that: its heading stands at the
 level of the heading naming whatever it fills, so the two read as one thing. The default `<h2>` is the level of a
-pane's own title (`ArchiveView`, `ProjectBrowser`) and of a dialog's, which react-aria sets for every `Frame.Heading`.
+pane's own title (`ArchiveView`, `ProjectBrowser`) and of a dialog's, which react-aria sets for every `ModalHeading`.
 The sidebar's empty lists use compact rows instead, which add no heading to the outline. Markdown rendered inside a
 view that has its own heading (an agent reply in a session's history) is rendered `embedded`: its headings start one
 level below that view's, and it sets no heading ids, since several such documents share one page.
@@ -1914,7 +1970,7 @@ the surface in both appearances.
 ### Clear buttons
 
 The clear action inside a search field or an optional select uses the shared `FieldClearButton`: the application's
-`Button` with `isIconOnly`, `size="xs"` and `variant="ghost"`, and a localized Clear tooltip and accessible name. It
+`Button` with `iconOnly`, `size="xs"` and `variant="ghost"`, and a localized Clear tooltip and accessible name. It
 stays transparent at rest. Since a filled field uses the standard ghost button's hover colour itself, the clear button
 overrides only the button's hover and press fill tokens: the local foreground blended at 16% and 24% over the actual
 field, respectively. This gives visible feedback on grey fields in both themes, including dialogs and popovers; the
@@ -2067,8 +2123,8 @@ dark material is a grey far lighter than dark `--chrome`.
 ## Pointer target size
 
 A control's pointer target is at least 24 by 24 CSS pixels (WCAG 2.2 AA 2.5.8). HeroUI's own sizes already clear it —
-its smallest icon-only button is 32. The application uses `components/controls/Button.tsx` for every Button, extending
-HeroUI with `size="xs"`: 24px height, a 24px square for icon-only buttons, 12px text and 14px icons.
+its smallest icon-only button is 32. The application uses the wrapper layer's `Button` (`packages/ui/src/primitives/Button.tsx`) for every Button,
+extending HeroUI with `size="xs"`: 24px height, a 24px square for icon-only buttons, 12px text and 14px icons.
 Compact actions use that size rather than per-call sizing styles.
 
 Icon buttons in sidebar rows, cards and headers, the right pane and the file viewer share a 24-by-24-pixel target and a

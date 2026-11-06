@@ -205,7 +205,7 @@ export function ShellTimeoutCommand({ params: { shell, command, timeout } }: { p
   );
 }
 
-/** Structured failures retain their metadata; `summary` is inline-safe for Alert.Description (empty for a code with
+/** Structured failures retain their metadata; `summary` is inline-safe for AlertDescription (empty for a code with
  * `noSummary`), `remedy` holds the one main thing to do (also inline-safe) and `details` the further explanation, then
  * the raw blocks (`further` and `raw` apart). Omitting `part` renders the complete message in the application's own
  * words: the sentence, the remedy and the further explanation, never the raw text; a code with `noSummary` has no

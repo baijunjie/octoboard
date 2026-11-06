@@ -1,11 +1,11 @@
 import React from "react";
-import { mergeRefs } from "react-aria";
 
 import { Hint } from "../components/hint/Hint";
 import { PopoverOwnerContext } from "../components/hint/popoverOwner";
 import { ChromeButton } from "./ChromeButton";
 import { CloseWhenCovered } from "./CloseWhenCovered";
 import { nestedPopovers } from "./nestedPopover";
+import { mergeRefs } from "../primitives";
 
 /** What the panel's content is given while the popover is up. */
 interface RailPanelState {
@@ -53,7 +53,7 @@ export function RailPanelEntry({ owner, label, triggerId, triggerLabel, triggerR
       // though the pointer did not move. That must not close the panel and take the popover with it.
       holdsOpen={() => nested.opened().length > 0}
       onOpenChange={onOpenChange}
-      trigger={({ ref, onHoverStart: _start, onHoverEnd: _end, preventFocusOnPress: _prevent, onMouseHoverChange, ...wiring }) => (
+      trigger={({ ref, focusOnPress: _focusOnPress, onMouseHoverChange, ...wiring }) => (
         <ChromeButton
           badge={badge}
           id={triggerId}

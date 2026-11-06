@@ -17,6 +17,7 @@ import { applyDaemonEvent, DaemonProvider, type Daemon, type State } from "./sto
 import { ThemeProvider } from "./preferences/theme";
 import { testDaemon } from "./test/testDaemon";
 import { matchesWidthQuery } from "./test/viewport";
+import { partSelector } from "./primitives";
 
 const CSS_VARS = { "--rail-width": "48px", "--breakpoint-tablet": "768px", "--breakpoint-phone": "390px" };
 
@@ -98,7 +99,7 @@ export function pressElement(element: HTMLElement | null | undefined): Promise<v
 
 /** Presses the open menu's item `label`, opening its submenu where it has one. */
 export async function pressMenuItem(label: string): Promise<void> {
-  const item = Array.from(document.querySelectorAll<HTMLElement>("[role=menuitem], [role=menuitemradio]")).find((element) => (element.querySelector('[data-slot="label"]')?.textContent ?? element.textContent) === label);
+  const item = Array.from(document.querySelectorAll<HTMLElement>("[role=menuitem], [role=menuitemradio]")).find((element) => (element.querySelector(partSelector.itemLabel)?.textContent ?? element.textContent) === label);
   expect(item, label).toBeDefined();
   await act(async () => {
     if (item!.hasAttribute("aria-haspopup")) {

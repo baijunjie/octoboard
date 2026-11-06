@@ -153,7 +153,6 @@ export function ConsoleDialog({
               icon={icon}
               onPick={chooseImage}
               onRemove={() => setIcon(null)}
-              isDisabled={busy}
               isPending={decoding}
             />
           </div>

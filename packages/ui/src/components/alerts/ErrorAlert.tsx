@@ -1,10 +1,10 @@
-import { Alert } from "@heroui/react";
 import React from "react";
 
 import { AlertStatusContext } from "./AlertButton";
 import { AlertFrame, type AlertStatus } from "./AlertFrame";
 import { DetailsButton } from "./DetailsButton";
 import { useAlertAnnouncement } from "../announce/useAlertAnnouncement";
+import { AlertContent, AlertDescription, AlertIndicator, AlertTitle } from "../../primitives";
 
 export type { AlertStatus };
 
@@ -13,7 +13,7 @@ export type { AlertStatus };
  * whole area laid out top down, or one about the whole view; never a whole subject that failed (`EmptyPanel`) or one
  * at a point (`StatusMark`). It is shown here and nowhere else. The Alert is compact ("Errors shown among other
  * content" in `docs/ui-standard.md`): the `title`, required, saying what happened; `children`, the one short
- * description, which says why rather than repeating the title (inline content only, since `Alert.Description` is a
+ * description, which says why rather than repeating the title (inline content only, since `AlertDescription` is a
  * `span`); then `remedy`, the one main thing to do about it, also always visible and also inline content, so the
  * visible copy is at most two sentences in the application's own words; then at its end, where HeroUI's own Alert puts
  * its action, the buttons. `actions` is the recovery button (Try again) and `details` everything else, which a Details
@@ -70,14 +70,14 @@ export function ErrorAlert({
   return (
     <div id={id} className={`min-w-0 shrink-0 text-start ${className}`}>
       <AlertFrame status={status} className="flex-wrap">
-        <Alert.Indicator aria-hidden="true" />
-        <Alert.Content className="min-w-40 basis-0">
+        <AlertIndicator />
+        <AlertContent className="min-w-40 basis-0">
           <div id={textId} key={announcement.key} role={announcement.role} className="flex min-w-0 max-w-full flex-col items-start">
-            <Alert.Title>{title}</Alert.Title>
-            {children && <Alert.Description>{children}</Alert.Description>}
+            <AlertTitle>{title}</AlertTitle>
+            {children && <AlertDescription>{children}</AlertDescription>}
           </div>
-          {remedy && <Alert.Description>{remedy}</Alert.Description>}
-        </Alert.Content>
+          {remedy && <AlertDescription>{remedy}</AlertDescription>}
+        </AlertContent>
         {(actions || details) && (
           <div className="ms-auto flex shrink-0 items-center gap-2">
             <AlertStatusContext.Provider value={status}>

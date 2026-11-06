@@ -1,4 +1,3 @@
-import { Meter } from "@heroui/react";
 import React from "react";
 
 import { Message, useT } from "../i18n/react";
@@ -7,6 +6,7 @@ import { useNow } from "../format/useNow";
 import { PROVIDER_FILL_CLASS, providerFillVars } from "./providerFill";
 import { QuotaWindowName } from "./quotaCopy";
 import { quotaResetsIn, quotaWindowLabel, remainingPercentAt, type QuotaNaming } from "../accounts/quotaFormat";
+import { Meter } from "../primitives";
 
 /** The line above or beneath a quota bar: the window's headline ("5h 82% remaining") with the
  * countdown to its reset ("resets in 1h 57m") at its end. It is hidden from assistive technology,
@@ -37,16 +37,13 @@ function MeterBar({ agent, naming, window, resets, percent, thin, muted, classNa
   const t = useT();
   return (
     <Meter
-      aria-label={quotaWindowLabel(t, naming, window)}
+      label={quotaWindowLabel(t, naming, window)}
       value={percent}
       valueLabel={resets ? t("quota.meterValueResets", { percent, resets }) : t("quota.meterValue", { percent })}
       className={`gap-0 ${muted ? "quota-meter--used-up" : PROVIDER_FILL_CLASS} ${className}`}
       style={muted ? undefined : providerFillVars(agent)}
-    >
-      <Meter.Track className={thin ? "h-1.5" : undefined}>
-        <Meter.Fill />
-      </Meter.Track>
-    </Meter>
+      trackClassName={thin ? "h-1.5" : undefined}
+    />
   );
 }
 

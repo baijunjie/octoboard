@@ -1,10 +1,10 @@
-import { setInteractionModality } from "react-aria";
 import { useCallback, useEffect, useRef } from "react";
 
 import { focusOpenDialog } from "../components/focus/modalFocus";
 import { focusRegion, regionElements, type Region } from "../components/focus/regionFocus";
 import { MODAL_OPEN } from "../components/focus/selectors";
 import { useLatest } from "../components/hooks/useLatest";
+import { setKeyboardModality } from "../primitives";
 
 /** The window's regions in visual order, each an element (or several) marked `data-region`. The
  * panels of the right pane, each a stop of its own, come after the terminal: the caller names
@@ -58,7 +58,7 @@ export function useRegionCycle({
     const regions = windowRegions(Object.keys(panels));
     if (document.querySelector(MODAL_OPEN)) {
       if (document.querySelector('[role="menu"]') || !shown.banner) return;
-      setInteractionModality("keyboard");
+      setKeyboardModality();
       if (currentRegion(regions) === "banner") focusOpenDialog(dialogFocus.current);
       else {
         dialogFocus.current = document.activeElement;
@@ -75,7 +75,7 @@ export function useRegionCycle({
       if (region !== "toast" && !(region in panels ? panels[region] : shown[region as ShownRegion])) continue;
       // F6 is a keyboard action, but react-aria may still think the last input was a pointer
       // (a click inside the terminal, say) and then draws no focus ring on what lands.
-      setInteractionModality("keyboard");
+      setKeyboardModality();
       if (focusRegion(region, focusTerminal)) break;
     }
   }, [latest]);

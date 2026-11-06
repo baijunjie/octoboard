@@ -1,9 +1,6 @@
-import { AlertDialog, Input, Label, TextField } from "@heroui/react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { Button } from "../controls/Button";
 import { InlineReference } from "../../i18n/InlineReference";
-import { openingFocus } from "../focus/modalFocus";
 import type { AcknowledgementView } from "../alerts/errorAlerts";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type { ErrorRecovery } from "../../errors/errorRecovery";
@@ -11,6 +8,7 @@ import { Dialog } from "./Dialog";
 import { useDialogAction, useFocusLeavingWhenDisabled } from "./dialogHooks";
 import { dialogAround } from "./dialogElement";
 import { useTrimmedField } from "../form/useTrimmedField";
+import { Button, Input, Label, ModalStatusIcon, TextField } from "../../primitives";
 
 export interface ConfirmDialogProps {
   /** A plain name for what the dialog does ("Delete session"), the same whatever it is opened on: the subject goes in
@@ -38,9 +36,9 @@ export interface ConfirmDialogProps {
   /** Keeps the question out of what a modal mounting in the same commit hides (see `Dialog`'s `topLayerAtMount`). */
   topLayerAtMount?: boolean;
   /** A control shown under the message that settles what Confirm does, such as a checkbox widening
-   * what the action covers; the caller holds its state and reads it in `onConfirm`. A function is
-   * given whether `onConfirm` is running, for a control to freeze while it does. */
-  extraControl?: React.ReactNode | ((busy: boolean) => React.ReactNode);
+   * what the action covers; the caller holds its state and reads it in `onConfirm`. While `onConfirm` runs the dialog
+   * is busy, which disables it. */
+  extraControl?: React.ReactNode;
   /** What the action takes along or takes away, as body text under the options and over the buttons, so that a line
    * it gains when an option is ticked moves no checkbox. A confirmation with it, like a destructive
    * one, is a warning modal: the warning icon leads its header. */
@@ -129,7 +127,7 @@ export function ConfirmDialog({
     dialogRef.current = dialogAround(confirmRef) ?? null;
   });
   const fallbackRef = hideCancel ? dialogRef : cancelRef;
-  useFocusLeavingWhenDisabled(confirmRef, !confirmed, fallbackRef);
+  useFocusLeavingWhenDisabled(confirmRef, !confirmed, fallbackRef, () => dialogRef.current);
   const opensOnConfirm = !destructive && !unprompted && word === undefined;
   // The `autoFocus` below is react-aria's, which for a press without a pointer (assistive technology,
   // a script) waits until no transition is running anywhere on the page, and never comes while one
@@ -144,12 +142,12 @@ export function ConfirmDialog({
   const footer = (
     <>
       {!hideCancel && (
-        <Button ref={cancelRef} type="button" variant="secondary" onPress={onCancel} isDisabled={busy} autoFocus={opensOnConfirm && !confirmed}>
+        <Button ref={cancelRef} type="button" variant="secondary" onPress={onCancel} autoFocus={opensOnConfirm && !confirmed}>
           {cancelLabel ?? t("common.cancel")}
         </Button>
       )}
       {otherAction && (
-        <Button type="button" variant="secondary" onPress={otherAction.onPress} isDisabled={busy}>
+        <Button type="button" variant="secondary" onPress={otherAction.onPress}>
           {otherAction.label}
         </Button>
       )}
@@ -158,15 +156,15 @@ export function ConfirmDialog({
           so Enter confirms at once, unless the action is destructive or the question unprompted:
           there Enter must not be the way in, and focus stays on the dialog until the user moves it.
           A typed word takes focus for its field instead. */}
-      <Button ref={confirmRef} type="submit" variant={destructive ? "danger" : "primary"} isPending={busy || waiting}
-        isDisabled={!confirmed} autoFocus={opensOnConfirm && confirmed}>
+      <Button ref={confirmRef} type="submit" variant={destructive ? "danger" : "primary"} pending={busy || waiting}
+        disabled={!confirmed} autoFocus={opensOnConfirm && confirmed}>
         {confirmLabel ?? t("common.confirm")}
       </Button>
     </>
   );
 
   return (
-    <Dialog title={title} headerLeading={destructive || consequences !== undefined ? <AlertDialog.Icon status="warning" /> : undefined} onClose={onCancel} busy={busy} footer={footer} failure={failure} resetKey={resetKey} focusesItselfOnOpen={unprompted} topLayerAtMount={topLayerAtMount} size={size} onSubmit={() => confirmed && !busy && !waiting && void run(onConfirm)} alert>
+    <Dialog title={title} headerLeading={destructive || consequences !== undefined ? <ModalStatusIcon status="warning" /> : undefined} onClose={onCancel} busy={busy} footer={footer} failure={failure} resetKey={resetKey} focusesItselfOnOpen={unprompted} topLayerAtMount={topLayerAtMount} size={size} onSubmit={() => confirmed && !busy && !waiting && void run(onConfirm)} alert>
       {typeof message === "string" ? (
         // The separator (a space in English, nothing in Chinese) joins the message's own text node: VoiceOver drops a text
         // node that is only whitespace, and would run the two sentences together.
@@ -177,7 +175,7 @@ export function ConfirmDialog({
           {message}
         </div>
       )}
-      {typeof extraControl === "function" ? extraControl(busy) : extraControl}
+      {extraControl}
       {consequences}
       {word !== undefined && (
         <TextField
@@ -191,7 +189,7 @@ export function ConfirmDialog({
           </Label>
           {/* Capitals by styling rather than by rewriting the value: rewriting a controlled value
               mid-composition breaks an input method's composition. */}
-          <Input {...openingFocus(true)} dir="ltr" placeholder={t("dialog.typeToConfirm.example", { word })} className="uppercase" autoComplete="off" spellCheck={false} />
+          <Input dir="ltr" placeholder={t("dialog.typeToConfirm.example", { word })} className="uppercase" autoComplete="off" spellCheck={false} />
         </TextField>
       )}
     </Dialog>

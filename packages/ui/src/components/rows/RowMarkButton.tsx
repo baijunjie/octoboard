@@ -1,9 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 import React, { type RefObject, useRef } from "react";
 
-import { Button } from "../controls/Button";
 import { handFocusOff } from "../focus/handFocusOff";
 import { TitledControl } from "../hint/TitledControl";
+import { Button } from "../../primitives";
 
 /** The mark of a pinned or locked row, which is also the way to take it off: its glyph becomes
  * `hoverIcon` while the button is hovered or holds keyboard focus. Placed like `RowIconButton`, so
@@ -32,11 +32,11 @@ export function RowMarkButton({
     <div ref={holder} className="flex shrink-0" onClick={(e) => e.stopPropagation()}>
       <TitledControl title={tooltip}>
         <Button
-          isIconOnly
+          iconOnly
           size="xs"
           variant="ghost"
-          aria-label={label}
-          preventFocusOnPress
+          label={label}
+          focusOnPress={false}
           onPress={() => {
             handFocusOff(holder.current, returnFocusTo.current, true);
             onPress();

@@ -1358,27 +1358,6 @@ html.pane-resizing * {
   inset-inline-end: 1.75rem;
 }
 
-/* A hovered tab keeps full opacity; HeroUI dims it. Both of HeroUI's hover selectors are matched: react-aria's
-   `data-hovered` outlives `:hover` by a frame when the pointer leaves, and dimming in that frame starts an
-   opacity transition that has WKWebView repaint the whole masked tab strip, shaking every tab's icon and label.
-   An approved exception (`docs/ui-standard.md`'s "Confirmed visual choices"). In `@layer components`, after
-   HeroUI's rule. */
-@layer components {
-  .tabs__tab:not([data-selected="true"]):not([data-disabled="true"]):hover,
-  .tabs__tab[data-hovered="true"]:not([data-selected="true"]):not([data-disabled="true"]) {
-    opacity: 1;
-  }
-
-  /* Every tab keeps its own composited layer, so WKWebView does not shift its rasterized icon and label between
-     pixel rows while the selection indicator moves inside the strip's masked scroller. Set here, for every tab,
-     rather than at each strip, so no strip is left without it. HeroUI's tab is already `position: relative;
-     z-index: 1`, so the only new effect of the transform is that the tab becomes the containing block for
-     `position: fixed` descendants too. */
-  .tabs__tab {
-    transform: translateZ(0);
-  }
-}
-
 @media (prefers-reduced-motion: no-preference) {
   .panel-switch::after {
     content: "";

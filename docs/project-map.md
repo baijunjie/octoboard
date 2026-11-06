@@ -36,7 +36,8 @@ code must use.
 - [Daemon](structure/daemon.md) — `apps/daemon/` ([README](../apps/daemon/README.md)): `octoboardd`, the core of the
   system; owns every agent process and all of Octoboard's data.
 - [UI](structure/ui.md) — `packages/ui/` ([README](../packages/ui/README.md)): the React UI of the desktop application,
-  with the dev-only state gallery, the fixtures runtime and the website preview build.
+  which reaches HeroUI and React Aria only through its wrapper layer (`src/primitives/`), with the dev-only state
+  gallery, the fixtures runtime and the website preview build.
 - [Desktop shell](structure/desktop.md) — `apps/desktop/` ([README](../apps/desktop/README.md)): the Tauri 2 macOS shell
   with its build, install and release scripts; loads the UI and starts the daemon as a sidecar.
 - [Website](structure/web.md) — `apps/web/` ([README](../apps/web/README.md)): the public Nuxt website.

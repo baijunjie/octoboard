@@ -2,18 +2,10 @@ import { ringForAutomaticFocus } from "../../input/touchInput";
 import { focusFirstIn, focusRegion, type Region } from "./regionFocus";
 import { MODAL_DIALOG } from "./selectors";
 
-/** Marks the control a dialog's opening focus goes to, the one given `autoFocus`: react-aria leaves no trace of it in
- * the page, and for a press without a pointer it drops that focus if anything else took focus first (an alert raised as
- * the dialog opens), so `focusOpenDialog` finds it by this mark. `Button` and `TextInput` set it from their `autoFocus`;
- * a dialog that focuses a control of its own on opening sets it on that control. */
-export function openingFocus(autoFocus: boolean | undefined): { "data-opening-focus"?: "" } {
-  return autoFocus ? { "data-opening-focus": "" } : {};
-}
-
 /** Returns to the foremost modal instead of an inert window region. A remembered control is
  * preferred while it still belongs to that dialog; the dialog itself survives replaced content.
  * With `opening`, focus that has no remembered control goes where the dialog's opening focus goes
- * (the control it opens on, marked by `openingFocus`) rather than to the dialog: the
+ * (the control it opens on, marked by `openingFocus` of `primitives`) rather than to the dialog: the
  * dialog may never have had that focus, and the dialog itself is where only a dialog that opens on
  * itself (a destructive confirmation, an unprompted question) starts. */
 export function focusOpenDialog(previous?: Element | null, { opening = false }: { opening?: boolean } = {}): boolean {

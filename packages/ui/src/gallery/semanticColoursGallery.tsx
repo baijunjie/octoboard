@@ -1,16 +1,15 @@
-import { ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { CircleAlert, Info, Sparkles } from "lucide-react";
 import React, { useEffect, useRef } from "react";
 import { setInteractionModality } from "react-aria";
 
 import { TopStatusMarker } from "../components/status/TopStatusMarker";
-import { Button } from "../components/controls/Button";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { ExternalLink } from "../components/text/ExternalLink";
 import { StatusMark } from "../components/status/StatusMark";
 import { InlineReference } from "../i18n/InlineReference";
 import { StatusBadge, type StatusBadgeColor } from "../components/status/StatusBadge";
 import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
+import { Button, ToggleButton, ToggleButtonGroup } from "../primitives";
 
 /** One semantic meaning and how the application draws it. The role tokens follow docs/ui-standard.md's "One
  * definition per semantic colour"; the purple help colour has no HeroUI token, so its icon colour is its text tint
@@ -171,7 +170,7 @@ export function SemanticColoursGallery(): React.ReactElement {
                 <span className="text-xs text-app-muted">Focus ring, <code className="font-mono">--focus</code>, on a keyboard-focused button.</span>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <ToggleButtonGroup aria-label="Browser mode" selectionMode="single" disallowEmptySelection defaultSelectedKeys={["files"]}>
+                <ToggleButtonGroup label="Browser mode" defaultSelectedKey="files">
                   <ToggleButton id="files" size="sm">Files</ToggleButton>
                   <ToggleButton id="changes" size="sm">Changes</ToggleButton>
                 </ToggleButtonGroup>

@@ -1,11 +1,10 @@
-import { Label, ProgressBar } from "@heroui/react";
 import { CircleCheck, CircleDashed } from "lucide-react";
 import React, { useId } from "react";
 
 import { providerLabel } from "../agents/providers";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
-import { DecorativeSpinner } from "../components/controls/DecorativeSpinner";
 import { useT } from "../i18n/react";
+import { Label, ProgressBar, ProgressBarTrack, Spinner } from "../primitives";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useProviders } from "../store";
 import { CardRows, EntryStatus, SHARED_STATUS, STATUS_TONE, type StatusEntry, StatusLine } from "./importParts";
@@ -29,7 +28,7 @@ function ItemState({ item }: { item: ItemProgress }): React.ReactElement {
   if (item.state === "creating" || item.state === "cloning") {
     return (
       <StatusLine label={WORKING_LABEL[item.state]}>
-        <DecorativeSpinner className="size-4 shrink-0" />
+        <Spinner size="sm" color="current" className="size-4 shrink-0" />
       </StatusLine>
     );
   }
@@ -75,12 +74,12 @@ export function ImportProgressView({ inspection, progress }: { inspection: Inspe
         text={counting && settled === total ? t("configuration.import.progress.allProcessed") : label}
         firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
       />
-      <ProgressBar value={settled} maxValue={Math.max(total, 1)} isIndeterminate={!counting} valueLabel={count} aria-describedby={counting ? undefined : `${id}-value`}>
+      <ProgressBar value={settled} maxValue={Math.max(total, 1)} indeterminate={!counting} valueLabel={count} describedBy={counting ? undefined : `${id}-value`}>
         <div className="flex items-baseline justify-between gap-2 text-sm">
           <Label>{label}</Label>
           <span id={`${id}-value`} className="text-app-muted">{counting ? count : t("configuration.import.progress.starting")}</span>
         </div>
-        <ProgressBar.Track><ProgressBar.Fill /></ProgressBar.Track>
+        <ProgressBarTrack />
       </ProgressBar>
       {inspection.consoles.map((console, c) => {
         const item = progress.get(itemKey({ kind: "console", console: c }));

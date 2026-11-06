@@ -1,7 +1,7 @@
 import React, { createContext, useContext } from "react";
 
-import { Button, type ButtonProps } from "../controls/Button";
 import type { AlertStatus } from "./ErrorAlert";
+import { Button, type ButtonProps } from "../../primitives";
 
 /** The status a button takes its colour from: that of the compact Alert it stands in, or, outside an Alert, of
  * the line it belongs to (a warning line's Details); danger where nothing sets it. */

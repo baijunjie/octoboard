@@ -1,5 +1,6 @@
-import { useTheme } from "@heroui/react";
 import React, { createContext, useContext } from "react";
+
+import { useTheme } from "../primitives";
 
 /** The user's stated intent — "system" means follow the OS, the other two are an explicit override.
  * Matches the values HeroUI's own `useTheme` persists under its `"heroui-theme"` `localStorage`

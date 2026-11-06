@@ -3,7 +3,6 @@ import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "reac
 import { flushSync } from "react-dom";
 
 import { afterCollectionFocus } from "../components/focus/afterCollectionFocus";
-import { Button } from "../components/controls/Button";
 import { CenteredEmptyPanel } from "../components/panel/EmptyPanel";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { errorDetails } from "../components/alerts/errorParts";
@@ -33,6 +32,7 @@ import { ringForAutomaticFocus } from "../input/touchInput";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { useProcessPanelContext } from "./useProcessPanel";
 import { ProcessSessionSelect } from "./ProcessSessionSelect";
+import { Button } from "../primitives";
 
 export function ProcessesPanel(): React.ReactElement | null {
   const data = useProcessPanelContext();
@@ -373,11 +373,11 @@ function TreeRow({ tree, acting, keepable, onStop, onKeep }: {
            revealing them leaves the command and directory at the card's full width. */
         <div className={`${HOVER_ACTIONS_CLASS} items-center gap-1 [@media(hover:none)]:ms-2 group-hover:ms-2 group-focus-within:ms-2`}>
           {keepable && (
-            <Button data-region-landing size="xs" variant="secondary" aria-label={t("processes.keepNamed", { command })} preventFocusOnPress isDisabled={acting} onPress={onKeep}>
+            <Button data-region-landing size="xs" variant="secondary" label={t("processes.keepNamed", { command })} focusOnPress={false} disabled={acting} onPress={onKeep}>
               {t("processes.keep")}
             </Button>
           )}
-          <Button data-region-landing={keepable ? undefined : true} size="xs" variant="danger-soft" aria-label={t("processes.stopNamed", { command })} preventFocusOnPress isDisabled={acting} onPress={onStop}>
+          <Button data-region-landing={keepable ? undefined : true} size="xs" variant="danger-soft" label={t("processes.stopNamed", { command })} focusOnPress={false} disabled={acting} onPress={onStop}>
             {t("processes.stop")}
           </Button>
         </div>

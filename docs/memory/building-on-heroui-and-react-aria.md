@@ -30,14 +30,16 @@ ARIA region semantics.
   `packages/ui/node_modules/@heroui/react/dist/components/` for `children ??` or `children ||`: where the default
   follows the parent, pass none and let the variant pick; where it is a fixed stand-in (`CloseButton`'s cross, a
   `MenuItem`'s submenu chevron), pass children only to put a different one there.
-- The project's existing wrappers over a HeroUI component (`Dialog` over `Modal`, `ActionMenu` over `Dropdown`), and
-  the shared dialogs built on those, are that component; use the wrapper where one exists. Where the wrapper's shape
-  cannot hold what is being built, assemble the HeroUI component's own parts instead, rather than widening the wrapper
-  with a switch that only the one case would ever pass, and put a comment at the component saying why it is not built
-  on the wrapper.
+- Application code reaches HeroUI and React Aria only through the wrapper layer, `src/primitives/` (its
+  README, and "Third-party UI components come through the wrapper layer" in `docs/ui-standard.md`); what this note
+  says about a HeroUI component's parts applies to writing its wrapper there. The project's composites built on a
+  wrapper (`Dialog` over the modal, `ActionMenu` over the dropdown), and the shared dialogs built on those, are that
+  component; use the composite where one exists. Where its shape cannot hold what is being built, build on the
+  wrapper's parts instead, rather than widening the composite with a switch that only the one case would ever pass,
+  and put a comment at the component saying why it is not built on the composite.
 - A hand-built element is acceptable only when HeroUI has no equivalent, or its equivalent cannot meet a stated
-  requirement. Then build it on react-aria / react-aria-components hooks, as HeroUI itself is, not on bare DOM event
-  handling, and put a comment at the component saying why HeroUI's is not used (a design-intent comment under the
+  requirement. Then build it on the layer's React Aria hooks, as HeroUI itself is built on React Aria, not on bare
+  DOM event handling, and put a comment at the component saying why HeroUI's is not used (a design-intent comment under the
   "Comment conventions" section of `.claude/skills/agent-docs/SKILL.md`).
 
 ## A HeroUI control's size follows the window's width, one step larger below 48rem
@@ -109,15 +111,26 @@ Giving the pointer back inside a `Label` changes two more things, neither visibl
   choices" in `docs/ui-standard.md`; anywhere else it is a change of HeroUI's look and goes by "Do not change how
   a HeroUI component looks" there.
 
-## An ancestor's context decides a react-aria element's props, so the default in its own file is not what renders
+## An ancestor's context fills a react-aria element's unset props, and any value passed at the element beats it
 
-A react-aria-components element merges a context value over the props it was given (`useContextProps`), and a parent
-that treats one as a known part supplies that value per slot, so a default written in the element's own file can be
-replaced from above with nothing at the call site to show it: react-aria's `Heading` defaults to `level = 3`, but a
-`Dialog` sets its `title` slot to `level: 2`, so HeroUI's `Modal.Heading` and `AlertDialog.Heading` — each a `Heading
-slot="title"`, and rendered in this project as `Frame.Heading` (`packages/ui/src/components/dialog/Dialog.tsx`, where `Frame` is
-one of those two) — render `h2`, and a heading inside a panel that can appear in a dialog is pitched against that
-rather than against `h3`.
+A react-aria-components element merges the props it was given over a context value (`useContextProps`, through
+react-aria's `mergeProps`, where every key not `undefined` wins), and a parent that treats one as a known part supplies
+that value per slot. Neither direction shows at the call site.
+
+Any value passed at the element, an explicit `false` included, replaces what the parent supplies. So a wrapper in
+`packages/ui/src/primitives/` passes a react-aria prop only when its caller set the project prop behind it, never one
+computed from the wrapper's own default: `excludeFromTabOrder: !tabStop`, with `tabStop` defaulting to `true`, sent
+`false` over the `SearchField`'s context and made its clear button a Tab stop that took focus on press. Write such a
+mapping as `tabStop === false || undefined`. A HeroUI part is the opposite trap: some spread `...props` after values
+they set themselves (`ModalBackdrop`'s `data-slot`), so a key present with the value `undefined` erases what the part
+set; pass optional props to a HeroUI part through `definedProps` (`packages/ui/src/primitives/props.ts`), which drops
+such keys.
+
+An unset prop, in turn, takes the parent's value, so a default written in the element's own file can be replaced from
+above: react-aria's `Heading` defaults to `level = 3`, but a `Dialog` sets its `title` slot to `level: 2`, so HeroUI's
+`Modal.Heading` and `AlertDialog.Heading` — each a `Heading slot="title"`, and drawn in this project by the wrapper
+layer's `ModalHeading` (`packages/ui/src/primitives/Modal.tsx`, which picks the one that matches the modal's kind) —
+render `h2`, and a heading inside a panel that can appear in a dialog is pitched against that rather than against `h3`.
 
 So settle what such an element puts in the DOM on a render — a jsdom test asserting the tag, or the running page —
 rather than on the default read off its own file under `packages/ui/node_modules/`, which an ancestor's context may
@@ -203,14 +216,14 @@ Tab onto such a panel then drops focus to `<body>`, since the render on that foc
 panel's `tabindex` away. A jsdom test catches it by making the late change and asserting the `tabpanel` has no
 `tabindex` afterwards.
 
-## `Tabs.Indicator` only on a strip whose tabs are fixed
+## The tab indicator only on a strip whose tabs are fixed
 
-HeroUI's `Tabs.Indicator` is react-aria-components' `SelectionIndicator`, which slides from tab to tab with a
-shared-element transition. When the newly selected tab renders again within the frame it was selected in, that
-transition is left stuck part-way, and a tab created and selected in one go always renders again then. So in
-`packages/ui`, use `Tabs.Indicator` only where the set of tabs does not change while the strip is shown; a strip that
-adds a tab and selects it at once draws the selected tab's fill on the tab itself (`data-[selected=true]:` classes
-carrying the indicator's fill and shadow), as the Terminal panel's strip in
+HeroUI's `Tabs.Indicator`, which the wrapper layer's `Tab` draws unless `indicator={false}`, is react-aria-components'
+`SelectionIndicator`, which slides from tab to tab with a shared-element transition. When the newly selected tab renders
+again within the frame it was selected in, that transition is left stuck part-way, and a tab created and selected in one
+go always renders again then. So in `packages/ui`, give a `Tab` its indicator only where the set of tabs does not change
+while the strip is shown; a strip that adds a tab and selects it at once draws the selected tab's fill on the tab itself
+(`data-[selected=true]:` classes carrying the indicator's fill and shadow), as the Terminal panel's strip in
 `packages/ui/src/terminal/shell/ShellTerminalPanel.tsx` does.
 
 ## Wiring a tooltip: what `TitledControl` and the other wrappers silently fail on
@@ -227,9 +240,9 @@ warns about:
   tooltip. Every HeroUI button and trigger does; a plain element or a `span` around the control gets none, and neither
   does a react-aria collection item (`ListBox.Item`, built on `useOption` / `useSelectableItem`), which reads as a
   react-aria-components control and is not one for this purpose; a mark inside such an item still takes
-  `IndicatorTooltip` as usual. Never wrap a control in a bare `Tooltip.Trigger`: it renders a focusable
-  `role="button"` `div` around the control, an extra tab stop that also takes focus on a mouse press, undoing
-  `preventFocusOnPress`.
+  `IndicatorTooltip` as usual. Never wrap a control in the wrapper layer's `TooltipTrigger`: it is the trigger for a mark that is
+  no control, an element of its own with a role of its own put around what it wraps; HeroUI's tooltip trigger under it
+  is a focusable `role="button"` `div`.
 - A control whose hover goes to a hidden input never opens a `TitledControl` on hover: around a HeroUI `Switch` the
   hover props reach the visually hidden input through `useSwitch` / `useToggle`, and around `Switch.Content` they reach
   nothing, since its `SwitchButton` does not consume `FocusableContext`. The shape such a control takes is in the

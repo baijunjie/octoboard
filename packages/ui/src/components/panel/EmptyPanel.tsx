@@ -1,10 +1,9 @@
-import { EmptyState, Surface } from "@heroui/react";
 import type { LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
-import { Button } from "../controls/Button";
 import { TitledControl } from "../hint/TitledControl";
 import { useAlertAnnouncement } from "../announce/useAlertAnnouncement";
+import { Button, EmptyState, Surface } from "../../primitives";
 
 /** `ErrorAlert`'s announcement of a failure panel. */
 interface Announcement {
@@ -119,7 +118,7 @@ export function EmptyPanel({
     );
     // `min-h-8` on both forms is the sidebar rows' height (`TreeRow`): a row standing in for them
     // takes up the line one of them would, so the list does not jump when its first row arrives.
-    if (!action) return <EmptyState aria-hidden={silent} className="flex min-h-8 items-center gap-2 py-1 ps-2 pe-1">{row}</EmptyState>;
+    if (!action) return <EmptyState silent={silent} className="flex min-h-8 items-center gap-2 py-1 ps-2 pe-1">{row}</EmptyState>;
     // Named by its visible message and then by what a press does: the message has to be inside the
     // name verbatim (WCAG 2.2 A 2.5.3), and the action says what the row is, which the message
     // alone does not. Two referenced elements rather than one joined string, so neither half is a
@@ -134,13 +133,13 @@ export function EmptyPanel({
         <TitledControl title={action.label}>
           <Button
             variant="ghost"
-            aria-labelledby={`${messageId} ${actionId}`}
+            labelledBy={`${messageId} ${actionId}`}
             // The tooltip says the action and nothing more, which the name already ends with, so it
             // is not also this row's description — `TitledControl` drops a tooltip that repeats an
             // `aria-label` by itself, but cannot see into a name assembled from other elements.
-            aria-describedby=""
+            describedBy=""
             ref={actionRef}
-            preventFocusOnPress
+            focusOnPress={false}
             onPress={action.onPress}
             className="h-auto min-h-8 w-full justify-start gap-2 rounded-lg py-1 ps-2 pe-1 text-start font-normal text-[inherit] whitespace-normal hover:bg-panel-hover [&_svg]:m-0"
           >
@@ -157,7 +156,7 @@ export function EmptyPanel({
   const Heading = `h${headingLevel}` as const;
   const SecondaryIcon = secondaryAction?.icon;
   return (
-    <EmptyState aria-hidden={silent} className="flex flex-col items-center gap-3 px-4 py-4 text-center">
+    <EmptyState silent={silent} className="flex flex-col items-center gap-3 px-4 py-4 text-center">
       <span className={`flex size-12 items-center justify-center rounded-full ${tone === "danger" ? "bg-danger-soft text-danger-soft-foreground" : "bg-default text-app-muted"}`}>
         <Icon aria-hidden="true" className="size-6" />
       </span>
@@ -188,8 +187,8 @@ export function EmptyPanel({
               data-region-landing={action.landing ? "" : undefined}
               size="sm"
               variant={action.variant ?? "secondary"}
-              preventFocusOnPress
-              isPending={action.isPending}
+              focusOnPress={false}
+              pending={action.isPending}
               onPress={action.onPress}
             >
               {ActionIcon && <ActionIcon aria-hidden="true" className="size-4" />}
@@ -198,7 +197,7 @@ export function EmptyPanel({
           )}
           {linkAction}
           {secondaryAction && (
-            <Button size="sm" variant="secondary" preventFocusOnPress onPress={secondaryAction.onPress}>
+            <Button size="sm" variant="secondary" focusOnPress={false} onPress={secondaryAction.onPress}>
               {SecondaryIcon && <SecondaryIcon aria-hidden="true" className="size-4" />}
               {secondaryAction.label}
             </Button>

@@ -1,5 +1,6 @@
-import { Spinner } from "@heroui/react";
 import React from "react";
+
+import { Spinner } from "../../primitives";
 
 /**
  * A pane's loading line: a spinner and what is being read, centred in the space the parent leaves
@@ -11,12 +12,12 @@ import React from "react";
 export function LoadingState({ label, size = "sm", spinner = true }: { label: string; size?: "sm" | "md"; spinner?: boolean }): React.ReactElement {
   return size === "sm" ? (
     <div aria-hidden="true" className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-app-muted">
-      {spinner && <Spinner size="sm" aria-hidden="true" />}
+      {spinner && <Spinner size="sm" />}
       {label}
     </div>
   ) : (
     <div aria-hidden="true" className="flex min-h-0 flex-1 flex-col items-center justify-center-safe gap-3 text-sm text-app-muted">
-      {spinner && <Spinner size="md" color="current" aria-hidden="true" />}
+      {spinner && <Spinner size="md" color="current" />}
       {label}
     </div>
   );

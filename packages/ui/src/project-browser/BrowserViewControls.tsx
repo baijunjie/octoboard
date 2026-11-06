@@ -1,13 +1,13 @@
 import { ChevronsDownUp, FolderTree, Funnel, FunnelX, List } from "lucide-react";
 import React from "react";
 
-import { Button } from "../components/controls/Button";
 import { IconToggle } from "../components/controls/IconToggle";
 import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
 import { TitledControl } from "../components/hint/TitledControl";
 import { useT } from "../i18n/react";
 import type { ChangeLayout } from "./git/changeLayout";
 import type { FileFilterState } from "./FileFilterField";
+import { Button } from "../primitives";
 
 /** The header's controls for the tab on screen: the filter field's toggle, then, for the Files tree
  * alone, the button that folds every folder (`collapseAll`) and, for the Git mode's changes
@@ -30,7 +30,7 @@ export function BrowserViewControls({
       </IconToggle>
       {collapseAll && (
         <TitledControl title={t("browser.collapseAll")}>
-          <Button isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.collapseAll")} isDisabled={collapseAll.disabled} preventFocusOnPress onPress={collapseAll.onPress}>
+          <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("browser.collapseAll")} disabled={collapseAll.disabled} focusOnPress={false} onPress={collapseAll.onPress}>
             <ChevronsDownUp aria-hidden="true" className="size-4" />
           </Button>
         </TitledControl>

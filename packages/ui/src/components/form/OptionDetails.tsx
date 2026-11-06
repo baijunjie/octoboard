@@ -1,5 +1,6 @@
-import { Disclosure, Surface } from "@heroui/react";
 import type React from "react";
+
+import { Disclosure, DisclosureBody, DisclosureContent, DisclosureIndicator, DisclosureTrigger, Surface } from "../../primitives";
 
 /** A disclosure, collapsed until asked, over what an option covers: a real button with a name that
  * stays put, its state carried by `aria-expanded` and the indicator, described by the option it
@@ -14,17 +15,17 @@ export function OptionDetails({ describedBy, name, children }: {
 }): React.ReactElement {
   return (
     <Disclosure>
-      <Disclosure.Trigger aria-describedby={describedBy} className="flex items-center gap-1 text-sm font-medium text-foreground">
+      <DisclosureTrigger describedBy={describedBy} className="flex items-center gap-1 text-sm font-medium text-foreground">
         {name}
-        <Disclosure.Indicator className="ms-0" />
-      </Disclosure.Trigger>
-      <Disclosure.Content>
-        <Disclosure.Body className="px-0">
+        <DisclosureIndicator className="ms-0" />
+      </DisclosureTrigger>
+      <DisclosureContent>
+        <DisclosureBody className="px-0">
           <Surface variant="secondary" className="rounded-lg px-3 py-2">
             {children}
           </Surface>
-        </Disclosure.Body>
-      </Disclosure.Content>
+        </DisclosureBody>
+      </DisclosureContent>
     </Disclosure>
   );
 }

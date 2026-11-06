@@ -1,12 +1,9 @@
-import { Popover, SearchField, Tag as HeroUITag, TagGroup } from "@heroui/react";
 import { Check, Funnel, FunnelX, Tags } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
-import { Button } from "../components/controls/Button";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { FieldClearButton } from "../components/controls/FieldClearButton";
-import { openingFocus } from "../components/focus/modalFocus";
 import { Tag } from "../components/form/Tag";
 import { TitledControl } from "../components/hint/TitledControl";
 import { useListMotion } from "../components/motion/useListMotion";
@@ -15,6 +12,7 @@ import { useScrollFade } from "../components/scroll/scrollFade";
 import { useTrimmedField } from "../components/form/useTrimmedField";
 import { useT } from "../i18n/react";
 import { withoutTags, withTag } from "../sessions/projectFiltering";
+import { Button, Popover, PopoverContent, SearchField, Tag as TagItem, TagGroup, TagList } from "../primitives";
 
 /** A console's project filter: the keyword a project's name must contain and the tags it must all
  * carry. */
@@ -104,12 +102,12 @@ export function ProjectFilterButton({
   const trigger = (
     <TitledControl title={label}>
       <Button
-        isIconOnly
+        iconOnly
         size="xs"
         variant="ghost"
-        aria-label={label}
-        preventFocusOnPress
-        aria-haspopup={clearAction ? false : undefined}
+        label={label}
+        focusOnPress={false}
+        hasPopup={clearAction ? false : undefined}
         className="shrink-0 rounded-md text-app-muted hover:text-foreground"
       >
         {filtering ? <FunnelX aria-hidden="true" className="size-4" /> : <Funnel aria-hidden="true" className="size-4" />}
@@ -123,50 +121,41 @@ export function ProjectFilterButton({
       className="flex"
       onPointerDownCapture={pointerFocus.onPointerDownCapture}
     >
-      <Popover isOpen={open} onOpenChange={onOpenChange}>
+      <Popover open={open} onOpenChange={onOpenChange}>
         {trigger}
-        <Popover.Content placement="bottom end" className="w-64">
-          <Popover.Dialog aria-label={t("sidebar.filter.open")}>
-            {/* The field clears itself on Escape; here Escape closes the popover and keeps the filter. */}
-            <div
-              className="flex flex-col gap-3"
-              onKeyDownCapture={(e) => {
-                if (e.key !== "Escape") return;
-                e.preventDefault();
-                e.stopPropagation();
-                onOpenChange(false);
-              }}
-            >
-              <SearchField
-                aria-label={t("sidebar.filter.field")}
-                {...keywordField}
-                onSubmit={() => onOpenChange(false)}
-                autoFocus
-                fullWidth
-                variant="secondary"
-              >
-                <SearchField.Group>
-                  <SearchField.SearchIcon />
-                  <SearchField.Input
-                    {...openingFocus(true)}
-                    placeholder={t("sidebar.filter.placeholder")}
-                  />
-                  <FieldClearButton slot="clear" data-slot="search-field-clear-button" className="me-2 shrink-0" />
-                </SearchField.Group>
-              </SearchField>
-              <TagPicker
-                vocabulary={vocabulary}
-                selected={filter.tags}
-                onChange={(added, removed) =>
-                  onChange((f) => ({
-                    ...f,
-                    tags: added.reduce(withTag, withoutTags(f.tags, removed)),
-                  }))
-                }
-              />
-            </div>
-          </Popover.Dialog>
-        </Popover.Content>
+        <PopoverContent placement="bottom end" className="w-64" label={t("sidebar.filter.open")}>
+          {/* The field clears itself on Escape; here Escape closes the popover and keeps the filter. */}
+          <div
+            className="flex flex-col gap-3"
+            onKeyDownCapture={(e) => {
+              if (e.key !== "Escape") return;
+              e.preventDefault();
+              e.stopPropagation();
+              onOpenChange(false);
+            }}
+          >
+            <SearchField
+              label={t("sidebar.filter.field")}
+              {...keywordField}
+              onSubmit={() => onOpenChange(false)}
+              autoFocus
+              fullWidth
+              variant="secondary"
+              placeholder={t("sidebar.filter.placeholder")}
+              clearButton={<FieldClearButton />}
+            />
+            <TagPicker
+              vocabulary={vocabulary}
+              selected={filter.tags}
+              onChange={(added, removed) =>
+                onChange((f) => ({
+                  ...f,
+                  tags: added.reduce(withTag, withoutTags(f.tags, removed)),
+                }))
+              }
+            />
+          </div>
+        </PopoverContent>
       </Popover>
     </div>
   );
@@ -191,15 +180,12 @@ function TagPicker({
   if (vocabulary.length === 0) return <EmptyPanel icon={Tags} message={t("sidebar.filter.noTags")} description={t("sidebar.filter.noTags.description")} />;
   return (
     <TagGroup
-      aria-label={t("sidebar.filter.tags")}
+      label={t("sidebar.filter.tags")}
       className="-mx-4"
-      size="sm"
       selectionMode="multiple"
       selectedKeys={selected}
-      onSelectionChange={(keys) => {
-        const next = vocabulary.filter(
-          (tag) => keys === "all" || keys.has(tag),
-        );
+      onSelectionChange={(isSelected) => {
+        const next = vocabulary.filter(isSelected);
         onChange(
           next.filter((tag) => !selected.includes(tag)),
           selected.filter((tag) => !next.includes(tag)),
@@ -209,21 +195,21 @@ function TagPicker({
       {/* The fade goes on the list, never on the popover around it: the popover is what animates
           away, and the fade's scroll-timeline animation never ends, so the popover's exit transition
           would wait for it forever. */}
-      <TagGroup.List {...fade}>
+      <TagList {...fade}>
         {vocabulary.map((tag) => (
-          <HeroUITag key={tag} id={tag} textValue={tag} data-list-motion={tag}>
-            {({ isSelected }) => (
+          <TagItem key={tag} id={tag} data-list-motion={tag}>
+            {({ selected: picked }) => (
               <>
                 {/* Picked is shown by a glyph too, not by the fill alone. */}
-                {isSelected && (
+                {picked && (
                   <Check aria-hidden="true" className="size-3 shrink-0" />
                 )}
                 <span dir="auto">{tag}</span>
               </>
             )}
-          </HeroUITag>
+          </TagItem>
         ))}
-      </TagGroup.List>
+      </TagList>
     </TagGroup>
   );
 }

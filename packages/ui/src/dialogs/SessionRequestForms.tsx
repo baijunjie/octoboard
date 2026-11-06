@@ -97,9 +97,8 @@ function useReportForm(state: RequestFormState, onReport: OnReport): void {
  * sent. The account entries follow the Switch account submenu's rules (`switchEntryBlock`), so an
  * account whose quota is used up, that is not logged in or whose sharing is being changed is listed but cannot be
  * chosen, and an account that is turned off is left out unless it is the session's own or the one chosen,
- * when it is listed and cannot be chosen; a requested account that no longer exists is said so.
- * `isDisabled` locks the form while the approval is carried out. */
-export function SwitchRequestForm({ request, onReport, isDisabled }: { request: SwitchRequest; onReport: OnReport; isDisabled: boolean }): React.ReactElement | null {
+ * when it is listed and cannot be chosen; a requested account that no longer exists is said so. */
+export function SwitchRequestForm({ request, onReport }: { request: SwitchRequest; onReport: OnReport }): React.ReactElement | null {
   const t = useT();
   const session = useDaemonStore((s) => s.sessions.get(request.target));
   const parentConsole = useDaemonStore((s) => s.consoles.get(request.console));
@@ -186,7 +185,6 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
             value={null}
             placeholder={t("dialog.sessionRequest.switch.account")}
             onChange={(key: string | null) => key !== null && setAccount(key === DEFAULT_ACCOUNT_KEY ? null : key)}
-            isDisabled={isDisabled}
             errorMessage={accountError}
           />
         )
@@ -196,7 +194,6 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
             options={options}
             value={account ?? DEFAULT_ACCOUNT_KEY}
             onChange={(key: string) => setAccount(key === DEFAULT_ACCOUNT_KEY ? null : key)}
-            isDisabled={isDisabled}
             errorMessage={accountError}
             mark={incomplete ? (markId) => <IncompleteSharingMark account={incomplete} markId={markId} /> : undefined}
           />
@@ -209,7 +206,6 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
         onModelChange={(value) => setChanged((current) => ({ ...current, model: value }))}
         onEffortChange={(value) => setChanged((current) => ({ ...current, effort: value }))}
         note={t("dialog.sessionRequest.switch.launchNote")}
-        isDisabled={isDisabled}
       />
     </>
   );
@@ -220,15 +216,15 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
  * them, starting on what the call asked for. Nothing the asking session wrote is shown. It cannot
  * be confirmed while the session cannot be handed off, which the Hand off menu item refuses for the
  * same reasons: it is working or starting, locked, held by an account switch, or on an account
- * whose sharing is changing. `isDisabled` locks the form while the approval is carried out. */
-export function HandoffRequestForm({ request, onReport, isDisabled }: { request: HandoffRequest; onReport: OnReport; isDisabled: boolean }): React.ReactElement | null {
+ * whose sharing is changing. */
+export function HandoffRequestForm({ request, onReport }: { request: HandoffRequest; onReport: OnReport }): React.ReactElement | null {
   const parentConsole = useDaemonStore((s) => s.consoles.get(request.console));
   const project = useDaemonStore((s) => (request.project ? s.projects.get(request.project) : undefined));
   const original = useDaemonStore((s) => s.sessions.get(request.target));
   const ownChanging = useDaemonStore((s) => sharingChangeRuns(s.accountSharing, original?.account_id ?? null));
   const switching = useAccountSwitchHeld(original);
   if (!parentConsole) return <NoEdits request={request} onReport={onReport} />;
-  return <HandoffFields request={request} onReport={onReport} console={parentConsole} project={project} original={original} switching={switching} ownChanging={ownChanging} isDisabled={isDisabled} />;
+  return <HandoffFields request={request} onReport={onReport} console={parentConsole} project={project} original={original} switching={switching} ownChanging={ownChanging} />;
 }
 
 /** The form of a handoff whose console the window does not know, which has nothing to change: the
@@ -238,7 +234,7 @@ function NoEdits({ request, onReport }: { request: HandoffRequest; onReport: OnR
   return null;
 }
 
-function HandoffFields({ request, onReport, console: parentConsole, project, original, switching, ownChanging, isDisabled }: {
+function HandoffFields({ request, onReport, console: parentConsole, project, original, switching, ownChanging }: {
   request: HandoffRequest;
   onReport: OnReport;
   console: Console;
@@ -247,7 +243,6 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
   /** Whether an account switch holds the session (`holdsAccountSwitch`). */
   switching: boolean;
   ownChanging: boolean;
-  isDisabled: boolean;
 }): React.ReactElement {
   const t = useT();
   const { choice, blocked, presetGone, unavailable, overrides, agentOptions, setPickedAgent, account, launch } = useLaunchChoice(parentConsole, project, original?.agent, undefined, {
@@ -264,7 +259,6 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
     edits: { agent: choice.agent, account: choice.account, ...overrides },
     unavailable: blocked || unavailable !== undefined || sessionBlock !== undefined || presetGone,
   }, onReport);
-  const locked = isDisabled || blocked;
 
   return (
     <>
@@ -275,7 +269,7 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
         options={agentOptions}
         value={choice.agent}
         onChange={setPickedAgent}
-        isDisabled={locked}
+        isDisabled={blocked}
         account={account && { ...account, mark: incomplete ? (markId) => <IncompleteSharingMark account={incomplete} markId={markId} /> : undefined }}
         errorMessage={presetGone ? t("dialog.sessionRequest.handoff.presetGone") : unavailable}
         placeholders={presetGone ? { agent: t("dialog.sessionRequest.handoff.agentPlaceholder"), account: t("dialog.sessionRequest.handoff.accountPlaceholder") } : undefined}
@@ -283,7 +277,7 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
       <LaunchSettingsFields
         {...launch}
         note={t(project ? "dialog.handoff.launchInheritanceNote" : "dialog.handoff.consoleLaunchInheritanceNote")}
-        isDisabled={locked || presetGone}
+        isDisabled={blocked || presetGone}
       />
     </>
   );

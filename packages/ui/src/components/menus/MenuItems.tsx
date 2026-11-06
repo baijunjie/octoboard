@@ -1,7 +1,4 @@
-import { Description, Dropdown, Kbd, Label, Separator } from "@heroui/react";
 import { LoaderCircle, type LucideIcon } from "lucide-react";
-import { MenuContext, useSlottedContext } from "react-aria-components";
-import { setInteractionModality } from "react-aria";
 import React, { useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
@@ -15,6 +12,7 @@ import { FadeOverflow } from "../text/FadeOverflow";
 import { TABBABLE } from "../focus/selectors";
 import { MenuShortcutScope } from "./menuShortcutScope";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanelContext } from "./menuEntries";
+import { Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSeparator, setKeyboardModality, Submenu, SubmenuIndicator, useSubmenuPanel } from "../../primitives";
 
 /** HeroUI's menu item label ignores the pointer, and its content inherits that, so a clipped label never sees
  * the hover that opens its tooltip. The label's content takes the pointer back, a disabled item's too (see
@@ -63,16 +61,12 @@ function isChoice(entry: ActionMenuEntry): entry is ActionMenuItem {
 
 
 /** What a panel of custom content sits in. react-aria hands a submenu's props to its menu, which a
- * panel is not, so the ones that make it part of the menu are applied here: the ref that keeps the
- * pointer's way to it open, and the keys that leave it. Content that moves focus with the arrow
- * keys marks the elements on its start edge `data-panel-edge="start"`: the key towards the menu
- * leaves from one of those, where anywhere else it moves within the content. The values come from
- * `SubmenuTrigger` through `MenuContext`: what to check again when react-aria is upgraded. */
+ * panel is not, so the ones that make it part of the menu are applied here (`useSubmenuPanel`): the
+ * ref that keeps the pointer's way to it open, and the keys that leave it. Content that moves focus
+ * with the arrow keys marks the elements on its start edge `data-panel-edge="start"`: the key
+ * towards the menu leaves from one of those, where anywhere else it moves within the content. */
 function PanelBody({ children }: { children: (context: ActionMenuPanelContext) => React.ReactNode }): React.ReactElement {
-  const context = useSlottedContext(MenuContext);
-  const { ref, id, "aria-labelledby": labelledBy, autoFocus, onClose } = context ?? {};
-  // The two key handlers are passed along but not part of `MenuProps`.
-  const { onKeyDown, onKeyUp } = (context ?? {}) as { onKeyDown?: React.KeyboardEventHandler; onKeyUp?: React.KeyboardEventHandler };
+  const { ref, id, labelledBy, autoFocus, close, onKeyDown, onKeyUp } = useSubmenuPanel();
   return (
     <div
       ref={ref}
@@ -91,7 +85,7 @@ function PanelBody({ children }: { children: (context: ActionMenuPanelContext) =
       onKeyDown={onKeyDown}
       onKeyUp={onKeyUp}
     >
-      {children({ close: onClose ?? (() => {}), labelledBy, autoFocus: Boolean(autoFocus) })}
+      {children({ close, labelledBy, autoFocus })}
     </div>
   );
 }
@@ -113,8 +107,8 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
     else node.removeAttribute("aria-keyshortcuts");
   }, []);
   // Each menu owns its keys, including actions bubbling from a deeper submenu.
-  const run = (key: React.Key) => {
-    if (typeof key !== "string" || !key.startsWith(`${prefix}:`)) return;
+  const run = (key: string) => {
+    if (!key.startsWith(`${prefix}:`)) return;
     const entry = entries[Number(key.slice(prefix.length + 1))];
     if (entry && isLeaf(entry)) entry.onClick();
   };
@@ -128,17 +122,17 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
   const renderItem = (entry: ActionMenuItem, index: number) => {
     const disabled = isDisabledItem(entry);
     return (
-      <Dropdown.Item
+      <MenuItem
         key={index}
         id={itemId(index)}
         textValue={entry.label}
         ref={(node) => rememberItem(node, index, entry.shortcut)}
         data-marquee-scope
-        aria-label={entry.reason && !entry.description ? t("menu.nameWithReason", { name: isolate(entry.ariaLabel ?? entry.label), reason: reasonText(entry.reason) }) : entry.ariaLabel}
+        label={entry.reason && !entry.description ? t("menu.nameWithReason", { name: isolate(entry.ariaLabel ?? entry.label), reason: reasonText(entry.reason) }) : entry.ariaLabel}
         className={disabled ? DISABLED_ROW_CLASS : undefined}
-        variant={entry.destructive ? "danger" : "default"}
-        isDisabled={disabled}
-        shouldCloseOnSelect={entry.closeOnSelect}
+        danger={entry.destructive}
+        disabled={disabled}
+        closeOnSelect={entry.closeOnSelect}
       >
         {disabled ? (
           <span aria-hidden="true" className="flex shrink-0 opacity-(--disabled-opacity)">
@@ -159,16 +153,11 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
           {entry.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={entry.reason} /></span>}
         </span>
         {!entry.reason && (entry.shortcut ? <MenuShortcut letter={entry.shortcut} /> : entry.end)}
-        {entry.selected !== undefined && <Dropdown.ItemIndicator />}
-      </Dropdown.Item>
+        {entry.selected !== undefined && <MenuItemCheck />}
+      </MenuItem>
     );
   };
 
-  // A disabled item stays in the arrow-key walk (the default skips it), so the reason under it (a quota
-  // used up) can be reached and read from the keyboard while the item still refuses to run. react-stately
-  // reads `disabledBehavior` from the menu's tree state and from a single-selection section's own
-  // selection state, but neither one's props declare it, hence the casts.
-  const keepDisabled = { disabledBehavior: "selection" };
   const nodes: React.ReactNode[] = [];
   // A run of consecutive `selected` items is a section of its own with single selection, so the
   // menu's other items stay plain menu items rather than becoming radios.
@@ -179,36 +168,30 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
       while (index < entries.length && isChoice(entries[index])) group.push(index++);
       index--;
       nodes.push(
-        // Left unnamed: a name here could only repeat the menu's.
-        <Dropdown.Section
-          key={group[0]}
-          selectionMode="single"
-          selectedKeys={group.filter((i) => (entries[i] as ActionMenuItem).selected).map(itemId)}
-          {...(keepDisabled as React.ComponentProps<typeof Dropdown.Section>)}
-        >
+        <MenuChoices key={group[0]} selected={group.filter((i) => (entries[i] as ActionMenuItem).selected).map(itemId)}>
           {group.map((i) => renderItem(entries[i] as ActionMenuItem, i))}
-        </Dropdown.Section>,
+        </MenuChoices>,
       );
     } else if (entry === "separator") {
       // A menu built from conditional items can leave a separator with nothing on one side; a separator
       // is drawn only between two items, and a run of them draws one.
-      if (nodes.length > 0 && index < entries.length - 1 && entries[index + 1] !== "separator") nodes.push(<Separator key={index} />);
+      if (nodes.length > 0 && index < entries.length - 1 && entries[index + 1] !== "separator") nodes.push(<MenuSeparator key={index} />);
     } else if ("note" in entry) {
       nodes.push(
         // Disabled so that it cannot be chosen, yet drawn at full opacity as the quiet text it is, not as a
         // branch that is off (HeroUI's fade of the row and of its `Label` cancelled, by the user's decision); the
         // spacer holds the place of the glyph the items have, and `ps-7` that of the check indicator a menu with
         // choices reserves at the start of each of its items (HeroUI's `ps-7` for them).
-        <Dropdown.Item key={index} id={itemId(index)} textValue={entry.label} isDisabled className={`cursor-default data-[disabled=true]:opacity-100 ${entries.some(isChoice) ? "ps-7" : ""}`}>
+        <MenuItem key={index} id={itemId(index)} textValue={entry.label} disabled className={`cursor-default data-[disabled=true]:opacity-100 ${entries.some(isChoice) ? "ps-7" : ""}`}>
           <span aria-hidden="true" className="size-4 shrink-0" />
           <Label className="min-w-0 flex-1 text-sm whitespace-normal text-app-muted opacity-100" dir="auto">{entry.label}</Label>
-        </Dropdown.Item>,
+        </MenuItem>,
       );
     } else if ("items" in entry || "panel" in entry) {
       nodes.push(
-        <Dropdown.SubmenuTrigger key={index}>
+        <Submenu key={index}>
           {/* HeroUI gives submenu triggers ps-2, while Dropdown items use px-2.5. Keep their leading edges aligned. */}
-          <Dropdown.Item id={itemId(index)} textValue={entry.label} ref={(node) => rememberItem(node, index, entry.shortcut)} data-marquee-scope className="ps-2.5!">
+          <MenuItem id={itemId(index)} textValue={entry.label} ref={(node) => rememberItem(node, index, entry.shortcut)} data-marquee-scope className="ps-2.5!">
             <ItemIcon icon={entry.icon} className={entry.iconClassName} />
             <Label className={`min-w-0 flex-1 text-clip ${labelPointerClass(false)}`}>
               <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>
@@ -217,13 +200,13 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
             {/* HeroUI's indicator is a chevron that always points right, while the submenu opens
                 towards the start of the line in a right-to-left interface; a flip points it towards
                 the submenu. */}
-            <Dropdown.SubmenuIndicator className="rtl:-scale-x-100" />
-          </Dropdown.Item>
+            <SubmenuIndicator className="rtl:-scale-x-100" />
+          </MenuItem>
           {/* The submenu's menu is named after its trigger item, so its dialog goes without. */}
-          <Dropdown.Popover aria-labelledby="" className="max-w-72">
+          <MenuPopover className="max-w-72">
             {"panel" in entry ? <PanelBody>{entry.panel}</PanelBody> : entry.loadItems ? <LoadedMenuItems load={entry.loadItems} /> : <MenuItems entries={entry.items} />}
-          </Dropdown.Popover>
-        </Dropdown.SubmenuTrigger>,
+          </MenuPopover>
+        </Submenu>,
       );
     } else {
       nodes.push(renderItem(entry, index));
@@ -241,16 +224,16 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
       if (isLeaf(entry) && isDisabledItem(entry)) return;
       const item = itemRefs.current.get(index);
       if (!item) return;
-      setInteractionModality("keyboard");
+      setKeyboardModality();
       item.focus();
       // Use the menu item's normal keyboard activation so selection, submenu focus and closing
       // stay under react-aria's control, including entries that keep their menu open.
       item.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
       item.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
     }}>
-      <Dropdown.Menu onAction={run} {...(autoFocus && { autoFocus })} {...(keepDisabled as React.ComponentProps<typeof Dropdown.Menu>)}>
+      <MenuList onAction={run} autoFocusFirst={autoFocus === "first"}>
         {nodes}
-      </Dropdown.Menu>
+      </MenuList>
     </div>
   );
 }
@@ -294,7 +277,7 @@ function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): 
     if (next === "retry") {
       // The render took the focused control away, not a press, and the last input was often a
       // pointer: the ring has to show where focus went.
-      setInteractionModality("keyboard");
+      setKeyboardModality();
       // The recovery action stands last, at the trailing edge, after Details.
       [...(root.current?.querySelectorAll<HTMLElement>(TABBABLE) ?? [])].at(-1)?.focus();
     } else if (next === "menu") root.current?.querySelector<HTMLElement>("[role=menu]")?.focus();
@@ -319,5 +302,5 @@ function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): 
 }
 
 function MenuShortcut({ letter }: { letter: string }): React.ReactElement {
-  return <Kbd aria-hidden="true" dir="ltr" slot="keyboard" className="ms-auto shrink-0 in-data-[hovered=true]:bg-surface"><Kbd.Content>{letter}</Kbd.Content></Kbd>;
+  return <Kbd decorative dir="ltr" slot="keyboard" className="ms-auto shrink-0 in-data-[hovered=true]:bg-surface"><KbdContent>{letter}</KbdContent></Kbd>;
 }

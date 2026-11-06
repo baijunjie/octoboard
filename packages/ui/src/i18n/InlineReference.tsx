@@ -1,10 +1,10 @@
-import { Chip } from "@heroui/react";
 import React from "react";
 
+import { Chip, ChipLabel } from "../primitives";
 import { useCodeColor, type CodeColor } from "./codeTone";
 
 export type InlineReferenceSize = "xs" | "sm" | "md" | "lg";
-export type InlineReferenceProps = Omit<React.ComponentProps<typeof Chip<"span">>, "size" | "color" | "children"> & {
+export type InlineReferenceProps = Omit<React.ComponentProps<typeof Chip>, "size" | "color" | "children"> & {
   children?: React.ReactNode;
   size?: InlineReferenceSize;
   color?: CodeColor;
@@ -23,7 +23,6 @@ export function InlineReference({
   children,
   size = "xs",
   color = "default",
-  variant = "soft",
   monospace = false,
   wrap = false,
   unbroken = false,
@@ -38,11 +37,10 @@ export function InlineReference({
     <React.Fragment key={i}>{i > 0 && <>/<wbr /></>}{part}</React.Fragment>
   )) : children;
   return (
-    <Chip<"span">
+    <Chip
       {...props}
       size="sm"
       color={nativeColor}
-      variant={variant}
       dir={dir}
       data-inline-reference=""
       data-size={size}
@@ -50,9 +48,9 @@ export function InlineReference({
       className={`inline-reference ${wrap ? "inline-reference--wrap" : ""} ${unbroken ? "inline-reference--unbroken" : ""} ${monospace ? "select-text" : ""} ${className}`}
     >
       {startContent}
-      <Chip.Label>
+      <ChipLabel>
         {monospace ? <code dir={dir} data-color={resolvedColor} className="inline-reference__code select-text">{text}</code> : text}
-      </Chip.Label>
+      </ChipLabel>
     </Chip>
   );
 }

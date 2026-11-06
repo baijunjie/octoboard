@@ -1,4 +1,3 @@
-import { Checkbox, Label } from "@heroui/react";
 import React, { useState } from "react";
 
 import { InlineReference } from "../i18n/InlineReference";
@@ -23,6 +22,7 @@ import type { Shown } from "./importParts";
 import type { ClientSettingValue } from "./clientSettings";
 import { ImportSettings } from "./ImportSettings";
 import { RegionTabs, type Region, type RegionPanel } from "./RegionTabs";
+import { Checkbox } from "../primitives";
 
 const TAB_LABEL: Record<Region, PlainMessageKey> = {
   consoles: "configuration.import.tab.consoles",
@@ -117,13 +117,8 @@ export function ImportReview({
         <LabelledGroup label={t("configuration.import.include.label")}>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             {carried.map((region) => (
-              <Checkbox key={region} variant="secondary" isSelected={checked[region]} onChange={(on) => onChecked(region, on)}>
-                <Checkbox.Content className="min-h-6">
-                  <Checkbox.Control>
-                    <Checkbox.Indicator />
-                  </Checkbox.Control>
-                  <Label>{t(REGION_LABEL[region])}</Label>
-                </Checkbox.Content>
+              <Checkbox key={region} variant="secondary" contentClassName="min-h-6" selected={checked[region]} onSelectedChange={(on) => onChecked(region, on)}>
+                {t(REGION_LABEL[region])}
               </Checkbox>
             ))}
           </div>

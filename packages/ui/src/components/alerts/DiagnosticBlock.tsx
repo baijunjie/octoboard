@@ -1,4 +1,3 @@
-import { Surface } from "@heroui/react";
 import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactElement } from "react";
 
 import { useT } from "../../i18n/react";
@@ -6,6 +5,7 @@ import { CopyButton } from "../controls/CopyButton";
 import { ROW_ICON_BUTTON_CLASS } from "../controls/RowControls";
 import { CODE_SURFACE_CLASS, CodeBlock } from "../text/CodeBlock";
 import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
+import { Surface } from "../../primitives";
 
 /** The id of the summary of the disclosure a block stands in, which names the block's region unless it is given its own
  * `labelledBy`: a block a caller passes as the content of an "Error details" disclosure is labelled by the disclosure

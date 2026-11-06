@@ -21,6 +21,9 @@ const SRC = new URL("../../", import.meta.url);
 
 const FADE_MODULE = "components/scroll/scrollFade.tsx";
 
+/** The wrapper layer's scroll shadow, which the fade module builds on, and the layer's entry point exporting it. */
+const SCROLL_SHADOW_WRAPPER = ["primitives/ScrollShadow.tsx", "primitives/index.ts"];
+
 type Exemption = {
   surface: string;
   reason: string;
@@ -218,9 +221,9 @@ describe("a scroll container in the UI package", () => {
     expect(problems).toEqual([]);
   });
 
-  it("is reached only through the module, never through HeroUI's ScrollShadow", () => {
+  it("is reached only through the module, never through the scroll shadow it wraps", () => {
     const problems = sourceFiles()
-      .filter((file) => file !== FADE_MODULE)
+      .filter((file) => file !== FADE_MODULE && !SCROLL_SHADOW_WRAPPER.includes(file))
       .flatMap((file) =>
         findScrollShadowUse(readFileSync(new URL(file, SRC), "utf8")).map(
           (site) =>

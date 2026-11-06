@@ -1,12 +1,10 @@
-import { Modal, Tabs } from "@heroui/react";
 import { Bell, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TitledControl } from "../components/hint/TitledControl";
-import { openingFocus } from "../components/focus/modalFocus";
 import { FadedScroller } from "../components/scroll/scrollFade";
 import { STICKY_HEADING_HEIGHT } from "../components/scroll/StickyHeading";
-import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
+import { Modal, ModalCloseButton, openingFocus, Tab, TabList, TabListContainer, TabPanel, Tabs } from "../primitives";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { tryEachFrame } from "../components/focus/tryEachFrame";
 import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
@@ -60,13 +58,13 @@ const MAX_FRAMES_TO_WAIT_FOR_MODAL = 30;
  * padding's; `stickyHeadingHeight` is the height of such a heading (see `FadedScroller`). */
 function SectionPanel({ id, stickyHeadingHeight, children }: { id: string; stickyHeadingHeight?: number; children: React.ReactNode }): React.ReactElement {
   return (
-    <Tabs.Panel id={id} className="flex min-h-0 min-w-0 flex-1 flex-col max-tablet:p-0">
+    <TabPanel id={id} className="flex min-h-0 min-w-0 flex-1 flex-col max-tablet:p-0">
       <FadedScroller
         stickyHeadingHeight={stickyHeadingHeight}
         stickySurface="overlay"
         className="min-h-0 flex-1 px-4 py-(--section-padding) [--section-padding:calc(var(--spacing)*4)] max-phone:px-3 max-phone:[--section-padding:calc(var(--spacing)*3)] desktop:px-8 desktop:[--section-padding:calc(var(--spacing)*6)]"
       >{children}</FadedScroller>
-    </Tabs.Panel>
+    </TabPanel>
   );
 }
 
@@ -159,71 +157,69 @@ export function SettingsDialog({
   const focusTarget = useCallback(() => selectedRef.current, []);
 
   return (
-    <Modal.Backdrop isOpen onOpenChange={(open) => !open && onClose()}>
-      {/* Native full size removes narrow-screen margins and uses an edge-to-edge transition. Wider
-          windows retain their inset layout; the container ends above the bottom notices. */}
-      <Modal.Container size={fullScreen ? "full" : undefined} className={fullScreen ? undefined : "max-desktop:p-4"}>
-        <Modal.Dialog
-          aria-label={t("settings.title")}
-          className={`control-fills flex flex-col overflow-hidden p-0 ${fullScreen ? "" : "h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[min(1000px,calc(100vw-32px))] max-w-none desktop:h-[min(85vh,calc(100vh-96px-var(--bottom-chrome-height)))] desktop:w-[min(1000px,calc(100vw-96px))] tablet:flex-row"}`}
-        >
-          <span ref={markerRef} hidden />
-          <TitledControl title={t("common.close")}>
-            {/* The panels' positioned scrollers overlap this corner. Keep the close button above them. */}
-            <Modal.CloseTrigger aria-label={t("common.close")} className="z-10 max-phone:top-4.5 max-phone:end-3" />
-          </TitledControl>
-          <Tabs
-            orientation={isNarrow ? "horizontal" : "vertical"}
-            selectedKey={sectionId}
-            onSelectionChange={(key) => setSectionId(String(key))}
-            className="min-h-0 min-w-0 flex-1"
-          >
-            {/* A direct child of `Tabs`, as HeroUI's styling of it expects; it is the section column
+    // Native full size removes narrow-screen margins and uses an edge-to-edge transition. Wider windows retain their
+    // inset layout; the container ends above the bottom notices.
+    <Modal
+      onClose={onClose}
+      size={fullScreen ? "full" : undefined}
+      containerClassName={fullScreen ? undefined : "max-desktop:p-4"}
+      label={t("settings.title")}
+      className={`control-fills flex flex-col overflow-hidden p-0 ${fullScreen ? "" : "h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[min(1000px,calc(100vw-32px))] max-w-none desktop:h-[min(85vh,calc(100vh-96px-var(--bottom-chrome-height)))] desktop:w-[min(1000px,calc(100vw-96px))] tablet:flex-row"}`}
+    >
+      <span ref={markerRef} hidden />
+      <TitledControl title={t("common.close")}>
+        {/* The panels' positioned scrollers overlap this corner. Keep the close button above them. */}
+        <ModalCloseButton label={t("common.close")} className="z-10 max-phone:top-4.5 max-phone:end-3" />
+      </TitledControl>
+      <Tabs
+        orientation={isNarrow ? "horizontal" : "vertical"}
+        selectedKey={sectionId}
+        onSelectionChange={setSectionId}
+        className="min-h-0 min-w-0 flex-1"
+      >
+        {/* A direct child of `Tabs`, as HeroUI's styling of it expects; it is the section column
                 itself, with no rule between it and the section. Narrow, it is the row along the top
                 instead, clear of the close button at its end and scrolling sideways on its own.
                 `self-start` keeps the column at its own height rather than the dialog's, which is
                 what bounds how many sections fit — see `SETTINGS_SECTION_IDS`. */}
-            <LocalizedTabListContainer
-              className="ms-4 me-12 mt-3 min-w-0 shrink-0 max-phone:ms-3 max-phone:mt-2 max-phone:max-w-[calc(100%-3.75rem)] max-tablet:w-max max-tablet:max-w-[calc(100%-4rem)] max-tablet:self-start tablet:my-4 tablet:me-0 tablet:w-48 tablet:self-start desktop:my-6"
-            >
-              {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
+        <TabListContainer
+          className="ms-4 me-12 mt-3 min-w-0 shrink-0 max-phone:ms-3 max-phone:mt-2 max-phone:max-w-[calc(100%-3.75rem)] max-tablet:w-max max-tablet:max-w-[calc(100%-4rem)] max-tablet:self-start tablet:my-4 tablet:me-0 tablet:w-48 tablet:self-start desktop:my-6"
+        >
+          {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
                   tabs read from the start like any list of names rather than centred. */}
-              <Tabs.List aria-label={t("settings.sections")} className="max-tablet:min-w-0 max-tablet:p-1.5 tablet:w-full">
-                {/* Hovered labels take the foreground colour for clear feedback. */}
-                {SETTINGS_SECTION_IDS.map((id) => {
-                  const { label, Icon } = SECTIONS[id];
-                  return (
-                    <Tabs.Tab
-                      key={id}
-                      id={id}
-                      className="justify-start gap-2 whitespace-nowrap hover:text-foreground max-tablet:w-auto max-tablet:flex-none max-tablet:scroll-mx-1.5"
-                      ref={id === sectionId ? attachSelected : undefined}
-                      {...(id === sectionId && !sectionTakesFocus && openingFocus(true))}
-                    >
-                      <Icon aria-hidden="true" className="size-4 shrink-0" />
-                      {t(label)}
-                      <Tabs.Indicator />
-                    </Tabs.Tab>
-                  );
-                })}
-              </Tabs.List>
-            </LocalizedTabListContainer>
+          <TabList label={t("settings.sections")} className="max-tablet:min-w-0 max-tablet:p-1.5 tablet:w-full">
+            {/* Hovered labels take the foreground colour for clear feedback. */}
             {SETTINGS_SECTION_IDS.map((id) => {
-              const { label, Content, stickyHeadingHeight } = SECTIONS[id];
+              const { label, Icon } = SECTIONS[id];
               return (
-                <SectionPanel key={id} id={id} stickyHeadingHeight={stickyHeadingHeight}>
-                  <h2 className="pb-2 text-xl font-semibold">{t(label)}</h2>
-                  <SettingsFocusContext.Provider value={focusTarget}>
-                    <AccountsNavigationContext.Provider value={accountsNavigation}>
-                      <Content />
-                    </AccountsNavigationContext.Provider>
-                  </SettingsFocusContext.Provider>
-                </SectionPanel>
+                <Tab
+                  key={id}
+                  id={id}
+                  className="justify-start gap-2 whitespace-nowrap hover:text-foreground max-tablet:w-auto max-tablet:flex-none max-tablet:scroll-mx-1.5"
+                  ref={id === sectionId ? attachSelected : undefined}
+                  {...(id === sectionId && !sectionTakesFocus && openingFocus(true))}
+                >
+                  <Icon aria-hidden="true" className="size-4 shrink-0" />
+                  {t(label)}
+                </Tab>
               );
             })}
-          </Tabs>
-        </Modal.Dialog>
-      </Modal.Container>
-    </Modal.Backdrop>
+          </TabList>
+        </TabListContainer>
+        {SETTINGS_SECTION_IDS.map((id) => {
+          const { label, Content, stickyHeadingHeight } = SECTIONS[id];
+          return (
+            <SectionPanel key={id} id={id} stickyHeadingHeight={stickyHeadingHeight}>
+              <h2 className="pb-2 text-xl font-semibold">{t(label)}</h2>
+              <SettingsFocusContext.Provider value={focusTarget}>
+                <AccountsNavigationContext.Provider value={accountsNavigation}>
+                  <Content />
+                </AccountsNavigationContext.Provider>
+              </SettingsFocusContext.Provider>
+            </SectionPanel>
+          );
+        })}
+      </Tabs>
+    </Modal>
   );
 }

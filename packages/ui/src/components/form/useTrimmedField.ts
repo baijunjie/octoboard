@@ -10,7 +10,7 @@ import { useState } from "react";
 export function useTrimmedField(
   value: string,
   onChange: (value: string) => void,
-): { value: string; onChange: (next: string | React.ChangeEvent<HTMLInputElement>) => void; onBlur: () => void } {
+): { value: string; onChange: (next: string) => void; onBlur: () => void } {
   // `held` is the value last handed to the form, so a `value` that differs from it came from
   // outside. Comparing against `shown.trim()` instead would never settle on a value set from
   // outside that itself has leading or trailing whitespace (a name stored before trimming).
@@ -22,8 +22,7 @@ export function useTrimmedField(
   }
   return {
     value: current.shown,
-    onChange: (next) => {
-      const text = typeof next === "string" ? next : next.target.value;
+    onChange: (text) => {
       setField({ shown: text, held: text.trim() });
       onChange(text.trim());
     },

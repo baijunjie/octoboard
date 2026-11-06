@@ -132,12 +132,11 @@ export function RemoveAccountDialog({ account, onRemoved, onCancel }: { account:
       confirmDisabled={blocked || problem}
       waiting={trash && inspection.pending}
       resetKey={account.id}
-      extraControl={(busy) => (
+      extraControl={(
         <>
           <ConfirmOption
             isSelected={trash}
             onChange={setTrash}
-            isReadOnly={busy}
             label={t("settings.accounts.removeTrash")}
             hint={t(trash && inspection.outcome?.status === "missing" ? "settings.accounts.removeTrashHintMissing" : "settings.accounts.removeTrashHint")}
             describedBy={describedBy || undefined}

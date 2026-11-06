@@ -1,5 +1,4 @@
 import React, { useMemo, useRef } from "react";
-import { Collection, Tree, TreeHeader, TreeItem, TreeItemContent, TreeSection, Virtualizer, type Key } from "react-aria-components";
 
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { useCollectionOptionTab } from "../../components/focus/collectionOptionTab";
@@ -10,13 +9,13 @@ import type { ChangeLayout } from "./changeLayout";
 import { ChangeRowBody, changeRowText } from "./changeRow";
 import { changeGroups, sectionKey, type ChangeItem, type ChangeNode, type ChangeSection, type CommitRef } from "./changes";
 import { collectionIndex, emptyCollectionIndex } from "../collectionIndex";
-import { ChangeListLayout, CHANGE_SCROLL_CLASS } from "./changeListLayout";
 import { ChangeSectionHeading, ChangeSectionHeadingStops, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
 import { RowActions } from "../RowActions";
 import { CommitIdLabel } from "./CommitIdLabel";
 import { shortCommit } from "./shortCommit";
 import { BrowserListMotion, useBrowserListMotion } from "../useBrowserListMotion";
 import { DirectoryRow, ExpandChevron, ROW_CLASS, ROW_HEIGHT, RowContent } from "../treeRow";
+import { Tree, TreeCollection, TreeHeader, TreeItem, TreeSection } from "../../primitives";
 
 /** The rows of `nodes` that open and close — the directories and the commits — and everything
  * under them. */
@@ -27,9 +26,8 @@ function foldableKeys(nodes: readonly ChangeNode[]): string[] {
 /**
  * A branch's changes as a list in sections — in conflict, staged, unstaged, untracked, then what it
  * has committed, as one flat run of changes or, when it is listed by commit, a row per commit
- * (newest first) holding that commit's changes — each section headed with its count. HeroUI 3 has
- * no tree, so this is built on the react-aria-components `Tree` HeroUI itself builds on,
- * virtualized, as the Files mode's tree is (`FileTree`), so it has the same keyboard model: arrows,
+ * (newest first) holding that commit's changes — each section headed with its count. It is the
+ * wrapper layer's virtualized `Tree`, as the Files mode's tree is (`FileTree`), so it has the same keyboard model: arrows,
  * Home / End, type-ahead, Left / Right to collapse and expand a row that has rows under it. In the
  * `tree` layout a section's changes (or a commit's) are grouped under their directories, in the
  * `flat` one they are one row each. A directory or a commit opens or closes and a change opens in
@@ -78,7 +76,7 @@ export function ChangeTree({
   // leaving them out of what is decided here is what makes that beside the point.
   const shown = useMemo(() => groups.filter((group) => !collapsed.has(sectionKey(group.section))), [groups, collapsed]);
   const foldable = useMemo(() => shown.flatMap((group) => foldableKeys(group.nodes)), [shown]);
-  const expanded = useMemo(() => new Set<Key>(foldable.filter((key) => !collapsed.has(key))), [foldable, collapsed]);
+  const expanded = useMemo(() => new Set(foldable.filter((key) => !collapsed.has(key))), [foldable, collapsed]);
 
   const { byKey, visibleKeys, folds } = useMemo(() => {
     const index = emptyCollectionIndex<ChangeNode>();
@@ -93,16 +91,16 @@ export function ChangeTree({
   }, [groups, expanded, collapsed]);
   const motion = useBrowserListMotion(listRef, visibleKeys, folds);
   const collectionRef = useCollectionOptionTab(motion.ref);
-  const { props: fade, wrap } = useStickyScrollFade({ ref: collectionRef, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none " + CHANGE_SCROLL_CLASS, stickyHeadingHeight: HEADING_HEIGHT });
+  const { props: fade, wrap } = useStickyScrollFade({ ref: collectionRef, className: "min-h-0 flex-1 overflow-auto pb-1 outline-none", stickyHeadingHeight: HEADING_HEIGHT });
 
   // Only the commits and directories this list shows are decided here: the sections' own keys and
   // the rows inside a folded section all stay as they are.
-  const onExpandedChange = (keys: Set<Key>) => {
+  const onExpandedChange = (keys: Set<string>) => {
     const next = new Set([...collapsed].filter((key) => !foldable.includes(key)));
     for (const key of foldable) if (!keys.has(key)) next.add(key);
     onCollapsedChange(next);
   };
-  const onAction = (key: Key) => {
+  const onAction = (key: string) => {
     const node = byKey.get(key);
     if (node?.type === "change") onOpen(node.item);
     else if (node) onExpandedChange(expanded.has(key) ? new Set([...expanded].filter((k) => k !== key)) : new Set([...expanded, key]));
@@ -111,9 +109,9 @@ export function ChangeTree({
   const renderNode = (node: ChangeNode): React.ReactElement => {
     if (node.type === "change") return <ChangeTreeRow item={node.item} isSelected={node.item.key === selected} layout={layout} />;
     const children = (
-      <Collection items={node.children} dependencies={[language, selected, layout]}>
+      <TreeCollection items={node.children} dependencies={[language, selected, layout]}>
         {renderNode}
-      </Collection>
+      </TreeCollection>
     );
     if (node.type === "directory") return <ChangeDirectoryRow node={node}>{children}</ChangeDirectoryRow>;
     return (
@@ -121,13 +119,11 @@ export function ChangeTree({
         data-list-motion={node.key}
         id={node.key}
         textValue={commitText(node.commit)}
-        aria-label={commitLabel(node.commit, node.count, language)}
-        hasChildItems
+        label={commitLabel(node.commit, node.count, language)}
+        expandable
         className={ROW_CLASS}
+        content={({ expanded }) => <CommitRow commit={node.commit} count={node.count} isExpanded={expanded} />}
       >
-        <TreeItemContent>
-          {({ isExpanded }) => <CommitRow commit={node.commit} count={node.count} isExpanded={isExpanded} />}
-        </TreeItemContent>
         {children}
       </TreeItem>
     );
@@ -136,11 +132,13 @@ export function ChangeTree({
   return (
     <BrowserListMotion keys={visibleKeys} folds={folds} prepare={motion.prepare}>
       <ChangeSectionHeadingStops>
-        {wrap(<Virtualizer layout={ChangeListLayout} layoutOptions={{ rowHeight: ROW_HEIGHT, headingHeight: HEADING_HEIGHT }}>
+        {wrap(
           <Tree
             {...fade}
-            aria-label={label}
+            label={label}
             items={groups}
+            rowHeight={ROW_HEIGHT}
+            headingHeight={HEADING_HEIGHT}
             expandedKeys={expanded}
             onExpandedChange={onExpandedChange}
             onAction={onAction}
@@ -163,13 +161,13 @@ export function ChangeTree({
                   />
                 </TreeHeader>
                 {/* A folded section is its heading and nothing else, still counting what it holds. */}
-                <Collection items={collapsed.has(sectionKey(group.section)) ? [] : group.nodes} dependencies={[language, selected, layout]}>
+                <TreeCollection items={collapsed.has(sectionKey(group.section)) ? [] : group.nodes} dependencies={[language, selected, layout]}>
                   {renderNode}
-                </Collection>
+                </TreeCollection>
               </TreeSection>
             )}
-          </Tree>
-        </Virtualizer>)}
+          </Tree>,
+        )}
       </ChangeSectionHeadingStops>
     </BrowserListMotion>
   );
@@ -215,14 +213,19 @@ function CommitRow({ commit, count, isExpanded }: { commit: CommitRef; count: nu
 function ChangeDirectoryRow({ node, children }: { node: Extract<ChangeNode, { type: "directory" }>; children: React.ReactNode }): React.ReactElement {
   const rowRef = useRef<HTMLDivElement>(null);
   return (
-    <TreeItem data-list-motion={node.key} id={node.key} textValue={node.name} hasChildItems className={ROW_CLASS} ref={rowRef}>
-      <TreeItemContent>
-        {({ isExpanded }) => (
-          <DirectoryRow name={node.name} isExpanded={isExpanded}>
-            <RowActions reserve contextTargetRef={rowRef} path={node.path} name={node.name} directory />
-          </DirectoryRow>
-        )}
-      </TreeItemContent>
+    <TreeItem
+      data-list-motion={node.key}
+      id={node.key}
+      textValue={node.name}
+      expandable
+      className={ROW_CLASS}
+      ref={rowRef}
+      content={({ expanded }) => (
+        <DirectoryRow name={node.name} isExpanded={expanded}>
+          <RowActions reserve contextTargetRef={rowRef} path={node.path} name={node.name} directory />
+        </DirectoryRow>
+      )}
+    >
       {children}
     </TreeItem>
   );
@@ -236,12 +239,19 @@ function ChangeTreeRow({ item, isSelected, layout }: { item: ChangeItem; isSelec
   // Marked `data-current`, not `data-selected`: react-aria-components writes the row's
   // `data-selected` itself, from a selection the tree does not have.
   return (
-    <TreeItem data-list-motion={item.key} id={item.key} textValue={name} aria-label={ariaLabel} data-current={isSelected || undefined} className={ROW_CLASS} ref={rowRef}>
-      <TreeItemContent>
+    <TreeItem
+      data-list-motion={item.key}
+      id={item.key}
+      textValue={name}
+      label={ariaLabel}
+      data-current={isSelected || undefined}
+      className={ROW_CLASS}
+      ref={rowRef}
+      content={
         <RowContent flat={flat}>
           <ChangeRowBody contextTargetRef={rowRef} item={item} name={name} detail={detail} />
         </RowContent>
-      </TreeItemContent>
-    </TreeItem>
+      }
+    />
   );
 }

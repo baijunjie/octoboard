@@ -1,4 +1,3 @@
-import { Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useId, useState } from "react";
 
 import { appConfig } from "../appConfig";
@@ -17,6 +16,7 @@ import { shortcutOverrides } from "../shortcuts/store";
 import { useDaemon } from "../store";
 import { heldClientSettings } from "./clientSettings";
 import { fileFailure } from "./failureText";
+import { Radio, RadioGroup } from "../primitives";
 
 /** The name the save dialog offers: the application's, and for one console that console's, with
  * what a file name cannot hold taken out. */
@@ -113,40 +113,19 @@ export function ExportConfigurationDialog({
       autoFocusSubmit
       onSubmit={submit}
     >
-      <RadioGroup variant="secondary" value={consoles} onChange={(value) => setConsoles(value as ExportedConsoles)} isReadOnly={busy}>
-        <Label>{t("configuration.export.scope")}</Label>
+      <RadioGroup variant="secondary" label={t("configuration.export.scope")} value={consoles} onChange={(value) => setConsoles(value as ExportedConsoles)}>
         {inHand && (
           <Radio value="one">
-            <Radio.Content>
-              <Radio.Control>
-                <Radio.Indicator />
-              </Radio.Control>
-              <Label><Message id="configuration.export.scope.console" params={{ name: <InlineReference dir="auto" wrap>{inHand.name}</InlineReference> }} /></Label>
-            </Radio.Content>
+            <Message id="configuration.export.scope.console" params={{ name: <InlineReference dir="auto" wrap>{inHand.name}</InlineReference> }} />
           </Radio>
         )}
-        <Radio value="all">
-          <Radio.Content>
-            <Radio.Control>
-              <Radio.Indicator />
-            </Radio.Control>
-            <Label>{t("configuration.export.scope.all")}</Label>
-          </Radio.Content>
-        </Radio>
-        <Radio value="none">
-          <Radio.Content>
-            <Radio.Control>
-              <Radio.Indicator />
-            </Radio.Control>
-            <Label>{t("configuration.export.scope.none")}</Label>
-          </Radio.Content>
-        </Radio>
+        <Radio value="all">{t("configuration.export.scope.all")}</Radio>
+        <Radio value="none">{t("configuration.export.scope.none")}</Radio>
       </RadioGroup>
       {pathsApply && (
         <ConfirmOption
           isSelected={includePaths}
           onChange={setIncludePaths}
-          isReadOnly={busy}
           label={t("configuration.export.paths.include")}
           hint={t(includePaths ? "configuration.export.paths.include.description.on" : "configuration.export.paths.include.description.off")}
           describedBy={includePaths ? warningId : undefined}
@@ -166,7 +145,6 @@ export function ExportConfigurationDialog({
           <ConfirmOption
             isSelected={includeSettings}
             onChange={setIncludeSettings}
-            isReadOnly={busy}
             label={t("configuration.export.settings.include")}
             hint={
               <Message
@@ -183,7 +161,6 @@ export function ExportConfigurationDialog({
           <ConfirmOption
             isSelected={includeAccounts}
             onChange={setIncludeAccounts}
-            isReadOnly={busy}
             label={t("configuration.export.accounts.include")}
             hint={t("configuration.export.accounts.description")}
           />

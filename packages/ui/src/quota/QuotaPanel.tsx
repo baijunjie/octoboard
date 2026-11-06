@@ -1,11 +1,10 @@
-import { Tabs } from "@heroui/react";
 import { Bot, Gauge, KeyRound } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { noAgentState, pickableAgents } from "../agents/agents";
-import { Button } from "../components/controls/Button";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
+import { Button, Tabs } from "../primitives";
 import { AgentTabList } from "../components/tabs/AgentTabList";
 import { PATH_VAR_PARAMS } from "../components/text/literalParams";
 import { Message, useT } from "../i18n/react";
@@ -64,7 +63,7 @@ export function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, 
           )}
         </div>
       ) : (
-        <Tabs variant="secondary" selectedKey={selected} onSelectionChange={(key) => setChosen(key as Agent)}>
+        <Tabs variant="underline" selectedKey={selected} onSelectionChange={(key) => setChosen(key as Agent)}>
           <AgentTabList
             providers={providers}
             agents={listed.map(({ agent }) => agent)}
@@ -90,7 +89,7 @@ export function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, 
       {/* The empty states that ask to add an agent or to manage the accounts have that button already; this link would say the same. */}
       {!(selected === undefined && (noAgents === "add" || noAgents === undefined)) && (
         <div className="groove-t flex justify-end p-2">
-          <Button size="sm" variant="ghost" className="text-app-muted hover:text-foreground data-[focus-visible=true]:text-foreground" preventFocusOnPress onPress={onOpenAccounts}>
+          <Button size="sm" variant="ghost" className="text-app-muted hover:text-foreground data-[focus-visible=true]:text-foreground" focusOnPress={false} onPress={onOpenAccounts}>
             <KeyRound aria-hidden="true" className="size-4 shrink-0" />
             {t("rail.quota.manage")}
           </Button>

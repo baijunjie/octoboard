@@ -1,4 +1,3 @@
-import { useFocusVisible } from "react-aria";
 import { useEffect, useRef, useState } from "react";
 
 import { keepsEscape } from "../components/focus/keepsEscape";
@@ -9,6 +8,7 @@ import { useIsNarrow, useMediaQuery } from "../components/hooks/breakpoint";
 import { useDockedPanelVisible } from "./panelVisibility";
 import { type ConsolePeek, useConsolePeek } from "./useConsolePeek";
 import { MODAL_OPEN } from "../components/focus/selectors";
+import { useKeyboardModality } from "../primitives";
 
 /** The two panes that float in on hover. */
 type Pane = "sidebar" | "aside";
@@ -184,7 +184,7 @@ export function usePaneToggles({
   // A device whose primary input cannot hover (a phone or a tablet's touch screen) floats no pane in:
   // a tap on a toggle or an avatar is a press, never a rest of the pointer.
   const canHover = !useMediaQuery(() => CANNOT_HOVER);
-  const keyboardInput = useLatest(useFocusVisible().isFocusVisible);
+  const keyboardInput = useLatest(useKeyboardModality());
   const ownDrawer = useState(false);
   const [sidebarOpen, setSidebarOpen] = drawer ?? ownDrawer;
   const [sidebarDocked, setSidebarDocked] = useDockedPanelVisible("sidebar");

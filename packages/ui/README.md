@@ -4,7 +4,8 @@
 application ([`apps/desktop/`](../../apps/desktop/README.md)) bundles its `dist/`, and the same build runs in a plain
 browser. It talks to the `octoboardd` daemon ([`apps/daemon/`](../../apps/daemon/README.md)) only over the protocol in
 [`apps/daemon/PROTOCOL.md`](../../apps/daemon/PROTOCOL.md). A separate build renders it over sample data as the
-website's product preview.
+website's product preview. HeroUI and React Aria reach the application only through the wrapper layer,
+[`src/primitives/`](src/primitives/README.md), which lint enforces.
 
 ## Development
 

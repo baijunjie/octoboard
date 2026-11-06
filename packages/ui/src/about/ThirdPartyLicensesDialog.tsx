@@ -1,4 +1,3 @@
-import { SearchField } from "@heroui/react";
 import { ChevronDown, ChevronRight, ScrollText, SearchX } from "lucide-react";
 import React, { useDeferredValue, useEffect, useId, useState } from "react";
 
@@ -11,6 +10,7 @@ import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announ
 import { Dialog } from "../components/dialog/Dialog";
 import { useTrimmedField } from "../components/form/useTrimmedField";
 import { useT } from "../i18n/react";
+import { SearchField } from "../primitives";
 import { filterPackages, loadThirdPartyLicenses, type LicensedPackage, type ThirdPartyLicenses } from "./thirdPartyLicenses";
 
 /** One package: its name, version and license on the summary of a disclosure, and its license texts behind it.
@@ -57,13 +57,15 @@ export function ThirdPartyLicensesList({ licenses }: { licenses: ThirdPartyLicen
   }
   return (
     <>
-      <SearchField aria-label={t("settings.about.thirdParty.search")} {...keywordField} fullWidth variant="secondary" aria-controls={shown.length === 0 ? undefined : listId}>
-        <SearchField.Group>
-          <SearchField.SearchIcon />
-          <SearchField.Input placeholder={t("settings.about.thirdParty.placeholder")} />
-          <FieldClearButton slot="clear" data-slot="search-field-clear-button" className="me-2 shrink-0" />
-        </SearchField.Group>
-      </SearchField>
+      <SearchField
+        label={t("settings.about.thirdParty.search")}
+        {...keywordField}
+        fullWidth
+        variant="secondary"
+        controls={shown.length === 0 ? undefined : listId}
+        placeholder={t("settings.about.thirdParty.placeholder")}
+        clearButton={<FieldClearButton />}
+      />
       <p className="text-sm text-app-muted">{t("settings.about.thirdParty.count", { count: shown.length })}</p>
       <StatusAnnouncer text={query.trim() === "" ? undefined : shown.length === 0 ? t("settings.about.thirdParty.none.sentence") : t("settings.about.thirdParty.count", { count: shown.length })} />
       {shown.length === 0 ? (

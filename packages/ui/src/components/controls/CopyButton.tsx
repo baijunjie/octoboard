@@ -1,7 +1,7 @@
 import { Check, Copy } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
-import { Button } from "./Button";
+import { Button } from "../../primitives";
 import { useT } from "../../i18n/react";
 import { useCopyWithNotice } from "../host/useCopyWithNotice";
 import { StatusAnnouncer } from "../announce/StatusAnnouncer";
@@ -24,7 +24,7 @@ const COPIED_HOLD_MS = 2000;
  * is not reliably re-read.
  *
  * It is icon-only unless given `children`, which are drawn as a label before the icon; the other
- * props are the `Button`'s (`size`, `variant`, `className`, `preventFocusOnPress`) and the caller
+ * props are the `Button`'s (`size`, `variant`, `className`, `focusOnPress`) and the caller
  * sets them to fit the place it sits in. An icon-only button's accessible name is the tooltip's
  * text. Where the platform has no clipboard, or it refuses, it copies through a selection (see
  * `copyText`). A copy that fails opens the error alert saying `failedText`.
@@ -47,7 +47,7 @@ export function CopyButton({
   failedText: string;
   /** A label drawn before the icon. */
   children?: React.ReactNode;
-} & Omit<React.ComponentProps<typeof Button>, "children" | "onPress" | "isIconOnly">): React.ReactElement {
+} & Omit<React.ComponentProps<typeof Button>, "children" | "onPress" | "iconOnly">): React.ReactElement {
   const t = useT();
   const copyWithNotice = useCopyWithNotice();
   const [copied, setCopied] = useState(false);
@@ -84,7 +84,7 @@ export function CopyButton({
   return (
     <>
       <TitledControl title={tooltipText} keepOpenOnPress onOpenChange={onTooltipOpenChange}>
-        <Button {...buttonProps} ref={buttonRef} isIconOnly={iconOnly} aria-label={iconOnly ? tooltipText : buttonProps["aria-label"]} onPress={copy}>
+        <Button {...buttonProps} ref={buttonRef} iconOnly={iconOnly} label={iconOnly ? tooltipText : buttonProps.label} onPress={copy}>
           {children}
           {copied
             ? <Check key="copied" aria-hidden="true" className="size-4 motion-safe:animate-copy-icon-in" />

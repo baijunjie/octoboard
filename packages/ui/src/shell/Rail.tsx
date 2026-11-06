@@ -1,8 +1,6 @@
-import { Badge } from "@heroui/react";
 import { Hand, Plus, Settings } from "lucide-react";
 import React, { memo, useRef } from "react";
 
-import { Button } from "../components/controls/Button";
 import { joinPhrases } from "../i18n/joinPhrases";
 import type { ShownStatusKind } from "../sessions/sessionStatus";
 import { isolate } from "../i18n/isolate";
@@ -25,6 +23,7 @@ import { NotificationsBell } from "./NotificationsBell";
 import { useListMotion } from "../components/motion/useListMotion";
 import { TitledControl } from "../components/hint/TitledControl";
 import { FadedScroller } from "../components/scroll/scrollFade";
+import { BadgeAnchor, Button } from "../primitives";
 
 const TOOLTIP_STATUSES: readonly ShownStatusKind[] = ["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working", "starting", "switching", "interrupted"];
 
@@ -103,31 +102,30 @@ const ConsoleTile = memo(function ConsoleTile({
   return (
     <div ref={tileRef} data-list-motion={thisConsole.id} className="flex px-1 pb-1">
       {/* The tile's box includes the badge's 4px overhang, keeping it inside the scroll viewport. */}
-      <Badge.Anchor>
+      <BadgeAnchor>
         <TitledControl title={tooltip} placement="end" focusOnly={hoverOpensSidebar}>
           <Button
-            isIconOnly
+            iconOnly
             size="sm"
             variant="ghost"
-            aria-label={label}
+            label={label}
             // The markup tooltip repeats the name, which TitledControl only detects for plain text.
-            aria-describedby=""
-            aria-current={current ? "true" : undefined}
+            describedBy=""
+            current={current}
             // Not styling: `usePanePeekPointer` (`Sidebar.tsx`) matches this to keep the floating sidebar
             // up while the pointer is on an avatar, which lies outside the card and its gap. Without it
             // the card slides away from under a pointer resting here.
             data-sidebar-peek-keep=""
-            preventFocusOnPress
+            focusOnPress={false}
             onPress={onSelect}
-            onHoverStart={(event) => event.pointerType === "mouse" && onHoverChange(true)}
-            onHoverEnd={(event) => event.pointerType === "mouse" && onHoverChange(false)}
+            onMouseHoverChange={onHoverChange}
             className={`size-9 min-w-0 rounded-lg p-0 ${current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS}`}
           >
             <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className="size-7" />
           </Button>
         </TitledControl>
         <AvatarStatusBadge status={status} />
-      </Badge.Anchor>
+      </BadgeAnchor>
       <ActionMenu
         className="hidden"
         label={t("sidebar.console.actions", { name: isolate(thisConsole.name) })}

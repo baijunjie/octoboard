@@ -1,9 +1,9 @@
-import { Alert } from "@heroui/react";
 import React from "react";
 
 import { CodeToneContext } from "../../i18n/codeTone";
+import { Alert, type AlertStatus } from "../../primitives";
 
-export type AlertStatus = "warning" | "danger";
+export type { AlertStatus };
 
 const FILLS: Record<AlertStatus, string> = {
   warning: "alert-fill-warning",
@@ -16,11 +16,10 @@ export function AlertFrame({
   status,
   className = "",
   children,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement> & { status: AlertStatus }): React.ReactElement {
+}: { status: AlertStatus; className?: string; children: React.ReactNode }): React.ReactElement {
   return (
     <CodeToneContext.Provider value={status}>
-      <Alert {...props} status={status} className={`${FILLS[status]} ${className}`}>
+      <Alert status={status} className={`${FILLS[status]} ${className}`}>
         {children}
       </Alert>
     </CodeToneContext.Provider>

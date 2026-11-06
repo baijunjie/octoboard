@@ -27,7 +27,7 @@ glyph followed by its word:
 - **Done** — finished. A console is done as soon as it is created, before its projects, and an account that already
   exists is done at once;
 - **Failed** — with its reason written out under the name, as in the result (see "The import result" below), and
-  **Details** where there is more;
+  **Details** where there is more, disabled, like everything else in the dialog, until the import has ended;
 - **Not attempted** — a project whose console could not be created, with a line saying so.
 
 The progress shows no account fallback marks or totals: those are the result's.

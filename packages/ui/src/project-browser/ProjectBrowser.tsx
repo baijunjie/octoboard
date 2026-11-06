@@ -1,14 +1,11 @@
-import { Tabs } from "@heroui/react";
 import { RefreshCw } from "lucide-react";
 import React, { useEffect, useId, useRef, useState } from "react";
 
-import { Button } from "../components/controls/Button";
 import { StatusMark } from "../components/status/StatusMark";
 import { handFocusOff } from "../components/focus/handFocusOff";
 import { HandoffOnUnmount } from "../components/focus/HandoffOnUnmount";
 import { handFocusToRegionStart } from "../components/focus/modalFocus";
-import { LocalizedTabListContainer } from "../components/tabs/LocalizedTabListContainer";
-import { TEXT_TAB_COMPACT_CLASS, TEXT_TAB_LIST_CLASS } from "../components/tabs/textTabClasses";
+import { Button, Tab, TabList, TabListContainer, TabPanel, Tabs } from "../primitives";
 import { TitledControl } from "../components/hint/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
@@ -142,24 +139,24 @@ export function ProjectBrowser({
                   layout={mode === "git" ? { value: browser.layout, onChange: browser.setLayout } : undefined}
                 />
                 <TitledControl title={t("browser.refresh")}>
-                  <Button ref={refreshRef} isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("browser.refresh")} preventFocusOnPress onPress={pressRefresh}>
+                  <Button ref={refreshRef} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("browser.refresh")} focusOnPress={false} onPress={pressRefresh}>
                     <RefreshCw aria-hidden="true" className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
                   </Button>
                 </TitledControl>
               </div>
             }
           >
-            <LocalizedTabListContainer className="shrink-0 rounded-none bg-transparent">
-              <Tabs.List aria-label={t("browser.modes")} className={TEXT_TAB_LIST_CLASS}>
-                <Tabs.Tab id="files" className={TEXT_TAB_COMPACT_CLASS}>{t("browser.mode.files")}<Tabs.Indicator /></Tabs.Tab>
-                <Tabs.Tab id="changes" className={TEXT_TAB_COMPACT_CLASS}>{t("git.view.changes")}<Tabs.Indicator /></Tabs.Tab>
-              </Tabs.List>
-            </LocalizedTabListContainer>
+            <TabListContainer className="shrink-0 rounded-none bg-transparent">
+              <TabList label={t("browser.modes")} fit="content">
+                <Tab id="files" size="compact">{t("browser.mode.files")}</Tab>
+                <Tab id="changes" size="compact">{t("git.view.changes")}</Tab>
+              </TabList>
+            </TabListContainer>
           </PanelHeader>
           <FileFilterField contextKey={tab} state={activeFilter} ignoredToggle={mode === "files"} incomplete={mode === "files" && files.searchIncomplete} label={t("browser.filter.label")} placeholder={t(mode === "files" ? "browser.filter.placeholder" : "git.filter.placeholder")} />
-          {mode === "files" ? <Tabs.Panel key="files" id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
+          {mode === "files" ? <TabPanel key="files" id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <FilesPanel project={project.id} files={files} refreshRef={refreshRef} focusHandoff={filesFocus} />
-          </Tabs.Panel> : <Tabs.Panel key="changes" id="changes" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
+          </TabPanel> : <TabPanel key="changes" id="changes" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <RowPathScope.Provider value={{ project: project.id, worktree: git.worktree }}>
               <GitView
                 {...git.view}
@@ -172,7 +169,7 @@ export function ProjectBrowser({
                 }}
               />
             </RowPathScope.Provider>
-          </Tabs.Panel>}
+          </TabPanel>}
         </Tabs>
       </div>
       {files.viewer && (

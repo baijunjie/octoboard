@@ -1,4 +1,3 @@
-import { Card } from "@heroui/react";
 import { Check, CircleDashed, FileUp, LayoutDashboard, Minus, Plus } from "lucide-react";
 import React, { useId, useImperativeHandle, useRef } from "react";
 
@@ -12,6 +11,7 @@ import type { DialogRequest } from "./dialogs/dialogRequest";
 import { Message, useT } from "./i18n/react";
 import { usePlatform } from "./platform/react";
 import { useDaemonStore, useProviders } from "./store";
+import { Card } from "./primitives";
 
 export interface WelcomeScreenHandle {
   focus: () => void;
@@ -84,31 +84,29 @@ export function WelcomeScreen({ onOpenDialog, ref }: WelcomeScreenProps): React.
             {t("welcome.supportedTools")}
           </h2>
           <Card>
-            <Card.Content>
-              <ul>
-                {providers.map((provider) => {
-                  const value = provider.id;
-                  const availability = agentAvailability.get(value)?.availability;
-                  const available = availability === "available";
-                  const unavailable = availability === "unavailable";
-                  const StatusIcon = available ? Check : unavailable ? Minus : CircleDashed;
-                  return (
-                    <li key={value} className="groove-b py-3 first:pt-0 last:border-b-0 last:pb-0">
-                      <div role="status" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                        <span className="flex min-w-0 items-center gap-3 text-sm font-medium">
-                          <AgentIcon agent={value} className="size-5 shrink-0" />
-                          <bdi className="break-words">{providerLabel(t, providers, value)}</bdi>
-                        </span>
-                        <StatusBadge variant="soft" color={available ? "success" : "default"} className="inline-flex items-center gap-1">
-                          <StatusIcon aria-hidden="true" className="size-3.5 shrink-0" />
-                          {t(available ? "welcome.toolInstalled" : unavailable ? "welcome.toolNotFound" : "welcome.toolChecking")}
-                        </StatusBadge>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Card.Content>
+            <ul>
+              {providers.map((provider) => {
+                const value = provider.id;
+                const availability = agentAvailability.get(value)?.availability;
+                const available = availability === "available";
+                const unavailable = availability === "unavailable";
+                const StatusIcon = available ? Check : unavailable ? Minus : CircleDashed;
+                return (
+                  <li key={value} className="groove-b py-3 first:pt-0 last:border-b-0 last:pb-0">
+                    <div role="status" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                      <span className="flex min-w-0 items-center gap-3 text-sm font-medium">
+                        <AgentIcon agent={value} className="size-5 shrink-0" />
+                        <bdi className="break-words">{providerLabel(t, providers, value)}</bdi>
+                      </span>
+                      <StatusBadge variant="soft" color={available ? "success" : "default"} className="inline-flex items-center gap-1">
+                        <StatusIcon aria-hidden="true" className="size-3.5 shrink-0" />
+                        {t(available ? "welcome.toolInstalled" : unavailable ? "welcome.toolNotFound" : "welcome.toolChecking")}
+                      </StatusBadge>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </Card>
           <p className="mt-3 text-center text-xs text-app-muted"><Message id="welcome.toolsHint" params={PATH_VAR_PARAMS} /></p>
         </section>

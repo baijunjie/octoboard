@@ -1,4 +1,3 @@
-import { Dropdown } from "@heroui/react";
 import { EllipsisVertical } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
@@ -21,6 +20,7 @@ import type { ActionMenuEntry } from "./menuEntries";
 import { MenuItems } from "./MenuItems";
 import { MenuShortcutScope } from "./menuShortcutScope";
 import { usePointerFocusReturn } from "./usePointerFocusReturn";
+import { Menu, MenuPopover, MenuTrigger, partSelector } from "../../primitives";
 
 /** The entries of a menu given as a function, read when the menu opens (the popover mounts its content
  * then), so that what they judge against the clock is the time they are looked at. */
@@ -189,7 +189,7 @@ export function ActionMenu({
       const active = document.activeElement;
       const handed = takeHandedFocus();
       const adopt =
-        handed?.isConnected && (active === document.body || active?.closest("[data-slot=dropdown-popover]"))
+        handed?.isConnected && (active === document.body || active?.closest(partSelector.menuPopover))
           ? handed
           : undefined;
       pointerFocus.notePress(adopt);
@@ -225,7 +225,7 @@ export function ActionMenu({
   // own menu over it). Close it the way react-aria's own menu trigger closes on a context menu.
   useEffect(() => {
     if (!isOpen) return;
-    const inMenu = (event: Event) => event.target instanceof Element && event.target.closest("[data-slot=dropdown-popover]");
+    const inMenu = (event: Event) => event.target instanceof Element && event.target.closest(partSelector.menuPopover);
     const onMouseDown = (event: MouseEvent) => {
       if (inMenu(event)) return;
       if (isSecondaryPress(event, !contextOnly)) onOpenChange(false);
@@ -251,31 +251,26 @@ export function ActionMenu({
       onClick={(e) => e.stopPropagation()}
       onPointerDownCapture={pointerFocus.onPointerDownCapture}
     >
-      <Dropdown isOpen={isOpen} onOpenChange={onOpenChange}>
-        {/* `preventFocusOnPress` keeps a press from moving focus off whatever had it (typically
+      <Menu open={isOpen} onOpenChange={onOpenChange}>
+        {/* `focusOnPress={false}` keeps a press from moving focus off whatever had it (typically
             the terminal); the menu itself takes focus once it opens. */}
         <TitledControl title={tooltip === false ? undefined : (tooltip ?? t("common.moreActions"))}>
-          <Dropdown.Trigger
+          <MenuTrigger
             ref={triggerRef}
-            aria-label={label}
+            label={label}
             hidden={contextOnly}
-            excludeFromTabOrder={contextOnly}
-            preventFocusOnPress
+            focusOnPress={false}
             className={contextOnly ? "hidden" : ICON_TRIGGER_CLASS}
           >
             {trigger ?? <EllipsisVertical aria-hidden="true" className="size-4" />}
-          </Dropdown.Trigger>
+          </MenuTrigger>
         </TitledControl>
-        {/* react-aria names the popover's dialog role after the trigger, as it does the menu inside it,
-            so a screen reader would speak the name twice. The dialog goes without one, a deliberate
-            departure from the ARIA rule that a dialog has a name: it only wraps the named menu, so a
-            name would just repeat it. The empty value wins over react-aria's and refers to nothing. */}
-        <Dropdown.Popover aria-labelledby="" className="min-w-48 max-w-72" getTargetRect={pointerAt ? () => new DOMRect(pointerAt.x, pointerAt.y, 0, 0) : undefined}>
+        <MenuPopover className="min-w-48 max-w-72" at={pointerAt ?? undefined}>
           <MenuShortcutScope value={isOpen}>
             <ResolvedMenuItems source={items} onGone={onPopoverGone} autoFocus={openedByKey ? "first" : undefined} />
           </MenuShortcutScope>
-        </Dropdown.Popover>
-      </Dropdown>
+        </MenuPopover>
+      </Menu>
     </div>
   );
 }

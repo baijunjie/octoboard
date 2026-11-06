@@ -2,11 +2,11 @@ import { CircleAlert, Info, TriangleAlert } from "lucide-react";
 import React from "react";
 
 import { useT } from "../../i18n/react";
-import { Button } from "../controls/Button";
 import { DiagnosticBlock } from "../alerts/DiagnosticBlock";
 import { Hint } from "../hint/Hint";
 import { usePopoverOwnerProps } from "../hint/popoverOwner";
 import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
+import { Button } from "../../primitives";
 
 /** Marks the popover of a status mark, so that a panel it is shown from can tell it is part of that panel: it is
  * portalled out of it (`PopoverOwnerContext` names the panel). */
@@ -90,7 +90,7 @@ function MarkButton({
         {...wiring}
         data-status-mark=""
         variant="ghost"
-        aria-label={label}
+        label={label}
         className="-mx-1 -my-0.5 h-auto min-h-0 w-auto min-w-0 shrink-0 gap-1.5 rounded-full px-1 py-0.5 align-baseline text-[length:inherit] leading-[inherit] font-normal text-inherit whitespace-nowrap [&>svg]:m-0"
       >
         {glyph}
@@ -105,9 +105,9 @@ function MarkButton({
       <Button
         {...wiring}
         data-status-mark=""
-        isIconOnly
+        iconOnly
         variant="ghost"
-        aria-label={label}
+        label={label}
         className="mx-[-0.1875rem] my-[-0.25rem] size-[1.375rem] min-h-0 min-w-0 shrink-0 rounded-full p-0 align-middle leading-none [&>svg]:m-0"
       >
         {glyph}
@@ -115,7 +115,7 @@ function MarkButton({
     );
   }
   return (
-    <Button {...wiring} data-status-mark="" isIconOnly size="xs" variant="ghost" aria-label={label} className="shrink-0 -my-0.5 rounded-full">
+    <Button {...wiring} data-status-mark="" iconOnly size="xs" variant="ghost" label={label} className="shrink-0 -my-0.5 rounded-full">
       {glyph}
     </Button>
   );
@@ -155,7 +155,7 @@ function PopoverMark({
   const bare = !children;
   // Only the one line, with nothing under it: no raw text, no actions.
   const plain = bare && !actions && !detail;
-  const header = inHeader ? { excludeFromTabOrder: true, "data-section-heading-control": "" } : undefined;
+  const header = inHeader ? { tabStop: false, "data-section-heading-control": "" } : undefined;
   // The popover gives focus back to what held it as it unmounts, from a frame of its own, so the
   // heading's band takes it from the frame after that, unless the user has put focus elsewhere.
   const handBackToHeading = ({ wasPressed, trigger }: { wasPressed: boolean; trigger: HTMLElement | null }) => {
@@ -179,7 +179,7 @@ function PopoverMark({
       bodyClassName={plain ? undefined : "flex min-h-0 flex-col gap-2"}
       contentProps={{ "data-status-mark-popover": "", ...owner, ...(markId && { "data-status-mark-id": markId }) }}
       onClosed={handBackToHeading}
-      trigger={({ onMouseHoverChange: _, expanded: __, popupId: ___, ...wiring }) => (
+      trigger={({ expanded: _, popupId: __, ...wiring }) => (
         <MarkButton {...wiring} {...header} data-status-mark-id={markId} label={label} glyph={glyph} inline={inline} text={text} />
       )}
     >

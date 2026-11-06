@@ -50,17 +50,17 @@ export function ArchiveSessionDialog({ requested, inspection, onClose }: {
       confirmLabel={t(cleanup.forcing ? "dialog.archiveSession.confirmDelete" : "dialog.archiveSession.confirm")}
       destructive={cleanup.forcing}
       waiting={cleanup.pending}
-      extraControl={(busy) => (
+      extraControl={(
         <>
           <ConfirmSection heading={t("dialog.archiveSession.boundHeading", { count: withIt.length })} shown={showBound} divided={false}>
             <SessionList sessions={withIt} />
           </ConfirmSection>
           <ConfirmSection heading={t("dialog.archiveSession.branchesHeading")} shown={showCleanup} divided={showBound}>
-            {cleanup.extraControl(busy)}
+            {cleanup.extraControl}
             <ConsequenceLines lines={cleanup.consequences} />
           </ConfirmSection>
           <ConfirmSection heading={t("dialog.archiveSession.processesHeading")} shown={showProcesses} divided={showBound || showCleanup}>
-            {processes.extraControl(busy)}
+            {processes.extraControl}
             <ConsequenceLines lines={processes.consequences} />
           </ConfirmSection>
         </>

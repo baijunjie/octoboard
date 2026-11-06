@@ -77,8 +77,10 @@ the language it shows and, in the macOS application, keeping running in the back
 holds" in `docs/product/settings-in-a-configuration.md`) — and opens the save dialog. In the desktop app a
 toast names the file it was saved as. A browser files a download itself, under its own name and wherever its settings
 say, and does not report one that was blocked or cancelled, so there the toast says only that the configuration was
-downloaded and names no file. Dismissing the desktop app's save dialog saves nothing and leaves the export dialog open;
-a file that could not be written is told as above.
+downloaded and names no file. The save dialog is part of the export's request, so until it is answered the export
+dialog is busy and cannot be left (see "A dialog cannot be left while its request runs" in `docs/product/dialogs.md`).
+Dismissing the desktop app's save dialog saves nothing and leaves the export dialog open; a file that could not be
+written is told as above.
 
 ## Choosing the file to import
 
@@ -86,9 +88,9 @@ a file that could not be written is told as above.
 The user picks a file, and the window sends its document to the daemon to be inspected; a file that is not JSON,
 or that the daemon refuses (not a configuration, a version this Octoboard does not read, unreadable), is told with its
 reason, and another can be chosen. A browser too old to report a dismissed file picker never answers for one, so the
-dialog is not held while the picker is open: it can be closed, or the picker opened again. Once the picked file's document
-is sent, the dialog cannot be left until the daemon has answered (see "A dialog cannot be left while its request runs" in
-`docs/product/dialogs.md`). What the daemon answers is
+dialog is not busy while the picker is open: its **Choose file** button shows as pending, but the dialog can be closed,
+or the picker opened again. Once the picked file's document is sent, the dialog cannot be left until the daemon has
+answered (see "A dialog cannot be left while its request runs" in `docs/product/dialogs.md`). What the daemon answers is
 then **reviewed before anything is created**.
 
 ## The import review
@@ -306,5 +308,5 @@ to it is lost — the dialog goes back to the review with every choice as it was
 alert over it (see "When the file fails" above).
 
 While the request runs the dialog cannot be left (see "A dialog cannot be left while its request runs" in
-`docs/product/dialogs.md`): **Cancel** stays in the footer, disabled, beside the **Import** button that was pressed, now
-pending, since an import cannot be cancelled once it has started.
+`docs/product/dialogs.md`): **Cancel** stays in the footer, disabled like every other control of the dialog, beside the
+**Import** button that was pressed, now pending, since an import cannot be cancelled once it has started.

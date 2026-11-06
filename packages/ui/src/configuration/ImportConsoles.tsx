@@ -1,7 +1,6 @@
 import { CircleCheck, CloudDownload } from "lucide-react";
 import React from "react";
 
-import { Button } from "../components/controls/Button";
 import { MarkLineBox } from "../components/status/MarkLineBox";
 import { StatusMark } from "../components/status/StatusMark";
 import { LabelledGroup } from "../components/form/LabelledGroup";
@@ -24,6 +23,7 @@ import {
   type RowState,
 } from "./importPlan";
 import { Card, CARD_HEADER_CLASS, CardRows, CardTitle, DirectoryChoiceField, EmptyLine, FallbackLines, FallbackMark, Field, FieldList, ItemName, ReviewRow, type Shown, STATUS_TONE, type StatusEntry, StatusGlyph, ToneLine } from "./importParts";
+import { Button } from "../primitives";
 
 const CHOICE_LABEL: Record<RowState["choice"], PlainMessageKey> = {
   exported_path: "configuration.import.choice.exportedPath",
@@ -223,7 +223,7 @@ export function ImportConsoles({
                 type="button"
                 size="sm"
                 variant="secondary"
-                isDisabled={count === 0}
+                disabled={count === 0}
                 onPress={() => {
                   onReview(applyToAll(consoles, review, choice));
                   onAnnounce(t("configuration.import.all.applied", { choice: t(CHOICE_LABEL[choice]), count }));

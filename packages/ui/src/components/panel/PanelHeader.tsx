@@ -1,12 +1,12 @@
 import { Maximize2, Minimize2, X } from "lucide-react";
 import React, { createContext, useContext } from "react";
 
-import { Button } from "../controls/Button";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../controls/RowControls";
 import { FadedScroller } from "../scroll/scrollFade";
 import { TitledControl } from "../hint/TitledControl";
 import { useT } from "../../i18n/react";
+import { Button } from "../../primitives";
 
 /** What a panel's card tells its header about the panel's place in the stack. */
 export interface PanelFrame {
@@ -97,14 +97,14 @@ export function PanelHeader({
       <RowIconGroup className={prioritizeChildren || compact || actions ? "" : "ms-auto"}>
         {frame?.canMaximize && (
           <TitledControl title={t(frame.maximized ? "panel.restore" : "panel.maximize")}>
-            <Button isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t(frame.maximized ? "panel.restore" : "panel.maximize")} preventFocusOnPress onPress={frame.onToggleMaximized}>
+            <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t(frame.maximized ? "panel.restore" : "panel.maximize")} focusOnPress={false} onPress={frame.onToggleMaximized}>
               {frame.maximized ? <Minimize2 aria-hidden="true" className="size-4" /> : <Maximize2 aria-hidden="true" className="size-4" />}
             </Button>
           </TitledControl>
         )}
         {frame && (
           <TitledControl title={t("panel.close")}>
-            <Button isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t("panel.close")} preventFocusOnPress onPress={frame.onClose}>
+            <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("panel.close")} focusOnPress={false} onPress={frame.onClose}>
               <X aria-hidden="true" className="size-4" />
             </Button>
           </TitledControl>

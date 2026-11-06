@@ -1,7 +1,5 @@
-import { SearchField } from "@heroui/react";
 import { FileSearch, FileX } from "lucide-react";
 import React, { useEffect, useId, useRef, useState } from "react";
-import { ButtonContext } from "react-aria-components";
 
 import { FieldClearButton } from "../components/controls/FieldClearButton";
 import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
@@ -10,6 +8,7 @@ import { PaneToolbar } from "../components/panel/PaneToolbar";
 import { StatusMark } from "../components/status/StatusMark";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useT } from "../i18n/react";
+import { SearchField } from "../primitives";
 import { isImeKey } from "../input/imeKey";
 import { interactionIsTouch } from "../input/touchInput";
 
@@ -90,27 +89,27 @@ export function FileFilterField({ state, label, placeholder, contextKey, ignored
     <div className="contents" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
       {state.filterOpen && (
         <PaneToolbar onKeyDownCapture={guardComposition} onBlur={onBlur}>
-          <SearchField aria-label={label} value={state.filter} onChange={state.onFilterChange} fullWidth variant="secondary" className="min-w-0 flex-1">
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input ref={input} placeholder={placeholder} />
-              {/* The mark stands before the Clear button, which keeps the trailing end it has with or without
-                  the mark. The field gives its clear button's behaviour to every button inside it
-                  through `ButtonContext`; the mark is not that button. When the search completes the mark
-                  goes, and focus it held goes to the input rather than to the page, ahead of the field's own
-                  `useFocusHandoff`. After a tap it leaves focus to that handoff, which takes it to the filter
-                  toggle: the input would raise the on-screen keyboard. */}
-              {incomplete && (
-                <>
-                  {handoffFrom(`[data-status-mark-id="${markId}"]`)}
-                  <ButtonContext.Provider value={{}}>
-                    <StatusMark tone="warning" markId={markId} label={t("browser.filter.partial")}>{t("browser.filter.partial.details")}</StatusMark>
-                  </ButtonContext.Provider>
-                </>
-              )}
-              <FieldClearButton slot="clear" data-slot="search-field-clear-button" className="me-2 shrink-0" />
-            </SearchField.Group>
-          </SearchField>
+          <SearchField
+            label={label}
+            value={state.filter}
+            onChange={state.onFilterChange}
+            fullWidth
+            variant="secondary"
+            className="min-w-0 flex-1"
+            inputRef={input}
+            placeholder={placeholder}
+            // The mark stands before the Clear button, which keeps the trailing end it has with or without the mark.
+            // When the search completes the mark goes, and focus it held goes to the input rather than to the page,
+            // ahead of the field's own `useFocusHandoff`. After a tap it leaves focus to that handoff, which takes it
+            // to the filter toggle: the input would raise the on-screen keyboard.
+            trailing={incomplete ? (
+              <>
+                {handoffFrom(`[data-status-mark-id="${markId}"]`)}
+                <StatusMark tone="warning" markId={markId} label={t("browser.filter.partial")}>{t("browser.filter.partial.details")}</StatusMark>
+              </>
+            ) : undefined}
+            clearButton={<FieldClearButton />}
+          />
           {ignoredToggle && (
             <IconToggle label={t(state.includeIgnored ? "browser.filter.excludeIgnored" : "browser.filter.includeIgnored")} isSelected={state.includeIgnored} onChange={state.onIncludeIgnoredChange}>
               {state.includeIgnored ? <FileSearch aria-hidden="true" className="size-4" /> : <FileX aria-hidden="true" className="size-4" />}

@@ -1,10 +1,10 @@
-import type React from "react";
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
 import { useRefocusIfLost } from "../components/dialog/dialogHooks";
 import { arrowNavigation } from "./arrowKeys";
 import type { ViewerContent } from "./content";
+import type { ButtonBlur } from "../primitives";
 import type { ViewerNavigation } from "./viewerNavigation";
 
 /**
@@ -66,10 +66,10 @@ export function useNavigationFocus({
   const focusNavigation = (which: "previous" | "next") => {
     focusedNavigation.current = which;
   };
-  const blurNavigation = (which: "previous" | "next", event: React.FocusEvent) => {
+  const blurNavigation = (which: "previous" | "next", blur: ButtonBlur) => {
     // A blur to nowhere is the button turning disabled under focus; anything else is the user
     // moving on.
-    if (event.relatedTarget !== null && focusedNavigation.current === which) focusedNavigation.current = undefined;
+    if (blur.movedTo !== null && focusedNavigation.current === which) focusedNavigation.current = undefined;
   };
 
   return { previousRef, nextRef, headerRef, focusNavigation, blurNavigation };

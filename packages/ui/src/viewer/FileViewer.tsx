@@ -96,7 +96,7 @@ export function FileViewer({
         isDisabled={!navigation.onPrevious}
         onPress={() => navigation.onPrevious?.()}
         onFocus={() => focusNavigation("previous")}
-        onBlur={(event) => blurNavigation("previous", event)}
+        onBlur={(blur) => blurNavigation("previous", blur)}
       />
       <PagerButton
         ref={nextRef}
@@ -105,7 +105,7 @@ export function FileViewer({
         isDisabled={!navigation.onNext}
         onPress={() => navigation.onNext?.()}
         onFocus={() => focusNavigation("next")}
-        onBlur={(event) => blurNavigation("next", event)}
+        onBlur={(blur) => blurNavigation("next", blur)}
       />
     </RowIconGroup>
   ) : null;

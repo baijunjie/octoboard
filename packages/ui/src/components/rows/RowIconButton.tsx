@@ -1,10 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 import React, { useId } from "react";
-import type { PressEvent } from "react-aria-components";
 
-import { Button } from "../controls/Button";
 import { ROW_ICON_BUTTON_BASE_CLASS, ROW_ICON_BUTTON_CLASS } from "../controls/RowControls";
 import { TitledControl } from "../hint/TitledControl";
+import { Button, type ButtonPress } from "../../primitives";
 
 /** A small icon-only button inside a row (the "+" that opens a session), with its tooltip. Its click
  * is kept from reaching the row behind it, and a mouse press leaves focus where it was. */
@@ -25,7 +24,7 @@ export function RowIconButton({
   title?: React.ReactNode;
   /** The accessible name, when it says more than the tooltip's bare verb (whose row it acts on). */
   ariaLabel?: string;
-  onPress: (event: PressEvent) => void;
+  onPress: (event: ButtonPress) => void;
   isDisabled?: boolean;
   /** Why the action cannot be done now, for a button that looks disabled but stays focusable and under
    * the pointer so that the reason is reachable: it is the tooltip and the button's description, while
@@ -43,15 +42,15 @@ export function RowIconButton({
     <div ref={ref} className="flex" onClick={(e) => e.stopPropagation()}>
       <TitledControl title={unavailable ?? title ?? label}>
         <Button
-          isIconOnly
+          iconOnly
           size="xs"
           variant="ghost"
-          aria-label={ariaLabel}
-          aria-describedby={unavailable ? reasonId : title && ariaLabel === label ? "" : undefined}
-          aria-disabled={unavailable ? true : undefined}
-          preventFocusOnPress
+          label={ariaLabel}
+          describedBy={unavailable ? reasonId : title && ariaLabel === label ? "" : undefined}
+          unavailable={!!unavailable}
+          focusOnPress={false}
           onPress={onPress}
-          isDisabled={isDisabled}
+          disabled={isDisabled}
           className={unavailable ? `${ROW_ICON_BUTTON_BASE_CLASS} pointer-events-auto data-[pressed=true]:[transform:none] active:[transform:none]` : ROW_ICON_BUTTON_CLASS}
         >
           {unavailable && <span id={reasonId} className="sr-only">{unavailable}</span>}

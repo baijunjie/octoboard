@@ -1,4 +1,3 @@
-import { Description, Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
@@ -20,6 +19,7 @@ import { ProviderName } from "../components/text/ProviderName";
 import { useNow } from "../format/useNow";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
+import { Radio, RadioGroup } from "../primitives";
 
 /** Which sessions Confirm switches: the session with everything bound under it, or every session
  * of its agent in its console. */
@@ -103,21 +103,12 @@ export function SwitchAccountDialog({
       }}
       extraControl={
         <>
-          <RadioGroup variant="secondary" value={scope} onChange={(value) => setScope(value as Scope)}>
-            <Label className="sr-only">{t("dialog.switchAccount.scopeLabel")}</Label>
-            <Radio value="session">
-              <Radio.Content>
-                <Radio.Control><Radio.Indicator /></Radio.Control>
-                <Label>{t("dialog.switchAccount.scopeSession")}</Label>
-              </Radio.Content>
-              <Description>{t("dialog.switchAccount.countSession", { count: counts.session })}</Description>
+          <RadioGroup variant="secondary" label={t("dialog.switchAccount.scopeLabel")} hideLabel value={scope} onChange={(value) => setScope(value as Scope)}>
+            <Radio value="session" description={t("dialog.switchAccount.countSession", { count: counts.session })}>
+              {t("dialog.switchAccount.scopeSession")}
             </Radio>
-            <Radio value="console">
-              <Radio.Content>
-                <Radio.Control><Radio.Indicator /></Radio.Control>
-                <Label>{t("dialog.switchAccount.scopeConsole")}</Label>
-              </Radio.Content>
-              <Description>{t("dialog.switchAccount.countConsole", { count: counts.console })}</Description>
+            <Radio value="console" description={t("dialog.switchAccount.countConsole", { count: counts.console })}>
+              {t("dialog.switchAccount.scopeConsole")}
             </Radio>
           </RadioGroup>
           <p className="text-sm text-app-muted"><Message id="dialog.switchAccount.eligibility" params={{ agent }} /></p>

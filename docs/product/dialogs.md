@@ -2,7 +2,7 @@
 
 How a dialog — a form dialog, a confirmation, an error alert or a failure modal — is titled, where keyboard focus starts
 in it, where a question the user did not ask for stands among other dialogs, what its confirm button says, what Enter
-does in it, what it and its buttons do while a request it started runs — with how a button anywhere in the window shows
+does in it, what it and its controls do while a request it started runs — with how a button anywhere in the window shows
 that its action is running — and how it changes size while open. What an open dialog puts
 out of reach in the rest of the window is in "What an open dialog, menu or popover covers" in
 `docs/product/window-layout.md`; error alerts and failure modals themselves are in `docs/product/error-alerts.md`.
@@ -105,16 +105,35 @@ as a button while what it opens is being opened.
 
 ## A dialog cannot be left while its request runs
 
-**While a request a dialog started is running, the dialog cannot be left**: its other buttons — **Cancel** among them —
-and its close button are disabled, and Escape and a press outside it do nothing; the button that started the request
-shows as pending. It applies to every form dialog and confirmation that sends a request — renaming, the console,
-session and project dialogs, handing a session off, the account and Add agent dialogs, exporting and importing a
-configuration, and every confirmation — and lasts until the request has been answered, whether it succeeded or failed.
-The console dialog counts an avatar image being read after it was picked as such a request. Waiting on something the
-user can still walk away from is not one, and leaves the dialog as it is: the import dialog's file picker (see
-"Choosing the file to import" in `docs/product/configuration-export-and-import-dialogs.md`), a check a confirmation makes
-before its action can start, which holds its confirm button pending meanwhile, or a login, which closing the dialog
-cancels (see `docs/product/logging-accounts-in.md`).
+**While a request a dialog started is running, the dialog is busy: it cannot be left, and nothing in it can be used but
+the button that started the request.** Escape and a press outside it do nothing, and every other control in it is
+disabled — **Cancel**, the close button and the other buttons, and the fields, pickers, checkboxes, radio buttons,
+switches, tabs, menu and disclosure triggers, tags, list items and links of its body. The button that started the
+request shows as pending (see "A button while its action runs" above). The disabled controls stay where they are and
+show their own disabled look; nothing is laid over the dialog, and assistive technology still reads them, as
+unavailable. A link in a busy dialog cannot be followed, by a click, a middle click or the keyboard, and Tab passes over
+it; it is still read as a link, unavailable.
+
+It applies to every form dialog and confirmation that sends a request — renaming, the console, session and project
+dialogs, handing a session off, the account and Add agent dialogs, exporting and importing a configuration, and every
+confirmation — and lasts until the request has been answered, whether it succeeded or failed. The console dialog counts
+an avatar image being read after it was picked as such a request. The export dialog's save dialog is part of its
+request, so the export dialog is busy while the save dialog is open (see "The export dialog" in
+`docs/product/configuration-export-and-import-dialogs.md`). Waiting on something the user can still walk away from is
+not such a request, and leaves the dialog operable and closable: the import dialog's file picker (see "Choosing the file
+to import" in `docs/product/configuration-export-and-import-dialogs.md`), a check a confirmation makes before its action
+can start, which holds its confirm button pending meanwhile but disables nothing else, or a login, which closing the
+dialog cancels (see `docs/product/logging-accounts-in.md`).
+
+**Keyboard focus stays in a busy dialog.** When the request starts with focus on a control it disables, focus moves to
+the pending button, or to the dialog itself where there is none; focus on the pending button or on the dialog stays
+where it is. When the request ends with the dialog still open, as after a failure, focus goes back to the control it was
+moved from; where the failure opened an error alert, it does so once the alert has been acknowledged. Where the user pressed
+somewhere in the dialog, or pressed Tab in it, while the request ran, focus is left where they put it instead. Where
+that control is gone or disabled by then, focus that would be left on nothing goes to the button that was pending, or
+to the dialog. A dialog whose refusal concerns one field returns focus to that field instead, however the request was
+started: the session dialog's Session ID field after a refused resume (see "Opening a new session on a found
+conversation" in `docs/product/resuming-a-conversation-by-its-session-id.md`).
 
 ## Where keyboard focus starts in a form dialog
 

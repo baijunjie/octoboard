@@ -13,6 +13,7 @@ import type { Daemon, State } from "../store";
 import type { TerminalElement } from "../terminal/terminalTextView";
 import { IS_MAC } from "../input/keys";
 import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
+import { partSelector } from "../primitives";
 
 /** Everything a pressable thing is looked up among. A hand-built row is a `role="button"`, a tag
  * in a tag group is a `role="row"`, and a checkbox or radio is its (visually hidden) input: pressing
@@ -56,7 +57,7 @@ function nameOf(element: Element): string {
     const labelledBy = element.getAttribute("aria-labelledby");
     label = labelledBy
       ? labelledBy.split(/\s+/).map((id) => element.ownerDocument.getElementById(id)?.textContent ?? "").join(" ")
-      : element.querySelector("[data-slot=label]")?.textContent ?? undefined;
+      : element.querySelector(partSelector.itemLabel)?.textContent ?? undefined;
   }
   if (element instanceof HTMLInputElement) {
     // A switch's label may hold only its control, with the words in a sibling it is labelled by.
@@ -139,8 +140,8 @@ function matches(matcher: Matcher, name: string): boolean {
 const isEnabled = (element: Element): boolean =>
   !element.hasAttribute("disabled") && element.getAttribute("aria-disabled") !== "true" && !element.closest("[inert]");
 
-/** What HeroUI marks a tooltip's trigger with. */
-const TOOLTIP_TRIGGER = "[data-slot=tooltip-trigger]";
+/** What wraps a tooltip's trigger. */
+const TOOLTIP_TRIGGER = partSelector.tooltipTrigger;
 
 /** The agent terminal in the centre, which the terminal steps act on: the Terminal panel's shell
  * terminals are xterm instances too, and must not be matched in its place. */
@@ -353,7 +354,7 @@ export interface Ui {
   hoverAnchored: (host: Matcher, tooltip: string) => Promise<void>;
   /** Moves the pointer onto the label of the menu item named `item`, enabled or disabled, and leaves it
    * there, for the tooltip of a label clipped by the menu's width. The pointer goes to the label's content (what
-   * `[data-slot=label]` holds), not to the item: the tooltip is that content's, and a real pointer
+   * `partSelector.itemLabel` holds), not to the item: the tooltip is that content's, and a real pointer
    * reaches it only where the label lets it through. The tooltip is the anchored shape, found as in
    * `hoverAnchored`, and the step fails unless it reads `tooltip`, which also catches a label that is
    * not clipped (nothing opens). A label that holds more than one line (a title with an identifier beneath
@@ -1006,7 +1007,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async hoverMenuLabel(item, tooltip, line) {
       await hover(() => {
-        const label = findMenuItem(item)?.querySelector<HTMLElement>("[data-slot=label]");
+        const label = findMenuItem(item)?.querySelector<HTMLElement>(partSelector.itemLabel);
         if (!label) return undefined;
         if (line === undefined) return label.firstElementChild as HTMLElement | null;
         const reading = Array.from(label.querySelectorAll<HTMLElement>("*")).filter((element) =>

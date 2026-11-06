@@ -1,11 +1,9 @@
 // What the browser's two trees (`FileTree`, `ChangeTree`) work out of their nodes: where a key finds
 // its node, which keys are on screen, and how those nest for the list motion. Pure, so the trees
 // differ only in which of their nodes are open.
-import type { Key } from "react-aria-components";
-
 export interface CollectionIndex<N> {
   /** Every node by its key, those under a closed node included. */
-  byKey: Map<Key, N>;
+  byKey: Map<string, N>;
   /** The keys of the rows on screen: the top-level nodes and what is under every open node. */
   visibleKeys: Set<string>;
   /** Each key on screen under its parent's, and the parents whose rows are shown (`ListFolds`). */
