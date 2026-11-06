@@ -261,6 +261,7 @@ export function ProjectDialog({
   return (
     <>
       <Dialog
+        size="lg"
         title={editing ? t("dialog.project.edit") : t("dialog.project.add")}
         onClose={onClose}
         submitLabel={editing ? t("common.save") : t("common.add")}
