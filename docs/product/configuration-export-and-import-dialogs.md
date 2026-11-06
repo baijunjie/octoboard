@@ -1,7 +1,7 @@
 # Configuration export and import dialogs
 
 The window's side of carrying a configuration between machines: where exporting and importing start, the export
-dialog, and the import dialog with its review and its result. What a configuration document holds, and what an import
+dialog, and the import dialog with its review, its progress and its result. What a configuration document holds, and what an import
 does on the machine running Octoboard, are in `docs/product/configuration-export-and-import.md`; the terms used here —
 the document's regions, the machine, account references and their fallbacks — are that doc's.
 
@@ -9,7 +9,9 @@ the document's regions, the machine, account references and their fallbacks — 
 
 Exporting is the **Export** button of Settings' **Configuration** section, and nowhere else.
 Importing is the **Import** button of that section, and the **Import configuration** button of the welcome screen,
-which is what an installation with no console yet shows. Both go through the window's own file dialogs, so no place is
+which is what an installation with no console yet shows. The import dialog opened from Settings opens over Settings,
+which stays open under it, and belongs to the window rather than to Settings, so nothing that closes Settings ends it;
+when it closes, keyboard focus goes back to the section's **Import** button. Both go through the window's own file dialogs, so no place is
 imposed on the file: the desktop app raises its save and open dialogs, and a browser tab downloads the file and opens a
 file picker. Where the window can do neither, the welcome screen's button is not shown and the Configuration section
 says that exporting and importing are not available (see "Configuration" in `docs/product/settings.md`).
@@ -60,7 +62,9 @@ sentence.
   shortcuts. **Accounts**, unchecked by default, notes that it includes the account names, their
   configuration directories, their sharing and turned-off choices, their order and the added agents, and that no login
   credentials are included, so the accounts are to be logged in again after an import. Neither note changes with the
-  other choices.
+  other choices. With Accounts unchecked the file names no account at all: every console and project in it uses its
+  agents' default accounts (see "How an account reference travels" in
+  `docs/product/configuration-export-and-import.md`).
 
 **Export** is unavailable while nothing is chosen — Do not export consoles with both global settings unchecked — and
 nothing says why, since the boxes that left it so are in view. It asks the daemon for the document, adds this client's
@@ -76,7 +80,9 @@ a file that could not be written is told as above.
 The user picks a file, and the window sends its document to the daemon to be inspected; a file that is not JSON,
 or that the daemon refuses (not a configuration, a version this Octoboard does not read, unreadable), is told with its
 reason, and another can be chosen. A browser too old to report a dismissed file picker never answers for one, so the
-dialog is not held while the picker is open: it can be closed, or the picker opened again. What the daemon answers is
+dialog is not held while the picker is open: it can be closed, or the picker opened again. Once the picked file's document
+is sent, the dialog cannot be left until the daemon has answered (see "A dialog cannot be left while its request runs" in
+`docs/product/dialogs.md`). What the daemon answers is
 then **reviewed before anything is created**.
 
 ## The import review
@@ -97,7 +103,7 @@ accessible name says it needs attention, and while the pointer rests on it or it
 says that this part has something that needs the user's attention. The Application settings tab never has one. The
 first tab is open when the review opens.
 
-Every card of the dialog, in the review and in the result alike, stands on a fill of its own, and its header row on a
+Every card of the dialog, in the review, the progress and the result alike, stands on a fill of its own, and its header row on a
 darker one.
 
 ### Consoles and projects in the review
@@ -237,9 +243,40 @@ The review's **Import** button sends the document unchanged, in one request, wit
 every project that is placed — a project left out is sent none — and, when the accounts are imported, the choice of
 every account given another directory or left out. A directory the user typed, for a project or an account of a region
 being imported, that is not usable stops the import before any request: the tab holding it comes forward, Consoles and
-projects first, its row is marked and its field takes focus. The dialog cannot be dismissed while the request runs,
-which with clones can be long. The **result** then replaces the review, and the dialog is renamed to say that the
-import finished.
+projects first, its row is marked and its field takes focus. Otherwise the **progress** replaces the review for as long
+as the request runs, which with clones can be long. When the daemon answers, the **result** replaces it, and the dialog
+is renamed to say that the import finished. When the request fails instead — the daemon refuses it, or the connection
+to it is lost — the dialog goes back to the review with every choice as it was, and the failure is told in an error
+alert over it (see "When the file fails" above).
+
+While the request runs the dialog cannot be left (see "A dialog cannot be left while its request runs" in
+`docs/product/dialogs.md`): **Cancel** stays in the footer, disabled, beside the **Import** button that was pressed, now
+pending, since an import cannot be cancelled once it has started.
+
+## The import progress
+
+At its top, a progress bar named **Importing configuration**. Until the daemon's first report on the import it shows no
+amount, and the line beside its name says that the import is starting; then it fills by the items that have settled —
+done, failed or not attempted — out of every item the import handles, and the line gives the count ("3 of 7
+processed"). The count is not announced at each step: assistive technology is told when the import starts and again
+when every item has been processed.
+
+Under it, one card per item group, in this order: a card for each console, with a row for each of its projects the
+import places; a card for each agent with accounts the import handles, with a row for each of those accounts; and a card
+for the application settings when they are applied. A project or an account left out has no row, and an agent with no
+account to handle has no card; an account that already exists has its row, whatever was chosen for it. There are no
+tabs. Each console, project, account and the application settings shows its state beside its name, a glyph followed by
+its word:
+
+- **Waiting** — not started yet;
+- **Creating…**, or **Cloning…** for a project being cloned, with a spinner in place of the glyph — being worked on;
+- **Done** — finished. A console is done as soon as it is created, before its projects, and an account that already
+  exists is done at once;
+- **Failed** — with its reason written out under the name, as in the result (see "The import result" below), and
+  **Details** where there is more;
+- **Not attempted** — a project whose console could not be created, with a line saying so.
+
+The progress shows no account fallback marks, totals or sharing warnings: those are the result's.
 
 ## The import result
 
@@ -252,7 +289,8 @@ first such tab is the one open; otherwise the first tab is. Nothing stands above
 own, and whether nothing failed is judged by that region's own failures alone.
 
 The result is the only place the import's failures are shown: no error alert opens for them. A failure is written out
-where it happened, under the row it concerns or, for a console, under its card's header: the reason in Octoboard's own
+where it happened, under the name of the row it concerns or, for a console, in its card's header under its name: the
+reason in Octoboard's own
 words, under it the one thing to do about it, and, where there is more, a **Details** button that opens the further
 explanation and the raw text (see "Names and diagnostic details" in `docs/product/error-alerts.md`). An outcome is a
 glyph followed by its word, each outcome with a glyph of its own, and is not a control.
@@ -264,7 +302,7 @@ projects left out, how many failed — consoles and projects together — and th
 there were any, and **Nothing failed** when nothing failed and nothing went unattempted.
 
 Then a card for each console, its header holding the console's name and always its outcome, **Created** or
-**Failed**, with the reason under the header when it failed; then a row for each of its projects, or a line saying
+**Failed**, with the reason in the header under the name when it failed; then a row for each of its projects, or a line saying
 that it has none. A project's row has the project's name and its outcome — **Created**, **Left out**, **Failed** or
 **Not attempted** — on one line, the outcome going under the name where the row is narrow. Under them, for a project
 created, a muted line saying how it was placed (at its exported path, in the default clone directory, cloned from its

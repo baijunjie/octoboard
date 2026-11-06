@@ -89,6 +89,14 @@ export const SCENARIOS: Scenario[] = [
     description: "Each meaning (neutral, accent, success, warning, danger and help) as labelled swatches of its roles with their token names, then the roles that exist once (link, keyboard focus ring, selected toggle segment, solid buttons, +N/−M counts, secondary text), then the real components in each colour (status badges soft and bordered, chips in a sentence, activity and status marks, and Alerts, which exist only in warning and danger and are replaced by a line saying so for the other meanings) on a card, a dialog, a panel, a tooltip and a sidebar row resting and selected. Compare the same colour across surfaces; use the viewing controls for light and dark.",
     semanticColours: true,
   },
+  {
+    id: "pending-buttons",
+    group: "Component colors",
+    category: "normal",
+    title: "Buttons while pending",
+    description: "Each button size (xs, sm, md, lg) in the primary, secondary and danger variants, idle and then pending: the pending one shows its spinner ahead of the unchanged label and is wider than the idle one by the spinner and its gap. Then the same for a link drawn as a button (xs and sm, secondary and outline), whose spinner stands ahead of its label and before the external-link glyph. Below, the console dialog's avatar field idle and while a picked image is read, where the spinner replaces the glyph. The same button as it waits in a dialog or a row is in the scenarios of the dialog or the row, e.g. the import's progress, Updates while it checks and the Trash check of Remove account.",
+    pendingButtons: true,
+  },
   ...PREVIEW_SCENARIOS,
 ];
 

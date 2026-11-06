@@ -145,3 +145,47 @@ async fn inspecting_reports_the_fallbacks_and_creates_nothing() {
     assert!(state.store.list_consoles().unwrap().is_empty());
     assert!(stored_projects(&state).is_empty());
 }
+
+#[tokio::test]
+async fn an_export_without_the_accounts_region_inspects_with_no_fallbacks() {
+    let area = ScratchDir::new("import-no-accounts-area");
+    let (source, _source_dir) = app_state("import-no-accounts-source");
+    source
+        .store
+        .insert_account(&account("acct-1", AgentId::CLAUDE, "Work"))
+        .unwrap();
+    let repo = directory(&area, "repo");
+    let mut hub = console("Hub", vec![project("repo", &repo.to_string_lossy())]);
+    hub.accounts[AgentId::CLAUDE] = Some(AccountName {
+        name: "Work".to_string(),
+    });
+    hub.projects[0].accounts[AgentId::CLAUDE] = ProjectAccountRef::Account {
+        name: "Work".to_string(),
+    };
+    import(
+        &source,
+        &document(vec![hub]),
+        vec![at(0, 0, DirectoryChoice::ExportedPath)],
+    )
+    .await
+    .unwrap();
+    // The source really references the account; only the region's absence leaves it unnamed.
+    let with_accounts = export::build(
+        &source.store,
+        &export::Selection {
+            accounts: true,
+            ..export::Selection::full(true)
+        },
+    )
+    .unwrap();
+    assert!(with_accounts.consoles[0].accounts[AgentId::CLAUDE].is_some());
+    let exported =
+        serde_json::to_value(export::build(&source.store, &export::Selection::full(true)).unwrap())
+            .unwrap();
+
+    let (target, _target_dir) = app_state("import-no-accounts-target");
+    let consoles = inspect(&target, &exported).await.unwrap().consoles;
+
+    assert!(consoles[0].account_fallbacks.is_empty());
+    assert!(consoles[0].projects[0].account_fallbacks.is_empty());
+}

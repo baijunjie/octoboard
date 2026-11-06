@@ -29,6 +29,8 @@ import {
   type Inspection,
   type ReviewState,
 } from "./importPlan";
+import { ImportProgressView } from "./ImportProgress";
+import { newImportId, NO_PROGRESS, withProgress, type ImportProgress } from "./progressState";
 import { ImportResult, type Imported } from "./ImportResult";
 import { ImportReview } from "./ImportReview";
 import type { Region } from "./RegionTabs";
@@ -37,6 +39,7 @@ import { raiseError } from "../components/alerts/raiseError";
 type Stage =
   | { kind: "choose" }
   | { kind: "review"; fileName: string; document: unknown; inspection: Inspection }
+  | { kind: "importing"; inspection: Inspection }
   | { kind: "result"; result: Imported; shortcuts?: { applied: number; skipped: number; overrides: Overrides } };
 
 /** How long after the window regains focus a file may still arrive before the picker is taken as
@@ -56,6 +59,17 @@ async function settleOpen<T>(open: () => Promise<T>, failed: (err: unknown) => v
   }
 }
 
+/** Runs `work` with `subscribe`'s subscription held for as long as it takes. A function of its
+ * own because the React Compiler skips whatever holds a `try` with a `finally`, as `settleOpen` explains. */
+async function whileListening<T>(subscribe: () => () => void, work: () => Promise<T>): Promise<T> {
+  const unsubscribe = subscribe();
+  try {
+    return await work();
+  } finally {
+    unsubscribe();
+  }
+}
+
 /** The regions checked on opening a review: the application settings change how this machine behaves rather than add
  * something to it, so they start unchecked. */
 const DEFAULT_CHECKED: Record<Region, boolean> = { consoles: true, accounts: true, settings: false };
@@ -64,9 +78,11 @@ const DEFAULT_CHECKED: Record<Region, boolean> = { consoles: true, accounts: tru
  * Imports a configuration document in three steps inside one dialog. The user picks a file through the platform's open
  * dialog and the daemon inspects it; what it answers is reviewed here, a row for every project and for every account,
  * before anything is created; and applying sends the document as it was read with the choice made for each project and
- * account, and shows what came of it. The regions of the file are imported as the user checks them (the consoles and
- * projects and the accounts by default, the application settings not), and only a checked region is sent, reviewed or
- * shown in the result; with none checked there is nothing to import. A directory typed for a project or an account that
+ * account, and shows what came of it: while the daemon works, the body lists every item being imported with the state the
+ * daemon's progress reports give it (`ImportProgressView`), and the result takes its place when the reply comes. The
+ * regions of the file are imported as the user checks them (the consoles and projects and the accounts by default, the
+ * application settings not), and only a checked region is sent, reviewed or shown in the result; with none checked
+ * there is nothing to import. A directory typed for a project or an account that
  * the daemon would refuse stops the import at the row, bringing its tab forward. A document the daemon refuses leaves
  * the dialog on the first step, with the reason, for another file to be tried. The daemon's reply to an import comes
  * only after its last clone, so the dialog cannot be dismissed while one is out. Waiting for the file is not such a
@@ -78,7 +94,7 @@ const DEFAULT_CHECKED: Record<Region, boolean> = { consoles: true, accounts: tru
  */
 export function ImportConfigurationDialog({ onClose }: { onClose: () => void }): React.ReactElement {
   const t = useT();
-  const { request } = useDaemon();
+  const { request, onImportProgress } = useDaemon();
   const { configurationFile } = usePlatform();
   const { busy, run } = useDialogAction(undefined, t("configuration.import.alertTitle"));
   const { shown, attempt } = useSubmitValidation();
@@ -93,6 +109,8 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   // Counts the imports a row's problem stopped, so the first such row gets focus once its message
   // is on screen.
   const [stopped, setStopped] = useState(0);
+  // The daemon's progress reports of the import running, which the progress view lists.
+  const [progress, setProgress] = useState<ImportProgress>(NO_PROGRESS);
   // A picker is open, or its answer is awaited. A ref as well as state: a second press can land
   // before the render that shows the first.
   const [waiting, setWaiting] = useState(false);
@@ -184,15 +202,31 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       setStopped((count) => count + 1);
       return;
     }
-    void run(async () => {
-      const result = await request({
+    const reviewing = stage;
+    const importing: Stage = { kind: "importing", inspection: stage.inspection };
+    const importId = newImportId();
+    const send = () =>
+      request({
         type: "import_configuration",
-        document: stage.document,
+        import_id: importId,
+        document: reviewing.document,
         resolutions: importingConsoles ? resolutionsOf(review) : [],
         apply_settings: regions.includes("settings"),
         // Absent means true, so only a refusal is spelled out.
         ...(inFile.includes("consoles") && !importingConsoles && { apply_consoles: false }),
         ...(creatingAccounts && { apply_accounts: true, account_resolutions: accountResolutionsOf(accounts, accountReview) }),
+      });
+    void run(async () => {
+      setProgress(NO_PROGRESS);
+      setStage(importing);
+      const result = await whileListening(
+        () => onImportProgress(importId, (event) => setProgress((current) => withProgress(current, event))),
+        send,
+      ).catch((err: unknown) => {
+        // The request failed, whether the daemon refused it or the connection closed under it: back to the review,
+        // which still holds every choice, and `run` reports the failure.
+        setStage(reviewing);
+        throw err;
       });
       // The daemon applied the settings it knows and echoed the shortcuts it passes through, which are this
       // client's own to apply: it does so only for what the daemon says it applied.
@@ -204,25 +238,27 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
 
   // Nothing checked is nothing to import.
   const nothingToImport = stage.kind === "review" && importedRegions(carriedRegions(stage.inspection), checked).length === 0;
-  // The footer's buttons stay while the body changes.
-  const reviewFooter = (
+  // The footer's buttons stay while the body changes: the same keys in every step's footer keep each one mounted. The
+  // import step shows this footer too: the daemon has no way to stop an import, so Cancel is disabled beside the
+  // pending Import, and the Import button that was pressed stays the same element and keeps focus as it turns pending.
+  const importFooter = (
     <>
-      <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
+      <Button key="cancel" type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
         {t("common.cancel")}
       </Button>
-      <Button type="submit" isPending={busy} isDisabled={nothingToImport}>
-        {busy ? t("configuration.import.review.pending") : t("configuration.import.review.submit")}
+      <Button key="import" type="submit" isPending={busy} isDisabled={nothingToImport}>
+        {t("configuration.import.review.submit")}
       </Button>
     </>
   );
 
   const chooseFooter = (
     <>
-      <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
+      <Button key="cancel" type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
         {t("common.cancel")}
       </Button>
       {/* Pending rather than disabled, so the button keeps focus and the dialog its Escape. */}
-      <Button type="submit" isPending={busy || waiting} autoFocus>
+      <Button key="import" type="submit" isPending={busy || waiting} autoFocus>
         {t("configuration.import.choose.submit")}
       </Button>
     </>
@@ -231,8 +267,9 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   const frame =
     stage.kind === "choose"
       ? { footer: chooseFooter, onSubmit: () => void choose() }
-      : stage.kind === "review"
-        ? { footer: reviewFooter, onSubmit: apply }
+      : stage.kind === "review" || stage.kind === "importing"
+        // The importing step keeps the form, so the pressed button is not remounted; `apply` does nothing there.
+        ? { footer: importFooter, onSubmit: apply }
         : {
           footer: (
             <Button type="button" onPress={onClose}>
@@ -244,7 +281,8 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   return (
     <Dialog
       title={t(stage.kind === "result" ? "configuration.import.result.title" : "configuration.import.title")}
-      onClose={busy ? () => {} : onClose}
+      onClose={onClose}
+      busy={busy}
       size={stage.kind === "choose" ? "md" : "wide"}
       resetKey={stage.kind}
       {...frame}
@@ -267,6 +305,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
             shown={shown}
           />
         )}
+        {stage.kind === "importing" && <ImportProgressView inspection={stage.inspection} progress={progress} />}
         {stage.kind === "result" && <ImportResult result={stage.result} shortcuts={stage.shortcuts} />}
       </div>
     </Dialog>

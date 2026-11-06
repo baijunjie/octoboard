@@ -240,7 +240,7 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Hand off request running",
-    description: "Hand off shows its busy state while the daemon works, and the dialog stays open.",
+    description: "Hand off shows its pending spinner ahead of the label while the daemon works, and the dialog stays open: its Cancel and close button are disabled, and Escape and a click outside do nothing.",
     state,
     sessionHandoffs: { [hub.id]: "pending" },
     steps: confirmHandoff(hub.title),

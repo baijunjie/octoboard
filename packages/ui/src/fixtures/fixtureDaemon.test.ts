@@ -1657,6 +1657,14 @@ describe("the fixture daemon's added agents", () => {
     expect(added(daemon)).toEqual(["grok", "claude", "codex"]);
   });
 
+  it("never answers an add a scenario holds pending, leaving the list as it was", async () => {
+    const daemon = createFixtureDaemon({ agentAdd: "pending", state: snapshotState({ settings: { ...settings, added_agents: ["claude"] } }) });
+    daemon.store.setState({ agentAvailability: new Map([["grok" as const, { agent: "grok" as const, availability: "available" as const, default_account_dir: null }]]) });
+    const outcome = await Promise.race([daemon.request({ type: "add_agent", agent: "grok" }).then(() => "answered", () => "answered"), new Promise((resolve) => setTimeout(() => resolve("waiting"), 50))]);
+    expect(outcome).toBe("waiting");
+    expect(added(daemon)).toEqual(["claude"]);
+  });
+
   it("refuses every change to the list with the error a scenario names, leaving the list as it was", async () => {
     const refusal = { code: "agent_order_invalid", params: {}, message: "the new order must name each added agent exactly once" };
     const daemon = createFixtureDaemon({ agentListError: refusal, state: snapshotState({ settings: { ...settings, added_agents: ["claude", "codex"] } }) });
@@ -2241,6 +2249,34 @@ describe("the fixture daemon's configuration export", () => {
           },
           { agent: "codex", default_account: { name: null, position: 0 }, accounts: [{ name: "Home", directory: "~", share_default_config: false, disabled: false }] },
         ],
+      });
+    });
+
+    it("names an account in a reference only where the accounts are exported, and otherwise drops it", async () => {
+      const referencing = createFixtureDaemon({
+        state: snapshotState({
+          consoles: [consoleOf("c-1", "Work", { accounts: { claude: "a-1" } })],
+          projects: [
+            projectOf("p-1", "c-1", "Named", { accounts: { claude: { kind: "account", id: "a-1" } } }),
+            projectOf("p-2", "c-1", "Pinned", { accounts: { claude: { kind: "default" } } }),
+            projectOf("p-3", "c-1", "Following"),
+          ],
+          settings: { ...DEFAULT_SETTINGS, accounts: [account("a-1", "claude", "Work", "/Users/dev/.claude-work")] },
+        }),
+      });
+      // Projects come by name: Following, Named, Pinned.
+      const references = async (include_accounts: boolean) => {
+        const { document } = (await referencing.request({ type: "export_configuration", include_accounts })) as { document: ReturnType<typeof exportedDocument> };
+        const [console] = document.consoles;
+        return { console: console.accounts.claude, projects: console.projects.map((project) => project.accounts.claude) };
+      };
+      expect(await references(true)).toEqual({
+        console: { name: "Work" },
+        projects: [{ kind: "inherit" }, { kind: "account", name: "Work" }, { kind: "default" }],
+      });
+      expect(await references(false)).toEqual({
+        console: null,
+        projects: [{ kind: "inherit" }, { kind: "inherit" }, { kind: "default" }],
       });
     });
 

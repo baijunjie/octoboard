@@ -375,7 +375,7 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Stop in flight",
-    description: "The user confirmed stopping the first process and the request is still pending. The confirmation stays open with its confirming button pending and cannot be dismissed (Cancel, Escape and the close button do nothing) until the request settles, while the panel remains behind it. Keep in flight holds its confirmation the same way.",
+    description: "The user confirmed stopping the first process and the request is still pending. The confirmation stays open with its confirming button pending and cannot be dismissed (Cancel and the close button are disabled, and Escape does nothing) until the request settles, while the panel remains behind it. Keep in flight holds its confirmation the same way.",
     state,
     preferences: panelPreferences,
     processes: { trees: pair, stop: "pending" },

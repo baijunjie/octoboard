@@ -13,7 +13,7 @@ import { accountsOutcomeOf, outcomeOf } from "./importPlan";
 import { AgentList, CardRows, EmptyLine, SettingLine, ToneLine } from "./importParts";
 import { shortcutValues } from "./importValues";
 import { RegionTabs, type Region, type RegionPanel } from "./RegionTabs";
-import { ResultCard, ResultRow } from "./ResultCards";
+import { Outcome, ResultCard, ResultRow } from "./ResultCards";
 import { SettingsCard } from "./SettingsCard";
 import { useProviders } from "../store";
 import { ProviderName } from "../components/text/ProviderName";
@@ -99,7 +99,7 @@ export function ImportResult({
     <>
       <RegionTotals label={t("configuration.import.result.totals.consoles")} items={consolesTotals} />
       {result.consoles.map((console, index) => (
-        <ResultCard key={index} name={console.name} fallbacks={console.account_fallbacks} status={console.status} failure={console.error}>
+        <ResultCard key={index} name={console.name} fallbacks={console.account_fallbacks} status={<Outcome status={console.status} />} failure={console.error}>
           {console.projects.length === 0 ? (
             <EmptyLine>{t("configuration.import.console.noProjects")}</EmptyLine>
           ) : (
@@ -109,7 +109,7 @@ export function ImportResult({
                   key={p}
                   name={project.name}
                   fallbacks={project.account_fallbacks}
-                  status={project.status}
+                  status={<Outcome status={project.status} />}
                   detail={
                     project.status === "created" && project.via
                       ? t(VIA_LABEL[project.via])
@@ -136,7 +136,7 @@ export function ImportResult({
               <ResultRow
                 key={i}
                 name={account.name}
-                status={account.status}
+                status={<Outcome status={account.status} />}
                 failure={account.status === "failed" ? account.error : undefined}
                 warning={account.sharing_warning ? { text: t("configuration.import.result.sharingWarning.text"), failure: account.sharing_warning } : undefined}
               />

@@ -346,6 +346,12 @@ pub enum RequestBody {
         #[serde(default = "default_true")]
         #[cfg_attr(test, ts(optional = nullable))]
         apply_consoles: bool,
+        /// A token of the client's own choosing that names this import in the
+        /// `configuration_import_progress` events broadcast while it runs; absent means none are
+        /// sent.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        import_id: Option<String>,
     },
     OpenSession {
         console_id: String,

@@ -97,7 +97,13 @@ document never carries one: `https://user:token@example.com/r.git` is written `h
 
 ### How an account reference travels
 
-An account reference — the account a console or a project names for an agent — travels as the account's **name alone**,
+An account reference — the account a console or a project names for an agent — travels only in a document that carries
+the accounts region. **A document without it names no account at all**: every console is written on each agent's
+default account, a project that names an account is written as following its console, and a project pinned to the
+agent's default account stays pinned to it. Importing such a document therefore binds nothing by name and nothing in it
+falls back (see "Accounts are rebound by name" below).
+
+In a document with the accounts region, a reference travels as the account's **name alone**,
 and which agent it belongs to is settled by the setting it sits in — the console's Claude Code account names a Claude
 Code account. Neither the account's stored id nor its config directory is in the reference: the id means nothing
 elsewhere and the directory is the layout of the machine it was on. An import rebinds every reference by name to the
@@ -109,8 +115,8 @@ dropped from the document, leaving exactly what deleting that account leaves beh
 default account, the project back to inheriting its console's reference (see "Agent config directories" in
 `docs/product/consoles.md`).
 
-A project keeps all three states its account setting can be in: inheriting its console's reference, the agent's default
-account pinned even where the console names another, or a named account.
+There a project keeps all three states its account setting can be in: inheriting its console's reference, the agent's
+default account pinned even where the console names another, or a named account.
 
 ### The accounts
 
@@ -369,7 +375,8 @@ out or failed. A reference that matches no account falls back to that agent's **
 left inheriting, and every such fallback is listed one by one: the inspection says which references would fall back,
 the result of an import which ones did. Since no account the import would create exists yet when it inspects, the
 inspection lists the references to them as well; the import review tells them apart by what is being imported (see
-"Account fallbacks" in `docs/product/configuration-export-and-import-dialogs.md`).
+"Account fallbacks" in `docs/product/configuration-export-and-import-dialogs.md`). A document exported without the
+accounts region holds no named reference (see "How an account reference travels" above), so it has no fallback.
 
 ### What applying does
 
@@ -475,4 +482,26 @@ An import that clones can run long. The clones are made one at a time, in the do
 after **30 minutes**, failing its project and leaving no directory behind (see "Associating a project" in
 `docs/product/projects.md`). There is no way to cancel an import while it runs, and it answers only once the last clone has
 finished — which can be as long as all of them together. Everything created before that point is already in the
-window.
+window, and where the import stands meanwhile is reported as it goes (see "Progress while an import runs" below).
+
+### Progress while an import runs
+
+An import request may name itself with a token of the client's choosing (`import_id`). For such an import the daemon
+reports where each of its items stands while it runs, broadcasting `configuration_import_progress` events that carry the
+token, to every client; a client keeps those with its own token. An import that names none is reported on by no event.
+
+- **The items** are each account the import handles, each console, each project it places, and the application settings
+  when they are applied. A project left out is not one, nor an account left out — but an account that already exists
+  is, whatever was chosen for it, since it is used as it is.
+- **Once nothing can be refused any more**, every item is reported waiting, in the order the import handles them: the
+  accounts, then each console followed by its projects, then the settings. A request refused before anything is
+  created reports nothing.
+- **Each item then moves** to being created as the daemon starts on it — being cloned, for a project that is cloned —
+  and ends done, failed (with the same failure the result reports for it), or, for a project whose console could not
+  be created, not attempted. A console is done as soon as it is created, its projects then reporting for themselves.
+  An account that already exists goes straight to done, and so does a created account whose sharing could not be
+  turned on: that warning is the result's.
+
+The events are sent before the reply, but the last of them can reach a client after it; once a client has the reply,
+it ignores the later events of that import. A failure the daemon answers with an error after reporting progress
+ends the import.

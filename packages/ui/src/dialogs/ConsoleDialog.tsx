@@ -138,6 +138,8 @@ export function ConsoleDialog({
         title={editing ? t("dialog.console.edit") : t("dialog.console.new")}
         onClose={onClose}
         submitLabel={editing ? t("common.save") : t("common.create")}
+        // Reading a picked image holds Save pending too: it is brief, and Save would otherwise look live while it
+        // does nothing.
         busy={busy || decoding}
         onSubmit={submit}
         size="wide"

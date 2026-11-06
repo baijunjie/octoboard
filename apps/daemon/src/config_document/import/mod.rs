@@ -12,6 +12,7 @@
 //! created here is as untrusted as one added by hand.
 
 mod accounts;
+mod progress;
 mod projects;
 
 use std::collections::{BTreeMap, HashMap};
@@ -24,15 +25,19 @@ use crate::project_git::remote_url;
 use crate::protocol::{
     error_code, Account, AccountFallback, AccountName, AccountResolution, AgentId, CodedError,
     ConfigurationDocument, DirectoryChoice, DocumentConsole, DocumentProject, DocumentSettings,
-    ImportFailure, ImportStatus, ImportedAccounts, ImportedConsole, ImportedProject,
-    InspectedAccounts, InspectedConsole, InspectedProject, InspectedSettings, PerAgent,
-    ProjectAccount, ProjectAccountRef, ProjectResolution, CONFIGURATION_FORMAT,
+    ImportFailure, ImportItem, ImportItemState, ImportStatus, ImportedAccounts, ImportedConsole,
+    ImportedProject, InspectedAccounts, InspectedConsole, InspectedProject, InspectedSettings,
+    PerAgent, ProjectAccount, ProjectAccountRef, ProjectResolution, CONFIGURATION_FORMAT,
     CONFIGURATION_VERSION,
 };
 use crate::providers::SettingValue;
 use crate::state::AppState;
 
-use accounts::{apply_accounts, index_account_resolutions, inspect_accounts};
+use accounts::{
+    announce_accounts, apply_accounts, index_account_resolutions, inspect_accounts,
+    prepare_accounts,
+};
+use progress::Progress;
 use projects::{
     clone_directory, derived_directory, exported_directory, place_project, probe_disk,
     probe_offers, Probe, PROBE_DEADLINE,
@@ -57,6 +62,28 @@ pub struct Imported {
     /// What came of the accounts; absent unless the caller asked for them.
     pub accounts: Option<ImportedAccounts>,
     pub consoles: Vec<ImportedConsole>,
+}
+
+/// [`apply_reporting`] for the tests, which have no client to report progress to.
+#[cfg(test)]
+pub async fn apply(
+    state: &Arc<AppState>,
+    document: &serde_json::Value,
+    resolutions: Vec<ProjectResolution>,
+    apply_settings: bool,
+    accounts: Option<Vec<AccountResolution>>,
+    apply_consoles: bool,
+) -> Result<Imported> {
+    apply_reporting(
+        state,
+        document,
+        resolutions,
+        apply_settings,
+        accounts,
+        apply_consoles,
+        None,
+    )
+    .await
 }
 
 /// The document `value` holds, or the refusal that applies: it is not one at all, it is of a
@@ -411,14 +438,23 @@ fn naming_console(mut err: anyhow::Error, name: &str) -> anyhow::Error {
 ///
 /// Projects are placed one at a time, so a clone, which may run for minutes, holds one blocking
 /// thread for its whole length and no document, however large, holds more.
-pub async fn apply(
+///
+/// With an `import_id`, every item is announced as waiting once nothing can be refused any more,
+/// in the order they are handled, and then reported as each is (`configuration_import_progress`;
+/// see [`ImportItem`]). A project with no resolution is left out and never announced. A console is
+/// `done` as soon as it is created, its projects reporting for themselves after it. What can fail
+/// of the accounts runs before the announcements; the one read after them, of the accounts the
+/// consoles bind to, can still fail, which ends the import with an error reply.
+pub async fn apply_reporting(
     state: &Arc<AppState>,
     document: &serde_json::Value,
     resolutions: Vec<ProjectResolution>,
     apply_settings: bool,
     accounts: Option<Vec<AccountResolution>>,
     apply_consoles: bool,
+    import_id: Option<String>,
 ) -> Result<Imported> {
+    let progress = Progress::new(state, import_id);
     let mut document = parse(document)?;
     let mut chosen = if apply_consoles {
         index_resolutions(&document, resolutions)?
@@ -460,10 +496,42 @@ pub async fn apply(
             .map_err(|err| naming_console(err, &new.name))?;
     }
 
-    let imported_accounts = match account_step {
-        Some((document_accounts, chosen)) => {
-            Some(apply_accounts(state, document_accounts, chosen).await?)
+    let accounts_ready = match account_step {
+        Some((document_accounts, account_choices)) => {
+            let prepared = prepare_accounts(state, document_accounts)?;
+            announce_accounts(document_accounts, &prepared, &account_choices, &progress);
+            Some((document_accounts, account_choices, prepared))
         }
+        None => None,
+    };
+    for (console_index, document_console) in document.consoles.iter().enumerate() {
+        progress.waiting(ImportItem::Console {
+            console: console_index,
+        });
+        for project_index in 0..document_console.projects.len() {
+            if chosen.contains_key(&(console_index, project_index)) {
+                progress.waiting(ImportItem::Project {
+                    console: console_index,
+                    project: project_index,
+                });
+            }
+        }
+    }
+    if apply_settings {
+        progress.waiting(ImportItem::Settings);
+    }
+
+    let imported_accounts = match accounts_ready {
+        Some((document_accounts, account_choices, prepared)) => Some(
+            apply_accounts(
+                state,
+                document_accounts,
+                prepared,
+                account_choices,
+                &progress,
+            )
+            .await,
+        ),
         None => None,
     };
     // After the accounts, so a reference binds to one the import created.
@@ -484,9 +552,26 @@ pub async fn apply(
         prepared.into_iter().enumerate()
     {
         let name = new.name.clone();
+        let console_item = ImportItem::Console {
+            console: console_index,
+        };
+        progress.report(console_item.clone(), ImportItemState::Creating);
         let created = match coordinator::consoles::create_console(state, new) {
             Ok(created) => created,
             Err(err) => {
+                let failure = ImportFailure::of(&err);
+                progress.failed(console_item, &failure);
+                for project_index in 0..document_projects.len() {
+                    if chosen.contains_key(&(console_index, project_index)) {
+                        progress.report(
+                            ImportItem::Project {
+                                console: console_index,
+                                project: project_index,
+                            },
+                            ImportItemState::NotAttempted,
+                        );
+                    }
+                }
                 let projects = document_projects
                     .iter()
                     .map(|project| ImportedProject::not_attempted(&project.name))
@@ -495,20 +580,40 @@ pub async fn apply(
                     console: None,
                     name,
                     status: ImportStatus::Failed,
-                    error: Some(ImportFailure::of(&err)),
+                    error: Some(failure),
                     account_fallbacks: Vec::new(),
                     projects,
                 });
                 continue;
             }
         };
+        // The console is done once it exists; its projects report for themselves.
+        progress.report(console_item, ImportItemState::Done);
         let mut projects = Vec::new();
         for (project_index, project) in document_projects.into_iter().enumerate() {
             let outcome = match chosen.remove(&(console_index, project_index)) {
                 None => ImportedProject::left_out(&project.name),
                 Some(choice) => {
+                    let item = ImportItem::Project {
+                        console: console_index,
+                        project: project_index,
+                    };
+                    progress.report(
+                        item.clone(),
+                        match choice {
+                            DirectoryChoice::Clone => ImportItemState::Cloning,
+                            _ => ImportItemState::Creating,
+                        },
+                    );
                     let accounts = rebinder.project(&project);
-                    place_project(state, &created.id, project, accounts, &choice, &clone_dir).await
+                    let outcome =
+                        place_project(state, &created.id, project, accounts, &choice, &clone_dir)
+                            .await;
+                    match &outcome.error {
+                        Some(failure) => progress.failed(item, failure),
+                        None => progress.report(item, ImportItemState::Done),
+                    }
+                    outcome
                 }
             };
             projects.push(outcome);
@@ -525,6 +630,7 @@ pub async fn apply(
 
     let (mut settings_applied, mut settings_error) = (None, None);
     if let Some(settings) = document.settings.filter(|_| apply_settings) {
+        progress.report(ImportItem::Settings, ImportItemState::Creating);
         let changes = SettingsChanges {
             auto_close_idle_shell_terminals: Some(settings.auto_close_idle_shell_terminals),
             auto_pull_repositories: Some(settings.auto_pull_repositories),
@@ -548,8 +654,15 @@ pub async fn apply(
             agent_tags: known_agent_tags(&settings.agent_tags).collect(),
         };
         match coordinator::settings::update_settings(state, changes) {
-            Ok(()) => settings_applied = Some(settings),
-            Err(err) => settings_error = Some(ImportFailure::of(&err)),
+            Ok(()) => {
+                settings_applied = Some(settings);
+                progress.report(ImportItem::Settings, ImportItemState::Done);
+            }
+            Err(err) => {
+                let failure = ImportFailure::of(&err);
+                progress.failed(ImportItem::Settings, &failure);
+                settings_error = Some(failure);
+            }
         }
     }
     Ok(Imported {

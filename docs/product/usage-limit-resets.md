@@ -65,7 +65,9 @@ The confirmation is a modal dialog titled **Redeem reset**. It shows:
 - that redeeming resets the account's eligible usage windows now;
 - the account's usage meters, drawn as in the rail's panel (see "How an account's quota is shown" in
   `docs/product/account-quotas.md`);
-- **Cancel** and **Use reset**. While the request is under way the button reads "Resetting usage…".
+- **Cancel** and **Use reset**. While the request is under way **Use reset** shows as pending and the dialog cannot be
+  left (see "A button while its action runs" and "A dialog cannot be left while its request runs" in
+  `docs/product/dialogs.md`).
 
 Until **Use reset** is pressed the dialog follows the account's reading as it changes, so a reset used or gone
 meanwhile shows. When the reading no longer holds any reset, the dialog says instead that the account has no usage limit

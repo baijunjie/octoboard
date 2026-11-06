@@ -17,7 +17,6 @@ export function RestoreProjectChangesDialog({ project, onClose }: { project: Pro
       subject={<Message id="dialog.restoreProjectChanges.subject" params={{ name: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />}
       message={t("dialog.restoreProjectChanges.message")}
       confirmLabel={t("dialog.restoreProjectChanges.confirm")}
-      pendingLabel={t("dialog.restoreProjectChanges.pending")}
       destructive
       onCancel={onClose}
       onConfirm={async () => {

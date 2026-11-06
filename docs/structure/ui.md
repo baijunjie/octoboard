@@ -127,7 +127,7 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
 - `src/process/` — the Processes panel and its data, the polled global process count the rail shows
   (`processPolling.ts` holds the polling paces), and the rail's process panel (`ProcessCounts`).
 - `src/configuration/` — configuration export and import dialogs (with the cards and parts they share, `SettingsCard.tsx`
-  and `importParts.tsx`; the review and result show one line per distinct provider-setting heading, from the served schema and the providers' copy), and the list of plain switch settings.
+  and `importParts.tsx`; the review and result show one line per distinct provider-setting heading, from the served schema and the providers' copy; `ImportProgress.tsx` shows a running import item by item, its state kept in `progressState.ts`, with `ResultCards.tsx` shared by progress and result), and the list of plain switch settings.
 - `src/about/`, `src/updates/` — the licenses dialog and its data; the UI side of self-update.
 
 ### Dev-only and website-facing
@@ -246,6 +246,10 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Send a browse request | through a lane or a slot in `src/browse/budget.ts` (`listingLane`, `listLane`, `documentImageLane`, `BROWSE_SLOTS`), whose shares `budget.test.ts` keeps within the daemon's bound; a new kind of request takes its share from them |
 | Treat a failed browse request | `browseFailure` and `projectBrowseFailure` (`src/browse/failure.ts`) |
 | Open a dialog from a control outside its window | `createLauncher` (`src/components/hooks/createLauncher.ts`) |
+| Open an App-level dialog (a `RequestedDialog`) from a control inside another dialog, so the dialog's lifetime is the window's and not the opener's | `openDialogFromAnywhere` (`src/dialogs/dialogLauncher.ts`), registered in `App.tsx` through `createLauncher`, as Settings → Configuration → Import does |
+| Follow a running configuration import | `Daemon.onImportProgress` (`src/store/connection.ts`), which delivers the `configuration_import_progress` events of one import (named by the `import_id` the request sent) to its listener outside the store and reducer, through `createImportProgressListeners` (`src/store/importProgressListeners.ts`); the fixture daemon implements it too |
+| A dialog whose work cannot be left while it runs | `Dialog`'s `busy` prop (`src/components/dialog/Dialog.tsx`): the close button is disabled and Escape and an outside click are ignored |
+| A decorative spinner beside a label that already says what runs | `DecorativeSpinner` (`src/components/controls/DecorativeSpinner.tsx`), which `Button` (while `isPending`, which also sets `aria-busy`), `ExternalLink` and the import progress view use; never HeroUI's `Spinner` directly, which is announced as a status |
 | Load a component lazily, with a way to load it again after a failed import | `retryableLazy` (`src/components/hooks/retryableLazy.ts`), not `React.lazy`, which keeps the rejection |
 | Poll a daemon answer that is shown or counted (process trees, the global process counts), publishing only a changed one | `usePolled` (`src/components/hooks/usePoll.ts`), under `useProcessTrees` and `useAllProcesses` at the paces in `src/process/processPolling.ts`, rather than a timer of its own |
 | A count in a row, or on a rail control | `CountBadge` (`src/components/status/CountBadge.tsx`), reusing `StatusBadge`, in a row; `RailCountBadge` (`src/shell/RailCountBadge.tsx`) through `ChromeButton`'s `badge` prop on a rail control |

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
+import { registerDialogLauncher } from "../dialogs/dialogLauncher";
 import { consoleOf } from "../fixtures/builders";
 import type { PlatformAdapter } from "../platform";
 import { mountHost } from "../test/mountHost";
@@ -37,10 +38,13 @@ it("falls back to the first console when the one the sidebar chose is gone", asy
   expect(document.body.textContent).toContain("Console Main and its projects");
 });
 
-it("opens the import from its own button", async () => {
+it("asks the window to open the import from its own button, and opens none itself", async () => {
+  const open = vi.fn();
+  onTestFinished(registerDialogLauncher(open));
   mount([main]);
   await press("Import");
-  expect(document.body.textContent).toContain("Choose an exported configuration file");
+  expect(open).toHaveBeenCalledExactlyOnceWith({ kind: "import-configuration" });
+  expect(document.body.textContent).not.toContain("Choose an exported configuration file");
 });
 
 it("has nothing to press where the platform cannot save or open a file", () => {

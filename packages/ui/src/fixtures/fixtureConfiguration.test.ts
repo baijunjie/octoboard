@@ -2,8 +2,10 @@
 import { describe, expect, it } from "vitest";
 
 import { documentSettings } from "../configuration/testSupport";
-import type { DocumentSettings, ImportedAccount, ImportedProject } from "../protocol";
-import { importDisagreement, withShortcutsEcho } from "./fixtureConfiguration";
+import type { DocumentSettings, ImportedAccount, ImportedProject, ImportItem } from "../protocol";
+import { inspected, inspectedProject } from "./configurationReview";
+import type { ImportProgressFixture } from "./fixture";
+import { handledImportItems, importDisagreement, importProgressDisagreement, withShortcutsEcho } from "./fixtureConfiguration";
 
 const project = (name: string, status: ImportedProject["status"], via: ImportedProject["via"] = null): ImportedProject => ({
   name,
@@ -118,5 +120,84 @@ describe("withShortcutsEcho", () => {
     expect(withShortcutsEcho(asked({ keyboard_shortcuts: null }), applied)).toBe(applied);
     const none = result([]);
     expect(withShortcutsEcho(asked({ keyboard_shortcuts: { lock } }), none)).toBe(none);
+  });
+});
+
+describe("handledImportItems", () => {
+  const inspection = inspected({
+    consoles: [
+      { name: "A", account_fallbacks: [], projects: [inspectedProject({ name: "A1", path: "/a1" }), inspectedProject({ name: "A2", path: "/a2" })] },
+      { name: "B", account_fallbacks: [], projects: [] },
+    ],
+    accounts: {
+      agents_to_add: [],
+      agents: [{ agent: "claude", default_name: null, default_name_applies: false, accounts: ["W", "X", "Y"].map((name) => ({ name, directory: `~/.${name}`, proposed_directory: `/h/.${name}`, status: name === "Y" ? ("existing" as const) : ("new" as const), in_use_by: null, error: null, share_default_config: false, disabled: false })) }],
+    },
+  });
+  const request = { type: "import_configuration" as const, document: {}, import_id: "i" };
+
+  it("lists the accounts not left out, one that exists whatever was chosen for it, each console with the projects that have a resolution, then the settings, as the daemon announces them", () => {
+    expect(
+      handledImportItems(
+        { ...request, apply_accounts: true, account_resolutions: [{ agent: "claude", account: 0, leave_out: true }, { agent: "claude", account: 2, leave_out: true }], resolutions: [{ console: 0, project: 1, choice: { kind: "clone" } }], apply_settings: true },
+        inspection,
+      ),
+    ).toEqual<ImportItem[]>([
+      { kind: "account", agent: "claude", account: 1 },
+      { kind: "account", agent: "claude", account: 2 },
+      { kind: "console", console: 0 },
+      { kind: "project", console: 0, project: 1 },
+      { kind: "console", console: 1 },
+      { kind: "settings" },
+    ]);
+  });
+
+  it("lists no console or project where the request asks for none, and no account or settings it does not ask for", () => {
+    expect(handledImportItems({ ...request, apply_consoles: false, resolutions: [{ console: 0, project: 0, choice: { kind: "clone" } }] }, inspection)).toEqual([]);
+  });
+});
+
+describe("importProgressDisagreement", () => {
+  const settings: ImportItem = { kind: "settings" };
+  const project = (p: number): ImportItem => ({ kind: "project", console: 0, project: p });
+  const handled: ImportItem[] = [{ kind: "account", agent: "claude", account: 0 }, { kind: "console", console: 0 }, project(0), project(1), { kind: "console", console: 1 }, settings];
+  const report = (item: ImportItem, state: "creating" | "cloning" | "done" | "not_attempted"): ImportProgressFixture => ({ item, state });
+  const failed = (item: ImportItem): ImportProgressFixture => ({ item, state: "failed", error: { code: "internal_error", params: {}, message: "x" } });
+
+  it("finds none for an import part-way: what is behind it settled, the console of the running project done as soon as it was created, the rest waiting", () => {
+    expect(
+      importProgressDisagreement(handled, [report(handled[0], "done"), report(handled[1], "done"), failed(project(0)), report(project(1), "cloning")]),
+    ).toBeUndefined();
+    expect(importProgressDisagreement(handled, [])).toBeUndefined();
+  });
+
+  it("finds none for a console being created, whose projects still wait", () => {
+    expect(importProgressDisagreement(handled, [report(handled[0], "done"), report(handled[1], "creating")])).toBeUndefined();
+  });
+
+  it("finds none for a console that could not be created, whose projects were not tried", () => {
+    expect(importProgressDisagreement(handled, [report(handled[0], "done"), failed(handled[1]), report(project(0), "not_attempted"), report(project(1), "not_attempted"), report(handled[4], "creating")])).toBeUndefined();
+  });
+
+  it("finds an item that is not handled, or reported twice", () => {
+    expect(importProgressDisagreement(handled, [report({ kind: "console", console: 5 }, "done")])).toMatch(/does not handle/);
+    expect(importProgressDisagreement(handled, [report(handled[0], "done"), report(handled[0], "creating")])).toMatch(/twice/);
+  });
+
+  it("finds an item that has moved on while one before it still waits", () => {
+    expect(importProgressDisagreement(handled, [report(settings, "creating")])).toMatch(/after an item that still waits/);
+    expect(importProgressDisagreement(handled, [report(project(0), "done")])).toMatch(/after an item that still waits/);
+  });
+
+  it("finds a project that moved on while its console is not done, or one not tried under a console that was created", () => {
+    expect(importProgressDisagreement(handled, [report(handled[0], "done"), report(handled[1], "creating"), report(project(0), "creating")])).toMatch(/its console is creating/);
+    expect(importProgressDisagreement(handled, [report(handled[0], "done"), report(handled[1], "done"), report(project(0), "not_attempted")])).toMatch(/its console is done/);
+    expect(importProgressDisagreement(handled, [report(handled[0], "done"), failed(handled[1]), report(project(0), "done")])).toMatch(/its console is failed/);
+    expect(importProgressDisagreement(handled, [report(handled[0], "done"), failed(handled[1]), report(project(0), "not_attempted")])).toMatch(/still waits though its console failed/);
+  });
+
+  it("finds a state only a project has on another item", () => {
+    expect(importProgressDisagreement(handled, [report(handled[0], "cloning")])).toMatch(/cannot be cloning/);
+    expect(importProgressDisagreement(handled, [report(handled[0], "done"), report(handled[1], "not_attempted")])).toMatch(/cannot be not_attempted/);
   });
 });

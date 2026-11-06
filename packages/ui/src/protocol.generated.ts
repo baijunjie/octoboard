@@ -1380,6 +1380,28 @@ export type Event = {
   consoles: Array<ImportedConsole>,
 }
 | {
+  "type": "configuration_import_progress",
+  import_id: string,
+  item: ImportItem,
+} & ({
+  "state": "waiting"
+}
+  | {
+  "state": "creating"
+}
+  | {
+  "state": "cloning"
+}
+  | {
+  "state": "done"
+}
+  | {
+  "state": "failed",
+  error: ImportFailure,
+}
+  | {
+  "state": "not_attempted"
+}) | {
   "type": "page_list",
   id: string | null,
   session_id: string,
@@ -1744,6 +1766,28 @@ export type ImportFailure = {
     [key in string]: string
   },
   message: string,
+};
+
+/**
+ * One thing an import creates or applies, named by its place in the document: the indices are
+ * those of `resolutions` and `account_resolutions`.
+ */
+export type ImportItem = {
+  "kind": "console",
+  console: number,
+}
+| {
+  "kind": "project",
+  console: number,
+  project: number,
+}
+| {
+  "kind": "account",
+  agent: Agent,
+  account: number,
+}
+| {
+  "kind": "settings"
 };
 
 export type ImportStatus = "created" | "left_out" | "failed" | "not_attempted";
@@ -2643,6 +2687,12 @@ export type Request = {
    * them no console or project is created and `resolutions` are not read.
    */
   apply_consoles?: boolean,
+  /**
+   * A token of the client's own choosing that names this import in the
+   * `configuration_import_progress` events broadcast while it runs; absent means none are
+   * sent.
+   */
+  import_id?: string | null,
 }
   | {
   "type": "open_session",
@@ -3330,6 +3380,12 @@ export type RequestBody = {
    * them no console or project is created and `resolutions` are not read.
    */
   apply_consoles?: boolean,
+  /**
+   * A token of the client's own choosing that names this import in the
+   * `configuration_import_progress` events broadcast while it runs; absent means none are
+   * sent.
+   */
+  import_id?: string | null,
 }
 | {
   "type": "open_session",

@@ -323,7 +323,7 @@ it("tells of each account's outcome in the result, with a note that the new ones
   await press("Import");
   const text = document.body.textContent ?? "";
   expect(Array.from(document.body.querySelectorAll("ul[aria-label='Totals for accounts'] > li")).map((li) => li.textContent!.replace(/·$/, ""))).toEqual(["1 account created", "1 account already existed", "1 account left out", "1 failed"]);
-  const card = Array.from(document.body.querySelectorAll("section")).find((section) => section.querySelector(":scope > div > div > h3")?.textContent === "Claude Code")!;
+  const card = Array.from(document.body.querySelectorAll("section")).find((section) => document.getElementById(section.getAttribute("aria-labelledby")!)?.textContent === "Claude Code")!;
   expect(Array.from(card.querySelectorAll("li")).map((li) => li.querySelector("[dir=auto]")!.textContent)).toEqual(["Work", "Home", "Team", "Odd"]);
   const rowText = (name: string) => Array.from(card.querySelectorAll("li")).find((li) => li.textContent!.startsWith(name))!.textContent!;
   expect(rowText("Work")).toContain("Created");

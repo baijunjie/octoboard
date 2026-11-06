@@ -413,6 +413,47 @@ pub struct ImportFailure {
     pub message: String,
 }
 
+/// One thing an import creates or applies, named by its place in the document: the indices are
+/// those of `resolutions` and `account_resolutions`.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ImportItem {
+    Console {
+        console: usize,
+    },
+    Project {
+        console: usize,
+        project: usize,
+    },
+    /// The `account`th account of `agent` in the document, the agent's parts read as one.
+    Account {
+        agent: AgentId,
+        account: usize,
+    },
+    Settings,
+}
+
+/// Where an item of a running import stands.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum ImportItemState {
+    /// Not reached yet.
+    Waiting,
+    /// Being created or applied; for a console, only until it exists.
+    Creating,
+    /// A project being cloned, which may take minutes.
+    Cloning,
+    /// Created or applied, or an account that existed already and is used as it is. A console is
+    /// done once it is created, before its projects are handled.
+    Done,
+    /// The same failure the result reports for it.
+    Failed { error: ImportFailure },
+    /// Its console could not be created, so it was never tried.
+    NotAttempted,
+}
+
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedProject {

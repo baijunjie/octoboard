@@ -82,6 +82,7 @@ export function createSettingsReplies({ scenario, store, fail, providerSettingCh
       return { type: "ack", id: null };
     },
     add_agent: (body) => {
+      if (scenario.agentAdd === "pending") return neverReplied();
       if (scenario.agentListError) return fail(scenario.agentListError);
       const current = store.getState();
       const added = current.settings.added_agents;

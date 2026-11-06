@@ -11,12 +11,13 @@ may cite a rule here by this file's path and the heading it sits under. UI copy 
 Style requirements follow this priority:
 
 1. HeroUI components use the library's default appearance through its supported variants and slots.
-2. Application-authored custom styles follow WCAG 2.2 level AA in both the light and the dark appearance.
+2. Application-authored custom styles aim at WCAG 2.2 level AA in both the light and the dark appearance.
 
-Do not override HeroUI's default colours, placeholder colours, opacity, borders or other visual treatments solely to
-meet an AA threshold. A library-default appearance below that threshold is not a project bug or an exception requiring
-approval. The visual thresholds below apply to application-authored custom styles; application-level keyboard access,
-accessible names, focus handling and announcements remain required.
+The contrast thresholds (see "Contrast") are a reference, not a requirement. A ratio below one is worth noticing and
+weighing, but it does not on its own make a style a defect, block a change, or call for a recorded exception: a style
+that reads well and fits the design is kept even where a measurement falls short. Do not override HeroUI's default
+colours, placeholder colours, opacity, borders or other visual treatments to meet a threshold. Application-level
+keyboard access, accessible names, focus handling and announcements remain required. (Source: user decision.)
 
 The user has kept a few shortfalls and overrides on purpose, each marked by a comment at its code saying so. Leave one
 that is marked as it is, and do not add a new exception without the user's say.
@@ -430,6 +431,18 @@ A disabled select option or menu item, with a reason or without, stays in the ar
 and, where it has one, hears why; it still cannot be activated or selected. Pointing at its clipped name still shows
 the full name, and pressing it runs nothing. Under that setting react-aria sets no
 `aria-disabled` on a select option, so the option gets it by hand.
+
+**A running action holds its button pending.** A button whose action is running is pending, not relabelled and not
+merely disabled: it sets `isPending` on the shared `Button` (`components/controls/Button.tsx`). It keeps its label and
+shows a decorative spinner before it (in place of the content of an icon-only button), is reported busy (`aria-busy`),
+takes no further press, and keeps focus, so a dialog's Escape and Tab containment survive; the button grows by the
+spinner's width. The label never changes to a progressive form ("Saving…", "Importing…"), so no catalog carries a
+pending variant of a button's label. A link drawn as a button (`ExternalLink`) shows the same spinner while its target
+opens. While a dialog's action runs the dialog is busy and cannot be left: Cancel and the other buttons beside the
+pending one stay in place but disabled, the close button is disabled, and Escape and a press outside do nothing
+(`busy` on the shared `Dialog`). Two pending holds are not such a time and leave the dialog leavable: waiting for a
+system picker the dialog opened, and a quick lookup that holds the confirm button pending before the action itself
+starts.
 
 ### A control inside a rendering library's shadow root
 
@@ -1551,8 +1564,10 @@ a press on the link. Its target is exempt from "Pointer target size" as inline t
 same button.
 
 **A report of outcomes** is the one place a failure's reason is written into its row: the import dialog's result,
-whose whole purpose is to say what happened to each console, project and account (`ResultCards.tsx` in
-`packages/ui/src/configuration/`). Each row says its outcome as a glyph and a word, and a failed row writes the reason
+whose whole purpose is to say what happened to each console, project and account, and the progress view that comes
+before it in the same dialog, which is the same report as it fills in (`ResultCards.tsx` and `ImportProgress.tsx` in
+`packages/ui/src/configuration/`). A card's own failure (a console that could not be created) is written in its header
+under its name, as a row writes its own, so it never reads as one of the card's rows. Each row says its outcome as a glyph and a word, and a failed row writes the reason
 in the application's words and the main remedy (in the secondary text colour) under the row as text; the further
 explanation and the raw text stay behind a **Details** button that opens the same popover a mark's would, so raw text
 is still a diagnostic block and never inline. A row that succeeded with a warning (an account created whose sharing
@@ -1853,6 +1868,9 @@ confirmation and the patterns known not to work.
 ## Contrast
 
 ### Thresholds
+
+These are reference values (see "Conformance level and exceptions"): a check reports a shortfall for consideration,
+not as a defect to fix.
 
 - Text: at least 4.5:1 against its background (3:1 for large text).
 - An icon or a state indicator: at least 3:1 against what it sits on.

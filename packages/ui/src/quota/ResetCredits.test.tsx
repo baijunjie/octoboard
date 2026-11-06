@@ -189,7 +189,8 @@ it("keeps asking from the reading at the press while the request runs, though a 
   act(() => store.setState({ accountQuotas: [quotaOf(undefined)] }));
   expect(dialogText()).toContain("One usage limit reset will be used on");
   expect(dialogText()).not.toContain("has no usage limit resets available.");
-  expect(submit().textContent).toBe("Resetting usage…");
+  expect(submit().textContent).toBe("Use reset");
+  expect(submit().getAttribute("aria-busy")).toBe("true");
   expect(spoken()).toBe("");
   settle({ type: "reset_credit_used", id: null, outcome: "reset" } as Event);
   await flush();
@@ -302,7 +303,8 @@ it("holds the confirm button while the request runs, so a second press sends not
   mount(daemon, <UseResetCreditDialog agent="codex" account="codex-work" accountName="Codex Work" onClose={onClose} />);
   press(submit());
   await flush();
-  expect(submit().textContent).toBe("Resetting usage…");
+  expect(submit().textContent).toBe("Use reset");
+  expect(submit().getAttribute("aria-busy")).toBe("true");
   press(submit());
   press(document.body.querySelector("[role=alertdialog] button[aria-label=Close]")!);
   expect(request).toHaveBeenCalledOnce();

@@ -553,7 +553,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Redeem reset confirmation, waiting for Codex",
-    description: "Use reset has been confirmed on Personal and Codex has not answered: the confirm button reads \"Resetting usage…\" and Cancel and the close button are held, so the dialog cannot be left meanwhile; the usage meters stay as they were.",
+    description: "Use reset has been confirmed on Personal and Codex has not answered: the confirm button keeps its label, \"Use reset\", with its pending spinner ahead of it, and Cancel and the close button are disabled and Escape does nothing, so the dialog cannot be left meanwhile; the usage meters stay as they were.",
     state: resetCreditsOn("a-codex"),
     resetCreditUse: "pending",
     steps: [...redeemFromPanel("Personal"), (ui) => ui.confirm()],

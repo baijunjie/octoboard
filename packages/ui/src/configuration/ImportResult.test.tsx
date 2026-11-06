@@ -71,14 +71,13 @@ it("gives each console a card named by its heading with its own outcome, and a r
   const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} />);
   expect(container.querySelector("table")).toBeNull();
   const cards = [...container.querySelectorAll("section")];
-  expect(cards.map((card) => card.querySelector("h3")!.textContent)).toEqual(["Fine", "Broken", "Empty"]);
-  for (const card of cards) {
-    expect(document.getElementById(card.getAttribute("aria-labelledby")!)).toBe(card.querySelector("h3"));
-  }
+  const headingOf = (card: Element) => document.getElementById(card.getAttribute("aria-labelledby")!)!;
+  expect(cards.map((card) => headingOf(card).textContent)).toEqual(["Fine", "Broken", "Empty"]);
   // The console's own outcome is in its header, whatever it is, and each project's is a word in its row.
-  expect(cards.map((card) => card.querySelector(":scope > div")!.textContent)).toEqual(["FineCreated", "BrokenFailed", "EmptyCreated"]);
+  const expectedHeaders = ["FineCreated", "BrokenFailed", "EmptyCreated"];
+  expect(cards.map((card, i) => card.textContent!.slice(0, expectedHeaders[i].length))).toEqual(expectedHeaders);
   expect([...cards[0].querySelectorAll("li")].map((li) => li.textContent)).toEqual(["P1CreatedAt its exported path", "P2Left out"]);
-  // A failed console's reason is under its header, and its project says it was not tried.
+  // A failed console's reason is in its header, under its name, and its project says it was not tried.
   expect(cards[1].textContent).toContain("/missing");
   expect(cards[1].textContent).toContain("Its console could not be created.");
   expect(cards[1].querySelectorAll("li")).toHaveLength(1);

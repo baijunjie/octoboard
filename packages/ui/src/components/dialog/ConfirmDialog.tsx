@@ -22,8 +22,6 @@ export interface ConfirmDialogProps {
   /** What the dialog says: a string is one paragraph; a node lays out its own structure. */
   message: React.ReactNode;
   confirmLabel?: string;
-  /** What the confirm button reads while `onConfirm` is running, for an action that takes seconds. */
-  pendingLabel?: string;
   /** What the button that declines is called. */
   cancelLabel?: string;
   /** Leaves out the Cancel button, for a question whose buttons are all ways of answering it: the
@@ -78,7 +76,6 @@ export function ConfirmDialog({
   subject,
   message,
   confirmLabel,
-  pendingLabel,
   cancelLabel,
   hideCancel,
   extraControl,
@@ -163,13 +160,13 @@ export function ConfirmDialog({
           A typed word takes focus for its field instead. */}
       <Button ref={confirmRef} type="submit" variant={destructive ? "danger" : "primary"} isPending={busy || waiting}
         isDisabled={!confirmed} autoFocus={opensOnConfirm && confirmed}>
-        {busy && pendingLabel ? pendingLabel : (confirmLabel ?? t("common.confirm"))}
+        {confirmLabel ?? t("common.confirm")}
       </Button>
     </>
   );
 
   return (
-    <Dialog title={title} headerLeading={destructive || consequences !== undefined ? <AlertDialog.Icon status="warning" /> : undefined} onClose={busy ? () => {} : onCancel} footer={footer} failure={failure} resetKey={resetKey} focusesItselfOnOpen={unprompted} topLayerAtMount={topLayerAtMount} size={size} onSubmit={() => confirmed && !busy && !waiting && void run(onConfirm)} alert>
+    <Dialog title={title} headerLeading={destructive || consequences !== undefined ? <AlertDialog.Icon status="warning" /> : undefined} onClose={onCancel} busy={busy} footer={footer} failure={failure} resetKey={resetKey} focusesItselfOnOpen={unprompted} topLayerAtMount={topLayerAtMount} size={size} onSubmit={() => confirmed && !busy && !waiting && void run(onConfirm)} alert>
       {typeof message === "string" ? (
         // The separator (a space in English, nothing in Chinese) joins the message's own text node: VoiceOver drops a text
         // node that is only whitespace, and would run the two sentences together.

@@ -61,6 +61,15 @@ it("honours a caller's opening flow and its external pending state", async () =>
   expect(pending.getAttribute("aria-disabled")).toBe("true");
 });
 
+it("shows a decorative spinner before the label of a pending button link, and none on a text link", () => {
+  const button = mount(<ExternalLink href={URL} appearance="button" isPending>Open</ExternalLink>);
+  const spinner = button.querySelector("[data-slot=spinner]");
+  expect(spinner?.getAttribute("aria-hidden")).toBe("true");
+  expect(button.firstElementChild).toBe(spinner);
+  expect(button.textContent).toBe("Open");
+  expect(mount(<ExternalLink href={URL} appearance="button">Open</ExternalLink>).querySelector("[data-slot=spinner]")).toBeNull();
+});
+
 it("reports a failed opener with localized copy, the destination as plain text and the original cause", async () => {
   const cause = new Error("Browser launch failed");
   const anchor = mount(<ExternalLink href={URL}>Guide</ExternalLink>, { kind: "tauri", links: { open: vi.fn().mockRejectedValue(cause) } });

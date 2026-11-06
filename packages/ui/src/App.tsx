@@ -44,6 +44,7 @@ import type { PanelKind } from "./layout/panelKind";
 import { LoginPageOpener } from "./settings/accounts/AccountLogin";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { registerSettingsLauncher } from "./settings/settingsLauncher";
+import { registerDialogLauncher } from "./dialogs/dialogLauncher";
 import { registerSessionModelLauncher } from "./dialogs/sessionModelLauncher";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { updateNoticeKind } from "./updates/noticeKind";
@@ -466,6 +467,7 @@ export function App(): React.ReactElement {
     if (session && !(otherModalOpen || settingsOpen)) openDialog({ kind: "session-model", session });
   });
   useEffect(() => registerSessionModelLauncher(openSessionModel), [openSessionModel]);
+  useEffect(() => registerDialogLauncher(stableOpenDialog), [stableOpenDialog]);
   // Where focus goes once the last alert or pending question, or Settings with no dialog under it, closes with nothing to
   // give it back to.
   const focusAfterModal = useStableHandler(() => focusAfterLoss(focusTerminal));

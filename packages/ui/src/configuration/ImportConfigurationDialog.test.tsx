@@ -233,6 +233,7 @@ it("sends the document unchanged with a resolution for every project that is pla
   expect(imports).toEqual([
     {
       type: "import_configuration",
+      import_id: expect.stringMatching(/^[0-9a-f]{32}$/),
       document: DOCUMENT,
       resolutions: [
         { console: 0, project: 0, choice: { kind: "exported_path" } },

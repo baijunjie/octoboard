@@ -2,7 +2,8 @@
 
 How a dialog — a form dialog, a confirmation, an error alert or a failure modal — is titled, where keyboard focus starts
 in it, where a question the user did not ask for stands among other dialogs, what its confirm button says, what Enter
-does in it, and how it changes size while open. What an open dialog puts
+does in it, what it and its buttons do while a request it started runs — with how a button anywhere in the window shows
+that its action is running — and how it changes size while open. What an open dialog puts
 out of reach in the rest of the window is in "What an open dialog, menu or popover covers" in
 `docs/product/window-layout.md`; error alerts and failure modals themselves are in `docs/product/error-alerts.md`.
 
@@ -91,11 +92,29 @@ is ticked:
   `docs/product/removing-accounts.md`).
 
 What a ticked option adds is said in the confirmation's message and in the lines under its options, not on the button.
-While the action runs, the button either shows as pending under its label or shows one in-progress text naming the
-single step underway — never several actions combined, and never chosen by an option. Archiving a session, deleting a
-session, deleting all archived sessions, removing a project and removing an account show as pending under their label;
-restoring a project's file changes shows that it is restoring, and switching a session's account that it is switching
-account.
+While the action runs, the button shows as pending under the label it already has (see "A button while its action
+runs" below).
+
+## A button while its action runs
+
+**A button whose action is running shows as pending**: a spinner comes before its label, which stays as it was — no
+button changes its words to say what is under way. An icon-only button shows the spinner in place of its icon. A pending
+button cannot be pressed, keeps keyboard focus when it has it, and is reported to assistive technology as busy; the
+spinner itself is not announced. This holds for every button in the window, in a dialog or not, and for a link drawn
+as a button while what it opens is being opened.
+
+## A dialog cannot be left while its request runs
+
+**While a request a dialog started is running, the dialog cannot be left**: its other buttons — **Cancel** among them —
+and its close button are disabled, and Escape and a press outside it do nothing; the button that started the request
+shows as pending. It applies to every form dialog and confirmation that sends a request — renaming, the console,
+session and project dialogs, handing a session off, the account and Add agent dialogs, exporting and importing a
+configuration, and every confirmation — and lasts until the request has been answered, whether it succeeded or failed.
+The console dialog counts an avatar image being read after it was picked as such a request. Waiting on something the
+user can still walk away from is not one, and leaves the dialog as it is: the import dialog's file picker (see
+"Choosing the file to import" in `docs/product/configuration-export-and-import-dialogs.md`), a check a confirmation makes
+before its action can start, which holds its confirm button pending meanwhile, or a login, which closing the dialog
+cancels (see `docs/product/logging-accounts-in.md`).
 
 ## Where keyboard focus starts in a form dialog
 

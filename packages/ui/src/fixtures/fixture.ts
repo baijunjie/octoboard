@@ -3,7 +3,7 @@ import type { Translate } from "../i18n/catalog";
 import type { ReplyOf } from "../requests";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
-import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence } from "../protocol";
+import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, ImportFailure, ImportItem, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence } from "../protocol";
 import type { MessageParams } from "../errors/codedError";
 import type { PathLinkRefusedCause } from "../errors/causes";
 import type { State } from "../store";
@@ -85,6 +85,13 @@ export interface ProcessesFixture {
   keep?: "pending" | FixtureError;
 }
 
+/** Where one item of a running import stands, as the daemon's last progress report for it says (see
+ * `ConfigurationFixture.progress`). */
+export type ImportProgressFixture = { item: ImportItem } & (
+  | { state: "creating" | "cloning" | "done" | "not_attempted" }
+  | { state: "failed"; error: ImportFailure }
+);
+
 /** What the platform and the daemon answer to exporting and importing configuration. Exporting needs
  * nothing from a scenario: the document is built from its state, as the daemon builds one. What an
  * inspection or an import answers is the scenario's to give, and has to agree with the scenario's
@@ -107,6 +114,12 @@ export interface ConfigurationFixture {
    * `"pending"` for an import that is never answered (a long clone). A scenario that applies an
    * import gives it. */
   imported?: Omit<Imported, "type"> | FixtureError | "pending";
+  /** The progress reports that precede the reply to `import_configuration`: the items that have left `waiting`, as the
+   * last report of each says. Every other item the import handles is announced `waiting`, as the daemon announces them
+   * all before it starts, and the fixture daemon refuses a list the real order of work cannot have produced (see
+   * `importProgressDisagreement`). Give it with `imported: "pending"` to hold the import part-way. Without it the import
+   * reports nothing, as a request that carries no `import_id` does. */
+  progress?: ImportProgressFixture[];
 }
 
 /** What the fixture daemon and the platform around it answer: the state the app starts from and the replies and
@@ -278,6 +291,8 @@ export interface Fixture {
    * (an agent uninstalled since the list was drawn, a second window that changed the order). Left out, they are
    * answered by the added list's own rules. */
   agentListError?: FixtureError;
+  /** `"pending"`: `add_agent` is never answered, so an Add stays in flight and the Add agent dialog stays busy. */
+  agentAdd?: "pending";
   /** A refusal of `confirm_trust` that asks for the project's parent folder to be trusted (`trust_parent_dir`), as the
    * daemon refuses a folder it cannot vouch for; nothing is answered, so the dialog stays open. A go-ahead for the
    * project alone is not refused, and without this every go-ahead is acknowledged. */

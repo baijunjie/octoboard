@@ -14,6 +14,7 @@ export function testDaemon({ state, request = () => Promise.reject(new Error("no
     request: looseRequestSender(request),
     showNotice: () => {},
     onNotification: () => () => {},
+    onImportProgress: () => () => {},
     dismissTrustPrompt: () => {},
     reconnect: () => {},
     terminalUrl: () => "",

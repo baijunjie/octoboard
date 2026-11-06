@@ -5,6 +5,7 @@ import { ActionableError } from "../../errors/actionableError";
 import type { Translate } from "../../i18n/catalog";
 import { useT } from "../../i18n/react";
 import { useOptionalPlatform } from "../../platform/react";
+import { DecorativeSpinner } from "../controls/DecorativeSpinner";
 import { ExternalLinkIcon } from "./ExternalLinkIcon";
 import { useFocusVisibleProps } from "../focus/useFocusVisibleProps";
 import { settle } from "../hooks/settle";
@@ -84,7 +85,8 @@ export function ExternalLink({ href, appearance = "text", size, variant = "secon
   const focus = useFocusVisibleProps();
   const action = useExternalLinkAction({ href, onOpen, onFailure, isPending });
   if (!action.address) return <span>{children}</span>;
-  const label = <>{children}<ExternalLinkIcon className={appearance === "button" ? "size-3.5" : "ms-1 size-[0.85em]"} /></>;
+  const spinner = appearance === "button" && action.busy && <DecorativeSpinner className={size === "xs" ? "size-3" : undefined} />;
+  const label = <>{spinner}{children}<ExternalLinkIcon className={appearance === "button" ? "size-3.5" : "ms-1 size-[0.85em]"} /></>;
   return (
     <a
       {...props}

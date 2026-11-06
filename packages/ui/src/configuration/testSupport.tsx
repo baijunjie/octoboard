@@ -10,7 +10,7 @@ import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { ConfigurationFileCapability } from "../platform";
 import type { DocumentSettings, Event, ClientRequestBody } from "../protocol";
-import type { State } from "../store";
+import type { Daemon, State } from "../store";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 
@@ -47,16 +47,18 @@ export interface Mounted {
 }
 
 /** Renders `dialog(onClose)` over a daemon answering each request with `reply`, and a platform
- * whose configuration-file capability is `configurationFile`. Taken down when the test finishes. */
+ * whose configuration-file capability is `configurationFile`; `daemonMembers` replace the daemon's other members.
+ * Taken down when the test finishes. */
 export function mountDialog(
   dialog: (onClose: () => void) => React.ReactElement,
   reply: (body: ClientRequestBody) => Promise<Event>,
   configurationFile: ConfigurationFileCapability,
   state: Partial<State> = {},
+  daemonMembers: Partial<Omit<Daemon, "request">> = {},
 ): Mounted {
   const closed = vi.fn();
   const request = vi.fn(reply);
-  const daemon = testDaemon({ state, request, showNotice: vi.fn() });
+  const daemon = testDaemon({ state, request, showNotice: vi.fn(), ...daemonMembers });
   // Registered before the mount, so it runs after the unmount.
   onTestFinished(() => {
     while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();

@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
+use super::progress::Progress;
 use super::Rebinder;
 use crate::accounts::dirs::normalize_account_dir;
 use crate::agents::availability;
@@ -16,8 +17,9 @@ use crate::coordinator;
 use crate::hostfs::dir_key;
 use crate::protocol::{
     error_code, AccountOutcome, AccountResolution, AccountStatus, AgentId, CodedError,
-    DocumentAccount, DocumentAccounts, ImportFailure, ImportedAccount, ImportedAccounts,
-    ImportedAgentAccounts, InspectedAccount, InspectedAccounts, InspectedAgentAccounts,
+    DocumentAccount, DocumentAccounts, ImportFailure, ImportItem, ImportItemState, ImportedAccount,
+    ImportedAccounts, ImportedAgentAccounts, InspectedAccount, InspectedAccounts,
+    InspectedAgentAccounts,
 };
 use crate::state::AppState;
 
@@ -284,23 +286,22 @@ pub(super) fn index_account_resolutions(
     Ok(chosen)
 }
 
-/// Creates the document's accounts as the Add account form would, with the added agents and the
-/// default accounts' names around them.
-///
-/// First every agent of the document missing from the added agents is appended (a list not yet
-/// decided is first filled, and where it stays undecided nothing is appended, since every agent
-/// counts as added until it is). Then each account in the document's order: one whose name an
-/// account of the agent had before the import is used as it is, a left-out one is skipped, and any
-/// other goes through the form's checks, a failure of which is recorded for that account alone.
-/// A created account takes the document's disabled flag, comes after the agent's other accounts in
-/// its display order, and has sharing turned on afterwards where the document says so, a failure
-/// of which is a warning on the account. The default account's name is applied last, under the
-/// rule an inspection reports.
-pub(super) async fn apply_accounts(
+/// What an import of the document's accounts settles before it announces anything, so that a
+/// failure of it leaves no announced item waiting.
+pub(super) struct PreparedAccounts {
+    /// The accounts this machine had before the import, which an account of the document is
+    /// matched against by name.
+    before: Rebinder,
+    agents_added: Vec<AgentId>,
+}
+
+/// Appends every agent of the document missing from the added agents (a list not yet decided is
+/// first filled, and where it stays undecided nothing is appended, since every agent counts as
+/// added until it is) and reads the accounts the import is matched against.
+pub(super) fn prepare_accounts(
     state: &Arc<AppState>,
     document: &DocumentAccounts,
-    mut chosen: HashMap<(AgentId, usize), AccountChoice>,
-) -> Result<ImportedAccounts> {
+) -> Result<PreparedAccounts> {
     let host = state.store.list_accounts()?;
     let before = Rebinder { accounts: host };
 
@@ -316,6 +317,63 @@ pub(super) async fn apply_accounts(
             crate::state::broadcast_settings(state)?;
         }
     }
+    Ok(PreparedAccounts {
+        before,
+        agents_added,
+    })
+}
+
+/// Announces as waiting each account of the document that [`apply_accounts`] handles: all but the
+/// left-out ones, an existing account included whatever was chosen for it, since one is used as it
+/// is and the choice is never read.
+pub(super) fn announce_accounts(
+    document: &DocumentAccounts,
+    prepared: &PreparedAccounts,
+    chosen: &HashMap<(AgentId, usize), AccountChoice>,
+    progress: &Progress,
+) {
+    for group in group_accounts(document) {
+        for (account, document_account) in group.accounts.iter().enumerate() {
+            let existing = prepared
+                .before
+                .find(group.agent, &document_account.name)
+                .is_some();
+            let left_out = matches!(
+                chosen.get(&(group.agent, account)),
+                Some(AccountChoice::LeaveOut)
+            );
+            if existing || !left_out {
+                progress.waiting(ImportItem::Account {
+                    agent: group.agent,
+                    account,
+                });
+            }
+        }
+    }
+}
+
+/// Creates the document's accounts as the Add account form would, with the added agents and the
+/// default accounts' names around them.
+///
+/// The agents were appended by [`prepare_accounts`]. Then each account in the document's order: one
+/// whose name an account of the agent had before the import is used as it is, a left-out one is
+/// skipped, and any other goes through the form's checks, a failure of which is recorded for that
+/// account alone. A created account takes the document's disabled flag, comes after the agent's
+/// other accounts in its display order, and has sharing turned on afterwards where the document
+/// says so, a failure of which is a warning on the account. The default account's name is applied
+/// last, under the rule an inspection reports. Each account is reported to `progress` as it is
+/// handled (see [`announce_accounts`]).
+pub(super) async fn apply_accounts(
+    state: &Arc<AppState>,
+    document: &DocumentAccounts,
+    prepared: PreparedAccounts,
+    mut chosen: HashMap<(AgentId, usize), AccountChoice>,
+    progress: &Progress,
+) -> ImportedAccounts {
+    let PreparedAccounts {
+        before,
+        agents_added,
+    } = prepared;
 
     let mut agents = Vec::new();
     for group in group_accounts(document) {
@@ -329,8 +387,13 @@ pub(super) async fn apply_accounts(
                 error: None,
                 sharing_warning: None,
             };
+            let item = ImportItem::Account {
+                agent: group.agent,
+                account: index,
+            };
             if let Some(id) = before.find(group.agent, &account.name) {
                 accounts.push(outcome(AccountOutcome::Existing, Some(id)));
+                progress.report(item, ImportItemState::Done);
                 continue;
             }
             let directory = match chosen.remove(&(group.agent, index)) {
@@ -341,6 +404,7 @@ pub(super) async fn apply_accounts(
                 Some(AccountChoice::Directory(directory)) => directory,
                 None => account.directory.clone(),
             };
+            progress.report(item.clone(), ImportItemState::Creating);
             match coordinator::accounts::insert_new_account(
                 state,
                 group.agent,
@@ -359,11 +423,14 @@ pub(super) async fn apply_accounts(
                         }
                     }
                     created_ids.push(created.id);
+                    progress.report(item, ImportItemState::Done);
                     accounts.push(imported);
                 }
                 Err(err) => {
+                    let failure = ImportFailure::of(&err);
+                    progress.failed(item, &failure);
                     let mut failed = outcome(AccountOutcome::Failed, None);
-                    failed.error = Some(ImportFailure::of(&err));
+                    failed.error = Some(failure);
                     accounts.push(failed);
                 }
             }
@@ -395,10 +462,10 @@ pub(super) async fn apply_accounts(
             default_name_applied,
         });
     }
-    Ok(ImportedAccounts {
+    ImportedAccounts {
         agents_added,
         agents: imported,
-    })
+    }
 }
 
 /// Whether `err` is the refusal of a name an account already has.
@@ -443,7 +510,7 @@ mod tests {
     use super::super::tests::{
         account, at, console, directory, document, project, stored_projects,
     };
-    use super::super::{apply, inspect, Inspection};
+    use super::super::{apply, apply_reporting, inspect, Inspection};
     use super::*;
     use crate::protocol::{
         AccountFallback, AccountName, DirectoryChoice, ProjectAccount, ProjectAccountRef,
@@ -893,6 +960,108 @@ mod tests {
                 agent: AgentId::CODEX,
                 name: "Left".to_string(),
             }]
+        );
+    }
+
+    #[tokio::test]
+    async fn each_account_is_reported_as_it_is_handled_the_left_out_one_never() {
+        use super::super::tests::progress::reported;
+        let area = ScratchDir::new("import-apply-progress-area");
+        let (state, _state_dir) = account_state("import-apply-progress", &area);
+        claude_account(&state, "known", "Known", &area.join("known"));
+        let document = with_accounts(
+            document(Vec::new()),
+            &[],
+            vec![agent_entry(
+                "claude",
+                None,
+                vec![
+                    doc_account("Known", &path_text(&area.join("elsewhere"))),
+                    doc_account("Fine", &path_text(&area.join("fine"))),
+                    // The name an account of the document took before it.
+                    doc_account("fine", &path_text(&area.join("again"))),
+                    doc_account("Skipped", &path_text(&area.join("skipped"))),
+                ],
+            )],
+        );
+        let mut events = state.subscribe();
+
+        apply_reporting(
+            &state,
+            &document,
+            Vec::new(),
+            false,
+            Some(vec![AccountResolution {
+                agent: AgentId::CLAUDE,
+                account: 3,
+                directory: None,
+                leave_out: true,
+            }]),
+            true,
+            Some("accounts".to_string()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            reported(&mut events, "accounts"),
+            [
+                "account Claude Code.0: waiting",
+                "account Claude Code.1: waiting",
+                "account Claude Code.2: waiting",
+                "account Claude Code.0: done",
+                "account Claude Code.1: creating",
+                "account Claude Code.1: done",
+                "account Claude Code.2: creating",
+                "account Claude Code.2: failed",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn an_existing_account_is_announced_and_done_even_when_the_choice_leaves_it_out() {
+        use super::super::tests::progress::reported;
+        let area = ScratchDir::new("import-apply-progress-existing-area");
+        let (state, _state_dir) = account_state("import-apply-progress-existing", &area);
+        claude_account(&state, "known", "Known", &area.join("known"));
+        let document = with_accounts(
+            document(Vec::new()),
+            &[],
+            vec![agent_entry(
+                "claude",
+                None,
+                vec![doc_account("Known", &path_text(&area.join("elsewhere")))],
+            )],
+        );
+        let mut events = state.subscribe();
+
+        let imported = apply_reporting(
+            &state,
+            &document,
+            Vec::new(),
+            false,
+            Some(vec![AccountResolution {
+                agent: AgentId::CLAUDE,
+                account: 0,
+                directory: None,
+                leave_out: true,
+            }]),
+            true,
+            Some("existing".to_string()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            imported.accounts.unwrap().agents[0].accounts[0].status,
+            AccountOutcome::Existing
+        );
+        assert_eq!(
+            reported(&mut events, "existing"),
+            [
+                "account Claude Code.0: waiting",
+                "account Claude Code.0: done"
+            ]
         );
     }
 

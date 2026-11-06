@@ -10,7 +10,7 @@ import { type DocumentSettings, type ImportedAccount, type ImportedAccounts, typ
 import { DEFAULT_ACCOUNT_NAME } from "../../accounts/defaultAccount";
 import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "../../fixtures/fixtureProviders";
 import type { Ui, Step } from "../../fixtures/interact";
-import type { ConfigurationFixture } from "../../fixtures/fixture";
+import type { ConfigurationFixture, ImportProgressFixture } from "../../fixtures/fixture";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
 import { accountOf, SAMPLE, consoleOf, projectOf, snapshotState } from "../../fixtures/builders";
@@ -708,6 +708,44 @@ const SETTINGS_RESULT: Omit<Imported, "type"> = {
 
 const reviewing = (extra: Partial<ConfigurationFixture> = {}): ConfigurationFixture => ({ file: FILE, inspection: REVIEW, imported: MIXED_RESULT, ...extra });
 
+/** `ACCOUNTS_REVIEW` with the console that cannot be created first, ahead of the one whose project is being cloned: the daemon
+ * creates the accounts, then each console with its projects in the document's order, then applies the settings, so a console
+ * already failed and a clone running can be on screen together only in this order. */
+const PROGRESS_REVIEW: Omit<Inspection, "type"> = {
+  ...ACCOUNTS_REVIEW,
+  consoles: [ACCOUNTS_REVIEW.consoles[1], ACCOUNTS_REVIEW.consoles[0], ACCOUNTS_REVIEW.consoles[2]],
+};
+
+/** Where `PROGRESS_REVIEW` imported with its defaults and the settings ticked stands part-way (the review's accounts left out
+ * and the project nothing places are not announced): the accounts all settled, one failed; the first console failed with
+ * its project not tried; the second console created, which the daemon reports done at once, with one project failed, one
+ * done and the last being cloned; the third console and the settings still waiting. */
+const IMPORT_UNDER_WAY: ImportProgressFixture[] = [
+  { item: { kind: "account", agent: "claude", account: 0 }, state: "done" },
+  { item: { kind: "account", agent: "claude", account: 1 }, state: "done" },
+  {
+    item: { kind: "account", agent: "claude", account: 2 },
+    state: "failed",
+    error: failure("config_dir_taken", { agent: "Claude Code", name: "Studio" }, "the directory is already used by `Studio` for Claude Code"),
+  },
+  { item: { kind: "account", agent: "codex", account: 0 }, state: "done" },
+  { item: { kind: "account", agent: "codex", account: 1 }, state: "done" },
+  {
+    item: { kind: "console", console: 0 },
+    state: "failed",
+    error: failure("internal_error", { detail: "the data directory cannot be written" }, "the data directory cannot be written"),
+  },
+  { item: { kind: "project", console: 0, project: 0 }, state: "not_attempted" },
+  { item: { kind: "console", console: 1 }, state: "done" },
+  {
+    item: { kind: "project", console: 1, project: 0 },
+    state: "failed",
+    error: failure("path_not_found", { path: "/Users/ana/code/website" }, "/Users/ana/code/website does not exist"),
+  },
+  { item: { kind: "project", console: 1, project: 1 }, state: "done" },
+  { item: { kind: "project", console: 1, project: 2 }, state: "cloning" },
+];
+
 export const configurationScenarios: Scenario[] = [
   {
     id: "configuration-settings-unavailable",
@@ -1062,13 +1100,28 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-import-importing",
     group: GROUP,
     category: "normal",
-    title: "Import, applying",
-    description: "The reply comes after the last clone; the dialog cannot be dismissed meanwhile.",
+    title: "Import, before the first progress report",
+    description: "Import was pressed and the daemon has reported nothing yet: the progress bar labelled \"Importing configuration\" is indeterminate, with \"Starting the import…\" where its count will go and no list under it, and the footer holds the Import button, showing its pending spinner before the label, beside a Cancel that is present but disabled. The dialog cannot be left meanwhile: the close button is disabled, and Escape and a click outside do nothing.",
     state,
     configuration: reviewing({ imported: "pending" }),
     steps: [
       ...importFromSettings,
       chooseFile,
+      importNow,
+    ],
+  },
+  {
+    id: "configuration-import-progress",
+    group: GROUP,
+    category: "normal",
+    title: "Import, in progress",
+    description: "Opened from Settings, the dialog stands over the Settings dialog, which stays open behind it. With Application settings ticked the import is part-way: the bar labelled \"Importing configuration\" is filled to the items that have settled, \"10 of 13 processed\". Below it are cards for the consoles, with their projects, then for each agent with its accounts, then for Application settings, each row with its state: Done, Failed with the reason, Not attempted (the project of the console that could not be created), Waiting, and Creating… or Cloning… with a spinner. The Work laptop console is already Done, one of its projects failed, one is done and the last is being cloned. The footer holds the pending Import button, with its spinner before the label, beside a disabled Cancel, and the close button is disabled too.",
+    state: accountsMachine,
+    configuration: reviewing({ inspection: PROGRESS_REVIEW, imported: "pending", progress: IMPORT_UNDER_WAY }),
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      toggleSettings,
       importNow,
     ],
   },

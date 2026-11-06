@@ -582,7 +582,9 @@ are now wrong or it leaves out one thing, the meaning has changed.
     happen first for its disabled confirm button to become available.
   - An error with a way out plus Cancel makes the way out the default action.
   - A load failure also carries a warning icon; its wording is the one "Errors" above already gives.
-  - Only an icon-only button swaps its icon for a spinner while in progress.
+  - A button never takes in-progress text: while its action runs it keeps its own label and shows a spinner before it
+    (an icon-only button's spinner replaces its icon), so "In-progress states" applies to status lines and banners
+    only, and no catalog carries a pending variant of a button's label (`docs/ui-standard.md`, "Buttons").
   - A search field's prompting question addresses the user in that language's register (de: Was suchst du?).
 
   (the user's decision)

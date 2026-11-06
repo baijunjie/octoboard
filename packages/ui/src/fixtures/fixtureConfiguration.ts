@@ -17,16 +17,18 @@ import type {
   ProjectAccountRef,
   DocumentSettings,
   Event,
+  ImportItem,
   PerAgent,
   Project,
   ProjectAccount,
   ClientRequestBody,
   Settings,
 } from "../protocol";
-import type { State } from "../store";
+import type { ImportProgressEvent, State } from "../store";
+import type { Inspection } from "../configuration/importPlan";
 import { refuseUnfillable } from "./banner";
 import type { FixtureError } from "./sampleFiles";
-import type { ConfigurationFixture } from "./fixture";
+import type { ConfigurationFixture, ImportProgressFixture } from "./fixture";
 import { exportedProviderSettings } from "./builders";
 
 /** The last segment of `path`, or an empty string where it has none (the filesystem root). */
@@ -106,7 +108,8 @@ function mappedAgents<T, U>(group: PerAgent<T>, map: (value: T, agent: Agent) =>
  * or every console or none, the application settings, the accounts; consoles by creation time and a console's projects by
  * name, with no id and no console working directory in it, and an account carried by its name alone. Without
  * `include_paths` a project's path is only its last segment and a project's remote is kept only where it can be cloned
- * from; an account directory is written whatever it says. A document with the settings carries the user's explicit
+ * from; an account directory is written whatever it says. Without the accounts region no account is named: every console's
+ * reference is `null` and a project's reference to an account is `inherit`. A document with the settings carries the user's explicit
  * provider setting `choices` of the settings that are exported (not the values in effect, which `state.settings` holds),
  * `{}` when the user chose for none. */
 export function exportedDocument(
@@ -116,7 +119,10 @@ export function exportedDocument(
 ): ConfigurationDocument {
   const regions = exportedRegions({ type: "export_configuration", ...request });
   const includePaths = request.include_paths ?? true;
+  // Without the accounts region the document names no account: a console's reference is the default account and a
+  // project's `account` reference is `inherit` (its `default` is kept, since it names none).
   const accountName = (agent: Agent, id: string | null | undefined): AccountName | null => {
+    if (!regions.accounts) return null;
     const account = state.settings.accounts.find((candidate) => candidate.id === id && candidate.agent === agent);
     return account ? { name: account.name } : null;
   };
@@ -236,6 +242,66 @@ export function importDisagreement(
   return undefined;
 }
 
+/** The items an `import_configuration` request makes the daemon handle, in the order it announces and handles them: the
+ * accounts (when asked for) other than those left out, an account that exists already included whatever was chosen for it,
+ * since it is used as it is and the choice is never read, then each console with the projects that have a resolution
+ * (unless the request asks for no consoles), then the application settings (when asked for). */
+export function handledImportItems(request: Extract<ClientRequestBody, { type: "import_configuration" }>, inspection: Omit<Inspection, "type">): ImportItem[] {
+  const items: ImportItem[] = [];
+  if (request.apply_accounts === true) {
+    const leftOut = new Set((request.account_resolutions ?? []).filter((r) => r.leave_out === true).map((r) => `${r.agent}:${r.account}`));
+    for (const { agent, accounts } of inspection.accounts?.agents ?? []) {
+      accounts.forEach((entry, account) => {
+        if (entry.status === "existing" || !leftOut.has(`${agent}:${account}`)) items.push({ kind: "account", agent, account });
+      });
+    }
+  }
+  if (request.apply_consoles !== false) {
+    const resolved = new Set((request.resolutions ?? []).map((r) => `${r.console}:${r.project}`));
+    inspection.consoles.forEach((console, c) => {
+      items.push({ kind: "console", console: c });
+      console.projects.forEach((_, p) => {
+        if (resolved.has(`${c}:${p}`)) items.push({ kind: "project", console: c, project: p });
+      });
+    });
+  }
+  if (request.apply_settings === true) items.push({ kind: "settings" });
+  return items;
+}
+
+const sameItem = (a: ImportItem, b: ImportItem): boolean => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+const describeItem = (item: ImportItem): string => Object.values(item).join(" ");
+
+/** What a progress list says that the daemon's work cannot have produced, or `undefined` where it can. The daemon handles
+ * the items in the order `handled` has them, one at a time, so once an item still waits every later one waits too; a
+ * console is `done` as soon as it is created, its projects following for themselves, or `failed` with every project it
+ * announced `not_attempted`, so a project that has left `waiting` (and is not `not_attempted`) has a `done` console;
+ * only a project that is cloned is `cloning`; and an item that is not handled has no report. */
+export function importProgressDisagreement(handled: ImportItem[], progress: ImportProgressFixture[]): string | undefined {
+  const reports = new Map<number, ImportProgressFixture>();
+  for (const report of progress) {
+    const at = handled.findIndex((item) => sameItem(item, report.item));
+    if (at < 0) return `${describeItem(report.item)} is reported, but the import does not handle it`;
+    if (reports.has(at)) return `${describeItem(report.item)} is reported twice`;
+    reports.set(at, report);
+  }
+  const stateOf = (at: number) => reports.get(at)?.state ?? "waiting";
+  let waiting = false;
+  for (const [at, item] of handled.entries()) {
+    const state = stateOf(at);
+    if (waiting && state !== "waiting") return `${describeItem(item)} is ${state} after an item that still waits`;
+    if (state === "waiting") waiting = true;
+    if ((state === "cloning" || state === "not_attempted") && item.kind !== "project") return `${describeItem(item)} cannot be ${state}`;
+    if (item.kind !== "project") continue;
+    const consoleAt = handled.findIndex((other) => other.kind === "console" && other.console === item.console);
+    const consoleState = stateOf(consoleAt);
+    if ((state === "not_attempted") !== (consoleState === "failed") && state !== "waiting") return `${describeItem(item)} is ${state} but its console is ${consoleState}`;
+    if (consoleState === "failed" && state === "waiting") return `${describeItem(item)} still waits though its console failed`;
+    if (state !== "waiting" && state !== "not_attempted" && consoleState !== "done") return `${describeItem(item)} is ${state} but its console is ${consoleState}`;
+  }
+  return undefined;
+}
+
 /** The result with the document's `keyboard_shortcuts` echoed in `settings_applied`, as the daemon does when it applied
  * the settings: it does not apply them itself, so it hands them back as they came, for the client to apply. A document
  * without them, or a result that reports no settings applied (none asked for, or a `settings_error`), echoes nothing. */
@@ -255,6 +321,7 @@ export function createConfigurationReplies(
   getState: () => State,
   fail: (error: FixtureError) => never,
   providerSettingChoices: () => Settings["provider_settings"],
+  reportProgress: (event: ImportProgressEvent) => void,
 ): (body: ClientRequestBody) => Event | Promise<Event> | undefined {
   return (body) => {
     switch (body.type) {
@@ -272,6 +339,20 @@ export function createConfigurationReplies(
       case "import_configuration": {
         const imported = fixture?.imported;
         if (imported === undefined) return refuseUnfillable("the scenario gives no result to answer import_configuration with");
+        if (fixture?.progress) {
+          const inspection = fixture.inspection;
+          if (inspection === undefined || "code" in inspection) return refuseUnfillable("the scenario gives progress for an import but no inspection to say what it handles");
+          if (!body.import_id) return refuseUnfillable("the scenario gives progress for an import, but the request carries no import_id to name it by");
+          const handled = handledImportItems(body, inspection);
+          const disagreement = importProgressDisagreement(handled, fixture.progress);
+          if (disagreement !== undefined) return refuseUnfillable(`the scenario's import progress does not follow from its steps: ${disagreement}`);
+          // Every item is announced waiting first; then each reports where it stands, in the order they are handled.
+          for (const item of handled) reportProgress({ type: "configuration_import_progress", import_id: body.import_id, item, state: "waiting" });
+          for (const item of handled) {
+            const report = fixture.progress.find((candidate) => sameItem(candidate.item, item));
+            if (report) reportProgress({ type: "configuration_import_progress", import_id: body.import_id, ...report });
+          }
+        }
         if (imported === "pending") return new Promise<Event>(() => {});
         if ("code" in imported) return fail(imported);
         const disagreement = importDisagreement(body, imported);

@@ -8,6 +8,7 @@ import { daemonMessage } from "../errors/daemonMessage";
 import { daemonWsUrl, isLocalDaemon, type DaemonAddress } from "../daemon";
 import { currentLanguage } from "../i18n/language";
 import type { Event, ClientRequestBody } from "../protocol";
+import { createImportProgressListeners, type ImportProgressEvent } from "./importProgressListeners";
 import { createOwnTrustNotices } from "./ownTrustNotices";
 import { reducer, type Action } from "./reducer";
 import { createStateStore, type State } from "./state";
@@ -30,6 +31,11 @@ export interface Daemon {
   /** Calls `listener` for every notification to show from now on: the daemon's errors and notices that
    * belong to no request, and what `showNotice` is given. Returns the unsubscribe. */
   onNotification: (listener: (notification: NotificationRequest) => void) => () => void;
+  /** Calls `listener` for each progress event of the configuration import `importId` names (the `import_id` its
+   * request carried) until the returned unsubscribe is called. The daemon broadcasts them to every window, and one may
+   * arrive after the import's reply, so the caller unsubscribes once that comes (the client does not do so itself) and
+   * hears nothing of it. */
+  onImportProgress: (importId: string, listener: (event: ImportProgressEvent) => void) => () => void;
   /** Drops a trust prompt from the queue, whether it was answered or declined — declining leaves the
    * confirmation for the user in the terminal, and the daemon asks again for it only after a
    * `snapshot`. */
@@ -52,6 +58,7 @@ export function createDaemon(address: DaemonAddress): Daemon {
     store.setState((state) => events.reduce((current, event) => reducer(current, { kind: "event", event }), state));
 
   const client = new DaemonClient(daemonWsUrl(address, "/ws/control"));
+  const importProgress = createImportProgressListeners();
   const notificationListeners = new Set<(notification: NotificationRequest) => void>();
   const pendingNotifications: NotificationRequest[] = [];
   const notify = (notification: NotificationRequest) => {
@@ -66,6 +73,10 @@ export function createDaemon(address: DaemonAddress): Daemon {
   client.onEvent((event) => {
     if (event.type === "snapshot") {
       ownTrustNotices.reset();
+      return;
+    }
+    if (event.type === "configuration_import_progress") {
+      importProgress.deliver(event);
       return;
     }
     if (event.type === "session_notice" && ownTrustNotices.claim(event)) return;
@@ -107,6 +118,7 @@ export function createDaemon(address: DaemonAddress): Daemon {
       pendingNotifications.splice(0).forEach(listener);
       return () => void notificationListeners.delete(listener);
     },
+    onImportProgress: importProgress.subscribe,
     dismissTrustPrompt: (session) => dispatch({ kind: "dismiss_trust_prompt", session }),
     reconnect: () => client.reconnect(),
     terminalUrl: (session) => daemonWsUrl(address, `/ws/term/${session}`),

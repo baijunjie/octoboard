@@ -12,6 +12,8 @@ import { Dialog } from "./Dialog";
 import { useDialogAction } from "./dialogHooks";
 import { framesAsTimers, settleFrames } from "./dialogTestSupport";
 import { TextInput } from "../form/TextInput";
+import { TitledControl } from "../hint/TitledControl";
+import { Button } from "../controls/Button";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -95,6 +97,30 @@ it("marks the submit button pending while busy rather than disabling it", () => 
     // the moment that action starts, so the native attribute costs nothing here.
     expect(cancel.hasAttribute("disabled")).toBe(true);
   });
+});
+
+it("disables the close button while busy, with the frame's own footer or a footer of the dialog's own", () => {
+  const closeButton = () => document.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!;
+  withFooter({ busy: true }, () => expect(closeButton().disabled).toBe(true));
+  withFooter({}, () => expect(closeButton().disabled).toBe(false));
+
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => {
+      root.render(
+        <DaemonProvider value={testDaemon()}>
+          <Dialog title="Import" onClose={() => {}} busy footer={<span>own footer</span>}>
+            <span>body</span>
+          </Dialog>
+        </DaemonProvider>,
+      );
+    });
+    expect(closeButton().disabled).toBe(true);
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+  }
 });
 
 // `submitDisabled` is the other kind: nothing to submit yet, with focus elsewhere. That is what a
@@ -478,16 +504,17 @@ it("measures the outer dialog again when a dialog nested in it closes", async ()
  * tooltip, so a control that has one has it open. */
 function escapeFrom(
   control: (dialog: Element) => HTMLElement | null | undefined,
-  props: { alert?: boolean; keyboardDismissHeld?: boolean } = {},
+  props: { alert?: boolean; keyboardDismissHeld?: boolean; busy?: boolean; body?: React.ReactNode } = {},
 ): { closes: number; tooltip: boolean } {
+  const { body = <span>body</span>, ...dialogProps } = props;
   const onClose = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   try {
     render(
       root,
-      <Dialog title="Rename" onClose={onClose} submitLabel="Save" onSubmit={() => {}} {...props}>
-        <span>body</span>
+      <Dialog title="Rename" onClose={onClose} submitLabel="Save" onSubmit={() => {}} {...dialogProps}>
+        {body}
       </Dialog>,
     );
     const dialog = document.querySelector("[role=dialog], [role=alertdialog]");
@@ -515,6 +542,7 @@ it.each([
   ["confirmation", { alert: true }, 0],
   ["acknowledgement", { alert: true, dismissable: false }, 0],
   ["modal whose keyboard dismissal is held", { keyboardDismissHeld: true }, 1],
+  ["busy modal", { busy: true }, 0],
 ])("handles a backdrop press on a %s", (_name, props, closes) => {
   const onClose = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
@@ -574,6 +602,25 @@ it("does not close on Escape while the keyboard dismissal is held, with a toolti
   expect(
     escapeFrom((dialog) => [...dialog.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent === "Cancel"), { keyboardDismissHeld: true }),
   ).toEqual({ closes: 0, tooltip: false });
+});
+
+// A busy dialog cannot be left: Escape is ignored where react-aria handles it and where a tooltip made the dialog
+// handle it itself. The pending submit button stays focusable, so the key arrives from there, and so does a body
+// control with a tooltip, where the dialog handles the key; the close button is disabled and cannot take focus.
+it("does not close on Escape while busy, with a tooltip open or not", () => {
+  const submit = (dialog: Element) => [...dialog.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent?.includes("Save"));
+  expect(escapeFrom(submit, { busy: true }).closes).toBe(0);
+  expect(escapeFrom(submit, { busy: true, alert: true }).closes).toBe(0);
+  expect(escapeFrom(submit).closes).toBe(1);
+
+  const body = (
+    <TitledControl title="Explained">
+      <Button>Extra</Button>
+    </TitledControl>
+  );
+  const extra = (dialog: Element) => [...dialog.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent === "Extra");
+  expect(escapeFrom(extra, { busy: true, body })).toEqual({ closes: 0, tooltip: true });
+  expect(escapeFrom(extra, { body })).toEqual({ closes: 1, tooltip: true });
 });
 
 /** Renders a dialog whose body measures `scrollHeight` tall in a `clientHeight` box (jsdom has no

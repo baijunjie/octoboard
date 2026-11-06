@@ -93,7 +93,7 @@ export function ExportConfigurationDialog({
   return (
     <Dialog
       title={t("configuration.export.title")}
-      onClose={busy ? () => {} : onClose}
+      onClose={onClose}
       submitLabel={t("configuration.export.submit")}
       busy={busy}
       submitDisabled={nothing}

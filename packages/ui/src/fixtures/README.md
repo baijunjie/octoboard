@@ -39,6 +39,14 @@ It is excluded from the production type check and from release verification, and
   into its own text; UI text names a provider through `providerLabel` instead. `fixtureProviders.test.ts` holds that copy to the
   daemon's descriptors (`apps/daemon/src/providers/`), so a descriptor that changes there fails it until the copy follows.
   `UNPRESENTED_PROVIDER` is a provider with no presentation module, which a scenario serves beside the registered ones.
+- `fixtureConfiguration.ts` answers the export, inspection and import of configuration. An import's progress is the scenario's
+  `ConfigurationFixture.progress`: the items that have left `waiting`, as the last report of each says. The fixture daemon
+  announces every item the request makes it handle `waiting` first, then sends those reports, to the listener of the
+  request's `import_id` (`Daemon.onImportProgress`) and before the reply, which `imported: "pending"` holds back to keep the
+  import part-way. It refuses a list the daemon's order of work (accounts, then each console with its projects, then the
+  settings, one at a time) cannot have produced (`importProgressDisagreement`): a console is `done` as soon as it is created,
+  its projects following for themselves (or `failed`, with each project it announced `not_attempted`), and an account that
+  exists already is announced whatever was chosen for it (`handledImportItems`).
 - `pageFrame.ts` and `preferences.ts` are the page set-up the gallery and the website preview do before the app loads;
   they import nothing from the app that reads a stored preference at load.
 - Sample data shared by scenarios and tests: `archiveSessions.ts`, `configurationReview.ts`, `restoreSample.ts`,

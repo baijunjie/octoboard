@@ -56,24 +56,33 @@ function submitsFromChoice(e: React.KeyboardEvent<HTMLFormElement>): boolean {
 let openDialogs = 0;
 
 /**
- * The frame every dialog shares. Unless `dismissable` is false, Escape calls `onClose`, which `keyboardDismissHeld`
- * withholds from Escape alone.
- * A click outside also closes a non-alert dialog; confirmations require an explicit response. The dialog is
- * mounted only while it is open, so `isOpen` is constant. With `onSubmit` the header, body and footer sit in
- * a `<form>`, so Enter in a text field submits it — the dialog decides what "submit" means. The
- * footer is Cancel plus a submit button labelled `submitLabel`, unless the dialog brings its own
- * `footer`. While `busy`, the submit button is marked pending rather than disabled: a disabled
- * attribute would blur the button the user has just pressed and take the dialog's Escape and Tab
- * with it for as long as the request runs, where pending blocks press and hover, keeps the button
- * focusable and announces itself. Cancel is disabled instead, which costs nothing because focus
- * cannot be on it at the moment the request starts. `submitDisabled` disables the submit button
- * alone, before any action, Cancel stays pressable, and since it is the form's only submit control
- * this also suppresses implicit submission from Enter in a text field. Focus is never left on a button that
- * has become disabled: it moves to Cancel. A form dialog puts `autoFocus` on its first text field, so Enter
- * submits at once; one with no text field passes `autoFocusSubmit` to open on the submit button instead, or on
- * Cancel when there is nothing to submit yet (a dialog with its own `footer` puts `autoFocus` on its own
- * button). `Button` and `TextInput` mark that control with `openingFocus`, which is where focus comes back to when an
- * acknowledged alert leaves it nowhere to return (`focusAfterLoss`); a field built from HeroUI's own parts marks itself.
+ * The frame every dialog shares. Unless `dismissable` is false, Escape calls `onClose`, which
+ * `keyboardDismissHeld` withholds from Escape alone and `busy` from Escape and a click outside. A
+ * click outside also closes a non-alert dialog; confirmations require an explicit response. The
+ * dialog is mounted only while it is open, so `isOpen` is constant. With `onSubmit` the header, body
+ * and footer sit in a `<form>`, so Enter in a text field submits it — the dialog decides what
+ * "submit" means. Passing or dropping `onSubmit` while the dialog is open swaps that `<form>` and
+ * remounts the header, body and footer, so a dialog that moves through steps keeps `onSubmit` across
+ * any step where a pressed button has to keep focus. The footer is Cancel plus a submit button
+ * labelled `submitLabel`, unless the dialog brings its own `footer`.
+ *
+ * While `busy`, the submit button is marked pending rather than disabled: a disabled attribute would
+ * blur the button the user has just pressed and take the dialog's Tab with it for as long as the
+ * request runs, where pending blocks press and hover, keeps the button focusable and announces
+ * itself. Cancel is disabled instead, and so is the close button: a busy dialog cannot be left at
+ * all. That costs nothing when the request starts from submit, since pressing it puts focus on it. A
+ * dialog whose own controls start the request without taking focus (`preventFocusOnPress`) hands
+ * focus on itself, as `AddAgentDialog` does, so it never falls to `<body>`.
+ *
+ * `submitDisabled` disables the submit button alone, before any action, Cancel stays pressable, and
+ * since it is the form's only submit control this also suppresses implicit submission from Enter in a
+ * text field. Focus is never left on a button that has become disabled: it moves to Cancel. A form
+ * dialog puts `autoFocus` on its first text field, so Enter submits at once; one with no text field
+ * passes `autoFocusSubmit` to open on the submit button instead, or on Cancel when there is nothing
+ * to submit yet (a dialog with its own `footer` puts `autoFocus` on its own button). `Button` and
+ * `TextInput` mark that control with `openingFocus`, which is where focus comes back to when an
+ * acknowledged alert leaves it nowhere to return (`focusAfterLoss`); a field built from HeroUI's own
+ * parts marks itself.
  */
 function DialogFrame({
   title,
@@ -83,7 +92,7 @@ function DialogFrame({
   children,
   footer,
   submitLabel,
-  busy,
+  busy = false,
   submitDisabled,
   autoFocusSubmit,
   onSubmit,
@@ -112,6 +121,10 @@ function DialogFrame({
   size?: "sm" | "md" | "lg" | "wide" | "viewer";
   /** Uses the modal's native full size, including its edge-to-edge transition. */
   fullScreen?: boolean;
+  /** A request the dialog started is out and cannot be taken back, so the dialog cannot be left: the close button is
+   * disabled, and Escape and a click outside do not call `onClose`. With `submitLabel` the submit button is also
+   * marked pending; a dialog with its own `footer` shows the wait itself. */
+  busy?: boolean;
   /** A confirmation that interrupts the user: HeroUI's `AlertDialog`, announced as an alert dialog. */
   alert?: boolean;
   /** The dialog is a failure modal, announced and described as an alert dialog whatever frame it is in. */
@@ -148,12 +161,11 @@ function DialogFrame({
     /** `null` for a dialog without a footer. */
     footer: BodyChildren | null;
     submitLabel?: never;
-    busy?: never;
     submitDisabled?: never;
     autoFocusSubmit?: never;
     onSubmit?: () => void;
   }
-  | { footer?: never; submitLabel: string; busy?: boolean; submitDisabled?: boolean; autoFocusSubmit?: boolean; onSubmit: () => void }
+  | { footer?: never; submitLabel: string; submitDisabled?: boolean; autoFocusSubmit?: boolean; onSubmit: () => void }
 )): React.ReactElement {
   const t = useT();
   // Closing returns focus to the element focused when the dialog opened, which for a dialog a menu
@@ -187,7 +199,7 @@ function DialogFrame({
   }, []);
   useToastClearance(markerRef, footer !== null);
   useHeightMotion(markerRef);
-  useEscapeWhileTooltipOpen(() => dialogAround(markerRef), dismissable && !keyboardDismissHeld ? onClose : () => {});
+  useEscapeWhileTooltipOpen(() => dialogAround(markerRef), dismissable && !keyboardDismissHeld && !busy ? onClose : () => {});
   const topLayer = useTopLayerAtMount(topLayerAtMount === true, markerRef);
 
   const Frame = alert ? AlertDialog : Modal;
@@ -277,8 +289,8 @@ function DialogFrame({
     <Frame.Backdrop
       isOpen
       isDismissable={dismissable && !alert}
-      isKeyboardDismissDisabled={!dismissable || keyboardDismissHeld}
-      onOpenChange={(open) => !open && dismissable && onClose()}
+      isKeyboardDismissDisabled={!dismissable || keyboardDismissHeld || busy}
+      onOpenChange={(open) => !open && dismissable && !busy && onClose()}
       data-react-aria-top-layer={topLayer ? "true" : undefined}
     >
       {/* The viewer fills narrow screens. Between tablet and desktop it keeps a 16px margin;
@@ -301,7 +313,7 @@ function DialogFrame({
           <span ref={markerRef} hidden />
           {dismissable && <TitledControl title={t("common.close")}>
             {/* Named explicitly so it always matches the tooltip. */}
-            <Frame.CloseTrigger aria-label={t("common.close")} className={fullScreen ? "top-2 end-3" : undefined} />
+            <Frame.CloseTrigger aria-label={t("common.close")} isDisabled={busy} className={fullScreen ? "top-2 end-3" : undefined} />
           </TitledControl>}
           {onSubmit ? (
             // A key held down repeats: the press that opened the dialog (a menu item takes Enter and

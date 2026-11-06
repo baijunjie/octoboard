@@ -12,8 +12,8 @@ use super::browse::{
 };
 use super::codes::{error_code, Code};
 use super::configuration::{
-    ConfigurationDocument, DocumentSettings, ImportFailure, ImportedAccounts, ImportedConsole,
-    InspectedAccounts, InspectedConsole, InspectedSettings,
+    ConfigurationDocument, DocumentSettings, ImportFailure, ImportItem, ImportItemState,
+    ImportedAccounts, ImportedConsole, InspectedAccounts, InspectedConsole, InspectedSettings,
 };
 use super::errors::{error_parts, params, Params};
 use super::fields::is_true;
@@ -379,6 +379,19 @@ pub enum Event {
         accounts: Option<ImportedAccounts>,
         consoles: Vec<ImportedConsole>,
     },
+    /// Where one item of a running `import_configuration` stands, broadcast to every client; a
+    /// client keeps the events whose `import_id` is the one it sent. Every item the import will
+    /// handle is announced `waiting` first, in the order they are handled, then each moves on to
+    /// `creating` (or `cloning`) and ends `done`, `failed` or `not_attempted`; an item left out is
+    /// never announced. They are all broadcast before the `configuration_imported` reply is sent
+    /// but may reach a client after it, so a client that has the reply ignores later progress for
+    /// that `import_id`.
+    ConfigurationImportProgress {
+        import_id: String,
+        item: ImportItem,
+        #[serde(flatten)]
+        state: ImportItemState,
+    },
     /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole
     /// HTML document, and only the session the user is looking at needs its pages, so the
     /// panel asks for them instead — and asks again after every `snapshot`, which is what keeps it
@@ -670,7 +683,9 @@ pub enum SessionRequestEnding {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::{Event, SessionStatus};
+    use crate::protocol::{
+        error_code, Event, ImportFailure, ImportItem, ImportItemState, SessionStatus,
+    };
 
     #[test]
     fn a_session_interrupted_reply_serializes_with_its_type_and_fields() {
@@ -690,6 +705,52 @@ mod tests {
                 "interrupted": true,
                 "status": "idle",
                 "note": "Interrupted.",
+            })
+        );
+    }
+
+    #[test]
+    fn a_configuration_import_progress_event_flattens_its_state_beside_its_item() {
+        assert_eq!(
+            serde_json::to_value(Event::ConfigurationImportProgress {
+                import_id: "import-1".to_owned(),
+                item: ImportItem::Project {
+                    console: 0,
+                    project: 2,
+                },
+                state: ImportItemState::Waiting,
+            })
+            .unwrap(),
+            serde_json::json!({
+                "type": "configuration_import_progress",
+                "import_id": "import-1",
+                "item": {"kind": "project", "console": 0, "project": 2},
+                "state": "waiting",
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(Event::ConfigurationImportProgress {
+                import_id: "import-1".to_owned(),
+                item: ImportItem::Settings,
+                state: ImportItemState::Failed {
+                    error: ImportFailure {
+                        code: error_code::ICON_NOT_AN_IMAGE,
+                        params: Default::default(),
+                        message: "not an image".to_owned(),
+                    },
+                },
+            })
+            .unwrap(),
+            serde_json::json!({
+                "type": "configuration_import_progress",
+                "import_id": "import-1",
+                "item": {"kind": "settings"},
+                "state": "failed",
+                "error": {
+                    "code": "icon_not_an_image",
+                    "params": {},
+                    "message": "not an image",
+                },
             })
         );
     }

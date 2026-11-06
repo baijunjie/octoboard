@@ -79,6 +79,18 @@ it("moves focus to Close when the button that was pressed goes with the agent be
   expect(document.activeElement).toBe([...document.querySelectorAll("button")].find((b) => b.textContent === "Close"));
 });
 
+it.each([
+  ["Close", () => [...document.querySelectorAll("button")].find((b) => b.textContent === "Close")!],
+  ["the close button", () => document.querySelector<HTMLElement>("[data-slot$=close-trigger]")!],
+])("hands focus to the pending Add button when it is on %s as the request starts", async (_name, control) => {
+  let settle = () => {};
+  render({ codex: "available" }, [], () => new Promise((resolve) => (settle = () => resolve({ type: "ack", id: null }))));
+  control().focus();
+  await act(async () => button("Add Codex").click());
+  expect(document.activeElement).toBe(button("Add Codex"));
+  await act(async () => settle());
+});
+
 it("presents a refusal and keeps the dialog open", async () => {
   const reported = vi.spyOn(errorAlerts, "report");
   onTestFinished(() => reported.mockRestore());

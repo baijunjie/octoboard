@@ -94,6 +94,8 @@ export interface Scenario extends Fixture {
   codePalette?: boolean;
   /** Shows the application's semantic colours as tokens, as real components and on each surface, instead of the application. */
   semanticColours?: boolean;
+  /** Shows the shared button in its pending state, in every size and variant and as the icon-only avatar field, instead of the application. */
+  pendingButtons?: boolean;
   preferences?: Preferences;
   /** The desktop shell asks the window to quit (Cmd+Q) once the steps have run: with a busy session or shell terminal
    * the confirmation they hold the quit up with is on screen, and with none the quit goes straight to the shell. The

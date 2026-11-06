@@ -1,6 +1,7 @@
 mod creating;
 mod failures;
 mod inspecting;
+pub(super) mod progress;
 mod reading;
 mod settings;
 

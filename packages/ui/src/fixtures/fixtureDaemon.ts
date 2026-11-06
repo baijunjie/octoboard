@@ -4,7 +4,7 @@ import { daemonMessage } from "../errors/daemonMessage";
 import type { Translate } from "../i18n/catalog";
 import { currentLanguage, t } from "../i18n/language";
 import type { Event, ClientRequestBody } from "../protocol";
-import type { Daemon, NotificationRequest } from "../store";
+import { createImportProgressListeners, type Daemon, type NotificationRequest } from "../store";
 import { broadcastNotification, errorNotification } from "../store/notifications";
 import type { Fixture, NotificationFixture } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -87,7 +87,8 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
   };
 
   const gitReply = createGitReplies(git, fail);
-  const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail, () => providerSettingChoices.current);
+  const importProgress = createImportProgressListeners();
+  const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail, () => providerSettingChoices.current, importProgress.deliver);
   const guards = createAccountGuards(context);
   const ledger = createProcessLedger(context);
   const replies = mergeHandlers(
@@ -124,6 +125,10 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
       setTimeout(raiseScenarioNotifications, NOTIFICATION_DELAY_MS);
       return () => void notificationListeners.delete(listener);
     },
+    // What an import reports is the scenario's to give (`ConfigurationFixture.progress`); the fixture delivers it to the
+    // listener of the import the request named, before the reply. The real daemon may deliver an event after the reply
+    // (see `apps/daemon/PROTOCOL.md`, "Configuration import"); a scenario does not rely on either order.
+    onImportProgress: importProgress.subscribe,
     dismissTrustPrompt: (session) =>
       store.setState((state) => ({ trustPrompts: state.trustPrompts.filter((p) => p.session !== session) })),
     reconnect: () => {},

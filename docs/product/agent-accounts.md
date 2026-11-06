@@ -83,7 +83,10 @@ status badge in every state:
 | **Checking…** (not yet determined) | The Add button, unavailable until the agent is found installed. |
 
 While the list is undecided every Add button is unavailable. The dialog stays open after an agent is added, its row
-turning to Added, so several can be added in turn; it closes on its **Close** button.
+turning to Added, so several can be added in turn; it closes on its **Close** button. While an addition is under way
+its **Add** button shows as pending and the dialog cannot be left (see "A dialog cannot be left while its request runs"
+in `docs/product/dialogs.md`); keyboard focus that was on **Close** or on the close button moves to that **Add** button,
+and goes back to **Close** once the addition is answered and its button is gone.
 
 The dialog also opens by itself, in front of Settings, when Settings is opened or navigated from one of the window's
 **Add agent** buttons (see "Opening and closing Settings" in `docs/product/settings.md`): Settings shows this section

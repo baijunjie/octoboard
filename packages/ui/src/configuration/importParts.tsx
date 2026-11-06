@@ -1,4 +1,4 @@
-import { Info, TriangleAlert, type LucideIcon } from "lucide-react";
+import { CircleAlert, CircleSlash, Info, TriangleAlert, type LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
 import { providerLabel } from "../agents/providers";
@@ -132,10 +132,37 @@ export interface StatusEntry {
   tone: (typeof STATUS_TONE)[keyof typeof STATUS_TONE];
 }
 
+/** The statuses a finished import and a running one share: an item that failed, and one never tried because the console
+ * it belongs to failed. */
+export const SHARED_STATUS = {
+  failed: { label: "configuration.import.result.failed", icon: CircleAlert, tone: STATUS_TONE.danger },
+  not_attempted: { label: "configuration.import.result.status.notAttempted", icon: CircleSlash, tone: STATUS_TONE.muted },
+} satisfies Record<string, StatusEntry>;
+
 /** The glyph of a status, `size` being its size (and margin) classes. */
 export function StatusGlyph({ entry, size }: { entry: StatusEntry; size: string }): React.ReactElement {
   const Icon = entry.icon;
   return <Icon aria-hidden="true" className={`${size} shrink-0 ${entry.tone}`} />;
+}
+
+/** A status as a line: `children` is its glyph (`StatusGlyph`, or a spinner while it is under way) and `label` its word. */
+export function StatusLine({ label, children }: { label: PlainMessageKey; children: React.ReactNode }): React.ReactElement {
+  const t = useT();
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm">
+      {children}
+      {t(label)}
+    </span>
+  );
+}
+
+/** A status entry as its glyph and its word. */
+export function EntryStatus({ entry }: { entry: StatusEntry }): React.ReactElement {
+  return (
+    <StatusLine label={entry.label}>
+      <StatusGlyph entry={entry} size="size-4" />
+    </StatusLine>
+  );
 }
 
 /** `useSubmitValidation`'s `shown`: holds a field's message back until the user has tried to import. */

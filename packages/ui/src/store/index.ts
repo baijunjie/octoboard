@@ -1,6 +1,8 @@
 export { applyDaemonEvent, dismissAccountLogin, seedShellTerminal, setAccountSwitchesQueued, trackAccountLogin } from "./actions";
 export { createDaemon } from "./connection";
 export type { Daemon } from "./connection";
+export { createImportProgressListeners } from "./importProgressListeners";
+export type { ImportProgressEvent } from "./importProgressListeners";
 export { consolePreference, currentConsoleOf, useCurrentConsole } from "./currentConsole";
 export { DEFAULT_SETTINGS } from "./defaultSettings";
 export { DaemonProvider, useDaemon, useOptionalDaemon, useDaemonStore, useDaemonStoreEqual, useDaemonStoreOrEmpty, useProviders } from "./react";

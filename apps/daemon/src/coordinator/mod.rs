@@ -460,14 +460,16 @@ async fn handle_inner(
             apply_accounts,
             account_resolutions,
             apply_consoles,
+            import_id,
         } => {
-            let imported = import::apply(
+            let imported = import::apply_reporting(
                 state,
                 &document,
                 resolutions,
                 apply_settings,
                 apply_accounts.then_some(account_resolutions),
                 apply_consoles,
+                import_id,
             )
             .await?;
             Ok(Some(Event::ConfigurationImported {

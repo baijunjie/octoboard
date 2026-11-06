@@ -12,11 +12,12 @@
 //! of this machine and not configuration. A console's `workdir` is left out because the daemon
 //! derives it from the console's id when the console is created, so it would carry that id and
 //! Octoboard's own layout, and an import makes its own. An account referenced by a console or a
-//! project travels as its name alone ([`AccountName`]) and never as an id or a `config_dir`, since
-//! an id means nothing elsewhere and the directory is this machine's layout. The accounts region
-//! ([`DocumentAccounts`]) is the one place accounts are described, and it never holds a
-//! credential, an id or a quota reading. `Settings.default_clone_dir` stays behind for the same
-//! reason: an import places projects under the *importing* machine's own.
+//! project travels, when the export holds the accounts region and only then, as its name alone
+//! ([`AccountName`]) and never as an id or a `config_dir`, since an id means nothing elsewhere and
+//! the directory is this machine's layout. The accounts region ([`DocumentAccounts`]) is the one
+//! place accounts are described, and it never holds a credential, an id or a quota reading.
+//! `Settings.default_clone_dir` stays behind for the same reason: an import places projects under
+//! the *importing* machine's own.
 
 use std::collections::HashMap;
 use std::path::{Component, Path};
@@ -131,11 +132,18 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
     // name. The id only breaks a tie and does not reach the document.
     consoles.sort_by(|a, b| (a.created_at, &a.id).cmp(&(b.created_at, &b.id)));
     let all_accounts = store.list_accounts()?;
-    let accounts: HashMap<String, Account> = all_accounts
-        .iter()
-        .cloned()
-        .map(|account| (account.id.clone(), account))
-        .collect();
+    // Without the accounts region nothing names an account: a console or project that referenced
+    // one is written as it is once the account is gone, using the agent's default account (or
+    // inheriting, for a project), so an import elsewhere finds no account missing.
+    let accounts: HashMap<String, Account> = if selection.accounts {
+        all_accounts
+            .iter()
+            .cloned()
+            .map(|account| (account.id.clone(), account))
+            .collect()
+    } else {
+        HashMap::new()
+    };
     let mut projects = store.list_projects()?;
     projects.sort_by(|a, b| (&a.name, &a.id).cmp(&(&b.name, &b.id)));
     let settings = if selection.settings {
@@ -492,16 +500,16 @@ mod tests {
 
     /// Everything a document is built from, for the single-console and full-export cases alike.
     fn exported(console: Option<&str>) -> (ConfigurationDocument, String) {
+        exported_with(match console {
+            Some(id) => Selection::console(id, true),
+            None => Selection::full(true),
+        })
+    }
+
+    fn exported_with(selection: Selection) -> (ConfigurationDocument, String) {
         let (state, _dir) = crate::test_support::app_state("config-export");
         populated(&state.store);
-        let document = build(
-            &state.store,
-            &match console {
-                Some(id) => Selection::console(id, true),
-                None => Selection::full(true),
-            },
-        )
-        .expect("built");
+        let document = build(&state.store, &selection).expect("built");
         let text = serde_json::to_string(&document).unwrap();
         (document, text)
     }
@@ -726,7 +734,10 @@ mod tests {
 
     #[test]
     fn an_account_travels_as_its_name_alone_and_a_reference_to_a_missing_account_is_dropped() {
-        let (document, text) = exported(Some("console-1"));
+        let (document, text) = exported_with(Selection {
+            accounts: true,
+            ..Selection::console("console-1", true)
+        });
 
         let hub = &document.consoles[0];
         assert_eq!(
@@ -769,12 +780,41 @@ mod tests {
             "project-5",
             "workdir",
             "config_dir",
-            ".claude-work",
-            ".codex-team",
         ] {
             assert!(!text.contains(leaked), "{leaked} is in {text}");
         }
         assert!(text.contains(r#""kind":"account""#) && text.contains("Work"));
+    }
+
+    #[test]
+    fn an_export_without_the_accounts_region_names_no_account_anywhere() {
+        let (document, text) = exported_with(Selection::console("console-1", true));
+
+        let hub = &document.consoles[0];
+        for agent in AgentId::ALL {
+            assert_eq!(hub.accounts[agent], None, "the console uses the default");
+            for project in &hub.projects {
+                assert!(
+                    !matches!(project.accounts[agent], ProjectAccountRef::Account { .. }),
+                    "{} names an account",
+                    project.name
+                );
+            }
+        }
+        let cloned = hub.projects.iter().find(|p| p.name == "cloned").unwrap();
+        assert_eq!(
+            cloned.accounts[AgentId::CLAUDE],
+            ProjectAccountRef::Inherit,
+            "a named account is no longer named"
+        );
+        assert_eq!(
+            cloned.accounts[AgentId::CODEX],
+            ProjectAccountRef::Default,
+            "the default stays the default"
+        );
+        assert!(!text.contains(r#""kind":"account""#) && !text.contains("Work"));
+        assert!(document.accounts.is_none());
+        assert!(!text.contains(".claude-work") && !text.contains(".codex-team"));
     }
 
     #[test]

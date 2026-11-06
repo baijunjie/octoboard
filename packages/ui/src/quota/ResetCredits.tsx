@@ -190,7 +190,6 @@ export function UseResetCreditDialog({ agent, account, accountName, onClose }: {
       extraControl={meters}
       consequences={asking && credits ? <ConfirmConsequences title={t("quota.resetCredits.confirm.effect")} /> : undefined}
       confirmLabel={asking ? t("quota.resetCredits.confirm.action") : t("quota.resetCredits.doneAction")}
-      pendingLabel={t("quota.resetCredits.confirm.pending")}
       hideCancel={!asking}
       confirmDisabled={asking && !credits}
       errorTitle={t("quota.resetCredits.failedTitle")}
