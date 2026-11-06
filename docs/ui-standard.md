@@ -274,9 +274,13 @@ layer's `partSelector`, never HeroUI's `data-slot` names or classes, so only the
 parts. The application stylesheet, which themes HeroUI's own stylesheet, is the exception: its rules over HeroUI's
 parts are written against HeroUI's classes and slots.
 
+Nor does it depend on the libraries' internal behaviour: it never listens for a react-aria event, sets an attribute
+react-aria filters out on a wrapper's node or synthesises its key events; the layer offers that behaviour under a
+project name (see its `README.md`).
+
 Tests and test support, the gallery, the shared fixtures and the website preview may import the libraries directly
-(setting the input modality in a test, say); the rule is for application source. Lint enforces it, with no exceptions in
-application source (`packages/ui/eslint.layers.mjs`).
+(setting the input modality in a test, say); the rule is for application source. Lint enforces the import
+rule, with no exceptions in application source (`packages/ui/eslint.layers.mjs`).
 
 ## Machine and platform perspective in copy
 

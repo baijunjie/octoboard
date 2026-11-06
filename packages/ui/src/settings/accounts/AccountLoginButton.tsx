@@ -14,7 +14,7 @@ import { canTakeFocus } from "../../components/focus/regionFocus";
 import { useLatest } from "../../components/hooks/useLatest";
 import { ringForAutomaticFocus } from "../../input/touchInput";
 import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
-import { Button } from "../../primitives";
+import { Button, onFocusScopeRestore } from "../../primitives";
 
 /** Told, as the login dialog a Log in button opened closes, whether the login succeeded, and the cancel closing it
  * sent, if any. */
@@ -64,9 +64,7 @@ function useLoginFocusReturn(
     const controller = new AbortController();
     restoreGuard.current = controller;
     const closingDialog = document.activeElement?.closest('[role="dialog"], [role="alertdialog"]');
-    // React Aria 3.52 FocusScope emits this cancelable event before applying its restore target,
-    // including the first control in a parent scope when the opener has disappeared.
-    document.addEventListener("react-aria-focus-scope-restore", (event) => {
+    onFocusScopeRestore((event) => {
       if (event.defaultPrevented || (!closedOnSuccess && button.current?.isConnected && !latest.current.succeeded)) return;
       const target = latest.current.fallback();
       if (!canTakeFocus(target)) return;
@@ -74,7 +72,7 @@ function useLoginFocusReturn(
       controller.abort();
       ringForAutomaticFocus();
       target.focus();
-    }, { capture: true, once: true, signal: controller.signal });
+    }, controller.signal);
     document.addEventListener("focusin", (event) => {
       if (!(event.target instanceof Node) || !closingDialog?.contains(event.target)) controller.abort();
     }, { capture: true, signal: controller.signal });

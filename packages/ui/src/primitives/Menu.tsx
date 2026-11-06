@@ -3,7 +3,9 @@ import React from "react";
 import { MenuContext, useSlottedContext } from "react-aria-components";
 
 import { useDisabled } from "./busy";
+import { setKeyboardModality } from "./focus";
 import { type DataAttributes, definedProps } from "./props";
+import { mergeRefs } from "./refs";
 
 /** HeroUI's dropdown: a `MenuTrigger` and the `MenuPopover` it opens. The caller holds the open state. */
 export function Menu({ open, onOpenChange, children }: {
@@ -81,23 +83,31 @@ export function MenuList({ onAction, autoFocusFirst, children }: {
 }
 
 /** HeroUI's dropdown item: `id` is what `onAction` is told, `textValue` what typing to it matches, `label` its accessible
- * name where its content does not give the right one. `ref` is the item's element. `danger` draws a destructive item;
- * `closeOnSelect={false}` keeps the menu open after it runs. */
-export function MenuItem({ ref, id, textValue, label, danger, disabled, closeOnSelect, className, children, ...data }: DataAttributes & {
+ * name where its content does not give the right one. `ref` is the item's element. `shortcut` is the key that runs the
+ * item, announced as its `aria-keyshortcuts` (the caller handles the key, and runs the item with `activateMenuItem`).
+ * `danger` draws a destructive item; `closeOnSelect={false}` keeps the menu open after it runs. */
+export function MenuItem({ ref, id, textValue, label, shortcut, danger, disabled, closeOnSelect, className, children, ...data }: DataAttributes & {
   ref?: React.Ref<HTMLDivElement>;
   id: string;
   textValue: string;
   label?: string;
+  shortcut?: string;
   danger?: boolean;
   disabled?: boolean;
   closeOnSelect?: boolean;
   className?: string;
   children: React.ReactNode;
 }): React.ReactElement {
+  // react-aria filters `aria-keyshortcuts` out of a menu item's props, so it is set on the element.
+  const announceShortcut = (node: HTMLDivElement | null) => {
+    if (!node) return;
+    if (shortcut) node.setAttribute("aria-keyshortcuts", shortcut);
+    else node.removeAttribute("aria-keyshortcuts");
+  };
   return (
     <Dropdown.Item
       {...data}
-      ref={ref}
+      ref={mergeRefs(ref, announceShortcut)}
       id={id}
       textValue={textValue}
       {...definedProps({ "aria-label": label, className, isDisabled: disabled, shouldCloseOnSelect: closeOnSelect })}
@@ -106,6 +116,16 @@ export function MenuItem({ ref, id, textValue, label, danger, disabled, closeOnS
       {children as React.ReactElement}
     </Dropdown.Item>
   );
+}
+
+/** Runs `item`, the element of a `MenuItem`, as its own keyboard activation does, for a key the caller handles itself:
+ * the item takes focus, with its ring, and gets Enter, so that the choice, a submenu's opening and the menu's closing
+ * (or staying open) stay react-aria's. */
+export function activateMenuItem(item: HTMLElement): void {
+  setKeyboardModality();
+  item.focus();
+  item.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
+  item.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
 }
 
 /** HeroUI's check mark of a `MenuItem` in `MenuChoices`, shown while it is the chosen one. */

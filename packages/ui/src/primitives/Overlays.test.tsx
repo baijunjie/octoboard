@@ -3,7 +3,8 @@ import React, { act, useRef } from "react";
 import { toast } from "@heroui/react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { Menu, MenuChoices, MenuItem, MenuList, MenuPopover, MenuTrigger } from "./Menu";
+import { activateMenuItem, Menu, MenuChoices, MenuItem, MenuList, MenuPopover, MenuTrigger } from "./Menu";
+import { onFocusScopeRestore } from "./focus";
 import { Modal, ModalBody, ModalHeading } from "./Modal";
 import { mount } from "./testSupport";
 import { closeToast, showToast, ToastRegion } from "./Toast";
@@ -158,4 +159,64 @@ it("draws a toast of any queued variant as an accent or a danger one", () => {
   const variantOf = (title: string) => [...document.querySelectorAll("p")].find((p) => p.textContent === title)?.dataset.variant;
   expect([variantOf("Failed"), variantOf("Saved"), variantOf("Done")]).toEqual(["danger", "accent", "accent"]);
   act(() => keys.forEach(closeToast));
+});
+
+it("announces a menu item's shortcut as aria-keyshortcuts and clears it when the shortcut goes", () => {
+  const menu = (shortcut?: string) => (
+    <Menu open onOpenChange={() => {}}>
+      <MenuTrigger label="More actions">…</MenuTrigger>
+      <MenuPopover>
+        <MenuList onAction={() => {}}>
+          <MenuItem id="rename" textValue="Rename" shortcut={shortcut}>Rename</MenuItem>
+        </MenuList>
+      </MenuPopover>
+    </Menu>
+  );
+  const { render } = mount(menu("r"));
+  const item = () => document.querySelector<HTMLElement>('[role="menuitem"]')!;
+  expect(item().getAttribute("aria-keyshortcuts")).toBe("r");
+  render(menu());
+  expect(item().hasAttribute("aria-keyshortcuts")).toBe(false);
+});
+
+it("activates a menu item as the keyboard would: focused, run, and the menu closed", () => {
+  const onAction = vi.fn();
+  const onOpenChange = vi.fn();
+  mount(
+    <Menu open onOpenChange={onOpenChange}>
+      <MenuTrigger label="More actions">…</MenuTrigger>
+      <MenuPopover>
+        <MenuList onAction={onAction}>
+          <MenuItem id="rename" textValue="Rename">Rename</MenuItem>
+          <MenuItem id="copy" textValue="Copy">Copy</MenuItem>
+        </MenuList>
+      </MenuPopover>
+    </Menu>,
+  );
+  const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  act(() => activateMenuItem(items[1]));
+  expect(document.activeElement).toBe(items[1]);
+  expect(onAction).toHaveBeenCalledWith("copy");
+  expect(onOpenChange).toHaveBeenCalledWith(false);
+});
+
+it("lets the caller take over a focus restore once, and stops listening on abort", () => {
+  const restore = () => {
+    const event = new Event("react-aria-focus-scope-restore", { cancelable: true });
+    document.dispatchEvent(event);
+    return event;
+  };
+  const controller = new AbortController();
+  const listener = vi.fn((event: Event) => event.preventDefault());
+  onFocusScopeRestore(listener, controller.signal);
+  expect(restore().defaultPrevented).toBe(true);
+  expect(restore().defaultPrevented).toBe(false);
+  expect(listener).toHaveBeenCalledTimes(1);
+
+  const aborted = new AbortController();
+  const late = vi.fn();
+  onFocusScopeRestore(late, aborted.signal);
+  aborted.abort();
+  restore();
+  expect(late).not.toHaveBeenCalled();
 });

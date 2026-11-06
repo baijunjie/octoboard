@@ -14,12 +14,12 @@ export { ComboBox, ComboBoxInputGroup, ComboBoxPopover, ComboBoxTrigger } from "
 export { Disclosure, DisclosureBody, DisclosureContent, DisclosureHeading, DisclosureIndicator, DisclosureTrigger } from "./Disclosure";
 export { EmptyState } from "./EmptyState";
 export { Description, FieldError, GroupFieldError, Label, OutsideFieldParts } from "./Field";
-export { openingFocus, setKeyboardModality, useFocusVisibleProps, useKeyboardModality, useObjectRef } from "./focus";
+export { onFocusScopeRestore, openingFocus, setKeyboardModality, useFocusVisibleProps, useKeyboardModality, useObjectRef } from "./focus";
 export { Kbd, KbdAbbr, KbdContent, type KbdKey } from "./Kbd";
 export { type PrimitiveLabels, PrimitiveLabelsProvider } from "./labels";
 export { ListBox, ListBoxItem, ListBoxItemLabel } from "./ListBox";
 export { LocaleProvider } from "./locale";
-export { Menu, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSeparator, MenuTrigger, Submenu, SubmenuIndicator, useSubmenuPanel } from "./Menu";
+export { activateMenuItem, Menu, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSeparator, MenuTrigger, Submenu, SubmenuIndicator, useSubmenuPanel } from "./Menu";
 export { Meter } from "./Meter";
 export { Modal, ModalBody, ModalCloseButton, ModalFooter, ModalHeader, ModalHeading, ModalStatusIcon } from "./Modal";
 export { FloatingPopover, type OverlayPlacement, Popover, PopoverContent, PopoverDialog } from "./Popover";

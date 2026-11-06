@@ -46,6 +46,11 @@ draws it (`StaticTag`, `GroupFieldError`), marks and all.
   that is neither a component nor a hook (`mergeRefs`) is re-exported from the entry point, with its type redefined
   here where it would otherwise bring a third-party type into a consumer's code; only the ones the application uses
   are exported, and one only a wrapper needs (`mergeProps`, `parseColor`) stays inside it.
+- **Behaviour that rests on react-aria internals lives here too**, under a project name, so the version note stays
+  in one place: `onFocusScopeRestore` (a one-shot capture listener for the cancelable focus-scope restore, to place
+  focus when a dialog or popover closes), `MenuItem`'s `shortcut` (renders `aria-keyshortcuts`, which react-aria filters out of
+  item props) and `activateMenuItem` (runs an item as its keyboard activation does). Application code never listens
+  for a react-aria event, sets its attributes on a wrapper's node or synthesises its key events.
 - **Class and style helpers.** Where a consumer has to give its own element the look of a wrapped component (a button
   drawn as a link, a scroller with HeroUI's scroll shadow, a tooltip's surface), the layer exports the helper instead
   of the class names: `buttonClassName`, `scrollShadowClassName`, `scrollShadowStripStyle`, `scrollShadowAutoProps`,

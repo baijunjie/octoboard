@@ -12,7 +12,7 @@ import { FadeOverflow } from "../text/FadeOverflow";
 import { TABBABLE } from "../focus/selectors";
 import { MenuShortcutScope } from "./menuShortcutScope";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanelContext } from "./menuEntries";
-import { Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSeparator, setKeyboardModality, Submenu, SubmenuIndicator, useSubmenuPanel } from "../../primitives";
+import { activateMenuItem, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSeparator, setKeyboardModality, Submenu, SubmenuIndicator, useSubmenuPanel } from "../../primitives";
 
 /** HeroUI's menu item label ignores the pointer, and its content inherits that, so a clipped label never sees
  * the hover that opens its tooltip. The label's content takes the pointer back, a disabled item's too (see
@@ -99,12 +99,9 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
   const root = useRef<HTMLDivElement>(null);
   const itemRefs = useRef(new Map<number, HTMLElement>());
   const itemId = (index: number) => `${prefix}:${index}`;
-  const rememberItem = useCallback((node: HTMLElement | null, index: number, shortcut: string | undefined) => {
-    if (!node) { itemRefs.current.delete(index); return; }
-    itemRefs.current.set(index, node);
-    // react-aria filters this attribute out of menu item props.
-    if (shortcut) node.setAttribute("aria-keyshortcuts", shortcut);
-    else node.removeAttribute("aria-keyshortcuts");
+  const rememberItem = useCallback((node: HTMLElement | null, index: number) => {
+    if (node) itemRefs.current.set(index, node);
+    else itemRefs.current.delete(index);
   }, []);
   // Each menu owns its keys, including actions bubbling from a deeper submenu.
   const run = (key: string) => {
@@ -126,7 +123,8 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
         key={index}
         id={itemId(index)}
         textValue={entry.label}
-        ref={(node) => rememberItem(node, index, entry.shortcut)}
+        ref={(node) => rememberItem(node, index)}
+        shortcut={entry.shortcut}
         data-marquee-scope
         label={entry.reason && !entry.description ? t("menu.nameWithReason", { name: isolate(entry.ariaLabel ?? entry.label), reason: reasonText(entry.reason) }) : entry.ariaLabel}
         className={disabled ? DISABLED_ROW_CLASS : undefined}
@@ -191,7 +189,7 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
       nodes.push(
         <Submenu key={index}>
           {/* HeroUI gives submenu triggers ps-2, while Dropdown items use px-2.5. Keep their leading edges aligned. */}
-          <MenuItem id={itemId(index)} textValue={entry.label} ref={(node) => rememberItem(node, index, entry.shortcut)} data-marquee-scope className="ps-2.5!">
+          <MenuItem id={itemId(index)} textValue={entry.label} ref={(node) => rememberItem(node, index)} shortcut={entry.shortcut} data-marquee-scope className="ps-2.5!">
             <ItemIcon icon={entry.icon} className={entry.iconClassName} />
             <Label className={`min-w-0 flex-1 text-clip ${labelPointerClass(false)}`}>
               <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>
@@ -224,12 +222,8 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
       if (isLeaf(entry) && isDisabledItem(entry)) return;
       const item = itemRefs.current.get(index);
       if (!item) return;
-      setKeyboardModality();
-      item.focus();
-      // Use the menu item's normal keyboard activation so selection, submenu focus and closing
-      // stay under react-aria's control, including entries that keep their menu open.
-      item.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
-      item.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
+      // Selection, submenu focus and closing stay react-aria's, including entries that keep their menu open.
+      activateMenuItem(item);
     }}>
       <MenuList onAction={run} autoFocusFirst={autoFocus === "first"}>
         {nodes}

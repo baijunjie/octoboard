@@ -45,3 +45,16 @@ export function useObjectRef<T>(ref?: React.Ref<T>): React.RefObject<T | null> {
 export function openingFocus(autoFocus: boolean | undefined): { "data-opening-focus"?: "" } {
   return autoFocus ? { "data-opening-focus": "" } : {};
 }
+
+/**
+ * Takes over where focus goes when a dialog or popover closes: `listener` runs once, before react-aria puts focus
+ * back, and calls `preventDefault()` on the event to place focus itself. It listens in the capture phase and stops at
+ * the first restore or when `signal` aborts.
+ *
+ * react-aria 3.52's `FocusScope` raises this cancelable `react-aria-focus-scope-restore` event on the document before it
+ * applies its restore target, including the first control of a parent scope once the opener is gone. An internal event,
+ * and no hook offers the choice: to check again when react-aria is upgraded.
+ */
+export function onFocusScopeRestore(listener: (event: Event) => void, signal: AbortSignal): void {
+  document.addEventListener("react-aria-focus-scope-restore", listener, { capture: true, once: true, signal });
+}
