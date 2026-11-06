@@ -498,7 +498,7 @@ export function App(): React.ReactElement {
   }
 
   return (
-    <div data-sidebar-dockable={!isNarrow} data-pane-docked={(!isNarrow && panes.sidebarDocked) || asideDocked} className="relative flex h-full flex-col">
+    <div data-sidebar-dockable={!isNarrow} data-aside-docked={asideDocked} data-pane-docked={(!isNarrow && panes.sidebarDocked) || asideDocked} className="relative flex h-full flex-col">
       <Toasts focusTerminal={focusTerminal} />
       <TitleBar
         sidebarShown={panes.sidebarShown}

@@ -355,7 +355,7 @@ export function TerminalPane({
       className="relative flex min-h-0 min-w-0 flex-1 flex-col"
       containerRef={containerRef}
       setLinkRef={setLinkRef}
-      padding="px-3 py-2"
+      padding="session-terminal-inset py-2"
       inert={!session || isArchived || switching}
       editMenu={session && !isArchived && <TerminalEditMenu key={session.id} sessionId={session.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
     >

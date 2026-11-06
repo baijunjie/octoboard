@@ -89,6 +89,40 @@
   background-color: var(--terminal-background);
 }
 
+/* xterm 6 and its fit addon reserve 14px on the physical right for the scrollbar. Split that
+   space, and the docked panels' gap, between the visible gutters. The terminal stays LTR even
+   when the panels sit on the left in an RTL interface. */
+.session-terminal-inset {
+  --terminal-base-inset: 12px;
+  --terminal-scrollbar-width: 14px;
+  --terminal-scrollbar-offset: calc(var(--terminal-scrollbar-width) / 2);
+  --terminal-panel-gap: 0px;
+  padding-inline-start: calc(var(--terminal-base-inset) + var(--terminal-scrollbar-offset) + var(--terminal-panel-gap) / 2);
+  padding-inline-end: calc(var(--terminal-base-inset) - var(--terminal-scrollbar-offset) - var(--terminal-panel-gap) / 2);
+}
+
+.session-terminal-inset:dir(rtl) {
+  --terminal-scrollbar-offset: calc(var(--terminal-scrollbar-width) / -2);
+}
+
+[data-aside-docked="true"] .session-terminal-inset {
+  --terminal-panel-gap: var(--panel-grip-gap);
+  /* The centred 24px pane handle reaches 8px into the terminal. Keep the scrollbar out of its
+     hit area in LTR; the larger physical left inset already leaves that room in RTL. */
+  --terminal-base-inset: calc(8px + var(--terminal-scrollbar-width) / 2 + var(--terminal-panel-gap) / 2);
+}
+
+/* A grid fits whole columns only. Centre the grid together with its scrollbar so the remaining
+   fraction of a column is shared by both gutters; keep the scrollbar outside the screen. */
+.session-terminal-inset .xterm {
+  width: fit-content;
+  margin-inline: auto;
+}
+
+.session-terminal-inset .xterm-screen {
+  margin-right: var(--terminal-scrollbar-width);
+}
+
 /* The typography plugin with selectors WebKit can file by tag; `../typography.mjs` has the reason. */
 @plugin "../typography.mjs";
 

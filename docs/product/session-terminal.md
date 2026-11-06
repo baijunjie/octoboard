@@ -133,6 +133,8 @@ program's next copy replaces it.
   Keyboard-protocol enhancements an agent asked for (the kitty keyboard flags) are not restored.
 - A reattach always redraws from the replay rather than appending to what is on screen, so scrollback older than the
   replay window is lost on every reconnect.
+- Once fitted, the character grid has equal visible space on its left and right, accounting for the scrollbar and
+  the gap beside docked panels; the scrollbar remains clear of the panel's resize handle in either reading direction.
 - Whatever changes the terminal pane's size resizes the agent's terminal: resizing the window, resizing the sidebar or
   the right pane, hiding or showing the sidebar, and the right pane coming or going as its panels open and close all do;
   a pane floating in or the sidebar's drawer opening over the terminal does not (see `docs/product/pane-docking.md` and
@@ -152,7 +154,7 @@ program's next copy replaces it.
   `docs/product/pane-docking.md`), the terminal's grid keeps the size it had when the ease began, and is fitted to its
   area once, when the column comes to rest — at most about a quarter of a second after the toggle was last pressed. Any
   other change to the terminal pane's size during the ease, a window resize included, is held until then too. Until that
-  fit, a closing column leaves blank space along the terminal's right edge and an opening one covers its rightmost
+  fit, a closing column adds blank space on both sides of the grid and an opening one covers its rightmost
   columns. The agent is then told the new size as above. Where the system asks for reduced motion the column does not
   ease, and the terminal follows at once. The right pane does not ease at all.
 - The terminal's colours follow the window's light or dark appearance, and its text is held to a minimum contrast
