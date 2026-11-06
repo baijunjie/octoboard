@@ -322,7 +322,7 @@ has the same button, uncommitted and committed alike, flat or grouped by folder,
 groups its changes under. **Right-clicking a row opens the same menu at the pointer** (Control-click also works in the
 desktop app).
 
-- The menu's order is **Copy path**, then the **Open in** submenu, omitting unavailable actions. On a file's row Open in
+- The menu's order is the **Copy** submenu, then the **Open in** submenu, omitting unavailable actions. On a file's row Open in
   holds **File manager**, then **Default application**; on a folder's row — a symbolic link listed as a folder included
   — **File manager**, then **Terminal**.
 - **File manager** shows the entry in the file manager: a file, or a symbolic link whatever it leads to, is selected in
@@ -349,14 +349,21 @@ desktop app).
   the daemon refuses raises an error alert titled that the terminal could not be created, and adds no tab; when the
   folder is no longer there or is no longer a folder, its remedy is the one File manager gives for an entry no longer
   there, and other refusals get theirs as in "Starting a shell terminal" in `docs/product/shell-terminals.md`.
-- **Copy path** puts the file or folder's path on the clipboard, slash separated, as a path within the project. For a
-  change it is the path the row names, which for a rename is its new path — the old one only where the new side is
-  absent (a deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-change-list.md`).
+- **Copy** holds **Copy relative path**, then **Copy absolute path**. The relative path is slash separated, within the
+  project. For a change it is the path the row names, which for a rename is its new path — the old one only where the
+  new side is absent (a deletion) or outside the project (see "What is listed" in
+  `docs/product/project-pane-git-change-list.md`). The absolute path names the live entry on the daemon's host: in Files,
+  under the resolved project directory; in Git, under the worktree the chosen branch is checked out in, including the
+  project's folder within that repository. A branch checked out nowhere uses the resolved project directory instead.
+  This applies to committed changes too; the path names today's location, not a historical file. The directory is
+  resolved when Copy opens. If that lookup fails or the worktree no longer exists, the absolute-path item is disabled
+  with a reason, and relative copying remains available. Reopening the submenu tries the lookup again.
   The path is copied **as the window shows it**, for a human to paste: a byte of a name that is not valid UTF-8 is
   copied as the replacement character U+FFFD, the character the name is displayed with. A **toast** then confirms that
   the path was copied; where neither the clipboard nor the browser's selection copy allows it, an error alert says it
-  could not be copied (see "Error alerts" in `docs/product/error-alerts.md`). The file viewer's header offers the same
-  action, and File manager and Default application too (see "The header" in `docs/product/file-viewer.md`).
+  could not be copied (see "Error alerts" in `docs/product/error-alerts.md`). The file viewer's header has a Copy path
+  button for the relative path, and File manager and Default application too (see "The header" in
+  `docs/product/file-viewer.md`).
 - **The Git mode's commit rows have no button**, and neither does a row that says something about a folder instead of
   listing an entry (loading, empty; see "Rows and the keyboard" above).
 - **The button shows while its row is hovered, holds keyboard focus, is the selected file or change, or has its menu
@@ -377,7 +384,7 @@ desktop app).
 - Its **accessible name names the file or folder** — "Actions for file server.ts" or "Actions for folder src" — so each
   row's button is told apart, while its tooltip is the short one every such button has (see "Tooltips on icon-only
   controls" in `docs/product/labels-and-tooltips.md`).
-- **Where the platform has no clipboard, Copy path still works**, through the browser's selection copy. A plain browser
+- **Where the platform has no clipboard, both path copies still work**, through the browser's selection copy. A plain browser
   whose page is not a secure context — served over `http` from anywhere but `localhost` — has no clipboard; the packaged
   desktop app always does.
 

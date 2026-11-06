@@ -50,6 +50,7 @@ export interface SidebarHandlers {
   onOpenSystemTerminal: (project: Project) => void;
   /** Opens a validated repository web URL; absent without browser-link support. */
   onOpenRepository?: (url: string) => void;
+  onLoadProjectCopyItems: (project: Project) => Promise<ActionMenuEntry[]>;
   onCopyProjectName: (project: Project) => void;
   onCopySessionId: (session: Session) => void;
   /** Checks the project against its remote and fast-forwards it now, whatever the automatic pull

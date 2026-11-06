@@ -44,6 +44,8 @@ export const en = {
   "common.copyFailed": "Could not copy the path",
   "common.copyFailedTitle": "Could not copy",
   "common.copyPath": "Copy path",
+  "common.copyRelativePath": "Copy relative path",
+  "common.copyAbsolutePath": "Copy absolute path",
   "common.create": "Create",
   "common.delete": "Delete",
   "common.edit": "Edit",
@@ -1128,6 +1130,7 @@ export const en = {
 
   "terminal.actions": "Terminal actions",
   "terminal.copy": "Copy",
+  "terminal.copySelection": "Copy selection",
   "terminal.paste": "Paste",
   "terminal.pasteNoClipboard": "Clipboard unavailable",
   "terminal.selectAll": "Select all",

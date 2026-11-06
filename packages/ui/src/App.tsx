@@ -432,6 +432,7 @@ export function App(): React.ReactElement {
     stableOpenSystemTerminal,
     stableCopySessionId,
     stableCopyProjectName,
+    stableLoadProjectCopyItems,
     stablePullProjectBranch,
     stablePushProjectBranch,
     stableLoadProjectBranches,
@@ -603,6 +604,7 @@ export function App(): React.ReactElement {
                 onOpenSystemTerminal={stableOpenSystemTerminal}
                 onOpenRepository={stableOpenRepository}
                 onCopyProjectName={stableCopyProjectName}
+                onLoadProjectCopyItems={stableLoadProjectCopyItems}
                 onCopySessionId={stableCopySessionId}
                 onPullProjectBranch={stablePullProjectBranch}
                 onPushProjectBranch={stablePushProjectBranch}

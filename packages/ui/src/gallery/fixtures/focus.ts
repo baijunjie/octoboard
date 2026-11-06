@@ -404,7 +404,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus, header menu",
     state,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "The header's menu starts with Open panel. It has no View archive: the Archived list below the sessions already lists the archive and opens it in full with View all.",
+    description: "The header's menu starts with Copy, Open in and Open panel in that order, followed by Git when available. It has no View archive: the Archived list below the sessions already lists the archive and opens it in full with View all.",
     steps: [(ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name }))],
   },
   {

@@ -42,8 +42,8 @@ held, opens the session at once without it (see "Opening a session with defaults
 focus mode, apart from the items those views leave out (see "What both views show" and "A console session's focus mode"
 in `docs/product/focus-mode.md`). Choosing an action closes the menu at once; submenu entries open their next menu.
 Separators split it into four groups, in this order: the first holds **Pin** / **Unpin**, as in a session's menu, and
-the actions for viewing the project inside the app (**Focus mode**, **View archive**); then the **Open panel**, **Open
-in** and **Git** submenus; managing the project itself (**Rename**, **Copy project name**, **Project settings**); and
+the actions for viewing the project inside the app (**Focus mode**, **View archive**); then the **Copy**, **Open in**,
+**Open panel** and **Git** submenus, in that order; managing the project itself (**Rename**, **Project settings**); and
 **Remove project**. An item a view does not offer is left out without moving the others.
 
 - **Pin** / **Unpin** — see "Pinning" in `docs/product/order-of-projects-and-sessions.md`.
@@ -55,10 +55,13 @@ in** and **Git** submenus; managing the project itself (**Rename**, **Copy proje
   shows only a disabled item saying so. On a project's heading in a console session's focus mode, the submenu covers
   only the project's share of that console session's archive, and its View all opens the console session's archive view
   instead (see "A console session's focus mode" in `docs/product/focus-mode.md`).
-- **Open panel** — a submenu with **Files**, then **Processes**, then **Terminal**, which open that panel of the
-  project's right pane inside the window; an entry whose panel is already on screen for the project is left out, and so
-  is the submenu when all are (see "Opening a panel from a project's action menu" in
-  `docs/product/right-pane-panels.md`).
+- **Copy** — a submenu with **Copy project name**, which copies the project's name exactly, then **Copy absolute
+  path**, which copies its resolved directory path on the daemon's host. Available in all the project-menu placements
+  above, including right-click menus. The directory is looked up when the submenu opens; if it cannot be resolved, the
+  absolute-path item is disabled with a reason, while copying the name remains available. Reopening the submenu tries
+  the lookup again. Where the platform has no clipboard, or it refuses, either value is copied through the browser's
+  selection copy instead (see "Copy buttons" in `docs/product/labels-and-tooltips.md`). Success raises a notice; a copy
+  neither way allows raises an error alert.
 - **Open in** — a submenu with **File manager**, then **System terminal**, then the project's repository host when
   available. File manager opens the project's directory on the daemon's host (see "Opening the system file manager"
   below). System terminal opens the operating system's terminal application at that directory (see "Opening a project
@@ -71,6 +74,10 @@ in** and **Git** submenus; managing the project itself (**Rename**, **Copy proje
   `git://`, `git+ssh://` and `ssh+git://` remotes use HTTPS. Credentials, query strings, fragments and a trailing `.git`
   are omitted from the opened address, as are transport ports on non-web remotes. Opening raises no success notice; a
   failure is an error alert.
+- **Open panel** — a submenu with **Files**, then **Processes**, then **Terminal**, which open that panel of the
+  project's right pane inside the window; an entry whose panel is already on screen for the project is left out, and so
+  is the submenu when all are (see "Opening a panel from a project's action menu" in
+  `docs/product/right-pane-panels.md`).
 - **Git** — a submenu, only while the project's status says its directory is a git repository, so not before the first
   status and not when the directory is not one (see "What one check does" in `docs/product/project-git-status.md`). It
   holds **Pull current branch**, then **Push current branch**, then **Switch branch**, then, after a separator, the
@@ -83,10 +90,6 @@ in** and **Git** submenus; managing the project itself (**Rename**, **Copy proje
   confirmation before discarding tracked changes (see "Restoring file changes" in
   `docs/product/project-git-actions.md`).
 - **Rename** — a dialog with the name alone; an empty name is rejected.
-- **Copy project name** — copies the project's name exactly to the clipboard. Available in all the project-menu
-  placements above, including right-click menus. Where the platform has no clipboard, or it refuses, the name is copied
-  through the browser's selection copy instead (see "Copy buttons" in `docs/product/labels-and-tooltips.md`). Success
-  raises a notice; a copy neither way allows raises an error alert.
 - **Project settings** — the project dialog, see "Editing a project" in `docs/product/projects.md`.
 - **Remove project** — see `docs/product/removing-projects.md`; it asks for confirmation first.
 

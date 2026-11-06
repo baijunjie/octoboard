@@ -4,6 +4,7 @@ import React, { createContext, useContext } from "react";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import type { ActionMenuEntry } from "../components/menus/menuEntries";
 import { RowControls } from "../components/controls/RowControls";
+import { useResolveAbsolutePath } from "../components/host/useResolveAbsolutePath";
 import { useCopyPath } from "../components/host/useCopyPath";
 import { type HostPath, useHostPathActions } from "../components/host/useHostPathActions";
 import { isolate } from "../i18n/isolate";
@@ -29,10 +30,22 @@ export function RowActions({ path, name, directory = false, reserve = false, con
 }): React.ReactElement {
   const t = useT();
   const copyPath = useCopyPath();
+  const resolveAbsolutePath = useResolveAbsolutePath();
   const scope = useContext(RowPathScope);
   const hostAction = useHostPathActions();
   const openTerminal = useContext(OpenShellTerminal);
-  const items: ActionMenuEntry[] = [{ label: t("common.copyPath"), icon: Copy, onClick: () => copyPath(path) }];
+  const relative = { label: t("common.copyRelativePath"), icon: Copy, onClick: () => copyPath(path) };
+  const items: ActionMenuEntry[] = [{
+    label: t("common.copy"), icon: Copy,
+    items: [relative],
+    ...(scope ? { loadItems: async () => {
+      const absoluteItem = await resolveAbsolutePath({ ...scope, path }).then(
+        (absolute) => ({ label: t("common.copyAbsolutePath"), icon: Copy, onClick: () => copyPath(absolute) }),
+        () => ({ label: t("common.copyAbsolutePath"), icon: Copy, disabled: true, reason: { state: t("common.copyFailed") }, onClick: () => {} }),
+      );
+      return [relative, absoluteItem];
+    } } : {}),
+  }];
   if (scope) {
     const run = (type: "open_project_path" | "reveal_project_path") => hostAction(type, { ...scope, path });
     const fileManager = { label: t("common.fileManager"), icon: FolderOpen, onClick: () => run("reveal_project_path") };

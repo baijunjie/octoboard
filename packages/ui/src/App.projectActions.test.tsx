@@ -264,6 +264,7 @@ it("copies the project name unchanged and reports success", async () => {
   const clipboard = { writeText: vi.fn(async () => {}) };
   const { daemon, project } = mountApp(false, clipboard);
   await openProjectMenu(project.name);
+  await press("Copy");
   await press("Copy project name");
   expect(clipboard.writeText).toHaveBeenCalledExactlyOnceWith(project.name);
   expect(daemon.showNotice).toHaveBeenCalledWith("Project name copied");
@@ -273,6 +274,7 @@ it("reports a clipboard failure", async () => {
   const clipboard = { writeText: vi.fn(async () => { throw new Error("Denied"); }) };
   const { daemon, project } = mountApp(false, clipboard);
   await openProjectMenu(project.name);
+  await press("Copy");
   await press("Copy project name");
   expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ message: "Could not copy the project name", title: "Could not copy", classification: expect.objectContaining({ kind: "actionable", recovery: "clipboard" }) })]);
   expect(daemon.showNotice).not.toHaveBeenCalled();

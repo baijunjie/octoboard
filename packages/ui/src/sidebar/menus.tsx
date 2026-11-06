@@ -93,7 +93,8 @@ export type MenuPlacement = "list" | "focused" | "nested";
 /** The project's actions, in the project row and in a focus mode (the project's own header, and a
  * console session's project headings); `placement` says which. Pin / Unpin comes first, as in a
  * session's menu; then the actions are grouped as viewing the project inside the app (focus mode,
- * archive), opening its panels (Open panel), opening it in outside tools (Open in), managing the project itself, and removing it.
+ * archive), copying and opening it (Copy, Open in, Open panel, Git), managing the project itself,
+ * and removing it.
  * "View archive" previews `archived` and its "View all" opens `archiveScope`. By default both are the
  * project's archive; a console session's focus mode passes the project's share of that console
  * session's archive and opens the whole of it.
@@ -125,10 +126,11 @@ export function projectMenu(
       ? []
       : [archiveSubmenu(t, t("sidebar.project.archive"), archived, handlers.onSelectSession, () => handlers.onOpenArchive(archiveScope))]),
     "separator",
-    ...(panels.length > 0 ? [{
-      label: t("sidebar.project.openPanel"), icon: PanelRight, iconClassName: "rtl:-scale-x-100",
-      items: panels.map((kind) => ({ label: t(PANEL_META[kind].name), icon: PANEL_META[kind].icon, onClick: () => handlers.onOpenProjectPanel(project, kind) })),
-    }] : []),
+    {
+      label: t("common.copy"), icon: Copy,
+      items: [{ label: t("sidebar.project.copyName"), icon: Copy, onClick: () => handlers.onCopyProjectName(project) }],
+      loadItems: () => handlers.onLoadProjectCopyItems(project),
+    },
     {
       label: t("common.openIn"), icon: SquareArrowOutUpRight,
       items: [
@@ -140,6 +142,10 @@ export function projectMenu(
         }] : []),
       ],
     },
+    ...(panels.length > 0 ? [{
+      label: t("sidebar.project.openPanel"), icon: PanelRight, iconClassName: "rtl:-scale-x-100",
+      items: panels.map((kind) => ({ label: t(PANEL_META[kind].name), icon: PANEL_META[kind].icon, onClick: () => handlers.onOpenProjectPanel(project, kind) })),
+    }] : []),
     ...(gitRepository
       ? [
         {
@@ -157,7 +163,6 @@ export function projectMenu(
       : []),
     "separator",
     { label: t("sidebar.project.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },
-    { label: t("sidebar.project.copyName"), icon: Copy, onClick: () => handlers.onCopyProjectName(project) },
     { label: t("sidebar.project.edit"), icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },
     "separator",
     { label: t("sidebar.project.remove"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-project", project }), destructive: true },

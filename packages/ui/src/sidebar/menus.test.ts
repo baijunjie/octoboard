@@ -18,7 +18,7 @@ const openIn = (menu: ActionMenuEntry[]) => menu.find((entry) => typeof entry ==
 const account = (id: string, agent: Account["agent"]): Account => accountOf(id, agent, id, `/home/${id}`);
 
 function submenu(session: Session, accounts: Account[], handlers = {} as SidebarHandlers) {
-  const entry = sessionMenu(t, handlers, session, accounts, {}, { providers: TEST_PROVIDERS, switching: false }).find((candidate) => typeof candidate === "object" && "items" in candidate);
+  const entry = sessionMenu(t, handlers, session, accounts, {}, { providers: TEST_PROVIDERS, switching: false }).find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account");
   return entry && typeof entry === "object" && "items" in entry ? entry : undefined;
 }
 
@@ -55,7 +55,7 @@ describe("the Switch account entry", () => {
   it("lists no turned-off account but the session's own, and is absent when every other one is off", () => {
     const labels = (session: Session, accounts: Account[], disabledDefaults?: ("claude" | "codex" | "grok")[]) => {
       const entry = sessionMenu(t, {} as SidebarHandlers, session, accounts, {}, { providers: TEST_PROVIDERS, switching: false, disabledDefaults })
-        .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu | undefined;
+        .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu | undefined;
       return entry?.items.map((item) => (typeof item === "object" ? item.label : item));
     };
     const off = { ...account("w", "claude"), disabled: true };
@@ -72,7 +72,7 @@ describe("the Switch account entry", () => {
     });
     const menu = (quotas: ReturnType<typeof spent>[], now: number) => {
       const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, quota: { quotas, now } })
-        .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+        .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
       return entry.items.slice(0, 2) as { reason?: { state: string; detail?: string } }[];
     };
     const [current, other] = menu([spent("w"), spent(null)], 0);
@@ -84,17 +84,17 @@ describe("the Switch account entry", () => {
   it("disables an account whose sharing change runs, without a reason, whatever its quota, and never the current one", () => {
     const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
     const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, sharing })
-      .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+      .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
     const [current, other] = entry.items as { disabled?: boolean; reason?: { state: string }; description?: string }[];
     expect(current.reason).toBeUndefined();
     expect(other.disabled).toBe(true);
     expect(other.reason).toBeUndefined();
     expect(other.description).toBeUndefined();
     const free = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, sharing: new Map() })
-      .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+      .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
     expect((free.items[1] as { reason?: unknown }).reason).toBeUndefined();
     const onto = sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, sharing })
-      .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+      .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
     expect((onto.items[1] as { selected: boolean; reason?: unknown }).selected).toBe(true);
     expect((onto.items[1] as { reason?: unknown }).reason).toBeUndefined();
   });
@@ -102,7 +102,7 @@ describe("the Switch account entry", () => {
   it("disables every other account, without a reason, while the session's own account is changing its sharing", () => {
     const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
     const entry = sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, sharing })
-      .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+      .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
     const [dflt, current] = entry.items as { disabled?: boolean; reason?: { state: string }; description?: string; selected: boolean }[];
     expect(current.selected).toBe(true);
     expect(current.reason).toBeUndefined();
@@ -125,7 +125,7 @@ describe("the Switch account entry", () => {
   it("disables the other accounts, Hand off and Unbind while an account switch holds the session", () => {
     const held = project({ account_id: "w", config_dir: "/home/w", bound_to: "hub" });
     const menu = sessionMenu(t, {} as SidebarHandlers, held, [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: true });
-    const entry = menu.find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+    const entry = menu.find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
     const [dflt, current] = entry.items as { disabled?: boolean; reason?: { state: string }; selected: boolean }[];
     expect(current.reason).toBeUndefined();
     expect(dflt.disabled).toBe(true);
@@ -142,7 +142,7 @@ describe("the Switch account entry", () => {
       unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "Claude Code is not signed in" }, email: null,
     };
     const items = (session: Session, switching = false) => (sessionMenu(t, {} as SidebarHandlers, session, [account("w", "claude"), account("v", "claude")], {}, { providers: TEST_PROVIDERS, switching, quota: { quotas: [signedOut], now: 0 } })
-      .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu).items as { disabled?: boolean; reason?: { state: string }; description?: string; selected: boolean }[];
+      .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu).items as { disabled?: boolean; reason?: { state: string }; description?: string; selected: boolean }[];
     const [, , v] = items(project());
     expect(v.disabled).toBe(true);
     expect(v.reason).toEqual({ state: "Not logged in" });
@@ -164,7 +164,7 @@ describe("the Switch account entry", () => {
       windows: [{ kind: "session" as const, label: null, used_percent: 40, resets_at: 7_200_000, window_minutes: 300 }], email: null,
     };
     const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], {}, { providers: TEST_PROVIDERS, switching: false, quota: { quotas: [quota], now: 0 } })
-      .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
+      .find((candidate) => typeof candidate === "object" && "items" in candidate && candidate.label === "Switch account") as ActionMenuSubmenu;
     const other = entry.items[1] as { reason?: unknown; description?: string };
     expect(other.reason).toBeUndefined();
     expect(other.description).toMatch(/60%/);
@@ -356,13 +356,13 @@ describe("a project's menu", () => {
     expect(labels("nested")).not.toContain("Focus mode");
   });
 
-  it("puts Pin first, then groups viewing in the app, panels and outside tools, managing the project, and removing it", () => {
+  it("puts Pin first, then groups viewing, copying and opening, managing the project, and removing it", () => {
     const handlers = {} as unknown as SidebarHandlers;
     const menu = projectMenu(t, handlers, { id: "p", pinned: false } as Project, [], { gitRepository: true });
     expect(menu.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual([
       "Pin", "Focus mode", "View archive", "separator",
-      "Open panel", "Open in", "Git", "separator",
-      "Rename", "Copy project name", "Project settings", "separator",
+      "Copy", "Open in", "Open panel", "Git", "separator",
+      "Rename", "Project settings", "separator",
       "Remove project",
     ]);
   });
@@ -384,7 +384,7 @@ describe("a project's menu", () => {
     expect(openIn(projectMenu(t, handlers, { ...project, remote_url: "/tmp/repo" }, [])).items).toHaveLength(2);
   });
 
-  it("offers each panel in Open panel, above Open in, except those on screen for this project", () => {
+  it("offers each panel in Open panel, below Open in, except those on screen for this project", () => {
     const panelItems = (visibleProjectPanels: SidebarHandlers["visibleProjectPanels"]) => {
       const menu = projectMenu(t, { visibleProjectPanels } as SidebarHandlers, { id: "p" } as Project, []);
       const labels = menu.flatMap((entry) => typeof entry === "object" ? [entry.label] : []);
@@ -398,7 +398,7 @@ describe("a project's menu", () => {
     expect(panelItems({ project: "p", kinds: ["files", "processes"] }).items).toEqual(["Terminal"]);
     expect(panelItems({ project: "p", kinds: ["files", "processes", "terminal"] }).items).toBeUndefined();
     const { labels } = panelItems(undefined);
-    expect(labels.indexOf("Open panel") + 1).toBe(labels.indexOf("Open in"));
+    expect(labels.indexOf("Open in") + 1).toBe(labels.indexOf("Open panel"));
     expect(labels).not.toContain("Browse files");
   });
 
