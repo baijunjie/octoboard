@@ -150,8 +150,10 @@ describe("buildStatusItemMenu quota submenus", () => {
   const labels = (menu: ReturnType<typeof menuOf>, index = 0) =>
     menu.submenus[index].items.map((item) => {
       switch (item.kind) {
-        case "header":
-          return item.detail ? `${item.title} | ${item.detail}` : item.title;
+        case "header": {
+          const title = item.status ? `${item.title} · ${item.status.label}` : item.title;
+          return item.detail ? `${title} | ${item.detail}` : title;
+        }
         case "window":
           return `${item.name} | ${item.detail}`;
         case "meter":
@@ -230,7 +232,7 @@ describe("buildStatusItemMenu quota submenus", () => {
     const reading = quotaOf("claude", null, { windows: [window({}), window({ kind: "weekly_model", label: "Fable", used_percent: 5, resets_at: null })] });
     const menu = menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [reading] }));
     expect(menu.submenus[0].items).toEqual([
-      { kind: "header", title: "Default · Max · Available", detail: "Updated 1 minute ago", label: "Default · Max · Available · updated 1 minute ago" },
+      { kind: "header", title: "Default · Max", detail: "Updated 1 minute ago", label: "Default · Max · updated 1 minute ago" },
       {
         kind: "window",
         name: "Session",
@@ -253,7 +255,7 @@ describe("buildStatusItemMenu quota submenus", () => {
   it("joins the session and the account-wide weekly window into one two-layer item read once", () => {
     const menu = menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null)] }));
     expect(menu.submenus[0].items).toEqual([
-      { kind: "header", title: "Default · Max · Available", detail: "Updated 1 minute ago", label: "Default · Max · Available · updated 1 minute ago" },
+      { kind: "header", title: "Default · Max", detail: "Updated 1 minute ago", label: "Default · Max · updated 1 minute ago" },
       {
         kind: "meter",
         session: { name: "Session", detail: "82% remaining · resets in 1h 57m", fraction: 0.82 },
@@ -267,7 +269,7 @@ describe("buildStatusItemMenu quota submenus", () => {
   it("says a reading under a minute old was taken just now", () => {
     const reading = quotaOf("claude", null, { fetched_at: NOW - 10_000 });
     const menu = menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [reading] }));
-    expect(menu.submenus[0].items[0]).toEqual({ kind: "header", title: "Default · Max · Available", detail: "Updated just now", label: "Default · Max · Available · updated just now" });
+    expect(menu.submenus[0].items[0]).toEqual({ kind: "header", title: "Default · Max", detail: "Updated just now", label: "Default · Max · updated just now" });
   });
 
   it("keeps a lone weekly window, or a model's, as a row of its own", () => {
@@ -300,7 +302,7 @@ describe("buildStatusItemMenu quota submenus", () => {
       accountQuotas: [quotaOf("codex", null, { plan: null, windows: [window({})] }), quotaOf("codex", "a1", { plan: "pro_lite", windows: [window({ used_percent: 100 })] })],
     }));
     expect(labels(menu)).toEqual([
-      "Default · Available | Updated 1 minute ago",
+      "Default | Updated 1 minute ago",
       "5h | 82% remaining · resets in 1h 57m",
       "---",
       `${isolate("Work")} · Pro Lite · Limit reached | Updated 1 minute ago`,
@@ -312,11 +314,12 @@ describe("buildStatusItemMenu quota submenus", () => {
     const reading = quotaOf("claude", null, { windows: [window({ kind, used_percent: 100 }), window({ kind: "weekly_model", used_percent: 0 })] });
     const sourceState = source({ agentAvailability: available("claude"), accountQuotas: [reading] });
     const [header, ...rows] = buildQuotaSubmenus(t, sourceState)[0].items;
-    expect(header).toMatchObject({ title: "Default · Max · Limit reached", label: "Default · Max · Limit reached · updated 1 minute ago" });
+    expect(header).toMatchObject({ title: "Default · Max", status: { label: "Limit reached" }, label: "Default · Max · Limit reached · updated 1 minute ago" });
     expect(rows.map((row) => row.kind)).toEqual(["window", "window"]);
     expect(rows.every((row) => "used_up" in row && row.used_up === true)).toBe(true);
     const later = buildQuotaSubmenus(t, { ...sourceState, now: NOW + 118 * MINUTE })[0].items;
-    expect(later[0]).toMatchObject({ title: "Default · Max · Available" });
+    expect(later[0]).toMatchObject({ title: "Default · Max" });
+    expect(later[0]).not.toHaveProperty("status");
     expect(later.some((row) => "used_up" in row)).toBe(false);
   });
 
@@ -330,18 +333,18 @@ describe("buildStatusItemMenu quota submenus", () => {
 
   it("does not mark an account used up for a model-specific limit", () => {
     const reading = quotaOf("claude", null, { windows: [window({ used_percent: 10 }), window({ kind: "weekly_model", used_percent: 100 })] });
-    expect(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [reading] })).submenus[0].items[0]).toMatchObject({ title: "Default · Max · Available" });
+    expect(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [reading] })).submenus[0].items[0]).toMatchObject({ title: "Default · Max" });
   });
 
   it("keeps a stale exhausted reading used up, matching session gating", () => {
     const reading = quotaOf("claude", null, { windows: [window({ used_percent: 100, resets_at: null })], unavailable: { code: "quota_timed_out", params: {}, message: "" } });
-    expect(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [reading] })).submenus[0].items[0]).toMatchObject({ title: "Default · Max · Limit reached" });
+    expect(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [reading] })).submenus[0].items[0]).toMatchObject({ title: "Default · Max", status: { label: "Limit reached" } });
   });
 
-  it("localizes the account status in Chinese", () => {
+  it("localizes the exhausted account tag in Chinese", () => {
     const translate: Translate = ((key: string, ...args: unknown[]) => format("zh-Hans", key as never, args[0] as never)) as Translate;
-    const state = source({ language: "zh-Hans", agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null)] });
-    expect(buildQuotaSubmenus(translate, state)[0].items[0]).toMatchObject({ title: "默认 · Max · 可用" });
+    const state = source({ language: "zh-Hans", agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null, { windows: [window({ used_percent: 100 })] })] });
+    expect(buildQuotaSubmenus(translate, state)[0].items[0]).toMatchObject({ title: "默认 · Max", status: { label: "已达上限" } });
   });
 
   it("says so in one line when an account's quota is unavailable or not read yet", () => {
@@ -362,8 +365,10 @@ describe("buildStatusItemMenu quota submenus", () => {
 
   it("keeps the last windows of an out-of-date reading under a line saying so", () => {
     const stale = quotaOf("claude", null, { fetched_at: NOW - 12 * MINUTE, windows: [window({})], unavailable: { code: "quota_timed_out", params: {}, message: "" } });
-    const lines = labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [stale] })));
-    expect(lines.slice(0, 3)).toEqual(["Default · Max · Status unknown | Updated 12 minutes ago", "⚠︎ Out of date: the last read failed", "Session | 82% remaining · resets in 1h 57m"]);
+    const staleMenu = menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [stale] }));
+    expect(staleMenu.submenus[0].items[0]).not.toHaveProperty("status");
+    const lines = labels(staleMenu);
+    expect(lines.slice(0, 3)).toEqual(["Default · Max | Updated 12 minutes ago", "⚠︎ Out of date: the last read failed", "Session | 82% remaining · resets in 1h 57m"]);
   });
 
   it("counts the countdown from the moment given and says so once the reset has passed, the window drawn full", () => {
@@ -405,8 +410,9 @@ describe("buildStatusItemMenu quota submenus", () => {
       consoleMap: new Map(consoles.map((c) => [c.id, c])), projectMap: new Map(projects.map((p) => [p.id, p])),
     });
     const headers = (status: SessionStatus) => menu(status).submenus.flatMap((submenu) => submenu.items.filter((item) => item.kind === "header").map((item) => (item as { title: string }).title.replace(/[\u2068\u2069]/g, "")));
-    expect(headers("working")).toEqual(["Work · Max · Available · Disabled"]);
-    expect(headers("idle")).toEqual(["Work · Max · Available · Disabled"]);
+    expect(headers("working")).toEqual(["Work · Max"]);
+    expect(menu("working").submenus[0].items[0]).toMatchObject({ suffix: "Disabled", label: expect.stringContaining("Max · Disabled") });
+    expect(headers("idle")).toEqual(["Work · Max"]);
     expect(menu("interrupted").submenus).toEqual([]);
     expect(menu("archived").submenus).toEqual([]);
   });

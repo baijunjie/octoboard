@@ -110,26 +110,27 @@ From top to bottom:
    `docs/product/account-quotas.md`). An account that is turned off (see "Turning an account off" in
    `docs/product/agent-accounts.md`) is not listed, and the menu follows the switch as it flips. The exception is the
    account the selected session is running on, as that section has it: it stays listed in its place, its header line
-   ending in **Disabled** after its quota status ("Work · Max · Available · Disabled"), or after its name and plan when
-   it has no status to show. An agent that is not added, not available, whose availability is not yet determined, or
-   whose accounts are all turned off, bar that one, has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
+   ending in **Disabled**, in secondary text after its reached-limit tag, or after its name and plan when there is
+   no tag. An agent that is not added, not available, whose availability is not yet determined, or whose
+   accounts are all turned off, bar that one, has none. The submenus are set off from the sessions and from Open
+   Octoboard by separators. Inside a submenu,
    nothing can be chosen:
-   - each account is a header line, at the small size of a section header, regular weight, in the secondary text
-     colour, with its name — for the agent's default account the name the user gave it, else **Default** (see "The
-     default account" in `docs/product/agent-accounts.md`) — and its plan after a dot where the agent names one
-     ("Default · Max"), in the saved display order (see "Reordering accounts" in `docs/product/agent-accounts.md`),
-     each set off by a separator.
+   - each account is a header line, at the small size of a section header and regular weight, with its name and plan
+     in the secondary text colour. The agent's default account uses the name the user gave it, else **Default** (see
+     "The default account" in `docs/product/agent-accounts.md`), and a plan the agent names follows after a dot
+     ("Default · Max"). Accounts follow the saved display order (see "Reordering accounts" in
+     `docs/product/agent-accounts.md`), each set off by a separator.
      For an account with windows to show, how long ago they were read is right-aligned on the header line in the same
      small secondary text ("Updated 3 minutes ago", "Updated just now" under a minute), also when they are kept after a
-     newer reading failed, and assistive technology reads the line as one phrase ("Default · Max · Available ·
-     updated 3 minutes ago"); it is left out for an account still being read or with no windows to show;
-   - an account with windows also has a quota status after its name and plan, included in the header's accessible
-     name: used-up quota follows "A used-up account" in `docs/product/account-quotas.md`, including kept windows
-     after a failed reading. Otherwise quota is available when the latest reading succeeded and contains an
-     account-wide window; its status is unknown when the latest reading failed or only model-specific windows were
-     reported. Availability describes the account-wide quota, not whether every model can be used. The status is
-     written in the UI's language, and no picture marks it. Accounts still being read or with no windows keep only
-     their reading, unavailable or login note below the header;
+     newer reading failed, and assistive technology reads the line as one phrase ("Default · Max · updated
+     3 minutes ago"); it is left out for an account still being read or with no windows to show;
+   - only an account whose quota is used up has a status pill after its name and plan: a rounded, soft-filled
+     reached-limit tag using the same warning text and background palette as the quota panel, in light and dark
+     appearances. Its localized words are included in the header's accessible name, read once with the rest of the
+     line; the pill is not announced separately. Used-up quota follows "A used-up account" in
+     `docs/product/account-quotas.md`, including kept windows after a failed reading. Other accounts have no quota
+     status label, visually or in the header's accessible name. Accounts still being read or with no windows keep
+     their reading, unavailable or login note below the header; an out-of-date reading keeps its note there too;
    - under the header, each window is one row, except as the next point says: its name on the left, as in "Quota
      windows" in `docs/product/account-quotas.md` ("5h", "Session"), "N% remaining · resets in <countdown>" ("82%
      remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a window with no reset time)

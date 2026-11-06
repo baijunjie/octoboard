@@ -98,3 +98,23 @@ it("moves the bubble and the hand by the shifts the sidebar's glyphs take, and n
   expect(statusGlyph("waiting_user", "light")).toContain(`<g transform="${shiftedTransform(HAND_SHIFT)}"`);
   for (const status of ["starting", "switching", "dormant", "paused", "done", "interrupted"] as const) expect(statusGlyph(status, "light")).not.toContain("transform");
 });
+
+
+it.each(["light", "dark"] as const)("uses the shared warning badge palette with alpha for the native exhausted quota tag in %s", async (appearance) => {
+  vi.mocked(resolveCssColour).mockImplementation((expression, theme, alpha) => {
+    expect(theme).toBe(appearance);
+    if (expression === "var(--tint-warning-fg)") return "#775500";
+    if (expression === "var(--tint-warning-bg)") {
+      expect(alpha).toBe(true);
+      return "#ffbb0026";
+    }
+    return undefined;
+  });
+  const headers = [{ kind: "header" as const, title: "Work", status: { label: "Limit reached" } }, { kind: "header" as const, title: "Home" }];
+  const menu = await withIcons({ ...draft, submenus: [{ title: "Usage", items: headers }] }, appearance);
+  expect(menu.submenus[0].items).toEqual([
+    { ...headers[0], status: { label: "Limit reached", foreground_colour: [119, 85, 0], background_colour: [255, 187, 0, 38] } },
+    headers[1],
+  ]);
+  expect(headers[0].status).not.toHaveProperty("foreground_colour");
+});

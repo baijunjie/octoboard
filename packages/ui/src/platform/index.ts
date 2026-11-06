@@ -220,9 +220,9 @@ export interface StatusItemSubmenu {
  * and a line cannot be chosen. */
 export type StatusItemSubmenuItem =
   /** An account's line: `title` at the left and, right-aligned, `detail` (when its reading was taken) when
-   * there is one. `title` includes the quota status in words. `label`, when given, is the whole line as one
+   * there is one. `status` is a separate coloured tag after the title. `label`, when given, is the whole line as one
    * phrase, for assistive technology. */
-  | { kind: "header"; title: string; detail?: string; label?: string }
+  | { kind: "header"; title: string; detail?: string; label?: string; suffix?: string; status?: { label: string; foreground_colour?: [number, number, number]; background_colour?: [number, number, number, number] } }
   /** A window's name and, right-aligned, its detail, with a bar of `fraction` (0 to 1) beneath, drawn in
    * `fill_colour`, the agent's bar colour from the UI stylesheet as sRGB bytes (the text colour when absent).
    * `used_up` marks the window of an account whose quota is used up, whose bar is drawn in `used_up_colour`

@@ -174,6 +174,12 @@ export async function withIcons(draft: StatusItemMenuDraft, appearance: Appearan
   // A provider without a colour of its own draws in the foreground, as its bars do on the page.
   const neutral = bytesOf(resolveCssColour("var(--default-foreground)", appearance));
   const coloured = (item: StatusItemSubmenuDraftItem): StatusItemSubmenuItem => {
+    if (item.kind === "header" && item.status) {
+      const foreground_colour = bytesOf(resolveCssColour("var(--tint-warning-fg)", appearance));
+      const background = resolveCssColour("var(--tint-warning-bg)", appearance, true);
+      const background_colour = background ? [1, 3, 5, 7].map((offset) => Number.parseInt(background.slice(offset, offset + 2), 16)) as [number, number, number, number] : undefined;
+      return { ...item, status: { ...item.status, ...(foreground_colour && { foreground_colour }), ...(background_colour && { background_colour }) } };
+    }
     if (item.kind !== "window" && item.kind !== "meter") return item;
     const { agent, ...rest } = item;
     const fill_colour = bytesOf(providerColour(agent)?.[appearance]) ?? neutral;

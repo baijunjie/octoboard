@@ -29,7 +29,7 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{NSDictionary, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString};
 
-use super::model::{MeterLayer, SubmenuItem};
+use super::model::{HeaderStatus, MeterLayer, SubmenuItem};
 
 /// The narrowest a row is, in points; a row whose text needs more is as wide as it needs, and the
 /// menu is as wide as its widest row.
@@ -126,6 +126,7 @@ pub(super) struct TextIvars {
     string: Retained<NSString>,
     /// The font and colour, as the attributes the string is measured and drawn with.
     attributes: Retained<NSDictionary<NSString, AnyObject>>,
+    background: Option<Retained<NSColor>>,
 }
 
 define_class!(
@@ -143,7 +144,16 @@ define_class!(
         #[unsafe(method(drawRect:))]
         fn draw_rect(&self, _dirty: NSRect) {
             let ivars = self.ivars();
-            let origin = NSPoint::new(TEXT_INSET, 0.0);
+            if let Some(background) = &ivars.background {
+                background.set();
+                let radius = self.bounds().size.height / 2.0;
+                NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(self.bounds(), radius, radius).fill();
+            }
+            let origin = if ivars.background.is_some() {
+                NSPoint::new(6.0, 2.0)
+            } else {
+                NSPoint::new(TEXT_INSET, 0.0)
+            };
             // SAFETY: the attributes hold an `NSFont` and an `NSColor` under the keys for them.
             unsafe {
                 ivars
@@ -156,7 +166,7 @@ define_class!(
         /// secondary colour blends with the menu's background as the system's own lines do.
         #[unsafe(method(allowsVibrancy))]
         fn allows_vibrancy(&self) -> bool {
-            true
+            self.ivars().background.is_none()
         }
     }
 
@@ -172,6 +182,16 @@ impl RowText {
         string: &str,
         colour: &NSColor,
         small: bool,
+        mtm: MainThreadMarker,
+    ) -> Retained<Self> {
+        Self::with_background(string, colour, small, None, mtm)
+    }
+
+    fn with_background(
+        string: &str,
+        colour: &NSColor,
+        small: bool,
+        background: Option<Retained<NSColor>>,
         mtm: MainThreadMarker,
     ) -> Retained<Self> {
         let font = if small {
@@ -196,10 +216,19 @@ impl RowText {
         let frame = rect(
             0.0,
             0.0,
-            size.width.ceil() + TEXT_INSET * 2.0,
-            size.height.ceil(),
+            size.width.ceil()
+                + if background.is_some() {
+                    12.0
+                } else {
+                    TEXT_INSET * 2.0
+                },
+            size.height.ceil() + if background.is_some() { 4.0 } else { 0.0 },
         );
-        let this = Self::alloc(mtm).set_ivars(TextIvars { string, attributes });
+        let this = Self::alloc(mtm).set_ivars(TextIvars {
+            string,
+            attributes,
+            background,
+        });
         // SAFETY: `initWithFrame:` is `NSView`'s designated initialiser.
         let text: Retained<Self> = unsafe { msg_send![super(this), initWithFrame: frame] };
         text.setAccessibilityElement(false);
@@ -365,14 +394,56 @@ fn single_line_row(string: &str, small: bool, mtm: MainThreadMarker) -> Retained
 
 /// An account's header: one line of small secondary text, its title at the left and, when there is
 /// one, when its reading was taken right-aligned.
-fn header_row(title: &str, detail: Option<&str>, mtm: MainThreadMarker) -> Retained<NSView> {
-    let Some(detail) = detail else {
-        return single_line_row(title, true, mtm);
-    };
-    let line = TextLine::new(title, detail, &NSColor::secondaryLabelColor(), true, mtm);
-    let width = line.width.max(MIN_WIDTH);
-    let row = row_view(width, line.height + LINE_PAD * 2.0, mtm);
-    line.place(&row, width, LINE_PAD);
+fn header_row(
+    title: &str,
+    detail: Option<&str>,
+    status: Option<&HeaderStatus>,
+    suffix: Option<&str>,
+    mtm: MainThreadMarker,
+) -> Retained<NSView> {
+    let line = TextLine::new(
+        title,
+        detail.unwrap_or(""),
+        &NSColor::secondaryLabelColor(),
+        true,
+        mtm,
+    );
+    let tag = status.map(|status| {
+        let colour = NSColor::systemOrangeColor();
+        let foreground = status
+            .foreground_colour
+            .map_or_else(NSColor::labelColor, srgb);
+        let background = status.background_colour.map_or_else(
+            || colour.colorWithAlphaComponent(0.15),
+            |[r, g, b, a]| srgb([r, g, b]).colorWithAlphaComponent(f64::from(a) / 255.0),
+        );
+        RowText::with_background(&status.label, &foreground, true, Some(background), mtm)
+    });
+    let suffix = suffix.map(|text| RowText::new(text, &NSColor::secondaryLabelColor(), true, mtm));
+    let suffix_width = suffix
+        .as_ref()
+        .map_or(0.0, |text| text.frame().size.width + 6.0);
+    let tag_width = tag.as_ref().map_or(0.0, |tag| tag.frame().size.width + 6.0);
+    let height = tag
+        .as_ref()
+        .map_or(line.height, |tag| line.height.max(tag.frame().size.height));
+    let width = (line.width + tag_width + suffix_width).max(MIN_WIDTH);
+    let row = row_view(width, height + LINE_PAD * 2.0, mtm);
+    line.place(&row, width, LINE_PAD + (height - line.height) / 2.0);
+    if let Some(suffix) = suffix {
+        suffix.setFrameOrigin(NSPoint::new(
+            INSET + line.name.frame().size.width + tag_width + 6.0,
+            LINE_PAD + (height - suffix.frame().size.height) / 2.0,
+        ));
+        row.addSubview(&suffix);
+    }
+    if let Some(tag) = tag {
+        tag.setFrameOrigin(NSPoint::new(
+            INSET + line.name.frame().size.width + 6.0,
+            LINE_PAD + (height - tag.frame().size.height) / 2.0,
+        ));
+        row.addSubview(&tag);
+    }
     row
 }
 
@@ -427,9 +498,19 @@ pub fn dress_submenu(menu: &NSMenu, items: &[SubmenuItem], mtm: MainThreadMarker
     for (item, model) in menu.itemArray().iter().zip(items) {
         match model {
             SubmenuItem::Separator => {}
-            SubmenuItem::Header { title, detail, .. } => {
-                item.setView(Some(&header_row(title, detail.as_deref(), mtm)))
-            }
+            SubmenuItem::Header {
+                title,
+                detail,
+                status,
+                suffix,
+                ..
+            } => item.setView(Some(&header_row(
+                title,
+                detail.as_deref(),
+                status.as_ref(),
+                suffix.as_deref(),
+                mtm,
+            ))),
             SubmenuItem::Note { text } => item.setView(Some(&single_line_row(text, false, mtm))),
             SubmenuItem::Window {
                 name,

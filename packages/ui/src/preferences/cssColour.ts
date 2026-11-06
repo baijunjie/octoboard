@@ -9,7 +9,7 @@ export type Appearance = "light" | "dark";
 const UNRESOLVED = "rgb(1, 2, 4)";
 
 /** A colour the page draws from its stylesheet (`var(--tint-accent-fg)`, a `color-mix()`), as the
- * `#rrggbb` it has now, for the places that cannot take CSS: an SVG drawn into a picture for the
+ * `#rrggbb` it has now (or `#rrggbbaa` with `alpha`), for the places that cannot take CSS: an SVG drawn into a picture for the
  * native menu, xterm's cell decorations. The stylesheet stays the only place the colour is written
  * down; this reads it back, in the theme the page is in, or in `appearance` when that is given (the
  * native menu follows the appearance the app sets, which `prefers-color-scheme` reports). `appearance` holds for a token HeroUI
@@ -18,9 +18,9 @@ const UNRESOLVED = "rgb(1, 2, 4)";
  * appearance and expression, so a caller may ask on every frame. `undefined` where the page cannot
  * resolve it: an expression that does not parse or names a variable that is not defined, no
  * stylesheet, no canvas. */
-export function resolveCssColour(expression: string, appearance?: Appearance): string | undefined {
+export function resolveCssColour(expression: string, appearance?: Appearance, alpha = false): string | undefined {
   const root = document.documentElement;
-  const key = `${root.className}|${root.dataset.theme ?? ""}|${appearance ?? ""}|${expression}`;
+  const key = `${root.className}|${root.dataset.theme ?? ""}|${appearance ?? ""}|${alpha}|${expression}`;
   if (resolved.has(key)) return resolved.get(key);
   // A colour that does not resolve falls back to the inherited one, so the host's is one nothing resolves to.
   const host = document.createElement("div");
@@ -44,8 +44,8 @@ export function resolveCssColour(expression: string, appearance?: Appearance): s
       canvas.clearRect(0, 0, 1, 1);
       canvas.fillStyle = computed;
       canvas.fillRect(0, 0, 1, 1);
-      const [r, g, b] = canvas.getImageData(0, 0, 1, 1).data;
-      colour = `#${[r, g, b].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+      const [r, g, b, a] = canvas.getImageData(0, 0, 1, 1).data;
+      colour = `#${(alpha ? [r, g, b, a] : [r, g, b]).map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
     }
   }
   resolved.set(key, colour);

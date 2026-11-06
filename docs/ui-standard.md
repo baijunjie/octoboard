@@ -181,7 +181,10 @@ its text below AA.
 A disabled account is left out of that panel and of the menu bar icon's quota submenus, except the one the selected
 session is running on. That row is drawn like any other, its name, meters and bars unmuted, since the account is in use,
 and a warning-coloured "Disabled" badge after its plan says in words why it is listed; the submenu's heading for it
-ends in "Disabled" after its quota state. The submenu heading carries the state in words only. In the Settings page's
+ends in "Disabled" after its quota state. Only a used-up account has a status pill in the submenu heading, using
+the same soft warning palette as the panel's limit-reached badge; other accounts have no quota status label.
+"Disabled" remains trailing secondary text. The heading is announced once as a whole, including the limit-reached
+state when present. In the Settings page's
 accounts table a turned-off account's Status cell says "Disabled" in a neutral badge in place of its login state; the
 badge opens the cell, so it has no screen-reader comma before it.
 

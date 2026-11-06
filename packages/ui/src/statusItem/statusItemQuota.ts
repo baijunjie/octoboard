@@ -77,23 +77,23 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   // account that is not logged in: a state to be told in a word, not a failure.
   if (quota.windows.length === 0) return [{ kind: "header", title: marked(planned) }, { kind: "note", text: t(isNotLoggedIn(quota.unavailable) ? "statusItem.quota.notLoggedIn" : "quota.unavailable") }];
   const naming = quotaNaming(quota, source.providers);
-  const status = exhaustedQuotaWindow(quota, source.now) ? "used_up"
-    : quota.unavailable || !usageBarWindows(naming) ? "unknown" : "available";
-  const statusTitle = marked(t(status === "used_up" ? "statusItem.quota.accountUsedUp"
-    : status === "unknown" ? "statusItem.quota.accountUnknown" : "statusItem.quota.accountAvailable", { account: planned }));
+  const exhausted = exhaustedQuotaWindow(quota, source.now) !== undefined;
+  const statusTitle = marked(exhausted ? t("statusItem.quota.accountUsedUp", { account: planned }) : planned);
   const age = formatRelativeTime(source.language, quota.fetched_at, source.now);
   // The header says when the windows were read, at its right, even when the latest read failed; a native menu has
   // no popover for the reason, so the out-of-date note only says that the last read failed.
   const justNow = isJustNow(quota.fetched_at, source.now);
   const lines: StatusItemSubmenuDraftItem[] = [{
     kind: "header",
-    title: statusTitle,
+    title: planned,
+    ...(disabled ? { suffix: t("accountChoice.disabled.reason") } : {}),
+    ...(exhausted ? { status: { label: t("quota.usedUp") } } : {}),
     detail: justNow ? t("quota.updatedNow") : t("quota.updated", { age }),
     label: justNow ? t("statusItem.quota.updatedNow", { header: statusTitle }) : t("statusItem.quota.updated", { header: statusTitle, age }),
   }];
   if (quota.unavailable) lines.push({ kind: "note", text: t("statusItem.quota.stale") });
   // The shell draws a used-up account's bars in grey, so that it recedes beside the accounts that can still be used.
-  const usedUp = status === "used_up" ? { used_up: true } : {};
+  const usedUp = exhausted ? { used_up: true } : {};
   const layers = twoLayerWindows(quota.windows);
   for (const window of orderedQuotaWindows(quota.windows)) {
     if (layers?.weekly && window === layers.weekly) continue;

@@ -88,6 +88,15 @@ pub struct MeterLayer {
     pub fraction: f64,
 }
 
+#[derive(Clone, Deserialize)]
+pub struct HeaderStatus {
+    pub label: String,
+    #[serde(default)]
+    pub foreground_colour: Option<[u8; 3]>,
+    #[serde(default)]
+    pub background_colour: Option<[u8; 4]>,
+}
+
 /// What a submenu holds, none of it choosable: an account's header (with when its reading was
 /// taken), a quota window's row with the bar the shell draws (`fraction` of it filled, in
 /// `fill_colour`, or in `used_up_colour` when the account's quota is `used_up`), the 5-hour and weekly
@@ -99,6 +108,10 @@ pub struct MeterLayer {
 pub enum SubmenuItem {
     Header {
         title: String,
+        #[serde(default)]
+        status: Option<HeaderStatus>,
+        #[serde(default)]
+        suffix: Option<String>,
         /// When the account's reading was taken, drawn right-aligned on its line.
         #[serde(default)]
         detail: Option<String>,
