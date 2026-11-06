@@ -250,7 +250,7 @@ export function AgentAccountsSection(): React.ReactElement {
             dividers instead of HeroUI's plain border. The strip pins itself to the top of the section's scroller
             over the rows, opaque on the dialog's own surface and flush with the scroller's edge
             (`--section-padding` is the padding the Settings dialog gives the section). */
-        <Tabs variant="underline" selectedKey={selected} onSelectionChange={(key) => setChosen(key as Agent)}>
+        <Tabs variant="underline" className="gap-0" selectedKey={selected} onSelectionChange={(key) => setChosen(key as Agent)}>
           <AgentTabList
             {...pinnedFocus}
             providers={providers}
@@ -350,7 +350,7 @@ export function AgentAccountsSection(): React.ReactElement {
 function AgentAccountsPanel(props: AgentAccountsPanelProps): React.ReactElement {
   const order = useAccountOrder(props.agent, props.owned);
   return (
-    <TabPanel id={props.agent} className="px-0 pt-0">
+    <TabPanel id={props.agent} className="mt-0 px-0 pt-0">
       <AgentAccountsPanelContent {...props} order={order} />
     </TabPanel>
   );

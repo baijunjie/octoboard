@@ -28,7 +28,7 @@ import { useProviders } from "../../store";
  * groove's. */
 const PINNED_EDGE = "group-data-[overflowing]/accounts:shadow-[inset_1px_0_0_var(--separator)] group-data-[overflowing]/accounts:rtl:shadow-[inset_-1px_0_0_var(--separator)]";
 
-const HEADER = "px-2 pb-2 text-start text-xs font-medium whitespace-nowrap text-app-muted groove-b";
+const HEADER = "px-2 py-2 align-middle text-start text-xs font-medium whitespace-nowrap text-app-muted groove-b";
 
 /** One agent's accounts as a table, a row for each account (`AccountTableRow`, as `children`) under column headers said
  * once: the account (name, plan and email), its usage, its status (login state, with the Log in icon while it is signed
@@ -55,8 +55,7 @@ export function AccountsTable({ agent, children }: { agent: Agent; children: Rea
   }, []);
   return (
     <div className={`group/accounts rounded-lg ${region.ring}`} data-overflowing={region.overflows ? "" : undefined}>
-      {/* The top padding is room for the focus ring of the help tip in the header. */}
-      <FadedScroller orientation="horizontal" region={region} fade={false} endInset={pinnedWidth} className="pt-1">
+      <FadedScroller orientation="horizontal" region={region} fade={false} endInset={pinnedWidth}>
         <table aria-label={t("settings.accounts.table.label", { agent: isolate(providerLabel(t, providers, agent)) })} className="w-full min-w-[38rem] border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
@@ -65,7 +64,7 @@ export function AccountsTable({ agent, children }: { agent: Agent; children: Rea
               <th scope="col" className={HEADER}>{t("settings.accounts.table.usage")}</th>
               <th scope="col" className={HEADER}>{t("settings.accounts.table.status")}</th>
               <th scope="col" className={HEADER}>
-                <span className="inline-flex items-center gap-1">
+                <span className="flex w-max items-center gap-1">
                   {t("settings.accounts.disable")}
                   <HelpTip label={t("settings.accounts.disableHelp")}>{t("settings.accounts.disableHiddenExplanationInUse")}</HelpTip>
                 </span>
