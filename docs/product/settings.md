@@ -402,17 +402,15 @@ changes, and why agents cannot change any of them are in "Approving requests aut
 A switch, **off to begin with**: whether a session's
 `request_session` call, its request for a session that is nobody's, is approved without asking the user. While the
 switch is off the row's description says what turning it on will do, and while it is on it says what is happening now:
-a session can start a session that reports to the user without asking first, and nobody but the user owns the new
-session.
+a session can start new sessions without asking first.
 
 ### Automatically approve resume requests
 
 A switch, **off to begin with**: whether a session's
 `request_resume_session` call, its request to resume a conversation, is approved without asking the user (see
 `docs/product/requests-to-resume-a-conversation.md`). While the switch is off the row's description says what turning
-it on will do, and while it is on it says what is happening now: a session can reopen or resume a session, or resume a
-conversation in a new session, without asking first; a reopened or resumed session keeps its owner and has its
-archived owners reopened with it; and a new session started this way is owned by nobody but the user.
+it on will do, and while it is on it says what is happening now: a session can reopen archived sessions or resume
+interrupted sessions and existing conversations without asking first.
 
 ### Automatically approve account switches
 

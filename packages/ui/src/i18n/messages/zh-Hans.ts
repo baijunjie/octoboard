@@ -2106,27 +2106,23 @@ export const zhHans: Translation<"other"> = {
     "开启后，会话和项目会随状态变化移动位置，除置顶项外，等待你处理的排在最前。没有未归档会话的项目排在最后。",
   "settings.sidebarOrder.description.on":
     "会话和项目会随状态变化移动位置，除置顶项外，等待你处理的排在最前。没有未归档会话的项目排在最后。",
-  "settings.agentPermissions.lead": "选择会话可以不先征得你同意就执行哪些操作，以及它们如何向你提问。",
-  "settings.autoApproveSession.label": "自动批准会话请求",
-  "settings.autoApproveSession.description.off":
-    "开启后，会话可以直接启动向你汇报的新会话，无需先征得你的同意。新会话除你之外没有其他所有者。",
-  "settings.autoApproveSession.description.on":
-    "会话可以直接启动向你汇报的新会话，无需先征得你的同意。新会话除你之外没有其他所有者。",
-  "settings.autoApproveResume.label": "自动批准恢复请求",
-  "settings.autoApproveResume.description.off":
-    "开启后，会话可以直接重新打开或恢复某个会话，或在新会话中恢复某段对话，无需先征得你的同意。被重新打开或恢复的会话保留原有的所有者，已归档的所有者也会一并重新打开；以这种方式新启动的会话除你之外没有其他所有者。",
-  "settings.autoApproveResume.description.on":
-    "会话可以直接重新打开或恢复某个会话，或在新会话中恢复某段对话，无需先征得你的同意。被重新打开或恢复的会话保留原有的所有者，已归档的所有者也会一并重新打开；以这种方式新启动的会话除你之外没有其他所有者。",
+  "settings.agentPermissions.lead": "选择智能体无需你确认即可执行的操作，以及它们向你提问的方式。",
+  "settings.autoApproveSession.label": "自动批准新建会话请求",
+  "settings.autoApproveSession.approvalDescription.off": "开启后，智能体无需你确认，即可新建会话。",
+  "settings.autoApproveSession.approvalDescription.on": "智能体无需你确认，即可新建会话。",
+  "settings.autoApproveResume.label": "自动批准恢复会话请求",
+  "settings.autoApproveResume.approvalDescription.off": "开启后，智能体无需你确认，即可重新打开已归档的会话，或恢复中断的会话及已有对话。",
+  "settings.autoApproveResume.approvalDescription.on": "智能体无需你确认，即可重新打开已归档的会话，或恢复中断的会话及已有对话。",
   "settings.autoApproveAccountSwitches.label": "自动批准账户切换",
   "settings.autoApproveAccountSwitches.description.off":
-    "开启后，会话可以直接切换其名下某个会话的账户，无需先征得你的同意。",
+    "开启后，智能体无需你确认，即可切换其名下会话的账户。",
   "settings.autoApproveAccountSwitches.description.on":
-    "会话可以直接切换其名下某个会话的账户，无需先征得你的同意。",
+    "智能体无需你确认，即可切换其名下会话的账户。",
   "settings.autoApproveHandoffs.label": "自动批准移交",
   "settings.autoApproveHandoffs.description.off":
-    "开启后，会话可以直接将其名下某个会话移交给另一个智能体的新会话，无需先征得你的同意。",
+    "开启后，智能体无需你确认，即可将其名下会话移交给另一个智能体的新会话。",
   "settings.autoApproveHandoffs.description.on":
-    "会话可以直接将其名下某个会话移交给另一个智能体的新会话，无需先征得你的同意。",
+    "智能体无需你确认，即可将其名下会话移交给另一个智能体的新会话。",
   "settings.askQuestionsAsChoices.label": "以选项形式提问",
   "settings.askQuestionsAsChoices.description.off":
     "开启后，会要求会话在需要你决定时提供可点选的选项，而非在回复中罗列选项。更改对之后启动的会话生效。",

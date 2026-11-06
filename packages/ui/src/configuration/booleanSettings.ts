@@ -96,14 +96,14 @@ const COPY: { [F in BooleanField]: Copy<F> } = {
     section: "agentBehavior",
     order: 1,
     label: "settings.autoApproveSession.label",
-    description: { on: "settings.autoApproveSession.description.on", off: "settings.autoApproveSession.description.off" },
+    description: { on: "settings.autoApproveSession.approvalDescription.on", off: "settings.autoApproveSession.approvalDescription.off" },
     consequence: "configuration.import.settings.consequence.autoApproveSession",
   },
   auto_approve_resume_requests: {
     section: "agentBehavior",
     order: 2,
     label: "settings.autoApproveResume.label",
-    description: { on: "settings.autoApproveResume.description.on", off: "settings.autoApproveResume.description.off" },
+    description: { on: "settings.autoApproveResume.approvalDescription.on", off: "settings.autoApproveResume.approvalDescription.off" },
     consequence: "configuration.import.settings.consequence.autoApproveResume",
   },
   auto_approve_account_switches: {

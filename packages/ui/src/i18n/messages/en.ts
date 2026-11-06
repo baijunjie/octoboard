@@ -2301,15 +2301,11 @@ export const en = {
     "Sessions and projects move as their status changes, so the ones waiting for you come first after the pinned ones. Projects with no unarchived session end the list.",
   "settings.agentPermissions.lead": "Choose what sessions may do without asking you first, and how they ask you.",
   "settings.autoApproveSession.label": "Automatically approve session requests",
-  "settings.autoApproveSession.description.off":
-    "Once this is on, a session can start a session that reports to you without asking you first. Nobody owns the new session but you.",
-  "settings.autoApproveSession.description.on":
-    "A session can start a session that reports to you without asking you first. Nobody owns the new session but you.",
+  "settings.autoApproveSession.approvalDescription.off": "Once this is on, a session can start new sessions without asking you first.",
+  "settings.autoApproveSession.approvalDescription.on": "A session can start new sessions without asking you first.",
   "settings.autoApproveResume.label": "Automatically approve resume requests",
-  "settings.autoApproveResume.description.off":
-    "Once this is on, a session can reopen or resume a session, or resume a conversation in a new session, without asking you first. A reopened or resumed session keeps its owner, and its archived owners are reopened with it. A new session started this way is owned by nobody but you.",
-  "settings.autoApproveResume.description.on":
-    "A session can reopen or resume a session, or resume a conversation in a new session, without asking you first. A reopened or resumed session keeps its owner, and its archived owners are reopened with it. A new session started this way is owned by nobody but you.",
+  "settings.autoApproveResume.approvalDescription.off": "Once this is on, a session can reopen archived sessions or resume interrupted sessions and existing conversations without asking you first.",
+  "settings.autoApproveResume.approvalDescription.on": "A session can reopen archived sessions or resume interrupted sessions and existing conversations without asking you first.",
   "settings.autoApproveAccountSwitches.label": "Automatically approve account switches",
   "settings.autoApproveAccountSwitches.description.off":
     "Once this is on, a session can switch the account of one of its own sessions without asking you first.",

@@ -687,7 +687,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Agent behavior",
-    description: "The lead line sits under the section heading, above a rule that opens the five rows: the session-request, resume-request, account-switch and handoff switches, all off, then Ask questions as choices, on, which is its default. Each of the four approval descriptions starts with \"Once this is on\" and says only what being on allows; the resume one names reopening, resuming and resuming a conversation in a new session, and none says what happens until then. The last row's description states what being on does, ending with the sentence that a change reaches sessions started afterwards. Switch a row to read its other description; none moves another.",
+    description: "The lead line sits under the section heading, above a rule that opens the five rows: the session-request, resume-request, account-switch and handoff switches, all off, then Ask questions as choices, on, which is its default. Each of the four approval descriptions starts with \"Once this is on\" and says only what being on allows; the resume one names reopening archived sessions or resuming interrupted sessions and existing conversations, and none says what happens until then. The last row's description states what being on does, ending with the sentence that a change reaches sessions started afterwards. Switch a row to read its other description; none moves another.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
