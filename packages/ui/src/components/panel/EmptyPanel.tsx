@@ -157,7 +157,7 @@ export function EmptyPanel({
   const Heading = `h${headingLevel}` as const;
   const SecondaryIcon = secondaryAction?.icon;
   return (
-    <EmptyState aria-hidden={silent} className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+    <EmptyState aria-hidden={silent} className="flex flex-col items-center gap-3 px-4 py-4 text-center">
       <span className={`flex size-12 items-center justify-center rounded-full ${tone === "danger" ? "bg-danger-soft text-danger-soft-foreground" : "bg-default text-app-muted"}`}>
         <Icon aria-hidden="true" className="size-6" />
       </span>
