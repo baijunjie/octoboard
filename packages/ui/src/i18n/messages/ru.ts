@@ -2108,6 +2108,8 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "settings.accounts.setting.description": "Применяется ко всем учётным записям {agent}.",
   "settings.accounts.setting.confirmMessage": "Установить {choice} для {setting} во всех учётных записях {agent}?",
   "settings.accounts.tags.heading": "Теги",
+  "settings.accounts.tags.helpLabel": "О тегах агентов",
+  "settings.accounts.tags.helpText": "Используйте теги, чтобы описать задачи, для которых подходит этот агент, например проверку кода или разработку интерфейсов. Другие сеансы могут учитывать их при выборе агента.",
   "settings.accounts.tags.label": "Теги для {agent}",
   "settings.accounts.tags.picked": "Выбранные теги для {agent}",
   "settings.accounts.tags.none": "Нет тегов",

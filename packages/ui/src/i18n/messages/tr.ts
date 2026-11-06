@@ -2348,6 +2348,8 @@ export const tr: Translation<"one" | "other"> = {
   "settings.accounts.setting.description": "Tüm {agent} hesapları için geçerlidir.",
   "settings.accounts.setting.confirmMessage": "Tüm {agent} hesaplarında {setting}, {choice} olarak ayarlansın mı?",
   "settings.accounts.tags.heading": "Etiketler",
+  "settings.accounts.tags.helpLabel": "Ajan etiketleri hakkında",
+  "settings.accounts.tags.helpText": "Bu ajanın uygun olduğu görevleri, örneğin kod incelemesi veya arayüz geliştirmeyi, etiketlerle açıklayın. Diğer oturumlar ajan seçerken bu etiketleri referans alabilir.",
   "settings.accounts.tags.label": "{agent} etiketleri",
   "settings.accounts.tags.picked": "{agent} için seçili etiketler",
   "settings.accounts.tags.none": "Etiket yok",

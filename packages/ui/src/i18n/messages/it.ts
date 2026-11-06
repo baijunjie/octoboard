@@ -2108,6 +2108,8 @@ export const it: Translation<"one" | "many" | "other"> = {
   "settings.accounts.setting.description": "Si applica a tutti gli account {agent}.",
   "settings.accounts.setting.confirmMessage": "Impostare {setting} su {choice} per tutti gli account {agent}?",
   "settings.accounts.tags.heading": "Tag",
+  "settings.accounts.tags.helpLabel": "Informazioni sui tag degli agenti",
+  "settings.accounts.tags.helpText": "Usa i tag per descrivere le attività per cui questo agente è adatto, come la revisione del codice o lo sviluppo di interfacce. Le altre sessioni possono consultarli quando scelgono un agente.",
   "settings.accounts.tags.label": "Tag per {agent}",
   "settings.accounts.tags.picked": "Tag scelti per {agent}",
   "settings.accounts.tags.none": "Nessun tag",

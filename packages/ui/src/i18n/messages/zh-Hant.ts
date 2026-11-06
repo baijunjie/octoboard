@@ -2270,6 +2270,8 @@ export const zhHant: Translation<"other"> = {
   "settings.accounts.setting.description": "適用於每個 {agent} 帳號。",
   "settings.accounts.setting.confirmMessage": "要將每個 {agent} 帳號的{setting}設為{choice}嗎？",
   "settings.accounts.tags.heading": "標籤",
+  "settings.accounts.tags.helpLabel": "關於代理程式標籤",
+  "settings.accounts.tags.helpText": "用標籤說明此代理程式擅長的工作，例如程式碼審查、介面開發，供其他工作階段選擇代理程式時參考。",
   "settings.accounts.tags.label": "{agent} 的標籤",
   "settings.accounts.tags.picked": "{agent} 已選的標籤",
   "settings.accounts.tags.none": "無標籤",

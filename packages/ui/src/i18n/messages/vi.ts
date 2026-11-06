@@ -2107,6 +2107,8 @@ export const vi: Translation<"other"> = {
   "settings.accounts.setting.description": "Áp dụng cho mọi tài khoản {agent}.",
   "settings.accounts.setting.confirmMessage": "Đặt {setting} thành {choice} cho mọi tài khoản {agent}?",
   "settings.accounts.tags.heading": "Thẻ",
+  "settings.accounts.tags.helpLabel": "Về thẻ tác tử",
+  "settings.accounts.tags.helpText": "Dùng thẻ để mô tả các công việc phù hợp với tác tử này, chẳng hạn như rà soát mã hoặc phát triển giao diện. Các phiên khác có thể tham khảo khi chọn tác tử.",
   "settings.accounts.tags.label": "Thẻ cho {agent}",
   "settings.accounts.tags.picked": "Thẻ đã chọn cho {agent}",
   "settings.accounts.tags.none": "Không có thẻ",

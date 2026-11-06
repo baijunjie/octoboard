@@ -958,7 +958,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, an agent's tags and the suggestions",
-    description: "Codex's tab with its Tags row at the top, above Permission approval: the label Tags, \"Applies to every Codex account\" under it and the field below holding the tags review and tests as removable chips ahead of the input, with the suggestions button at its end. The suggestions list is open under the field and offers the tags the other added agents carry (frontend, backend and research), not the two already picked. Pick one or type a new tag and press Enter to save it at once; remove a chip to save the shorter list. The other tabs show the same row with their own tags, or the \"No tags\" placeholder when they have none.",
+    description: "Codex's tab with its Tags row at the top, above Permission approval: the label Tags with a help button beside it, \"Applies to every Codex account\" under it and the field below holding the tags review and tests as removable chips ahead of the input, with the suggestions button at its end. The suggestions list is open under the field and offers the tags the other added agents carry (frontend, backend and research), not the two already picked. Pick one or type a new tag and press Enter to save it at once; remove a chip to save the shorter list. The other tabs show the same row with their own tags, or the \"No tags\" placeholder when they have none.",
     state: taggedState,
     steps: [
       ...openAccounts,
@@ -967,16 +967,16 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
-    id: "settings-accounts-approval-help-claude",
+    id: "settings-accounts-agent-tags-help",
     group: GROUP,
     category: "normal",
-    title: "Settings: accounts, permission approval explanation",
-    description: "The help button beside the Permission approval label above the table is touched with a finger. Its popover keeps the agent's explanation next to the selector it describes; Codex's tab words it for its reviewers in the same popover.",
-    state: quotaState,
+    title: "Settings: accounts, agent tags explanation",
+    description: "The help button beside Tags is touched with a finger. Its popover explains that tags describe the tasks an agent is good at, such as code review or UI development, so other sessions can use them when choosing an agent. The explanation stays beside the Tags label above the field; the same help popover presents the other settings' explanations.",
+    state: taggedState,
     steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.touchPress(ui.t("provider.claude.setting.approval_mode.helpLabel")),
+      ...openAccounts,
+      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
+      (ui) => ui.touchPress(ui.t("settings.accounts.tags.helpLabel")),
     ],
   },
   {

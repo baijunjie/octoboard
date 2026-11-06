@@ -2135,6 +2135,8 @@ export const de: Translation<"one" | "other"> = {
   "settings.accounts.setting.description": "Gilt für alle Konten von {agent}.",
   "settings.accounts.setting.confirmMessage": "{setting} für alle Konten von {agent} auf {choice} setzen?",
   "settings.accounts.tags.heading": "Tags",
+  "settings.accounts.tags.helpLabel": "Über Agenten-Tags",
+  "settings.accounts.tags.helpText": "Beschreibe mit Tags, für welche Aufgaben dieser Agent geeignet ist, etwa Code-Reviews oder UI-Entwicklung. Andere Sitzungen können sich bei der Auswahl eines Agenten daran orientieren.",
   "settings.accounts.tags.label": "Tags für {agent}",
   "settings.accounts.tags.picked": "Ausgewählte Tags für {agent}",
   "settings.accounts.tags.none": "Keine Tags",

@@ -2269,6 +2269,8 @@ export const ja: Translation<"other"> = {
   "settings.accounts.setting.description": "すべての {agent} アカウントに適用します。",
   "settings.accounts.setting.confirmMessage": "すべての {agent} アカウントで、{setting} を {choice} に設定しますか？",
   "settings.accounts.tags.heading": "タグ",
+  "settings.accounts.tags.helpLabel": "エージェントのタグについて",
+  "settings.accounts.tags.helpText": "タグを使って、コードレビューや UI 開発など、このエージェントに向いているタスクを説明します。他のセッションがエージェントを選ぶときに参考にできます。",
   "settings.accounts.tags.label": "{agent} のタグ",
   "settings.accounts.tags.picked": "{agent} で選択したタグ",
   "settings.accounts.tags.none": "タグなし",

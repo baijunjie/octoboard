@@ -2108,6 +2108,8 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "settings.accounts.setting.description": "ينطبق على كل حساب {agent}.",
   "settings.accounts.setting.confirmMessage": "تعيين {setting} إلى {choice} لكل حساب {agent}؟",
   "settings.accounts.tags.heading": "الوسوم",
+  "settings.accounts.tags.helpLabel": "حول وسوم الوكلاء",
+  "settings.accounts.tags.helpText": "استخدم الوسوم لوصف المهام التي يناسبها هذا الوكيل، مثل مراجعة الشيفرة أو تطوير واجهات المستخدم. يمكن للجلسات الأخرى الرجوع إليها عند اختيار وكيل.",
   "settings.accounts.tags.label": "وسوم {agent}",
   "settings.accounts.tags.picked": "الوسوم المختارة لـ {agent}",
   "settings.accounts.tags.none": "لا توجد وسوم",

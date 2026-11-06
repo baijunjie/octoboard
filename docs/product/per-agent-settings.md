@@ -16,8 +16,10 @@ there is no list of tags to manage, a tag is typed the first time it is used, an
 dropped and one matching another of the agent's tags ignoring case is dropped, the first spelling staying.
 
 They are set in the agent's tab, in the **Tags** row, the tab's top row in every agent's tab, above the rows of the
-agent's provider settings (see "Provider settings" below). The row holds its name, a line saying that it
-applies to every account of the agent and, under them across the row's full width, the same Tags field as a project's
+agent's provider settings (see "Provider settings" below). A "?" help tip beside the row's name explains that tags
+describe the tasks the agent is suited for and give other sessions a reference when choosing an agent. The row keeps
+a line saying that it applies to every account of the agent and, under them across the row's full width, the same
+Tags field as a project's
 (see "Editing a project" in `docs/product/projects.md`), its picked tags looking and behaving as there (see "Picked
 tags" in `docs/product/project-tags.md`). The field has no visible label of its own; its accessible name is "Tags for"
 and the agent. Its empty text input says the agent has no tags while none is picked, and invites adding a tag once one

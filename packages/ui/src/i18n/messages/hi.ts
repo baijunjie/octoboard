@@ -2107,6 +2107,8 @@ export const hi: Translation<"one" | "other"> = {
   "settings.accounts.setting.description": "यह सेटिंग हर {agent} अकाउंट पर लागू होती है।",
   "settings.accounts.setting.confirmMessage": "हर {agent} अकाउंट के लिए {setting} को {choice} पर सेट करें?",
   "settings.accounts.tags.heading": "टैग",
+  "settings.accounts.tags.helpLabel": "एजेंट टैग के बारे में",
+  "settings.accounts.tags.helpText": "टैग से बताएँ कि यह एजेंट किन कामों के लिए उपयुक्त है, जैसे कोड की समीक्षा या यूआई बनाना। दूसरे सेशन एजेंट चुनते समय इन्हें देख सकते हैं।",
   "settings.accounts.tags.label": "{agent} के टैग",
   "settings.accounts.tags.picked": "{agent} के लिए चुने टैग",
   "settings.accounts.tags.none": "कोई टैग नहीं",

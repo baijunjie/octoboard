@@ -2108,6 +2108,8 @@ export const id: Translation<"other"> = {
   "settings.accounts.setting.description": "Berlaku untuk setiap akun {agent}.",
   "settings.accounts.setting.confirmMessage": "Atur {setting} ke {choice} untuk setiap akun {agent}?",
   "settings.accounts.tags.heading": "Tag",
+  "settings.accounts.tags.helpLabel": "Tentang tag agen",
+  "settings.accounts.tags.helpText": "Gunakan tag untuk menjelaskan tugas yang cocok bagi agen ini, seperti peninjauan kode atau pengembangan antarmuka. Sesi lain dapat merujuknya saat memilih agen.",
   "settings.accounts.tags.label": "Tag untuk {agent}",
   "settings.accounts.tags.picked": "Tag yang dipilih untuk {agent}",
   "settings.accounts.tags.none": "Tidak ada tag",

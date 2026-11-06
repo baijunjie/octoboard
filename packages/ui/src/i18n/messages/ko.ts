@@ -2270,6 +2270,8 @@ export const ko: Translation<"other"> = {
   "settings.accounts.setting.description": "모든 {agent} 계정에 적용됩니다.",
   "settings.accounts.setting.confirmMessage": "모든 {agent} 계정에서 {setting}을(를) {choice}(으)로 설정하겠습니까?",
   "settings.accounts.tags.heading": "태그",
+  "settings.accounts.tags.helpLabel": "에이전트 태그 정보",
+  "settings.accounts.tags.helpText": "태그로 코드 검토나 UI 개발 등 이 에이전트에 적합한 작업을 설명합니다. 다른 세션이 에이전트를 선택할 때 참고할 수 있습니다.",
   "settings.accounts.tags.label": "{agent}의 태그",
   "settings.accounts.tags.picked": "{agent}에서 선택한 태그",
   "settings.accounts.tags.none": "태그 없음",

@@ -2268,6 +2268,8 @@ export const th: Translation<"other"> = {
   "settings.accounts.setting.description": "ใช้กับบัญชี {agent} ทุกบัญชี",
   "settings.accounts.setting.confirmMessage": "ตั้งค่า {setting} เป็น {choice} สำหรับบัญชี {agent} ทุกบัญชีหรือไม่?",
   "settings.accounts.tags.heading": "แท็ก",
+  "settings.accounts.tags.helpLabel": "เกี่ยวกับแท็กเอเจนต์",
+  "settings.accounts.tags.helpText": "ใช้แท็กอธิบายงานที่เอเจนต์นี้เหมาะสม เช่น การตรวจสอบโค้ดหรือการพัฒนาส่วนติดต่อผู้ใช้ เซสชันอื่นใช้อ้างอิงเมื่อเลือกเอเจนต์ได้.",
   "settings.accounts.tags.label": "แท็กสำหรับ {agent}",
   "settings.accounts.tags.picked": "แท็กที่เลือกสำหรับ {agent}",
   "settings.accounts.tags.none": "ไม่มีแท็ก",

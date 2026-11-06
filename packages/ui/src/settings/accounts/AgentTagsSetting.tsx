@@ -5,6 +5,7 @@ import { providerLabel } from "../../agents/providers";
 import { alertAppDataFailure } from "../../components/alerts/raiseError";
 import { TagsInput } from "../../components/form/TagsInput";
 import { tagVocabulary } from "../../components/form/tagVocabulary";
+import { HelpTip } from "../../components/hint/HelpTip";
 import { isolate } from "../../i18n/isolate";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
@@ -72,6 +73,7 @@ export function AgentTagsSetting({ agent }: { agent: Agent }): React.ReactElemen
   return (
     <SettingRow
       label={t("settings.accounts.tags.heading")}
+      help={<HelpTip label={t("settings.accounts.tags.helpLabel")}>{t("settings.accounts.tags.helpText")}</HelpTip>}
       description={t("settings.accounts.setting.description", { agent: name })}
       below={
         <TagsInput

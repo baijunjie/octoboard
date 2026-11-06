@@ -2345,6 +2345,8 @@ export const zhHans: Translation<"other"> = {
   "settings.accounts.setting.description": "适用于每个 {agent} 账户。",
   "settings.accounts.setting.confirmMessage": "要将每个 {agent} 账户的{setting}设为{choice}吗？",
   "settings.accounts.tags.heading": "标签",
+  "settings.accounts.tags.helpLabel": "关于智能体标签",
+  "settings.accounts.tags.helpText": "用标签说明智能体擅长的任务，例如代码审查、界面开发，供其他会话选择智能体时参考。",
   "settings.accounts.tags.label": "{agent} 的标签",
   "settings.accounts.tags.picked": "{agent} 已选的标签",
   "settings.accounts.tags.none": "无标签",

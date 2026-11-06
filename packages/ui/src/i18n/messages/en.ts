@@ -2555,6 +2555,8 @@ export const en = {
   "settings.accounts.setting.description": "Applies to every {agent} account.",
   "settings.accounts.setting.confirmMessage": "Set {setting} to {choice} for every {agent} account?",
   "settings.accounts.tags.heading": "Tags",
+  "settings.accounts.tags.helpLabel": "About agent tags",
+  "settings.accounts.tags.helpText": "Use tags to describe the tasks this agent is suited for, such as code review or UI development. Other sessions can refer to them when choosing an agent.",
   "settings.accounts.tags.label": "Tags for {agent}",
   "settings.accounts.tags.picked": "Tags picked for {agent}",
   "settings.accounts.tags.none": "No tags",
