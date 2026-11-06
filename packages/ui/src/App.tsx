@@ -626,20 +626,15 @@ export function App(): React.ReactElement {
                 <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />
               )}
               {/* Floating panes leave the agent area its full width; horizontal overflow remains a
-                  guard while the docked sidebar's column is changing width. */}
-              <main className="relative flex min-w-0 flex-1 overflow-x-auto">
+                  guard while the docked sidebar's column is changing width. The scroll container's
+                  own shadow reaches the sidebar without being clipped by its overflow. */}
+              <main className="relative flex min-w-0 flex-1 overflow-x-auto pane-docked:shadow-(--panel-shadow)">
                 {/* The flex basis matches the width allocator's 400px floor, so the pane keeps its
                     allocated width and the terminal grows into the remaining space. Phone mode removes the floor. */}
-                {/* Beside docked panes it casts the content panel's soft shadow (`--panel-shadow`) over the
-                    docked panes on either side, so the terminal reads as the layer above them. `z-1`
-                    lifts it, with what it holds, over everything in the panes, the aside's positioned
-                    content (sticky headings, scroll fades) included, which comes later in the row and
-                    would otherwise cover the shadow; it stays under the resize handles and the floating
-                    cards. The content panel clips the shadow on the other sides and wherever a pane is
-                    closed. The clip-path cuts it on the aside's side: the aside's cards sit apart from the
-                    terminal across a gap of the terminal's own background, which a shadow would draw a
-                    line in. */}
-                <div ref={agentAreaRef} inert={covered || floatingShown} className={`relative flex min-h-0 ${asideFloats ? "min-w-0 flex-1" : "min-w-[400px] flex-[1_1_400px]"} pane-docked:z-1 pane-docked:shadow-(--panel-shadow) pane-docked:[clip-path:inset(-12px_0_-12px_-12px)] pane-docked:rtl:[clip-path:inset(-12px_-12px_-12px_0)]`}>
+                {/* Keep the agent area above the docked pane's positioned content and below resize
+                    handles and floating cards. The scroll container casts the sidebar shadow; the
+                    right pane's cards sit across an unpainted gap of the terminal's background. */}
+                <div ref={agentAreaRef} inert={covered || floatingShown} className={`relative flex min-h-0 ${asideFloats ? "min-w-0 flex-1" : "min-w-[400px] flex-[1_1_400px]"} pane-docked:z-1`}>
                   <ArchiveLayer
                     focusTerminal={focusTerminal}
                     view={archiveOpen && archiveConsole ? {
