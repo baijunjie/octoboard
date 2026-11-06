@@ -3,7 +3,7 @@ import { IS_MAC } from "../input/keys";
 import type { Binding } from "./binding";
 
 /** Where the shortcuts are listed under, in the order of the list. */
-export const SHORTCUT_GROUPS = ["navigation", "focus", "sessions", "application", "editing", "window"] as const;
+export const SHORTCUT_GROUPS = ["navigation", "focus", "application", "editing", "window"] as const;
 export type ShortcutGroup = (typeof SHORTCUT_GROUPS)[number];
 
 /** Which clients a shortcut exists on: `app` is the desktop app (`windowChrome`), `macApp` that on
@@ -46,10 +46,6 @@ const REBINDABLE = [
   { id: "focusMode", label: "settings.shortcuts.command.focusMode", group: "focus", binding: primary("KeyF", { shift: true }), availability: "always" },
   { id: "newSession", label: "settings.shortcuts.command.newSession", group: "focus", binding: primary("KeyN"), availability: "always" },
   { id: "quickCreate", label: "settings.shortcuts.command.quickCreate", group: "focus", binding: primary("KeyN", { shift: true }), availability: "always" },
-  { id: "lock", label: "settings.shortcuts.command.lock", group: "sessions", binding: primary("KeyL", { shift: true }), availability: "always" },
-  { id: "pin", label: "settings.shortcuts.command.pin", group: "sessions", binding: primary("KeyP", { shift: true }), availability: "always" },
-  { id: "archive", label: "settings.shortcuts.command.archive", group: "sessions", binding: primary("KeyA", { shift: true }), availability: "always" },
-  { id: "copyId", label: "settings.shortcuts.command.copyId", group: "sessions", binding: primary("KeyC", { shift: true }), availability: "always" },
   { id: "openSettings", label: "settings.shortcuts.command.openSettings", group: "application", binding: primary("Comma"), availability: "nativeMenu" },
 ] as const satisfies readonly Omit<ShortcutCommand, "rebindable">[];
 

@@ -18,13 +18,13 @@ afterEach(() => restoreAllBindings());
 
 describe("matching", () => {
   it("matches the physical key with exactly the modifiers of the binding", () => {
-    const lock: Binding = { code: "KeyL", primary: true, shift: true };
-    expect(matches(lock, press(lock))).toBe(true);
-    expect(matches(lock, new KeyboardEvent("keydown", { code: "KeyL", shiftKey: true, ...primary, key: "ł" }))).toBe(true);
-    expect(matches(lock, press({ code: "KeyL", primary: true }))).toBe(false);
-    expect(matches(lock, press({ code: "KeyL", primary: true, shift: true, alt: true }))).toBe(false);
-    expect(matches(lock, press({ code: "KeyL", primary: true, shift: true, other: true }))).toBe(false);
-    expect(matches(lock, press({ code: "KeyP", primary: true, shift: true }))).toBe(false);
+    const focusMode: Binding = { code: "KeyF", primary: true, shift: true };
+    expect(matches(focusMode, press(focusMode))).toBe(true);
+    expect(matches(focusMode, new KeyboardEvent("keydown", { code: "KeyF", shiftKey: true, ...primary, key: "ł" }))).toBe(true);
+    expect(matches(focusMode, press({ code: "KeyF", primary: true }))).toBe(false);
+    expect(matches(focusMode, press({ code: "KeyF", primary: true, shift: true, alt: true }))).toBe(false);
+    expect(matches(focusMode, press({ code: "KeyF", primary: true, shift: true, other: true }))).toBe(false);
+    expect(matches(focusMode, press({ code: "KeyN", primary: true, shift: true }))).toBe(false);
   });
 
   it("means ⌘ on an Apple keyboard and Ctrl elsewhere by `primary`, and the other key by `other`", () => {
@@ -35,10 +35,10 @@ describe("matching", () => {
 
   it("follows the command's current binding", () => {
     const event = press({ code: "KeyJ", primary: true, shift: true });
-    expect(matchesCommand("lock", event)).toBe(false);
-    expect(setBinding("lock", { code: "KeyJ", primary: true, shift: true })).toBeUndefined();
-    expect(matchesCommand("lock", event)).toBe(true);
-    expect(matchesCommand("lock", press(defaultBinding("lock")))).toBe(false);
+    expect(matchesCommand("focusMode", event)).toBe(false);
+    expect(setBinding("focusMode", { code: "KeyJ", primary: true, shift: true })).toBeUndefined();
+    expect(matchesCommand("focusMode", event)).toBe(true);
+    expect(matchesCommand("focusMode", press(defaultBinding("focusMode")))).toBe(false);
   });
 });
 
@@ -108,12 +108,12 @@ describe("the registry", () => {
 });
 
 describe("validation", () => {
-  const check = (binding: Binding) => validateBinding("lock", binding, defaults);
+  const check = (binding: Binding) => validateBinding("focusMode", binding, defaults);
 
   it("accepts a combination with the shortcut modifier that nothing else holds", () => {
     expect(check({ code: "KeyK", primary: true, shift: true })).toBeUndefined();
     expect(check({ code: "Digit1", primary: true, alt: true })).toBeUndefined();
-    expect(check(defaultBinding("lock"))).toBeUndefined();
+    expect(check(defaultBinding("focusMode"))).toBeUndefined();
   });
 
   it("refuses a modifier alone, a key with no shortcut modifier, and the keys that keep their meaning", () => {
@@ -136,7 +136,7 @@ describe("validation", () => {
   it("refuses Shift with a number or symbol key for Open settings alone, whose key only the native menu matches", () => {
     for (const code of ["Digit1", "Comma", "Backslash", "Slash"]) {
       expect(validateBinding("openSettings", { code, primary: true, shift: true }, defaults)).toEqual({ reason: "shiftedKey" });
-      expect(validateBinding("lock", { code, primary: true, shift: true }, defaults)).toBeUndefined();
+      expect(validateBinding("focusMode", { code, primary: true, shift: true }, defaults)).toBeUndefined();
     }
     expect(validateBinding("openSettings", { code: "KeyK", primary: true, shift: true }, defaults)).toBeUndefined();
     expect(sanitizeOverrides({ openSettings: { code: "Digit1", primary: true, shift: true } })).toEqual({ overrides: {}, skipped: 1 });
@@ -151,7 +151,7 @@ describe("validation", () => {
   });
 
   it("refuses another command's binding, also of a command this client does not have, and a fixed key", () => {
-    expect(check(defaultBinding("pin"))).toEqual({ reason: "conflict", with: "pin" });
+    expect(check(defaultBinding("quickCreate"))).toEqual({ reason: "conflict", with: "quickCreate" });
     expect(check(defaultBinding("back"))).toEqual({ reason: "conflict", with: "back" });
     expect(check({ code: "KeyV", primary: true })).toEqual({ reason: "conflict", with: "paste" });
     expect(check({ code: "KeyH", primary: true, alt: true })).toEqual({ reason: "conflict", with: "hideOthers" });
@@ -160,9 +160,9 @@ describe("validation", () => {
   });
 
   it("looks at the bindings as they stand, so a freed combination can be taken", () => {
-    const moved = effectiveBindings({ pin: { code: "KeyK", primary: true, shift: true } });
-    expect(validateBinding("lock", defaultBinding("pin"), moved)).toBeUndefined();
-    expect(validateBinding("lock", { code: "KeyK", primary: true, shift: true }, moved)).toEqual({ reason: "conflict", with: "pin" });
+    const moved = effectiveBindings({ quickCreate: { code: "KeyK", primary: true, shift: true } });
+    expect(validateBinding("focusMode", defaultBinding("quickCreate"), moved)).toBeUndefined();
+    expect(validateBinding("focusMode", { code: "KeyK", primary: true, shift: true }, moved)).toEqual({ reason: "conflict", with: "quickCreate" });
   });
 });
 
@@ -170,81 +170,89 @@ describe("the overrides", () => {
   const stored = () => localStorage.getItem(PREFERENCE_KEYS.keyboardShortcuts);
 
   it("keep only what differs from the defaults, and drop the entry once nothing does", () => {
-    expect(setBinding("lock", { code: "KeyK", primary: true, shift: true })).toBeUndefined();
-    expect(JSON.parse(stored()!)).toEqual({ lock: { code: "KeyK", primary: true, shift: true } });
-    expect(bindingFor("lock")).toEqual({ code: "KeyK", primary: true, shift: true });
-    expect(setBinding("lock", defaultBinding("lock"))).toBeUndefined();
+    expect(setBinding("focusMode", { code: "KeyK", primary: true, shift: true })).toBeUndefined();
+    expect(JSON.parse(stored()!)).toEqual({ focusMode: { code: "KeyK", primary: true, shift: true } });
+    expect(bindingFor("focusMode")).toEqual({ code: "KeyK", primary: true, shift: true });
+    expect(setBinding("focusMode", defaultBinding("focusMode"))).toBeUndefined();
     expect(stored()).toBeNull();
   });
 
   it("refuse a binding that cannot be used and change nothing", () => {
-    expect(setBinding("lock", defaultBinding("pin"))).toEqual({ reason: "conflict", with: "pin" });
-    expect(bindingFor("lock")).toEqual(defaultBinding("lock"));
+    expect(setBinding("focusMode", defaultBinding("quickCreate"))).toEqual({ reason: "conflict", with: "quickCreate" });
+    expect(bindingFor("focusMode")).toEqual(defaultBinding("focusMode"));
     expect(stored()).toBeNull();
   });
 
   it("are read back from storage and merged with the defaults", () => {
-    setBinding("archive", { code: "KeyK", primary: true, alt: true });
+    setBinding("newSession", { code: "KeyK", primary: true, alt: true });
     const raw = stored();
     shortcutOverrides.set({});
-    expect(bindingFor("archive")).toEqual(defaultBinding("archive"));
+    expect(bindingFor("newSession")).toEqual(defaultBinding("newSession"));
     localStorage.setItem(PREFERENCE_KEYS.keyboardShortcuts, raw!);
-    expect(sanitizeOverrides(JSON.parse(raw!)).overrides).toEqual({ archive: { code: "KeyK", primary: true, alt: true } });
-    expect(effectiveBindings({ archive: { code: "KeyK", primary: true, alt: true } }).lock).toEqual(defaultBinding("lock"));
+    expect(sanitizeOverrides(JSON.parse(raw!)).overrides).toEqual({ newSession: { code: "KeyK", primary: true, alt: true } });
+    expect(effectiveBindings({ newSession: { code: "KeyK", primary: true, alt: true } }).focusMode).toEqual(defaultBinding("focusMode"));
   });
 
   it("drop an unknown id, a malformed binding and one that cannot stand, and count them", () => {
     const { overrides, skipped } = sanitizeOverrides({
-      lock: { code: "KeyK", primary: true, shift: true },
+      focusMode: { code: "KeyK", primary: true, shift: true },
       nonsense: { code: "KeyJ", primary: true },
-      pin: "KeyP",
-      archive: { code: "KeyK", primary: true, shift: true },
-      copyId: { code: "Escape", primary: true },
+      quickCreate: "KeyN",
+      newSession: { code: "KeyK", primary: true, shift: true },
+      openSettings: { code: "Escape", primary: true },
       back: defaultBinding("back"),
     });
-    expect(overrides).toEqual({ lock: { code: "KeyK", primary: true, shift: true } });
+    expect(overrides).toEqual({ focusMode: { code: "KeyK", primary: true, shift: true } });
     expect(skipped).toBe(4);
     expect(sanitizeOverrides("not an object")).toEqual({ overrides: {}, skipped: 0 });
   });
 
   it("are judged as a whole, so a swap stands whatever order it is written in", () => {
-    const lock = defaultBinding("lock");
-    const pin = defaultBinding("pin");
-    expect(sanitizeOverrides({ lock: pin, pin: lock })).toEqual({ overrides: { lock: pin, pin: lock }, skipped: 0 });
-    expect(sanitizeOverrides({ pin: lock, lock: pin })).toEqual({ overrides: { pin: lock, lock: pin }, skipped: 0 });
+    const focusMode = defaultBinding("focusMode");
+    const quickCreate = defaultBinding("quickCreate");
+    expect(sanitizeOverrides({ focusMode: quickCreate, quickCreate: focusMode })).toEqual({ overrides: { focusMode: quickCreate, quickCreate: focusMode }, skipped: 0 });
+    expect(sanitizeOverrides({ quickCreate: focusMode, focusMode: quickCreate })).toEqual({ overrides: { quickCreate: focusMode, focusMode: quickCreate }, skipped: 0 });
   });
 
   it("are judged as a whole, so a chain of moves stands whatever order it is written in", () => {
     const moved = { code: "KeyK", primary: true, shift: true };
-    const chain = { lock: defaultBinding("pin"), pin: moved };
+    const chain = { focusMode: defaultBinding("quickCreate"), quickCreate: moved };
     expect(sanitizeOverrides(chain)).toEqual({ overrides: chain, skipped: 0 });
-    expect(sanitizeOverrides({ pin: moved, lock: defaultBinding("pin") })).toEqual({ overrides: { pin: moved, lock: defaultBinding("pin") }, skipped: 0 });
+    expect(sanitizeOverrides({ quickCreate: moved, focusMode: defaultBinding("quickCreate") })).toEqual({ overrides: { quickCreate: moved, focusMode: defaultBinding("quickCreate") }, skipped: 0 });
   });
 
   it("keep the earlier of two entries that claim one combination, and give the dropped command its default", () => {
     const claimed = { code: "KeyK", primary: true, shift: true };
-    expect(sanitizeOverrides({ lock: claimed, pin: claimed })).toEqual({ overrides: { lock: claimed }, skipped: 1 });
-    expect(sanitizeOverrides({ pin: claimed, lock: claimed })).toEqual({ overrides: { pin: claimed }, skipped: 1 });
-    // The dropped pin keeps its own default, which the lock entry then clashes with.
-    expect(sanitizeOverrides({ pin: { code: "Escape", primary: true }, lock: defaultBinding("pin") })).toEqual({ overrides: {}, skipped: 2 });
+    expect(sanitizeOverrides({ focusMode: claimed, quickCreate: claimed })).toEqual({ overrides: { focusMode: claimed }, skipped: 1 });
+    expect(sanitizeOverrides({ quickCreate: claimed, focusMode: claimed })).toEqual({ overrides: { quickCreate: claimed }, skipped: 1 });
+    // The dropped quickCreate keeps its own default, which the focusMode entry then clashes with.
+    expect(sanitizeOverrides({ quickCreate: { code: "Escape", primary: true }, focusMode: defaultBinding("quickCreate") })).toEqual({ overrides: {}, skipped: 2 });
   });
 
   it("restore a default only when no other command holds it, and say who does", () => {
-    setBinding("pin", { code: "KeyK", primary: true, shift: true });
-    setBinding("lock", defaultBinding("pin"));
-    expect(restoreBinding("pin")).toEqual({ reason: "conflict", with: "lock" });
-    expect(bindingFor("pin")).toEqual({ code: "KeyK", primary: true, shift: true });
-    expect(restoreBinding("lock")).toBeUndefined();
-    expect(restoreBinding("pin")).toBeUndefined();
+    setBinding("quickCreate", { code: "KeyK", primary: true, shift: true });
+    setBinding("focusMode", defaultBinding("quickCreate"));
+    expect(restoreBinding("quickCreate")).toEqual({ reason: "conflict", with: "focusMode" });
+    expect(bindingFor("quickCreate")).toEqual({ code: "KeyK", primary: true, shift: true });
+    expect(restoreBinding("focusMode")).toBeUndefined();
+    expect(restoreBinding("quickCreate")).toBeUndefined();
     expect(stored()).toBeNull();
   });
 
   it("are replaced as a whole by an import, which reports what stood and which overrides were set", () => {
-    setBinding("pin", { code: "KeyJ", primary: true, shift: true });
-    expect(replaceOverrides({ lock: { code: "KeyK", primary: true, shift: true }, bad: 1 })).toEqual({ applied: 1, skipped: 1, overrides: { lock: { code: "KeyK", primary: true, shift: true } } });
-    expect(bindingFor("pin")).toEqual(defaultBinding("pin"));
-    expect(bindingFor("lock")).toEqual({ code: "KeyK", primary: true, shift: true });
+    setBinding("quickCreate", { code: "KeyJ", primary: true, shift: true });
+    expect(replaceOverrides({ focusMode: { code: "KeyK", primary: true, shift: true }, bad: 1 })).toEqual({ applied: 1, skipped: 1, overrides: { focusMode: { code: "KeyK", primary: true, shift: true } } });
+    expect(bindingFor("quickCreate")).toEqual(defaultBinding("quickCreate"));
+    expect(bindingFor("focusMode")).toEqual({ code: "KeyK", primary: true, shift: true });
     expect(replaceOverrides({})).toEqual({ applied: 0, skipped: 0, overrides: {} });
     expect(stored()).toBeNull();
   });
+});
+
+
+it("drops retired selected-session shortcuts and frees their modifier combinations", () => {
+  const retired = { lock: "KeyL", pin: "KeyP", archive: "KeyA", copyId: "KeyC" };
+  const overrides = Object.fromEntries(Object.entries(retired).map(([id, code]) => [id, { code, primary: true, shift: true }]));
+  expect(sanitizeOverrides(overrides)).toEqual({ overrides: {}, skipped: 4 });
+  for (const code of Object.values(retired)) expect(validateBinding("focusMode", { code, primary: true, shift: true }, defaults)).toBeUndefined();
 });

@@ -50,7 +50,6 @@ import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { updateNoticeKind } from "./updates/noticeKind";
 import { UpdateNotice } from "./updates/UpdateNotice";
 import { useUpdateSelector, useUpdateStore } from "./updates/UpdatesProvider";
-import { useSessionActionShortcuts } from "./sidebar/useSessionActionShortcuts";
 import { belongsToFocus } from "./sidebar/focus";
 import { consoleSessionAbove } from "./sessions/order";
 import { useWaitingCount } from "./store";
@@ -413,7 +412,7 @@ export function App(): React.ReactElement {
     focusTerminal,
   });
 
-  const { archiveSession, stableArchiveSession } = useArchiveSession({
+  const { stableArchiveSession } = useArchiveSession({
     resumingIds,
     dialogRequest,
     launchQuestionOpen: launchConfirmation !== undefined,
@@ -439,12 +438,6 @@ export function App(): React.ReactElement {
     stableSetLocked,
     stableSetPinned,
   } = useRowRequests();
-  useSessionActionShortcuts(selectedSession, {
-    onSetLocked: stableSetLocked,
-    onSetPinned: stableSetPinned,
-    onArchiveSession: archiveSession,
-    onCopySessionId: stableCopySessionId,
-  });
   usePaneSwipe({
     asideFloats,
     noConsoles,

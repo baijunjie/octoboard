@@ -6,7 +6,6 @@ import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
-import { ShortcutTooltip } from "./sessionShortcuts";
 import type { SidebarHandlers } from "./types";
 
 /** The pin mark of a pinned project or session, which is also the way to unpin it: a pin glyph that
@@ -17,12 +16,10 @@ import type { SidebarHandlers } from "./types";
 export function PinButton({
   name,
   onUnpin,
-  shortcut = false,
   returnFocusTo,
 }: {
   name: string;
   onUnpin: () => void;
-  shortcut?: boolean;
   returnFocusTo: RefObject<HTMLElement | null>;
 }): React.ReactElement {
   const t = useT();
@@ -30,7 +27,7 @@ export function PinButton({
     <RowMarkButton
       icon={Pin}
       hoverIcon={PinOff}
-      tooltip={shortcut ? <ShortcutTooltip action="pin">{t("sidebar.unpin")}</ShortcutTooltip> : t("sidebar.unpin")}
+      tooltip={t("sidebar.unpin")}
       label={t("sidebar.unpinItem", { name: isolate(name) })}
       tone="text-app-muted"
       onPress={onUnpin}
@@ -50,7 +47,7 @@ export function LockButton({ name, onUnlock, returnFocusTo }: {
     <RowMarkButton
       icon={Lock}
       hoverIcon={LockOpen}
-      tooltip={<ShortcutTooltip action="lock">{t("sidebar.session.unlock")}</ShortcutTooltip>}
+      tooltip={t("sidebar.session.unlock")}
       label={t("sidebar.session.unlockItem", { name: isolate(name) })}
       tone="text-warning-soft-foreground"
       onPress={onUnlock}
@@ -83,7 +80,7 @@ export function SessionMarkButtons({
   return (
     <>
       {session.locked && <LockButton name={title} onUnlock={() => handlers.onSetLocked(session, false)} returnFocusTo={returnFocusTo} />}
-      {!hidePin && session.pinned && <PinButton shortcut name={title} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={returnFocusTo} />}
+      {!hidePin && session.pinned && <PinButton name={title} onUnpin={() => handlers.onSetPinned({ session }, false)} returnFocusTo={returnFocusTo} />}
     </>
   );
 }

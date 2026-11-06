@@ -120,7 +120,7 @@ A session row's action menu offers:
   to the Trash, as described in that section.
 
 Archive and Delete menu items are disabled while the session is locked, showing "Session locked" under their name
-(in place of Archive's shortcut) and a sentence that the session is locked, so it cannot be archived or deleted, as
+(in place of their letter shortcut) and a sentence that the session is locked, so it cannot be archived or deleted, as
 their description for assistive technology.
 
 **The Delete or Archive button.** Just before its action-menu button, an unlocked session row — a console session's
@@ -142,32 +142,38 @@ also names the session ("Delete session …" or "Archive session …"). It shows
 names and keyboard focus" in `docs/product/sidebar.md`). When a shortcut goes away while holding keyboard focus, focus
 goes to the row.
 
-## Session keyboard shortcuts
+## Session menu keyboard shortcuts
 
-These shortcuts act on the **selected session**, regardless of which row or control has keyboard focus, including
-while typing in the terminal. They work both inside and outside focus mode. The table gives their defaults, with
-**Cmd** on an Apple keyboard or **Ctrl** elsewhere; each can be changed (see `docs/product/keyboard-shortcuts.md`):
+While a session's action menu is open, a single letter takes the corresponding item immediately. It acts on the
+**session the menu belongs to**, whether or not that session is selected. This applies wherever that menu is offered,
+including right-click menus, nested sessions, focus cards and archived rows.
 
-| Action | Default shortcut | Availability |
-|---|---|---|
-| Lock / Unlock | Cmd/Ctrl+Shift+L | A session that is not archived |
-| Pin / Unpin | Cmd/Ctrl+Shift+P | A session that is not archived |
-| Archive | Cmd/Ctrl+Shift+A | An unlocked session that is not archived |
-| Copy session ID | Cmd/Ctrl+Shift+C | Any selected session, including an archived one |
+| Action | Letter |
+|---|---|
+| Lock / Unlock | L |
+| Pin / Unpin | P |
+| Focus mode | F |
+| Reopen | O |
+| Rename | R |
+| Copy session ID | C |
+| Colour submenu | B |
+| Change model | M |
+| Switch account submenu | S |
+| Hand off | H |
+| Unbind | U |
+| Archive | A |
+| Delete | D |
 
-Pinning also works when the selected session is the console session whose focus mode is open, even though its own
-card offers no pin control. The archive shortcut follows the normal archive confirmation and protection rules (see
-"Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`); for an unused session
-it still archives, even when its menu and button offer Delete. It never deletes the session.
+Each item shows its letter at its trailing edge, except when a disabled item's reason takes that space. The letters
+are fixed across languages and cannot be changed in Settings. Only items that are present can be taken; a disabled
+item does nothing from its letter, as from a press. Archive and Delete follow their own menu actions and normal
+confirmation and protection rules.
 
-The corresponding session menu items show their current shortcut, and the Unlock, Unpin and Archive button tooltips
-show it too. Project pin controls have no session shortcut hint. Menu and button actions still act on their own session;
-the keyboard shortcuts always act on the selected one.
-
-The shortcuts match physical keys whatever the keyboard layout. With no selected session, the key combinations
-are left alone. With a selection, holding a combination does not repeat its action; unavailable actions do nothing.
-No action runs while a dialog or menu is open or during input-method composition. Outside composition, recognized
-combinations are withheld from the terminal even when the action is unavailable.
+The letter is matched against the character typed, with no modifier held. Holding a letter does not repeat its
+action, and input-method composition does not activate an item. A letter acts only inside its own open
+menu: once the menu closes it has no effect, and keys inside a submenu or its panel do not activate a parent item.
+Pressing a submenu's letter opens it with keyboard focus inside, as Enter on its item does. Arrow keys, Enter,
+Space and Escape keep the menu's usual navigation and activation behavior.
 
 ## The binding badge
 

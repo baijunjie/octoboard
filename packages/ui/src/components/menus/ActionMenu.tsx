@@ -19,6 +19,7 @@ import {
 import { endKeyContextMenuSkip, skipKeyContextMenu } from "./keyContextMenuSkip";
 import type { ActionMenuEntry } from "./menuEntries";
 import { MenuItems } from "./MenuItems";
+import { MenuShortcutScope } from "./menuShortcutScope";
 import { usePointerFocusReturn } from "./usePointerFocusReturn";
 
 /** The entries of a menu given as a function, read when the menu opens (the popover mounts its content
@@ -270,7 +271,9 @@ export function ActionMenu({
             departure from the ARIA rule that a dialog has a name: it only wraps the named menu, so a
             name would just repeat it. The empty value wins over react-aria's and refers to nothing. */}
         <Dropdown.Popover aria-labelledby="" className="min-w-48 max-w-72" getTargetRect={pointerAt ? () => new DOMRect(pointerAt.x, pointerAt.y, 0, 0) : undefined}>
-          <ResolvedMenuItems source={items} onGone={onPopoverGone} autoFocus={openedByKey ? "first" : undefined} />
+          <MenuShortcutScope value={isOpen}>
+            <ResolvedMenuItems source={items} onGone={onPopoverGone} autoFocus={openedByKey ? "first" : undefined} />
+          </MenuShortcutScope>
         </Dropdown.Popover>
       </Dropdown>
     </div>

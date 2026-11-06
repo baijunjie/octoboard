@@ -21,25 +21,25 @@ const openSection: Step[] = [
   (ui) => ui.press(ui.t("settings.section.shortcuts")),
 ];
 
-const changeLabel = (ui: Ui, command: "newSession" | "lock") =>
+const changeLabel = (ui: Ui, command: "newSession" | "quickCreate") =>
   ui.t("settings.shortcuts.changeLabel", { command: ui.t(`settings.shortcuts.command.${command}`) });
 
 /** Enters recording on the row of `command`. */
-const recordFor = (command: "newSession" | "lock"): Step => (ui) => ui.press(changeLabel(ui, command));
+const recordFor = (command: "newSession" | "quickCreate"): Step => (ui) => ui.press(changeLabel(ui, command));
 
 const chord = (binding: Binding): Step => (ui) => ui.chord(binding);
 
 /** The changes a user has made: valid on every platform, none equal to a default. */
 const customised: Overrides = {
   focusMode: { code: "KeyG", primary: true, shift: true },
-  lock: { code: "KeyK", primary: true, shift: true },
+  quickCreate: { code: "KeyK", primary: true, shift: true },
   newSession: { code: "KeyO", primary: true },
 };
 
 /** A focus-mode key moved away and its default taken by another command, so putting it back is refused. */
 const defaultTaken: Overrides = {
   focusMode: { code: "KeyG", primary: true, shift: true },
-  lock: { code: "KeyF", primary: true, shift: true },
+  quickCreate: { code: "KeyF", primary: true, shift: true },
 };
 
 const customisedPreferences = (keyboardShortcuts: Overrides): Preferences => ({ keyboardShortcuts });
@@ -51,7 +51,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in a browser",
     description:
-      "Only what a browser has is listed: under Navigation the two Fixed region keys, then Focus mode and Sessions with a Change button per command, each key drawn as key caps. Back and Forward, the console-session switch and the native-menu groups (Application, Window) are left out. Editing is listed with only Find in file, also Fixed. A line above says shortcut changes apply only to the current browser, and there is no Restore defaults while every key is a default.",
+      "Only what a browser has is listed: under Navigation the two Fixed region keys, then Focus mode with a Change button per command, each key drawn as key caps. Back and Forward, the console-session switch and the native-menu groups (Application, Window) are left out. Editing is listed with only Find in file, also Fixed. A line above says shortcut changes apply only to the current browser, and there is no Restore defaults while every key is a default.",
     state,
     steps: openSection,
   },
@@ -61,7 +61,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in the desktop app",
     description:
-      "The introduction says shortcut changes apply only to the current desktop app. Every group is listed: Navigation (Back and Forward appear only where the window itself reports macOS, the console-session switch as ⌃Tab and ⇧⌃Tab), Focus mode, Sessions, Application with Open settings, then Editing and Window below it, where the dialog scrolls and every row reads Fixed instead of Change.",
+      "The introduction says shortcut changes apply only to the current desktop app. Every group is listed: Navigation (Back and Forward appear only where the window itself reports macOS, the console-session switch as ⌃Tab and ⇧⌃Tab), Focus mode, Application with Open settings, then Editing and Window below it, where the dialog scrolls and every row reads Fixed instead of Change.",
     desktopApp: true,
     state,
     steps: openSection,
@@ -72,7 +72,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts, some changed",
     description:
-      "Toggle focus mode, Lock or unlock the session and New session show their own keys, each with a Reset button after Change that the unchanged rows lack, and Restore defaults sits at the end of the intro line. Choose 560px to see the narrow layout: at 768px and narrower each row stacks its keys and buttons under its name, aligned to the end edge, and the intro line stacks Restore defaults under itself, also at the end edge.",
+      "Toggle focus mode, New session with defaults and New session show their own keys, each with a Reset button after Change that the unchanged rows lack, and Restore defaults sits at the end of the intro line. Choose 560px to see the narrow layout: at 768px and narrower each row stacks its keys and buttons under its name, aligned to the end edge, and the intro line stacks Restore defaults under itself, also at the end edge.",
     state,
     preferences: customisedPreferences(customised),
     steps: openSection,
@@ -103,7 +103,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "exceptional",
     title: "Keyboard shortcuts, a default another command holds",
     description:
-      "Reset was pressed on Toggle focus mode, whose default Lock or unlock the session now has: the row is not recording, keeps its changed key with Change and Reset beside it, and a danger-coloured line under its name says the combination is already used for that command.",
+      "Reset was pressed on Toggle focus mode, whose default New session with defaults now has: the row is not recording, keeps its changed key with Change and Reset beside it, and a danger-coloured line under its name says the combination is already used for that command.",
     state,
     preferences: customisedPreferences(defaultTaken),
     steps: [...openSection, (ui) => ui.press(ui.t("settings.shortcuts.resetLabel", { command: ui.t("settings.shortcuts.command.focusMode") }))],
@@ -114,8 +114,8 @@ export const shortcutsScenarios: Scenario[] = [
     category: "exceptional",
     title: "Keyboard shortcuts, a key that edits text",
     description:
-      "Recording continues on the Lock or unlock row after pressing the left arrow with the shortcut modifier; its line says that with it the arrow keys, Home, End, Page Up, Page Down, Backspace, Delete and Enter move the caret or edit text, so they cannot be used. This is the longest refusal and wraps over several lines: choose 560px to see it wrap under the row's name, where each row stacks at 768px and narrower.",
+      "Recording continues on the New session with defaults row after pressing the left arrow with the shortcut modifier; its line says that with it the arrow keys, Home, End, Page Up, Page Down, Backspace, Delete and Enter move the caret or edit text, so they cannot be used. This is the longest refusal and wraps over several lines: choose 560px to see it wrap under the row's name, where each row stacks at 768px and narrower.",
     state,
-    steps: [...openSection, recordFor("lock"), chord({ code: "ArrowLeft", primary: true })],
+    steps: [...openSection, recordFor("quickCreate"), chord({ code: "ArrowLeft", primary: true })],
   },
 ];

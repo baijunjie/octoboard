@@ -572,3 +572,50 @@ describe("the Menu key and Shift+F10 on the context target", () => {
     expect(document.querySelector("[role=menu]")).toBeNull();
   });
 });
+
+it("chooses a letter only in its open menu and closes as a normal selection does", async () => {
+  const chosen = vi.fn();
+  await openMenu([{ label: "Rename", icon: Trash2, shortcut: "R", onClick: chosen }]);
+  const menu = document.querySelector<HTMLElement>("[role=menu]")!;
+  const key = (init: KeyboardEventInit = {}) => {
+    const event = new KeyboardEvent("keydown", { key: "r", bubbles: true, cancelable: true, ...init });
+    act(() => menu.dispatchEvent(event));
+    return event;
+  };
+  for (const init of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { shiftKey: true }, { isComposing: true }, { repeat: true }]) key(init);
+  expect(chosen).not.toHaveBeenCalled();
+  expect(key().defaultPrevented).toBe(true);
+  expect(chosen).toHaveBeenCalledOnce();
+  await act(async () => {});
+  expect(document.querySelector("[role=menu]")).toBeNull();
+});
+
+it("does not choose a disabled item or an item with a reason by its letter", async () => {
+  const chosen = vi.fn();
+  await openMenu([
+    { label: "Archive", icon: Trash2, shortcut: "A", disabled: true, onClick: chosen },
+    { label: "Delete", icon: Trash2, shortcut: "D", reason: { state: "Locked" }, onClick: chosen },
+  ]);
+  const menu = document.querySelector<HTMLElement>("[role=menu]")!;
+  for (const key of ["a", "d"]) act(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })));
+  expect(chosen).not.toHaveBeenCalled();
+  expect(document.querySelector("[role=menu]")).not.toBeNull();
+});
+
+it("opens a submenu by its letter and keeps parent letters out of it", async () => {
+  const parent = vi.fn();
+  const child = vi.fn();
+  await openMenu([
+    { label: "Root", icon: Trash2, shortcut: "R", onClick: parent },
+    { label: "Switch", icon: Trash2, shortcut: "S", items: [{ label: "Choice", icon: Trash2, shortcut: "R", onClick: child }] },
+  ]);
+  const menu = document.querySelector<HTMLElement>("[role=menu]")!;
+  act(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "s", bubbles: true, cancelable: true })));
+  await act(async () => {});
+  const menus = document.querySelectorAll<HTMLElement>("[role=menu]");
+  expect(menus).toHaveLength(2);
+  expect(menus[1].contains(document.activeElement)).toBe(true);
+  act(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true, cancelable: true })));
+  expect(child).toHaveBeenCalledOnce();
+  expect(parent).not.toHaveBeenCalled();
+});

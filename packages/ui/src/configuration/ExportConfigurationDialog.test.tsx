@@ -190,18 +190,18 @@ it("saves the document as the daemon sent it, under a name for the console, and 
 });
 
 it("adds this client's changed keyboard shortcuts to a full export, and to nothing else", async () => {
-  const lock = { code: "KeyK", primary: true, shift: true };
-  shortcutOverrides.set({ lock });
+  const focusMode = { code: "KeyK", primary: true, shift: true };
+  shortcutOverrides.set({ focusMode });
   onTestFinished(() => shortcutOverrides.set({}));
   const full: ConfigurationDocument = { ...DOCUMENT, settings: documentSettings({ auto_pull_repositories: true }) };
   const save = vi.fn<Save>(async (name) => ({ kind: "saved", name }));
   mountDialog((onClose) => <ExportConfigurationDialog onClose={onClose} />, () => Promise.resolve({ type: "configuration_exported", id: null, document: full }), { save, open: vi.fn() });
   await press("Export");
-  expect(JSON.parse(save.mock.calls[0][1]).settings).toEqual({ ...full.settings, keyboard_shortcuts: { lock } });
+  expect(JSON.parse(save.mock.calls[0][1]).settings).toEqual({ ...full.settings, keyboard_shortcuts: { focusMode } });
 });
 
 it("leaves a single console's export as the daemon sent it, whatever shortcuts this client has changed", async () => {
-  shortcutOverrides.set({ lock: { code: "KeyK", primary: true, shift: true } });
+  shortcutOverrides.set({ focusMode: { code: "KeyK", primary: true, shift: true } });
   onTestFinished(() => shortcutOverrides.set({}));
   const mounted = mount();
   await press("Export");

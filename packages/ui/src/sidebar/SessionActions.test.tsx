@@ -7,10 +7,7 @@ import type { RequestHandler } from "../requests";
 import { enter, openTooltip, press, withFakeTimers } from "../components/hint/tooltipTestSupport";
 import { sessionOf } from "../fixtures/builders";
 import type { Session } from "../protocol";
-import type { Binding } from "../shortcuts/binding";
-import { BindingKbd } from "../shortcuts/ShortcutKbd";
-import { defaultBinding } from "../shortcuts/commands";
-import { restoreAllBindings, setBinding } from "../shortcuts/store";
+import { restoreAllBindings } from "../shortcuts/store";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { SessionActions } from "./SessionActions";
@@ -114,35 +111,21 @@ it.each([true, false])("gives the Copy session ID row's ID its full text as a to
   expect(handlers.onCopySessionId).toHaveBeenCalledExactlyOnceWith(session);
 });
 
-it("shows the keys the user set on the menu items, and the default on an item left alone", async () => {
-  const changed = {
-    lock: { code: "KeyK", primary: true, shift: true },
-    pin: { code: "KeyU", primary: true, shift: true },
-    focusMode: { code: "KeyG", primary: true, shift: true },
-    copyId: { code: "KeyI", primary: true, shift: true },
-  } as const;
-  for (const [command, binding] of Object.entries(changed)) expect(setBinding(command as keyof typeof changed, binding)).toBeUndefined();
+it("shows menu-only letters instead of selected-session window shortcuts", async () => {
   const session = { ...unused, status: "idle" as const, has_conversation: true, kind: "console" as const };
-  const { container } = mount(session, async () => ({ type: "ack", id: null }));
+  const { container, handlers } = mount(session, async () => ({ type: "ack", id: null }));
+  for (const letter of ["L", "P", "A", "C"]) {
+    act(() => container.dispatchEvent(new KeyboardEvent("keydown", { key: letter.toLowerCase(), code: `Key${letter}`, bubbles: true })));
+  }
+  expect(handlers.onArchiveSession).not.toHaveBeenCalled();
+  expect(handlers.onCopySessionId).not.toHaveBeenCalled();
   press(container.querySelector<HTMLElement>('button[aria-label^="Actions for session"]')!, "mouse");
   await act(async () => {});
-
-  // The key caps as the menu draws them for a binding, rendered on their own to compare against.
-  const capsOf = (binding: Binding) => {
-    const host = document.body.appendChild(document.createElement("div"));
-    const hostRoot = createRoot(host);
-    act(() => hostRoot.render(<BindingKbd binding={binding} />));
-    const text = host.textContent;
-    act(() => hostRoot.unmount());
-    host.remove();
-    return text;
-  };
-  const shown = (label: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent?.startsWith(label))!.querySelector("kbd")?.textContent;
-
-  expect(shown("Lock")).toBe(capsOf(changed.lock));
-  expect(shown("Pin")).toBe(capsOf(changed.pin));
-  expect(shown("Focus mode")).toBe(capsOf(changed.focusMode));
-  expect(shown("Copy session ID")).toBe(capsOf(changed.copyId));
-  expect(shown("Archive")).toBe(capsOf(defaultBinding("archive")));
-  for (const [command, binding] of Object.entries(changed)) expect(capsOf(binding)).not.toBe(capsOf(defaultBinding(command as keyof typeof changed)));
+  const shown = (label: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent?.startsWith(label))!;
+  for (const [label, letter] of [["Lock", "L"], ["Pin", "P"], ["Focus mode", "F"], ["Rename", "R"], ["Copy session ID", "C"], ["Colour", "B"], ["Change model", "M"], ["Archive", "A"]]) {
+    expect(shown(label).querySelector("kbd")?.textContent).toBe(letter);
+    expect(shown(label).getAttribute("aria-keyshortcuts")).toBe(letter);
+  }
+  act(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "c", bubbles: true, cancelable: true })));
+  expect(handlers.onCopySessionId).toHaveBeenCalledExactlyOnceWith(session);
 });

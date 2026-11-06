@@ -341,7 +341,7 @@ it("the console session's card menu offers neither Pin nor Focus mode, and no pi
   ), sessions);
   expect(container.querySelector('[aria-label^="Unpin"]')).toBeNull();
   act(() => container.querySelector<HTMLElement>(`button[aria-label="Actions for session ${isolate("Hub")}"]`)?.click());
-  const items = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((el) => el.textContent);
+  const items = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((el) => el.querySelector(".label")?.textContent ?? el.textContent);
   expect(items).toContain("Rename");
   expect(items.some((label) => /^(Pin|Unpin)/.test(label ?? "") || label === "Focus mode")).toBe(false);
   unmount();

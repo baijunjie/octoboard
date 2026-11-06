@@ -215,11 +215,11 @@ it("tells what came of the keyboard shortcuts in the settings card, and the ones
   const container = mountHost(null);
   const render = (shortcuts: { applied: number; skipped: number; overrides: Overrides }) =>
     container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings({ auto_pull_repositories: true }), settings_error: null, accounts: null }} shortcuts={shortcuts} />);
-  render({ applied: 2, skipped: 0, overrides: { lock: { code: "KeyK", primary: true, shift: true }, pin: { code: "KeyJ", primary: true, shift: true } } });
+  render({ applied: 2, skipped: 0, overrides: { focusMode: { code: "KeyK", primary: true, shift: true }, quickCreate: { code: "KeyJ", primary: true, shift: true } } });
   const listed = settingLines(container)["Keyboard shortcuts"];
   expect(listed.badge).toBe("2 changes from the defaults");
   expect(listed.values).toHaveLength(2);
-  render({ applied: 1, skipped: 2, overrides: { lock: { code: "KeyK", primary: true, shift: true } } });
+  render({ applied: 1, skipped: 2, overrides: { focusMode: { code: "KeyK", primary: true, shift: true } } });
   expect(settingLines(container)["Keyboard shortcuts"]).toMatchObject({ badge: "1 change from the default", note: "2 shortcuts in the file could not be applied here and were left out." });
   expect(settingLines(container)["Keyboard shortcuts"].values).toHaveLength(1);
   render({ applied: 0, skipped: 0, overrides: {} });

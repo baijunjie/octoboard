@@ -296,7 +296,8 @@ creation. The header's existing availability and quick-creation refusals apply t
 **A keyboard shortcut toggles focus mode**: Toggle focus mode, `Shift+Cmd+F` on a Mac (the macOS application, or a
 browser on a Mac) and `Ctrl+Shift+F` elsewhere unless the user has changed it (see
 `docs/product/keyboard-shortcuts.md`), matched on the physical key whatever the keyboard layout. The Focus mode items
-of the project and console session menus show it.
+of project menus show it. A console session menu instead shows its fixed `F` key, which acts only while that menu
+is open (see "Session menu keyboard shortcuts" in `docs/product/sidebar-session-rows.md`).
 
 - Outside focus mode it enters focus mode for the selected session's context, switching the sidebar to that session's
   console first when needed: a project session's project, or, with a console session selected, that console session

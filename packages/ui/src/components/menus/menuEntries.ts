@@ -4,6 +4,8 @@ import type React from "react";
 import type { Reason } from "../../format/reason";
 
 export interface ActionMenuItem {
+  /** A single letter that chooses this entry while its menu is open. */
+  shortcut?: string;
   label: string;
   /** What the item shows in place of `label` (a path that has to read left to right); `label` stays
    * its text value for typeahead. It takes the pointer as `label` does, so a tooltip or marquee in it
@@ -39,6 +41,8 @@ export interface ActionMenuItem {
 
 /** An item that opens a nested menu of its own items. */
 export interface ActionMenuSubmenu {
+  /** A single letter that chooses this entry while its menu is open. */
+  shortcut?: string;
   label: string;
   icon: LucideIcon | React.ReactElement;
   /** Added to a lucide glyph's own classes, as an item's `iconClassName`. */
@@ -64,6 +68,8 @@ export interface ActionMenuPanelContext {
  * palette of swatches). The panel is part of the menu: arrow keys leave it towards the menu as they
  * do a nested one, and it closes the whole menu to finish. */
 export interface ActionMenuPanel {
+  /** A single letter that chooses this entry while its menu is open. */
+  shortcut?: string;
   label: string;
   icon: LucideIcon | React.ReactElement;
   /** Added to a lucide glyph's own classes, as an item's `iconClassName`. */

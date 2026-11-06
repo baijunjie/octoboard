@@ -13,7 +13,6 @@ import { useAccountSwitchHeld, useDaemon, useDaemonStore } from "../store";
 import { type MenuPlacement, offersDelete, sessionMenu } from "./menus";
 import { archiveNeedsConfirmation, isUnusedSession } from "../sessions/order";
 import { RowIconButton } from "../components/rows/RowIconButton";
-import { ShortcutTooltip } from "./sessionShortcuts";
 import type { SidebarHandlers } from "./types";
 
 /** A session row's or card's controls: its action menu, and before it a Delete or Archive shortcut
@@ -61,7 +60,6 @@ export function SessionActions({
           <RowIconButton
             icon={deletable ? Trash2 : Archive}
             label={t(deletable ? "sidebar.session.delete" : "sidebar.session.archive")}
-            title={deletable ? undefined : <ShortcutTooltip action="archive">{t("sidebar.session.archive")}</ShortcutTooltip>}
             ariaLabel={t(deletable ? "sidebar.session.deleteItem" : "sidebar.session.archiveItem", { title: isolate(title) })}
             onPress={() => deletable
               ? handlers.onOpenDialog({ kind: "delete-session", session })

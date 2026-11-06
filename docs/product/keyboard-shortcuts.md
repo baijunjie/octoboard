@@ -6,7 +6,9 @@ changed shortcut belongs to the client it was changed in — the desktop app, or
 "Where the shortcuts are kept" below).
 
 What each command does, and when it does nothing, is in the doc of the command itself; this doc covers the keys: which
-there are, how they are changed and how a key press is matched against them.
+there are, how they are changed and how a key press is matched against them. The fixed letters that act only inside
+an open session menu are described in "Session menu keyboard shortcuts" in `docs/product/sidebar-session-rows.md`;
+they are not listed in Settings.
 
 ## How a combination is written and matched
 
@@ -32,8 +34,8 @@ Keyboard shortcuts section tells assistive technology a combination, it says it 
 
 ## What is listed
 
-The section lists every shortcut in six groups, in this order. Within a group the commands that can be changed come
-first. The defaults are written for an Apple keyboard; elsewhere each modifier is the one the table above maps it to.
+The section lists the window, system and file-viewer shortcuts in five groups, in this order. Within a group the
+commands that can be changed come first. The defaults are written for an Apple keyboard; elsewhere each modifier is the one the table above maps it to.
 
 | Group | Command | Default | Can be changed | Listed in |
 |---|---|---|---|---|
@@ -46,10 +48,6 @@ first. The defaults are written for an Apple keyboard; elsewhere each modifier i
 | Focus mode | **Toggle focus mode** | `Shift+Cmd+F` | yes | every client |
 | Focus mode | **New session** | `Cmd+N` | yes | every client |
 | Focus mode | **New session with defaults** | `Shift+Cmd+N` | yes | every client |
-| Sessions | **Lock or unlock the session** | `Shift+Cmd+L` | yes | every client |
-| Sessions | **Pin or unpin the session** | `Shift+Cmd+P` | yes | every client |
-| Sessions | **Archive the session** | `Shift+Cmd+A` | yes | every client |
-| Sessions | **Copy session ID** | `Shift+Cmd+C` | yes | every client |
 | Application | **Open settings** | `Cmd+,` | yes | the desktop app (its native menu) |
 | Editing | **Undo**, **Redo**, **Cut**, **Copy**, **Paste**, **Select all** | `Cmd+Z`, `Shift+Cmd+Z`, `Cmd+X`, `Cmd+C`, `Cmd+V`, `Cmd+A` | no | the desktop app (its native menu) |
 | Editing | **Find in file** | `Cmd+F` | no | every client |
@@ -63,9 +61,8 @@ be given to another command there either (see "Which combinations are refused" b
 What each command does: Back and Forward in "Keyboard shortcuts" in `docs/product/navigation-history.md`; the
 console-session keys in "The switch strip" in `docs/product/focus-mode.md`; the region keys in
 `docs/product/moving-focus-between-regions.md`; Toggle focus mode in "The focus mode shortcut" and the two New session
-commands in "Creating sessions from the keyboard", both in `docs/product/focus-mode.md`; the four session commands in
-"Session keyboard shortcuts" in `docs/product/sidebar-session-rows.md`; Open settings in "Opening and closing
-Settings" in `docs/product/settings.md`; Find in file, which acts only in the file viewer, in
+commands in "Creating sessions from the keyboard", both in `docs/product/focus-mode.md`; Open settings in "Opening
+and closing Settings" in `docs/product/settings.md`; Find in file, which acts only in the file viewer, in
 `docs/product/finding-in-the-file-viewer.md`; and the native menu's keys in `docs/product/application-lifecycle.md`.
 
 ## The Keyboard shortcuts section
@@ -153,13 +150,11 @@ The same rules decide what a recording accepts, what a reset may put back and wh
 
 ## Where the shortcuts show
 
-Everywhere a shortcut is shown it is the command's current one, and it changes as soon as the shortcut does:
+Where a configurable shortcut is shown it is the command's current one, and it changes as soon as the shortcut does:
 
-- the key caps at the end of the session menu's Lock / Unlock, Pin / Unpin, Archive and Copy session ID items, and of
-  the Focus mode items of the project and console session menus;
+- the key caps at the end of a project menu's Focus mode item;
 - the tooltips that name a shortcut: the **+** that the New session commands act on, which shows the shortcut of
-  whichever of the two it would take (see "Creating sessions from the keyboard" in `docs/product/focus-mode.md`), and
-  the session buttons listed in "Session keyboard shortcuts" in `docs/product/sidebar-session-rows.md`;
+  whichever of the two it would take (see "Creating sessions from the keyboard" in `docs/product/focus-mode.md`);
 - the desktop app's native menu, whose **Settings…** item carries Open settings' shortcut;
 - a report page, which passes the window's Back, Forward and console-session keys on as they are bound (see "Window
   shortcuts inside a page" in `docs/product/report-panel.md`).
@@ -187,11 +182,11 @@ each modifier that is held, as `true`, among `primary`, `shift`, `alt` and `othe
 and matched" above). A modifier that is absent or `false` is not held. `{}` means every shortcut at its default.
 
 ```json
-{ "lock": { "code": "KeyK", "primary": true, "shift": true }, "back": { "code": "BracketLeft", "primary": true, "alt": true } }
+{ "focusMode": { "code": "KeyK", "primary": true, "shift": true }, "back": { "code": "BracketLeft", "primary": true, "alt": true } }
 ```
 
 The command ids are `back`, `forward`, `nextConsoleSession`, `previousConsoleSession`, `focusMode`, `newSession`,
-`quickCreate` (New session with defaults), `lock`, `pin`, `archive`, `copyId` and `openSettings`. The fixed keys have
+`quickCreate` (New session with defaults) and `openSettings`. The fixed window keys and session-menu letters have
 none.
 
 **Such an object is judged as a whole set**, against the bindings the whole set would leave, so that two commands

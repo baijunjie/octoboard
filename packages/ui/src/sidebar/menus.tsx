@@ -313,12 +313,12 @@ export function sessionMenu(
   const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, providers, sharing, disabledDefaults, accountOrder, switching);
   const focusable = session.kind === "console" && !archived && !focused;
   return [
-    ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, end: <ShortcutKbd command="lock" />, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
-    ...(archived ? [{ label: t("sidebar.session.reopen"), icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
-    ...(archived || focused ? [] : [{ ...pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned)), end: <ShortcutKbd command="pin" /> }]),
-    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
+    ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, shortcut: "L", onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
+    ...(archived ? [{ label: t("sidebar.session.reopen"), shortcut: "O", icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
+    ...(archived || focused ? [] : [{ ...pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned)), shortcut: "P" }]),
+    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, shortcut: "F", onClick: () => handlers.onFocus({ consoleSession: session }) }] : []),
     ...(!archived ? ["separator" as const] : []),
-    ...(!archived ? [{ label: t("sidebar.session.rename"), icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
+    ...(!archived ? [{ label: t("sidebar.session.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
     {
       label: t("sidebar.session.copyId"),
       ariaLabel: t("sidebar.session.copyId"),
@@ -334,19 +334,19 @@ export function sessionMenu(
       ),
       description: session.id,
       icon: Copy,
-      end: <ShortcutKbd command="copyId" />,
+      shortcut: "C",
       onClick: () => handlers.onCopySessionId(session),
     },
-    ...(session.kind === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
+    ...(session.kind === "console" && !archived ? [{ ...colourSubmenu(t, handlers, session), shortcut: "B" }] : []),
     ...(!archived ? ["separator" as const] : []),
     // A session still starting, or being switched to another account, is refused by the daemon; both end on their own.
-    ...(archived ? [] : [{ label: t("sidebar.session.changeModel"), icon: Cpu, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) }]),
-    ...(switchAccount ? [switchAccount] : []),
-    ...(archived ? [] : [handoffItem(t, handlers, session, canHandoff, { switching, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined })]),
-    ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), icon: Unlink, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
+    ...(archived ? [] : [{ label: t("sidebar.session.changeModel"), shortcut: "M", icon: Cpu, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) }]),
+    ...(switchAccount ? [{ ...switchAccount, shortcut: "S" }] : []),
+    ...(archived ? [] : [{ ...handoffItem(t, handlers, session, canHandoff, { switching, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined }), shortcut: "H" }]),
+    ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), shortcut: "U", icon: Unlink, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
     "separator",
     offersDelete(session, hasBoundSessions)
-      ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, ...lockedItemState(t, session, "sidebar.session.deleteLocked") }
-      : { label: t("sidebar.session.archive"), icon: Archive, end: <ShortcutKbd command="archive" />, onClick: () => handlers.onArchiveSession(session), ...lockedItemState(t, session, "sidebar.session.archiveLocked") },
+      ? { label: t("sidebar.session.delete"), shortcut: "D", icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, ...lockedItemState(t, session, "sidebar.session.deleteLocked") }
+      : { label: t("sidebar.session.archive"), icon: Archive, shortcut: "A", onClick: () => handlers.onArchiveSession(session), ...lockedItemState(t, session, "sidebar.session.archiveLocked") },
   ];
 }

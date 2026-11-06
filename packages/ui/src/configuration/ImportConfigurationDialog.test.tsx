@@ -252,7 +252,7 @@ it("applies the application settings only once they are included", async () => {
   expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: true });
 });
 
-const LOCK = { code: "KeyK", primary: true, shift: true };
+const FOCUS = { code: "KeyK", primary: true, shift: true };
 /** A daemon that, when asked for the settings, applies them and echoes the document's keyboard shortcuts as they came
  * (or as `echo` has it, where given); asked for no settings, it reports none applied. */
 const echoing = (settings: Record<string, unknown> = {}) => (body: ClientRequestBody): Promise<Event> => {
@@ -261,7 +261,7 @@ const echoing = (settings: Record<string, unknown> = {}) => (body: ClientRequest
   const applied = { ...MIXED_RESULT.settings_applied!, ...(carried !== undefined && carried !== null && { keyboard_shortcuts: carried as never }), ...settings };
   return Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: body.apply_settings ? applied : null });
 };
-const PIN = { code: "KeyJ", primary: true, shift: true };
+const QUICK_CREATE = { code: "KeyJ", primary: true, shift: true };
 const withShortcuts = (shortcuts: unknown) => JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, keyboard_shortcuts: shortcuts } });
 
 it("says nothing of keyboard shortcuts when the document carries none", async () => {
@@ -271,48 +271,48 @@ it("says nothing of keyboard shortcuts when the document carries none", async ()
 
 it("says what the document's keyboard shortcuts would do on this device", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
-  await reviewingSettings({ text: withShortcuts({ lock: LOCK, bad: 1 }) });
+  await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS, bad: 1 }) });
   expect(settingLines()["Keyboard shortcuts"]).toEqual({
     badge: "Set to the file's",
     note: "1 of the file's shortcuts differs from the default. Shortcut changes apply only to this browser.",
-    values: ["Lock or unlock the session: ⇧⌃K (now ⇧⌃L)"],
+    values: ["Toggle focus mode: ⇧⌃K (now ⇧⌃F)"],
   });
 });
 
 it("replaces this device's keyboard shortcuts with the document's once the settings are applied, and reports it", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
-  shortcutOverrides.set({ pin: { code: "KeyJ", primary: true, shift: true } });
-  await reviewingSettings({ text: withShortcuts({ lock: LOCK, bad: 1 }), reply: echoing() });
+  shortcutOverrides.set({ quickCreate: { code: "KeyJ", primary: true, shift: true } });
+  await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS, bad: 1 }), reply: echoing() });
   await press("Import");
-  expect(bindingFor("lock")).toEqual(LOCK);
-  expect(bindingFor("pin")).toEqual({ code: "KeyP", primary: true, shift: true });
+  expect(bindingFor("focusMode")).toEqual(FOCUS);
+  expect(bindingFor("quickCreate")).toEqual({ code: "KeyN", primary: true, shift: true });
   await openTab("Application settings");
   const applied = resultSettingLines();
-  expect(applied["Keyboard shortcuts"]).toEqual({ badge: "1 change from the default", note: "1 shortcut in the file could not be applied here and was left out.", values: ["Lock or unlock the session: ⇧⌃K"] });
+  expect(applied["Keyboard shortcuts"]).toEqual({ badge: "1 change from the default", note: "1 shortcut in the file could not be applied here and was left out.", values: ["Toggle focus mode: ⇧⌃K"] });
 });
 
 it("leaves this device's keyboard shortcuts alone unless the settings are included", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
-  await reviewing({ text: withShortcuts({ lock: LOCK }), reply: echoing() });
+  await reviewing({ text: withShortcuts({ focusMode: FOCUS }), reply: echoing() });
   await press("Import");
-  expect(bindingFor("lock")).not.toEqual(LOCK);
+  expect(bindingFor("focusMode")).not.toEqual(FOCUS);
   expect(text()).not.toContain("Keyboard shortcuts");
 });
 
 async function importing(shortcuts: unknown, settings?: Record<string, unknown>) {
-  shortcutOverrides.set({ pin: PIN });
+  shortcutOverrides.set({ quickCreate: QUICK_CREATE });
   await reviewingSettings({ text: withShortcuts(shortcuts), reply: echoing(settings) });
   await press("Import");
 }
 
 it("puts every shortcut back to its default when the document carries an empty set, and says so", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
-  shortcutOverrides.set({ pin: PIN });
+  shortcutOverrides.set({ quickCreate: QUICK_CREATE });
   await reviewingSettings({ text: withShortcuts({}), reply: echoing() });
-  expect(settingLines()["Keyboard shortcuts"]).toEqual({ badge: "Back to defaults", note: "Shortcut changes apply only to this browser.", values: ["Pin or unpin the session: ⇧⌃P (now ⇧⌃J)"] });
+  expect(settingLines()["Keyboard shortcuts"]).toEqual({ badge: "Back to defaults", note: "Shortcut changes apply only to this browser.", values: ["New session with defaults: ⇧⌃N (now ⇧⌃J)"] });
   expect(text()).not.toContain("0 of them");
   await press("Import");
-  expect(bindingFor("pin")).toEqual({ code: "KeyP", primary: true, shift: true });
+  expect(bindingFor("quickCreate")).toEqual({ code: "KeyN", primary: true, shift: true });
   await openTab("Application settings");
   expect(resultSettingLines()["Keyboard shortcuts"]).toEqual({ badge: "Defaults" });
   expect(text()).not.toContain("0 changes");
@@ -324,27 +324,27 @@ it("leaves this device's keyboard shortcuts alone when the settings could not be
     body.type === "import_configuration"
       ? Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: null, settings_error: { code: "import_settings_missing", params: {}, message: "no settings" } as never })
       : reply(body);
-  shortcutOverrides.set({ pin: PIN });
-  await reviewingSettings({ text: withShortcuts({ lock: LOCK }), reply: failing });
+  shortcutOverrides.set({ quickCreate: QUICK_CREATE });
+  await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS }), reply: failing });
   await act(async () => settingsBox().click());
   await press("Import");
-  expect(bindingFor("pin")).toEqual(PIN);
-  expect(bindingFor("lock")).not.toEqual(LOCK);
+  expect(bindingFor("quickCreate")).toEqual(QUICK_CREATE);
+  expect(bindingFor("focusMode")).not.toEqual(FOCUS);
 });
 
-it.each([[[LOCK]], ["lock"], [null], [7]])("ignores a keyboard_shortcuts echo that is not an object (%j)", async (echo) => {
+it.each([[[FOCUS]], ["focusMode"], [null], [7]])("ignores a keyboard_shortcuts echo that is not an object (%j)", async (echo) => {
   onTestFinished(() => shortcutOverrides.set({}));
-  await importing({ lock: LOCK }, { keyboard_shortcuts: echo });
-  expect(bindingFor("pin")).toEqual(PIN);
-  expect(bindingFor("lock")).not.toEqual(LOCK);
+  await importing({ focusMode: FOCUS }, { keyboard_shortcuts: echo });
+  expect(bindingFor("quickCreate")).toEqual(QUICK_CREATE);
+  expect(bindingFor("focusMode")).not.toEqual(FOCUS);
 });
 
 it("leaves this device's keyboard shortcuts alone when the document carries none, whatever else is applied", async () => {
   onTestFinished(() => shortcutOverrides.set({}));
-  shortcutOverrides.set({ pin: { code: "KeyJ", primary: true, shift: true } });
+  shortcutOverrides.set({ quickCreate: { code: "KeyJ", primary: true, shift: true } });
   await reviewingSettings();
   await press("Import");
-  expect(bindingFor("pin")).toEqual({ code: "KeyJ", primary: true, shift: true });
+  expect(bindingFor("quickCreate")).toEqual({ code: "KeyJ", primary: true, shift: true });
 });
 
 it("offers the regions of the file as checkboxes above the tabs, the settings unchecked, and a tab only for a checked region", async () => {

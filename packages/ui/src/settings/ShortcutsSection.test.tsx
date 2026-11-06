@@ -36,6 +36,7 @@ it("lists only the commands this client has, and says the fixed ones cannot be c
   const browser = mount();
   expect(text(browser)).toContain("Shortcut changes apply only to this browser.");
   expect(text(browser)).toContain("Toggle focus mode");
+  for (const retired of ["Lock or unlock the session", "Pin or unpin the session", "Archive the session", "Copy session ID"]) expect(text(browser)).not.toContain(retired);
   expect(text(browser)).toContain("Next region of the window");
   expect(text(browser)).not.toContain("Back");
   expect(text(browser)).not.toContain("Open settings");
@@ -58,27 +59,27 @@ it("lists the desktop app's own commands and the native menu's fixed keys there"
 
 it("records the next combination, saves it at once and offers Reset", () => {
   const container = mount();
-  act(() => button(container, "Change the shortcut for Lock or unlock the session")!.click());
+  act(() => button(container, "Change the shortcut for Toggle focus mode")!.click());
   expect(text(container)).toContain("Press the new keys…");
   const event = press({ code: "KeyK", primary: true, shift: true });
   expect(event.defaultPrevented).toBe(true);
-  expect(bindingFor("lock")).toEqual({ code: "KeyK", primary: true, shift: true });
+  expect(bindingFor("focusMode")).toEqual({ code: "KeyK", primary: true, shift: true });
   expect(text(container)).not.toContain("Press the new keys…");
-  expect(button(container, "Reset the shortcut for Lock or unlock the session to its default")).not.toBeNull();
+  expect(button(container, "Reset the shortcut for Toggle focus mode to its default")).not.toBeNull();
   expect(button(container, "Restore defaults") ?? [...container.querySelectorAll("button")].find((b) => b.textContent === "Restore defaults")).toBeTruthy();
 });
 
 it("says why a combination cannot be used, keeps recording and saves nothing", () => {
   const container = mount();
-  act(() => button(container, "Change the shortcut for Lock or unlock the session")!.click());
-  press({ code: "KeyP", primary: true, shift: true });
-  expect(text(container)).toContain("Already used for Pin or unpin the session.");
+  act(() => button(container, "Change the shortcut for Toggle focus mode")!.click());
+  press({ code: "KeyN", primary: true, shift: true });
+  expect(text(container)).toContain("Already used for New session with defaults.");
   expect(text(container)).toContain("Press the new keys…");
   press({ code: "KeyK" });
   expect(text(container)).toContain("Hold");
   press({ code: "ShiftLeft", shift: true });
   expect(text(container)).toContain("Press the new keys…");
-  expect(bindingFor("lock")).toEqual({ code: "KeyL", primary: true, shift: true });
+  expect(bindingFor("focusMode")).toEqual({ code: "KeyF", primary: true, shift: true });
 });
 
 it("stops on Escape without anything else seeing the key, and gives the keys back to the page after", () => {
@@ -87,32 +88,32 @@ it("stops on Escape without anything else seeing the key, and gives the keys bac
   const listener = (event: KeyboardEvent) => reached.push(event.code);
   window.addEventListener("keydown", listener, { capture: true });
   onTestFinished(() => window.removeEventListener("keydown", listener, { capture: true }));
-  act(() => button(container, "Change the shortcut for Lock or unlock the session")!.click());
+  act(() => button(container, "Change the shortcut for Toggle focus mode")!.click());
   press({ code: "Escape" }, { key: "Escape" });
   expect(reached).toEqual([]);
   expect(text(container)).not.toContain("Press the new keys…");
   press({ code: "KeyK", primary: true, shift: true });
   expect(reached).toEqual(["KeyK"]);
-  expect(bindingFor("lock")).toEqual({ code: "KeyL", primary: true, shift: true });
+  expect(bindingFor("focusMode")).toEqual({ code: "KeyF", primary: true, shift: true });
 });
 
 it("resets one command, and restores every default", () => {
-  setBinding("lock", { code: "KeyK", primary: true, shift: true });
-  setBinding("pin", { code: "KeyJ", primary: true, shift: true });
+  setBinding("focusMode", { code: "KeyK", primary: true, shift: true });
+  setBinding("quickCreate", { code: "KeyJ", primary: true, shift: true });
   const container = mount();
-  act(() => button(container, "Reset the shortcut for Lock or unlock the session to its default")!.click());
-  expect(bindingFor("lock")).toEqual({ code: "KeyL", primary: true, shift: true });
-  expect(bindingFor("pin")).toEqual({ code: "KeyJ", primary: true, shift: true });
+  act(() => button(container, "Reset the shortcut for Toggle focus mode to its default")!.click());
+  expect(bindingFor("focusMode")).toEqual({ code: "KeyF", primary: true, shift: true });
+  expect(bindingFor("quickCreate")).toEqual({ code: "KeyJ", primary: true, shift: true });
   act(() => [...container.querySelectorAll("button")].find((b) => b.textContent === "Restore defaults")!.click());
-  expect(bindingFor("pin")).toEqual({ code: "KeyP", primary: true, shift: true });
+  expect(bindingFor("quickCreate")).toEqual({ code: "KeyN", primary: true, shift: true });
   expect([...container.querySelectorAll("button")].some((b) => b.textContent === "Restore defaults")).toBe(false);
 });
 
-const LOCK_CHANGE = "Change the shortcut for Lock or unlock the session";
+const FOCUS_MODE_CHANGE = "Change the shortcut for Toggle focus mode";
 
 it("lets an unmodified Enter or Space through to the focused Cancel, and says nothing of them", () => {
   const container = mount();
-  act(() => button(container, LOCK_CHANGE)!.click());
+  act(() => button(container, FOCUS_MODE_CHANGE)!.click());
   for (const key of ["Enter", " "]) {
     const event = press({ code: key === " " ? "Space" : "Enter" }, { key });
     expect(event.defaultPrevented).toBe(false);
@@ -127,7 +128,7 @@ it("lets an unmodified Enter or Space through to the focused Cancel, and says no
 it("ends the recording on Tab and on ⌥Tab, which move on as they always do", () => {
   for (const alt of [false, true]) {
     const container = mount();
-    act(() => button(container, LOCK_CHANGE)!.click());
+    act(() => button(container, FOCUS_MODE_CHANGE)!.click());
     const event = press({ code: "Tab", alt }, { key: "Tab" });
     expect(event.defaultPrevented).toBe(false);
     expect(text(container)).not.toContain("Press the new keys…");
@@ -137,55 +138,55 @@ it("ends the recording on Tab and on ⌥Tab, which move on as they always do", (
 it("shows a refusal as a field's error is, tied to the control, and speaks it again when it repeats", async () => {
   const container = mount();
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 150)); });
-  act(() => button(container, LOCK_CHANGE)!.click());
-  press({ code: "KeyP", primary: true, shift: true });
-  const message = [...container.querySelectorAll("span")].find((span) => span.textContent === "Already used for Pin or unpin the session.")!;
+  act(() => button(container, FOCUS_MODE_CHANGE)!.click());
+  press({ code: "KeyN", primary: true, shift: true });
+  const message = [...container.querySelectorAll("span")].find((span) => span.textContent === "Already used for New session with defaults.")!;
   expect(message.className).toContain("text-danger");
-  expect(button(container, "Cancel changing the shortcut for Lock or unlock the session")!.getAttribute("aria-describedby")).toBe(message.id);
+  expect(button(container, "Cancel changing the shortcut for Toggle focus mode")!.getAttribute("aria-describedby")).toBe(message.id);
   const spoken = () => container.querySelector("[role=status]")!.textContent!;
   const first = spoken();
-  press({ code: "KeyP", primary: true, shift: true });
+  press({ code: "KeyN", primary: true, shift: true });
   expect(spoken()).not.toBe(first);
   expect(spoken().trim()).toBe(first.trim());
 });
 
 it("says a combination is held by a command this client does not list", () => {
   const container = mount();
-  act(() => button(container, LOCK_CHANGE)!.click());
+  act(() => button(container, FOCUS_MODE_CHANGE)!.click());
   press({ code: "BracketLeft", primary: true });
   expect(text(container)).toContain("Already used for Back in the desktop app.");
 });
 
 it("keeps a row's override and says why when its default has been taken by another command", () => {
-  setBinding("pin", { code: "KeyK", primary: true, shift: true });
-  setBinding("lock", { code: "KeyP", primary: true, shift: true });
+  setBinding("quickCreate", { code: "KeyK", primary: true, shift: true });
+  setBinding("focusMode", { code: "KeyN", primary: true, shift: true });
   const container = mount();
-  act(() => button(container, "Reset the shortcut for Pin or unpin the session to its default")!.click());
-  expect(text(container)).toContain("Already used for Lock or unlock the session.");
-  expect(bindingFor("pin")).toEqual({ code: "KeyK", primary: true, shift: true });
+  act(() => button(container, "Reset the shortcut for New session with defaults to its default")!.click());
+  expect(text(container)).toContain("Already used for Toggle focus mode.");
+  expect(bindingFor("quickCreate")).toEqual({ code: "KeyK", primary: true, shift: true });
 });
 
 it("moves focus to Change only when a reset succeeds, and speaks it once the focus move is over", async () => {
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
-  setBinding("lock", { code: "KeyK", primary: true, shift: true });
+  setBinding("focusMode", { code: "KeyK", primary: true, shift: true });
   const container = mount();
   await act(async () => { await vi.advanceTimersByTimeAsync(200); });
   const status = () => container.querySelector("[role=status]")!.textContent!.trim();
-  const reset = button(container, "Reset the shortcut for Lock or unlock the session to its default")!;
+  const reset = button(container, "Reset the shortcut for Toggle focus mode to its default")!;
   act(() => reset.focus());
   act(() => reset.click());
-  expect(document.activeElement).toBe(button(container, LOCK_CHANGE));
+  expect(document.activeElement).toBe(button(container, FOCUS_MODE_CHANGE));
   expect(status()).toBe("");
   await act(async () => { await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS + 10); });
-  expect(status()).toMatch(/^Lock or unlock the session is back to .*L\.$/);
+  expect(status()).toMatch(/^Toggle focus mode is back to .*F\.$/);
 });
 
 it("leaves focus on Reset when the reset is refused", () => {
-  setBinding("pin", { code: "KeyK", primary: true, shift: true });
-  setBinding("lock", { code: "KeyP", primary: true, shift: true });
+  setBinding("quickCreate", { code: "KeyK", primary: true, shift: true });
+  setBinding("focusMode", { code: "KeyN", primary: true, shift: true });
   const container = mount();
-  const reset = button(container, "Reset the shortcut for Pin or unpin the session to its default")!;
+  const reset = button(container, "Reset the shortcut for New session with defaults to its default")!;
   act(() => reset.focus());
   act(() => reset.click());
   expect(document.activeElement).toBe(reset);
@@ -203,11 +204,11 @@ const refusals: [string, Binding, string][] = [
 
 it.each(refusals)("says why %s cannot be used, keeps recording and saves nothing", (_name, binding, message) => {
   const container = mount();
-  act(() => button(container, LOCK_CHANGE)!.click());
+  act(() => button(container, FOCUS_MODE_CHANGE)!.click());
   press(binding, { key: binding.code === "Escape" ? "Escape" : "" });
   expect(container.querySelector(".text-danger")?.textContent).toBe(message);
   expect(text(container)).toContain("Press the new keys…");
-  expect(bindingFor("lock")).toEqual({ code: "KeyL", primary: true, shift: true });
+  expect(bindingFor("focusMode")).toEqual({ code: "KeyF", primary: true, shift: true });
 });
 
 it("says Open settings cannot take Shift with a number or symbol key", () => {

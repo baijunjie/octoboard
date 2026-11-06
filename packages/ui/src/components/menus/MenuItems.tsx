@@ -1,8 +1,8 @@
-import { Description, Dropdown, Label, Separator } from "@heroui/react";
+import { Description, Dropdown, Kbd, Label, Separator } from "@heroui/react";
 import { LoaderCircle, type LucideIcon } from "lucide-react";
 import { MenuContext, useSlottedContext } from "react-aria-components";
 import { setInteractionModality } from "react-aria";
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
 import { isolate } from "../../i18n/isolate";
@@ -13,6 +13,7 @@ import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../announce/StatusAn
 import { useT } from "../../i18n/react";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { TABBABLE } from "../focus/selectors";
+import { MenuShortcutScope } from "./menuShortcutScope";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanelContext } from "./menuEntries";
 
 /** HeroUI's menu item label ignores the pointer, and its content inherits that, so a clipped label never sees
@@ -99,8 +100,18 @@ function PanelBody({ children }: { children: (context: ActionMenuPanelContext) =
  * focuses its first item as a menu opened from its trigger with the keyboard does. */
 export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; autoFocus?: "first" }): React.ReactElement {
   const t = useT();
+  const shortcutsActive = useContext(MenuShortcutScope);
   const prefix = useId();
+  const root = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef(new Map<number, HTMLElement>());
   const itemId = (index: number) => `${prefix}:${index}`;
+  const rememberItem = useCallback((node: HTMLElement | null, index: number, shortcut: string | undefined) => {
+    if (!node) { itemRefs.current.delete(index); return; }
+    itemRefs.current.set(index, node);
+    // react-aria filters this attribute out of menu item props.
+    if (shortcut) node.setAttribute("aria-keyshortcuts", shortcut);
+    else node.removeAttribute("aria-keyshortcuts");
+  }, []);
   // Each menu owns its keys, including actions bubbling from a deeper submenu.
   const run = (key: React.Key) => {
     if (typeof key !== "string" || !key.startsWith(`${prefix}:`)) return;
@@ -121,6 +132,7 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
         key={index}
         id={itemId(index)}
         textValue={entry.label}
+        ref={(node) => rememberItem(node, index, entry.shortcut)}
         data-marquee-scope
         aria-label={entry.reason && !entry.description ? t("menu.nameWithReason", { name: isolate(entry.ariaLabel ?? entry.label), reason: reasonText(entry.reason) }) : entry.ariaLabel}
         className={disabled ? DISABLED_ROW_CLASS : undefined}
@@ -146,7 +158,7 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
           {entry.description && <Description className="sr-only">{entry.description}</Description>}
           {entry.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={entry.reason} /></span>}
         </span>
-        {!entry.reason && entry.end}
+        {!entry.reason && (entry.shortcut ? <MenuShortcut letter={entry.shortcut} /> : entry.end)}
         {entry.selected !== undefined && <Dropdown.ItemIndicator />}
       </Dropdown.Item>
     );
@@ -196,11 +208,12 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
       nodes.push(
         <Dropdown.SubmenuTrigger key={index}>
           {/* HeroUI gives submenu triggers ps-2, while Dropdown items use px-2.5. Keep their leading edges aligned. */}
-          <Dropdown.Item id={itemId(index)} textValue={entry.label} data-marquee-scope className="ps-2.5!">
+          <Dropdown.Item id={itemId(index)} textValue={entry.label} ref={(node) => rememberItem(node, index, entry.shortcut)} data-marquee-scope className="ps-2.5!">
             <ItemIcon icon={entry.icon} className={entry.iconClassName} />
             <Label className={`min-w-0 flex-1 text-clip ${labelPointerClass(false)}`}>
               <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>
             </Label>
+            {entry.shortcut && <MenuShortcut letter={entry.shortcut} />}
             {/* HeroUI's indicator is a chevron that always points right, while the submenu opens
                 towards the start of the line in a right-to-left interface; a flip points it towards
                 the submenu. */}
@@ -217,9 +230,28 @@ export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; 
     }
   }
   return (
-    <Dropdown.Menu onAction={run} {...(autoFocus && { autoFocus })} {...(keepDisabled as React.ComponentProps<typeof Dropdown.Menu>)}>
-      {nodes}
-    </Dropdown.Menu>
+    <div ref={root} className="contents" onKeyDownCapture={(event) => {
+      if (!shortcutsActive || event.defaultPrevented || event.repeat || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      if (!(event.target instanceof Element) || event.target.closest('[role="menu"]') !== root.current?.querySelector('[role="menu"]')) return;
+      const index = entries.findIndex((entry) => entry !== "separator" && !("note" in entry) && entry.shortcut?.toLowerCase() === event.key.toLowerCase());
+      if (index < 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const entry = entries[index];
+      if (isLeaf(entry) && isDisabledItem(entry)) return;
+      const item = itemRefs.current.get(index);
+      if (!item) return;
+      setInteractionModality("keyboard");
+      item.focus();
+      // Use the menu item's normal keyboard activation so selection, submenu focus and closing
+      // stay under react-aria's control, including entries that keep their menu open.
+      item.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
+      item.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
+    }}>
+      <Dropdown.Menu onAction={run} {...(autoFocus && { autoFocus })} {...(keepDisabled as React.ComponentProps<typeof Dropdown.Menu>)}>
+        {nodes}
+      </Dropdown.Menu>
+    </div>
   );
 }
 
@@ -284,4 +316,8 @@ function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): 
       )}
     </div>
   </>;
+}
+
+function MenuShortcut({ letter }: { letter: string }): React.ReactElement {
+  return <Kbd aria-hidden="true" dir="ltr" slot="keyboard" className="ms-auto shrink-0 in-data-[hovered=true]:bg-surface"><Kbd.Content>{letter}</Kbd.Content></Kbd>;
 }

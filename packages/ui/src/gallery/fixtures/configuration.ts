@@ -458,10 +458,10 @@ const documentWith = (shortcuts: Record<string, unknown>) => ({
  * command this version has no name for and one that clashes with a key the file gives an earlier entry, which keeps it. */
 const SHORTCUTS_FILE = documentWith({
   focusMode: { code: "KeyG", primary: true, shift: true },
-  lock: { code: "KeyK", primary: true, shift: true },
+  quickCreate: { code: "KeyK", primary: true, shift: true },
   newSession: { code: "KeyO", primary: true },
   teleport: { code: "KeyT", primary: true, shift: true },
-  pin: { code: "KeyK", primary: true, shift: true },
+  nextConsoleSession: { code: "KeyK", primary: true, shift: true },
 });
 
 /** The machine's home directory, which a document's `~/` stands for. */

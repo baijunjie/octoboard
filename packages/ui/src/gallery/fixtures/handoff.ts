@@ -150,7 +150,7 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Menu of a locked session, Hand off disabled",
-    description: "Hand off and Archive are both greyed out with \"Session locked\" under their names although the session is idle; Archive shows the reason in place of its keyboard shortcut. Unlock stays available. A session in the middle of a turn (\"Session busy\") or with no other agent to hand off to (\"No other agent\") greys Hand off the same way, with its own reason.",
+    description: "Hand off and Archive are both greyed out with \"Session locked\" under their names although the session is idle; Archive shows the reason in place of its menu shortcut. Unlock stays available. A session in the middle of a turn (\"Session busy\") or with no other agent to hand off to (\"No other agent\") greys Hand off the same way, with its own reason.",
     state: lockedState,
     steps: [openMenu(locked.title)],
   },
