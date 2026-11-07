@@ -238,13 +238,12 @@ async fn a_queued_message_running_right_after_the_cancel_does_not_hide_it() {
             (
                 CTRL_C,
                 Box::new(move || {
-                    // `StopCancelled`, then the queued message's `UserPromptSubmit`.
+                    // `StopCancelled`, then the queued message's `UserPromptSubmit`. The `Idle`
+                    // and `Working` they report fall between two reads of the status, so they are
+                    // left out: written here one after the other, the `Idle` could be read between
+                    // them, which is what this test supposes nothing does.
                     state.abandon_turn("s");
-                    state.apply_hook_status("s", SessionStatus::Idle).unwrap();
                     state.turn_started("s", Some("the queued message"));
-                    state
-                        .apply_hook_status("s", SessionStatus::Working)
-                        .unwrap();
                 }),
             ),
         ],
