@@ -361,6 +361,9 @@ fn a_refused_call_reaches_the_hook_side_as_a_refusal_not_as_an_answer() {
 
 // -- the dispatchers, against the stand-in ----------------------------------
 
+/// The old value git gives a forced update, which names no value the ref had.
+const ZERO_OID: &str = "0000000000000000000000000000000000000000";
+
 /// What the stand-in was started with and given, one line per call: its arguments, a tab, and the
 /// input with its newlines turned to spaces.
 fn gate_calls(fixture: &Fixture) -> Vec<String> {
@@ -369,6 +372,25 @@ fn gate_calls(fixture: &Fixture) -> Vec<String> {
         .lines()
         .map(str::to_string)
         .collect()
+}
+
+/// The updates of a reference-transaction input as [`gate_calls`] gives it: an old value, a new
+/// value and a ref name each, in the order git listed them, which is not always the same.
+fn updates(input: &str) -> Vec<[&str; 3]> {
+    let words: Vec<&str> = input.split_whitespace().collect();
+    assert_eq!(words.len() % 3, 0, "{input}");
+    words
+        .chunks(3)
+        .map(|update| [update[0], update[1], update[2]])
+        .collect()
+}
+
+/// The update of `name` in the call `call` of [`gate_calls`].
+fn update_of<'a>(call: &'a str, name: &str) -> Option<[&'a str; 3]> {
+    let (_, input) = call.split_once('\t')?;
+    updates(input)
+        .into_iter()
+        .find(|[_, _, updated]| *updated == name)
 }
 
 fn with_gate_status<'a>(command: &'a mut Command, status: &str) -> &'a mut Command {
@@ -387,7 +409,12 @@ fn an_existing_branch_moving_is_put_to_the_gate_once_and_a_creation_is_not() {
         args,
         format!("gate-hook --session a --port 1 --key {TEST_KEY} reference-transaction prepared")
     );
-    assert!(input.ends_with(" refs/heads/main "), "{input}");
+    assert!(
+        updates(input)
+            .iter()
+            .any(|[_, _, name]| *name == "refs/heads/main"),
+        "{input}"
+    );
 
     fixture.as_session("a", &["branch", "topic"]);
     fixture.as_session("a", &["tag", "t"]);
@@ -407,11 +434,11 @@ fn an_existing_branch_forced_without_its_old_value_is_put_to_the_gate() {
     fixture.as_session("a", &["branch", "-f", "topic", "main"]);
     let calls = gate_calls(&fixture);
     assert_eq!(calls.len(), before + 2, "{calls:?}");
-    assert!(calls[before].ends_with(" refs/heads/main "), "{calls:?}");
-    assert!(
-        calls[before + 1].ends_with(" refs/heads/topic "),
-        "{calls:?}"
-    );
+    // Git may list `HEAD`, which follows `main`, before or after it.
+    let forced =
+        |call: &str, name: &str| update_of(call, name) == Some([ZERO_OID, first.as_str(), name]);
+    assert!(forced(&calls[before], "refs/heads/main"), "{calls:?}");
+    assert!(forced(&calls[before + 1], "refs/heads/topic"), "{calls:?}");
 }
 
 #[test]
