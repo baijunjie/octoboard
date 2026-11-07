@@ -18,7 +18,7 @@
 //! to that — see `crate::session::trust`.
 //!
 //! An approval mode chosen for the account is passed as `--permission-mode` on every launch and
-//! resume, and none is passed for an account that follows its own configuration. Approve everything
+//! resume, and none is passed for an account that follows its own configuration. Bypass permissions
 //! also adds `skipDangerousModePermissionPrompt` to the `--settings` JSON: Octoboard asks the user
 //! for that consent in Settings, and the flag-borne key keeps Claude Code's own blocking warning
 //! from appearing without writing anything into the account's configuration files. Whatever the
@@ -423,6 +423,8 @@ impl AgentProvider for ClaudeProvider {
             // `default` rather than `manual`: every Claude Code version accepts it, and it is what
             // the hooks and the transcript report; `manual` exists only from 2.1.200.
             Some("manual") => Some("default"),
+            Some("accept_edits") => Some("acceptEdits"),
+            Some("plan") => Some("plan"),
             Some("bypass") => Some("bypassPermissions"),
             _ => None,
         };
@@ -585,7 +587,7 @@ mod tests {
     }
 
     /// The flag follows the choice on a fresh launch and a resume alike; following the account
-    /// configuration passes none, and only Approve everything carries the consent key in
+    /// configuration passes none, and only Bypass permissions carries the consent key in
     /// `--settings`. Octoboard's own tools are allowed under every choice, and nothing else is.
     #[test]
     fn the_approval_mode_is_passed_on_fresh_launches_and_resumes() {
@@ -595,9 +597,18 @@ mod tests {
             (None, None, false),
             (Some("auto"), Some("auto"), false),
             (Some("manual"), Some("default"), false),
+            (Some("accept_edits"), Some("acceptEdits"), false),
+            (Some("plan"), Some("plan"), false),
             (Some("bypass"), Some("bypassPermissions"), true),
         ];
         for (mode, flag, bypass) in cases {
+            if let Some(mode) = mode {
+                assert!(AgentId::CLAUDE
+                    .descriptor()
+                    .setting("approval_mode")
+                    .unwrap()
+                    .accepts(&SettingValue::Choice(mode.to_string())));
+            }
             for resume in [None, Some("conversation-1")] {
                 let settings = ProviderSettings::new(mode.map(|mode| {
                     (

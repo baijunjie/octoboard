@@ -38,6 +38,10 @@ the Grok Build section's "Leader mode leaves the TUI's stop to a `SIGKILL` of th
 **Grok Build 1.0.70** on 2026-11-02. All three rewrite their hook surface, their payload fields, their configuration
 layering and their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
 
+The permission-resume note below distinguishes the native implementations in **Claude Code 2.1.274** and **2.1.319**.
+Grok's permission-mode startup and resume behavior was measured on **Grok Build 1.0.77** with isolated configuration,
+fake credentials and no model turn.
+
 How Octoboard's status mapping handles these traps is encoded in each provider's hook interpreter,
 `apps/daemon/src/adapter/<provider>/hooks.rs`; the product behavior built on them is in the product docs.
 
@@ -359,6 +363,15 @@ a best-available alias it excludes is refused by Claude Code.
   `auto`), then `Notification` `permission_prompt`. A tool call the classifier blocks shows no prompt: `PreToolUse` and
   then `Stop`, with no `PermissionRequest` and no `PostToolUse`.
 
+**Permission mode on resume without an explicit flag** (native implementation inspected in 2.1.274 and 2.1.319).
+An interactive direct resume can restore a stored mode instead of simply reading the account's current default.
+It does not restore stored `bypassPermissions`; restoring `auto` depends on current availability, and a stored Manual
+mode can yield to a configured default. The newer implementation separately restores an unexited plan on an interactive
+resume when no explicit mode or fork was requested; the older implementation lacks that path. An explicit
+`--permission-mode` prevents the saved mode from replacing the launch's selection. These are source observations,
+not additional runtime probes. The official [permission mode on resume](https://code.claude.com/docs/en/sessions#permission-mode-on-resume)
+reference documents the conditions for direct terminal resume, the picker, `/resume` and non-interactive resume.
+
 **Dialogs at a resume and in an idle session** (2.1.307, read from the executable and reproduced with fake
 subscription credentials against a local stub). None runs a hook, and `idle_prompt` is not sent while one is up.
 
@@ -519,6 +532,31 @@ session's first turn was 0.249 s.
 resolves an approval request itself: the hook fires, no modal is shown and the tool proceeds. A raised hand would ask
 the user to answer something they never see.
 
+**Permission presets (0.166.0).** The native UI selects built-in permission profiles together with an approval
+policy and reviewer:
+
+| Preset | `default_permissions` | `approval_policy` | `approvals_reviewer` |
+|---|---|---|---|
+| Ask for approval | `:workspace` | `on-request` | `user` |
+| Approve for me | `:workspace` | `on-request` | `auto_review` |
+| Full access | `:danger-full-access` | `never` | `user` |
+
+Each value can be supplied with `-c`. A session-level `default_permissions` selects the built-in profile ahead of
+lower-layer legacy sandbox settings, without inheriting their extra writable roots or network access. Combining it
+with `--sandbox` or `--approve-for-me` would select legacy sandbox configuration instead. These rules were checked
+against the matching release's `utils/approval-presets/src/lib.rs` and `core/src/config/mod.rs`, and exercised through
+offline `debug prompt-input` initialization with the adapter's hook, MCP, instruction and terminal overrides. All
+three presets and no override were checked against permissive legacy settings and a named custom profile: eight
+cases, without a model turn. Workspace presets produced restricted network access and excluded the legacy extra
+writable root; full access produced unrestricted permissions; no override used the account configuration.
+
+**Plain resume preserves saved permissions when no explicit preset is supplied (0.166.0).** Direct launch overrides
+for these three keys replace the saved choices; omitting them lets Codex restore the destination thread's permissions.
+Clearing a launch preset therefore does not reset a resumed thread to its account's current configuration, and even
+`--profile` alone does not force a reset. This is established by `tui/src/resume_permissions.rs`,
+`tui/src/app_server_session.rs` and `tui/src/resume_permissions_tests.rs` in the matching release; the offline
+initialization probe does not exercise a live thread resume.
+
 **An MCP server's tools are pre-approved per server, and `approve` is the value that asks nothing.**
 `mcp_servers.<key>.default_tools_approval_mode` takes `auto`, `prompt`, `writes` or `approve` — the four variants of the
 binary's own `AppToolApproval` enum, which `codex app-server generate-json-schema` reports too, and the same four the
@@ -657,6 +695,24 @@ server does with them at run time, and whether commands Codex runs for its model
 measured.
 
 ## Grok Build
+
+**Permission modes** (1.0.77). The [official permission modes](https://docs.x.ai/build/features/permissions) are Ask,
+Auto and Always-approve. Their user-configuration values under `[ui].permission_mode` are `ask`, `auto` and
+`always-approve`; the corresponding explicit CLI values for `--permission-mode` are `default`, `auto` and
+`bypassPermissions`. Plan mode and sandboxing are independent settings. Deny rules and hooks still apply in
+Always-approve mode.
+
+These three CLI selections were checked on fresh launches and direct resumes with the complete Octoboard hook/MCP
+injection, per-session configuration copy and shared session directory, using fake credentials, a local model catalog
+and no model turn. The actual mode was read from `SessionStart.permissionMode`, not inferred from `summary.json`.
+Explicit Ask replaced a previous Always-approve mode on the same session; Auto and Always-approve each replaced Ask on
+resume. The account's configuration bytes were unchanged. A resume with no explicit mode and an account configuration
+selecting Always-approve entered `bypassPermissions` after a prior Ask launch, so omitting the flag must not be described
+as preserving all saved permission choices. It leaves the result to Grok's configuration and resume rules.
+
+Auto remains feature-gated. With `[auto_mode].enabled=false`, passing `--permission-mode auto` produced `default` in
+the startup hook and connected MCP normally. These probes establish startup selection and fallback only; they did not
+exercise the classifier's decisions on tool calls.
 
 16 hook events, payload as JSON on stdin, with **every field present in both camelCase and snake_case**. The hook
 process additionally receives `GROK_HOOK_EVENT`, `GROK_HOOK_NAME` — whose `global/`, `project/` or `managed:` prefix is

@@ -32,13 +32,28 @@ function approvalOf(container: HTMLElement): HTMLSelectElement {
   return container.querySelector<HTMLSelectElement>('[role="tabpanel"] select')!;
 }
 
-it("offers one Codex mode above the table, following configuration by default", () => {
+it("offers the native Codex presets above the table, using custom configuration by default", () => {
   const { container } = mount("Codex");
   const select = approvalOf(container);
   expect(select.value).toBe("inherit");
   expect(select.getAttribute("aria-label")).toBe("Permission approval for \u2068Codex\u2069");
-  expect([...select.options].map((option) => option.value)).toEqual(["inherit", "auto_review", "user"]);
+  expect([...select.options].map((option) => option.value)).toEqual(["inherit", "user", "auto_review", "full_access"]);
+  expect([...select.options].map((option) => option.textContent)).toEqual(["Custom (config.toml)", "Ask for approval", "Approve for me", "Full access"]);
   expect(container.querySelectorAll("tbody select")).toHaveLength(0);
+});
+
+it("separates permission timing from custom permissions that retain saved permissions on resume", async () => {
+  const { container } = mount("Codex");
+  await act(async () => buttonNamed(container, "About permission approval")!.click());
+  const help = document.querySelector('[role="dialog"][aria-label="About permission approval"]');
+  expect(help).not.toBeNull();
+  const paragraphs = help!.querySelectorAll("p");
+  expect(paragraphs).toHaveLength(2);
+  expect(paragraphs[0].textContent).toContain("the next time a session starts or resumes");
+  expect(paragraphs[0].textContent).toContain("computer running the session");
+  expect(paragraphs[1].textContent).toContain("new sessions use each account's configuration");
+  expect(paragraphs[1].textContent).toContain("resumed sessions keep their saved permissions");
+  expect(paragraphs[1].textContent).toContain("Select another mode to replace saved permissions");
 });
 
 it("says the permission approval once, as a row above the table with its help, not in a column or the details or settings dialogs", async () => {
@@ -58,10 +73,25 @@ it("says the permission approval once, as a row above the table with its help, n
   expect(settingsDialog.textContent).not.toContain("Permission approval");
 });
 
-it("shows no permission approval row for Grok", () => {
+it("offers Grok's native approval modes, following configuration by default", () => {
   const { container } = mount("Grok Build");
-  expect(container.querySelector("select")).toBeNull();
-  expect(container.textContent).not.toContain("Permission approval");
+  const select = approvalOf(container);
+  expect(select.value).toBe("inherit");
+  expect([...select.options].map((option) => option.value)).toEqual(["inherit", "ask", "auto", "always_approve"]);
+  expect([...select.options].slice(1).map((option) => option.textContent)).toEqual(["Ask", "Auto", "Always-approve"]);
+  expect(container.querySelectorAll("tbody select")).toHaveLength(0);
+});
+
+it.each([
+  ["ask", "ask"],
+  ["auto", "auto"],
+  ["inherit", null],
+] as const)("saves the Grok selector as %s at once", async (value, saved) => {
+  settings.provider_settings = { grok: { approval_mode: value === "inherit" ? "ask" : null } };
+  const { container, change } = mount("Grok Build");
+  change(approvalOf(container), value);
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_provider_setting", agent: "grok", setting: "approval_mode", value: saved });
+  await act(async () => {});
 });
 
 it("shows the stored Codex choice", () => {
@@ -117,11 +147,11 @@ it("words a denied save of the permission approval for the application's data fo
   while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
 });
 
-it("words a denied save of Approve everything, made from its confirmation, for the application's data folder too", async () => {
+it("words a denied save of Bypass permissions, made from its confirmation, for the application's data folder too", async () => {
   const { container, change } = mount("Claude Code");
   change(approvalOf(container), "bypass");
   request.mockRejectedValueOnce(deniedWrite());
-  act(() => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Approve everything")!.click());
+  act(() => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Bypass permissions")!.click());
   await act(async () => {});
   const text = queuedAlertText();
   expect(text).toContain("data folder is writable");
@@ -141,12 +171,13 @@ it("keeps the trigger available while saving and prevents another option selecti
   expect([...select.options].every((option) => !option.disabled)).toBe(true);
 });
 
-it("offers Claude Code's four choices, following configuration by default, and shows the stored one", () => {
+it("offers Claude Code's native modes, following configuration by default, and shows the stored one", () => {
   const { container } = mount("Claude Code");
   const select = approvalOf(container);
   expect(select.value).toBe("inherit");
   expect(select.getAttribute("aria-label")).toBe("Permission approval for \u2068Claude Code\u2069");
-  expect([...select.options].map((option) => option.value)).toEqual(["inherit", "auto", "manual", "bypass"]);
+  expect([...select.options].map((option) => option.value)).toEqual(["inherit", "auto", "manual", "accept_edits", "plan", "bypass"]);
+  expect([...select.options].slice(1).map((option) => option.textContent)).toEqual(["Auto", "Manual", "Accept edits", "Plan", "Bypass permissions"]);
   settings.provider_settings = { claude: { approval_mode: "manual" } };
   expect(approvalOf(mount("Claude Code").container).value).toBe("manual");
 });
@@ -154,6 +185,8 @@ it("offers Claude Code's four choices, following configuration by default, and s
 it.each([
   ["auto", "auto"],
   ["manual", "manual"],
+  ["accept_edits", "accept_edits"],
+  ["plan", "plan"],
   ["inherit", null],
 ] as const)("saves the Claude Code selector as %s at once", async (value, saved) => {
   settings.provider_settings = { claude: { approval_mode: value === "inherit" ? "auto" : null } };
@@ -163,33 +196,37 @@ it.each([
   await act(async () => {});
 });
 
-it("keeps the confirmation open and the choice unchanged when saving Approve everything fails", async () => {
+it("keeps the confirmation open and the choice unchanged when saving Bypass permissions fails", async () => {
   const { container, change } = mount("Claude Code");
   const select = approvalOf(container);
   change(select, "bypass");
   request.mockRejectedValueOnce(new Error("save refused"));
-  act(() => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Approve everything")!.click());
+  act(() => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Bypass permissions")!.click());
   await act(async () => {});
-  expect(document.body.textContent).toContain("in every Claude Code account's sessions");
+  expect(document.body.textContent).toContain("in sessions of every Claude Code account");
   expect(select.value).toBe("inherit");
 });
 
-it("saves Approve everything only once the warning, which names the agent, is confirmed", async () => {
-  const { container, change } = mount("Claude Code");
+it.each([
+  ["Claude Code", "claude", "approval_mode", "bypass", "Bypass permissions", "Bypass permissions?", "in sessions of every Claude Code account"],
+  ["Codex", "codex", "approval_reviewer", "full_access", "Full access", "Allow full access?", "without sandbox restrictions or permission approval"],
+  ["Grok Build", "grok", "approval_mode", "always_approve", "Always-approve", "Always approve tool calls?", "Deny rules and hooks still apply"],
+] as const)("saves %s unrestricted mode only after confirmation", async (name, agent, setting, value, label, title, consequence) => {
+  const { container, change } = mount(name);
   const select = approvalOf(container);
-  change(select, "bypass");
+  change(select, value);
   expect(request).not.toHaveBeenCalled();
   const buttons = () => [...document.querySelectorAll<HTMLButtonElement>("button")];
   const press = (label: string) => act(() => buttons().find((b) => b.textContent === label)!.click());
-  expect(document.querySelector('[role="alertdialog"] h2')?.textContent).toBe("Approve everything?");
-  expect(document.body.textContent).toContain("in every Claude Code account's sessions");
+  expect(document.querySelector('[role="alertdialog"] h2')?.textContent).toBe(title);
+  expect(document.body.textContent).toContain(consequence);
   press("Cancel");
   expect(request).not.toHaveBeenCalled();
-  expect(document.body.textContent).not.toContain("in every Claude Code account's sessions");
-  change(select, "bypass");
-  press("Approve everything");
+  expect(document.body.textContent).not.toContain(consequence);
+  change(select, value);
+  press(label);
   await act(async () => {});
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: "bypass" });
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_provider_setting", agent, setting, value });
 });
 
 it("shows one agent at a time, opening on the first and switching by tab", () => {

@@ -20,8 +20,8 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
   onTestFinished(() => { act(() => root.unmount()); container.remove(); setLanguage(before); });
   for (const [id, expected] of [
     ["provider.grok.dirHint", ["Grok"]],
-    ["provider.codex.setting.approval_reviewer.description", ["Codex"]],
-    ["provider.claude.setting.approval_mode.description", ["Claude Code"]],
+    ["provider.codex.login_busy.summary", ["Codex"]],
+    ["provider.claude.setting.approval_mode.choice.auto.summary", ["Claude"]],
     ["settings.permissions.lead", ["Octoboard", "Octoboard", "macOS"]],
     ["settings.cloneDir.description.gitUrl", ["Git"]],
     ["git.unavailable", ["Git"]],

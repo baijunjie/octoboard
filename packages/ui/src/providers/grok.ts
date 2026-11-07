@@ -8,6 +8,8 @@ const names = {
 
 // The copy that speaks of the provider's own files and behaviour, found by the components under `provider.<id>.` (see
 // `ProviderMessage`).
+// Native English permission summaries: https://docs.x.ai/build/features/permissions
+// Other locales translate that wording; separate help explains native configuration and app-specific scope.
 const en = {
   "provider.grok.trustCaution":
     "Trusting lets {agent} load this project's own instructions, hooks and MCP servers.",
@@ -27,6 +29,21 @@ const en = {
     "The {agent} sandbox ({profile}, set by {source}) is incompatible with the home {appName} gives each session, so the session was not launched.",
   "provider.grok.sandbox_unsupported.remedy":
     "To launch this session through {appName}, turn the sandbox off where it is set, or ask whoever manages that setting to. A conversation started under the sandbox keeps it, so continue that one in {agent} itself.",
+  "provider.grok.setting.approval_mode.heading": "Permission approval",
+  "provider.grok.setting.approval_mode.helpLabel": "About permission approval",
+  "provider.grok.setting.approval_mode.label": "Permission approval for {agent}",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "Could not save the permission approval",
+  "provider.grok.setting.approval_mode.helpTiming": "Changes take effect the next time a session starts or resumes. Permissions apply on the computer running the session.",
+  "provider.grok.setting.approval_mode.helpCustom": "When no mode is specified, the permission mode follows native configuration and resume rules. Automatic review falls back to asking for approval when the native feature is unavailable.",
+  "provider.grok.setting.approval_mode.inheritSummary": "Use native configuration and resume rules",
+  "provider.grok.setting.approval_mode.choice.ask": "Ask",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "Prompt for anything not already allowed",
+  "provider.grok.setting.approval_mode.choice.auto": "Auto",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "Classifier auto-approves safe tools; dangerous ones may still prompt",
+  "provider.grok.setting.approval_mode.choice.always_approve": "Always-approve",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "Auto-approve tool calls",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "Always approve tool calls?",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "Tools can change or delete files without a routine permission prompt in sessions of every {agent} account. Deny rules and hooks still apply.",
 } as const;
 
 const arMessages = {
@@ -43,6 +60,21 @@ const arMessages = {
   "provider.grok.home_not_initialized.recovery": "شغّل {grok} معه مباشرة مرة واحدة على الأقل ليصبح له سجل جلسات، قبل توجيه حساب إليه.",
   "provider.grok.sandbox_unsupported": "بيئة عزل {agent} (الملف {profile}، المحدد بواسطة {source}) غير متوافقة مع المجلد الرئيسي الذي يخصصه {appName} لكل جلسة، لذا لم تبدأ الجلسة.",
   "provider.grok.sandbox_unsupported.remedy": "لبدء هذه الجلسة عبر {appName}، أوقف بيئة العزل من موضع إعدادها، أو اطلب ذلك ممن يدير هذا الإعداد. تحتفظ المحادثة التي بدأت في بيئة العزل بها، لذا تابع تلك المحادثة في {agent} نفسه.",
+  "provider.grok.setting.approval_mode.heading": "الموافقة على الأذونات",
+  "provider.grok.setting.approval_mode.helpLabel": "حول الموافقة على الأذونات",
+  "provider.grok.setting.approval_mode.label": "الموافقة على الأذونات لـ {agent}",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "تعذر حفظ الموافقة على الأذونات",
+  "provider.grok.setting.approval_mode.helpTiming": "تسري التغييرات عند بدء جلسة أو استئنافها في المرة القادمة. تسري الأذونات على جهاز الكمبيوتر الذي يشغّل الجلسة.",
+  "provider.grok.setting.approval_mode.helpCustom": "عند عدم تحديد وضع، يتبع وضع الأذونات الإعدادات وقواعد الاستئناف الأصلية. تعود المراجعة التلقائية إلى طلب الموافقة عند عدم توفر الميزة الأصلية.",
+  "provider.grok.setting.approval_mode.inheritSummary": "استخدام الإعدادات وقواعد الاستئناف الأصلية",
+  "provider.grok.setting.approval_mode.choice.ask": "السؤال",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "طلب الموافقة على كل ما لم يُسمح به مسبقاً",
+  "provider.grok.setting.approval_mode.choice.auto": "تلقائي",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "يوافق المصنّف تلقائياً على الأدوات الآمنة؛ وقد تستمر الأدوات الخطرة في طلب الموافقة",
+  "provider.grok.setting.approval_mode.choice.always_approve": "الموافقة دائماً",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "الموافقة التلقائية على استدعاءات الأدوات",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "الموافقة دائماً على استدعاءات الأدوات؟",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "يمكن للأدوات تغيير الملفات أو حذفها دون طلب إذن اعتيادي في جلسات جميع حسابات {agent}. تظل قواعد الرفض والخطافات سارية.",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const deMessages = {
@@ -59,6 +91,21 @@ const deMessages = {
   "provider.grok.home_not_initialized.recovery": "Führe {grok} mindestens einmal direkt damit aus, damit ein Sitzungsverlauf vorhanden ist, bevor du ein Konto darauf verweist.",
   "provider.grok.sandbox_unsupported": "Die Sandbox von {agent} ({profile}, festgelegt durch {source}) ist mit dem Benutzerverzeichnis, das {appName} jeder Sitzung zuweist, nicht kompatibel. Die Sitzung wurde daher nicht gestartet.",
   "provider.grok.sandbox_unsupported.remedy": "Um diese Sitzung über {appName} zu starten, deaktiviere die Sandbox an der Stelle, an der sie festgelegt ist, oder bitte die für diese Einstellung verantwortliche Person darum. Ein unter der Sandbox gestartetes Gespräch behält sie. Setze es daher direkt in {agent} fort.",
+  "provider.grok.setting.approval_mode.heading": "Berechtigungsgenehmigung",
+  "provider.grok.setting.approval_mode.helpLabel": "Informationen zur Berechtigungsgenehmigung",
+  "provider.grok.setting.approval_mode.label": "Berechtigungsgenehmigung für {agent}",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "Berechtigungsgenehmigung konnte nicht gesichert werden",
+  "provider.grok.setting.approval_mode.helpTiming": "Änderungen gelten beim nächsten Starten oder Fortsetzen einer Sitzung. Die Berechtigungen gelten auf dem Computer, auf dem die Sitzung läuft.",
+  "provider.grok.setting.approval_mode.helpCustom": "Wenn kein Modus angegeben ist, folgt der Berechtigungsmodus der nativen Konfiguration und den Fortsetzungsregeln. Ist die native Funktion nicht verfügbar, fragt die automatische Prüfung stattdessen nach einer Genehmigung.",
+  "provider.grok.setting.approval_mode.inheritSummary": "Native Konfiguration und Fortsetzungsregeln verwenden",
+  "provider.grok.setting.approval_mode.choice.ask": "Nachfragen",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "Bei allem nachfragen, was noch nicht erlaubt ist",
+  "provider.grok.setting.approval_mode.choice.auto": "Automatisch",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "Der Klassifikator genehmigt sichere Werkzeuge automatisch; gefährliche können weiterhin nachfragen",
+  "provider.grok.setting.approval_mode.choice.always_approve": "Immer genehmigen",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "Werkzeugaufrufe automatisch genehmigen",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "Werkzeugaufrufe immer genehmigen?",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "Werkzeuge können in den Sitzungen aller {agent}-Konten Dateien ohne die übliche Berechtigungsabfrage ändern oder löschen. Ablehnungsregeln und Hooks gelten weiterhin.",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const esMessages = {
@@ -75,6 +122,21 @@ const esMessages = {
   "provider.grok.home_not_initialized.recovery": "Ejecuta {grok} directamente con él al menos una vez para que tenga un historial de sesiones antes de asignarlo a una cuenta.",
   "provider.grok.sandbox_unsupported": "El entorno aislado de {agent} ({profile}, establecido por {source}) es incompatible con el directorio de inicio que {appName} asigna a cada sesión, por lo que no se inició la sesión.",
   "provider.grok.sandbox_unsupported.remedy": "Para iniciar esta sesión desde {appName}, desactiva el entorno aislado donde esté establecido o pídelo a quien gestione ese ajuste. Una conversación iniciada en el entorno aislado lo conserva, así que continúala en el propio {agent}.",
+  "provider.grok.setting.approval_mode.heading": "Aprobación de permisos",
+  "provider.grok.setting.approval_mode.helpLabel": "Acerca de la aprobación de permisos",
+  "provider.grok.setting.approval_mode.label": "Aprobación de permisos para {agent}",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "No se pudo guardar la aprobación de permisos",
+  "provider.grok.setting.approval_mode.helpTiming": "Los cambios se aplican la próxima vez que se inicie o reanude una sesión. Los permisos se aplican en el ordenador que ejecuta la sesión.",
+  "provider.grok.setting.approval_mode.helpCustom": "Si no se especifica un modo, el modo de permisos sigue la configuración y las reglas de reanudación nativas. La revisión automática vuelve a pedir aprobación cuando la función nativa no está disponible.",
+  "provider.grok.setting.approval_mode.inheritSummary": "Usar la configuración y las reglas de reanudación nativas",
+  "provider.grok.setting.approval_mode.choice.ask": "Preguntar",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "Pedir aprobación para todo lo que no esté ya permitido",
+  "provider.grok.setting.approval_mode.choice.auto": "Automático",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "El clasificador aprueba automáticamente las herramientas seguras; las peligrosas pueden seguir pidiendo aprobación",
+  "provider.grok.setting.approval_mode.choice.always_approve": "Aprobar siempre",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "Aprobar automáticamente las llamadas a herramientas",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "¿Aprobar siempre las llamadas a herramientas?",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "Las herramientas pueden modificar o eliminar archivos sin una solicitud rutinaria de permiso en las sesiones de todas las cuentas de {agent}. Las reglas de denegación y los hooks siguen aplicándose.",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const frMessages = {
@@ -91,6 +153,21 @@ const frMessages = {
   "provider.grok.home_not_initialized.recovery": "Exécutez {grok} directement avec ce répertoire au moins une fois afin de créer un historique de session, avant d’y faire pointer un compte.",
   "provider.grok.sandbox_unsupported": "Le bac à sable de {agent} ({profile}, défini par {source}) est incompatible avec le répertoire de base attribué par {appName} à chaque session. La session n’a donc pas été lancée.",
   "provider.grok.sandbox_unsupported.remedy": "Pour lancer cette session via {appName}, désactivez le bac à sable à l’endroit où il est défini, ou demandez à la personne qui gère ce réglage de le faire. Une conversation démarrée sous le bac à sable le conserve. Continuez-la donc directement dans {agent}.",
+  "provider.grok.setting.approval_mode.heading": "Approbation des autorisations",
+  "provider.grok.setting.approval_mode.helpLabel": "À propos de l’approbation des autorisations",
+  "provider.grok.setting.approval_mode.label": "Approbation des autorisations pour {agent}",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "Impossible d’enregistrer l’approbation des autorisations",
+  "provider.grok.setting.approval_mode.helpTiming": "Les modifications s’appliquent au prochain démarrage ou à la prochaine reprise d’une session. Les autorisations s’appliquent sur l’ordinateur qui exécute la session.",
+  "provider.grok.setting.approval_mode.helpCustom": "Si aucun mode n’est indiqué, le mode d’autorisation suit la configuration et les règles de reprise natives. L’examen automatique revient à demander une autorisation si la fonction native est indisponible.",
+  "provider.grok.setting.approval_mode.inheritSummary": "Utiliser la configuration et les règles de reprise natives",
+  "provider.grok.setting.approval_mode.choice.ask": "Demander",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "Demander pour tout ce qui n’est pas déjà autorisé",
+  "provider.grok.setting.approval_mode.choice.auto": "Automatique",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "Le classificateur approuve automatiquement les outils sûrs ; les outils dangereux peuvent encore demander une autorisation",
+  "provider.grok.setting.approval_mode.choice.always_approve": "Toujours approuver",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "Approuver automatiquement les appels d’outils",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "Toujours approuver les appels d’outils ?",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "Les outils peuvent modifier ou supprimer des fichiers sans demande d’autorisation habituelle dans les sessions de tous les comptes {agent}. Les règles de refus et les hooks restent applicables.",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const hiMessages = {
@@ -107,6 +184,21 @@ const hiMessages = {
   "provider.grok.home_not_initialized.recovery": "किसी अकाउंट के लिए इसे चुनने से पहले कम से कम एक बार {grok} सीधे इसके साथ चलाएँ, ताकि इसमें सेशन हिस्ट्री बन जाए।",
   "provider.grok.sandbox_unsupported": "{agent} का सैंडबॉक्स ({profile}, जिसे {source} ने सेट किया है) उस होम के साथ काम नहीं करता जो {appName} हर सेशन को देता है, इसलिए सेशन शुरू नहीं हुआ।",
   "provider.grok.sandbox_unsupported.remedy": "{appName} से यह सेशन शुरू करने के लिए सैंडबॉक्स जहाँ सेट है वहाँ बंद करें, या वह सेटिंग संभालने वाले व्यक्ति से ऐसा करने को कहें। सैंडबॉक्स में शुरू हुई बातचीत में वह लागू रहता है, इसलिए उसे {agent} में ही आगे बढ़ाएँ।",
+  "provider.grok.setting.approval_mode.heading": "अनुमति की मंज़ूरी",
+  "provider.grok.setting.approval_mode.helpLabel": "अनुमति की मंज़ूरी के बारे में",
+  "provider.grok.setting.approval_mode.label": "{agent} के लिए अनुमति की मंज़ूरी",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "अनुमति की मंज़ूरी सेव नहीं हो सकी",
+  "provider.grok.setting.approval_mode.helpTiming": "बदलाव अगली बार सेशन शुरू या फिर से शुरू होने पर लागू होते हैं। अनुमतियाँ उस कंप्यूटर पर लागू होती हैं जिस पर सेशन चल रहा है।",
+  "provider.grok.setting.approval_mode.helpCustom": "कोई मोड तय न होने पर अनुमति मोड मूल कॉन्फ़िगरेशन और फिर से शुरू करने के नियमों के अनुसार तय होता है। मूल सुविधा उपलब्ध न होने पर अपने आप जाँच के बजाय मंज़ूरी माँगी जाती है।",
+  "provider.grok.setting.approval_mode.inheritSummary": "मूल कॉन्फ़िगरेशन और फिर से शुरू करने के नियम इस्तेमाल करें",
+  "provider.grok.setting.approval_mode.choice.ask": "पूछें",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "जो पहले से अनुमत नहीं है, उसके लिए पूछें",
+  "provider.grok.setting.approval_mode.choice.auto": "अपने आप",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "क्लासिफ़ायर सुरक्षित टूल अपने आप मंज़ूर करता है; खतरनाक टूल अब भी पूछ सकते हैं",
+  "provider.grok.setting.approval_mode.choice.always_approve": "हमेशा मंज़ूर करें",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "टूल कॉल अपने आप मंज़ूर करें",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "टूल कॉल हमेशा मंज़ूर करें?",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "सभी {agent} अकाउंट के सेशन में टूल सामान्य अनुमति माँगे बिना फ़ाइलें बदल या मिटा सकते हैं। अस्वीकार करने के नियम और हुक अब भी लागू होते हैं।",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const idMessages = {
@@ -123,6 +215,21 @@ const idMessages = {
   "provider.grok.home_not_initialized.recovery": "Jalankan {grok} langsung dengan direktori tersebut setidaknya sekali agar memiliki riwayat sesi, sebelum mengarahkan akun ke sana.",
   "provider.grok.sandbox_unsupported": "Sandbox {agent} ({profile}, diatur oleh {source}) tidak kompatibel dengan direktori utama yang diberikan {appName} kepada setiap sesi, sehingga sesi tidak diluncurkan.",
   "provider.grok.sandbox_unsupported.remedy": "Untuk meluncurkan sesi ini melalui {appName}, nonaktifkan sandbox di tempat pengaturannya, atau minta pengelola pengaturan tersebut melakukannya. Percakapan yang dimulai dalam sandbox tetap menggunakannya, jadi lanjutkan percakapan itu di {agent} sendiri.",
+  "provider.grok.setting.approval_mode.heading": "Persetujuan izin",
+  "provider.grok.setting.approval_mode.helpLabel": "Tentang persetujuan izin",
+  "provider.grok.setting.approval_mode.label": "Persetujuan izin untuk {agent}",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "Tidak dapat menyimpan persetujuan izin",
+  "provider.grok.setting.approval_mode.helpTiming": "Perubahan berlaku saat sesi dimulai atau dilanjutkan berikutnya. Izin berlaku pada komputer yang menjalankan sesi.",
+  "provider.grok.setting.approval_mode.helpCustom": "Jika mode tidak ditentukan, mode izin mengikuti konfigurasi dan aturan pelanjutan bawaan. Tinjauan otomatis beralih kembali ke permintaan persetujuan jika fitur bawaan tidak tersedia.",
+  "provider.grok.setting.approval_mode.inheritSummary": "Gunakan konfigurasi dan aturan pelanjutan bawaan",
+  "provider.grok.setting.approval_mode.choice.ask": "Tanya",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "Minta persetujuan untuk apa pun yang belum diizinkan",
+  "provider.grok.setting.approval_mode.choice.auto": "Otomatis",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "Pengklasifikasi otomatis menyetujui alat yang aman; alat berbahaya mungkin tetap meminta persetujuan",
+  "provider.grok.setting.approval_mode.choice.always_approve": "Selalu setujui",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "Setujui panggilan alat secara otomatis",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "Selalu setujui panggilan alat?",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "Alat dapat mengubah atau menghapus file tanpa permintaan izin rutin dalam sesi semua akun {agent}. Aturan penolakan dan hook tetap berlaku.",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const itMessages = {
@@ -139,6 +246,21 @@ const itMessages = {
   "provider.grok.home_not_initialized.recovery": "Esegui {grok} direttamente con questa directory almeno una volta, in modo che abbia una cronologia delle sessioni, prima di assegnarla a un account.",
   "provider.grok.sandbox_unsupported": "La sandbox di {agent} ({profile}, impostata da {source}) è incompatibile con la directory base che {appName} assegna a ogni sessione, quindi la sessione non è stata avviata.",
   "provider.grok.sandbox_unsupported.remedy": "Per avviare questa sessione tramite {appName}, disattiva la sandbox dove è impostata oppure chiedilo a chi gestisce l’impostazione. Una conversazione avviata nella sandbox la mantiene: continuala quindi direttamente in {agent}.",
+  "provider.grok.setting.approval_mode.heading": "Approvazione dei permessi",
+  "provider.grok.setting.approval_mode.helpLabel": "Informazioni sull’approvazione dei permessi",
+  "provider.grok.setting.approval_mode.label": "Approvazione dei permessi per {agent}",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "Impossibile salvare l’approvazione dei permessi",
+  "provider.grok.setting.approval_mode.helpTiming": "Le modifiche si applicano al prossimo avvio o alla prossima ripresa di una sessione. I permessi si applicano sul computer che esegue la sessione.",
+  "provider.grok.setting.approval_mode.helpCustom": "Se non è specificata una modalità, la modalità dei permessi segue la configurazione e le regole di ripresa native. La revisione automatica torna a chiedere approvazione quando la funzione nativa non è disponibile.",
+  "provider.grok.setting.approval_mode.inheritSummary": "Usa la configurazione e le regole di ripresa native",
+  "provider.grok.setting.approval_mode.choice.ask": "Chiedi",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "Chiedi per tutto ciò che non è già consentito",
+  "provider.grok.setting.approval_mode.choice.auto": "Automatico",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "Il classificatore approva automaticamente gli strumenti sicuri; quelli pericolosi possono ancora chiedere conferma",
+  "provider.grok.setting.approval_mode.choice.always_approve": "Approva sempre",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "Approva automaticamente le chiamate agli strumenti",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "Approvare sempre le chiamate agli strumenti?",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "Gli strumenti possono modificare o eliminare file senza la consueta richiesta di permesso nelle sessioni di tutti gli account {agent}. Le regole di rifiuto e gli hook restano validi.",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const jaMessages = {
@@ -155,6 +277,21 @@ const jaMessages = {
   "provider.grok.home_not_initialized.recovery": "アカウントに指定する前に、その場所で {grok} を少なくとも1回直接実行して、セッション履歴を作成してください。",
   "provider.grok.sandbox_unsupported": "{agent} のサンドボックス（{source} で設定された {profile}）は、{appName} が各セッションに用意するホームと互換性がないため、セッションを起動しませんでした。",
   "provider.grok.sandbox_unsupported.remedy": "{appName} からこのセッションを起動するには、サンドボックスを設定元でオフにするか、その設定の管理者に依頼してください。サンドボックス内で始めた会話には設定が残るため、その会話は {agent} 自体で続けてください。",
+  "provider.grok.setting.approval_mode.heading": "権限の承認",
+  "provider.grok.setting.approval_mode.helpLabel": "権限の承認について",
+  "provider.grok.setting.approval_mode.label": "{agent} の権限の承認",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "権限の承認設定を保存できませんでした",
+  "provider.grok.setting.approval_mode.helpTiming": "変更は次にセッションを起動または再開したときに反映されます。権限はセッションを実行するコンピューターに適用されます。",
+  "provider.grok.setting.approval_mode.helpCustom": "モードを指定しない場合、ネイティブの設定と再開ルールに従って権限モードが決まります。ネイティブ機能が利用できない場合、自動審査は承認を求める動作に戻ります。",
+  "provider.grok.setting.approval_mode.inheritSummary": "ネイティブの設定と再開ルールを使用",
+  "provider.grok.setting.approval_mode.choice.ask": "確認",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "まだ許可されていない操作はすべて確認",
+  "provider.grok.setting.approval_mode.choice.auto": "自動",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "分類器が安全なツールを自動承認し、危険なツールは引き続き確認する場合があります",
+  "provider.grok.setting.approval_mode.choice.always_approve": "常に承認",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "ツール呼び出しを自動承認",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "ツール呼び出しを常に承認しますか？",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "すべての {agent} アカウントのセッションで、ツールが通常の権限確認なしにファイルを変更または削除できます。拒否ルールとフックは引き続き適用されます。",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const koMessages = {
@@ -171,6 +308,21 @@ const koMessages = {
   "provider.grok.home_not_initialized.recovery": "계정에 지정하기 전에 해당 디렉터리에서 {grok}을(를) 한 번 이상 직접 실행하여 세션 이력을 생성해 주세요.",
   "provider.grok.sandbox_unsupported": "{agent} 샌드박스 ({source}에서 설정된 {profile})가 {appName}에서 각 세션에 제공하는 홈과 호환되지 않아 세션을 시작하지 않았습니다.",
   "provider.grok.sandbox_unsupported.remedy": "{appName}에서 이 세션을 시작하려면 샌드박스를 설정한 곳에서 끄거나 해당 설정 관리자에게 요청해 주세요. 샌드박스에서 시작한 대화는 해당 설정이 유지되므로 {agent} 자체에서 계속해 주세요.",
+  "provider.grok.setting.approval_mode.heading": "권한 승인",
+  "provider.grok.setting.approval_mode.helpLabel": "권한 승인에 관하여",
+  "provider.grok.setting.approval_mode.label": "{agent}의 권한 승인",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "권한 승인 설정을 저장하지 못했습니다",
+  "provider.grok.setting.approval_mode.helpTiming": "변경 사항은 다음에 세션을 시작하거나 재개할 때 적용됩니다. 권한은 세션을 실행하는 컴퓨터에 적용됩니다.",
+  "provider.grok.setting.approval_mode.helpCustom": "모드를 지정하지 않으면 기본 설정과 재개 규칙에 따라 권한 모드가 결정됩니다. 기본 기능을 사용할 수 없으면 자동 검토 대신 승인을 요청합니다.",
+  "provider.grok.setting.approval_mode.inheritSummary": "기본 설정 및 재개 규칙 사용",
+  "provider.grok.setting.approval_mode.choice.ask": "확인",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "아직 허용되지 않은 모든 작업에 대해 확인",
+  "provider.grok.setting.approval_mode.choice.auto": "자동",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "분류기가 안전한 도구를 자동 승인하며 위험한 도구는 여전히 확인을 요청할 수 있음",
+  "provider.grok.setting.approval_mode.choice.always_approve": "항상 승인",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "도구 호출 자동 승인",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "도구 호출을 항상 승인할까요?",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "모든 {agent} 계정의 세션에서 도구가 일반적인 권한 확인 없이 파일을 변경하거나 삭제할 수 있습니다. 거부 규칙과 훅은 계속 적용됩니다.",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const ptMessages = {
@@ -187,6 +339,21 @@ const ptMessages = {
   "provider.grok.home_not_initialized.recovery": "Execute {grok} diretamente nele pelo menos uma vez para criar um histórico de sessões antes de usá-lo em uma conta.",
   "provider.grok.sandbox_unsupported": "O sandbox de {agent} ({profile}, definido por {source}) é incompatível com o diretório base que {appName} fornece a cada sessão. Por isso, a sessão não foi iniciada.",
   "provider.grok.sandbox_unsupported.remedy": "Para iniciar esta sessão por {appName}, desative o sandbox onde ele está configurado ou peça a quem administra essa configuração. Uma conversa iniciada no sandbox o mantém, portanto continue essa conversa no próprio {agent}.",
+  "provider.grok.setting.approval_mode.heading": "Aprovação de permissões",
+  "provider.grok.setting.approval_mode.helpLabel": "Sobre a aprovação de permissões",
+  "provider.grok.setting.approval_mode.label": "Aprovação de permissões para {agent}",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "Não foi possível salvar a aprovação de permissões",
+  "provider.grok.setting.approval_mode.helpTiming": "As alterações entram em vigor na próxima vez que uma sessão for iniciada ou retomada. As permissões se aplicam no computador que executa a sessão.",
+  "provider.grok.setting.approval_mode.helpCustom": "Quando nenhum modo é especificado, o modo de permissões segue a configuração e as regras de retomada nativas. A análise automática volta a pedir aprovação quando o recurso nativo não está disponível.",
+  "provider.grok.setting.approval_mode.inheritSummary": "Usar a configuração e as regras de retomada nativas",
+  "provider.grok.setting.approval_mode.choice.ask": "Perguntar",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "Pedir aprovação para tudo que ainda não foi permitido",
+  "provider.grok.setting.approval_mode.choice.auto": "Automático",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "O classificador aprova automaticamente ferramentas seguras; as perigosas ainda podem pedir aprovação",
+  "provider.grok.setting.approval_mode.choice.always_approve": "Sempre aprovar",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "Aprovar automaticamente chamadas de ferramentas",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "Sempre aprovar chamadas de ferramentas?",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "As ferramentas podem alterar ou excluir arquivos sem um pedido rotineiro de permissão nas sessões de todas as contas de {agent}. As regras de negação e os hooks continuam válidos.",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const ruMessages = {
@@ -203,6 +370,21 @@ const ruMessages = {
   "provider.grok.home_not_initialized.recovery": "Прежде чем указать его для учётной записи, запустите {grok} напрямую с ним хотя бы один раз, чтобы появилась история сеансов.",
   "provider.grok.sandbox_unsupported": "Песочница {agent} ({profile}, задана в {source}) несовместима с домашним каталогом, который {appName} предоставляет каждому сеансу, поэтому сеанс не запущен.",
   "provider.grok.sandbox_unsupported.remedy": "Чтобы запустить этот сеанс через {appName}, отключите песочницу там, где она задана, или попросите управляющего этой настройкой. Разговор, начатый в песочнице, сохраняет её, поэтому продолжите его в самом {agent}.",
+  "provider.grok.setting.approval_mode.heading": "Одобрение разрешений",
+  "provider.grok.setting.approval_mode.helpLabel": "Об одобрении разрешений",
+  "provider.grok.setting.approval_mode.label": "Одобрение разрешений для {agent}",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "Не удалось сохранить одобрение разрешений",
+  "provider.grok.setting.approval_mode.helpTiming": "Изменения вступят в силу при следующем запуске или возобновлении сеанса. Разрешения действуют на компьютере, на котором выполняется сеанс.",
+  "provider.grok.setting.approval_mode.helpCustom": "Если режим не указан, режим разрешений определяется собственной конфигурацией и правилами возобновления. Когда встроенная функция недоступна, вместо автоматической проверки снова запрашивается подтверждение.",
+  "provider.grok.setting.approval_mode.inheritSummary": "Использовать собственную конфигурацию и правила возобновления",
+  "provider.grok.setting.approval_mode.choice.ask": "Спрашивать",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "Спрашивать обо всём, что ещё не разрешено",
+  "provider.grok.setting.approval_mode.choice.auto": "Авто",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "Классификатор автоматически одобряет безопасные инструменты; опасные могут по-прежнему требовать подтверждения",
+  "provider.grok.setting.approval_mode.choice.always_approve": "Всегда одобрять",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "Автоматически одобрять вызовы инструментов",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "Всегда одобрять вызовы инструментов?",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "Инструменты могут изменять или удалять файлы без обычного запроса разрешения в сеансах всех учётных записей {agent}. Правила запрета и хуки продолжают действовать.",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const thMessages = {
@@ -219,6 +401,21 @@ const thMessages = {
   "provider.grok.home_not_initialized.recovery": "เรียกใช้ {grok} กับไดเรกทอรีนี้โดยตรงอย่างน้อยหนึ่งครั้งเพื่อให้มีประวัติเซสชัน ก่อนกำหนดให้บัญชีใช้ไดเรกทอรีนี้",
   "provider.grok.sandbox_unsupported": "แซนด์บ็อกซ์ของ {agent} ({profile} ซึ่งกำหนดโดย {source}) ใช้ร่วมกับไดเรกทอรีหลักที่ {appName} จัดให้แต่ละเซสชันไม่ได้ จึงไม่ได้เปิดเซสชัน",
   "provider.grok.sandbox_unsupported.remedy": "หากต้องการเปิดเซสชันนี้ผ่าน {appName} ให้ปิดแซนด์บ็อกซ์ในตำแหน่งที่กำหนดค่าไว้ หรือขอให้ผู้ดูแลการตั้งค่านั้นปิดให้ บทสนทนาที่เริ่มในแซนด์บ็อกซ์จะยังคงใช้แซนด์บ็อกซ์ ให้ทำงานกับบทสนทนานั้นต่อใน {agent} โดยตรง",
+  "provider.grok.setting.approval_mode.heading": "การอนุมัติสิทธิ์",
+  "provider.grok.setting.approval_mode.helpLabel": "เกี่ยวกับการอนุมัติสิทธิ์",
+  "provider.grok.setting.approval_mode.label": "การอนุมัติสิทธิ์สำหรับ {agent}",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "บันทึกการอนุมัติสิทธิ์ไม่ได้",
+  "provider.grok.setting.approval_mode.helpTiming": "การเปลี่ยนแปลงมีผลเมื่อเริ่มเซสชันหรือกลับมาทำงานต่อในครั้งถัดไป สิทธิ์มีผลกับคอมพิวเตอร์ที่เรียกใช้เซสชัน",
+  "provider.grok.setting.approval_mode.helpCustom": "เมื่อไม่ระบุโหมด โหมดสิทธิ์จะเป็นไปตามการกำหนดค่าและกฎการกลับมาทำงานต่อของระบบเดิม เมื่อฟีเจอร์ดั้งเดิมไม่พร้อมใช้งาน การตรวจสอบอัตโนมัติจะกลับไปขออนุมัติ",
+  "provider.grok.setting.approval_mode.inheritSummary": "ใช้การกำหนดค่าและกฎการกลับมาทำงานต่อของระบบเดิม",
+  "provider.grok.setting.approval_mode.choice.ask": "ถาม",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "ถามสำหรับทุกอย่างที่ยังไม่ได้รับอนุญาต",
+  "provider.grok.setting.approval_mode.choice.auto": "อัตโนมัติ",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "ตัวจำแนกอนุมัติเครื่องมือที่ปลอดภัยโดยอัตโนมัติ ส่วนเครื่องมือที่อันตรายอาจยังถาม",
+  "provider.grok.setting.approval_mode.choice.always_approve": "อนุมัติเสมอ",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "อนุมัติการเรียกใช้เครื่องมือโดยอัตโนมัติ",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "อนุมัติการเรียกใช้เครื่องมือเสมอหรือไม่",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "เครื่องมือสามารถเปลี่ยนแปลงหรือลบไฟล์โดยไม่ถามสิทธิ์ตามปกติในเซสชันของทุกบัญชี {agent} กฎการปฏิเสธและฮุกยังคงมีผล",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const trMessages = {
@@ -235,6 +432,21 @@ const trMessages = {
   "provider.grok.home_not_initialized.recovery": "Bir hesabı bu dizine yönlendirmeden önce oturum geçmişi oluşması için {grok} aracını doğrudan bu dizinle en az bir kez çalıştırın.",
   "provider.grok.sandbox_unsupported": "{agent} korumalı alanı ({source} tarafından ayarlanan {profile}), {appName} tarafından her oturuma verilen ana dizinle uyumlu olmadığından oturum başlatılmadı.",
   "provider.grok.sandbox_unsupported.remedy": "Bu oturumu {appName} üzerinden başlatmak için korumalı alanı ayarlandığı yerde kapatın veya bu ayarı yöneten kişiden kapatmasını isteyin. Korumalı alanda başlatılmış bir konuşma bu ayarı korur; o konuşmaya {agent} içinde devam edin.",
+  "provider.grok.setting.approval_mode.heading": "İzin onayı",
+  "provider.grok.setting.approval_mode.helpLabel": "İzin onayı hakkında",
+  "provider.grok.setting.approval_mode.label": "{agent} için izin onayı",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "İzin onayı kaydedilemedi",
+  "provider.grok.setting.approval_mode.helpTiming": "Değişiklikler, bir oturum bir sonraki kez başlatıldığında veya sürdürüldüğünde geçerli olur. İzinler, oturumu çalıştıran bilgisayarda geçerlidir.",
+  "provider.grok.setting.approval_mode.helpCustom": "Mod belirtilmediğinde izin modu, yerel yapılandırmaya ve sürdürme kurallarına göre belirlenir. Yerel özellik kullanılamadığında otomatik inceleme yerine yeniden onay istenir.",
+  "provider.grok.setting.approval_mode.inheritSummary": "Yerel yapılandırmayı ve sürdürme kurallarını kullan",
+  "provider.grok.setting.approval_mode.choice.ask": "Sor",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "Henüz izin verilmemiş her şey için sor",
+  "provider.grok.setting.approval_mode.choice.auto": "Otomatik",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "Sınıflandırıcı güvenli araçları otomatik onaylar; tehlikeli olanlar yine de sorabilir",
+  "provider.grok.setting.approval_mode.choice.always_approve": "Her zaman onayla",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "Araç çağrılarını otomatik onayla",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "Araç çağrıları her zaman onaylansın mı?",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "Araçlar, tüm {agent} hesaplarının oturumlarında rutin izin istemi olmadan dosyaları değiştirebilir veya silebilir. Ret kuralları ve kancalar geçerli olmaya devam eder.",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const viMessages = {
@@ -251,6 +463,21 @@ const viMessages = {
   "provider.grok.home_not_initialized.recovery": "Chạy trực tiếp {grok} với thư mục đó ít nhất một lần để có lịch sử phiên trước khi đặt tài khoản vào đó.",
   "provider.grok.sandbox_unsupported": "Sandbox của {agent} ({profile}, do {source} đặt) không tương thích với thư mục nhà mà {appName} cấp cho mỗi phiên nên phiên chưa được khởi chạy.",
   "provider.grok.sandbox_unsupported.remedy": "Để khởi chạy phiên này qua {appName}, tắt sandbox tại nơi được đặt hoặc yêu cầu người quản lý cài đặt đó tắt. Hội thoại bắt đầu trong sandbox sẽ giữ sandbox, nên tiếp tục hội thoại đó trong chính {agent}.",
+  "provider.grok.setting.approval_mode.heading": "Chấp thuận quyền",
+  "provider.grok.setting.approval_mode.helpLabel": "Về việc chấp thuận quyền",
+  "provider.grok.setting.approval_mode.label": "Chấp thuận quyền cho {agent}",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "Không lưu được cài đặt chấp thuận quyền",
+  "provider.grok.setting.approval_mode.helpTiming": "Thay đổi có hiệu lực vào lần tiếp theo khi bắt đầu hoặc tiếp tục phiên. Các quyền áp dụng trên máy tính chạy phiên.",
+  "provider.grok.setting.approval_mode.helpCustom": "Khi không chỉ định chế độ, chế độ quyền tuân theo cấu hình và quy tắc tiếp tục gốc. Xét duyệt tự động chuyển về yêu cầu phê duyệt khi tính năng gốc không khả dụng.",
+  "provider.grok.setting.approval_mode.inheritSummary": "Dùng cấu hình và quy tắc tiếp tục gốc",
+  "provider.grok.setting.approval_mode.choice.ask": "Hỏi",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "Hỏi với mọi thao tác chưa được cho phép",
+  "provider.grok.setting.approval_mode.choice.auto": "Tự động",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "Bộ phân loại tự động phê duyệt công cụ an toàn; công cụ nguy hiểm vẫn có thể yêu cầu xác nhận",
+  "provider.grok.setting.approval_mode.choice.always_approve": "Luôn phê duyệt",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "Tự động phê duyệt lệnh gọi công cụ",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "Luôn phê duyệt lệnh gọi công cụ?",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "Công cụ có thể thay đổi hoặc xóa tệp mà không hỏi quyền thông thường trong phiên của mọi tài khoản {agent}. Quy tắc từ chối và hook vẫn áp dụng.",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const zhHans = {
@@ -272,6 +499,21 @@ const zhHans = {
     "{agent} 的沙箱（{profile}，由 {source} 设置）与 {appName} 为每个会话提供的主目录不兼容，因此未启动此会话。",
   "provider.grok.sandbox_unsupported.remedy":
     "请在设置沙箱的位置将其关闭，或联系管理该设置的人，以便通过 {appName} 启动此会话。在沙箱下开始的对话会一直沿用沙箱，请直接在 {agent} 中继续该对话。",
+  "provider.grok.setting.approval_mode.heading": "权限审批",
+  "provider.grok.setting.approval_mode.helpLabel": "关于权限审批",
+  "provider.grok.setting.approval_mode.label": "{agent} 的权限审批方式",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "无法保存权限审批设置",
+  "provider.grok.setting.approval_mode.helpTiming": "更改在会话下次启动或恢复时生效，权限作用于运行会话的电脑。",
+  "provider.grok.setting.approval_mode.helpCustom": "未指定模式时，按原生配置及恢复规则决定权限模式。原生功能不可用时，自动模式回退为询问。",
+  "provider.grok.setting.approval_mode.inheritSummary": "使用原生配置及恢复规则",
+  "provider.grok.setting.approval_mode.choice.ask": "询问",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "对尚未允许的任何操作询问",
+  "provider.grok.setting.approval_mode.choice.auto": "自动",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "分类器自动批准安全的工具；危险的工具仍可能询问",
+  "provider.grok.setting.approval_mode.choice.always_approve": "始终批准",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "自动批准工具调用",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "始终批准工具调用？",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "在所有 {agent} 账户的会话中，工具可能无需常规权限审批就修改或删除文件。拒绝规则与钩子仍然适用。",
 } as const;
 
 const zhHantMessages = {
@@ -288,6 +530,21 @@ const zhHantMessages = {
   "provider.grok.home_not_initialized.recovery": "請先直接對它執行一次 {grok}，使其具有工作階段記錄，再將帳號指向它。",
   "provider.grok.sandbox_unsupported": "{agent} 的沙盒（{profile}，由 {source} 設定）與 {appName} 為每個工作階段提供的主目錄不相容，因此未啟動此工作階段。",
   "provider.grok.sandbox_unsupported.remedy": "請在設定沙盒的位置將其關閉，或聯繫管理此設定的人，以便透過 {appName} 啟動此工作階段。在沙盒下開始的對話會一直沿用沙盒，請直接在 {agent} 中繼續此對話。",
+  "provider.grok.setting.approval_mode.heading": "權限核准",
+  "provider.grok.setting.approval_mode.helpLabel": "關於權限核准",
+  "provider.grok.setting.approval_mode.label": "{agent} 的權限核准方式",
+  "provider.grok.setting.approval_mode.saveFailedTitle": "無法儲存權限核准設定",
+  "provider.grok.setting.approval_mode.helpTiming": "變更在工作階段下次啟動或恢復時生效，權限作用於執行工作階段的電腦。",
+  "provider.grok.setting.approval_mode.helpCustom": "未指定模式時，按原生設定及恢復規則決定權限模式。原生功能無法使用時，自動模式退回詢問。",
+  "provider.grok.setting.approval_mode.inheritSummary": "使用原生設定及恢復規則",
+  "provider.grok.setting.approval_mode.choice.ask": "詢問",
+  "provider.grok.setting.approval_mode.choice.ask.summary": "對尚未允許的任何操作詢問",
+  "provider.grok.setting.approval_mode.choice.auto": "自動",
+  "provider.grok.setting.approval_mode.choice.auto.summary": "分類器自動核准安全的工具；危險的工具仍可能詢問",
+  "provider.grok.setting.approval_mode.choice.always_approve": "一律核准",
+  "provider.grok.setting.approval_mode.choice.always_approve.summary": "自動核准工具呼叫",
+  "provider.grok.setting.approval_mode.confirm.always_approve.title": "一律核准工具呼叫？",
+  "provider.grok.setting.approval_mode.confirm.always_approve.consequence": "在所有 {agent} 帳號的工作階段中，工具可能無須一般權限核准就變更或刪除檔案。拒絕規則與掛鉤仍然適用。",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 /** Grok Build. The mark is taken from LobeHub's icon set (`@lobehub/icons-static-svg`, MIT), monochrome in the text

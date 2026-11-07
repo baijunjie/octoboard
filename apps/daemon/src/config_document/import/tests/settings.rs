@@ -409,6 +409,12 @@ async fn provider_settings_round_trip_with_the_accounts_approval_settings_includ
         "approval_mode",
         SettingValue::Choice("bypass".into()),
     );
+    set(
+        &source,
+        AgentId::GROK,
+        "approval_mode",
+        SettingValue::Choice("always_approve".into()),
+    );
     source
         .store
         .insert_console(&crate::test_support::console(&source_dir))
@@ -420,6 +426,7 @@ async fn provider_settings_round_trip_with_the_accounts_approval_settings_includ
         serde_json::json!({
             "codex": { "claude_compatibility": false, "approval_reviewer": "auto_review" },
             "claude": { "approval_mode": "bypass" },
+            "grok": { "approval_mode": "always_approve" },
         })
     );
 
@@ -538,6 +545,43 @@ async fn provider_settings_round_trip_with_the_accounts_approval_settings_includ
     );
     assert!(!choices.contains_key("claude"));
     assert!(!choices.contains_key("future"));
+
+    let inspected = inspect(&target, &full)
+        .await
+        .unwrap()
+        .accounts
+        .unwrap()
+        .agent_settings
+        .unwrap();
+    assert_eq!(
+        inspected.provider_settings["grok"]["approval_mode"],
+        SettingValue::Choice("always_approve".into())
+    );
+    assert_eq!(
+        inspected.current_provider_settings["grok"]["approval_mode"],
+        None
+    );
+    apply(
+        &target,
+        &full,
+        Vec::new(),
+        ApplyOptions {
+            settings: false,
+            accounts: Some(Vec::new()),
+            consoles: true,
+            clone_dir: true,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        target
+            .store
+            .provider_settings_of(AgentId::GROK)
+            .unwrap()
+            .choice("approval_mode"),
+        Some("always_approve")
+    );
 }
 
 /// The tags of every agent travel with the accounts, removed agents' included, and an import

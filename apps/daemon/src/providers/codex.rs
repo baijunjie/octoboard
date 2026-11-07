@@ -111,12 +111,16 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
             kind: SettingKind::Choice {
                 choices: &[
                     SettingChoice {
+                        value: "user",
+                        confirm: false,
+                    },
+                    SettingChoice {
                         value: "auto_review",
                         confirm: false,
                     },
                     SettingChoice {
-                        value: "user",
-                        confirm: false,
+                        value: "full_access",
+                        confirm: true,
                     },
                 ],
             },

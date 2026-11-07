@@ -57,18 +57,32 @@ describe("the settings the providers declare", () => {
   it.each(FIXTURE_AGENTS)("%s has the copy of each of its settings and their choices in every language", (agent) => {
     const module = providerPresentation(agent)!;
     const served = TEST_PROVIDERS.find((provider) => provider.id === agent)!;
+    const source = module.messages.en as Record<string, string>;
     expect(served.settings.length).toBeGreaterThan(0);
     for (const descriptor of served.settings) {
       const prefix = `provider.${agent}.setting.${descriptor.id}.`;
-      const names = ["heading", "helpLabel", "label", "description", "saveFailedTitle"];
+      const preferred = (name: string, fallback: string) => source[prefix + name] !== undefined ? name : fallback;
+      const names = new Set([
+        "heading", "helpLabel", "label", "saveFailedTitle",
+        preferred("helpTiming", "description"),
+        ...Object.keys(source).filter((key) => key.startsWith(prefix)).map((key) => key.slice(prefix.length)),
+      ]);
       if (descriptor.kind.type === "choice") {
         for (const choice of descriptor.kind.choices) {
-          names.push(`choice.${choice.value}`);
-          if (choice.confirm) names.push(`confirm.${choice.value}.title`, `confirm.${choice.value}.message`);
+          names.add(`choice.${choice.value}`);
+          if (choice.confirm) {
+            names.add(`confirm.${choice.value}.title`);
+            names.add(preferred(`confirm.${choice.value}.consequence`, `confirm.${choice.value}.message`));
+          }
         }
       }
-      for (const [language, messages] of Object.entries(module.messages) as [string, Record<string, string>][]) {
-        for (const name of names) expect(messages[prefix + name], `${language} ${prefix}${name}`).toEqual(expect.any(String));
+      for (const language of Object.keys(CATALOGS)) {
+        const messages = (module.messages as Record<string, Record<string, string>>)[language];
+        expect(messages, `${agent} ${language}`).toBeDefined();
+        for (const name of names) {
+          const text = messages[prefix + name];
+          expect(typeof text === "string" && text.trim().length > 0, `${language} ${prefix}${name}`).toBe(true);
+        }
       }
     }
   });

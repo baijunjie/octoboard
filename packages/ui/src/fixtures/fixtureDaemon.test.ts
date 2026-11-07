@@ -596,11 +596,11 @@ describe("the fixture daemon's deletion of archived sessions", () => {
 
 /** Every provider's every setting in effect: Codex's Claude compatibility off and Grok Build's on, no permission approval
  * chosen, except what `compatibility` and the approvals say. */
-function providerSettings(compatibility: { codex?: boolean; grok?: boolean } = {}, claude: { approval_mode?: string } = {}, codex: { approval_reviewer?: string } = {}): Settings["provider_settings"] {
+function providerSettings(compatibility: { codex?: boolean; grok?: boolean } = {}, claude: { approval_mode?: string } = {}, codex: { approval_reviewer?: string } = {}, grok: { approval_mode?: string } = {}): Settings["provider_settings"] {
   return {
     claude: { approval_mode: claude.approval_mode ?? null },
     codex: { approval_reviewer: codex.approval_reviewer ?? null, claude_compatibility: compatibility.codex ?? false },
-    grok: { claude_compatibility: compatibility.grok ?? true },
+    grok: { approval_mode: grok.approval_mode ?? null, claude_compatibility: compatibility.grok ?? true },
   };
 }
 
@@ -1236,6 +1236,19 @@ describe("the fixture daemon's settings and rail removals", () => {
 
 describe("the fixture daemon's permission approval", () => {
   const scenario = { state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts: [] } }) };
+
+  it("saves and exports each Grok Build mode and clears it without changing compatibility", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    const exported = async () => ((await daemon.request({ type: "export_configuration", include_accounts: true })) as { document: ReturnType<typeof exportedDocument> }).document.accounts?.agent_settings?.provider_settings;
+    for (const mode of ["ask", "auto", "always_approve"]) {
+      await daemon.request({ type: "set_provider_setting", agent: "grok", setting: "approval_mode", value: mode });
+      expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({}, {}, {}, { approval_mode: mode }));
+      expect(await exported()).toEqual({ grok: { approval_mode: mode } });
+    }
+    await daemon.request({ type: "set_provider_setting", agent: "grok", setting: "approval_mode", value: null });
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings());
+    expect(await exported()).toEqual({});
+  });
 
   it("saves and clears Codex's reviewer and Claude Code's mode, one for the agent, without changing other settings", async () => {
     const daemon = createFixtureDaemon(scenario);

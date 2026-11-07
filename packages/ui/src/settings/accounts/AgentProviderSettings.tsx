@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { idWords, providerLabel, servedProvider, settingMessageKey } from "../../agents/providers";
 import { alertAppDataFailure } from "../../components/alerts/raiseError";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
-import { OptionSelect } from "../../components/form/OptionSelect";
+import { OptionSelect, type Option } from "../../components/form/OptionSelect";
 import { HelpTip } from "../../components/hint/HelpTip";
 import { appDataRecovery } from "../../errors/errorRecovery";
 import type { MessageKey } from "../../i18n/catalog";
@@ -49,11 +49,21 @@ function useSettingCopy(agent: Agent, setting: string) {
 /** The setting row's help tip, saying what the setting does in the provider's words. */
 function SettingHelp({ copy }: { copy: ReturnType<typeof useSettingCopy> }): React.ReactElement | null {
   const label = copy.text("helpLabel");
-  const description = copy.node("description");
-  return label && description ? <HelpTip label={label}>{description}</HelpTip> : null;
+  const description = copy.node("helpTiming") ?? copy.node("description");
+  const custom = copy.node("helpCustom");
+  return label && description ? (
+    <HelpTip label={label}>
+      {custom ? (
+        <div className="flex flex-col gap-2">
+          <p>{description}</p>
+          <p>{custom}</p>
+        </div>
+      ) : description}
+    </HelpTip>
+  ) : null;
 }
 
-/** A choice setting: "follow account configuration" plus the setting's declared choices, saved when selected. A choice
+/** A choice setting: inherited native behavior plus the setting's declared choices, saved when selected. A choice
  * the schema marks `confirm` is saved only once its confirmation dialog is accepted; cancelling leaves the stored value
  * as it was. */
 function ChoiceSetting({ agent, descriptor, choices }: { agent: Agent; descriptor: SettingDescriptor; choices: Choice[] }): React.ReactElement | null {
@@ -68,6 +78,12 @@ function ChoiceSetting({ agent, descriptor, choices }: { agent: Agent; descripto
   if (!heading) return null;
   const save = (value: string | null) => request({ type: "set_provider_setting", agent, setting: descriptor.id, value });
   const choiceLabel = (value: string) => copy.text(`choice.${value}`) ?? idWords(value);
+  const option = (value: string, label: string): Option<string> => {
+    const description = copy.text(value === "inherit" ? "inheritSummary" : `choice.${value}.summary`)
+      ?? copy.text(value === "inherit" ? "inheritDescription" : `choice.${value}.description`);
+    const base = { value, label, isDisabled: busy };
+    return description ? { ...base, detail: description, reason: { state: description } } : base;
+  };
   const choose = (picked: string) => {
     if (picked !== "inherit" && choices.find((choice) => choice.value === picked)?.confirm) {
       setConfirming(picked);
@@ -93,14 +109,14 @@ function ChoiceSetting({ agent, descriptor, choices }: { agent: Agent; descripto
           value={typeof stored === "string" ? stored : "inherit"}
           onChange={choose}
           options={[
-            { value: "inherit", label: t("settings.accounts.setting.inherit"), isDisabled: busy },
-            ...choices.map((choice) => ({ value: choice.value, label: choiceLabel(choice.value), isDisabled: busy })),
+            option("inherit", copy.text("inherit") ?? t("settings.accounts.setting.inherit")),
+            ...choices.map((choice) => option(choice.value, choiceLabel(choice.value))),
           ]}
         />
         {confirming !== undefined && (
           <ConfirmDialog
             title={copy.text(`confirm.${confirming}.title`) ?? choiceLabel(confirming)}
-            message={<p>{copy.node(`confirm.${confirming}.message`) ?? <Message id="settings.accounts.setting.confirmMessage" params={{ setting: <InlineReference dir="auto" wrap>{heading}</InlineReference>, choice: <InlineReference dir="auto" wrap>{choiceLabel(confirming)}</InlineReference>, agent: <ProviderName agent={agent} /> }} />}</p>}
+            message={<p>{copy.node(`confirm.${confirming}.consequence`) ?? copy.node(`confirm.${confirming}.message`) ?? <Message id="settings.accounts.setting.confirmMessage" params={{ setting: <InlineReference dir="auto" wrap>{heading}</InlineReference>, choice: <InlineReference dir="auto" wrap>{choiceLabel(confirming)}</InlineReference>, agent: <ProviderName agent={agent} /> }} />}</p>}
             confirmLabel={choiceLabel(confirming)}
             destructive
             errorTitle={copy.saveFailedTitle()}

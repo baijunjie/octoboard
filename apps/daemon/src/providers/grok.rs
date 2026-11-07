@@ -3,8 +3,8 @@
 use super::layout::AgentLayout;
 use super::{
     AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, ModelDisplay, ProviderCode,
-    ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming, SessionWindowName, SettingDescriptor,
-    SettingKind, SwitchDefault,
+    ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming, SessionWindowName, SettingChoice,
+    SettingDescriptor, SettingKind, SwitchDefault,
 };
 
 /// A Grok Build session's pinned source home exists but Grok has never been run against it, so it
@@ -96,15 +96,40 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
     },
     model_display: ModelDisplay::PLAIN,
     compatibility_source: false,
-    settings: &[SettingDescriptor {
-        id: "claude_compatibility",
-        kind: SettingKind::Switch {
-            default: SwitchDefault::On,
+    settings: &[
+        SettingDescriptor {
+            id: "approval_mode",
+            kind: SettingKind::Choice {
+                choices: &[
+                    SettingChoice {
+                        value: "ask",
+                        confirm: false,
+                    },
+                    SettingChoice {
+                        value: "auto",
+                        confirm: false,
+                    },
+                    SettingChoice {
+                        value: "always_approve",
+                        confirm: true,
+                    },
+                ],
+            },
+            // A process-local permission flag travels with the settings, without changing the account's files.
+            exported: true,
+            shown_to_agents: false,
+            compatibility_with: None,
         },
-        exported: true,
-        shown_to_agents: true,
-        compatibility_with: Some("claude"),
-    }],
+        SettingDescriptor {
+            id: "claude_compatibility",
+            kind: SettingKind::Switch {
+                default: SwitchDefault::On,
+            },
+            exported: true,
+            shown_to_agents: true,
+            compatibility_with: Some("claude"),
+        },
+    ],
     codes: &[HOME_NOT_INITIALIZED, SANDBOX_UNSUPPORTED],
 };
 

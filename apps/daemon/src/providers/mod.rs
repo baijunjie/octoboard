@@ -279,7 +279,7 @@ pub struct SettingDescriptor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SettingKind {
-    /// One of the choices; unset follows each account's own configuration.
+    /// One of the choices; unset leaves configuration and resume behavior to the native agent.
     Choice { choices: &'static [SettingChoice] },
     /// On or off, by the user's choice or else by its default rule.
     Switch { default: SwitchDefault },

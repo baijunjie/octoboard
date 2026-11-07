@@ -1,7 +1,7 @@
 # Per-agent settings
 
-Settings that apply to every account of one agent, the default account included, rather than to a single account:
-the agent's tags, and the settings each agent's provider declares for itself — how Claude Code and Codex handle
+Settings that apply to every account of one agent, the default account included, rather than to a single account: the
+agent's tags, and the settings each agent's provider declares for itself — how Claude Code, Codex and Grok Build handle
 permission requests, and whether Codex and Grok Build load Claude Code's configuration. Each is set in the agent's tab
 of Settings' **Agent accounts** section, in a row above the agent's accounts table (see "The accounts table" in
 `docs/product/agent-accounts.md`).
@@ -50,17 +50,19 @@ every account of that agent, the default account included. Today they are:
 
 | Agent | Row | Setting id | Kind | Carried by a configuration export | Readable by sessions |
 |---|---|---|---|---|---|
-| Claude Code | **Permission approval** (see "Approval modes" below) | `approval_mode` | Choice of `auto`, `manual` or `bypass` | Yes | No |
-| Codex | **Permission approval** (see "Approval modes" below) | `approval_reviewer` | Choice of `auto_review` or `user` | Yes | No |
+| Claude Code | **Permission approval** (see "Approval modes" below) | `approval_mode` | Choice of `auto`, `manual`, `accept_edits`, `plan` or `bypass` | Yes | No |
+| Codex | **Permission approval** (see "Approval modes" below) | `approval_reviewer` | Choice of `user`, `auto_review` or `full_access` | Yes | No |
 | Codex | **Claude compatibility** (see "Claude compatibility" below) | `claude_compatibility` | Switch, on while Claude Code is an added agent until chosen | Yes | Yes |
+| Grok Build | **Permission approval** (see "Approval modes" below) | `approval_mode` | Choice of `ask`, `auto` or `always_approve` | Yes | No |
 | Grok Build | **Claude compatibility** (see "Claude compatibility" below) | `claude_compatibility` | Switch, on until chosen | Yes | Yes |
 
 A setting is one of two kinds:
 
 - **A choice** takes one of the values its provider declares, or none. With none, which is where every choice setting
-  starts, the agent follows each account's own configuration; the row offers this as **Follow account configuration**,
-  before the declared choices. A declared choice may need the user's confirmation before it is saved (see "Approval
-  modes" below).
+  starts, Octoboard passes no override and the agent applies its native configuration and resume behavior. The first
+  option is the provider's own inheritance label where it has one, otherwise **Follow account configuration**. Codex's
+  permission setting uses **Custom (config.toml)** (see "Approval modes" below). A declared choice may need the user's
+  confirmation before it is saved.
 - **A switch** is on or off. Until the user turns it, it follows a default rule: on, off, or on while a named agent is
   among the added agents (see "Added agents" in `docs/product/agent-accounts.md`). Such a rule is worked out afresh
   whenever the value is read, so adding or removing that agent moves it; while the list of added agents is still
@@ -71,16 +73,16 @@ Octoboard keeps only the user's explicit choices, in the daemon, so every window
 restart; every window is given the **value in effect** of every setting of every agent: a switch's choice or else its
 default, a choice setting's choice or else none. A stored choice the setting no longer takes is read as no choice.
 
-The agent's tab has one row per setting, in the order the provider declares them, under the Tags row: Claude Code's
-tab shows Permission approval, Codex's Permission approval then Claude compatibility, and Grok Build's Claude
-compatibility. A setting the window has no wording for is not shown; a choice the window has no name for is offered by
-its value in words (a value `read_only` as "Read only"). Each row holds the setting's name with a "?" help tip saying
-what it does, a line saying that it applies to every account of the agent, and, at the row's end, a selector
-for a choice or a switch for a switch, named for the setting and the agent ("Permission approval for Codex"). A choice
-is saved when selected, its choices unavailable while the save is unanswered; a switch is saved when turned, unavailable
-while the save is unanswered — it looks disabled but stays focusable — and keeps its position when the save fails. The
-switch always shows the value in effect. A failed save is shown in an error alert titled for the setting ("Could not
-save the permission approval", "Could not save Claude compatibility").
+The agent's tab has one row per setting, in the order the provider declares them, under the Tags row: Claude Code's tab
+shows Permission approval; Codex's and Grok Build's show Permission approval then Claude compatibility. A setting the
+window has no wording for is not shown; a choice the window has no name for is offered by its value in words (a value
+`read_only` as "Read only"). Each row holds the setting's name with a "?" help tip saying what it does, a line saying
+that it applies to every account of the agent, and, at the row's end, a selector for a choice or a switch for a switch,
+named for the setting and the agent ("Permission approval for Codex"). A choice is saved when selected, its choices
+unavailable while the save is unanswered; a switch is saved when turned, unavailable while the save is unanswered — it
+looks disabled but stays focusable — and keeps its position when the save fails. The switch always shows the value in
+effect. A failed save is shown in an error alert titled for the setting ("Could not save the permission approval",
+"Could not save Claude compatibility").
 
 A value is read when a session of any account of the agent starts or resumes, including an account switch, and a legacy
 pinned directory with no account reference included; a running process keeps what it was started with. Octoboard
@@ -95,59 +97,104 @@ Octoboard writes none of the agents' configuration files for them. Whether sessi
 
 A program on the daemon's host sets a choice with the control request `set_provider_setting`, naming the agent, the
 setting id and the value — `true` or `false` for a switch, the choice's text for a choice setting, or `null` to clear
-the choice, a switch going back to its default rule and a choice setting to following the account configuration. A
-setting the agent's provider does not declare, a value of the other kind, or a choice the setting does not offer is
-refused as an unreadable request (`unreadable_request`). The confirmation a choice needs is asked for by the window, not
-by the daemon, so this request saves such a choice at once.
+the choice, a switch going back to its default rule and a choice setting to the agent's native configuration and resume
+behavior. A setting the agent's provider does not declare, a value of the other kind, or a choice the setting does not
+offer is refused as an unreadable request (`unreadable_request`). The confirmation a choice needs is asked for by the
+window, not by the daemon, so this request saves such a choice at once.
 
 ## Approval modes
 
-How Claude Code and Codex handle permission requests: the **Permission approval** row of each one's tab, a provider
-setting of the choice kind (see "Provider settings" above). The help tip explains how the agent handles permission
-requests, that **Follow account configuration** leaves it to each account's own configuration and, for Codex, that
-automatic review may use additional tokens. Grok Build has no such row.
+How Claude Code, Codex and Grok Build handle permission requests and access: the **Permission approval** row of each
+agent's tab, a provider setting of the choice kind (see "Provider settings" above).
 
-Codex's choices:
+All three permission menus show a short secondary explanation under every option, including the inheritance option.
+Native summaries retain the original English wording for Codex and Grok Build and the original English and Simplified
+Chinese wording for Claude Code; other locales translate the English source. Claude Code's and Grok Build's Follow
+account configuration are Octoboard choices with their own explanation. The notes wrap within the expanded list; the
+closed selector shows only the selected label. Assistive technology receives the explanation as a separate description,
+keeping the option's name to its label and reading the explanation once.
 
-- **Follow account configuration** leaves the reviewer to each account's own Codex configuration. This is the initial
-  choice; automatic review is never enabled just by adding an account.
-- **Automatic review** (`auto_review`) asks Codex to review approval requests itself and may use additional tokens.
-- **Ask me** (`user`) asks Codex to send approval requests to the user.
+The native summaries contain no added qualifiers. Each agent's separate help has two spaced paragraphs. The first
+explains that changes take effect on the next session start or resume and permissions apply on the computer running the
+session. The second explains the agent's native configuration and resume behavior: Codex's Custom distinction between
+new and resumed sessions, Claude Code's native rules and explicit-mode precedence, and Grok Build's native rules and
+fallback from Auto to Ask when its native feature is unavailable. Permission grants and safeguards are explained in the
+risk confirmations.
 
-Claude Code's choices:
+Codex's choices, in menu order:
 
-- **Follow account configuration** passes nothing, so each account's own `settings.json` decides. This is the initial
-  choice.
-- **Automatic** (`auto`) launches Claude Code in its auto mode, where a classifier approves what it judges safe and
-  blocks the rest. Whether auto mode is available to an account, which depends on its plan among other things, is Claude
-  Code's own decision; Octoboard only asks for it.
-- **Ask me** (`manual`) launches Claude Code so that every tool call not already allowed asks the user.
-- **Approve everything** (`bypass`) launches Claude Code so that every tool runs without asking.
+- **Custom (config.toml)** passes no permission override. This is the initial choice. New sessions use the account's own
+  native configuration; resumed sessions retain their saved native permissions. Selecting Custom does not reset a
+  resumed conversation's saved permissions to the account's current configuration. Select an explicit preset to replace
+  saved permissions on the next launch or resume.
 
-An explicit choice overrides the agent's own setting for that launch without writing its configuration files, and for
-Codex without changing its sandbox or approval policy. Whatever the choice, Follow account configuration included,
-Octoboard's own tools run without asking in both agents, while every other tool stays under the choice (see "Claude
-Code" and "Codex" in `docs/product/per-agent-launch-specifics.md`).
+- **Ask for approval** (`user`) uses Codex's built-in workspace permission profile, its `on-request` approval policy and
+  the user as reviewer. It permits work inside the workspace and asks before actions beyond that boundary.
 
-**Approve everything** is saved only once the user accepts a destructive confirmation that names the agent and warns
-that every tool will run without asking in every account of that agent, commands that change or delete files included;
-its confirm button carries the choice's own name. Cancelling, Escape included, leaves the choice as it was. If the save
-fails, the error alert is shown over the confirmation, which stays open, and the choice stays unchanged. Because the
-user has agreed there, Claude Code's own blocking warning for that mode never appears (see "Claude Code" in
-`docs/product/per-agent-launch-specifics.md`).
+- **Approve for me** (`auto_review`) uses the same workspace profile and approval policy, with automatic review of
+  eligible approval requests. Automatic review can still lead to a request for manual approval.
 
-A configuration export that includes the accounts carries the explicit choices, and an import of the accounts applies
-them — **Approve everything** included, without this confirmation; the import's review names the choice beforehand (see
-"The agent account settings are applied with the accounts" in `docs/product/settings-in-a-configuration.md`). No
-session can read or change them.
+- **Full access** (`full_access`) uses Codex's built-in unrestricted permission profile and `never` approval policy. It
+  removes Codex's sandbox restrictions and permission approval for file and internet access.
+
+Claude Code's choices, in menu order:
+
+- **Follow account configuration** passes no permission-mode override. This is the initial choice. Claude Code decides
+  the mode using its native configuration and resume rules. A resume may restore a saved mode under those rules, with
+  exceptions such as bypass not being restored solely from the saved mode and auto depending on account eligibility.
+  Selecting an explicit mode takes precedence over the saved mode.
+
+- **Auto** (`auto`) uses Claude Code's auto mode, where a classifier reviews actions. Whether auto mode is available to
+  an account is Claude Code's own decision; Octoboard only asks for it.
+
+- **Manual** (`manual`) asks for actions that Claude Code's permission rules have not already allowed.
+
+- **Accept edits** (`accept_edits`) automatically accepts file edits and the filesystem operations Claude Code permits
+  in this mode; other actions remain subject to its permission rules.
+
+- **Plan** (`plan`) starts Claude Code in its planning mode, for preparing a plan before making changes.
+
+- **Bypass permissions** (`bypass`) skips routine permission prompts, including for tools that change or delete files.
+  Explicit permission rules and Claude Code's built-in safeguards still apply.
+
+Grok Build's choices, in menu order:
+
+- **Follow account configuration** passes no permission-mode override. This is the initial choice. Grok Build uses its
+  native configuration and resume rules.
+
+- **Ask** (`ask`) requests permission for tool calls that are not already allowed.
+
+- **Auto** (`auto`) uses Grok Build's classifier to approve safe tool calls; dangerous calls can still ask. The native
+  feature decides its availability and falls back to Ask when unavailable.
+
+- **Always-approve** (`always_approve`) approves tool calls without routine prompts, including calls that change or
+  delete files. Deny rules and hooks still apply. Permission mode is separate from sandboxing; this setting does not
+  disable a sandbox or make a sandboxed launch compatible with Octoboard.
+
+An explicit preset or mode is passed on every launch and resume without writing the agent's configuration files. The
+concrete launch parameters are in "How each agent is given the injection" in
+`docs/product/per-agent-launch-specifics.md`. Claude Code and Codex pre-approve Octoboard's own tools under every
+choice; Grok Build receives no such grant. The agents' explicit rules and each tool's own refusals still apply (see
+"Claude Code", "Codex" and "Grok Build" in that document).
+
+**Full access**, **Bypass permissions** and **Always-approve** are saved only once the user accepts a destructive
+confirmation that names the agent and explains the scope of the permission grant across all of its accounts. The confirm
+button carries the choice's own name. Cancelling, Escape included, leaves the choice as it was. If saving fails, an
+error alert appears over the confirmation, which stays open, and the stored choice stays unchanged. Accepting Bypass
+permissions also accepts Claude Code's own blocking startup warning for that mode, for the launch alone.
+
+A configuration export that includes the accounts carries every explicit choice, and an import of the accounts applies
+them, including Full access, Bypass permissions and Always-approve, without this separate confirmation. The import
+review names the choice beforehand (see "The agent account settings are applied with the accounts" in
+`docs/product/settings-in-a-configuration.md`). No session can read or change these settings.
 
 ## Claude compatibility
 
 Whether an agent other than Claude Code — Codex and Grok Build — has its sessions load Claude Code's configuration as
 well as its own: Claude Code's instructions (`CLAUDE.md` and rules), skills, agents, commands and MCP servers, and
 following Claude Code's hooks and permissions. It is the **Claude compatibility** row of each one's tab, a provider
-setting of the switch kind (see "Provider settings" above): under the Permission approval row for Codex, directly above
-the accounts table for Grok Build, and never in Claude Code's tab, which has no such setting. The row is there whether
+setting of the switch kind (see "Provider settings" above): under the Permission approval row and above the accounts
+table for Codex and Grok Build, and never in Claude Code's tab, which has no such setting. The row is there whether
 or not Claude Code is an added agent. Its help tip ("About Claude compatibility") says what the setting does whatever
 the switch's position: when on, the agent's sessions load Claude Code's instructions, skills, agents, commands and MCP
 servers and follow its hooks and permissions; when off, they follow only their own configuration. For Codex it adds

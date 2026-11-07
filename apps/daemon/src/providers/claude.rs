@@ -111,7 +111,14 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
                     value: "manual",
                     confirm: false,
                 },
-                // Every tool call runs without asking.
+                SettingChoice {
+                    value: "accept_edits",
+                    confirm: false,
+                },
+                SettingChoice {
+                    value: "plan",
+                    confirm: false,
+                },
                 SettingChoice {
                     value: "bypass",
                     confirm: true,

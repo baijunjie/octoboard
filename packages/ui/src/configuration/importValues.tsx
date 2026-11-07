@@ -75,10 +75,10 @@ function isSettingValue(descriptor: SettingDescriptor, value: unknown): value is
 }
 
 /** How a setting's value reads in the review: a switch On or Off, a choice by its provider's word for it, and a choice
- * left unset as following the account configuration. */
+ * left unset by its provider's inheritance label, else as following the account configuration. */
 function settingValueText(t: Translate, agent: string, setting: string, value: boolean | string | null): string {
   if (typeof value === "boolean") return t(onOff(value));
-  if (value === null) return t("settings.accounts.setting.inherit");
+  if (value === null) return settingWord(t, agent, setting, "inherit") ?? t("settings.accounts.setting.inherit");
   return settingWord(t, agent, setting, `choice.${value}`) ?? idWords(value);
 }
 

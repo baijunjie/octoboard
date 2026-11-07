@@ -893,7 +893,7 @@ in its body, its first sentence naming it there ("Fix search will be switched to
 follows. The title is the modal's accessible name, read whole each time it opens and each time focus comes back into
 it; a long or variable one wraps into a block that no longer reads as a heading, and puts the name of a subject ahead
 of what is being asked about it. The confirmation of a setting choice that raises risk is the one exception: its title is
-the short question ("Approve everything?"), still with no variable content (see "A dialog's title" in
+the short question ("Bypass permissions?"), still with no variable content (see "A dialog's title" in
 `docs/product/dialogs.md`).
 
 The rule is for these general modals — forms, confirmations, warnings, errors and failures. A dedicated component

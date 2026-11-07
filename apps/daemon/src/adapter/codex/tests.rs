@@ -213,13 +213,10 @@ fn claude_source() -> Option<&'static dyn crate::adapter::CompatibilitySource> {
     crate::adapter::provider(AgentId::CLAUDE).compatibility_source()
 }
 
-/// The settings that choose `reviewer`.
-fn reviewer_settings(reviewer: ApprovalReviewer) -> crate::providers::ProviderSettings {
+fn permission_settings(mode: &str) -> crate::providers::ProviderSettings {
     crate::providers::ProviderSettings::new([(
         "approval_reviewer".to_string(),
-        Some(crate::providers::SettingValue::Choice(
-            reviewer.as_str().to_string(),
-        )),
+        Some(crate::providers::SettingValue::Choice(mode.to_string())),
     )])
 }
 
@@ -412,42 +409,103 @@ fn claude_compatibility_leaves_servers_the_projects_codex_config_defines() {
 }
 
 #[test]
-fn account_reviewer_overrides_are_repeated_on_resume_without_changing_the_users_config() {
+fn native_permission_presets_replace_account_choices_on_launch_and_resume_without_writing_config() {
     let mut fixture = spec_fixture();
-    let home = fixture.scratch.join("reviewer-home");
+    let home = fixture.scratch.join("permission-home");
     std::fs::create_dir_all(&home).unwrap();
     let config = home.join("config.toml");
-    let original = "approvals_reviewer = \"auto_review\"\n";
-    std::fs::write(&config, original).unwrap();
     fixture.config_dir = Some(home);
-    for (reviewer, text, resolves) in [
-        (ApprovalReviewer::User, "user", false),
-        (ApprovalReviewer::AutoReview, "auto_review", true),
+    for (original, custom_resolves) in [
+        (
+            r#"approvals_reviewer = "auto_review"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+[sandbox_workspace_write]
+network_access = true
+writable_roots = ["/outside"]
+"#,
+            true,
+        ),
+        (
+            r#"approvals_reviewer = "user"
+approval_policy = "never"
+default_permissions = "personal"
+[permissions.personal.filesystem]
+":root" = "write"
+[permissions.personal.network]
+enabled = true
+"#,
+            false,
+        ),
     ] {
-        for resume in [None, Some("conversation-1")] {
-            let settings = reviewer_settings(reviewer);
-            let mut spec = fixture.spec();
-            spec.settings = &settings;
-            spec.resume_agent_session_id = resume;
-            spec.task = Some("Initial prompt");
-            let plan = CodexProvider.plan(&spec).unwrap();
-            assert_eq!(plan.resolves_approvals_itself, resolves);
-            assert!(overrides(&plan.args).contains(&format!("approvals_reviewer=\"{text}\"")));
-            assert!(!plan
-                .args
-                .iter()
-                .any(|arg| arg.contains("approval_policy") || arg.contains("sandbox_mode")));
-            if resume.is_none() {
-                assert_eq!(plan.args.last().unwrap(), "Initial prompt");
+        std::fs::write(&config, original).unwrap();
+        for (choice, expected, resolves) in [
+            (
+                Some("user"),
+                vec![
+                    "default_permissions=\":workspace\"",
+                    "approval_policy=\"on-request\"",
+                    "approvals_reviewer=\"user\"",
+                ],
+                false,
+            ),
+            (
+                Some("auto_review"),
+                vec![
+                    "default_permissions=\":workspace\"",
+                    "approval_policy=\"on-request\"",
+                    "approvals_reviewer=\"auto_review\"",
+                ],
+                true,
+            ),
+            (
+                Some("full_access"),
+                vec![
+                    "default_permissions=\":danger-full-access\"",
+                    "approval_policy=\"never\"",
+                    "approvals_reviewer=\"user\"",
+                ],
+                true,
+            ),
+            (None, vec![], custom_resolves),
+        ] {
+            for resume in [None, Some("conversation-1")] {
+                let settings = choice.map(permission_settings).unwrap_or_default();
+                let mut spec = fixture.spec();
+                spec.settings = &settings;
+                spec.resume_agent_session_id = resume;
+                spec.task = Some("Initial prompt");
+                let plan = CodexProvider.plan(&spec).unwrap();
+                assert_eq!(plan.resolves_approvals_itself, resolves, "{choice:?}");
+                let permission_overrides: Vec<_> = overrides(&plan.args)
+                    .into_iter()
+                    .filter(|arg| {
+                        [
+                            "default_permissions=",
+                            "approval_policy=",
+                            "approvals_reviewer=",
+                        ]
+                        .iter()
+                        .any(|prefix| arg.starts_with(prefix))
+                    })
+                    .collect();
+                assert_eq!(permission_overrides, expected, "{choice:?} {resume:?}");
+                assert!(!plan.args.iter().any(|arg| {
+                    arg.starts_with("sandbox_mode=")
+                        || arg.starts_with("sandbox_workspace_write.")
+                        || arg.starts_with("permissions.")
+                        || matches!(arg.as_str(), "--sandbox" | "--approve-for-me")
+                }));
+                if resume.is_none() {
+                    assert_eq!(plan.args.last().unwrap(), "Initial prompt");
+                } else {
+                    assert_eq!(&plan.args[..2], ["resume", "conversation-1"]);
+                    assert!(!plan.args.iter().any(|arg| arg == "Initial prompt"));
+                }
+                assert_eq!(std::fs::read_to_string(&config).unwrap(), original);
             }
-            assert_eq!(std::fs::read_to_string(&config).unwrap(), original);
         }
     }
-    let plan = CodexProvider.plan(&fixture.spec()).unwrap();
-    assert!(plan.resolves_approvals_itself);
-    assert!(!overrides(&plan.args)
-        .iter()
-        .any(|arg| arg.starts_with("approvals_reviewer=")));
 }
 
 /// A hand raised for an approval the user is never shown can never be cleared by them, so the

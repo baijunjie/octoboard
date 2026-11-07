@@ -1,6 +1,6 @@
 //! Codex adapter. Configuration is injected through repeated per-invocation `-c` overrides on the
 //! terminal's own command line, without changing the user's configuration files. A resume repeats
-//! them, the approval reviewer included.
+//! them, the permission preset included.
 //!
 //! `CODEX_HOME` must not be used to *inject* anything: it makes Codex ignore the user's entire
 //! global setup (`~/.codex/AGENTS.md`, model choice, approval policy, skills, plugins), not just add
@@ -47,6 +47,10 @@
 //!   own hook script path, so seeding `hooks.state` with hashes shipped with the adapter cannot
 //!   work — no hash captured once could ever match a different session's.
 //!
+//! A permission preset selects the built-in permission profile, approval policy and reviewer.
+//! Without a preset, Codex uses account configuration on a fresh launch and saved thread
+//! permissions on a resume.
+//!
 //! The effective `approvals_reviewer` changes what Octoboard may promise: with it set to auto review,
 //! the `PermissionRequest` hook fires for requests resolved without showing a modal. The adapter
 //! resolves the account override or reads the user's setting so those events do not raise a hand.
@@ -89,29 +93,22 @@ use crate::session_tools;
 use claude_compatibility::reserved_env;
 use config::{model_migrations, project_server_names, read_config, server_names, ConfigFile};
 
-/// Who resolves Codex's approval requests: the value of the `approval_reviewer` setting. Unset
-/// follows the account's own configuration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum ApprovalReviewer {
+/// The permission preset held under `approval_reviewer`. Unset leaves permission selection to
+/// Codex's native launch or resume behavior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PermissionMode {
     User,
     AutoReview,
+    FullAccess,
 }
 
-impl ApprovalReviewer {
-    /// The reviewer the session's settings choose.
+impl PermissionMode {
     fn of(settings: &crate::providers::ProviderSettings) -> Option<Self> {
         match settings.choice("approval_reviewer")? {
             "user" => Some(Self::User),
             "auto_review" => Some(Self::AutoReview),
+            "full_access" => Some(Self::FullAccess),
             _ => None,
-        }
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::User => "user",
-            Self::AutoReview => "auto_review",
         }
     }
 }
@@ -425,13 +422,22 @@ impl AgentProvider for CodexProvider {
             args.push(format!("model_reasoning_effort={}", toml_string(effort)));
         }
 
-        if let Some(reviewer) = ApprovalReviewer::of(spec.settings) {
-            // Repeated on resume like the other launch overrides; the user's file stays intact.
-            args.push("-c".to_string());
-            args.push(format!(
-                "approvals_reviewer={}",
-                toml_string(reviewer.as_str())
-            ));
+        if let Some(mode) = PermissionMode::of(spec.settings) {
+            let (profile, policy, reviewer) = match mode {
+                PermissionMode::User => (":workspace", "on-request", "user"),
+                PermissionMode::AutoReview => (":workspace", "on-request", "auto_review"),
+                PermissionMode::FullAccess => (":danger-full-access", "never", "user"),
+            };
+            // Built-in profiles keep a preset from inheriting legacy writable roots or network
+            // access. Explicit per-launch choices also replace a resumed thread's saved choices.
+            for (key, value) in [
+                ("default_permissions", profile),
+                ("approval_policy", policy),
+                ("approvals_reviewer", reviewer),
+            ] {
+                args.push("-c".to_string());
+                args.push(format!("{key}={}", toml_string(value)));
+            }
         }
 
         if spec.resume_agent_session_id.is_none() {
@@ -449,7 +455,7 @@ impl AgentProvider for CodexProvider {
     }
 }
 
-/// Whether this user's Codex resolves approval requests without ever showing a dialog.
+/// Whether Codex handles permission-request hooks without asking the user.
 ///
 /// The account override takes precedence; otherwise read the user's own `config.toml`, never
 /// written to. The setting's shape is not pinned down (it has been seen as a plain value and as a
@@ -458,8 +464,8 @@ impl AgentProvider for CodexProvider {
 /// will be asked", which is the safe way to be wrong: a hand raised needlessly is visible, while
 /// one never raised leaves a session looking busy while it waits.
 fn resolves_approvals_itself(spec: &LaunchSpec<'_>, config: &ConfigFile) -> bool {
-    if let Some(reviewer) = ApprovalReviewer::of(spec.settings) {
-        return reviewer == ApprovalReviewer::AutoReview;
+    if let Some(mode) = PermissionMode::of(spec.settings) {
+        return mode != PermissionMode::User;
     }
     const AUTO_REVIEW: &str = "auto_review";
     let ConfigFile::Parsed(parsed) = config else {

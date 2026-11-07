@@ -86,14 +86,31 @@ mod tests {
         let reviewer = &serde_json::to_value(&served[1]).unwrap()["settings"][0];
         assert_eq!(reviewer["id"], "approval_reviewer");
         assert_eq!(reviewer["kind"]["type"], "choice");
-        assert_eq!(reviewer["kind"]["choices"][0]["value"], "auto_review");
+        assert_eq!(reviewer["kind"]["choices"][0]["value"], "user");
         assert_eq!(reviewer["exported"], true);
-        let bypass = &claude["settings"][0]["kind"]["choices"][2];
+        let bypass = &claude["settings"][0]["kind"]["choices"][4];
         assert_eq!(
             (bypass["value"].as_str(), bypass["confirm"].as_bool()),
             (Some("bypass"), Some(true))
         );
-        let compatibility = &grok["settings"][0];
+        let approval = &grok["settings"][0];
+        assert_eq!(approval["id"], "approval_mode");
+        assert_eq!(approval["exported"], true);
+        assert_eq!(approval["shown_to_agents"], false);
+        assert_eq!(
+            approval["kind"]["choices"],
+            serde_json::json!([
+                {"value": "ask", "confirm": false},
+                {"value": "auto", "confirm": false},
+                {"value": "always_approve", "confirm": true}
+            ])
+        );
+        let setting = AgentId::GROK.descriptor().setting("approval_mode").unwrap();
+        for value in ["ask", "auto", "always_approve"] {
+            assert!(setting.accepts(&crate::providers::SettingValue::Choice(value.into())));
+        }
+        assert!(!setting.accepts(&crate::providers::SettingValue::Choice("plan".into())));
+        let compatibility = &grok["settings"][1];
         assert_eq!(
             compatibility["kind"],
             serde_json::json!({"type": "switch", "default": "on"})

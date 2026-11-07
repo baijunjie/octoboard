@@ -20,16 +20,17 @@ agent.
 | The agent's time limit on a call to Octoboard's tools | None is set | `-c mcp_servers.octoboard.tool_timeout_sec=660` | `tool_timeout_sec = 660` in that table |
 | The role description | `--append-system-prompt`, added to Claude Code's own system prompt | `-c developer_instructions=…`, a developer message added beside Codex's own prompt, which stays as it is | `--rules`, appended to Grok's system prompt |
 | The model and reasoning effort | `--model`, `--effort` | `-c model=…`, `-c model_reasoning_effort=…` | `--model`, `--reasoning-effort` |
-| An explicit approval choice (see "Approval modes" in `docs/product/per-agent-settings.md`) | `--permission-mode`: `auto` for **Automatic**, `default` for **Ask me**, `bypassPermissions` for **Approve everything** | `-c approvals_reviewer=…`: `auto_review` for **Automatic review**, `user` for **Ask me**; passed again on a resume | Not applicable |
+| An explicit permission choice (see "Approval modes" in `docs/product/per-agent-settings.md`) | `--permission-mode`: `auto` for **Auto**, `default` for **Manual**, `acceptEdits` for **Accept edits**, `plan` for **Plan**, `bypassPermissions` for **Bypass permissions** | `-c default_permissions=…`, `-c approval_policy=…` and `-c approvals_reviewer=…` select a complete preset (see "Codex" below) | `--permission-mode`: `default` for **Ask**, `auto` for **Auto**, `bypassPermissions` for **Always-approve** |
 | Claude compatibility while on (see "Claude compatibility" in `docs/product/per-agent-settings.md`) | Not applicable | A section appended to the `developer_instructions` text, and Claude Code's MCP servers as `-c mcp_servers.<name>.…` overrides (see "Claude compatibility for Codex" below) | `GROK_CLAUDE_*_ENABLED=true` in the environment (see "Claude compatibility for Grok Build" below) |
-| Anything else | The status line, and under **Approve everything** the acceptance of Claude Code's warning, in the `--settings` JSON | The overrides listed under "Codex" below | `--no-leader` (see "Grok's leader mode" below) |
+| Anything else | The status line, and under **Bypass permissions** the acceptance of Claude Code's warning, in the `--settings` JSON | The overrides listed under "Codex" below | `--no-leader` (see "Grok's leader mode" below) |
 
 The 660 seconds are Octoboard's own 10-minute limit on a forwarded call plus a minute (see "The time limit on
 Octoboard's tools" below and the Codex list below for why). A value the session leaves to the agent's default — no
-model, no effort, **Follow account configuration** — passes nothing for it, except that Claude Code may be passed a
-model then (see "The default model" in `docs/product/model-and-reasoning-effort.md`). The variables a launch sets for
-each agent, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME` and `GROK_THEME` among them, are in "The launch
-environment" in `docs/product/launching-agents.md`.
+model, no effort, **Follow account configuration** for Claude Code and Grok Build or **Custom (config.toml)** for Codex
+— passes nothing for it, except that Claude Code may be passed a model then (see "The default model" in
+`docs/product/model-and-reasoning-effort.md`). The variables a launch sets for each agent, `CLAUDE_CONFIG_DIR`,
+`CODEX_HOME`, `GROK_HOME` and `GROK_THEME` among them, are in "The launch environment" in
+`docs/product/launching-agents.md`.
 
 A new session's initial task is passed as the agent's prompt argument. On a resume only Claude Code is given a prompt
 argument, and only when Octoboard has an instruction or a prompt to continue for it; Codex and Grok Build are given none
@@ -58,11 +59,12 @@ else a `CLAUDE_CONFIG_DIR` the user's shell exports — and `~/.claude.json` whe
 without that file yet produces no warning; `~/.claude.json` is not consulted in its place.
 
 An explicit approval mode chosen for Claude Code in Settings is passed on every launch of any of its accounts, a resume
-included, as the permission mode Claude Code starts in; following each account's configuration passes none, so the
-account's `settings.json` decides. Under **Approve everything**, every launch also tells Claude Code that its own
-warning for that mode has been accepted, so the blocking screen it would otherwise raise on a config directory's first
-use of the mode never appears; this holds for that launch alone, and nothing is written into the account's configuration
-files. The choices are in "Approval modes" in `docs/product/per-agent-settings.md`.
+included, taking precedence over a saved mode. Following account configuration passes none, so Claude Code decides from
+its native configuration and resume rules, including their conditions for restoring a saved mode. Under **Bypass
+permissions**, every launch also tells Claude Code that its own warning for that mode has been accepted, so the blocking
+screen it would otherwise raise on a config directory's first use of the mode never appears; this holds for that launch
+alone, and nothing is written into the account's configuration files. The choices are in "Approval modes" in
+`docs/product/per-agent-settings.md`.
 
 Octoboard's own tools are pre-approved for the session on every launch, a resume included, under every approval mode,
 following the account's configuration included, so a session's calls to them, a console session's orchestration
@@ -71,10 +73,10 @@ server, `mcp__octoboard`; like the acceptance of the warning above, it holds for
 written into any settings file. The rule covers that one server's tools alone: every other MCP server, whatever its
 name, Bash, file edits and every other tool keep the approval mode in effect. It adds to the user's and the project's
 own `allow` rules rather than replacing them, and a `deny` or `ask` rule of the user's or the project's that names one
-of Octoboard's tools still wins over it — a `deny` takes that tool away from the session altogether. Under
-**Automatic**, Octoboard's tools are therefore not put to Claude Code's auto-mode classifier either. What a tool itself
-refuses, and the requests Octoboard puts to the user before acting on a session's behalf (see
-`docs/product/session-requests.md`), are unaffected.
+of Octoboard's tools still wins over it — a `deny` takes that tool away from the session altogether. Under **Auto**,
+Octoboard's tools are therefore not put to Claude Code's auto-mode classifier either. What a tool itself refuses, and
+the requests Octoboard puts to the user before acting on a session's behalf (see `docs/product/session-requests.md`),
+are unaffected.
 
 ## Codex
 
@@ -119,12 +121,24 @@ Automatic messages reach Codex through its terminal, like any other agent's: Oct
 a draft aside, so they take the guarded terminal delivery in "Messages held until a session can take them" in
 `docs/product/message-delivery.md`.
 
-An explicit Codex approval reviewer chosen for Codex in Settings takes precedence on every launch of any of its
-accounts, a resume included. When the setting follows each account's configuration, whether Codex resolves approval
-requests by itself is read from `config.toml` in the Codex home that launch uses: the session's Codex config directory,
-else a `CODEX_HOME` the user's shell exports, else `~/.codex`. A trusted project's own `.codex/config.toml`, which Codex
-itself layers over that file, is not consulted for this. The choices are in "Approval modes" and their lifetime rules
-in "Provider settings" in `docs/product/per-agent-settings.md`.
+An explicit Codex permission preset chosen in Settings applies on every launch of any of its accounts, a resume
+included. Each is passed as three per-launch configuration overrides:
+
+| Choice | `default_permissions` | `approval_policy` | `approvals_reviewer` |
+|---|---|---|---|
+| Ask for approval (`user`) | `:workspace` | `on-request` | `user` |
+| Approve for me (`auto_review`) | `:workspace` | `on-request` | `auto_review` |
+| Full access (`full_access`) | `:danger-full-access` | `never` | `user` |
+
+The built-in profile replaces the account's own permission profile and its legacy sandbox roots and network settings for
+that launch. The preset also replaces permissions saved with a resumed conversation. The **Custom (config.toml)** choice
+passes none of these overrides and leaves Codex's native new-session and resume behavior intact. Its meaning and
+lifetime rules are in "Approval modes" and "Provider settings" in `docs/product/per-agent-settings.md`.
+
+For status reporting under Custom, whether Codex reviews approval requests itself is read from `config.toml` in the
+Codex home that launch uses: the session's Codex config directory, else a `CODEX_HOME` the user's shell exports, else
+`~/.codex`. A trusted project's own `.codex/config.toml`, which Codex itself layers over that file, is not consulted for
+this status hint. Actual action prompts are observed separately through Codex's terminal activity title.
 
 ### Claude compatibility for Codex
 
@@ -187,6 +201,17 @@ through the server's `env_vars`, and an entry the user's shell does not already 
 own name, on the Codex process as a whole rather than on the server alone.
 
 ## Grok Build
+
+An explicit permission mode chosen in Settings applies to every account on fresh launches and resumes through
+`--permission-mode`: Ask uses `default`, Auto uses `auto`, and Always-approve uses `bypassPermissions`. Following
+account configuration passes no flag and leaves the mode to Grok Build's native configuration and resume rules. When the
+native auto-mode feature is unavailable, Grok Build falls back to Ask. The launch neither edits the source configuration
+nor writes a permission mode back from the session's copy, even when the source configuration is shared through a
+symlink. The choices and confirmations are in "Approval modes" in `docs/product/per-agent-settings.md`.
+
+Always-approve leaves deny rules and hooks active; a session can still need the user's attention. It does not disable
+Grok Build's sandbox or bypass Octoboard's refusal of an incompatible sandboxed launch, described below. Octoboard
+passes no separate grant to pre-approve its own tools for Grok Build.
 
 ### The per-session Grok home
 

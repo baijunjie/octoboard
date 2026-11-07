@@ -282,6 +282,18 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
         &spec.role_options(),
     ));
 
+    // Grok applies explicit permission modes to fresh sessions and resumes. Unset, its own
+    // configuration and resume rules decide; the account's copied configuration stays intact.
+    let permission_mode = match spec.settings.choice("approval_mode") {
+        Some("ask") => Some("default"),
+        Some("auto") => Some("auto"),
+        Some("always_approve") => Some("bypassPermissions"),
+        _ => None,
+    };
+    if let Some(mode) = permission_mode {
+        args.extend(["--permission-mode".to_string(), mode.to_string()]);
+    }
+
     // A fullscreen launch writes `--model` into `[models] default` and `--reasoning-effort` into
     // `[models] default_reasoning_effort` before the user changes anything. The writeback skips a
     // default equal to this launch's model and never copies the effort, so neither flag replaces

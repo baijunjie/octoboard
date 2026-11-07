@@ -35,21 +35,22 @@ that rule. What is the user's alone is never changed through these tools, by any
 - adding or removing a trusted folder;
 - adding, removing or reordering agents (see "Added agents" and "Reordering and removing an agent" in
   `docs/product/agent-accounts.md`), since the list of added agents decides whether a new session of an agent may be
-  opened, or a session handed off to it, at all, from the window or by an agent's tool: a session could otherwise add
-  an agent the user removed or never added and start sessions on it, and which agents Octoboard runs, and in what
-  order they are offered, is the user's own choice;
+  opened, or a session handed off to it, at all, from the window or by an agent's tool: a session could otherwise add an
+  agent the user removed or never added and start sessions on it, and which agents Octoboard runs, and in what order
+  they are offered, is the user's own choice;
 - changing whether a new session's account is chosen automatically (see "Automatically select an account" in
   `docs/product/settings.md`), an agent's provider settings (see "Provider settings" in
   `docs/product/per-agent-settings.md`) or an agent's tags (see "Agent tags" in the same document), since which agents
   and accounts spend the user's quota, and how, is the user's choice. `get_settings` still returns the first and the
-  last, and the provider settings their provider lets sessions read — Claude compatibility — read-only: a session
-  weighs them when it chooses an agent or an account;
-- reading or changing Claude Code's approval mode or Codex's approval reviewer (see "Approval modes" in
+  last, and the provider settings their provider lets sessions read — Claude compatibility — read-only: a session weighs
+  them when it chooses an agent or an account;
+- reading or changing Claude Code's or Grok Build's approval mode or Codex's permission preset (see "Approval modes" in
   `docs/product/per-agent-settings.md`), since a session could otherwise lift the permission prompts of the sessions
-  launched after it, its own next resume included, for instance by switching Claude Code to Approve everything;
-- reading or changing whether session requests, resume requests, account switches or handoffs are approved
-  automatically (see "Approving requests automatically" in `docs/product/session-requests.md`), since a session could
-  otherwise approve its own requests;
+  launched after it, its own next resume included, for instance by switching Claude Code to Bypass permissions, Codex
+  to Full access or Grok Build to Always-approve;
+- reading or changing whether session requests, resume requests, account switches or handoffs are approved automatically
+  (see "Approving requests automatically" in `docs/product/session-requests.md`), since a session could otherwise
+  approve its own requests;
 - reading or changing whether usage windows are started automatically (see "Start usage windows automatically" in
   `docs/product/settings.md`), since that spends the user's quota;
 - reading or changing whether sessions are switched to another account at the usage limit (see "Automatically switch

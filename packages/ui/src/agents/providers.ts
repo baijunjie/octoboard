@@ -71,9 +71,11 @@ export function idWords(id: string): string {
 }
 
 /** The catalog key of the message `name` of the setting `setting` of provider `id`
- * (`provider.<id>.setting.<setting>.<name>`), where the name is `heading`, `helpLabel`, `label`, `description`,
- * `saveFailedTitle`, `choice.<value>` or `confirm.<value>.title` / `.message`; `undefined` for a provider, setting or
- * name the catalogs have no message for (a provider with no presentation module). */
+ * (`provider.<id>.setting.<setting>.<name>`), where the name is `heading`, `helpLabel`, `label`, `description` /
+ * `helpTiming` / `helpCustom`, `inherit` / `inheritDescription` / `inheritSummary`, `saveFailedTitle`,
+ * `choice.<value>` / `.description` / `.summary` or
+ * `confirm.<value>.title` / `.consequence` / `.message`; `undefined` for a provider, setting or name the catalogs have
+ * no message for (a provider with no presentation module). */
 export function settingMessageKey(id: string, setting: string, name: string): MessageKey | undefined {
   const key = `provider.${id}.setting.${setting}.${name}`;
   return isMessageKey(key) ? key : undefined;

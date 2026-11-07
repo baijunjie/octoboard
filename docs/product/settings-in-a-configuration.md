@@ -101,17 +101,17 @@ holds:
 - **Start usage windows automatically** (see that section in `docs/product/settings.md`), under
   `auto_start_quota_windows`. The review's line for turning it on says that a usage window that has not started
   counting is then started with one small request, which counts a little toward the account's usage limits.
-- **Provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), under `provider_settings`,
-  an object keyed by agent, each holding an object keyed by setting id with the user's explicit choice: `true` or
-  `false` for a switch, the choice's text for a choice setting. Only the settings their provider declares as carried
-  are in it — today every provider setting: Claude Code's and Codex's Permission approval and Codex's and Grok Build's
-  Claude compatibility, `{"claude": {"approval_mode": "bypass"}, "codex": {"claude_compatibility": true}}` say — and of
-  those only the ones the user made a choice for: a setting never chosen for is absent, so on the importing machine it
-  keeps following that machine's default — an unset Codex Claude compatibility there follows whether Claude Code is
-  added there, an unset Permission approval follows each account's own configuration — and an agent with nothing
-  carried is absent, an export where no choice was made carrying `{}`. An entry naming an agent or a setting this build
-  does not declare as carried, or a value the setting does not take, is skipped rather than refused, in the inspection
-  as in the apply, so a hand-edited document cannot set a provider setting the build does not carry.
+- **Provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), under `provider_settings`, an
+  object keyed by agent, each holding an object keyed by setting id with the user's explicit choice: `true` or `false`
+  for a switch, the choice's text for a choice setting. Only the settings their provider declares as carried are in it —
+  today every provider setting: all three agents' Permission approval and Codex's and Grok Build's Claude
+  compatibility, `{"claude": {"approval_mode": "bypass"}, "codex": {"claude_compatibility": true}}` say — and of those
+  only the ones the user made a choice for: a setting never chosen for is absent, so on the importing machine it keeps
+  following that machine's default — an unset Codex Claude compatibility there follows whether Claude Code is added
+  there, an unset Permission approval leaves native configuration and resume behavior to the agent — and an agent with
+  nothing carried is absent, an export where no choice was made carrying `{}`. An entry naming an agent or a setting
+  this build does not declare as carried, or a value the setting does not take, is skipped rather than refused, in the
+  inspection as in the apply, so a hand-edited document cannot set a provider setting the build does not carry.
 - **Agent tags** (see "Agent tags" in `docs/product/per-agent-settings.md`), under `agent_tags`, an object keyed by
   agent (`claude`, `codex`, `grok`) holding each agent's tags as a list. It carries every agent that has tags, a removed
   agent's included; an agent without tags is absent, and an export where no agent has tags carries `{}`. An agent this
@@ -196,10 +196,10 @@ document lists with the document's, normalised as the Tags row's are, and leaves
 - One that turns automatic switching at the usage limit on or off changes no session.
 - One that turns the starting of usage windows on looks over the quota readings already held at once (see "When an
   account is kicked" in `docs/product/starting-usage-windows.md`).
-- One that changes an agent's Claude compatibility or Permission approval changes no session already running; the
-  value is read when a session next starts or resumes. A Permission approval of **Approve everything** is applied
-  without the confirmation the Permission approval row asks for (see "Approval modes" in
-  `docs/product/per-agent-settings.md`); the review names the choice before anything is done.
+- One that changes an agent's Claude compatibility or Permission approval changes no session already running; the value
+  is read when a session next starts or resumes. A Permission approval of **Bypass permissions**, **Full access** or
+  **Always-approve** is applied without the separate confirmation the Permission approval row asks for (see "Approval
+  modes" in `docs/product/per-agent-settings.md`); the review names the choice before anything is done.
 
 Agent account settings that could not be applied are reported in the accounts' result, and the import stands. A
 document of the first version carried these settings among its application settings; reading it moves them to its

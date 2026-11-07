@@ -184,6 +184,76 @@ fn every_launch_runs_without_groks_leader_mode() {
     }
 }
 
+/// Permission choices override a permissive account default on both launch paths without
+/// changing the account configuration, including when Grok saves a mode in the session copy.
+#[test]
+fn permission_modes_apply_on_fresh_launches_and_resumes_without_account_writeback() {
+    for (choice, expected) in [
+        (None, None),
+        (Some("ask"), Some("default")),
+        (Some("auto"), Some("auto")),
+        (Some("always_approve"), Some("bypassPermissions")),
+    ] {
+        for resume in [false, true] {
+            let mut fixture = spec_fixture();
+            let home = with_default_home(&mut fixture);
+            let original = "[ui]\npermission_mode = \"always-approve\"\nyolo = true\n";
+            let shared = fixture.scratch.join("shared-config.toml");
+            std::fs::write(&shared, original).unwrap();
+            std::fs::remove_file(home.join("config.toml")).unwrap();
+            std::os::unix::fs::symlink(&shared, home.join("config.toml")).unwrap();
+            fixture.model = Some("grok-4".to_string());
+            fixture.effort = Some("low".to_string());
+            let settings = crate::providers::ProviderSettings::new([(
+                "approval_mode".to_string(),
+                choice.map(|value| crate::providers::SettingValue::Choice(value.to_string())),
+            )]);
+            let mut spec = fixture.spec();
+            spec.settings = &settings;
+            spec.task = Some("do it");
+            spec.resume_agent_session_id = resume.then_some("agent-side-id");
+            let plan = plan_isolated(&spec).expect("plan");
+            let flags: Vec<_> = plan
+                .args
+                .windows(2)
+                .filter(|pair| pair[0] == "--permission-mode")
+                .map(|pair| pair[1].as_str())
+                .collect();
+            assert_eq!(
+                flags,
+                expected.into_iter().collect::<Vec<_>>(),
+                "{choice:?} resume={resume}"
+            );
+            assert!(
+                !plan.resolves_approvals_itself,
+                "rules can still ask the user"
+            );
+            let model = plan.args.iter().position(|arg| arg == "--model").unwrap();
+            let mut tail = vec!["--model", "grok-4", "--reasoning-effort", "low"];
+            if !resume {
+                tail.push("do it");
+            }
+            assert_eq!(plan.args[model..], tail);
+            let farm = PathBuf::from(&plan.env[0].1);
+            let copied = std::fs::read_to_string(farm.join("config.toml")).unwrap();
+            assert!(copied.starts_with(original));
+            assert!(copied.contains("[mcp_servers.octoboard]"));
+            assert!(farm.join("hooks/octoboard.json").is_file());
+            std::fs::write(
+                farm.join("config.toml"),
+                copied.replace("always-approve", "ask"),
+            )
+            .unwrap();
+            plan.after_exit
+                .as_ref()
+                .expect("shared config writeback")
+                .run();
+            assert_eq!(std::fs::read_to_string(&shared).unwrap(), original);
+            assert!(home.join("config.toml").is_symlink());
+        }
+    }
+}
+
 #[test]
 fn a_pinned_grok_home_replaces_the_users_as_the_source_of_the_farm() {
     let mut fixture = spec_fixture();

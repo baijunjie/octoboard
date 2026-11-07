@@ -217,14 +217,15 @@ select an account**, **Automatically switch accounts at the usage limit** and **
 badged as a switch of the application settings is (see "Application settings in the review" below), then the provider
 settings and the agent tags, each a setting made of several items, listed as such a setting is:
 
-- **The provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), one line per setting
-  — today **Permission approval** and **Claude compatibility** — present when the document carries a choice that this
+- **The provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), one line per setting —
+  today **Permission approval** and **Claude compatibility** — present when the document carries a choice that this
   machine's agents declare as carried and that the setting takes, the agents declaring a setting under the same id
-  sharing its line, named as the agents' tabs name it. A setting the window has no wording for under any of those
-  agents is a line of its own for each agent, named by the agent's name, a colon, then the setting's id in words (an id
+  sharing its line, named as the agents' tabs name it. A setting the window has no wording for under any of those agents
+  is a line of its own for each agent, named by the agent's name, a colon, then the setting's id in words (an id
   `sandbox_mode` as "Sandbox mode"). Badged **Set to the file's**, it lists each such agent that this machine reports
   whose value would change: a switch **On** or **Off**, a choice by its name, or by its value in words where the window
-  has no name for it, and a choice left unset here as **Follow account configuration**.
+  has no name for it, and a choice left unset here by its provider's inheritance label: **Custom (config.toml)** for
+  Codex permission approval, otherwise **Follow account configuration**.
 - **Agent tags**, present when the document carries tags for an agent this build knows: badged **Set to the file's**, it
   lists each such agent whose tags would change, its tags shown as tags, or **No tags** for none.
 

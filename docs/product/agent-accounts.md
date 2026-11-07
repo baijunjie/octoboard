@@ -184,7 +184,7 @@ are shown" in `docs/product/settings.md`.
 
 Each agent's tab panel holds the agent's **Tags** row (see "Agent tags" in `docs/product/per-agent-settings.md`), then
 a row for each setting its provider declares (see "Provider settings" in `docs/product/per-agent-settings.md`) — for
-Claude Code and Codex, the agent's **Permission approval** row (see "Approval modes" there), then, for Codex and Grok
+all three agents, the agent's **Permission approval** row (see "Approval modes" there), then, for Codex and Grok
 Build, the agent's **Claude compatibility** row (see "Claude compatibility" there) — then one table of the agent's
 accounts, named for the agent ("Claude Code accounts"): a row per account, in the saved order (see "Reordering accounts" below). Its columns:
 

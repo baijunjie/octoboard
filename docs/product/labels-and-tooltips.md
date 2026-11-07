@@ -222,7 +222,7 @@ Help tips are used in these places:
   details dialog: that it is the agent's own default configuration directory, which new sessions use when no account is
   chosen and whose configuration other accounts can share (see "The default account" in
   `docs/product/agent-accounts.md`);
-- the name of Claude Code's and Codex's **Permission approval** row in Settings' Agent accounts section (see "Approval
+- the name of each agent's **Permission approval** row in Settings' Agent accounts section (see "Approval
   modes" in `docs/product/per-agent-settings.md`);
 - the **Share default configuration** row of an account's settings dialog: what is linked to the default account's
   directory, what is never shared and what happens when sharing is turned off (see "Sharing the default configuration"

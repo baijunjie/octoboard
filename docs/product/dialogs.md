@@ -18,10 +18,10 @@ account's two dialogs are titled "Account details" and "Account settings", the b
 dialog that shows one piece of content rather than asking or reporting anything, the file viewer, keeps the name of what
 it shows as its title (see `docs/product/file-viewer.md`).
 
-The one exception is the confirmation of a setting choice that raises risk, such as Claude Code's "Approve everything":
-its title asks the question ("Approve everything?", 「确认全部批准？」), since what it confirms is a standing choice
-the user is about to grant, not an action on a subject. It still holds no variable content. Destructive confirmations
-(deleting, removing, archiving) keep the plain name.
+The one exception is the confirmation of a setting choice that raises risk, such as Claude Code's Bypass permissions or
+Codex's Full access: its title asks a question, since what it confirms is a standing choice the user is about to grant,
+not an action on a subject. It still holds no variable content. Destructive confirmations (deleting, removing,
+archiving) keep the plain name.
 
 ## Destructive confirmations
 
