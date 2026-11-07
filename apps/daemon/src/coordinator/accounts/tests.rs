@@ -856,7 +856,8 @@ async fn a_login_is_refused_for_a_foreign_account_and_a_cancel_for_a_login_that_
 }
 
 /// A sign-in for a provider with no flow is refused with `provider_unsupported`, for the default
-/// account and an account of its own, before any login is registered.
+/// account and an account of its own, before any login is registered and before the shell
+/// environment is taken: under test there is none, so a capture coming first would fail instead.
 #[tokio::test]
 async fn a_sign_in_is_refused_for_a_provider_with_no_login_flow() {
     let (state, _dir) = crate::test_support::app_state("coordinator-login-unsupported");

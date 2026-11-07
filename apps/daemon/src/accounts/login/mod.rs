@@ -189,8 +189,11 @@ impl AccountLogins {
     /// `account_being_removed` while the account's removal is moving its directory to the Trash.
     /// What follows is announced as `account_login_updated`.
     pub async fn start(state: &Arc<AppState>, start: Start) -> Result<()> {
+        // Refused before the shell environment is taken: a provider with no flow needs none, and a
+        // login shell that cannot be captured must not hide that it has none.
+        offered_login(start.agent)?;
         // Waited for as a person's launch is: the first login may be the first thing to need it.
-        let shell_env = tokio::task::spawn_blocking(crate::env_shell::launch_snapshot)
+        let shell_env = tokio::task::spawn_blocking(login_shell)
             .await?
             .map_err(|err| {
                 let detail = format!("{err:#}");
@@ -233,11 +236,7 @@ impl AccountLogins {
             agent: start.agent,
             account: start.account.clone(),
         };
-        let login = CodedError::require_offered(
-            start.agent,
-            ProviderOperation::SignIn,
-            provider(start.agent).accounts().and_then(|ops| ops.login()),
-        )?;
+        let login = offered_login(start.agent)?;
         let logins = &state.account_logins;
         let mut running = logins.lock();
         // Judged under the logins' lock, which `end` takes as well: an account whose removal is
@@ -376,6 +375,29 @@ impl AccountLogins {
             let _ = task.await;
         }
     }
+}
+
+/// The sign-in flow `agent`'s provider offers, or its refusal as `provider_unsupported`.
+fn offered_login(agent: AgentId) -> Result<&'static dyn flows::LoginFlow> {
+    CodedError::require_offered(
+        agent,
+        ProviderOperation::SignIn,
+        provider(agent).accounts().and_then(|ops| ops.login()),
+    )
+}
+
+/// The shell environment a login started by [`AccountLogins::start`] runs in.
+#[cfg(not(test))]
+fn login_shell() -> Result<HashMap<String, String>> {
+    crate::env_shell::launch_snapshot()
+}
+
+/// Under test, none: the host's login shell is not the tests' to depend on, and a refusal that
+/// comes first is told whatever the shell is. Tests that run a login take
+/// [`AccountLogins::start_for_test`].
+#[cfg(test)]
+fn login_shell() -> Result<HashMap<String, String>> {
+    anyhow::bail!("no shell environment under test")
 }
 
 #[cfg(test)]
