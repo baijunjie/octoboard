@@ -27,11 +27,16 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   clipboard, a terminal behaviour, and so on, each documented where it is declared), `steps` that reach component-local
   state the way a user does, and `liveChanges`.
 - The frame page (`gallery-frame.html`, run by `frame.tsx`) sets `data-gallery-ready` on its `<html>` once its steps have
-  run, its own notifications have been raised and finite animations have ended; the shell (`gallery.html`, `shell.tsx`)
-  only reads it from its iframe and never sets it, so automation waits on it by opening the frame URL directly, and
-  captures only after it. A failure of the gallery's own machinery (a step that threw, a fixture that cannot be answered
-  as the real daemon would, an exit transition that never ends) is painted over the page as a `[data-gallery-failure]` overlay
-  (`packages/ui/src/fixtures/banner.ts`); check a capture for it.
+  run, its own notifications have been raised, visible lazy content has committed and finite animations have settled.
+  The frame enables the observer in `packages/ui/src/components/hooks/lazyReadiness.tsx`; Suspense boundaries expose
+  their pending lifetime through `trackSuspenseFallback`, and `retryableLazy` reports import failures and commits.
+  Nested lazy content revealed by a resolved parent is included; intentional pending fixture requests are not waited
+  out. A failed visible import or the 15-second lazy readiness limit raises a gallery failure. The shell
+  (`gallery.html`, `shell.tsx`) only reads readiness from its iframe and never sets it, so automation opens the frame
+  URL directly and waits for readiness before capturing. A failure of the gallery's machinery (a step that threw, a
+  fixture that cannot be answered as the real daemon would, lazy content that failed or never settled, an exit
+  transition that never ends) is painted over the page as a `[data-gallery-failure]` overlay
+  (`packages/ui/src/fixtures/banner.ts`); check a capture for it even when the page signals ready.
 - `chrome=1` in a frame URL gives the page the desktop window's `windowChrome` capability, so what only the desktop app
   offers can be driven in a browser, while keeping the browser platform kind. A scenario's `desktopApp` gives it that,
   the native menu bar and the desktop platform kind, for a view that exists only in the app (the full Keyboard
@@ -203,11 +208,12 @@ chooses one width. Both sides use the current scenario's own width when set, oth
 either side's `minWidth`; height is the current scenario's height or 900, with a minimum of 400. A removed scenario
 uses its baseline metadata. This keeps the viewport equal on both sides.
 
-Each capture uses a fresh browser context, waits for the scenario's initial steps and fonts, disables screenshot
-animations and hides the caret. It does not replay the Live changes buttons. Render errors and gallery failure
-overlays are recorded as errors. A completed comparison records unchanged, changed, added, removed or error; a case
-interrupted before completion remains pending. Reports are saved incrementally, and an interrupted or aborted run
-shows Incomplete. Browser or comparison infrastructure failures stop the remaining cases and close Chromium; a
+Each capture uses a fresh browser context and waits for the scenario's initial steps, currently visible lazy content
+and fonts before taking a screenshot, with screenshot animations disabled and the caret hidden. It does not replay
+the Live changes buttons. Render errors and gallery failure overlays, including a failed visible lazy import or lazy
+readiness timeout, are recorded as errors. A completed comparison records unchanged, changed, added, removed or error;
+a case interrupted before completion remains pending. Reports are saved incrementally, and an interrupted or aborted
+run shows Incomplete. Browser or comparison infrastructure failures stop the remaining cases and close Chromium; a
 scenario render failure can be recorded while the remaining cases continue.
 
 `--threshold <0..255>` sets the largest RGBA channel difference ignored, default 8; a pixel beyond it counts as changed.

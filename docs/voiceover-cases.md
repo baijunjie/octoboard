@@ -141,6 +141,8 @@ commands. Native accessibility trees were read separately (VoiceOver off or on) 
 | E8 | Local main `9d199cb42573568a07d618034494a95c75a0a2c7` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo8-20261025-2j89ms59`; FOCUS-4, bare Error and Note viewer-header marks with real daemon/throwaway files; no agent, browser or gallery. |
 | E9 | Branch `fix/startup-error-details` at `f37fc3d925f35eb78f1048ea4767df369a1f6b1d` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo9-ddnbws96`; WARN-3, WARN-4 and WARN-5, real daemon with isolated HOME/TMPDIR/agent directories, fixture Codex CLI and dated records, throwaway real Git repositories and worktrees; no Safari or gallery. |
 | E10 | Local main `287dec4a61d1cc57f4ad1b3c09c8211210320a11`, source of `docs/voiceover-relisten` | Packaged `Octoboard Verification`, build-time identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo10-20261027-relisten`; SA-D, SA-E and FOCUS-1 on the current accounts table and account details dialog; real daemon with a credential-free Grok CLI fixture. |
+| E11 | An unmerged local wrapper-verification build based on main `9ee45c135` | Packaged `Octoboard Wrapper Verify Fixed`, identifier and scratch signing identifier `dev.octoboard.verify.wrappers.fixed-20261107`; normal production entry, real isolated daemon and credential-free Claude fixture records/processes. FOCUS-5 uses native caption-panel screenshots, not AppleScript speech reads. |
+
 
 E4's tree equals main `429be4556`. E1 to E3 and the build commits behind them were unmerged local-only builds, so they
 are not durable references and are not cited by hash. E5's three commits are the fixes as they landed on main; the build
@@ -255,6 +257,7 @@ mapping.
 | [FOCUS-2 Focus after an expansion takes the pressed control away](#focus-2-focus-after-an-expansion-takes-the-pressed-control-away) | caller-told focus restore and code-frame handoff | Pass |
 | [FOCUS-3 Status mark and quota popover focus and reading paths](#focus-3-status-mark-and-quota-popover-focus-and-reading-paths) | shared hover/press popover, focus and item chooser | Pass for quota Enter/Escape focus paths, the mark's focus return on Escape and item-chooser reachability; the bare-mark Enter naming failed, see KNW-9 and FOCUS-4 |
 | [FOCUS-4 Bare mark dialog named by its tone](#focus-4-bare-mark-dialog-named-by-its-tone) | tone-named bare mark dialog; sentence remains the trigger name | Pass for Enter speech without the repeated sentence and Escape focus return, Error and Note |
+| [FOCUS-5 Busy dialog hands focus to its pending button and returns after refusal](#focus-5-busy-dialog-hands-focus-to-its-pending-button-and-returns-after-refusal) | busy context, layout-effect handoff, nested error acknowledgement and explicit input return | Pass by native caption verification, SessionDialog Enter submission |
 | [PLAIN-1 Text change in a mounted plain status](#plain-1-text-change-in-a-mounted-plain-status) | `role="status"` replaced in place inside a modal | Pass (first build) |
 | [PLAIN-2 Persistent visible status with an action](#plain-2-persistent-visible-status-with-an-action) | plain `role="status"` filled in place | Pass |
 | [ALERT-1 A conflicted file read fails](#alert-1-a-conflicted-file-read-fails) | delayed `PaneFailure` alert inside the viewer | Pass for file-not-found |
@@ -964,6 +967,66 @@ mapping.
   for Warning, the restricted-change rich path line, marks with their own custom bodies, hover navigation, quota,
   removed triggers or another language. Touch VoiceOver on iOS/iPadOS and the touch wrapper's generic `Hint` naming were
   not tested; no desktop simulation is claimed.
+
+### FOCUS-5 Busy dialog hands focus to its pending button and returns after refusal
+
+- **Location and state change.** In the normal packaged app, put a valid fixture conversation ID in Session ID and
+  press Enter. Hold that one real request, then let the real isolated daemon bind the conversation to another
+  throwaway project before forwarding it. Read the resulting refusal, Tab to OK and press Enter. The original
+  dialog stays open with Session ID focused and Open disabled pending a new lookup. No gallery reply supplies the
+  error, and no real model or agent authorization is used.
+- **Mechanism.** `packages/ui/src/primitives/Modal.tsx` (`Modal`) provides the busy context;
+  `packages/ui/src/primitives/busy.ts` (`useDisabled`) disables the other controls. The pending `Button` in
+  `packages/ui/src/primitives/Button.tsx` keeps its label and focusability, becomes unavailable through HeroUI's
+  pending behavior and sets `aria-busy`. `packages/ui/src/components/dialog/useFocusLeavingWhenBusy.ts`
+  (`useFocusLeavingWhenBusy`), called by `packages/ui/src/components/dialog/Dialog.tsx` (`Dialog`), moves focus from
+  the newly disabled input to that pending button in a layout effect. `packages/ui/src/dialogs/SessionDialog.tsx`
+  (`SessionDialog`) names the input through `returnFocusRef`; the handoff waits until the nested error is
+  acknowledged before returning there.
+  This is focus-driven control reading, not a `StatusAnnouncer` or a separate automatic busy sentence.
+- **ARIA wiring as rendered.** The source field is a native `AXTextField` named Session ID. While held, it is
+  disabled and unfocused; the native Open button is disabled and focused. The error has a focused native alert-dialog
+  group named Could not open a session, with the refusal as body text and an enabled OK button. Tab focuses OK;
+  acknowledgement leaves Session ID enabled and focused, while Open is disabled and unfocused. These native values
+  corroborate the focus path; they do not stand in for the caption evidence or claim literal generated HTML IDs.
+- **Result, pending button.** Pass. Without a VoiceOver cursor-read command, the native caption panel displays:
+
+  ```text
+  Open，网站“button”正忙 变暗，button
+  ```
+
+- **Result, refusal and acknowledgement.** Pass for the observed path. The long alert initially focuses its body,
+  rather than OK. Its automatic caption begins with the visible excerpt below. After a deliberate Tab, the caption
+  begins `OK，button，` followed by that error text, and native focus is on OK. This deliberate reading is not a second
+  automatic-announcement count.
+
+  ```text
+  Could not open a session This conversation already
+  belongs to a session outside this project. Check the
+  conversation ID and selected account. Resume the
+  ```
+
+- **Result, input return.** Pass. Enter on OK returns native focus to Session ID. The caption displays the Open
+  session dialog context, the field's example ID, the same fixture ID `269912fb-6358-414d-bb67-379792d92913`, and
+  text-position feedback. The caption panel clips the tail; neither a complete utterance nor a separate reading of
+  the field label is claimed. The source field was also captioned with that UUID before submission.
+- **Capture.** Direct screenshots of the existing native VoiceOver caption panel, two samples per state, plus separate
+  own-application screenshots and native AX snapshots. The caption window's running system-bundle owner and exact
+  window ID were checked; each screenshot checked the screen-lock state before and after. This was not a browser,
+  synthetic VoiceOver `output`, AppleScript last-phrase result or human audio listening. Sparse panel samples do not
+  count identical replays or establish a complete speech history. Local artifacts are indexed by
+  `out/wrapper-native-20261107/evidence-index.html` under the VoiceOver caption confirmation.
+- **Environment.** E11, macOS 26.2 (25C56), English application text, mixed English/Simplified Chinese VoiceOver
+  output, light appearance. Only the isolated application was driven. The user explicitly authorized temporary
+  foreground operation and Command-F5 startup/restoration. The panel was already visible and its display preference
+  was left unchanged in this sequence; no volume, mute or VoiceOver settings were changed. The sequence ended with
+  VoiceOver disabled, its service absent and the exact original foreground application restored. The production
+  entry had no diagnostic key, focus or announcement overrides.
+- **Date.** 2026-11-07.
+- **Reuse scope.** Covers this newly-disabled text input to pending-button layout-effect handoff, the nested refusal
+  read, explicit Tab to acknowledgement and named-input return even when submit becomes disabled. Callers still
+  have to satisfy every matching item above. It is not direct listening coverage for an Install link, another
+  dialog, pointer submission, a removed return target, another language or unrelated live-region announcements.
 
 ### PLAIN-1 Text change in a mounted plain status
 

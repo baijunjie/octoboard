@@ -8,6 +8,7 @@
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 
+import { observeLazyReadiness } from "../components/hooks/lazyReadiness";
 import { isLanguage, type Language } from "../i18n/languages";
 import { galleryFailure } from "../fixtures/banner";
 import { SCENARIOS } from "./fixtures";
@@ -19,6 +20,7 @@ import { prepareStorage } from "./prepare";
 import { LIVE_CHANGE_EVENT } from "./scenario";
 import { fixtureUpdater } from "./updaterFixture";
 
+const lazyReadiness = observeLazyReadiness();
 const params = new URLSearchParams(window.location.search);
 const scenario = SCENARIOS.find((s) => s.id === params.get("scenario"));
 const requestedLanguage = params.get("lang");
@@ -204,7 +206,12 @@ function CheckedOnOpen(): null {
 
 // No automatic update check follows on its own, which would move a settled view 30 seconds on
 // (`firstCheckDelayMs={null}`): a scenario that wants one says `checked`.
-ReactDOM.createRoot(document.getElementById("root")!).render(
+ReactDOM.createRoot(document.getElementById("root")!, {
+  onCaughtError: (error, info) => {
+    lazyReadiness.caught(error);
+    console.error(error, info.componentStack);
+  },
+}).render(
   <React.StrictMode>
     <AppRoot
       platform={galleryPlatform()}
@@ -292,11 +299,14 @@ if (daemon && scenario?.notifications?.length) {
   const raised = await Promise.race([daemon.scenarioNotificationsRaised.then(() => true), ui.wait(NOTIFICATIONS_LIMIT_MS).then(() => false)]);
   if (!raised) galleryFailure(`The scenario's notifications were not raised within ${NOTIFICATIONS_LIMIT_MS / 1000}s: nothing on the page subscribed to them`);
 }
-// The first wait: two frames after the last step, not at its end, since what the last step set going has usually
-// been drawn by then, which is what a capture or a read of the overlay needs. The cap is short, so that a page too
-// busy to draw two frames in that time goes on without them.
-await afterFrames(200);
-// What the steps set easing (a dialog growing to its height) is waited out, so the view captured is the
-// settled one; the wait is capped, as the other is, so that a page that never settles still claims ready.
-await settleMotion(document, 1000);
+// A lazy fallback is observed through its commit lifetime, including children revealed by a resolved parent.
+// Intentional fixture requests stay outside this barrier, so a busy dialog is still a settled gallery view.
+try {
+  await lazyReadiness.settle(async () => {
+    await afterFrames(200);
+    await settleMotion(document, 1000);
+  }, 15_000);
+} catch (error) {
+  galleryFailure(`The scenario's lazy content is not ready: ${(error as Error).message}`, error);
+}
 document.documentElement.dataset.galleryReady = "true";

@@ -85,9 +85,9 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
   `Dialog` frame and toolkit), `form/`, `controls/`, `menus/`, `hint/` (the one component behind tooltips and floating
   popovers), `text/`, `status/`, `icons/`, `tabs/`, `motion/`, `scroll/` (the faded scroller and the sticky section
   heading), `focus/`, `announce/`, `panel/`, `host/`, `rows/` (the tree row, its icon and mark buttons, the
-  hover-actions class), `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, polling, the latest-request hook,
-  `useLatest` and `useRenderLatest`, `useSerialPush`, `settle`, a `try`/`finally` helper kept outside components
-  because the React Compiler skips a function holding one).
+  hover-actions class), `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, lazy readiness for capture hosts,
+  polling, the latest-request hook, `useLatest` and `useRenderLatest`, `useSerialPush`, `settle`, a `try`/`finally`
+  helper kept outside components because the React Compiler skips a function holding one).
 - `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry`
   with its panels in `src/quota/`, and `RailProcessesEntry`, both on the shared popover wiring of `RailPanelEntry`),
   `NotificationsBell`, `ContentPanel`, `Toasts`, `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement
@@ -270,6 +270,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A dialog whose work cannot be left while it runs | `Dialog`'s `busy` prop (`src/components/dialog/Dialog.tsx`), which sets `Modal`'s `busy` (`src/primitives/Modal.tsx`): Escape and an outside click are ignored, and every control in the dialog is disabled but a `pending` `Button`, which takes the focus from a control that busy disables and gives it back to the control it was taken from when the request is over (`useFocusLeavingWhenBusy`, `src/components/dialog/useFocusLeavingWhenBusy.ts`). The wrappers read the state through `useDisabled` (`src/primitives/busy.ts`), and code that draws a control of its own (a link) reads `useBusy`; a dialog does not disable its own controls for it |
 | A decorative spinner beside a label that already says what runs | the layer's `Spinner` without a `label` (`src/primitives/Spinner.tsx`), which `Button` (while `pending`, which also sets `aria-busy`), `ExternalLink` and the import progress view use; never one with a `label` there, which is announced as a status |
 | Load a component lazily, with a way to load it again after a failed import | `retryableLazy` (`src/components/hooks/retryableLazy.ts`), not `React.lazy`, which keeps the rejection |
+| Observe visible Suspense content before a capture | `observeLazyReadiness` and `trackSuspenseFallback` (`src/components/hooks/lazyReadiness.tsx`); the gallery frame enables observation, while production hosts leave it disabled |
 | Poll a daemon answer that is shown or counted (process trees, the global process counts), publishing only a changed one | `usePolled` (`src/components/hooks/usePoll.ts`), under `useProcessTrees` and `useAllProcesses` at the paces in `src/process/processPolling.ts`, rather than a timer of its own |
 | A count in a row, or on a rail control | `CountBadge` (`src/components/status/CountBadge.tsx`), reusing `StatusBadge`, in a row; `RailCountBadge` (`src/shell/RailCountBadge.tsx`) through `ChromeButton`'s `badge` prop on a rail control |
 | A rail entry whose button opens a popover panel | `RailPanelEntry` (`src/shell/RailPanelEntry.tsx`), which wires the popover; the status marks and Details popovers the panel opens are tagged with `PopoverOwnerContext` (`src/components/hint/popoverOwner.ts`) and asked about through `nestedPopovers` (`src/shell/nestedPopover.ts`), and `CloseWhenCovered` (`src/shell/`) closes the panel under another modal |

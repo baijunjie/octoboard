@@ -1,5 +1,6 @@
 import React, { Suspense, useEffect, useRef } from "react";
 
+import { trackSuspenseFallback } from "../components/hooks/lazyReadiness";
 import { PaneFailure } from "../components/alerts/PaneFailure";
 import { retryableLazy } from "../components/hooks/retryableLazy";
 import { PanelHeader } from "../components/panel/PanelHeader";
@@ -30,7 +31,7 @@ export function LazyProjectBrowser({ focusTerminal, ...props }: Props): React.Re
       focusTerminal={focusTerminal}
       onRetry={browser.retry}
     >
-      <Suspense fallback={null}>
+      <Suspense fallback={trackSuspenseFallback(null)}>
         <Browser {...props} />
       </Suspense>
     </LoadBoundary>

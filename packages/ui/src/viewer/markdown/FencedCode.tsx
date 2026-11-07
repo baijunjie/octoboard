@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useState } from "react";
 
+import { trackSuspenseFallback } from "../../components/hooks/lazyReadiness";
 import { CODE_THEMES } from "../code/codeTheme";
 import { HighlightedFile, RendererBoundary } from "../code/codeRenderer";
 
@@ -44,7 +45,7 @@ export function FencedCode({
       {(!drawable || !drawn) && plain}
       {drawable && (
         <RendererBoundary resetKey={text} fallback={drawn ? plain : null}>
-          <Suspense fallback={null}>
+          <Suspense fallback={trackSuspenseFallback(null)}>
             <HighlightedFile name="code" language={language} lineNumbers={false} text={text} theme={theme} wrap onDrawn={onDrawn} />
           </Suspense>
         </RendererBoundary>

@@ -94,7 +94,9 @@ export function TabList({ label, fit, ref, className, children }: {
  * composited layer, so WKWebView does not shift its rasterized icon and label between pixel rows while the selection
  * indicator moves inside the strip's masked scroller; HeroUI's tab is already `position: relative; z-index: 1`, so the
  * transform's only other effect is that the tab contains its `position: fixed` descendants. */
-const TAB_CLASS = "[&:not([data-selected=true]):not([data-disabled=true]):is(:hover,[data-hovered=true])]:opacity-100 transform-[translateZ(0)]";
+// The new indicator stays in its selected tab's stacking context. SharedElement moves it over other tabs on the way
+// forward, so keep that whole context below the unselected tabs and their labels.
+const TAB_CLASS = "[&:not([data-selected=true]):not([data-disabled=true]):is(:hover,[data-hovered=true])]:opacity-100 transform-[translateZ(0)] ui-selected:z-0";
 
 /** One tab, keyed `id`, with the selection indicator inside it unless `indicator` is false; `indicatorClassName` moves
  * the indicator (an underline strip's to its list's edge). `size` is a text strip's tab (see `TabList`'s `fit`):

@@ -117,6 +117,12 @@ Applies when visually verifying gallery interactions. A capture taken after setu
 screen; it does not visually verify earlier states, even when their assertions passed. Display initialization is not
 a regression sequence: keep necessary behavioral assertions in tests or separate verification runs.
 
+Before using a native frame sequence to judge an animation, check its actual presentation timestamps and
+capture-callback span and confirm the requested state change is visible within the frames. Requested FPS, frame
+count and changed endpoints do not establish coverage. Keep the screen-lock guard fresh without blocking the
+sampling path long enough to miss the transition. Report the maximum observed sample gap and restrict conclusions
+to the captured frames.
+
 ## Settle what `git` writes against real `git` in a throwaway repository
 
 Applies to `git` output written out by hand rather than taken from a run of `git`: a patch in a gallery change fixture
@@ -139,6 +145,12 @@ scenario here raised the connection banner and then opened a dialog over it, whe
 way round; every measurement passed, and the fix it passed still failed in the packaged app. So when reproducing a
 defect or verifying its fix, put the steps in the order the report gives, and where a scenario cannot reach the state
 that way, extend it until it can rather than reporting the pass the other order gives.
+
+For native focus or scrolling checks of a virtualized Files or Changes list, start with a short listing and let
+asynchronous loading or expansion grow it beyond the viewport before the first End, then exercise type-ahead and
+wheel scrolling. Starting with the complete long listing does not cover that evolution. Confirm the actual focused
+element and the painted destination inside the native viewport: the logical focus key and AX row presence alone are
+insufficient. Use the normal packaged entry without diagnostic patches for final acceptance.
 
 ## Check the page in WebKit with real pointer input and focus scrolling, and with long and CJK text
 

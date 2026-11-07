@@ -1,6 +1,7 @@
 import { FileQuestion, MessageSquareOff } from "lucide-react";
 import React, { Suspense, useCallback, useId, useRef } from "react";
 
+import { trackSuspenseFallback } from "../../components/hooks/lazyReadiness";
 import { retryableLazy } from "../../components/hooks/retryableLazy";
 import { useHasPainted } from "../../components/motion/useHasPainted";
 import { EmptyPanel } from "../../components/panel/EmptyPanel";
@@ -218,7 +219,7 @@ function Message({ message }: { message: ConversationMessage }): React.ReactElem
       <div data-speaker={message.speaker} className="history-message rounded-xl bg-default px-3 py-2 text-sm leading-6 shadow-(--panel-shadow)">
         {message.speaker === "agent" ? (
           <RendererBoundary resetKey={message.text} fallback={plain} retry={markdownDocument.retry}>
-            <Suspense fallback={plain}>
+            <Suspense fallback={trackSuspenseFallback(plain)}>
               <MarkdownDocument embedded text={message.text} path="" theme={theme} renderCode={renderCode} onOpenLink={links && onOpenLink} />
             </Suspense>
           </RendererBoundary>

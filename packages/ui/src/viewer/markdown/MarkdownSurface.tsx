@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useState } from "react";
 
+import { trackSuspenseFallback } from "../../components/hooks/lazyReadiness";
 import { useRenderLatest } from "../../components/hooks/useLatest";
 import { retryableLazy } from "../../components/hooks/retryableLazy";
 import { useFadeRegion, useScrollFade } from "../../components/scroll/scrollFade";
@@ -126,7 +127,7 @@ function DocumentSurface({
           }}
           onCopy={(event) => void copyDocument(event, event.currentTarget, text)}
         >
-          <Suspense fallback={<LoadingOverlay />}>
+          <Suspense fallback={trackSuspenseFallback(<LoadingOverlay />)}>
             <MarkdownDocument
               text={text}
               path={location?.path ?? ""}

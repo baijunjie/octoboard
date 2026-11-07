@@ -1,5 +1,6 @@
 import React, { Suspense, useEffect, useRef } from "react";
 
+import { trackSuspenseFallback } from "../../components/hooks/lazyReadiness";
 import { AgentIcon } from "../../components/icons/AgentIcon";
 import { PanelHeader } from "../../components/panel/PanelHeader";
 import { SessionAgentIcon } from "../../components/icons/SessionAgentIcon";
@@ -114,5 +115,5 @@ function WorkflowFiles(): React.ReactElement {
 function Changes(): React.ReactElement {
   const t = useT();
   useRendererScope();
-  return <section className="feature-surface changes-view"><header className="changes-heading"><code dir="ltr">src/orders.ts</code><ChangeStatusBadge status="modified">{t("viewer.change.modified")}</ChangeStatusBadge></header><div className="diff-body" dir="ltr"><Suspense fallback={null}><RenderedDiff name="orders.ts" patch={patch} layout="unified" theme="dark" wrap={false} onDrawn={ready} labels={{ unmodified: (count) => t("viewer.expand.unmodified", { count }), unknown: t("viewer.expand.unknown"), above: t("viewer.expand.above"), below: t("viewer.expand.below"), between: t("viewer.expand.between"), hiddenAll: (count) => t("viewer.expand.hiddenAll", { count }), all: t("viewer.expand.all"), loading: t("viewer.expand.loading"), failedHere: t("viewer.expand.failedHere") }} /></Suspense></div></section>;
+  return <section className="feature-surface changes-view"><header className="changes-heading"><code dir="ltr">src/orders.ts</code><ChangeStatusBadge status="modified">{t("viewer.change.modified")}</ChangeStatusBadge></header><div className="diff-body" dir="ltr"><Suspense fallback={trackSuspenseFallback(null)}><RenderedDiff name="orders.ts" patch={patch} layout="unified" theme="dark" wrap={false} onDrawn={ready} labels={{ unmodified: (count) => t("viewer.expand.unmodified", { count }), unknown: t("viewer.expand.unknown"), above: t("viewer.expand.above"), below: t("viewer.expand.below"), between: t("viewer.expand.between"), hiddenAll: (count) => t("viewer.expand.hiddenAll", { count }), all: t("viewer.expand.all"), loading: t("viewer.expand.loading"), failedHere: t("viewer.expand.failedHere") }} /></Suspense></div></section>;
 }

@@ -1,4 +1,5 @@
-import { createElement, lazy, type ComponentProps, type ComponentType } from "react";
+import { createElement, lazy, useLayoutEffect, type ComponentProps, type ComponentType } from "react";
+import { committedLazyLoad, failedLazyLoad } from "./lazyReadiness";
 
 /**
  * A lazily loaded component whose load can be tried again. `lazy` keeps the rejection of a failed
@@ -16,10 +17,12 @@ export function retryableLazy<T extends ComponentType<any>>(
   load: () => Promise<{ default: T }>,
 ): { Component: ComponentType<ComponentProps<T>>; retry: () => void } {
   let failed = false;
+  const loadKey = {};
   const start = () =>
     lazy(() =>
       load().catch((error: unknown) => {
         failed = true;
+        failedLazyLoad(loadKey, error);
         throw error;
       }),
     );
@@ -28,6 +31,7 @@ export function retryableLazy<T extends ComponentType<any>>(
     // Kept out of the React Compiler: `current` is state outside React that `retry` replaces, which its
     // memoization would take for constant and so keep rendering the one that failed.
     "use no memo";
+    useLayoutEffect(() => committedLazyLoad(loadKey), []);
     return createElement(current as ComponentType<ComponentProps<T>>, props);
   }
   return {

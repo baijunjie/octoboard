@@ -1,5 +1,6 @@
 import React, { Suspense } from "react";
 
+import { trackSuspenseFallback } from "../../components/hooks/lazyReadiness";
 import { ActionableError } from "../../errors/actionableError";
 import { useT } from "../../i18n/react";
 import { retryableLazy } from "../../components/hooks/retryableLazy";
@@ -25,7 +26,7 @@ export function LazyLinkedFileViewer(props: React.ComponentProps<typeof Viewer>)
         props.onClose();
       }}
     >
-      <Suspense fallback={null}>
+      <Suspense fallback={trackSuspenseFallback(null)}>
         <Viewer {...props} />
       </Suspense>
     </LoadBoundary>

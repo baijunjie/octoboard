@@ -28,7 +28,7 @@ import { type DataAttributes, definedProps } from "./props";
  * to the top of the list while its section is in view. The rest of the props (a scroll fade's, a list motion's) go on
  * the tree's scrolling element.
  */
-export function Tree<T extends object>({ ref, label, items, expandedKeys, onExpandedChange, onAction, dependencies, rowHeight, headingHeight, className, children, ...rest }: DataAttributes & Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
+export function Tree<T extends object>({ ref, label, items, expandedKeys, onExpandedChange, onAction, dependencies, rowHeight, headingHeight, className, children, onKeyDown, ...rest }: DataAttributes & Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
   ref?: React.Ref<HTMLDivElement>;
   label: string;
   items: Iterable<T>;
@@ -43,7 +43,7 @@ export function Tree<T extends object>({ ref, label, items, expandedKeys, onExpa
 }): React.ReactElement {
   const sectioned = headingHeight !== undefined;
   return (
-    <Virtualizer layout={sectioned ? StickySectionLayout : ListLayout} layoutOptions={sectioned ? { rowHeight, headingHeight } : { rowHeight }}>
+    <Virtualizer layout={sectioned ? StickySectionLayout : PersistedTreeLayout} layoutOptions={sectioned ? { rowHeight, headingHeight } : { rowHeight }}>
       <AriaTree<T>
         {...(rest as object)}
         ref={ref}
@@ -52,6 +52,16 @@ export function Tree<T extends object>({ ref, label, items, expandedKeys, onExpa
         expandedKeys={expandedKeys as Set<string>}
         onExpandedChange={(keys) => onExpandedChange(new Set([...keys].map(String)))}
         onAction={(key) => onAction(String(key))}
+        render={(props) => <div {...props} onKeyDown={(event) => {
+          props.onKeyDown?.(event);
+          // React Aria moves focus but leaves these keys' default scrolling enabled without selection. WebKit's
+          // native keyboard scroll then conflicts with the virtualizer's scroll, leaving its painted offset behind.
+          if (["Home", "End", "PageUp", "PageDown"].includes(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey &&
+            !(event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])'))) {
+            event.preventDefault();
+          }
+          onKeyDown?.(event);
+        }} />}
         {...definedProps({ dependencies, className: sectioned ? `${className ?? ""} ${STICKY_SECTION_SCROLL_CLASS}` : className })}
       >
         {children}
@@ -126,6 +136,29 @@ export function TreeHeader({ className, children, ...data }: DataAttributes & { 
       {children}
     </AriaTreeHeader>
   );
+}
+
+/** A listing that grows can leave a cached offscreen row outside ListLayout's current root traversal. The upstream
+ * persisted-key check sees the cache entry and skips rebuilding, so a focused row never mounts. Rebuild only when an
+ * existing persisted item is missing from that traversal; its cached position may also predate the new rows. */
+class PersistedTreeLayout extends ListLayout<unknown> {
+  protected override layoutIfNeeded(rect: Rect): void {
+    super.layoutIfNeeded(rect);
+    const virtualizer = this.virtualizer;
+    if (!virtualizer || virtualizer.persistedKeys.size === 0) return;
+    const roots = new Set(this.rootNodes.map((node) => node.layoutInfo.key));
+    const nodes = [...this.rootNodes];
+    for (const node of nodes) {
+      roots.add(node.layoutInfo.key);
+      if (node.children) nodes.push(...node.children);
+    }
+    const missing = [...virtualizer.persistedKeys].some((key) => virtualizer.collection.getItem(key)?.type === "item" && !roots.has(key));
+    if (!missing) return;
+    // Match ListLayout's missing-cache fallback, recalculating the row instead of returning its stale layout info.
+    this.requestedRect = new Rect(0, 0, Infinity, Infinity);
+    this.rootNodes = this.buildCollection();
+    this.requestedRect = new Rect(0, 0, this.contentSize.width, this.contentSize.height);
+  }
 }
 
 /** The layout of a sectioned tree. The virtualizer's sticky wrapper must stay within its own section, whose overflow

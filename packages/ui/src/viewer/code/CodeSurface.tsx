@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { trackSuspenseFallback } from "../../components/hooks/lazyReadiness";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { useFadeRegion, useScrollFade, type FadeRegion } from "../../components/scroll/scrollFade";
 import type { PlainMessageKey } from "../../i18n/catalog";
@@ -127,7 +128,7 @@ function CodeFrame({
     <FrameSurface focused={frame.region.focused}>
       <div dir="ltr" {...fade} {...FIND_REGION} onKeyDown={frame.onKeyDown}>
         {!drawn && <LoadingOverlay />}
-        <Suspense fallback={null}>{children(onDrawn)}</Suspense>
+        <Suspense fallback={trackSuspenseFallback(null)}>{children(onDrawn)}</Suspense>
       </div>
     </FrameSurface>
   );
