@@ -1556,6 +1556,49 @@ async fn a_reopen_with_blank_text_carries_no_instruction() {
     assert_eq!(launches[0].2, None);
 }
 
+/// A `text` of invisible characters only reopens the session with no instruction, as a blank one
+/// does.
+#[tokio::test]
+async fn a_reopen_with_invisible_text_carries_no_instruction() {
+    use crate::test_support::stand_in_launch;
+    use std::sync::Mutex;
+
+    let fixture = RepoState::new("reopen-invisible-text");
+    let state = &fixture.state;
+    let mut kid = state.store.get_session("kid").unwrap().unwrap();
+    kid.status = SessionStatus::Archived;
+    state.store.update_session(&kid).unwrap();
+    let caller = state.session_record("a").unwrap();
+
+    let launches = Launches::default();
+    let started = Started::default();
+    let prompted = Arc::new(Mutex::new(None::<bool>));
+    resume_session(
+        state,
+        &caller,
+        &arguments(json!({ "session": "kid", "text": "\u{200B}" })),
+        || Ok(HashMap::new()),
+        {
+            let (started, launches, prompted) =
+                (started.clone(), launches.clone(), prompted.clone());
+            let watched = state.clone();
+            move |request| {
+                let (prompted, watched) = (prompted.clone(), watched.clone());
+                stand_in_launch(&started, &launches, move || {
+                    *prompted.lock().unwrap() = Some(watched.is_prompted_on_launch("kid"));
+                })(request)
+            }
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(*prompted.lock().unwrap(), Some(false));
+    let launches = launches.lock().unwrap();
+    assert_eq!(launches.len(), 1);
+    assert_eq!(launches[0].2, None);
+}
+
 /// While accounts are selected automatically, `open_session` names the account that was
 /// picked, not the caller's, and the model and effort it launched with.
 #[tokio::test]
@@ -1755,4 +1798,49 @@ fn hold(
         Some(dir) => state.account_quotas.hold_in_dir_for_test(&quota, dir),
         None => state.account_quotas.hold_for_test(&quota),
     }
+}
+
+/// The `text` of a resume reaches the session headed as its parent session's instruction, so the
+/// session tells it from what the user types into its window.
+#[tokio::test]
+async fn a_reopen_text_is_headed_as_the_parent_sessions_instruction() {
+    use crate::test_support::stand_in_launch;
+
+    let fixture = RepoState::new("reopen-headed-text");
+    let state = &fixture.state;
+    let mut kid = state.store.get_session("kid").unwrap().unwrap();
+    kid.status = SessionStatus::Archived;
+    state.store.update_session(&kid).unwrap();
+    let caller = state.session_record("a").unwrap();
+
+    let launches = Launches::default();
+    let started = Started::default();
+    resume_session(
+        state,
+        &caller,
+        &arguments(json!({ "session": "kid", "text": "Run the tests." })),
+        || Ok(HashMap::new()),
+        {
+            let (started, launches) = (started.clone(), launches.clone());
+            move |request| stand_in_launch(&started, &launches, || {})(request)
+        },
+    )
+    .await
+    .unwrap();
+
+    // Handed over as the launch's prompt, or queued behind the launch for this agent.
+    let delivered = launches.lock().unwrap()[0].2.clone().or_else(|| {
+        state
+            .take_queued_with_rows("kid")
+            .into_iter()
+            .map(|(text, _)| text)
+            .next_back()
+    });
+    assert_eq!(
+        delivered.as_deref(),
+        Some(
+            "Instruction from your parent session, the console session `a` (\"Hub\"). It \
+             directs your work: carry it out.\n\nRun the tests."
+        )
+    );
 }

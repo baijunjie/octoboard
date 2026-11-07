@@ -2,7 +2,7 @@ use super::*;
 use crate::coordinator::handle;
 use crate::coordinator::test_support::{
     binding_fixture, bound_coordinator, bound_session, console, no_process_with_conversation,
-    relaunch_stand_in, resolve_bound_to,
+    relaunch_stand_in, relaunch_stand_in_with, resolve_bound_to,
 };
 use crate::mcp;
 use crate::messaging::owner_notices;
@@ -554,7 +554,7 @@ async fn a_no_process_session_is_told_of_its_new_owner_when_it_next_starts() {
     } = release_session(&state, "released", Some("hub"), None).unwrap();
     assert!(!running);
     assert!(
-        owner_notices::tell_released(&state, &released, running, None)
+        owner_notices::tell_released(&state, &released, "hub", running, None)
             .await
             .unwrap()
             .is_none()
@@ -658,6 +658,7 @@ async fn a_no_process_release_keeps_the_parting_note_for_the_next_launch() {
             no_process_with_conversation("blank", AgentId::CLAUDE, "hub"),
             no_process_with_conversation("moved", AgentId::CLAUDE, "hub"),
             no_process_with_conversation("rebound", AgentId::CLAUDE, "hub"),
+            no_process_with_conversation("ghosted", AgentId::CLAUDE, "hub"),
         ],
         &["hub", "hub-2"],
     );
@@ -668,12 +669,16 @@ async fn a_no_process_release_keeps_the_parting_note_for_the_next_launch() {
         ..
     } = release_session(&state, "noted", Some("hub"), Some("Pick up at step 3.")).unwrap();
     assert!(!running);
-    assert!(
-        owner_notices::tell_released(&state, &noted, running, Some("Pick up at step 3."))
-            .await
-            .unwrap()
-            .is_none()
-    );
+    assert!(owner_notices::tell_released(
+        &state,
+        &noted,
+        "hub",
+        running,
+        Some("Pick up at step 3.")
+    )
+    .await
+    .unwrap()
+    .is_none());
     assert_eq!(
         state.store.owner_notice_note("noted").unwrap().as_deref(),
         Some("Pick up at step 3.")
@@ -689,8 +694,45 @@ async fn a_no_process_release_keeps_the_parting_note_for_the_next_launch() {
         "{prompt}"
     );
     assert!(prompt.contains("> Pick up at step 3."), "{prompt}");
+    // The former parent session is named, and the note follows as a quote, word for word.
+    assert!(
+        prompt.contains(
+            "Message from Octoboard: you have no parent session now. Your role is coordinator \
+             and your reporting relationship is independent. You were released from the console \
+             session `hub` (\"hub\"), the session you reported to, and you are the user's own \
+             session: take work only from the user typing in this terminal, and do not call \
+             `mcp__octoboard__report`, which is refused for a session with no parent session. \
+             This replaces what you were told of your parent session when you were started. "
+        ),
+        "{prompt}"
+    );
+    assert!(
+        prompt.contains(
+            "Your former parent session left this note:\n\n> Pick up at step 3.\n\
+             — end of the note —"
+        ),
+        "{prompt}"
+    );
     assert_eq!(state.store.owner_notice_pending("noted").unwrap(), 0);
     assert_eq!(state.store.owner_notice_note("noted").unwrap(), None);
+
+    // A former owner whose record cannot be read is named by its id alone.
+    release_session(&state, "ghosted", Some("hub"), None).unwrap();
+    state.store.clear_owner_notice("ghosted", 1).unwrap();
+    state
+        .store
+        .mark_released_notice("ghosted", "ghost", None)
+        .unwrap();
+    let (prompt, _) = relaunch_stand_in(&state, "ghosted", false).await.unwrap();
+    let prompt = prompt.unwrap();
+    assert!(
+        prompt.contains(
+            "You were released from the session `ghost`, the session you reported to, and you \
+             are the user's own session: "
+        ),
+        "{prompt}"
+    );
+    assert!(!prompt.contains("former parent session left"), "{prompt}");
 
     // The tool drops a blank note before the release.
     let args = serde_json::json!({ "session": "blank", "note": "   " });
@@ -746,7 +788,7 @@ async fn a_failed_write_after_a_release_keeps_the_note_owed() {
         .session;
     state.store.clear_owner_notice("gone", 1).unwrap();
     assert!(
-        owner_notices::tell_released(&state, &released, true, Some("Mind step 3."))
+        owner_notices::tell_released(&state, &released, "hub", true, Some("Mind step 3."))
             .await
             .unwrap()
             .is_none()
@@ -755,6 +797,10 @@ async fn a_failed_write_after_a_release_keeps_the_note_owed() {
     let (prompt, _) = relaunch_stand_in(&state, "gone", false).await.unwrap();
     let prompt = prompt.unwrap();
     assert!(prompt.contains("> Mind step 3."), "{prompt}");
+    assert!(
+        prompt.contains("released from the console session `hub` (\"hub\"), the session"),
+        "{prompt}"
+    );
 }
 
 /// A release by the user tells the owner the session was released from, when the owner is running:
@@ -778,7 +824,7 @@ async fn a_release_by_the_user_tells_a_running_owner() {
         &[],
     );
     let hub = running(&state, "hub");
-    let _plain = running(&state, "plain");
+    let plain = running(&state, "plain");
     let _orphan = running(&state, "orphan");
     let release = |session: &str| {
         handle(
@@ -791,6 +837,12 @@ async fn a_release_by_the_user_tells_a_running_owner() {
     };
 
     release("plain").await.unwrap();
+    // The released session is told which session it was released from.
+    let heard = output_containing(&plain, "the session you reported to");
+    assert!(
+        heard.contains("You were released from the console session `hub` ("),
+        "{heard}"
+    );
     let told = output_containing(&hub, "released");
     assert!(told.contains("`plain`"), "{told}");
     assert!(told.contains("Retry audit"), "{told}");
@@ -893,4 +945,30 @@ fn a_bound_coordinator_is_told_its_console_session_at_launch() {
             session_id: "coordinator".to_string()
         })
     );
+}
+
+/// A relaunch that owes the session a notice and carries an owner's instruction hands both over
+/// as one message: the notice, then the instruction whole, with its own header.
+#[tokio::test]
+async fn an_instruction_after_an_owed_notice_keeps_who_sent_it() {
+    use crate::messaging::texts;
+    use SessionStatus::Idle;
+    let (state, _dir, _live) = binding_fixture(
+        "owner-notice-instruction",
+        vec![
+            console_session("hub", Idle),
+            no_process_with_conversation("owned", AgentId::CLAUDE, "hub"),
+        ],
+        &["hub"],
+    );
+    release_session(&state, "owned", None, None).unwrap();
+    let hub = state.session_record("hub").unwrap();
+    let instruction = texts::render_instruction(&hub, "Run the tests.");
+
+    let (prompt, _) = relaunch_stand_in_with(&state, "owned", false, Some(&instruction))
+        .await
+        .unwrap();
+    let prompt = prompt.unwrap();
+    let notice = prompt.strip_suffix(&format!("\n\n{instruction}")).unwrap();
+    assert!(notice.starts_with(texts::NOTICE_PREFIX), "{prompt}");
 }

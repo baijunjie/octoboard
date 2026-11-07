@@ -42,16 +42,17 @@ code and fenced code retain a monospace face; fenced code keeps its code theme. 
 documents in the file viewer does not change the history's typography (see "Markdown style" in
 `docs/product/settings.md`).
 
-**Messages Octoboard wrote into the session are hidden**: the brief a session was started with, a report from a
-session under it, a report panel form submission, information shared with the session (or the copy of what it
-shared), a notice that begins "Message from Octoboard", and the opening prompt of a session started at another
-session's request, of one handed branches by the session that started it, or of one taking over a handed-off session
-(see `docs/product/handing-off-sessions.md`). This hides only those messages from the history view; the original
+**Messages Octoboard wrote into the session are hidden**: the brief a session was started with, an instruction from
+its parent session (sent with `instruct_session`, or as `resume_session`'s `text`), a report from a session under it, a
+report panel form submission, information shared with the session (or the copy of what it shared), a notice that
+begins "Message from Octoboard", and the opening prompt of a session started at another session's request, of one
+handed branches by the session that started it, or of one taking over a handed-off session (see
+`docs/product/handing-off-sessions.md`). This hides only those messages from the history view; the original
 conversation record is unchanged. The agent's final reply to a hidden message remains visible.
 
-**Which messages are Octoboard's is told from how they begin.** So text an owner session sends with `instruct_session`,
-which has no fixed opening, reads as the user's; and a message the user typed that happens to begin the way one of
-Octoboard's does is hidden too.
+**Which messages are Octoboard's is told from how they begin**, by the headers in `docs/product/message-headers.md`,
+those of earlier versions included (see "Headers of earlier versions" there). So a message the user typed that happens
+to begin the way one of Octoboard's does is hidden too.
 
 Each message the user or Octoboard sent opens a turn. Also left out: tool calls and their output, the model's
 reasoning, the replies of a turn before its last one, slash-command expansions, the note an agent leaves when a turn

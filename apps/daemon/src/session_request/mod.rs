@@ -479,7 +479,7 @@ where
 
 /// How an approval's outcome written into the caller's session opens, which is what tells the turn
 /// it starts from any other.
-const OUTCOME_OPENING: &str = concat!(texts::notice_prefix!(), " about your");
+const OUTCOME_OPENING: &str = concat!(texts::notice_prefix!(), ": this concerns your");
 
 /// The message that tells a caller's session what became of its call of `tool`, the note being the
 /// call's own, for a caller whose agent gave up on the call without any signal reaching Octoboard.

@@ -59,6 +59,9 @@ Where to start, by question:
   resume a conversation by its ID.
 - [Reporting to a parent session](product/reporting-to-owners.md) — how a project session with a parent reports a round
   of work, when it archives itself, and what is kept for a parent that is interrupted.
+- [Message headers](product/message-headers.md) — how every text a session or Octoboard writes into a session is headed
+  (sender, relationship, nature), the exact header of a parent session's instruction, and what sessions are told about
+  headers.
 - [Information between sessions](product/information-between-sessions.md) — what a session can see of the other running
   sessions, how it tells them something, and what is kept for an interrupted session.
 - [What every session reads](product/what-every-session-reads.md) — the read-only MCP tools open to all sessions.

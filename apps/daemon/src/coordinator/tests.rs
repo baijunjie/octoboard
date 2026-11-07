@@ -513,6 +513,7 @@ async fn report(
         status,
         Vec::new(),
         Vec::new(),
+        None,
     )
     .await
 }
@@ -564,7 +565,7 @@ async fn a_report_to_an_interrupted_owner_is_kept_for_its_resume_in_order() {
     assert_eq!(queued.len(), 4, "{queued:?}");
     assert!(queued[0].contains("first news"), "{queued:?}");
     assert!(
-        queued[1].starts_with("Report from session worker"),
+        queued[1].starts_with("Report from your child session, the project session `worker`"),
         "{queued:?}"
     );
     assert!(queued[1].contains("all done"), "{queued:?}");

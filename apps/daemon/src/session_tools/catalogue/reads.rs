@@ -439,8 +439,8 @@ pub(super) const READ_SESSION_HISTORY: ToolDef = ToolDef {
 
 /// What every session, of whatever kind, may do with every other session: look at the running ones,
 /// and tell any of them things (an interrupted one takes it when resumed). Kept apart from
-/// `instruct_session` so that a message arriving in a session is framed by which tool sent it: an
-/// instruction comes from its owner, and information from anyone.
+/// `instruct_session` so that a message arriving in a session is headed by which tool sent it: an
+/// instruction from its parent session, and information from anyone.
 pub(super) const LIST_SESSIONS: ToolDef = ToolDef {
     name: "list_sessions",
     description: concat!(

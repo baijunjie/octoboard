@@ -42,7 +42,11 @@ pub(crate) fn capitalised(text: &str) -> String {
 pub(crate) const BRIEF_OPENING: &str = "## Goal";
 
 /// How a report written into its owner begins.
-pub(crate) const REPORT_OPENING: &str = "Report from session ";
+pub(crate) const REPORT_OPENING: &str = "Report from your child session, ";
+
+/// How a report written into its owner began before the header named the relationship. Archived
+/// histories hold such messages, so it is still told as Octoboard's.
+pub(crate) const LEGACY_REPORT_OPENING: &str = "Report from session ";
 
 /// How [`render_page_submission`] begins.
 pub(crate) const PAGE_SUBMISSION_OPENING: &str = "Report panel form submission";
@@ -80,7 +84,7 @@ pub(crate) const TAKEOVER_OPENING: &str = "You are taking over the work of the "
 pub(crate) fn takeover_prompt(original: &Session, package: &Path, note: Option<&str>) -> String {
     let note = note.map_or_else(String::new, |note| {
         format!(
-            "\n\nThe owner that handed the work off left you this note:\n\n{}",
+            "\n\nThe session that handed the work off left you this note:\n\n{}",
             naming::quote(note)
         )
     });
@@ -180,6 +184,20 @@ pub(crate) fn branches_opening_prompt(
     )
 }
 
+/// How [`render_instruction`] begins.
+pub(crate) const INSTRUCTION_OPENING: &str = "Instruction from your parent session, ";
+
+/// An instruction `owner` sends its session with `instruct_session` or `resume_session`, headed so
+/// that the session tells its parent session's instruction from what the user types into its
+/// window, which reaches it with no header. The text itself is left as written, not quoted as
+/// information is: it is work the session is to carry out.
+pub(crate) fn render_instruction(owner: &Session, text: &str) -> String {
+    format!(
+        "{INSTRUCTION_OPENING}{}. It directs your work: carry it out.\n\n{text}",
+        naming::named_session(owner)
+    )
+}
+
 /// How [`request_opening_prompt`] begins.
 pub(crate) const REQUEST_OPENING: &str = "You were started at the request of the session ";
 
@@ -206,7 +224,7 @@ pub(crate) fn request_opening_prompt(
     });
     format!(
         "{REQUEST_OPENING}{label}, {approval}. Nobody \
-         owns you but the user: that session is not your owner, and it and you can only share \
+         owns you but the user: that session is not your parent session, and it and you can only share \
          information with each other.{transferred} This is the brief it wrote:\n\n{brief}",
         label = naming::label(caller),
     )

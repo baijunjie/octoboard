@@ -138,7 +138,7 @@ pub(crate) async fn handoff_session_with(
     }
     let held = takeover_context(state, &moved).await;
     let prompt = format!(
-        "{}\n\nThe original is archived; what it held is yours now:{held}",
+        "{}\n\nThe original is archived; what it held is yours now:{held}\n\n{FORWARDED_NOTE}",
         takeover_prompt(&original, &path, request.note.as_deref()),
     );
     start_work(state, first, prompt).await;
@@ -434,6 +434,12 @@ pub(super) async fn tell(
         }
     }
 }
+
+/// What the receiving session is told of the messages [`forward_messages`] delivers after its first
+/// work prompt: they are written as they were sent to the original, so nothing in them says they
+/// were not meant for the receiver.
+const FORWARDED_NOTE: &str = "Any messages that were waiting for the original session follow \
+    this one, as they were sent to it; their headers say who sent them.";
 
 /// The final responsibilities included in the receiving session's first work prompt.
 async fn takeover_context(state: &Arc<AppState>, moved: &Moved) -> String {

@@ -119,15 +119,17 @@ tool, every refusal reaches the model as its reason in prose.
 
 **The released session is told**, by a message written through the delivery every message takes (queued while it cannot
 take one; see "Messages held until a session can take them" in `docs/product/message-delivery.md`), that it has no owner
-now, having been released from the session it reported to, and is the user's own session; that it takes work only from
-the user typing in its terminal and is not to call `report`, which is refused for a session with no owner; that this
-replaces what it was told of its owner when it was started; that it can start and drive sessions of its own with
-`open_session` and the tools that go with it, calling `get_session` once with no arguments first so that its tool list
-catches up (see "When a binding changes while a session runs" below), and can still tell its former owner something with
-`inform_session`, which the former owner weighs rather than obeys; and the list of the Octoboard tools it now has. A
-release made with a `note` ends that message with the note, marked as its former owner's, every line quoted, followed by
-a closing line. One with no process running is told when it next starts instead, and so is one whose message could not
-be written; the note is kept with what it is owed (see "A change of owner told at the next launch" below).
+now, having been released from the session it reported to — named by kind, id and title, as the <kind> session `id`
+("title"), or as the session `id` when that session's record can no longer be read — and is the user's own session; that
+it takes work only from the user typing in its terminal and is not to call `report`, which is refused for a session with
+no owner; that this replaces what it was told of its owner when it was started; that it can start and drive sessions of
+its own with `open_session` and the tools that go with it, calling `get_session` once with no arguments first so that
+its tool list catches up (see "When a binding changes while a session runs" below), and can still tell its former owner
+something with `inform_session`, which the former owner weighs rather than obeys; and the list of the Octoboard tools it
+now has. A release made with a `note` ends that message with the note, marked as its former owner's, every line quoted,
+followed by a closing line. One with no process running is told when it next starts instead, and so is one whose message
+could not be written; the former owner and the note are kept with what it is owed (see "A change of owner told at the
+next launch" below).
 
 **The former owner is told only of the user's release**: an owner that releases a session itself is sent nothing, since
 it made the call. When the user releases a session, its former owner, if it has a process running, is told by a message
@@ -196,12 +198,13 @@ and goes on driving them (see "Coordinators with a parent session" in `docs/prod
 session becomes a worker" in `docs/product/report-panel.md`).
 
 **The summary reaches the owner as the caller's first report**, through the ordinary reporting path (see
-`docs/product/reporting-to-owners.md`), with the status `needs_decision` and no open items. The report's summary opens
-by saying the project session bound itself to the owner, is the owner's to drive from now on and reports to it — and,
-for a coordinator with a parent, that it keeps the sessions it started and drives them itself, which the owner can read
-but not drive — then gives the caller's `summary`. It counts as the caller's report for its current turn, so that turn
-ending without a `report` produces no synthesised report (see "When a session does not report" in
-`docs/product/reporting-to-owners.md`).
+`docs/product/reporting-to-owners.md`), with the status `needs_decision` and no open items. Under the status line, a
+sentence of Octoboard's own says the project session bound itself to the owner, is the owner's to drive from now on and
+reports to it — and, for a coordinator with a parent, that it keeps the sessions it started and drives them itself,
+which the owner can read but not drive — and that its summary follows; the caller's `summary` then follows quoted, as
+any report's summary is (see "The report as the owner reads it" in `docs/product/reporting-to-owners.md`). It counts as
+the caller's report for its current turn, so that turn ending without a `report` produces no synthesised report (see
+"When a session does not report" in `docs/product/reporting-to-owners.md`).
 
 The call returns `owner`, `owner_kind`, `role` (`coordinator` or `worker`) and a `note` telling the caller its role and
 that it now reports to that parent; that from now on it takes work only from the owner, or from the user typing in its
@@ -260,10 +263,12 @@ a restart of Octoboard, and is not part of the session record clients read.
 
 It is delivered when the session's process is next started — a resume, a reopen, or any other relaunch, such as one for
 a switch of account — ahead of the launch's own instruction, in the same text as that instruction where there is one (an
-owner's `resume_session` text, say): a Claude Code session resuming a conversation has it in its launch prompt, any
-other session as a message delivered once it can take one (see "Messages held until a session can take them" in
-`docs/product/message-delivery.md`). Where it stands among the information kept for an interrupted session is in
-"Information for an interrupted session" in `docs/product/information-between-sessions.md`.
+owner's `resume_session` text, say), the notice first and the instruction, with its own header where it has one (see
+"A parent session's instruction" in `docs/product/message-headers.md`), after a blank line: a Claude Code session
+resuming a conversation has it in its launch prompt, any other session as a message delivered once it can take one (see
+"Messages held until a session can take them" in `docs/product/message-delivery.md`). Where it stands among the
+information kept for an interrupted session is in "Information for an interrupted session" in
+`docs/product/information-between-sessions.md`.
 
 The notice is built at delivery, from the binding as it stands then, so a later change replaces an earlier one still
 owed and several changes end in one notice. A session that has an owner is told that its owner changed while it was not
@@ -271,10 +276,13 @@ running, which session its owner is now, that it takes work only from it or from
 reports to it with `report`, and that this replaces what it was told of its owner when it was started; one with the
 worker role is also told it can no longer start or drive sessions, with the list of the Octoboard tools it has, and that
 any pages it pushed to the report panel were withdrawn with the tools for them. A session with no owner is told what a
-released session is told (see "Releasing a session from its owner" above), with the parting note of the release that
-left it independent, where that release was made with one and is still the latest change of the session's owner: a later
-change of owner — the session binding itself to an owner, say — drops the note, and a note kept for a message that could
-not be written is kept only while the session is still independent.
+released session is told (see "Releasing a session from its owner" above), naming the former parent session of the
+release that left it independent — by kind, id and title, or as the session `id` when that session's record is gone by
+the time the notice is told — with that release's parting note where it was made with one, as long as that release is
+still the latest change of the session's owner: a later change of owner — the session binding itself to an owner, say —
+drops the former owner and the note, and those kept for a message that could not be written are kept only while the
+session is still independent.
 
-The notice, and any note kept with it, is no longer owed once the launch has started the session's process. A launch
-that fails leaves it owed for the next one, so a session may be told of a change twice, but never not at all.
+The notice, and the former owner and any note kept with it, is no longer owed once the launch has started the session's
+process. A launch that fails leaves it owed for the next one, so a session may be told of a change twice, but never not
+at all.

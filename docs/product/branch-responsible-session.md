@@ -129,11 +129,11 @@ the caller itself, and the two must differ. No approval is asked: the caller own
   could be read, else `null`. A branch not moved because by then `from` was no longer responsible for it, or it was
   gone, is named in `not_transferred`. The `note` says what was transferred and that cleanup follows the new
   responsible session. If no branch could be moved, or the move could not be recorded, the call is refused.
-- **The sessions concerned are told.** `from` and `to`, each unless it is the caller, are sent a message naming the
-  caller as their owner and listing each branch with where it is checked out and whether that worktree holds
+- **The sessions concerned are told.** `from` and `to`, each unless it is the caller, are sent a message from Octoboard naming the
+  caller as their parent session and listing each branch with where it is checked out and whether that worktree holds
   uncommitted changes. `from`'s says it is no longer responsible for the branches, must not touch them or their
   worktrees, and must leave any uncommitted changes there as they are. `to`'s says it is now the session responsible
-  for them, the previous one no longer is, and its owner will tell it what to do with them; its list also gives each
+  for them, the previous one no longer is, and its parent session will send it its instruction about them; its list also gives each
   branch's target branch, where one is recorded (see "Target branches and fork points" in
   `docs/product/revert-gate.md`). A session that is interrupted or archived, or that a message could not be written
   to, is not told; the `note` names it and asks the caller to tell it once it can take a message.

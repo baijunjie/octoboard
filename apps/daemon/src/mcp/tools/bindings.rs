@@ -117,7 +117,7 @@ pub(in crate::mcp) async fn release_session(
         Some(&caller.id),
         note.as_deref(),
     )?;
-    let delivery = tell_released(state, &released, running, note.as_deref()).await;
+    let delivery = tell_released(state, &released, &caller.id, running, note.as_deref()).await;
     Ok(json!({
         "session": released.id,
         "role": released.role,
@@ -146,16 +146,16 @@ pub(in crate::mcp) async fn bind_to_session(
     let (bound, owner) = coordinator::bindings::bind_session(state, &caller.id, owner_id)?;
     let coordinator = bound.role == Role::Coordinator;
 
-    let first_report = first_report_on_bind(coordinator, summary);
     // The binding is this round's report, so the round ending without another is not reported on
     // a second time.
     let delivered = reporting::deliver_own_report(
         state,
         &bound.id,
-        first_report,
+        summary.to_string(),
         ReportStatus::NeedsDecision,
         Vec::new(),
         Vec::new(),
+        Some(first_report_on_bind(coordinator).to_string()),
     )
     .await;
     let tool = |name: &str| qualified_tool_name(bound.agent, name);
@@ -453,6 +453,11 @@ mod tests {
         let told = output_containing(&released, "Then stop.");
         assert!(told.contains("you have no parent session now"), "{told}");
         assert!(
+            told.contains("You were released from the console session `a` (")
+                && told.contains("), the session you reported to, and you are"),
+            "{told}"
+        );
+        assert!(
             told.contains("Your former parent session left this note:"),
             "{told}"
         );
@@ -566,8 +571,17 @@ mod tests {
             }
         }
         assert_eq!(withdrawn.len(), 1);
-        let report = output_containing(&starter, "auditing the retries");
-        assert!(report.contains("Report from session loose"), "{report}");
+        let report = output_containing(&starter, "auditing the retries").replace("\r\n", "\n");
+        assert!(
+            report.contains(
+                "Report from your child session, the project session `loose` (\"Work loose\") in \
+                 the project \"project-1\"\nStatus: needs_decision\nThis project session is now a \
+                 worker reporting to you: it is yours to drive from now on, and reports to you. \
+                 Its summary of what it is doing and needs follows.\n\n> I am auditing the \
+                 retries.\n— end of report from session `loose` —"
+            ),
+            "{report}"
+        );
 
         let err = call(
             &state,

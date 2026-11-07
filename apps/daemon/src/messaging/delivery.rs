@@ -160,6 +160,16 @@ pub fn write_message(
     write_message_inner(state, id, text, when_blocked, None)
 }
 
+/// The refusal of a message with nothing left in it once its control and invisible characters
+/// are removed.
+pub(crate) fn blank_text() -> anyhow::Error {
+    CodedError::raised(
+        error_code::FIELD_REQUIRED,
+        "the message is empty once its control and invisible characters are removed",
+        &[("field", "text")],
+    )
+}
+
 fn write_message_inner(
     state: &Arc<AppState>,
     id: &str,
@@ -169,11 +179,7 @@ fn write_message_inner(
 ) -> Result<Delivery> {
     // Written, it would be an empty prompt the agent does not send, and nobody would learn why.
     if term::is_blank_once_stripped(text) {
-        return Err(CodedError::raised(
-            error_code::FIELD_REQUIRED,
-            "the message is empty once its control and invisible characters are removed",
-            &[("field", "text")],
-        ));
+        return Err(blank_text());
     }
     let session = state.session_record(id)?;
     // Held from the claim on until the resume, so queued rather than refused whatever state its
@@ -370,6 +376,15 @@ fn wait_out_claim(state: &Arc<AppState>, id: &str) {
     }
 }
 
+/// The sentence that dates a message kept for a session while it was interrupted, as of now: every
+/// kept message carries it, so the session reading it after its resume knows when it was written.
+pub(crate) fn kept_dating() -> String {
+    format!(
+        "Kept for you while you were interrupted; it dates from {}.",
+        time::readable_utc_minute(now_millis())
+    )
+}
+
 /// Writes `text`, a report or a notice about the session `about`, into `owner`, queued while it
 /// cannot take a message; an owner that is interrupted has it kept instead, built by `kept` around
 /// the line that says so, and written into it once it is resumed, in the order it came with the
@@ -398,9 +413,9 @@ pub(crate) fn write_to_owner(
 ) -> Result<Delivery> {
     let kept_text = || {
         let line = format!(
-            "Kept for you while you were interrupted; it dates from {}. What it says of the \
-             session may no longer hold, so check the session with `{}` before acting on it.",
-            time::readable_utc_minute(now_millis()),
+            "{} What it says of the session may no longer hold, so check the session with `{}` \
+             before acting on it.",
+            kept_dating(),
             catalogue::qualified_tool_name(owner.agent, "get_session"),
         );
         kept(&line)

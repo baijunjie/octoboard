@@ -15,6 +15,13 @@ notice that begins "Message from Octoboard" is built from `messaging::texts::NOT
 opening alone reads like something a user could type, give its first line a fixed phrase too and match on both, as the
 branches prompt does with `messaging::texts::BRANCHES_MARKER`.
 
+Text that one session, or Octoboard on a session's behalf, writes into another also says who sent it, how it relates
+to the receiver and what it is (the standard is in `docs/product/message-headers.md`): the user's own typing is the only
+text with no header, and that is how a session tells the two apart. Text a session passes along is quoted with
+`naming::quote`; a parent session's instruction goes through `texts::render_instruction` and is not quoted, since it is
+to be carried out. A new header is also named in what sessions are told about headers (`message_headers` in
+`apps/daemon/src/session_tools/role.rs`, and the console session's instruction file, which a test checks).
+
 ## A key the daemon types into a session on its own is gated, alone and sent once
 
 Applies to daemon code that writes keystrokes of its own into a session's terminal (an interrupt key, a Ctrl-U, an

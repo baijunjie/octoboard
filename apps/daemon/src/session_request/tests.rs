@@ -243,6 +243,18 @@ async fn outcome_of(call: tokio::task::JoinHandle<Result<Value>>) -> Result<Valu
         .unwrap()
 }
 
+/// The outcome written into the caller's session is a notice, opening with the prefix and a colon
+/// like every other, and names the call it concerns.
+#[test]
+fn an_outcome_message_is_a_notice_naming_the_call() {
+    assert_eq!(
+        outcome_message(AgentId::CLAUDE, "request_session", "The user approved it."),
+        "Message from Octoboard: this concerns your `mcp__octoboard__request_session` call. The \
+         user approved it. If that call already returned this, there is nothing more to do about \
+         it."
+    );
+}
+
 /// A session may ask for one in a project of another console: the dialog is told where, and an
 /// approval starts it there with nobody as its owner, leaves the caller as it was, and writes the
 /// outcome into the caller's session as well as returning it.

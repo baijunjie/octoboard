@@ -17,15 +17,13 @@ are its owner's to carry out in `owner_items` rather than `open_items`.
 
 The report is written into its **parent session** — a console session or project coordinator — named by the reporting
 relationship rather than looked up, since a console may hold several console sessions. It arrives as a user message
-naming the reporting session's id, its title and project, the status, the open items, the owner items under their own
-heading saying they are the owner's to do, and then the summary. Each list is left out when it is empty. The reporting
-session is told that it was delivered; that it is queued and will reach its owner as soon as the owner can take a
-message; that it was kept for its owner, which is interrupted, and is delivered once the owner is resumed (see "Reports
-and notices for an interrupted owner" below); or that it was written into the owner's input but the owner's agent did
-not send it to the conversation, so the owner has not read it and the user has been told to check the owner (see "A
-message written but not sent" and "A message a dialog discarded or a view took" in `docs/product/message-delivery.md`).
-Every outcome but the first tells it not to send the report again. The note names the owner by its id, calling it a
-console session or a project session according to which it is.
+(see "The report as the owner reads it" below). The reporting session is told that it was delivered; that it is queued
+and will reach its owner as soon as the owner can take a message; that it was kept for its owner, which is interrupted,
+and is delivered once the owner is resumed (see "Reports and notices for an interrupted owner" below); or that it was
+written into the owner's input but the owner's agent did not send it to the conversation, so the owner has not read it
+and the user has been told to check the owner (see "A message written but not sent" and "A message a dialog discarded or
+a view took" in `docs/product/message-delivery.md`). Every outcome but the first tells it not to send the report again.
+The note names the owner by its id, calling it a console session or a project session according to which it is.
 
 Reporting is refused, or fails without accepting the report, when:
 
@@ -50,6 +48,37 @@ Reporting is refused, or fails without accepting the report, when:
 - the session is a coordinator with a parent, the report has `status: done` and no open items (whatever owner items it
   has), and a session bound to it is not archived, unless a lock blocks automatic archiving (see "Automatic archiving"
   below). The reason names those sessions. Its other reports go through, and none of them archives it.
+
+## The report as the owner reads it
+
+A report reaches its owner as:
+
+```text
+Report from your child session, the project session `<id>` ("<title>") in the project "<project>"
+Status: <status>
+Open items:
+- <open item>
+For you to do:
+- <owner item>
+
+> <summary, line by line>
+— end of report from session `<id>` —
+```
+
+- **The first two lines** name the reporting session — by kind, id and title, and the project it runs in, left out when
+  the project's record cannot be read or the project's name is the session's title — and give the status, `done`, `failed` or `needs_decision`, on its own line.
+- **Octoboard's own lines come next, unquoted**, each on its own line under the status: the line saying a report was
+  synthesised (see "When a session does not report" below); the sentence saying what a session that bound itself to the
+  owner now is to it, on its first report (see "Setting a parent for an independent session" in
+  `docs/product/changing-session-owners.md`); and the line saying the report was kept for an interrupted owner (see
+  "Reports and notices for an interrupted owner" below).
+- **The open items**, then **the owner items** under a heading saying they are the owner's to do, one per line, each
+  item put on one line. Each list is left out when it is empty.
+- **The summary** follows after a blank line, every line of it quoted with `> `, blank ones included, and is closed by
+  a line naming the session by its id. Neither the summary nor an item can pass for a line of Octoboard's own (see "The
+  headers" in `docs/product/message-headers.md`). A session whose turn ended without saying anything has no summary
+  to quote: in its place, Octoboard's own line says it said nothing and to check it with `get_session`, with no
+  closing line, and the synthesised line then says only that the status is Octoboard's guess.
 
 ## When a session does not report
 
@@ -168,7 +197,7 @@ session" in `docs/product/information-between-sessions.md`).
 - **Each kept report and notice is dated.** It carries a line saying it was kept for the owner while it was
   interrupted, the minute it dates from (in UTC), that what it says of the session may no longer hold, and to check the
   session with `get_session` before acting on it. In a report the line comes among the lines that open it, before the
-  open items, the owner items and the summary.
+  open items, the owner items and the summary (see "The report as the owner reads it" above).
 - **A kept wait gives way to what came after it.** A kept notice that a session is waiting for the user, or that it
   stayed idle after its last report, is dropped once any later report or notice about the same session is kept for
   that owner, another of the same kind included; information shared with the owner does not drop it. At the resume, a

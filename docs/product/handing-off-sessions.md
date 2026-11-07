@@ -148,7 +148,7 @@ owner's handoff" below), unless **Automatically approve handoffs** is on, in whi
 | `account` | no | The receiving session's account: an account's id or name, or `default` for the agent's default account. It must belong to `agent`. `default` chooses that account outright and does not fall through to a project pin. Left out or blank, while **Automatically select an account** is on, it is chosen as for a session of `agent` the caller starts in the session's project (or, for a console session, its console), among `agent`'s accounts only, as "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md` describes. When the switch is off, it is the caller's own account when `agent` is the caller's own agent and that account can still open a session; otherwise the project's account for that agent, else the console's. A left-out account is settled when the call is made; where the user is asked, that is the account their form starts on. |
 | `title` | no | The receiving session's created name, stored trimmed. Left out or blank, it takes the original's displayed name (see "What the receiving session takes over" below). It is to be written in the user's language (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
 | `model`, `effort` | no | The receiving session's model and reasoning effort. Left out, each comes from the project or console, as for any handoff; blank, it is the agent's own default; any other must be one the agent offers. |
-| `note` | no | What the caller tells the receiving session beyond the package, such as where the work stands and what to do first. It is added at the end of the receiving session's opening prompt, introduced as a note from the owner that handed the work off, every line quoted. Blank is the same as left out. |
+| `note` | no | What the caller tells the receiving session beyond the package, such as where the work stands and what to do first. It is added to the receiving session's opening prompt after what the prompt says of the package and before the responsibilities it lists, introduced as a note from the session that handed the work off, every line quoted. Blank is the same as left out. |
 
 The receiving session takes the original's place, so it is the caller's, as the original was, and reports to it. The
 caller is not sent the message that tells an owner of a handoff (see "Who is told" below), since it made the call; the
@@ -288,7 +288,9 @@ the original's place has moved and the original has been archived. It names the 
 tells it to read the package whole before doing anything else and to carry on where the original stopped — and, when
 the package names an earlier handoff package, to read that one too, and so on back along the chain, before carrying on.
 The same prompt says that the original is archived, lists the receiving session's final responsibilities, and tells it
-not to message the original. No separate message announcing handoff completion is sent to the receiving session.
+not to message the original, and ends by saying that any messages that were waiting for the original follow it, as
+they were sent to the original, their headers saying who sent them (see "Messages for the original during a handoff"
+below). No separate message announcing handoff completion is sent to the receiving session.
 
 Once it is running, it takes the original's whole place:
 

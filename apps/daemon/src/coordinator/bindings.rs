@@ -379,7 +379,7 @@ pub(super) async fn release_requested(state: &Arc<AppState>, id: String) -> Resu
     // Nobody asked for the notices: a session that cannot be told now is still released,
     // and each notice is told, and its failure logged, on its own.
     let (told, told_owner) = tokio::join!(
-        owner_notices::tell_released(state, &released, running, None),
+        owner_notices::tell_released(state, &released, &former_owner, running, None),
         owner_notices::tell_former_owner(state, &former_owner, &released),
     );
     if let Err(err) = told {

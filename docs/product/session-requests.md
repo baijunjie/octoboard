@@ -240,7 +240,7 @@ dialog (see "Approving requests automatically" above):
 3. **Its opening prompt says who asked for it.** The brief is preceded by a paragraph naming the requesting session by
    id and title, saying the session was started at that session's request with the user's approval — or, for an
    automatic approval, automatically under the user's setting to approve session requests without asking — that nobody
-   owns it but the user, and that the requesting session is not its owner and the two can only share information with
+   owns it but the user, and that the requesting session is not its parent session and the two can only share information with
    each other. Where the request named branches, the paragraph also says the requesting session handed it those
    branches, naming each, with its target branch where one is recorded (see "Target branches and fork points" in
    `docs/product/revert-gate.md`), with the same approval, that it is now the session responsible for them and is to
@@ -321,9 +321,10 @@ the caller is still responsible for them.
 
 **An approval's outcome is also written into the caller's session as a message**, after the call's result, through
 the delivery every message takes (see "Messages held until a session can take them" in
-`docs/product/message-delivery.md`). It carries the same note as the result, says it is from Octoboard about the
-call that made the request, naming its tool — `request_session`, `request_resume_session`, `switch_session_account`
-or `handoff_session` — and that there is nothing more to do if the call already returned it. This is how a caller
+`docs/product/message-delivery.md`). It opens as a notice from Octoboard ("Message from Octoboard:", see
+`docs/product/message-headers.md`) saying it concerns the caller's call that made the request, naming its tool —
+`request_session`, `request_resume_session`, `switch_session_account` or `handoff_session` — then carries the same note
+as the result, and says there is nothing more to do if the call already returned it. This is how a caller
 whose agent gave up on the call by a time limit of its own, without any signal reaching Octoboard, still learns what
 came of its request (see "Waiting for the answer" above).
 

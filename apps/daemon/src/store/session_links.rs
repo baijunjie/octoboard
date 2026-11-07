@@ -18,8 +18,8 @@ impl Store {
     /// stands, or `None` when nothing changed. What else `owner` may be is the caller's to check.
     /// With `owe_notice` the session is marked owed a notice of its new owner
     /// ([`Self::mark_owner_notice`]) in the same statement, so the change and the mark land
-    /// together. Any parting note a release left owed is dropped: the release is no longer the
-    /// latest change of owner.
+    /// together. Any parting note and former owner a release left owed are dropped: the release is
+    /// no longer the latest change of owner.
     pub fn set_binding(
         &self,
         id: &str,
@@ -33,7 +33,8 @@ impl Store {
             id,
             "UPDATE sessions SET bound_to = ?3, role = ?4,
                     owner_notice_pending = owner_notice_pending + ?8,
-                    owner_notice_note = NULL
+                    owner_notice_note = NULL,
+                    owner_notice_former_owner = NULL
              WHERE id = ?1 AND kind = ?5 AND bound_to IS ?2
                AND EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?3
                              AND owner.role = ?6)
@@ -66,8 +67,9 @@ impl Store {
     /// to `from`, so of two changes racing for it only one lands. The sessions bound to `id` stay
     /// bound to it. Returns the record as it now stands, or `None` when nothing changed. With
     /// `owe_notice` the session is marked owed a notice ([`Self::mark_owner_notice`]) in the same
-    /// statement, and `note`, the releasing owner's parting words, is kept with it
-    /// ([`Self::owner_notice_note`]); without, there is nobody to keep it for and it is dropped.
+    /// statement, and `from`, the former owner, and `note`, its parting words, are kept with it
+    /// ([`Self::owner_notice_former_owner`], [`Self::owner_notice_note`]); without, there is nobody
+    /// to keep them for and they are dropped.
     pub fn clear_binding(
         &self,
         id: &str,
@@ -79,7 +81,8 @@ impl Store {
             id,
             "UPDATE sessions SET bound_to = NULL, role = ?6,
                     owner_notice_pending = owner_notice_pending + ?4,
-                    owner_notice_note = CASE WHEN ?4 THEN ?5 END
+                    owner_notice_note = CASE WHEN ?4 THEN ?5 END,
+                    owner_notice_former_owner = CASE WHEN ?4 THEN ?2 END
              WHERE id = ?1 AND kind = ?3 AND bound_to IS ?2",
             params![
                 id,
@@ -107,7 +110,8 @@ impl Store {
         let tx = conn.transaction()?;
         if let Some(owner) = coordinator_of {
             let bound = tx.execute(
-                "UPDATE sessions SET bound_to = ?2, role = ?5, owner_notice_note = NULL
+                "UPDATE sessions SET bound_to = ?2, role = ?5, owner_notice_note = NULL,
+                        owner_notice_former_owner = NULL
                  WHERE id = ?1 AND kind = ?3 AND bound_to IS NULL
                    AND EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?2 AND owner.kind = ?4)",
                 params![
@@ -181,14 +185,21 @@ impl Store {
     }
 
     /// [`Self::mark_owner_notice`] for a release whose message could not be written to a running
-    /// session: the former owner's parting `note` is kept with the mark, in the same statement,
-    /// only while the session is still unbound, so a change of owner since leaves no stale note.
-    pub fn mark_owner_notice_with_note(&self, id: &str, note: &str) -> Result<()> {
+    /// session: the former owner `former_owner` and its parting `note`, when it left one, are kept
+    /// with the mark, in the same statement, only while the session is still unbound, so a change
+    /// of owner since leaves nothing stale.
+    pub fn mark_released_notice(
+        &self,
+        id: &str,
+        former_owner: &str,
+        note: Option<&str>,
+    ) -> Result<()> {
         self.lock().execute(
             "UPDATE sessions SET owner_notice_pending = owner_notice_pending + 1,
-                    owner_notice_note = CASE WHEN bound_to IS NULL THEN ?2 END
+                    owner_notice_note = CASE WHEN bound_to IS NULL THEN ?3 END,
+                    owner_notice_former_owner = CASE WHEN bound_to IS NULL THEN ?2 END
              WHERE id = ?1",
-            params![id, note],
+            params![id, former_owner, note],
         )?;
         Ok(())
     }
@@ -221,12 +232,28 @@ impl Store {
             .flatten())
     }
 
-    /// Clears the notice owed to session `id`, and the note kept with it, if its count is still
-    /// `seen`, the one a launch read before it delivered the notice: a change marked since stays
-    /// owed.
+    /// The id of the former owner a release left with the notice session `id` is owed, if the
+    /// release left one and no change of owner has come since (see [`Self::clear_binding`]). The
+    /// record it names may be gone by the time the notice is told.
+    pub fn owner_notice_former_owner(&self, id: &str) -> Result<Option<String>> {
+        Ok(self
+            .lock()
+            .query_row(
+                "SELECT owner_notice_former_owner FROM sessions WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .optional()?
+            .flatten())
+    }
+
+    /// Clears the notice owed to session `id`, and the note and former owner kept with it, if its
+    /// count is still `seen`, the one a launch read before it delivered the notice: a change marked
+    /// since stays owed.
     pub fn clear_owner_notice(&self, id: &str, seen: i64) -> Result<()> {
         self.lock().execute(
-            "UPDATE sessions SET owner_notice_pending = 0, owner_notice_note = NULL
+            "UPDATE sessions SET owner_notice_pending = 0, owner_notice_note = NULL,
+                    owner_notice_former_owner = NULL
              WHERE id = ?1 AND owner_notice_pending = ?2",
             params![id, seen],
         )?;
@@ -496,18 +523,34 @@ mod tests {
             store.owner_notice_note("coordinator").unwrap().as_deref(),
             Some("good luck")
         );
+        // The former owner is kept with it, to be named in the notice.
+        assert_eq!(
+            store
+                .owner_notice_former_owner("coordinator")
+                .unwrap()
+                .as_deref(),
+            Some("session-1")
+        );
         store
             .set_binding("coordinator", None, "session-1", Role::Worker, false, true)
             .unwrap()
             .expect("bound again");
         assert_eq!(store.owner_notice_pending("coordinator").unwrap(), 2);
         assert_eq!(store.owner_notice_note("coordinator").unwrap(), None);
-        // A release with nobody to be told keeps no note.
+        assert_eq!(
+            store.owner_notice_former_owner("coordinator").unwrap(),
+            None
+        );
+        // A release with nobody to be told keeps no note and no former owner.
         assert!(store
             .clear_binding("coordinator", "session-1", false, Some("dropped"))
             .unwrap()
             .is_some());
         assert_eq!(store.owner_notice_note("coordinator").unwrap(), None);
+        assert_eq!(
+            store.owner_notice_former_owner("coordinator").unwrap(),
+            None
+        );
         assert!(store
             .clear_binding("coordinator", "session-1", true, Some("good luck"))
             .unwrap()
@@ -525,24 +568,57 @@ mod tests {
         store.clear_owner_notice("coordinator", 2).unwrap();
         assert_eq!(store.owner_notice_pending("coordinator").unwrap(), 3);
         assert!(store.owner_notice_note("coordinator").unwrap().is_some());
+        assert!(store
+            .owner_notice_former_owner("coordinator")
+            .unwrap()
+            .is_some());
         store.clear_owner_notice("coordinator", 3).unwrap();
         assert_eq!(store.owner_notice_note("coordinator").unwrap(), None);
-        // A failed write to a running session marks the notice with the note, while unbound only.
+        assert_eq!(
+            store.owner_notice_former_owner("coordinator").unwrap(),
+            None
+        );
+        // A failed write to a running session marks the notice with the former owner and the note,
+        // while unbound only.
         store
-            .mark_owner_notice_with_note("coordinator", "kept")
+            .mark_released_notice("coordinator", "session-1", Some("kept"))
             .unwrap();
         assert_eq!(
             store.owner_notice_note("coordinator").unwrap().as_deref(),
             Some("kept")
+        );
+        assert_eq!(
+            store
+                .owner_notice_former_owner("coordinator")
+                .unwrap()
+                .as_deref(),
+            Some("session-1")
+        );
+        store.clear_owner_notice("coordinator", 1).unwrap();
+        // A release that left no note still names its former owner.
+        store
+            .mark_released_notice("coordinator", "session-1", None)
+            .unwrap();
+        assert_eq!(store.owner_notice_note("coordinator").unwrap(), None);
+        assert_eq!(
+            store
+                .owner_notice_former_owner("coordinator")
+                .unwrap()
+                .as_deref(),
+            Some("session-1")
         );
         store
             .set_binding("coordinator", None, "session-1", Role::Worker, false, false)
             .unwrap()
             .expect("bound again");
         store
-            .mark_owner_notice_with_note("coordinator", "stale")
+            .mark_released_notice("coordinator", "session-1", Some("stale"))
             .unwrap();
         assert_eq!(store.owner_notice_note("coordinator").unwrap(), None);
+        assert_eq!(
+            store.owner_notice_former_owner("coordinator").unwrap(),
+            None
+        );
         let child = store.get_session("child").unwrap().unwrap();
         assert_eq!(child.bound_to.as_deref(), Some("coordinator"));
         // A console session is never bound, so nothing to clear.

@@ -304,18 +304,37 @@ pub(super) async fn relaunch_stand_in(
     id: &str,
     fail: bool,
 ) -> Result<(Option<String>, Vec<String>)> {
+    relaunch_stand_in_with(state, id, fail, None).await
+}
+
+/// [`relaunch_stand_in`] with `instruction` delivered by the relaunch.
+pub(super) async fn relaunch_stand_in_with(
+    state: &Arc<AppState>,
+    id: &str,
+    fail: bool,
+    instruction: Option<&str>,
+) -> Result<(Option<String>, Vec<String>)> {
     use crate::test_support::{stand_in_launch, Launched, StandIn};
     use std::sync::Mutex;
     let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
     let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
     let claim = state.begin_launch(id).unwrap();
     let launch = stand_in_launch(&started, &launches, || {});
-    relaunch_session_with(state, &claim, id, None, true, None, None, move |request| {
-        if fail {
-            anyhow::bail!("the agent could not start");
-        }
-        launch(request)
-    })
+    relaunch_session_with(
+        state,
+        &claim,
+        id,
+        instruction,
+        true,
+        None,
+        None,
+        move |request| {
+            if fail {
+                anyhow::bail!("the agent could not start");
+            }
+            launch(request)
+        },
+    )
     .await?;
     let prompt = launches.lock().unwrap()[0].2.clone();
     Ok((prompt, state.take_queued(id)))

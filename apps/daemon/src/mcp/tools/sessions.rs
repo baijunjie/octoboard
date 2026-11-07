@@ -18,7 +18,7 @@ use crate::mcp::lookup::{
 use crate::mcp::views::{account_fields, branch_names_of, describe_session};
 use crate::messaging::texts::{self, branches_opening_prompt, request_opening_prompt};
 use crate::protocol::{Console, Origin, Project, Session, SessionKind};
-use crate::session::term::{Launch, LaunchRequest};
+use crate::session::term::{self, Launch, LaunchRequest};
 use crate::session_request;
 use crate::state::bindings::owned_count_of;
 use crate::state::AppState;
@@ -245,9 +245,14 @@ pub(in crate::mcp) async fn resume_session(
     coordinator::resume::resume_session_with_launch(
         state,
         &target.id,
-        // Blank text is no instruction: announcing a prompt and then sending none (or queueing an
-        // empty write) would leave the session shown as about to be prompted.
-        optional_text(arguments, "text")?.as_deref(),
+        // Blank text, invisible characters included, is no instruction: announcing a prompt and
+        // then sending none (or queueing an empty write) would leave the session shown as about
+        // to be prompted. Headed as the caller's instruction, so the session tells it from the
+        // user's own typing.
+        optional_text(arguments, "text")?
+            .filter(|text| !term::is_blank_once_stripped(text))
+            .map(|text| texts::render_instruction(caller, &text))
+            .as_deref(),
         // An owner asks over MCP, which has no window appearance to match.
         None,
         // Checked against what the agent offers before anything is relaunched.

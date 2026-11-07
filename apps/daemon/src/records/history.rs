@@ -26,15 +26,21 @@ use crate::time;
 
 /// How the messages Octoboard writes into a session begin, by what wrote them. The notices are
 /// worded at several places and all begin alike.
-const OCTOBOARD_OPENINGS: [&str; 8] = [
+const OCTOBOARD_OPENINGS: [&str; 14] = [
     texts::NOTICE_PREFIX,
+    texts::INSTRUCTION_OPENING,
     texts::REQUEST_OPENING,
     texts::TAKEOVER_OPENING,
     texts::BRIEF_OPENING,
     texts::REPORT_OPENING,
+    texts::LEGACY_REPORT_OPENING,
     texts::PAGE_SUBMISSION_OPENING,
-    sharing::INFO_OPENING,
+    sharing::INFO_PARENT_OPENING,
+    sharing::INFO_CHILD_OPENING,
+    sharing::INFO_OTHER_OPENING,
     sharing::INFO_COPY_OPENING,
+    sharing::LEGACY_INFO_OPENING,
+    sharing::LEGACY_INFO_COPY_OPENING,
 ];
 
 /// Whether `text` is a message Octoboard wrote into a session. The branches prompt begins like
@@ -155,6 +161,25 @@ mod tests {
     #[test]
     fn the_prompt_to_carry_on_after_a_restart_is_octoboards() {
         assert!(from_octoboard(crate::messaging::texts::CONTINUE_PROMPT));
+    }
+
+    /// A message that began with an older header, as an archived history holds it, is Octoboard's
+    /// as much as one with the present headers.
+    #[test]
+    fn the_headers_of_every_period_are_octoboards() {
+        for text in [
+            "Report from your child session, the project session `a` (\"A\")\nStatus: done",
+            "Report from session a — A\nStatus: done",
+            "Information from your parent session, the console session `a` (\"A\")",
+            "Information from your child session, the project session `a` (\"A\")",
+            "Information from another session, the project session `a` (\"A\")",
+            "Information from session a — A",
+            "Copy of information shared with your child session, the project session `a`",
+            "Copy of information shared with your session a — A",
+        ] {
+            assert!(from_octoboard(text), "{text}");
+        }
+        assert!(!from_octoboard("Report from the team"));
     }
 
     /// Every opening a message Octoboard writes is defined with (a constant named `*_OPENING`) is

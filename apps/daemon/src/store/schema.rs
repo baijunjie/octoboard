@@ -17,7 +17,7 @@ use rusqlite::Connection;
 /// [`MIGRATIONS`], and the released version's schema is kept as `schema/v{N}.sql` and listed in the
 /// test-only `PAST_SCHEMAS`, for the test that migrates a database built from each and compares the
 /// result with a fresh one.
-pub(super) const SCHEMA_VERSION: i64 = 1;
+pub(super) const SCHEMA_VERSION: i64 = 2;
 
 /// The `application_id` of an Octoboard database, "OCTB" in ASCII, written into the file's header
 /// when it is created, so that a SQLite file of another program is told apart from one of ours.
@@ -29,7 +29,10 @@ pub(super) const APPLICATION_ID: i64 = 0x4F43_5442;
 /// test compares the two). A step that rebuilds a table renames the old one aside and creates the
 /// new one under its final name: a table renamed into place is stored with its name quoted in
 /// `sqlite_master`, which no longer matches `SCHEMA`.
-pub(super) const MIGRATIONS: &[&str] = &[];
+pub(super) const MIGRATIONS: &[&str] = &[
+    // 1 to 2: the id of the owner a release left with the notice told at the next launch.
+    "ALTER TABLE sessions ADD COLUMN owner_notice_former_owner TEXT;",
+];
 
 /// Every table, index and trigger of the current schema.
 pub(super) const SCHEMA: &str = r#"
@@ -219,8 +222,11 @@ CREATE TABLE sessions (
     pinned           INTEGER NOT NULL DEFAULT 0,
     locked           INTEGER NOT NULL DEFAULT 0,
     started_at       INTEGER NOT NULL,
-    ended_at         INTEGER
-);
+    ended_at         INTEGER ,
+    owner_notice_former_owner TEXT);
+-- `owner_notice_former_owner` is the id of the owner that released the session while it was
+-- not running, named in the notice with the parting note; NULL for none. Written and cleared
+-- with `owner_notice_note`. It is the last column, spelled as a migration leaves it.
 -- The lookups by the columns that other rows and the daemon's queries hold sessions by.
 CREATE INDEX sessions_console_id ON sessions (console_id);
 CREATE INDEX sessions_project_id ON sessions (project_id);
@@ -766,7 +772,7 @@ mod tests {
 
     /// The schema of every version before the current one, each kept as `schema/v{N}.sql`:
     /// `PAST_SCHEMAS[n - 1]` is version `n`.
-    const PAST_SCHEMAS: [&str; (SCHEMA_VERSION - 1) as usize] = [];
+    const PAST_SCHEMAS: [&str; (SCHEMA_VERSION - 1) as usize] = [include_str!("schema/v1.sql")];
 
     /// The files next to `path` that are backups from before a migration.
     fn backups(path: &Path) -> Vec<PathBuf> {
@@ -859,16 +865,99 @@ mod tests {
         assert_eq!(store.list_projects().unwrap().len(), 1);
     }
 
-    /// A test-only step from version 1 to 2, standing in for the first real migration: the
-    /// machinery is exercised through it while [`MIGRATIONS`] is empty.
+    /// A test-only step from version 1 to 2 that adds a column of its own to a table no real step
+    /// touches, so the machinery is exercised through it on a database whose rows it can check.
     const TEST_STEPS: &[&str] = &["ALTER TABLE consoles ADD COLUMN extra TEXT;"];
 
-    /// A database at version 1 holding a console, written by the current build.
+    /// A database at version 1 holding a console, built from the schema kept for that version.
     fn write_version_1_database(path: &Path) {
-        let store = Store::open(path).expect("version 1 database");
-        store
-            .insert_console(&console(None, None, None))
-            .expect("console");
+        let conn = Connection::open(path).expect("version 1 database");
+        conn.execute_batch(PAST_SCHEMAS[0])
+            .expect("version 1 schema");
+        conn.pragma_update(None, "user_version", 1)
+            .expect("version");
+        conn.pragma_update(None, "application_id", APPLICATION_ID)
+            .expect("application id");
+        conn.execute(
+            "INSERT INTO consoles (id, name, workdir, default_agent, created_at)
+             VALUES ('console-1', 'Console', '/tmp/console-1', 'claude', 0)",
+            [],
+        )
+        .expect("console");
+    }
+
+    /// A migration of a version 1 database holding sessions keeps every row as it was, with the
+    /// column the real step adds empty in each, a pending notice and its note included.
+    #[test]
+    fn migrating_a_populated_version_1_database_keeps_its_sessions() {
+        let path = temp_db("migrate-populated");
+        write_version_1_database(&path);
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "INSERT INTO sessions (id, agent, console_id, project_id, host_id, kind, origin,
+                                       title, status, role, bound_to, started_at,
+                                       owner_notice_pending, owner_notice_note)
+                 VALUES ('owner', 'claude', 'console-1', NULL, 'local', 'console', 'user',
+                         'Hub', 'idle', 'coordinator', NULL, 1, 0, NULL),
+                        ('child', 'claude', 'console-1', NULL, 'local', 'project', 'console',
+                         'Child', 'idle', 'worker', 'owner', 2, 2, 'take over the tests'),
+                        ('loner', 'claude', 'console-1', NULL, 'local', 'project', 'user',
+                         'Loner', 'idle', 'coordinator', NULL, 3, 0, NULL);",
+            )
+            .expect("sessions");
+        }
+
+        migrate(&path, 1, MIGRATIONS).expect("migrated");
+        let conn = Connection::open(&path).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), 2);
+        type Row = (
+            String,
+            String,
+            Option<String>,
+            i64,
+            Option<String>,
+            Option<String>,
+        );
+        let rows = conn
+            .prepare(
+                "SELECT id, title, bound_to, owner_notice_pending, owner_notice_note,
+                        owner_notice_former_owner
+                 FROM sessions ORDER BY started_at",
+            )
+            .unwrap()
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            })
+            .unwrap()
+            .collect::<Result<Vec<Row>, _>>()
+            .unwrap();
+        let s = |text: &str| Some(text.to_string());
+        let row = |id: &str, title: &str, bound, pending, note| {
+            (
+                id.to_string(),
+                title.to_string(),
+                bound,
+                pending,
+                note,
+                None,
+            )
+        };
+        assert_eq!(
+            rows,
+            vec![
+                row("owner", "Hub", None, 0, None),
+                row("child", "Child", s("owner"), 2, s("take over the tests")),
+                row("loner", "Loner", None, 0, None),
+            ]
+        );
     }
 
     /// Adds a session whose project does not exist, which the check after the steps refuses.

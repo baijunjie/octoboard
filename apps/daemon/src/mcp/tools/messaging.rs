@@ -12,7 +12,9 @@ use crate::mcp::lookup::{
 use crate::messaging::delivery::{self, Delivery, SentBy, WhenBlocked};
 use crate::messaging::reporting::{self, ReportStatus};
 use crate::messaging::sharing::{self, OwnerCopy};
+use crate::messaging::texts;
 use crate::protocol::{error_code, AgentId, CodedError, Session, SessionStatus};
+use crate::session::term;
 use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::AppState;
 
@@ -22,7 +24,13 @@ pub(in crate::mcp) async fn instruct_session(
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
-    let text = required_str(arguments, "text")?.to_string();
+    let body = required_str(arguments, "text")?;
+    // Refused before it is headed: the header would keep an empty body from being seen as one.
+    if term::is_blank_once_stripped(body) {
+        return Err(delivery::blank_text());
+    }
+    // Headed as the caller's instruction, so the session tells it from the user's own typing.
+    let text = texts::render_instruction(caller, body);
     let outcome = delivery::write_message_off_runtime(state, &target.id, text, WhenBlocked::Queue)
         .await
         .map_err(|err| point_to_resume(err, caller.agent, &target))?;
@@ -126,6 +134,7 @@ pub(in crate::mcp) async fn report(
         status,
         open_items,
         owner_items,
+        None,
     )
     .await?;
     Ok(json!({ "note": note }))

@@ -224,8 +224,8 @@ fn messages(caller: &Session, from: &Session, to: &Session, moved: &[String]) ->
     let named = quoted(moved);
     [
         format!(
-            "{NOTICE_PREFIX}: {owner}, your owner, transferred the {} {named} you started \
-             to {}. {} no longer yours: do not stop {} or rely on {}; {} running for {}.",
+            "{NOTICE_PREFIX}: {owner}, your parent session, transferred the {} {named} you \
+             started to {}. {} no longer yours: do not stop {} or rely on {}; {} running for {}.",
             words.noun_phrase(),
             named_session(to),
             words.they_are_capitalised,
@@ -235,9 +235,9 @@ fn messages(caller: &Session, from: &Session, to: &Session, moved: &[String]) ->
             named_session(to),
         ),
         format!(
-            "{NOTICE_PREFIX}: {owner}, your owner, transferred the {} {named} to you from {}. \
-             {} yours now and {} running: {} stopped when your process ends. `{}` lists {} \
-             in `processes`. Your owner will tell you what to do with {}.",
+            "{NOTICE_PREFIX}: {owner}, your parent session, transferred the {} {named} to you \
+             from {}. {} yours now and {} running: {} stopped when your process ends. `{}` lists \
+             {} in `processes`. Your parent session will send you its instruction about {}.",
             words.noun_phrase(),
             named_session(from),
             words.they_are_capitalised,
@@ -258,6 +258,32 @@ mod tests {
         assert_stops_running, is_running, output_containing, running, stand_in_starting,
         wait_for_pid, Background, KillOnDrop, ScratchDir, StandIn,
     };
+
+    /// Both parties are told who moved the process tree, naming it as their parent session.
+    #[test]
+    fn the_parties_are_told_it_was_their_parent_session_that_moved_the_tree() {
+        let (caller, from, to) = (
+            project_session("hub", "console-1", None),
+            project_session("kid", "console-1", Some("hub")),
+            project_session("other-kid", "console-1", Some("hub")),
+        );
+        let [to_from, to_to] = messages(&caller, &from, &to, &["p1".to_string()]);
+        assert_eq!(
+            to_from,
+            "Message from Octoboard: the project session `hub` (\"Work hub\"), your parent \
+             session, transferred the process tree `p1` you started to the project session \
+             `other-kid` (\"Work other-kid\"). It is no longer yours: do not stop it or rely \
+             on it; it keeps running for the project session `other-kid` (\"Work other-kid\")."
+        );
+        assert_eq!(
+            to_to,
+            "Message from Octoboard: the project session `hub` (\"Work hub\"), your parent \
+             session, transferred the process tree `p1` to you from the project session `kid` \
+             (\"Work kid\"). It is yours now and keeps running: it is stopped when your process \
+             ends. `mcp__octoboard__get_session` lists it in `processes`. Your parent session \
+             will send you its instruction about it."
+        );
+    }
 
     /// `shared_console_state` plus sessions of the console session `a`: `kid` and `other-kid`,
     /// idle, `busy-kid` in the middle of a turn and `asleep-kid`, interrupted.

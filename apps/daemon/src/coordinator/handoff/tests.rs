@@ -283,6 +283,7 @@ async fn a_report_during_branch_transfer_follows_the_completed_bootstrap_once() 
             crate::messaging::reporting::ReportStatus::NeedsDecision,
             vec!["wait for the next instruction".to_string()],
             Vec::new(),
+            None,
         )
         .await
         .unwrap();
@@ -307,7 +308,7 @@ async fn a_report_during_branch_transfer_follows_the_completed_bootstrap_once() 
         .find("what it held is yours now")
         .expect("completed context arrived");
     let report = output
-        .find("Report from session worker")
+        .find("Report from your child session, the project session `worker`")
         .expect("the real child report arrived");
     assert!(bootstrap < context && context < report, "{output}");
     assert_eq!(
@@ -841,9 +842,15 @@ async fn messages_for_the_original_during_a_handoff_are_forwarded_to_the_receivi
 
     let output = fixture.output_of(&receiving.id, "sent during the handoff");
     let held = output.find("what it held is yours now").unwrap();
+    let note = output
+        .find(
+            "Any messages that were waiting for the original session follow this one, as they \
+             were sent to it; their headers say who sent them.",
+        )
+        .expect("the prompt says the original's messages follow");
     let before = output.find("queued before the handoff").unwrap();
     let during = output.find("sent during the handoff").unwrap();
-    assert!(held < before && before < during, "{output}");
+    assert!(held < note && note < before && before < during, "{output}");
     // The archived original has no process to take a marker; the receiving session's output above
     // is ordered after everything forwarded, and the original was written nothing before it ended.
     let heard = String::from_utf8_lossy(&original.recent_output(8 * 1024)).into_owned();

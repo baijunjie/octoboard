@@ -270,8 +270,8 @@ each session listed.
 
 `read_session_history` reads the conversation of any session, running, interrupted or archived, from the agent's own
 record — the same record the history view reads (see `docs/product/session-history.md`), read afresh on each call. It
-holds the user's messages, the messages Octoboard wrote into the session — a brief, a report, shared information, a
-notice — and the agent's final reply to each turn. Unlike the view, it hides none of Octoboard's messages, marking them
+holds the user's messages, the messages Octoboard wrote into the session — a brief, a parent session's instruction, a
+report, shared information, a notice — and the agent's final reply to each turn. Unlike the view, it hides none of Octoboard's messages, marking them
 as Octoboard's instead; everything else the view leaves out (see "What the history lists" there), tool calls among it,
 is left out here too.
 

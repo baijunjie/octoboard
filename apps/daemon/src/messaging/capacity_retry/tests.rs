@@ -88,7 +88,7 @@ impl Fixture {
     /// Waits until the owner has been given the failed report the retry held back.
     async fn owner_gets_the_failed_report(&self) {
         let heard = hub_heard_of(&self.hub, "did not go ahead").await;
-        assert!(heard.contains("Report from session"), "{heard}");
+        assert!(heard.contains("Report from your child session"), "{heard}");
         assert!(!self.is_waiting());
     }
 
@@ -98,7 +98,10 @@ impl Fixture {
         let heard = self.worker_output();
         assert!(!heard.contains("retrying automatically"), "{name}: {heard}");
         let heard = hub_heard(&self.state, &self.hub).await;
-        assert!(!heard.contains("Report from session"), "{name}: {heard}");
+        assert!(
+            !heard.contains("Report from your child session"),
+            "{name}: {heard}"
+        );
     }
 
     fn record(&self) -> Session {
@@ -142,7 +145,7 @@ async fn a_capacity_failure_is_retried_in_the_same_process_without_changing_anyt
     // The owner is told a retry is coming, not that the session failed.
     let heard = hub_heard_of(&fixture.hub, "do not send it a continue prompt").await;
     assert!(heard.contains("retry automatically in"), "{heard}");
-    assert!(!heard.contains("Report from session"), "{heard}");
+    assert!(!heard.contains("Report from your child session"), "{heard}");
 
     let heard = fixture.worker_heard("retry 1 of 3").await;
     assert!(
@@ -187,11 +190,11 @@ async fn the_third_retry_failing_again_gives_the_owner_the_failed_report() {
             .await;
     }
     let heard = hub_heard(&fixture.state, &fixture.hub).await;
-    assert!(!heard.contains("Report from session"), "{heard}");
+    assert!(!heard.contains("Report from your child session"), "{heard}");
 
     fixture.fail_at_capacity();
-    let heard = hub_heard_of(&fixture.hub, "Report from session").await;
-    assert!(heard.contains("Report from session"), "{heard}");
+    let heard = hub_heard_of(&fixture.hub, "Report from your child session").await;
+    assert!(heard.contains("Report from your child session"), "{heard}");
     assert!(!fixture.is_waiting());
     // The report leaves the session paused at its prompt, as a failed turn does.
     assert_eq!(fixture.record().status, SessionStatus::Idle);
@@ -216,8 +219,8 @@ async fn the_retries_end_after_three_whatever_prompt_the_next_turn_starts_with()
         );
     }
     fixture.fail_at_capacity();
-    let heard = hub_heard_of(&fixture.hub, "Report from session").await;
-    assert!(heard.contains("Report from session"), "{heard}");
+    let heard = hub_heard_of(&fixture.hub, "Report from your child session").await;
+    assert!(heard.contains("Report from your child session"), "{heard}");
     assert_eq!(
         fixture
             .state
@@ -283,7 +286,7 @@ async fn a_retried_turn_that_finishes_without_a_report_is_reported_on() {
         },
     );
     let heard = hub_heard_of(&fixture.hub, "finished-the-carried-on-work").await;
-    assert!(heard.contains("Report from session"), "{heard}");
+    assert!(heard.contains("Report from your child session"), "{heard}");
 }
 
 #[tokio::test]
@@ -404,7 +407,9 @@ async fn the_failed_report_never_overtakes_the_retry_notice() {
     fixture.owner_gets_the_failed_report().await;
     let heard = hub_heard_of(&fixture.hub, "did not go ahead").await;
     let notice = heard.find("will retry automatically").expect("notice");
-    let report = heard.find("Report from session").expect("report");
+    let report = heard
+        .find("Report from your child session")
+        .expect("report");
     assert!(notice < report, "{heard}");
 }
 
@@ -432,7 +437,7 @@ async fn a_failure_of_another_kind_is_reported_at_once_and_never_retried() {
     );
 
     let heard = hub_heard_of(&fixture.hub, "a different error").await;
-    assert!(heard.contains("Report from session"), "{heard}");
+    assert!(heard.contains("Report from your child session"), "{heard}");
     assert_eq!(
         fixture
             .state

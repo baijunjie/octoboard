@@ -132,9 +132,9 @@ fn resumed_on_recovery(session: &Session, continued: bool) -> String {
         "It is awaiting instructions."
     };
     format!(
-        "{NOTICE_PREFIX}: session `{}` resumed automatically after its account's usage quota \
+        "{NOTICE_PREFIX}: {} resumed automatically after its account's usage quota \
          recovered. {continuation}",
-        session.id
+        named_session(session)
     )
 }
 
@@ -150,14 +150,19 @@ pub fn tell_owner_it_will_be_retried(
     seconds: u64,
 ) {
     tell_owner(state, session, |_| {
-        format!(
-            "{NOTICE_PREFIX}: session {}'s model was at capacity, so its turn stopped. {} will \
-             retry automatically in {seconds} seconds (retry {attempt} of {of}) in the same \
-             session; do not send it a continue prompt yourself.",
-            label(session),
-            crate::APP_NAME
-        )
+        will_be_retried(session, attempt, of, seconds)
     });
+}
+
+/// The notice of [`tell_owner_it_will_be_retried`].
+fn will_be_retried(session: &Session, attempt: usize, of: usize, seconds: u64) -> String {
+    format!(
+        "{NOTICE_PREFIX}: the model of {} was at capacity, so its turn stopped. {} will retry \
+         automatically in {seconds} seconds (retry {attempt} of {of}) in the same session; do \
+         not send it a continue prompt yourself.",
+        named_session(session),
+        crate::APP_NAME
+    )
 }
 
 /// Tells the owner of `session` that it could not be resumed on its own account once that
@@ -171,9 +176,9 @@ pub fn tell_owner_the_recovery_failed(state: &Arc<AppState>, session: &Session, 
 /// The notice of [`tell_owner_the_recovery_failed`].
 fn recovery_failed(session: &Session, reason: &str) -> String {
     format!(
-        "{NOTICE_PREFIX}: session {} could not resume after its account's usage quota \
+        "{NOTICE_PREFIX}: {} could not resume after its account's usage quota \
          recovered. It is interrupted and its work is stopped. Reason: {reason}",
-        label(session)
+        named_session(session)
     )
 }
 
@@ -415,27 +420,18 @@ pub(crate) fn transferred_to_owner(
     )
 }
 
-/// The first report a project session that bound itself to an owner sends it: what it now is to
-/// the owner, and `summary`, what it is doing and needs. `coordinator` is whether it is a
-/// coordinator, which keeps the sessions it started, else a worker.
-pub(crate) fn first_report_on_bind(coordinator: bool, summary: &str) -> String {
+/// What Octoboard says with the first report a project session that bound itself to an owner
+/// sends it, ahead of the session's own summary: what it now is to the owner. `coordinator` is
+/// whether it is a coordinator, which keeps the sessions it started, else a worker.
+pub(crate) fn first_report_on_bind(coordinator: bool) -> &'static str {
     if coordinator {
-        format!(
-            "This project coordinator set you as its parent session: it is yours to drive from \
-             now on, and reports to you. It keeps the sessions it started in its own project \
-             and drives them itself; you can read those but not drive them.\n\
-             \n\
-             What it is doing and needs:\n\
-             {summary}"
-        )
+        "This project coordinator set you as its parent session: it is yours to drive from now \
+         on, and reports to you. It keeps the sessions it started in its own project and drives \
+         them itself; you can read those but not drive them. Its summary of what it is doing and \
+         needs follows."
     } else {
-        format!(
-            "This project session is now a worker reporting to you: it is yours to drive from \
-             now on, and reports to you.\n\
-             \n\
-             What it is doing and needs:\n\
-             {summary}"
-        )
+        "This project session is now a worker reporting to you: it is yours to drive from now \
+         on, and reports to you. Its summary of what it is doing and needs follows."
     }
 }
 
@@ -457,18 +453,26 @@ pub(crate) fn running_or_leave(state: &Arc<AppState>, session: &Session) -> Resu
     Ok(running)
 }
 
+/// What a release leaves with the notice it owes: who the former owner was and what it said in
+/// parting, if anything.
+#[derive(Clone, Copy)]
+pub(crate) struct Parting<'a> {
+    pub(crate) former_owner: &'a str,
+    pub(crate) note: Option<&'a str>,
+}
+
 /// Writes `text` into the session `id`, queued while it cannot take a message, when `running` says
 /// it has a process (see [`running_or_leave`]); `None` is a session left to be told when it next
 /// starts. A write that fails, a process that ended meanwhile say, leaves the notice for the next
-/// launch too: it is built then from the binding as it stands, so telling twice does no harm. A
-/// `note`, the parting words of a release, is kept with the notice that is left owed, as long as
-/// the session is still unbound.
+/// launch too: it is built then from the binding as it stands, so telling twice does no harm. The
+/// `parting` of a release is kept with the notice that is left owed, as long as the session is
+/// still unbound.
 pub(crate) async fn tell_now_or_leave(
     state: &Arc<AppState>,
     id: &str,
     text: String,
     running: bool,
-    note: Option<&str>,
+    parting: Option<Parting<'_>>,
 ) -> Result<Option<Delivery>> {
     if !running {
         return Ok(None);
@@ -477,8 +481,12 @@ pub(crate) async fn tell_now_or_leave(
         Ok(delivery) => Ok(Some(delivery)),
         Err(err) => {
             tracing::debug!(session = %id, %err, "telling a session of its parent session failed");
-            match note {
-                Some(note) => state.store.mark_owner_notice_with_note(id, note)?,
+            match parting {
+                Some(parting) => {
+                    state
+                        .store
+                        .mark_released_notice(id, parting.former_owner, parting.note)?
+                }
                 None => state.store.mark_owner_notice(id)?,
             }
             Ok(None)
@@ -495,7 +503,15 @@ pub(crate) fn owner_notice(state: &Arc<AppState>, session: &Session) -> Result<S
     let Some(owner_id) = &session.bound_to else {
         // The note of the release is told only while the release is the latest change of owner.
         let note = state.store.owner_notice_note(&session.id)?;
-        return Ok(released_text(session, note.as_deref()));
+        let former_owner = state
+            .store
+            .owner_notice_former_owner(&session.id)?
+            .map(|id| named_or_id(state, &id));
+        return Ok(released_text(
+            session,
+            former_owner.as_deref(),
+            note.as_deref(),
+        ));
     };
     // An owner no longer on record is named by its id alone, as a report to it would be.
     let owner = match state.store.get_session(owner_id)? {
@@ -510,22 +526,37 @@ pub(crate) fn owner_notice(state: &Arc<AppState>, session: &Session) -> Result<S
     ))
 }
 
-/// Tells the project session `released`, just released from its owner, that it has none: its role
-/// description, recorded when it was launched, still says whose it is. Queued while the session
-/// cannot take a message; one with no process is told when it next starts (see [`owner_notice`]),
-/// with the former owner's parting `note` if the release stored one.
+/// `id` as a message names a session: by its kind, id and title when its record can be read, else
+/// by its id alone.
+fn named_or_id(state: &Arc<AppState>, id: &str) -> String {
+    match state.store.get_session(id) {
+        Ok(Some(session)) => named_session(&session),
+        _ => format!("the session `{id}`"),
+    }
+}
+
+/// Tells the project session `released`, just released from its owner `former_owner_id`, that it
+/// has none: its role description, recorded when it was launched, still says whose it is. Queued
+/// while the session cannot take a message; one with no process is told when it next starts (see
+/// [`owner_notice`]), with the former owner's parting `note` if the release stored one. The notice
+/// sent now names the former parent session, by its id alone when its record cannot be read.
 pub(crate) async fn tell_released(
     state: &Arc<AppState>,
     released: &Session,
+    former_owner_id: &str,
     running: bool,
     note: Option<&str>,
 ) -> Result<Option<Delivery>> {
+    let former_owner = running.then(|| named_or_id(state, former_owner_id));
     tell_now_or_leave(
         state,
         &released.id,
-        released_text(released, note),
+        released_text(released, former_owner.as_deref(), note),
         running,
-        note,
+        Some(Parting {
+            former_owner: former_owner_id,
+            note,
+        }),
     )
     .await
 }
@@ -559,8 +590,9 @@ pub(crate) async fn tell_former_owner(
         .map(Some)
 }
 
-/// The notice of a release, ending with the former owner's parting `note` when there is one.
-fn released_text(released: &Session, note: Option<&str>) -> String {
+/// The notice of a release, naming the `former_owner` (as [`named_or_id`] words it) when it is
+/// known and ending with its parting `note` when there is one.
+fn released_text(released: &Session, former_owner: Option<&str>, note: Option<&str>) -> String {
     let tool = |name: &str| catalogue::qualified_tool_name(released.agent, name);
     let note = match note {
         Some(note) => format!(
@@ -569,9 +601,13 @@ fn released_text(released: &Session, note: Option<&str>) -> String {
         ),
         None => String::new(),
     };
+    let former = match former_owner {
+        Some(owner) => format!("{owner}, the session"),
+        None => "the session".to_string(),
+    };
     format!(
         "{NOTICE_PREFIX}: you have no parent session now. {INDEPENDENT_COORDINATOR_ROLE}. You \
-         were released from the session you reported to, and you are the user's own session: take \
+         were released from {former} you reported to, and you are the user's own session: take \
          work only from the user typing in this terminal, and do not call `{report}`, which is \
          refused for a session with no parent session. This replaces what you were told of your \
          parent session when you were started. You can start and drive sessions of your own with \
@@ -941,20 +977,28 @@ mod tests {
         );
         assert_eq!(
             resumed_on_recovery(&session, true),
-            "Message from Octoboard: session `session-7` resumed automatically after its \
-             account's usage quota recovered. It was sent a prompt to continue; do not send it one \
-             yourself."
+            "Message from Octoboard: the project session `session-7` (\"Fix the \"login\" retry\") \
+             resumed automatically after its account's usage quota recovered. It was sent a prompt \
+             to continue; do not send it one yourself."
         );
         assert_eq!(
             resumed_on_recovery(&session, false),
-            "Message from Octoboard: session `session-7` resumed automatically after its \
-             account's usage quota recovered. It is awaiting instructions."
+            "Message from Octoboard: the project session `session-7` (\"Fix the \"login\" retry\") \
+             resumed automatically after its account's usage quota recovered. It is awaiting \
+             instructions."
+        );
+        assert_eq!(
+            will_be_retried(&session, 2, 5, 30),
+            "Message from Octoboard: the model of the project session `session-7` (\"Fix the \
+             \"login\" retry\") was at capacity, so its turn stopped. Octoboard will retry \
+             automatically in 30 seconds (retry 2 of 5) in the same session; do not send it a \
+             continue prompt yourself."
         );
         assert_eq!(
             recovery_failed(&session, "the launch failed"),
-            "Message from Octoboard: session `session-7` (\"Fix the \"login\" retry\") could not \
-             resume after its account's usage quota recovered. It is interrupted and its work is \
-             stopped. Reason: the launch failed"
+            "Message from Octoboard: the project session `session-7` (\"Fix the \"login\" retry\") \
+             could not resume after its account's usage quota recovered. It is interrupted and \
+             its work is stopped. Reason: the launch failed"
         );
     }
 
@@ -980,12 +1024,32 @@ mod tests {
             bound_to: None,
             ..coordinator
         };
-        let text = released_text(&released, None);
+        let text = released_text(&released, None, None);
         assert!(
             text.starts_with(
                 "Message from Octoboard: you have no parent session now. Your role is coordinator \
                  and your reporting relationship is independent. You were released from the \
                  session you reported to, and you are the user's own session: "
+            ),
+            "{text}"
+        );
+        let hub = state.session_record("hub").unwrap();
+        let text = released_text(&released, Some(&named_session(&hub)), None);
+        assert!(
+            text.starts_with(
+                "Message from Octoboard: you have no parent session now. Your role is coordinator \
+                 and your reporting relationship is independent. You were released from the \
+                 console session `hub` (\"hub\"), the session you reported to, and you are the \
+                 user's own session: "
+            ),
+            "{text}"
+        );
+        let text = released_text(&released, Some("the session `gone`"), None);
+        assert!(
+            text.starts_with(
+                "Message from Octoboard: you have no parent session now. Your role is coordinator \
+                 and your reporting relationship is independent. You were released from the \
+                 session `gone`, the session you reported to, and you are the user's own session: "
             ),
             "{text}"
         );
@@ -1104,16 +1168,16 @@ mod tests {
         assert!(transferred_to_owner(&state, &from, &owner, &worker, "n")
             .contains("Its role is worker and it cannot manage child sessions. The transfer note"));
         assert_eq!(
-            first_report_on_bind(true, "Ready."),
+            first_report_on_bind(true),
             "This project coordinator set you as its parent session: it is yours to drive from \
              now on, and reports to you. It keeps the sessions it started in its own project and \
-             drives them itself; you can read those but not drive them.\n\nWhat it is doing and \
-             needs:\nReady."
+             drives them itself; you can read those but not drive them. Its summary of what it \
+             is doing and needs follows."
         );
         assert_eq!(
-            first_report_on_bind(false, "Ready."),
+            first_report_on_bind(false),
             "This project session is now a worker reporting to you: it is yours to drive from now \
-             on, and reports to you.\n\nWhat it is doing and needs:\nReady."
+             on, and reports to you. Its summary of what it is doing and needs follows."
         );
     }
 }

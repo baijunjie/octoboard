@@ -73,7 +73,9 @@ pub(super) const PROJECT_OPEN_SESSION: ToolDef = ToolDef {
 pub(super) const INSTRUCT_SESSION: ToolDef = ToolDef {
     name: "instruct_session",
     description: "Append an instruction to a running session of yours: it directs the session; \
-                  to tell a session something without instructing it, use `inform_session`. \
+                  to tell a session something without instructing it, use `inform_session`. It \
+                  arrives headed \"Instruction from your parent session\", naming your session, \
+                  so the session tells it from the user's own typing. \
                   Delivered straight away when the session is idle or mid-turn; held until the \
                   user is done when the session is waiting for them. The answer says if it was \
                   queued, or written but left unsent by the session's agent. Refused for a \
@@ -226,7 +228,8 @@ pub(super) const RESUME_SESSION: ToolDef = ToolDef {
                 "session": { "type": "string", "description": "The session's id." },
                 "text": {
                     "type": "string",
-                    "description": "An instruction to deliver once it is running.",
+                    "description": "An instruction to deliver once it is running, headed as \
+                                    from you like an `instruct_session` one.",
                 },
                 "model": {
                     "type": "string",
