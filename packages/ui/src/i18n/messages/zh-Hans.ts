@@ -1159,6 +1159,7 @@ export const zhHans: Translation<"other"> = {
   "git.filter.placeholder": "要查找哪个文件？",
   "git.filter.noMatch": "没有匹配的更改",
   "git.group.committed": "已提交",
+  "git.group.countWithCommits": "{count}（{commits}）",
   "git.view.changes": "更改",
   "git.commits.collapseAll": "收起全部提交",
   "git.commits.expandAll": "展开全部提交",

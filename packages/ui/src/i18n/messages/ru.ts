@@ -1076,6 +1076,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "git.filter.placeholder": "Какой файл вы ищете?",
   "git.filter.noMatch": "Подходящих изменений нет",
   "git.group.committed": "Закоммиченные",
+  "git.group.countWithCommits": "{count} ({commits})",
   "git.view.changes": "Изменения",
   "git.commits.collapseAll": "Свернуть все коммиты",
   "git.commits.expandAll": "Развернуть все коммиты",

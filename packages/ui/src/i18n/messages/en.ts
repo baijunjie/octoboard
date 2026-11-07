@@ -1279,6 +1279,7 @@ export const en = {
   "git.filter.placeholder": "Which file are you looking for?",
   "git.filter.noMatch": "No matching changes",
   "git.group.committed": "Committed",
+  "git.group.countWithCommits": "{count} ({commits})",
   "git.view.changes": "Changes",
   "git.commits.collapseAll": "Collapse all commits",
   "git.commits.expandAll": "Expand all commits",

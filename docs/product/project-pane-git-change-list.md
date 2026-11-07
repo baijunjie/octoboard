@@ -175,7 +175,12 @@ project keeps its own choice across reloads and restarts (see "What is remembere
   are listed. A filter with no matches still shows the no-matching-changes state (see "Filtering by file name"
   below).
 - **The Committed section stays one section**, with one heading band whose count is of all the committed changes it
-  shows. Inside it is **one commit row per commit**, newest first, in the order `git log` gives them, and each commit's
+  shows, followed by the count of commit rows it lists in parentheses — "Committed 10 (5)"; languages written with
+  full-width punctuation (Japanese, Simplified and Traditional Chinese) use full-width parentheses with no space before
+  them. The count of commits is left out while no commit row is listed, as while the commits are being read or
+  could not be read, so it never reads as none. It counts the commit rows the filter leaves, as the count of changes
+  does, and, when only the newest commits are listed, only those listed; a folded commit, or a folded Committed
+  section, still counts. Not grouped by commit, the heading has the count of changes alone. Inside it is **one commit row per commit**, newest first, in the order `git log` gives them, and each commit's
   changes are one level in, under its row; grouped by folder, the folders are inside each commit (see "Flat or grouped
   by folder" below).
 - **A commit row** has an expand arrow, as a folder's row does, then the first seven characters of the commit's id in
@@ -403,7 +408,8 @@ field is hidden, "Hide the filter" while it is shown (see "Two-state icon toggle
 - **Only the file's name is matched** — the last part of its path, as its row shows it — ignoring case and any
   whitespace around the text; the folders it is in are not, so `src` does not keep every file under `src/`. A rename
   is matched by its new name. An empty field, or one holding only whitespace, shows every change.
-- **It narrows what is shown, not what is listed.** The sections' and the commit rows' counts are of the rows shown, a
+- **It narrows what is shown, not what is listed.** The sections' and the commit rows' counts, and the Committed
+  heading's count of commits, are of the rows shown, a
   section or a commit with no match is left out, and grouped by folder only the folders leading to a match remain. What
   the list holds, and when it is listed again, is unchanged; a list listed again is narrowed by the same text.
 - **When nothing matches**, the list's place says there are no matching changes (announced to assistive technology

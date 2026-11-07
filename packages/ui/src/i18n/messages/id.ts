@@ -1076,6 +1076,7 @@ export const id: Translation<"other"> = {
   "git.filter.placeholder": "File apa yang Anda cari?",
   "git.filter.noMatch": "Tidak ada perubahan yang cocok",
   "git.group.committed": "Sudah di-commit",
+  "git.group.countWithCommits": "{count} ({commits})",
   "git.view.changes": "Perubahan",
   "git.commits.collapseAll": "Ciutkan semua commit",
   "git.commits.expandAll": "Perluas semua commit",

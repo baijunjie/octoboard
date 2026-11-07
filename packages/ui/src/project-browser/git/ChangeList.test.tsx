@@ -197,6 +197,15 @@ it("narrows the commits too: one with no match has no row, and every count follo
   expect(container.textContent).toContain("Committed2");
 });
 
+it("follows the count of committed changes with the count of their commits while grouped by commit", () => {
+  const committedText = (grouped: boolean, items: typeof byCommit) =>
+    heading(mountRows(<ChangeList items={items} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} changeView={changeViewFixture({ byCommit: { value: grouped, onChange: () => {} } })} />), "Committed").textContent;
+  expect(committedText(true, byCommit)).toBe("Committed3 (2)");
+  expect(committedText(false, byCommit)).toBe("Committed3");
+  // Grouped, with no commit listed yet (loading, or failed), there is no "(0)".
+  expect(committedText(true, items)).toBe("Committed0");
+});
+
 it("places a row below the commit rows before it, a folded commit contributing its own row alone", () => {
   const lex = byCommit.find((item) => item.path === "src/lex.ts")!;
   // Under three headings and the four uncommitted rows come the newer commit's row and its change,

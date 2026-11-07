@@ -1116,6 +1116,7 @@ export const ko: Translation<"other"> = {
   "git.filter.placeholder": "어떤 파일을 찾고 있습니까?",
   "git.filter.noMatch": "일치하는 변경 사항이 없습니다",
   "git.group.committed": "커밋됨",
+  "git.group.countWithCommits": "{count} ({commits})",
   "git.view.changes": "변경 사항",
   "git.commits.collapseAll": "모든 커밋 접기",
   "git.commits.expandAll": "모든 커밋 펼치기",

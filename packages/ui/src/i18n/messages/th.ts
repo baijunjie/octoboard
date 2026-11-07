@@ -1114,6 +1114,7 @@ export const th: Translation<"other"> = {
   "git.filter.placeholder": "กำลังหาไฟล์ไหน?",
   "git.filter.noMatch": "ไม่มีการเปลี่ยนแปลงที่ตรงกัน",
   "git.group.committed": "คอมมิตแล้ว",
+  "git.group.countWithCommits": "{count} ({commits})",
   "git.view.changes": "การเปลี่ยนแปลง",
   "git.commits.collapseAll": "ยุบคอมมิตทั้งหมด",
   "git.commits.expandAll": "ขยายคอมมิตทั้งหมด",

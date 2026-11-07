@@ -1075,6 +1075,7 @@ export const vi: Translation<"other"> = {
   "git.filter.placeholder": "Đang tìm tệp nào?",
   "git.filter.noMatch": "Không có thay đổi phù hợp",
   "git.group.committed": "Đã commit",
+  "git.group.countWithCommits": "{count} ({commits})",
   "git.view.changes": "Thay đổi",
   "git.commits.collapseAll": "Thu gọn tất cả commit",
   "git.commits.expandAll": "Mở rộng tất cả commit",

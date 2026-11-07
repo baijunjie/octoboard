@@ -1116,6 +1116,7 @@ export const zhHant: Translation<"other"> = {
   "git.filter.placeholder": "要尋找哪個檔案？",
   "git.filter.noMatch": "沒有符合的更改",
   "git.group.committed": "已提交",
+  "git.group.countWithCommits": "{count}（{commits}）",
   "git.view.changes": "更改",
   "git.commits.collapseAll": "收起全部提交",
   "git.commits.expandAll": "展開全部提交",

@@ -1133,6 +1133,7 @@ export const tr: Translation<"one" | "other"> = {
   "git.filter.placeholder": "Hangi dosyayı arıyorsunuz?",
   "git.filter.noMatch": "Eşleşen değişiklik yok",
   "git.group.committed": "İşlenmiş",
+  "git.group.countWithCommits": "{count} ({commits})",
   "git.view.changes": "Değişiklikler",
   "git.commits.collapseAll": "Tüm işlemeleri daralt",
   "git.commits.expandAll": "Tüm işlemeleri genişlet",

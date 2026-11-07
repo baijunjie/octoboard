@@ -1076,6 +1076,7 @@ export const es: Translation<"one" | "many" | "other"> = {
   "git.filter.placeholder": "¿Qué archivo buscas?",
   "git.filter.noMatch": "No hay cambios coincidentes",
   "git.group.committed": "Con commit",
+  "git.group.countWithCommits": "{count} ({commits})",
   "git.view.changes": "Cambios",
   "git.commits.collapseAll": "Contraer todos los commits",
   "git.commits.expandAll": "Expandir todos los commits",

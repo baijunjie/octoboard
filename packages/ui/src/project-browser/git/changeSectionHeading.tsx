@@ -20,14 +20,17 @@ export const HEADING_HEIGHT = 30;
  * `ChangeSectionHeading` lays out the band's folding button and any trailing view controls or mark. */
 export const HEADING_CLASS = "flex h-[30px] groove-b bg-default text-xs font-medium text-app-muted";
 
-/** What a section's heading says: the section's name and how many changes it holds. */
-function SectionHeadingText({ section, count }: { section: ChangeSection; count: number }): React.ReactElement {
+/** What a section's heading says: the section's name and how many changes it holds, followed, when
+ * given, by how many commits those changes come from. */
+function SectionHeadingText({ section, count, commitCount }: { section: ChangeSection; count: number; commitCount?: number }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
   return (
     <>
       {t(SECTION_LABELS[section])}
-      <span className="shrink-0">{new Intl.NumberFormat(language).format(count)}</span>
+      <span className="shrink-0">
+        {commitCount === undefined ? new Intl.NumberFormat(language).format(count) : t("git.group.countWithCommits", { count, commits: commitCount })}
+      </span>
     </>
   );
 }
@@ -56,7 +59,7 @@ function keepHeadingFocus(band: HTMLButtonElement | null): void {
 /**
  * What a section's heading holds: a button filling the space before its controls, which folds the
  * section's rows away and unfolds them again (its key in `collapsed` is `sectionKey`), showing a
- * chevron, the section's name and its count.
+ * chevron, the section's name and its count (with the count of commits, while grouped by commit).
  *
  * The button covers the label and its free space rather than only the chevron, which settles three things at once:
  * a press anywhere before the trailing controls folds the section, the pointer target is the band itself rather
@@ -136,7 +139,9 @@ export function ChangeSectionHeading({
       ) : (
         <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
       )}
-      <SectionHeadingText section={section} count={count} />
+      {/* Grouped by commit, the count of changes is followed by the count of commits they come from,
+          left out while no commit is listed (still loading, or failed) rather than reading as none. */}
+      <SectionHeadingText section={section} count={count} commitCount={byCommit?.value && commitKeys.length > 0 ? commitKeys.length : undefined} />
     </BareButton>
   );
   if (!mark && !byCommit) return band;

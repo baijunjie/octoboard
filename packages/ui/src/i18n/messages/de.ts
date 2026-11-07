@@ -1103,6 +1103,7 @@ export const de: Translation<"one" | "other"> = {
   "git.filter.placeholder": "Welche Datei suchst du?",
   "git.filter.noMatch": "Keine passenden Änderungen",
   "git.group.committed": "Committet",
+  "git.group.countWithCommits": "{count} ({commits})",
   "git.view.changes": "Änderungen",
   "git.commits.collapseAll": "Alle Commits einklappen",
   "git.commits.expandAll": "Alle Commits aufklappen",

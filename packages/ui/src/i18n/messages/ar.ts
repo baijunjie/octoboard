@@ -1076,6 +1076,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "git.filter.placeholder": "ما الملف الذي تبحث عنه؟",
   "git.filter.noMatch": "لا توجد تغييرات مطابقة",
   "git.group.committed": "مودعة",
+  "git.group.countWithCommits": "{count} ({commits})",
   "git.view.changes": "التغييرات",
   "git.commits.collapseAll": "طي جميع الإيداعات",
   "git.commits.expandAll": "توسيع جميع الإيداعات",

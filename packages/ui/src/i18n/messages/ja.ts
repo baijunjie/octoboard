@@ -1115,6 +1115,7 @@ export const ja: Translation<"other"> = {
   "git.filter.placeholder": "どのファイルをお探しですか？",
   "git.filter.noMatch": "一致する変更がありません",
   "git.group.committed": "コミット済み",
+  "git.group.countWithCommits": "{count}（{commits}）",
   "git.view.changes": "変更",
   "git.commits.collapseAll": "すべてのコミットを折りたたむ",
   "git.commits.expandAll": "すべてのコミットを展開",

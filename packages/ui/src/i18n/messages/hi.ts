@@ -1075,6 +1075,7 @@ export const hi: Translation<"one" | "other"> = {
   "git.filter.placeholder": "आप कौन-सी फ़ाइल खोज रहे हैं?",
   "git.filter.noMatch": "कोई मिलता-जुलता बदलाव नहीं",
   "git.group.committed": "कमिट किए गए",
+  "git.group.countWithCommits": "{count} ({commits})",
   "git.view.changes": "बदलाव",
   "git.commits.collapseAll": "सभी कमिट समेटें",
   "git.commits.expandAll": "सभी कमिट फैलाएँ",
