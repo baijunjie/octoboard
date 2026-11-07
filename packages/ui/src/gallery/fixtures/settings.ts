@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "../../fixtures/fixtureProviders";
 import { providerLabel } from "../../agents/providers";
-import { describing, type Ui, type Step } from "../../fixtures/interact";
+import { describing, type Matcher, type Ui, type Step } from "../../fixtures/interact";
 import { type AccountLogin, type AccountSharing, type Agent, type AgentAvailability } from "../../protocol";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
@@ -403,11 +403,17 @@ const openSharingHelp = (name: string, agent: Agent = "claude"): Step[] => [
   (ui) => ui.touchPress(ui.t("settings.accounts.sharing.helpLabel")),
 ];
 
+/** An option of an open permission approval list, found by its label. The option's accessible name is the label alone,
+ * but the step driver reads an option's whole text (the label, the summary read by screen readers and the visible note
+ * under it), so what it sees starts with the label instead of equalling it. This is a prefix match: do not give it a
+ * label that starts another option's label. */
+const approvalOption = (label: string): Matcher => describing(`permission approval option(${label})`, (name) => name.startsWith(label));
+
 /** Claude Code's tab, its permission approval set to Bypass permissions: the confirmation dialog it opens. */
 const bypassSteps: Step[] = [
   ...openAccounts,
   (ui) => ui.press(ui.t("provider.claude.setting.approval_mode.label", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "claude") })),
-  (ui) => ui.press(ui.t("provider.claude.setting.approval_mode.choice.bypass")),
+  (ui) => ui.press(approvalOption(ui.t("provider.claude.setting.approval_mode.choice.bypass"))),
 ];
 
 /** The two owned Claude Code accounts the sharing scenarios share the page with the default account: Work is the first
@@ -1399,7 +1405,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Bypass permissions confirmation",
-    description: "Choosing Bypass permissions in the Permission approval row opens a warning modal instead of saving: a warning icon, the choice as the title question, a body explaining that permission checks are bypassed in every Claude Code account's sessions (the agent's name as a chip), including for commands that change or delete files, while explicit permission rules and safeguards still apply, and the danger-coloured button repeating the choice. Cancelling leaves the row on Auto.",
+    description: "Choosing Bypass permissions in the Permission approval row opens a warning modal instead of saving: a warning icon, the choice as the title question, a body saying tools can change or delete files without a routine permission prompt in the sessions of every Claude Code account (the agent's name as a chip), while explicit permission rules and built-in safeguards still apply, and the danger-coloured button repeating the choice. Cancelling leaves the row on Auto.",
     state: quotaState,
     steps: bypassSteps,
   },
@@ -1498,7 +1504,7 @@ export const settingsScenarios: Scenario[] = [
       ...openAccounts,
       (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
       (ui) => ui.press(ui.t("provider.codex.setting.approval_reviewer.label", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "codex") })),
-      (ui) => ui.press(ui.t("provider.codex.setting.approval_reviewer.choice.auto_review")),
+      (ui) => ui.press(approvalOption(ui.t("provider.codex.setting.approval_reviewer.choice.auto_review"))),
     ],
   },
   {
