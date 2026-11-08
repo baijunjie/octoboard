@@ -34,11 +34,10 @@ fn a_cycle_of_bindings_does_not_hang_the_ordering() {
     assert_eq!(in_resume_order(sessions).len(), 2);
 }
 
-/// Only sessions a run left live are picked: the ones still running when it ended, and the ones
-/// its shutdown marked; never an archived one, and never one interrupted before it ended. The
-/// mark does not outlive the start that read it.
+/// Every session that is interrupted once the start has marked the previous run's sessions is
+/// listed, one interrupted by an earlier run included; an archived one is not.
 #[test]
-fn only_the_sessions_a_run_left_live_are_picked() {
+fn every_interrupted_session_is_listed_once_the_start_has_marked_the_rest() {
     let (state, _dir) = console_with_project_and_accounts("resume-on-start-pick");
     let insert = |id: &str, status| {
         state
@@ -48,57 +47,18 @@ fn only_the_sessions_a_run_left_live_are_picked() {
     };
     insert("running", SessionStatus::Working);
     insert("prompt", SessionStatus::Idle);
-    insert("shut-down", SessionStatus::Working);
     insert("interrupted-before", SessionStatus::Interrupted);
     insert("archived", SessionStatus::Archived);
-    // A clean shutdown: the mark first, then the interruption.
-    state
-        .store
-        .mark_left_live(&["shut-down".to_string(), "archived".to_string()])
-        .unwrap();
-    state.store.interrupt_session("shut-down", 5, None).unwrap();
-
-    let picked: Vec<String> = state
-        .store
-        .take_left_live_sessions()
-        .unwrap()
-        .into_iter()
-        .map(|session| session.id)
-        .collect();
-    assert_eq!(picked, ["running", "prompt", "shut-down"]);
-
-    // Taken once: after the start has interrupted what was running, nothing is left to pick.
     state.store.mark_live_sessions_interrupted().unwrap();
-    assert!(state.store.take_left_live_sessions().unwrap().is_empty());
-}
 
-/// A daemon that stops its sessions leaves them marked, so the next start still knows they were
-/// running although each now reads as interrupted.
-#[tokio::test]
-async fn stopping_the_sessions_marks_the_running_ones() {
-    let (state, dir) = crate::test_support::app_state("resume-on-start-stop");
-    crate::state::test_support::insert_record(&state, &dir, "running", SessionStatus::Working);
-    state
+    let listed: Vec<String> = state
         .store
-        .insert_session(&crate::state::test_support::session_record(
-            "before",
-            SessionStatus::Interrupted,
-        ))
-        .unwrap();
-    let live =
-        crate::test_support::fake_live_session("running", AgentId::CLAUDE, 80, 24, "sleep 30");
-    state.register_live(live.clone());
-
-    state.stop_all_sessions().await;
-
-    let picked: Vec<String> = state
-        .store
-        .take_left_live_sessions()
+        .list_interrupted_sessions()
         .unwrap()
         .into_iter()
         .map(|session| session.id)
         .collect();
-    assert_eq!(picked, ["running"]);
+    assert_eq!(listed, ["running", "prompt", "interrupted-before"]);
 }
 
 fn ids(names: &[&str]) -> Vec<String> {
@@ -239,12 +199,15 @@ async fn the_setting_off_resumes_nothing() {
     let (state, _dir) = console_with_project_and_accounts("resume-on-start-off");
     let called = Arc::new(AtomicUsize::new(0));
     let counted = called.clone();
-    let left = vec![project_session(
-        "s",
-        AgentId::CLAUDE,
-        SessionStatus::Working,
-    )];
-    spawn_with(&state, left, move |_, _| {
+    state
+        .store
+        .insert_session(&project_session(
+            "s",
+            AgentId::CLAUDE,
+            SessionStatus::Interrupted,
+        ))
+        .unwrap();
+    spawn_with(&state, move |_, _| {
         let counted = counted.clone();
         async move {
             counted.fetch_add(1, Ordering::SeqCst);
@@ -253,4 +216,37 @@ async fn the_setting_off_resumes_nothing() {
     });
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert_eq!(called.load(Ordering::SeqCst), 0);
+}
+
+/// With the setting on, the interrupted sessions are resumed and the others are not.
+#[tokio::test]
+async fn the_setting_on_resumes_the_interrupted_sessions() {
+    let (state, _dir) = console_with_project_and_accounts("resume-on-start-on");
+    state.store.set_resume_sessions_on_start(true).unwrap();
+    for (id, status) in [
+        ("interrupted", SessionStatus::Interrupted),
+        ("archived", SessionStatus::Archived),
+        ("idle", SessionStatus::Idle),
+    ] {
+        state
+            .store
+            .insert_session(&project_session(id, AgentId::CLAUDE, status))
+            .unwrap();
+    }
+    let resumed = Arc::new(Mutex::new(Vec::new()));
+    let recorded = resumed.clone();
+    spawn_with(&state, move |_, id| {
+        let recorded = recorded.clone();
+        async move {
+            recorded.lock().unwrap().push(id);
+            Ok(())
+        }
+    });
+    let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+    while resumed.lock().unwrap().is_empty() && std::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    // Another resume would follow the first one after the gap between starts.
+    tokio::time::sleep(START_GAP + Duration::from_millis(100)).await;
+    assert_eq!(*resumed.lock().unwrap(), ["interrupted"]);
 }

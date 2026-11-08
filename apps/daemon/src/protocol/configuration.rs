@@ -143,7 +143,7 @@ pub struct DocumentSettings {
     pub auto_approve_account_switches: bool,
     pub auto_approve_handoffs: bool,
     pub ask_questions_as_choices: bool,
-    /// Whether the daemon resumes the sessions the previous run left live when it starts (see
+    /// Whether the daemon resumes the interrupted sessions when it starts (see
     /// `Settings.resume_sessions_on_start`). Absent in a document from a build that had no such
     /// setting, which an import then leaves as this machine has it.
     #[serde(default, skip_serializing_if = "Option::is_none")]

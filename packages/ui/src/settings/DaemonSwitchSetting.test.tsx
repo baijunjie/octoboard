@@ -33,6 +33,6 @@ it.each([
   ["a browser, even on a Mac", { kind: "browser", host: { ...BROWSER_HOST, os: "macos" } }],
 ] as const)("leaves that out in %s, which quits as for any quit", (_name, platform) => {
   const container = mountResume(platform);
-  expect(container.textContent).toContain("resumes the sessions");
+  expect(container.textContent).toContain("resumes every interrupted session");
   expect(container.textContent).not.toContain(SYSTEM_QUIT);
 });

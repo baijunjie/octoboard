@@ -860,57 +860,21 @@ impl Store {
         Ok(rows.into_iter().flatten().collect())
     }
 
-    /// Marks the sessions among `ids` that still have a process as left live by the daemon that is
-    /// shutting down: the mark outlives the status the shutdown is about to give them, which
-    /// would otherwise read like one the user interrupted earlier. See
-    /// [`Self::take_left_live_sessions`].
-    pub fn mark_left_live(&self, ids: &[String]) -> Result<()> {
-        let mut conn = self.lock();
-        let tx = conn.transaction()?;
-        for id in ids {
-            tx.execute(
-                "UPDATE sessions SET left_live = 1 WHERE id = ?1 AND status NOT IN (?2, ?3)",
-                params![
-                    id,
-                    enum_to_text(&SessionStatus::Archived),
-                    enum_to_text(&SessionStatus::Interrupted),
-                ],
-            )?;
-        }
-        tx.commit()?;
-        Ok(())
-    }
-
-    /// The sessions the previous daemon left live, oldest first, and forgets the mark: those that
-    /// were still running when it ended (a crash, a kill, or a stored status that never moved
-    /// off one with a process) and those it marked as it shut down ([`Self::mark_left_live`]). An
-    /// archived session is never one, and neither is one that was interrupted before the run
-    /// ended. Call it before [`Self::mark_live_sessions_interrupted`], which moves the stored
-    /// statuses this reads; the mark is cleared whether or not the caller acts on the answer, so
-    /// it never outlives the one start it is for.
-    pub fn take_left_live_sessions(&self) -> Result<Vec<Session>> {
-        let mut conn = self.lock();
-        let tx = conn.transaction()?;
-        let sessions = {
-            let mut stmt = tx.prepare(&format!(
-                "SELECT {SESSION_COLUMNS} FROM sessions
-                 WHERE status != ?1 AND (left_live = 1 OR status != ?2)
-                 ORDER BY started_at"
-            ))?;
-            let rows = stmt
-                .query_map(
-                    params![
-                        enum_to_text(&SessionStatus::Archived),
-                        enum_to_text(&SessionStatus::Interrupted),
-                    ],
-                    read_session,
-                )?
-                .collect::<rusqlite::Result<Vec<_>>>()?;
-            rows.into_iter().flatten().collect()
-        };
-        tx.execute("UPDATE sessions SET left_live = 0 WHERE left_live = 1", [])?;
-        tx.commit()?;
-        Ok(sessions)
+    /// The sessions that are interrupted, oldest first: every one the daemon shows as resumable,
+    /// whichever run interrupted it. Call it after [`Self::mark_live_sessions_interrupted`] when the
+    /// sessions a previous daemon left mid-flight are to be counted too.
+    pub fn list_interrupted_sessions(&self) -> Result<Vec<Session>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {SESSION_COLUMNS} FROM sessions WHERE status = ?1 ORDER BY started_at"
+        ))?;
+        let rows = stmt
+            .query_map(
+                params![enum_to_text(&SessionStatus::Interrupted)],
+                read_session,
+            )?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows.into_iter().flatten().collect())
     }
 
     /// Moves every session that a previous daemon left mid-flight to `interrupted`. The daemon

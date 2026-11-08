@@ -40,8 +40,8 @@ On every daemon start:
 
 - **Every session a previous run left behind becomes *interrupted*.** No process from that run is adopted as a running
   session, whatever the stored status said. Archived sessions are left as they are.
-- **While Resume sessions on start is on, the sessions that were running when the previous run ended are then
-  resumed**, a few at a time (see "Resuming the sessions a run left running" in
+- **While Resume sessions on start is on, every interrupted session is then resumed**, the ones the previous run
+  left and any interrupted earlier, a few at a time (see "Resuming the interrupted sessions at start" in
   `docs/product/archiving-and-resuming-sessions.md`).
 - Per-session scratch space from previous runs is cleared.
 - Saved background-process records are reconciled under "Automatic stopping and its boundaries" in
@@ -318,9 +318,9 @@ On macOS, while **Resume sessions on start** is off (see that section in `docs/p
 or shutdown is answered exactly like any other quit, so **Octoboard can hold up a logout, restart or shutdown until the
 user answers the confirmation dialog.** That is deliberate, not an oversight. While the setting is on, the system's own
 logout, restart or shutdown quits at once and asks nothing, whatever is running, and the window is not brought back for
-it: the sessions it interrupts are resumed when Octoboard next starts (see "Resuming the sessions a run left running" in
-`docs/product/archiving-and-resuming-sessions.md`). Octoboard tells such a quit by the reason the system gives with it;
-a quit request that gives none of those reasons asks as any quit does, and so does every quit the user makes —
+it: the sessions it interrupts are resumed when Octoboard next starts (see "Resuming the interrupted sessions at start"
+in `docs/product/archiving-and-resuming-sessions.md`). Octoboard tells such a quit by the reason the system gives with
+it; a quit request that gives none of those reasons asks as any quit does, and so does every quit the user makes —
 `Cmd+Q`, the menus' Quit, the Dock icon's Quit, closing the window. Until the window's UI has the daemon's settings, a
 logout, restart or shutdown asks as any quit does.
 
@@ -449,7 +449,7 @@ as under any other.
 
 | Path | Contents |
 |---|---|
-| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages every session pushed, each project's trust permission and the trusted folders (see "The trust permission" in `docs/product/folder-trust.md`), and the settings the daemon keeps for every client (see "How switches save" and "Git" in `docs/product/settings.md`), and which sessions were running when the daemon last stopped, for Resume sessions on start (see "Resuming the sessions a run left running" in `docs/product/archiving-and-resuming-sessions.md`). What the daemon does with an existing file when it starts is under "The database's schema version" below. |
+| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages every session pushed, each project's trust permission and the trusted folders (see "The trust permission" in `docs/product/folder-trust.md`), and the settings the daemon keeps for every client (see "How switches save" and "Git" in `docs/product/settings.md`). What the daemon does with an existing file when it starts is under "The database's schema version" below. |
 | `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console sessions run, including the console session instruction file Octoboard writes there, `AGENTS.md`, and `CLAUDE.md`, a link to it, or a file that imports it where the host makes no file links (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared wholesale on daemon start. |
 | `~/.octoboard/output/<session id>` | The saved terminal preview shown for an interrupted session (see "Interrupted and archived sessions" in `docs/product/session-terminal.md` for its capture rules and limits). Written when the process ends, including when the daemon stops it on its way out, but not when the daemon itself goes down on an internal failure. Starting a new process discards it. Removed with the session's record; on daemon start, any left for a session that no longer exists is removed. |

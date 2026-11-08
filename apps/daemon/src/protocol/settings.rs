@@ -66,8 +66,9 @@ pub struct Settings {
     /// Whether the daemon starts an account's usage window that has reset but not begun counting,
     /// by sending one minimal request on that account. Off unless the user turned it on.
     pub auto_start_quota_windows: bool,
-    /// Whether the daemon, once it has started, resumes the sessions the previous run left live
-    /// (see `coordinator::resume_on_start`). Off unless the user turned it on; read at each start.
+    /// Whether the daemon, once it has started, resumes the sessions that are interrupted then,
+    /// whichever run interrupted them (see `coordinator::resume_on_start`). Off unless the user
+    /// turned it on; read at each start.
     pub resume_sessions_on_start: bool,
     /// The directory a `git` association clones into when none is named: the one the user set, or
     /// `~/Projects` (expanded) while none is. Always an absolute, lexically normalised path.

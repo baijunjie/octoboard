@@ -32,10 +32,8 @@ pub(super) const APPLICATION_ID: i64 = 0x4F43_5442;
 pub(super) const MIGRATIONS: &[&str] = &[
     // 1 to 2: the id of the owner a release left with the notice told at the next launch.
     "ALTER TABLE sessions ADD COLUMN owner_notice_former_owner TEXT;",
-    // 2 to 3: the setting that resumes the sessions a run left live, and the mark that says which
-    // sessions those were.
-    "ALTER TABLE settings ADD COLUMN resume_sessions_on_start INTEGER NOT NULL DEFAULT 0;
-     ALTER TABLE sessions ADD COLUMN left_live INTEGER NOT NULL DEFAULT 0;",
+    // 2 to 3: the setting that resumes the interrupted sessions when the daemon starts.
+    "ALTER TABLE settings ADD COLUMN resume_sessions_on_start INTEGER NOT NULL DEFAULT 0;",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -227,14 +225,10 @@ CREATE TABLE sessions (
     locked           INTEGER NOT NULL DEFAULT 0,
     started_at       INTEGER NOT NULL,
     ended_at         INTEGER ,
-    owner_notice_former_owner TEXT, left_live INTEGER NOT NULL DEFAULT 0);
+    owner_notice_former_owner TEXT);
 -- `owner_notice_former_owner` is the id of the owner that released the session while it was
 -- not running, named in the notice with the parting note; NULL for none. Written and cleared
--- with `owner_notice_note`.
--- `left_live` is 1 for a session whose process the daemon ended when it shut down (or that was
--- still running when a daemon died), so the next daemon start can tell it from a session that
--- was already interrupted; see `Store::take_left_live_sessions`. Cleared by that start.
--- Both are the last columns, spelled as a migration leaves them.
+-- with `owner_notice_note`. It is the last column, spelled as a migration leaves it.
 -- The lookups by the columns that other rows and the daemon's queries hold sessions by.
 CREATE INDEX sessions_console_id ON sessions (console_id);
 CREATE INDEX sessions_project_id ON sessions (project_id);

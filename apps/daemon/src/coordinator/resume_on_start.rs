@@ -1,14 +1,15 @@
-//! Resuming the sessions the previous run left live, when the user asked for that
+//! Resuming the interrupted sessions at the daemon's start, when the user asked for that
 //! (`Settings.resume_sessions_on_start`). The daemon owns the agent processes, so a run that ended
 //! — a quit, a signal, a crash — left every running session interrupted; with the setting on, the
-//! start after it brings back the ones that were running, one resume each, as the user's click on
-//! an interrupted session would.
+//! start after it brings back every session that is interrupted by then, one resume each, as the
+//! user's click on an interrupted session would. That includes one interrupted by an earlier run
+//! or by a resume that failed, since nothing records why a session is interrupted.
 //!
 //! Which sessions those are is the store's to say
-//! ([`crate::store::Store::take_left_live_sessions`]: not archived, and not already interrupted
-//! before that run ended), read before the start marks everything interrupted. This module orders
-//! them, paces the resumes and leaves each failure where the resume left the session: interrupted,
-//! with the reason in the log and no alert, since nobody asked for this resume.
+//! ([`crate::store::Store::list_interrupted_sessions`]), read once the start has marked what the
+//! previous run left running as interrupted. This module orders them, paces the resumes and leaves
+//! each failure where the resume left the session: interrupted, with the reason in the log and no
+//! alert, since nobody asked for this resume.
 
 use std::future::Future;
 use std::sync::Arc;
@@ -29,17 +30,18 @@ const WIDTH: usize = 3;
 /// How long a resume waits to start after the previous one started.
 const START_GAP: Duration = Duration::from_millis(400);
 
-/// Starts the task that resumes `left_live`, the sessions the previous run left live, unless the
-/// setting is off (or cannot be read, which counts as off). The setting is read now, at the
-/// daemon's start; a change afterwards applies to the next one.
-pub fn spawn(state: &Arc<AppState>, left_live: Vec<Session>) {
-    spawn_with(state, left_live, |state, id| async move {
+/// Starts the task that resumes the interrupted sessions, unless the setting is off (or cannot be
+/// read, which counts as off). Call it once the start has marked the sessions the previous run left
+/// running as interrupted. The setting is read now, at the daemon's start; a change afterwards
+/// applies to the next one.
+pub fn spawn(state: &Arc<AppState>) {
+    spawn_with(state, |state, id| async move {
         resume_if_still_interrupted(&state, &id).await
     });
 }
 
 /// [`spawn`] with the resume of one session supplied by the caller.
-fn spawn_with<F, Fut>(state: &Arc<AppState>, left_live: Vec<Session>, resume: F)
+fn spawn_with<F, Fut>(state: &Arc<AppState>, resume: F)
 where
     F: Fn(Arc<AppState>, String) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Result<()>> + Send + 'static,
@@ -52,14 +54,18 @@ where
             return;
         }
     }
-    let ids = in_resume_order(left_live);
+    let interrupted = match state.store.list_interrupted_sessions() {
+        Ok(sessions) => sessions,
+        Err(err) => {
+            tracing::warn!(%err, "listing the interrupted sessions failed; no session is resumed");
+            return;
+        }
+    };
+    let ids = in_resume_order(interrupted);
     if ids.is_empty() {
         return;
     }
-    tracing::info!(
-        sessions = ids.len(),
-        "resuming the sessions the previous run left running"
-    );
+    tracing::info!(sessions = ids.len(), "resuming the interrupted sessions");
     let state = state.clone();
     tokio::spawn(async move {
         run(&state, ids, START_GAP, resume).await;

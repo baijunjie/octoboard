@@ -235,16 +235,17 @@ it.
 
 ### Resume sessions on start
 
-A switch, **off to begin with**: whether Octoboard resumes, each time it starts, the sessions that were running when it
-last stopped. While the switch is off the row's description says what turning it on will do, and while it is on it says
-what is happening now. In the macOS application the description of the on state adds that a logout, restart or
-shutdown then quits Octoboard without asking (see "Quitting" in `docs/product/application-lifecycle.md`); other clients
-do not say it. The daemon stores it as `resume_sessions_on_start` and keeps it, so every window shows the same. A
-console session may read and change it, and a configuration export that includes the application settings carries it
-(see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
-application settings an export carries" in `docs/product/settings-in-a-configuration.md`). Turning it on or off resumes
-nothing at once: it is read when the daemon next starts. Which sessions are resumed, and how, is in "Resuming the
-sessions a run left running" in `docs/product/archiving-and-resuming-sessions.md`.
+A switch, **off to begin with**: whether Octoboard resumes the interrupted sessions each time it starts, those the
+previous run left and any interrupted before it last stopped. While the switch is off the row's description says what
+turning it on will do, and while it is on it says what is happening now. In the macOS application the description of
+the on state adds that a logout, restart or shutdown then quits Octoboard without asking (see "Quitting" in
+`docs/product/application-lifecycle.md`); other clients do not say it. The daemon stores it as
+`resume_sessions_on_start` and keeps it, so every window shows the same. A console session may read and change it, and a
+configuration export that includes the application settings carries it (see "Application settings: `get_settings` and
+`update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings an export carries" in
+`docs/product/settings-in-a-configuration.md`). Turning it on or off resumes nothing at once: it is read when the daemon
+next starts. Which sessions are resumed, and how, is in "Resuming the interrupted sessions at start" in
+`docs/product/archiving-and-resuming-sessions.md`.
 
 ### Keep running in the background
 

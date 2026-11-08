@@ -247,9 +247,9 @@ pub(super) const UPDATE_SETTINGS: ToolDef = ToolDef {
                 },
                 "resume_sessions_on_start": {
                     "type": "boolean",
-                    "description": "Whether, when Octoboard starts, the sessions the previous run \
-                                    left running are resumed automatically (archived ones and \
-                                    ones already interrupted before that run ended are not).",
+                    "description": "Whether, when Octoboard starts, the sessions that are \
+                                    interrupted then are resumed automatically, including ones \
+                                    interrupted before it last stopped.",
                 },
                 "interface_language": {
                     "type": "string",

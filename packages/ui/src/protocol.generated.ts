@@ -1096,7 +1096,7 @@ export type DocumentSettings = {
   auto_approve_handoffs: boolean,
   ask_questions_as_choices: boolean,
   /**
-   * Whether the daemon resumes the sessions the previous run left live when it starts (see
+   * Whether the daemon resumes the interrupted sessions when it starts (see
    * `Settings.resume_sessions_on_start`). Absent in a document from a build that had no such
    * setting, which an import then leaves as this machine has it.
    */
@@ -4631,8 +4631,9 @@ export type Settings = {
    */
   auto_start_quota_windows: boolean,
   /**
-   * Whether the daemon, once it has started, resumes the sessions the previous run left live
-   * (see `coordinator::resume_on_start`). Off unless the user turned it on; read at each start.
+   * Whether the daemon, once it has started, resumes the sessions that are interrupted then,
+   * whichever run interrupted them (see `coordinator::resume_on_start`). Off unless the user
+   * turned it on; read at each start.
    */
   resume_sessions_on_start: boolean,
   /**

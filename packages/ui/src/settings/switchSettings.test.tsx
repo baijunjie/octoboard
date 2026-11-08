@@ -28,7 +28,7 @@ it("lists every switch the settings page covers once", () => {
 // What each switch says while it is on; every one says the same while it is off.
 const OFF_TEXT = "Once this is on";
 const switches = [
-  { key: "resume_sessions_on_start", label: "Resume sessions on start", onText: "resumes the sessions that were running when it last stopped, each time it starts." },
+  { key: "resume_sessions_on_start", label: "Resume sessions on start", onText: "resumes every interrupted session each time it starts, including ones interrupted before it last stopped." },
   { key: "auto_close_idle_shell_terminals", label: "Close idle terminals when closing the panel", onText: "Closing the Terminal panel closes its idle terminals" },
   { key: "auto_delete_unresumable_archives", label: "Automatically delete archived sessions whose conversation is gone", onText: "is deleted automatically" },
   { key: "auto_approve_resume_requests", label: "Automatically approve resume requests", onText: "without asking you first" },

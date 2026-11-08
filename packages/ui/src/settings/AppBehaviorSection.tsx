@@ -10,10 +10,10 @@ import { MenuBarIconSetting } from "./MenuBarIconSetting";
 import { SettingsGroup } from "./SettingsGroup";
 
 /** How the application behaves around the window, in groups: startup (whether the app opens at login, where the
- * platform offers it, and whether the sessions the previous run left running are resumed), the window (where the
- * platform offers it: whether closing it keeps the app running, whether the menu bar icon shows), power (where the
- * platform offers it: whether the computer is kept awake, and when) and the terminals (whether closing a panel closes
- * idle terminals). A group the platform has nothing for is left out. */
+ * platform offers it, and whether the interrupted sessions are resumed), the window (where the platform offers it:
+ * whether closing it keeps the app running, whether the menu bar icon shows), power (where the platform offers it:
+ * whether the computer is kept awake, and when) and the terminals (whether closing a panel closes idle terminals). A
+ * group the platform has nothing for is left out. */
 export function AppBehaviorSection(): React.ReactElement {
   const t = useT();
   const { backgroundRun, statusItem, keepAwake, launchAtLogin } = usePlatform();

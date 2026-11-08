@@ -28,7 +28,7 @@
 //! - [`validate`]: the checks of the text fields requests carry.
 //! - [`archive_cleanup`], [`resume_on_start`], [`exit_watch`]: not request handlers.
 //!   `archive_cleanup` is the daemon task that deletes archived sessions whose conversation can no
-//!   longer be resumed; `resume_on_start` resumes the sessions the previous run left running, when
+//!   longer be resumed; `resume_on_start` resumes the interrupted sessions when the daemon starts, if
 //!   the user asked for that; `exit_watch` is the exit watcher every launch starts, and the
 //!   sequence that drops a live session.
 //!

@@ -42,9 +42,9 @@ that has application settings.
 **App behavior**
 
 - **Resume sessions on start** (see that section in `docs/product/settings.md`), under `resume_sessions_on_start`. The
-  review's line for turning it on says that Octoboard will then resume, each time it starts, the sessions that were
-  running when it last stopped. A document from a build without the setting has no such key, and an import of it
-  leaves this machine's choice as it is.
+  review's line for turning it on says that Octoboard will then resume every interrupted session each time it starts,
+  including ones interrupted before it last stopped. A document from a build without the setting has no such key, and
+  an import of it leaves this machine's choice as it is.
 - **Keep running in the background**, under `run_in_background`, `true` or `false`, carried only by a client that has
   the setting — the desktop application (see "Closing the window" in `docs/product/application-lifecycle.md`).
 - **Show menu bar icon**, under `show_menu_bar_icon`, `true` or `false`, carried only by the desktop application (see

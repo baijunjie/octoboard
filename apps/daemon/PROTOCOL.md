@@ -1194,16 +1194,15 @@ check still fetches the remote and reports how far ahead or behind the branch is
 is behind and can fast-forward is fast-forwarded. It never pushes, and it never merges non-fast-forward. Turning it on
 also fast-forwards straight away, without waiting for the next check — see "Fast-forwarding when the setting is turned
 on" below.
-`resume_sessions_on_start` (default `false`) is the application-wide choice to bring back, when the daemon starts, the
-sessions the previous run left live: not archived, and not already interrupted before that run ended, whether it ended
-with a quit, a termination signal or a crash. They are the sessions that had a process when the run ended, which the
-daemon records as it stops them (`sessions.left_live`) or finds still running in the store at start. The setting is read
-once at start, after every session left behind has been marked interrupted; each session is then resumed as a
+`resume_sessions_on_start` (default `false`) is the application-wide choice to bring back, when the daemon starts, every
+session that is interrupted then: the ones the previous run ended (with a quit, a termination signal or a crash) and
+any interrupted earlier, by an earlier run or by a resume that failed. The setting is read once at start, after every
+session left behind has been marked interrupted, and the sessions are listed then; each is resumed as a
 `resume_session` request would (including a conversation proven gone, which is skipped and left interrupted), at most
 three at a time and each start 400 ms after the previous one, owners before the sessions bound to them. A resume that
-fails is logged and leaves the session interrupted; no client is told. The mark is cleared by every start, so a session
-is resumed at most once for the run that left it, and changing the setting later never resumes an older run's
-sessions. A client may learn it from `snapshot.settings` and `settings_updated` like any other setting.
+fails is logged and leaves the session interrupted; no client is told, and it is tried again at the next start. Changing
+the setting later resumes nothing until the next start. A client may learn it from `snapshot.settings` and
+`settings_updated` like any other setting.
 `auto_close_idle_shell_terminals` (default `false`) is the application-wide choice for a client to close idle shell
 terminals when the user explicitly closes their project's Terminal panel. Running programs stay open. The client
 sends `close_shell_terminal` with `only_if_idle: true` for the project's terminals present at the close; the daemon

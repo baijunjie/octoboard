@@ -44,12 +44,6 @@ impl AppState {
             }
         };
         let _ = tokio::time::timeout(shutdown_hook_settle(), settling).await;
-        // Before the interruption below gives them the status of any other interrupted session:
-        // the next start resumes these when the user asked for that.
-        let ids: Vec<String> = sessions.iter().map(|live| live.id.clone()).collect();
-        if let Err(err) = self.store.mark_left_live(&ids) {
-            tracing::warn!(%err, "marking the sessions left running failed");
-        }
         for live in &sessions {
             if let Err(err) = self.interrupt_session_record(&live.id) {
                 tracing::warn!(session = %live.id, %err, "marking the session interrupted failed");

@@ -835,7 +835,7 @@ async fn settings_are_listed_without_directories_and_the_general_switches_are_wr
     .unwrap();
     assert_eq!(ordered["sidebar_order_by_status"], false);
     assert!(!state.store.sidebar_order_by_status().unwrap());
-    // Resuming the sessions a run left running is a setting an agent may read and change.
+    // Resuming the interrupted sessions when Octoboard starts is a setting an agent may read and change.
     assert_eq!(read["resume_sessions_on_start"], false);
     let resumed = call(
         &state,
