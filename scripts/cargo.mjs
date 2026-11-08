@@ -13,14 +13,14 @@
 // need no daemon build and no fetched files. Only this script sets the override: a plain `cargo build` or
 // `pnpm tauri build` still fails without them.
 //
-// `check-windows` cross-checks for `x86_64-pc-windows-msvc` through `cargo xwin` (`cargo install cargo-xwin`,
-// `rustup target add x86_64-pc-windows-msvc`, and clang/LLVM on the PATH for the C build scripts; it downloads
-// the MSVC CRT and Windows SDK on first use, so run it with `XWIN_ACCEPT_LICENSE=1` to accept their license).
-// Both crates gate: the desktop crate is checked first and then the daemon, and the exit code is non-zero
-// when either fails. `pnpm check:windows desktop` or `pnpm check:windows daemon` checks just one crate.
+// `check-windows` cross-checks for `x86_64-pc-windows-msvc` through `cargo xwin`. It first checks the toolchain
+// that needs (`scripts/lib/windows-toolchain.mjs`) and fails naming how to install each missing piece. Both crates
+// gate: the desktop crate is checked first and then the daemon, and the exit code is non-zero when either fails.
+// `pnpm check:windows desktop` or `pnpm check:windows daemon` checks just one crate.
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { WINDOWS_TARGET, windowsCheckEnv, windowsToolchainProblems } from "./lib/windows-toolchain.mjs";
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -31,10 +31,9 @@ const COMMANDS = {
 };
 
 const WINDOWS_CRATES = { desktop: "octoboard", daemon: "octoboardd" };
-const WINDOWS_TARGET = "x86_64-pc-windows-msvc";
-const env = { ...process.env, TAURI_CONFIG: JSON.stringify({ bundle: { externalBin: [], resources: [] } }) };
+const tauriConfig = { TAURI_CONFIG: JSON.stringify({ bundle: { externalBin: [], resources: [] } }) };
 
-const run = (args) => {
+const run = (args, env = { ...process.env, ...tauriConfig }) => {
   const result = spawnSync("cargo", args, { cwd: repoRoot, stdio: "inherit", env });
   if (result.error) throw result.error;
   return result.status ?? 1;
@@ -48,6 +47,12 @@ if (name === "check-windows") {
     console.error("Usage: node scripts/cargo.mjs check-windows [desktop|daemon] [cargo arguments]");
     process.exit(2);
   }
+  const windowsEnv = { ...windowsCheckEnv(), ...tauriConfig };
+  const problems = windowsToolchainProblems({ env: windowsEnv });
+  if (problems.length > 0) {
+    console.error(`check-windows: the Windows cross-check cannot run on this machine:\n${problems.map((problem) => `- ${problem}`).join("\n")}`);
+    process.exit(1);
+  }
   const checkCrate = (crate) =>
     run([
       "xwin",
@@ -58,7 +63,7 @@ if (name === "check-windows") {
       "-p",
       WINDOWS_CRATES[crate],
       ...(only ? rest : extra),
-    ]);
+    ], windowsEnv);
   if (only) process.exit(checkCrate(only));
   const desktop = checkCrate("desktop");
   const daemon = checkCrate("daemon");

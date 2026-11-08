@@ -52,7 +52,7 @@ test("UI reruns remain narrowed and release checks exclude website and gallery s
   const ui = steps(["packages/ui/src/App.tsx"]).find((step) => step.label === "ui tests");
   assert.deepEqual(ui.rerun(["packages/ui/src/a/X.test.tsx"]), [["pnpm", "--filter", "@octoboard/ui", "test", "src/a/X.test.tsx"]]);
   const release = checkSteps({ mode: "release" });
-  assert.deepEqual(release.map((step) => step.label), ["identity check", "application lint", "application type check", "desktop script tests", "rustfmt check", "application UI tests", "rust clippy", "rust tests"]);
+  assert.deepEqual(release.map((step) => step.label), ["identity check", "application lint", "application type check", "desktop script tests", "rustfmt check", "application UI tests", "rust clippy", "rust tests", "windows cross-check"]);
   assert.ok(release[1].cmd.includes("**/src/gallery/**"));
   assert.ok(release[1].cmd.includes("**/src/fixtures/**"));
   assert.ok(release[2].cmd.includes("typecheck:app"));
@@ -69,9 +69,21 @@ test("release groups together run every release check with identical commands an
   const all = checkSteps({ mode: "release" });
   const frontend = checkSteps({ mode: "release", group: "frontend" });
   const native = checkSteps({ mode: "release", group: "native" });
+  const windows = checkSteps({ mode: "release", group: "windows" });
   const commands = (items) => [...new Set(items.map((step) => JSON.stringify(step.cmd)))].sort();
-  assert.deepEqual(commands([...frontend, ...native]), commands(all));
+  assert.deepEqual(commands([...frontend, ...native, ...windows]), commands(all));
   assert.deepEqual(frontend.map((step) => step.label), ["identity check", "application lint", "application type check", "application UI tests"]);
   assert.deepEqual(native.map((step) => step.label), ["identity check", "desktop script tests", "rustfmt check", "rust clippy", "rust tests"]);
+  assert.deepEqual(windows.map((step) => step.label), ["identity check", "windows cross-check"]);
   assert.throws(() => checkSteps({ mode: "release", group: "unknown" }), /Unknown release check group/);
+});
+
+test("the complete release plan cross-checks both crates for Windows, a heavy step no hosted group runs", () => {
+  const step = checkSteps({ mode: "release" }).find((item) => item.label === "windows cross-check");
+  assert.deepEqual(step.cmd, ["pnpm", "check:windows"]);
+  assert.equal(step.heavy, true);
+  for (const group of ["frontend", "native"]) {
+    assert.ok(!checkSteps({ mode: "release", group }).some((item) => item.cmd.includes("check:windows")), group);
+  }
+  assert.ok(!checkSteps({ mode: "full" }).some((item) => item.cmd.includes("check:windows")));
 });

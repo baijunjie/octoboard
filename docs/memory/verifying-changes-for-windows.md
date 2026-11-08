@@ -2,11 +2,12 @@
 
 ## Cross-check Rust changes for Windows yourself, and report Windows-only code as unverified until it ran on Windows
 
-Applies when you change Rust code in either crate on a Mac. `pnpm verify`, the pre-push hook and the release check
-build and test for the host they run on only; none of them cross-checks Windows, so a change that breaks the Windows
-build passes all of them and surfaces only when a release builds the Windows installer. Run `pnpm check:windows`
-(through `cargo xwin`, which has to be installed; `pnpm check:windows daemon` or `desktop` checks one crate) before
-handing the change over.
+Applies when you change Rust code in either crate on a Mac. `pnpm verify`, `pnpm verify --quick` and the pre-push
+hook build and test for the host they run on only; none of them cross-checks Windows, so a change that breaks the
+Windows build passes all of them, lands on main, and surfaces only when the release check (`pnpm verify --release`,
+which does run `pnpm check:windows`) refuses to tag a version. Run `pnpm check:windows` (through `cargo xwin`; a
+machine missing its toolchain is told what to install; `pnpm check:windows daemon` or `desktop` checks one crate)
+before handing the change over.
 
 It only compiles. Windows-only code, and the tests that run only on Windows, never run on the Mac: they run on the
 `windows-check` job of `.github/workflows/quality.yml`, which runs only when started by hand, or on a Windows machine.

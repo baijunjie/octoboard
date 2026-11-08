@@ -16,7 +16,7 @@ import { clearFailure, failedFiles, narrowedFiles, readFailure, recordFailure, R
 import { quickSteps } from "./verify/quick.mjs";
 import { MENU_KEYS_FILE, planScope } from "./verify/scope.mjs";
 import { contentKey, readStamp, recordPass, stampDirectory, stepKey } from "./verify/stamp.mjs";
-import { checkSteps } from "./verify/steps.mjs";
+import { checkSteps, RELEASE_GROUPS } from "./verify/steps.mjs";
 import { workingTree } from "./verify/tree.mjs";
 
 const args = process.argv.slice(2);
@@ -31,8 +31,8 @@ if (unknown.length > 0 || (flag("--base") && (!baseArg || baseArg.startsWith("--
   process.exit(2);
 }
 
-if (flag("--release-group") && (!flag("--release") || flag("--full") || !["frontend", "native"].includes(releaseGroup))) {
-  console.error("verify: --release-group requires --release and one of frontend or native");
+if (flag("--release-group") && (!flag("--release") || flag("--full") || !RELEASE_GROUPS.includes(releaseGroup))) {
+  console.error(`verify: --release-group requires --release and one of ${RELEASE_GROUPS.join(", ")}`);
   process.exit(2);
 }
 

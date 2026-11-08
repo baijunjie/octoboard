@@ -239,8 +239,9 @@ later, from the same tag: the versioned release gets that platform's files added
 
 ### Prepare and push a version
 
-Run from the clean main checkout on `main` on macOS, with dependencies installed, the Rust toolchain available and
-Git access to `origin`:
+Run from the clean main checkout on `main` on macOS, with dependencies installed, the Rust toolchain available, the
+Windows cross-check's toolchain installed (step 4) and Git access to `origin`. The command refuses to start, before
+changing anything and in a dry run too, on a machine missing a piece of that toolchain, naming how to install it:
 
 ```sh
 pnpm --filter @octoboard/desktop release:version 0.1.0-beta.2 --notes-file /tmp/octoboard-release-notes.md --dry-run
@@ -256,8 +257,9 @@ preserved. `--platforms macos|windows` releases one platform only: the tag messa
 
 The version must be a semantic version strictly newer than the current one, without build metadata. The command
 refuses an existing local or remote version tag, release branch or release worktree. `.worktrees/` must be ignored
-(for example in `.git/info/exclude`). `--dry-run` checks the inputs and queries the remote refs, then prints the plan
-and notes without changing files or refs; it does not fetch or run the checks.
+(for example in `.git/info/exclude`). `--dry-run` checks the inputs and the Windows cross-check's toolchain and
+queries the remote refs, then prints the plan and notes without changing files or refs; it does not fetch or run the
+checks.
 
 The command:
 
@@ -270,9 +272,13 @@ The command:
 3. Rebases onto main, runs `pnpm verify --quick`, fast-forwards main and removes the release worktree and branch.
 4. Runs `pnpm verify --release --fresh --head <release-commit>` locally on the version commit, regardless of the
    changed files or previous passes. This checks identity, application lint, production UI types, application UI
-   tests, desktop script tests, Rust formatting, clippy and both Rust crates' tests. Website and gallery-only checks
-   are excluded. It then runs `pnpm verify --base <fetched-remote-main> --head <release-commit>` for every unpushed
-   main change, reusing the release checks' passes where the step commands match and adding any other affected checks.
+   tests, desktop script tests, Rust formatting, clippy, both Rust crates' tests and the Windows cross-check of both
+   crates (`pnpm check:windows`, whichever platforms the version selects), so a change that breaks the Windows build
+   cannot be tagged. That check needs cargo-xwin, the `x86_64-pc-windows-msvc` Rust target, LLVM's clang
+   (Homebrew's is put first on the PATH by itself) and the MSVC CRT and Windows SDK, downloaded once with
+   `XWIN_ACCEPT_LICENSE=1 pnpm check:windows`, which accepts their license. Website and gallery-only checks are
+   excluded. It then runs `pnpm verify --base <fetched-remote-main> --head <release-commit>` for every unpushed main
+   change, reusing the release checks' passes where the step commands match and adding any other affected checks.
    Both runs require that exact commit and a clean checkout; the command stops if main changes during preparation or
    verification.
 5. Creates the annotated version tag on the checked commit and atomically pushes that exact commit to remote main

@@ -9,6 +9,7 @@ test("partial release checks require an explicit valid release group", () => {
   for (const args of [
     ["--release-group"],
     ["--release-group", "frontend"],
+    ["--release-group", "windows"],
     ["--release", "--release-group", "unknown"],
     ["--release", "--full", "--release-group", "native"],
     ["--release", "--quick", "--release-group", "frontend"],

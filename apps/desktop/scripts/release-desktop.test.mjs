@@ -32,7 +32,7 @@ function fixture(t) {
   // Seed the remote without running a push: the release itself exercises the push and its hooks.
   git("--git-dir", remote, "fetch", "-q", root, "main:main");
   const calls = [];
-  const options = { root, version: "0.1.0-beta.2", notes: "## Fixes\n\n- Keep # headings.\n", log: () => {}, run: (name, args, config) => {
+  const options = { root, version: "0.1.0-beta.2", notes: "## Fixes\n\n- Keep # headings.\n", log: () => {}, toolchainProblems: () => [], run: (name, args, config) => {
     calls.push({ name, args, cwd: config.cwd });
     if (name !== "git") return { status: 0 };
     return runResult(name, args, { ...config, stdio: ["pipe", "pipe", "pipe"] });
@@ -123,6 +123,18 @@ test("a version for one platform ends its tag message with the platforms line, w
   const message = git("tag", "-l", "--format=%(contents)", "desktop-v0.1.0-beta.2");
   assert.equal(message, `${options.notes.trim()}\n\nPlatforms: macos`);
   assert.deepEqual(readTagMessage(message), { notes: options.notes.trim(), platforms: ["macos"] });
+});
+
+test("a machine that cannot run the Windows cross-check is refused before any file, ref or command, dry run included", (t) => {
+  const { git, calls, options } = fixture(t);
+  const before = git("show-ref");
+  const toolchainProblems = () => ["cargo-xwin is not installed: run `cargo install --locked cargo-xwin`."];
+  for (const dryRun of [false, true]) {
+    assert.throws(() => releaseDesktop({ ...options, dryRun, toolchainProblems }), /Windows cross-check[\s\S]*cargo install --locked cargo-xwin/);
+  }
+  assert.deepEqual(calls, []);
+  assert.equal(git("show-ref"), before);
+  assert.equal(git("status", "--porcelain"), "");
 });
 
 test("dirty worktrees and existing local or remote tags are refused without creating a branch", (t) => {

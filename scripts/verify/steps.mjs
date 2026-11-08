@@ -22,10 +22,15 @@ const RUST_STEPS = [
   pnpm("rust tests", ["test:rust"], { heavy: true }),
 ];
 
+// The `cargo xwin` cross-check of both crates for Windows. It runs only in the local release plan, as its own
+// group: the hosted `native` group's macOS runner has no cargo-xwin, and `quality.yml` checks Windows natively.
+const WINDOWS_STEP = pnpm("windows cross-check", ["check:windows"], { heavy: true });
+export const RELEASE_GROUPS = ["frontend", "native", "windows"];
+
 export function checkSteps(scope) {
   if (scope.mode === "release") {
     const frontend = [
-      lint("application lint", ["packages/ui", "apps/desktop/scripts", "scripts/lib/env.mjs", "scripts/lib/git.mjs", "scripts/verify/environment.mjs"], ["**/src/gallery/**", "**/src/fixtures/**", "**/src/website-preview/**", "**/scripts/gallery*", "**/scripts/wkbench/**"]),
+      lint("application lint", ["packages/ui", "apps/desktop/scripts", "scripts/lib/env.mjs", "scripts/lib/git.mjs", "scripts/lib/windows-toolchain.mjs", "scripts/verify/environment.mjs"], ["**/src/gallery/**", "**/src/fixtures/**", "**/src/website-preview/**", "**/scripts/gallery*", "**/scripts/wkbench/**"]),
       pnpm("application type check", ["--filter", "@octoboard/ui", "typecheck:app"]),
       pnpm("application UI tests", ["--filter", "@octoboard/ui", "test:app"], { heavy: true }),
     ];
@@ -33,8 +38,9 @@ export function checkSteps(scope) {
       pnpm("desktop script tests", ["--filter", "@octoboard/desktop", "test"]),
       ...RUST_STEPS,
     ];
-    if (scope.group && !["frontend", "native"].includes(scope.group)) throw new Error(`Unknown release check group: ${scope.group}`);
-    return lightFirst([IDENTITY_CHECK, ...(scope.group === "native" ? [] : frontend), ...(scope.group === "frontend" ? [] : native)]);
+    if (scope.group && !RELEASE_GROUPS.includes(scope.group)) throw new Error(`Unknown release check group: ${scope.group}`);
+    const groups = { frontend, native, windows: [WINDOWS_STEP] };
+    return lightFirst([IDENTITY_CHECK, ...(scope.group ? groups[scope.group] : Object.values(groups).flat())]);
   }
   const packages = scope.mode === "full" ? ALL_PACKAGES : scope.packages;
   const steps = scope.mode === "unread" ? [] : [IDENTITY_CHECK];

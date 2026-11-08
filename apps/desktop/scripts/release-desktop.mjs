@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { gitChecked, gitResult, runResult } from "../../../scripts/lib/git.mjs";
+import { windowsToolchainProblems } from "../../../scripts/lib/windows-toolchain.mjs";
 import { compareVersions, parsePlatforms, platformsTrailer, tag } from "./release-manifest.mjs";
 
 const VERSION_FILES = ["apps/desktop/package.json", "Cargo.toml", "Cargo.lock"];
@@ -48,7 +49,7 @@ export function parseOptions(args, cwd = process.cwd()) {
   return { version: positionals[0], notes, platforms: parsePlatforms(values.platforms), dryRun: values["dry-run"] };
 }
 
-export function releaseDesktop({ root, version, notes, platforms = parsePlatforms(), dryRun = false, run = runResult, log = console.log }) {
+export function releaseDesktop({ root, version, notes, platforms = parsePlatforms(), dryRun = false, run = runResult, log = console.log, toolchainProblems = windowsToolchainProblems }) {
   const git = (...args) => gitChecked(root, ...args);
   const cleanMain = () => {
     if (git("branch", "--show-current") !== "main") throw new Error("Run the release from the main worktree on main.");
@@ -63,6 +64,10 @@ export function releaseDesktop({ root, version, notes, platforms = parsePlatform
   cleanMain();
   if (!notes?.trim()) throw new Error("The release notes are empty.");
   const { current } = versionFiles(root, version);
+  // The release checks end with the Windows cross-check; a machine that cannot run it is refused before any
+  // file or ref changes, rather than after main has been fast-forwarded and every other check has run.
+  const problems = toolchainProblems();
+  if (problems.length > 0) throw new Error(`The Windows cross-check of the release checks cannot run on this machine:\n${problems.map((problem) => `- ${problem}`).join("\n")}`);
   const releaseTag = tag(version);
   const branch = `release/${releaseTag}`;
   const worktree = path.join(root, ".worktrees", releaseTag);

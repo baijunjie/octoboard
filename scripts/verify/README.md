@@ -34,19 +34,24 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    and nothing runs. `build` inputs (`builds`) add the UI build. The `menu.*` keys of the UI message catalog count only
    when a changed line is one of them. A cross-package read (a test that reads another package's file, an import across
    packages) is declared in `scope.mjs`; `scope.test.mjs` fails when a new one is not. `--full` selects every package
-   and `--release` the shipping application only. `--release-group frontend|native` selects one part of the release
-   plan; it requires `--release` and cannot be combined with `--full` or `--quick`. Without a group, `--release`
+   and `--release` the shipping application only. `--release-group frontend|native|windows` selects one part of the
+   release plan; it requires `--release` and cannot be combined with `--full` or `--quick`. Without a group, `--release`
    still selects every application check.
 3. **Steps** (`steps.mjs`). Every non-`unread` plan, including release and quick plans, checks generated identity fields
    against `config/app.json` without writing (`scripts/sync-identity.mjs --check`). A package selects its other steps
    (lint, type check, locales, tests, build, script tests; both Rust crates always run together). Light steps run first
    and heavy ones (UI tests, Rust builds and tests, the website build) last, and a failure stops the run. The website
    build runs before its SEO tests, which read the generated output. `--release` runs the application checks:
-   application lint, production UI type check, application UI tests, desktop script tests, rustfmt, clippy and Rust
-   tests. Local `release:version` runs the complete plan with `--fresh --head <release-commit>` before tagging, then
-   scoped push verification can reuse matching passes. The release groups partition those same commands; both also
-   run the identity check. The optional hosted workflow runs the groups independently, with a separate Linux
-   compilation job (see "Hosted application checks").
+   application lint, production UI type check, application UI tests, desktop script tests, rustfmt, clippy, Rust
+   tests and the Windows cross-check (`pnpm check:windows`: both crates, all targets, through `cargo xwin`). Local
+   `release:version` runs the complete plan with `--fresh --head <release-commit>` before tagging, then scoped push
+   verification can reuse matching passes. The release groups partition those same commands; each also runs the
+   identity check. The optional hosted workflow runs the frontend and native groups independently, with separate Linux
+   and Windows jobs (see "Hosted application checks"); the windows group is local only, since its toolchain
+   (cargo-xwin, the `x86_64-pc-windows-msvc` target, LLVM's clang, the downloaded MSVC CRT and Windows SDK) is
+   not on the hosted macOS runner. A machine missing any of it fails the step before compiling, with a message naming
+   each missing piece and how to install it; the check never accepts the SDK license itself (see
+   `scripts/lib/windows-toolchain.mjs`).
 4. **Reuse** (`stamp.mjs`, `tree.mjs`, `rerun.mjs`). `tree.mjs` fingerprints the working copy (tracked and untracked,
    non-ignored files, taken through a scratch index). A pass is recorded in the common git directory, keyed by that tree
    and the toolchain versions (node and pnpm, plus rustc except for the frontend release group) per step command, so
@@ -87,7 +92,7 @@ automatically.
 
 ## Hosted application checks
 
-`.github/workflows/quality.yml` runs only on request. Its three independent jobs provide hosted checks; release CI
+`.github/workflows/quality.yml` runs only on request. Its independent jobs provide hosted checks; release CI
 does not call this workflow or wait for its results:
 
 | Job | Runner | Command and scope |
@@ -95,6 +100,7 @@ does not call this workflow or wait for its results:
 | `frontend` | `ubuntu-latest` | `pnpm verify --release --release-group frontend --fresh`: identity, application lint, production UI type check and application UI tests. |
 | `native` | `macos-26` | `pnpm verify --release --release-group native --fresh`: identity, desktop script tests, rustfmt, clippy for the workspace and all targets, and both Rust crates' tests. |
 | `linux-check` | `ubuntu-latest` | `node scripts/cargo.mjs check --locked`: compile both crates with the Linux prerequisites installed. |
+| `windows-check`, `windows-bundle` | `windows-latest` | Native Windows checks and the unsigned installer build (see the [tooling overview](../../docs/structure/tooling.md)); the local release plan's windows group also cross-checks the same crates from the Mac. |
 
 The frontend group does not invoke `rustc`, including when identifying the toolchain for local pass stamps, so it
 does not download the pinned Rust toolchain. Desktop script tests stay on macOS because archive tests exercise its
@@ -110,8 +116,8 @@ retention and timing measurements are documented in the [Rust cache module](../.
 
 - A new package or a new input: add or extend a rule in `RULES`; a rule's `consumers` decide which steps run.
 - A new check: a step in `steps.mjs`; keep `quick.mjs` consistent (its tests fail when a UI test reads files or a crate
-  has crate-wide tests that its lists do not name). A new release check belongs in the frontend or native group;
-  `steps.test.mjs` checks that their combined commands equal the complete release plan.
+  has crate-wide tests that its lists do not name). A new release check belongs in the frontend, native or windows
+  group; `steps.test.mjs` checks that their combined commands equal the complete release plan.
 - A script that other packages import is named in the matching rule (`scripts/lib/git.mjs`, `scripts/lib/env.mjs`,
   `lock.mjs`).
 - A test that creates a temporary Git repository calls `assertRepositoryEnvironmentCleared` at module startup before
@@ -121,7 +127,7 @@ retention and timing measurements are documented in the [Rust cache module](../.
 ## External interfaces
 
 - `pnpm verify` with `--dry-run`, `--base <ref>`, `--head <commit>`, `--full`, `--release`,
-  `--release-group frontend|native`, `--quick`, `--fresh`.
+  `--release-group frontend|native|windows`, `--quick`, `--fresh`.
 - `scope.mjs`: `RULES`, `planScope`, `matchingRules`. `steps.mjs`: `checkSteps`. `quick.mjs`: `quickSteps`.
 - `changes.mjs`: `chooseBase`, `resolveBase`, `resolveLocalTargetBase`, `remoteTargetBase` (the one
   merge-base-with-the-remote-target function, also used by the pre-push hook), `resolveRemoteTargetBase`,
