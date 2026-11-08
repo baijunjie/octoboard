@@ -197,6 +197,7 @@ const CORE_CODES = {
   icon_not_an_image: { origin: "daemon", recovery: "avatarImage", variants: { import: { nameParams: ["console_name"] } }, variantOf: (params) => params.console_name ? "import" : undefined },
   icon_too_large: { origin: "daemon", recovery: "avatarSize", variants: { import: { nameParams: ["console_name"] } }, variantOf: (params) => params.console_name ? "import" : undefined },
   import_accounts_missing: { origin: "daemon", recovery: "configuration" },
+  import_agent_missing: { origin: "daemon", recovery: "configuration" },
   import_choice_unavailable: { origin: "daemon", recovery: "configuration" },
   import_resolution_invalid: { origin: "daemon", recovery: "configuration" },
   import_settings_missing: { origin: "daemon", recovery: "configuration" },

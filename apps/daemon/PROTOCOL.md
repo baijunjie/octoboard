@@ -196,9 +196,9 @@ the request id as if it were a record id.
 | `use_reset_credit` | `agent` (the provider the credit is of; one whose `capabilities.reset_credits` is true), `account?` (an account id; absent or null is the agent's default account) | Uses one of the account's rate limit reset credits, for a user who confirmed it; nothing else in the daemon, no MCP tool and no automatic account switch ever does. The credit is the first the held reading lists (`reset_credits`, which expires first), or the one the provider picks when the reading holds no details. The provider's CLI is run as a reading runs it, with a fresh idempotency key (for Codex, `codex app-server` with `account/rateLimitResetCredit/consume`; see "Plan quota" in `docs/agent-cli-reference.md`). Answered with `reset_credit_used` once the provider has answered. The account's quota is read again after every run of the CLI, a failed one included, since a credit may have been used though the answer did not arrive. Refused: `provider_unsupported` (`operation` `reset_credit`: the agent's provider offers no reset credits), `unknown_account` (not an account of the agent), `agent_not_available`, `shell_environment_timeout`, `binary_not_found`, `reset_credit_not_signed_in`, `reset_credit_in_progress` (a use on this account is running), `daemon_shutting_down`, `reset_credit_timed_out`, `reset_credit_failed` |
 | `read_account_mcp_inventory` | `agent`, `account?` (an account id; absent or null is the agent's default account), `refresh?` (default false) | Reads the MCP servers and platform connectors of the account through the agent's own CLI and answers with `account_mcp_inventory_read` once it has answered; it connects to every server, so it can take up to a minute and a quarter (Claude Code checks the sign-in for up to 15 seconds before listing for up to 60; Grok Build lists for up to 15 seconds, then diagnoses for up to 60). `refresh` asks the agent to refetch what it caches (Codex's Apps) instead of reading what it holds; Claude Code and Grok Build have nothing to refetch, so `refresh` changes nothing for them. A request for an account that is already being read joins that reading and gets the same inventory, whatever its `refresh`. Nothing the account holds is written. Refused only with `unknown_account` (not an account of the agent); every other failure is the inventory's `unavailable`. See "Account MCP inventory" below |
 | `refresh_account_quotas` | `agent?`, `account?` | Answered with `ack` at once. Re-reads the plan quota of the accounts it selects whose last attempt is older than the polling interval (five minutes, longer for an account that keeps failing), and also those whose last attempt is over 30 seconds old and which hold no windows because the account is not signed in or has no quota to report (a sign-in done outside Octoboard shows up at once): `agent` limits it to one agent's accounts, `account` (an account id) to that one account, and with neither it covers every account of every available agent, leaving out the accounts turned off (`set_account_disabled`) unless a session is running on one. An `account` that does not exist or belongs to another `agent` is refused with `unknown_account`. Each reading that finishes follows as `account_quotas_updated`; any other account that is not due, or whose reading is already running, is left alone. See "Account quotas" below |
-| `export_configuration` | `console?`, `consoles?` (`one`\|`all`\|`none`), `include_settings?`, `include_accounts?`, `include_paths?` | Answered with `configuration_exported`: the configuration document (see "Configuration export" below) holding the regions chosen. `consoles` says which consoles and projects: `one` (the console `console` names), `all` or `none`; absent it is `one` when `console` is given and `all` otherwise, and `console` is read for `one` alone. `include_settings` says whether the application settings are in it; absent it is true exactly when every console is exported. `include_accounts` says whether the account structure is, never a credential; absent it is false. Each region is independent of the others. A request that would export nothing (`consoles` `none`, no settings, no accounts) is refused with `export_empty`, `consoles` `one` without a `console` with `field_required`, and a `console` that does not exist with `unknown_console` rather than answered with an empty document. `include_paths` is a bool, true when absent; false exports each project's `path` as its last segment alone and drops a `remote_url` that cannot be cloned from (see "Configuration export"); it never touches the accounts, whose directories are always written. A read of what is stored: it runs no `git` and touches no session |
+| `export_configuration` | `console?`, `consoles?` (`one`\|`all`\|`none`), `settings_sections?`, `include_accounts?`, `include_paths?` | Answered with `configuration_exported`: the configuration document (see "Configuration export" below) holding the regions chosen. `consoles` says which consoles and projects: `one` (the console `console` names), `all` or `none`; absent it is `one` when `console` is given and `all` otherwise, and `console` is read for `one` alone. `settings_sections` lists the sections of Settings whose application settings are in it (`general`, `app_behavior`, `git`, `agent_behavior`, `keyboard_shortcuts`, `cleanup`; the Agent accounts section is `include_accounts`), written under one `settings` region that exists exactly when the list is not empty; absent it is every section when every console is exported and none otherwise, and a section listed twice counts once. The daemon writes the keys it holds of each section (General: `interface_language` alone, and only when it holds one; Keyboard shortcuts: none, so the region may be empty and the client adds the rest). `include_accounts` says whether the account structure is, never a credential; absent it is false. Each region is independent of the others. A request that would export nothing (`consoles` `none`, no sections, no accounts) is refused with `export_empty`, `consoles` `one` without a `console` with `field_required`, and a `console` that does not exist with `unknown_console` rather than answered with an empty document. `include_paths` is a bool, true when absent; false exports each project's `path` as its last segment alone and drops a `remote_url` that cannot be cloned from (see "Configuration export"); it never touches the accounts, whose directories are always written. A read of what is stored: it runs no `git` and touches no session |
 | `inspect_configuration` | `document` | Answered with `configuration_inspected`: for each project of the configuration document `document` (see "Configuration import" below) the directories it could be placed in on this machine, for each account reference that matches no account here (an account the document's accounts would create is listed too; the client tells them apart from `accounts`), and, when the document carries accounts, what importing each of them would do. Changes nothing and runs no `git`. Its existence checks of paths together have a 15 second deadline; a project whose check did not come back in that time is offered nothing. A document that is not a configuration document, is of a version this daemon does not read, or cannot be read is refused with `configuration_not_recognised`, `configuration_version_unsupported` or `configuration_unreadable` |
-| `import_configuration` | `document`, `resolutions?`, `apply_settings?`, `apply_clone_dir?`, `apply_accounts?`, `account_resolutions?`, `apply_consoles?`, `import_id?` | Answered with `configuration_imported`: creates a new console for each console of `document` and associates each project with the directory its entry in `resolutions` chooses (see "Configuration import" below). A project with no entry is left out. The document is refused as `inspect_configuration` refuses it, and a resolution that names a console or project the document does not have, names one twice, or chooses a `directory` that is neither an absolute path nor starts with `~/`, is refused with `import_resolution_invalid`; all of that before anything is created, as is anything `create_console` would refuse of a console of the document (an avatar that is not an image, say). `apply_settings` (absent means false) also applies the document's application settings; asking for them of a document that carries none is refused with `import_settings_missing`, before anything is created. `apply_clone_dir` (read only with `apply_settings`; absent means true) says whether the document's default clone directory is applied with them: false keeps this machine's own, and the reply carries no `clone_dir_applied`. `apply_accounts` (absent means false) also creates the document's accounts, before the consoles, so their references bind to them; asking for them of a document that carries none is refused with `import_accounts_missing`, before anything is created. `account_resolutions` (read only with `apply_accounts`) are `{ agent, account, directory? \| leave_out? }` entries, `account` being the index among the document's accounts of that `agent`: it gives the account another `directory` (absolute or starting with `~/`) or leaves it out (`leave_out: true`). One that names an account the document lacks, names one twice, gives both or neither of the two choices, or gives a malformed `directory` is refused with `import_resolution_invalid` (`agent` and `account` in its params), before anything is created. `apply_consoles` (absent means true, so a client that never sends it keeps importing the consoles) says whether the document's consoles and projects are created at all; false creates no console or project, and `resolutions` are not read (one naming a project the document lacks is no refusal), so only the accounts and the settings asked for are applied and `consoles` in the reply is empty. A project or account that cannot be created after that is not an error of the request (see "Configuration import"). `import_id` (a token of the client's own choosing) names the import in the `configuration_import_progress` events broadcast while it runs; absent means none are sent |
+| `import_configuration` | `document`, `resolutions?`, `apply_settings?`, `apply_clone_dir?`, `apply_accounts?`, `apply_agents?`, `account_resolutions?`, `apply_consoles?`, `import_id?` | Answered with `configuration_imported`: creates a new console for each console of `document` and associates each project with the directory its entry in `resolutions` chooses (see "Configuration import" below). A project with no entry is left out. The document is refused as `inspect_configuration` refuses it, and a resolution that names a console or project the document does not have, names one twice, or chooses a `directory` that is neither an absolute path nor starts with `~/`, is refused with `import_resolution_invalid`; all of that before anything is created, as is anything `create_console` would refuse of a console of the document (an avatar that is not an image, say). `apply_settings` (a list of sections as for `export_configuration`; absent or empty applies none, a section listed twice counts once) also applies the document's application settings of those sections only; listing a section the document does not carry (none of its keys present) is refused with `import_settings_missing` (`section` in its params), before anything is created. `apply_clone_dir` (read only when `apply_settings` lists `git`; absent means true) says whether the document's default clone directory is applied with them: false keeps this machine's own, and the reply carries no `clone_dir_applied`. `apply_accounts` (absent means false) also creates the document's accounts, before the consoles, so their references bind to them; asking for them of a document that carries none is refused with `import_accounts_missing`, before anything is created. `apply_agents` (read only with `apply_accounts`; absent means every agent the document carries something for: an agent entry, a place in `added_agents`, or provider settings or tags) limits the accounts' part to those agents (a list is deduplicated): an agent not listed is not appended to the added agents, its default account's name and flag are not applied, none of its accounts is created or reused (a console or project reference to one falls back exactly as one to an account left out does, unless an account of that name exists on this machine already), and its provider settings and tags are not applied; the three Agent accounts switches apply whichever agents are listed. Listing an agent the document carries nothing for is refused with `import_agent_missing` (`agent` in its params), before anything is created, and the reply (`accounts.agents_added`, `accounts.agents`, `accounts.agent_settings_applied`) holds only what was applied. `account_resolutions` (read only with `apply_accounts`) are `{ agent, account, directory? \| leave_out? }` entries, `account` being the index among the document's accounts of that `agent`: it gives the account another `directory` (absolute or starting with `~/`) or leaves it out (`leave_out: true`). One that names an account the document lacks, names one twice, gives both or neither of the two choices, or gives a malformed `directory` is refused with `import_resolution_invalid` (`agent` and `account` in its params), before anything is created. `apply_consoles` (absent means true, so a client that never sends it keeps importing the consoles) says whether the document's consoles and projects are created at all; false creates no console or project, and `resolutions` are not read (one naming a project the document lacks is no refusal), so only the accounts and the settings asked for are applied and `consoles` in the reply is empty. A project or account that cannot be created after that is not an error of the request (see "Configuration import"). `import_id` (a token of the client's own choosing) names the import in the `configuration_import_progress` events broadcast while it runs; absent means none are sent |
 | `get_project_source` | `project`, `slot?`, `asked_by_person?` | Where the project's files are read from: its resolved directory and, when it is inside a Git repository, the repository, the worktree holding it, its place in that worktree and every worktree of the repository, that one included. Answered with `project_source`. A browse request: see "Browsing a project" below for the rules every browse request shares (`slot`, budgets, its own outbound queue) |
 | `list_project_dir` | `project`, `path`, `worktree?`, `slot?`, `asked_by_person?` | Lists one directory of the project's files on disk, `path` being a wire path relative to the project's directory (empty for the directory itself). With `worktree`, the same place in that worktree of the project's repository is listed instead. Answered with `project_dir`. A browse request |
 | `search_project_files` | `project`, `query`, `include_ignored?`, `slot?`, `asked_by_person?` | Searches file names recursively beneath the project's directory, including unopened subdirectories. A trimmed, case-insensitive basename substring, not a path expression. Files Git ignores, and ignored folders with all beneath them, are left out unless `include_ignored` (absent means false) is true — see "Searching file names". Answered with `project_file_matches`. A browse request |
@@ -330,8 +330,8 @@ the request id as if it were a record id.
 | `project_commit_change` | `id`, `project`, `commit`, `parent`, `old`, `new`, `patch` — the reply to `read_project_commit_change`. `commit` and `parent` echo the request; the old side was read from `parent` (the empty tree for none) and the new side from `commit`; `old`, `new` and `patch` are as in `project_change` |
 | `project_commit_change_bodies` | `id`, `project`, `commit`, `parent`, `old`, `new` — the reply to `read_project_commit_change_bodies`. `commit` and `parent` echo the request; `old` and `new` are as in `project_change_bodies` |
 | `configuration_exported` | `id`, `document` — the reply to `export_configuration`; `document` is a configuration document (see "Configuration export") |
-| `configuration_inspected` | `id`, `settings?`, `accounts?`, `consoles` — the reply to `inspect_configuration`; `settings` is what the document's application settings are and what they are on this machine now; `accounts` is what importing the document's accounts would do (present when the document carries them); one `InspectedConsole` per console of the document, in its order (see "Configuration import") |
-| `configuration_imported` | `id`, `settings_applied?`, `settings_error?`, `clone_dir_applied?`, `accounts?`, `consoles` — the reply to `import_configuration`; `settings_applied` holds the settings that were applied, and is absent when they were not asked for or could not be applied, in which case `settings_error` says why; `clone_dir_applied` is the default clone directory that was written, which happens before the rest of the settings and so stays when `settings_error` is set, and is absent where there was none to write or this machine's own was kept; `accounts` is what came of the accounts and is present only when `apply_accounts` was sent; one `ImportedConsole` per console of the document, in its order (see "Configuration import") |
+| `configuration_inspected` | `id`, `settings?`, `settings_sections`, `accounts?`, `consoles` — the reply to `inspect_configuration`; `settings` is what the document's application settings are and what they are on this machine now (a key the document does not carry is given as this machine's value, so it reads as no change); `settings_sections` lists the sections of Settings the document carries, in Settings order, empty when it has no `settings`; `accounts` is what importing the document's accounts would do (present when the document carries them); one `InspectedConsole` per console of the document, in its order (see "Configuration import") |
+| `configuration_imported` | `id`, `settings_applied?`, `settings_error?`, `clone_dir_applied?`, `accounts?`, `consoles` — the reply to `import_configuration`; `settings_applied` holds the settings of the sections listed in `apply_settings` that were applied, and is absent when none were asked for or could not be applied, in which case `settings_error` says why; `clone_dir_applied` is the default clone directory that was written, which happens before the rest of the settings and so stays when `settings_error` is set, and is absent where there was none to write or this machine's own was kept; `accounts` is what came of the accounts and is present only when `apply_accounts` was sent; one `ImportedConsole` per console of the document, in its order (see "Configuration import") |
 | `configuration_import_progress` | `import_id`, `item`, `state`, `error?` — where one item of a running `import_configuration` stands, broadcast to every client (a client keeps the events whose `import_id` is the one it sent; nothing else tells the clients apart). `item` is `{kind: "console", console}`, `{kind: "project", console, project}` (indexes into the document, as in `resolutions`), `{kind: "account", agent, account}` (as in `account_resolutions`), `{kind: "clone_dir"}` (the default clone directory), `{kind: "agent_settings"}` (the Agent accounts settings) or `{kind: "settings"}` (the application settings without those two). `state` is `waiting`, `creating`, `cloning` (a project whose choice is `clone`, in place of `creating`), `done`, `failed` (with `error`, the failure the result reports for the item) or `not_attempted` (a project whose console could not be created). See "Configuration import" below |
 | `page_list` | `id`, `session_id`, `pages` — oldest first. Pages are not in `snapshot`: one carries a whole HTML document, and only the session on screen needs its pages, so the panel asks (and so does the window for a project session it has selected, to know whether the Report panel has anything to show). Asking again after every `snapshot` is what keeps it correct across a `page_created` a lagging client never received: such a client is sent a fresh snapshot in place of the events it missed, on the socket it already has |
 | `path_links` | `id`, `links` — one `{path, kind, view?, viewer_only?}` per asked path, in order, `path` as asked, `kind` `file`, `directory` or `none`, `view` (`{worktree?, path}`) and `viewer_only` (present only when true) as `probe_path_links` describes |
@@ -444,8 +444,9 @@ A client also branches on some codes, instead of only showing them:
 | `configuration_version_unsupported` | `version`, `oldest`, `supported` | A configuration document's `version` is not one this daemon reads, which are `oldest` to `supported` (an older one is upgraded as it is read) |
 | `configuration_unreadable` | `detail` | A configuration document is not a JSON object, has a `version` that is not a whole number, or cannot be read as a document of its version |
 | `import_resolution_invalid` | `console`, `project` or `agent`, `account` | A resolution of `import_configuration` names a project the document does not have, resolves one twice, or chooses a `directory` that is neither an absolute path nor starts with `~/`; `console` and `project` are the indexes it gave. An account resolution (`account_resolutions`) that names an account the document lacks, resolves one twice, gives both or neither of `directory` and `leave_out`, or gives a `directory` that is neither an absolute path nor starts with `~/` is refused the same way, with `agent` (its display name, such as `Claude Code`) and `account` (the index it gave) in place of the two |
-| `import_settings_missing` | — | `import_configuration` asked for the document's application settings and it carries none |
+| `import_settings_missing` | `section` | `import_configuration` listed in `apply_settings` a section that the document does not carry |
 | `import_accounts_missing` | — | `import_configuration` asked for the document's accounts (`apply_accounts`) and it carries none |
+| `import_agent_missing` | `agent` | `import_configuration` asked (`apply_agents`) for the accounts' part of an agent and the document carries nothing for it |
 | `export_empty` | — | `export_configuration` selected nothing: `consoles` is `none` and neither the settings nor the accounts are included |
 | `import_choice_unavailable` | `choice` | Reported on a project of `configuration_imported`, not as a reply: the choice made for it cannot be used because the document gives it nothing to use for it (a path that is not absolute, a remote URL that may not be cloned, or none) |
 | `icon_not_an_image` | `console_name?` | A console's icon is not a `data:image/` URL. `console_name` names the console when the refusal is of an imported configuration (`import_configuration`), which may carry several |
@@ -1838,32 +1839,43 @@ input of the import as much as a file the user keeps, so its shape is part of th
 ```
 Document { format: "octoboard-configuration", version: 3,
            exported_by,              // the Octoboard version that exported it, or null; informational
-           settings?: { auto_pull_repositories,       // present exactly when the application settings were
-                                                      // exported, whichever consoles
-                        auto_close_idle_shell_terminals,
-                        auto_delete_unresumable_archives,
-                        resume_sessions_on_start?,   // absent in a document of a build without the setting
-                        auto_approve_session_requests,
-                        auto_approve_resume_requests,
-                        auto_approve_account_switches,
-                        auto_approve_handoffs,
-                        ask_questions_as_choices,
-                        git_workflow: GitWorkflowSettings,
-                        default_clone_dir?,                  // `~/<relative path>` under the exporting machine's home
-                                                             // directory, otherwise the absolute path; whatever
-                                                             // `include_paths` says
-                        interface_language?,                 // the language tag the exporting client's interface was in
-                        appearance?,                         // "light" | "dark" | "system", added by the client
-                        markdown_style?,                     // the style's id, added by the client
-                        run_in_background?,                  // bool, added by a client that has the setting
-                        show_menu_bar_icon?,                 // bool, added by a client that has the icon
-                        keep_awake?,                         // bool, Prevent sleep, added by a client that can hold the computer awake
-                        keep_awake_when?,                    // "always" | "working", added with `keep_awake`
-                        keyboard_shortcuts? },               // the exporting client's changed shortcuts by command id
-                                                             // (`{}`: all at their defaults), added by the client, never
-                                                             // the daemon (see below)
+           settings?: DocumentSettings,                      // present exactly when at least one settings section was
+                                                             // exported, whichever consoles
            accounts?: DocumentAccounts,                      // present exactly when the accounts were exported
            consoles: DocumentConsole[] }                     // empty when no console was exported
+DocumentSettings { // every key is optional (absent or null: not carried); a section is carried when any of its keys is
+                   // general
+                   appearance?,                         // "light" | "dark" | "system", added by the client
+                   interface_language?,                 // the language tag the exporting client's interface was in
+                   markdown_style?,                     // the style's id, added by the client
+                   session_order?: { sessions?, active_projects?, inactive_projects? },
+                                                        // the sort orders ("status"|"started", "status"|"name"|"used",
+                                                        // "name"|"used"), added by the client
+                   // app_behavior
+                   resume_sessions_on_start?,           // absent in a document of a build without the setting
+                   run_in_background?,                  // bool, added by a client that has the setting
+                   show_menu_bar_icon?,                 // bool, added by a client that has the icon
+                   keep_awake?,                         // bool, Prevent sleep, added by a client that can hold the computer awake
+                   keep_awake_when?,                    // "always" | "working", added with `keep_awake`
+                   auto_close_idle_shell_terminals?,
+                   // git
+                   default_clone_dir?,                  // `~/<relative path>` under the exporting machine's home
+                                                        // directory, otherwise the absolute path; whatever
+                                                        // `include_paths` says
+                   auto_pull_repositories?,
+                   git_workflow?: GitWorkflowSettings,  // when present, all five items are
+                   // agent_behavior
+                   auto_approve_session_requests?,
+                   auto_approve_resume_requests?,
+                   auto_approve_account_switches?,
+                   auto_approve_handoffs?,
+                   ask_questions_as_choices?,
+                   // keyboard_shortcuts
+                   keyboard_shortcuts?,                 // the exporting client's changed shortcuts by command id
+                                                        // (`{}`: all at their defaults), added by the client, never
+                                                        // the daemon (see below)
+                   // cleanup
+                   auto_delete_unresumable_archives? }
 DocumentConsole { name, icon?, default_agent,
                   project_session_agent?,                           // absent or null: follows default_agent
                   accounts: { <provider id>: … },                   // each an AccountName or null
@@ -1906,17 +1918,24 @@ DocumentAccount   { name, directory, disabled: bool }
 ```
 
 - **Scope.** The regions are chosen one by one (see the `export_configuration` request): the consoles and projects
-  (`consoles`: one, all or none; `consoles` is empty for none), the application settings (`settings`) and the accounts
-  (`accounts`). `settings` is present exactly when the settings were exported and `accounts` exactly when the accounts
-  were: nothing may be inferred from the presence of one about the others. `settings` holds the portable application
-  settings (`auto_close_idle_shell_terminals`, `auto_pull_repositories`, `auto_delete_unresumable_archives`,
-  `resume_sessions_on_start` (optional: a document without it leaves this machine's choice as it is),
-  `auto_approve_session_requests`, `auto_approve_resume_requests`,
-  `auto_approve_account_switches`, `auto_approve_handoffs`, `ask_questions_as_choices`, `git_workflow`,
-  `default_clone_dir` and `interface_language`), and the client's own: `appearance`, `markdown_style`,
-  `run_in_background`, `show_menu_bar_icon`, `keep_awake`, `keep_awake_when` and `keyboard_shortcuts`, which the daemon never builds, stores or reads: the client adds them to
-  the document it saves (and replaces `interface_language` by the language it shows), applies them itself on import, and
-  the daemon passes them through (`settings_applied` carries them back as they came). The settings of the Agent
+  (`consoles`: one, all or none; `consoles` is empty for none), the application settings by section of Settings
+  (`settings`) and the accounts (`accounts`). `settings` is present exactly when at least one section was exported and
+  `accounts` exactly when the accounts were: nothing may be inferred from the presence of one about the others. A
+  section is carried by a document when any of its keys is present. The sections and their keys: General
+  (`interface_language`, `appearance`, `markdown_style`, `session_order`), App behavior (`resume_sessions_on_start`,
+  `run_in_background`, `show_menu_bar_icon`, `keep_awake`, `keep_awake_when`, `auto_close_idle_shell_terminals`), Git
+  (`default_clone_dir`, `auto_pull_repositories`, `git_workflow`), Agent behavior (`auto_approve_session_requests`,
+  `auto_approve_resume_requests`, `auto_approve_account_switches`, `auto_approve_handoffs`,
+  `ask_questions_as_choices`), Keyboard shortcuts (`keyboard_shortcuts`) and Cleanup
+  (`auto_delete_unresumable_archives`); the Agent accounts section is the accounts region. A key the document does not
+  carry (absent or `null`) is left as this machine has it; `resume_sessions_on_start` is also absent in a document of
+  a build without the setting. The client's own keys are `appearance`, `markdown_style`, `session_order`,
+  `run_in_background`, `show_menu_bar_icon`, `keep_awake`, `keep_awake_when` and `keyboard_shortcuts`, which the daemon
+  never builds, stores or reads: the client adds them to the document it saves, for the sections chosen only (and
+  replaces `interface_language` by the language it shows), applies them itself on import, and the daemon passes them
+  through (`settings_applied` carries them back as they came). `session_order` is `{ sessions, active_projects,
+  inactive_projects }`, each part optional and passed through unchecked; the client writes all three, and on import
+  applies each part whose value it knows. The settings of the Agent
   accounts section travel with the accounts, in `accounts.agent_settings`. Consoles are ordered by creation time and a
   console's `projects` by name, with the stored id breaking a tie, so the order is the same on every export; the id
   itself is not in the document. `projects` is all of a console's projects, whether or not a project is a git
@@ -1998,7 +2017,8 @@ project, and creates. A client sends the same `document` to both and does not al
 untrusted input: its paths and URLs are data this machine checks, and nothing in it is acted on as it stands.
 
 ```
-configuration_inspected { settings?: { auto_pull_repositories, current_auto_pull_repositories,
+configuration_inspected { settings_sections: SettingsSection[],   // the sections the document carries, in Settings order
+                          settings?: { auto_pull_repositories, current_auto_pull_repositories,
                                       auto_close_idle_shell_terminals,
                                       current_auto_close_idle_shell_terminals,
                                       auto_delete_unresumable_archives,
@@ -2015,6 +2035,7 @@ configuration_inspected { settings?: { auto_pull_repositories, current_auto_pull
                                       current_auto_approve_handoffs,
                                       ask_questions_as_choices,
                                       current_ask_questions_as_choices,
+                                      // a value the document does not carry is this machine's own
                                       git_workflow: GitWorkflowSettings,
                                       current_git_workflow: GitWorkflowSettings,
                                       default_clone_dir?,        // the document's, as it resolves here (`~/` expanded);
@@ -2061,11 +2082,12 @@ OffersUnderCloneDir { offers: { exported_path?, default_clone_dir?, clone? },   
                       default?: "exported_path" | "default_clone_dir" | "clone" }   // the choice preselected there
 AccountFallback   { agent, name }                          // a reference that matches no account on this machine
 
-import_configuration { document, resolutions?: ProjectResolution[], apply_settings?: bool,
-                       apply_accounts?: bool, account_resolutions?: AccountResolution[],
+import_configuration { document, resolutions?: ProjectResolution[], apply_settings?: SettingsSection[],
+                       apply_accounts?: bool, apply_agents?: Agent[],      // apply_agents: absent is every agent the document carries
+                       account_resolutions?: AccountResolution[],
                        apply_consoles?: bool,                // absent is true; false creates no console or project
                        apply_clone_dir?: bool,               // absent is true; false keeps this machine's default clone
-                                                             // directory when the settings are applied
+                                                             // directory when `git` is among `apply_settings`
                        import_id?: string }                  // names the import in `configuration_import_progress`; absent sends none
 AccountResolution { agent, account,                     // `account`: the index among the document's accounts of `agent`
                     directory?,                         // another directory, absolute or starting with `~/`; or
@@ -2080,17 +2102,18 @@ ImportItem        { kind: "console", console } | { kind: "project", console, pro
                   | { kind: "account", agent, account }
                   | { kind: "clone_dir" }       // the default clone directory, written before anything is created
                   | { kind: "agent_settings" }  // the Agent accounts settings, applied after the accounts
-                  | { kind: "settings" }        // the application settings, without those two
+                  | { kind: "settings" }        // the application settings of the listed sections, without those two
 
-configuration_imported { settings_applied?: { auto_close_idle_shell_terminals, auto_pull_repositories, auto_delete_unresumable_archives?,
+configuration_imported { settings_applied?: { auto_close_idle_shell_terminals?, auto_pull_repositories?, auto_delete_unresumable_archives?,
                                            resume_sessions_on_start?, auto_approve_session_requests?,
                                            auto_approve_resume_requests?, auto_approve_account_switches?,
                                            auto_approve_handoffs?, ask_questions_as_choices?, git_workflow?,
                                            default_clone_dir?,          // only when it was applied
                                            interface_language?,         // only when this build offers it
-                                           appearance?, markdown_style?, run_in_background?, show_menu_bar_icon?,
-                                           keep_awake?, keep_awake_when?,
-                                           keyboard_shortcuts? },   // the document's, as it came; the client applies the last seven and the ones it holds
+                                           appearance?, markdown_style?, session_order?, run_in_background?,
+                                           show_menu_bar_icon?, keep_awake?, keep_awake_when?,
+                                           keyboard_shortcuts? },   // only keys of the sections listed in `apply_settings`; the
+                                                                    // client-held ones are the document's, as they came
                          settings_error?: Failure,   // the settings asked for could not be applied
                          clone_dir_applied?,         // the default clone directory written, which stays written when
                                                      // `settings_error` is set
@@ -2124,12 +2147,13 @@ Failure           { code, params, message }             // as an `error` reply c
   (`configuration_not_recognised`), when its `version` is not one this daemon reads
   (`configuration_version_unsupported`; checked before the rest of the body is read, since another version may be shaped
   in ways this one cannot read), or when it cannot be read (`configuration_unreadable`). Applying also refuses an
-  impossible resolution, of a project or of an account (`import_resolution_invalid`), a request for settings or accounts
-  the document does not carry (`import_settings_missing`, `import_accounts_missing`), and whatever `create_console`
-  would refuse of any console of the document (`icon_not_an_image`, `icon_too_large`, with the console's name in
-  `console_name`). Past that point nothing is refused and nothing is undone: what goes wrong is reported in the result
-  (below), because by then earlier consoles and projects exist and have been broadcast, and a rollback would contradict
-  that an import always creates and goes through the ordinary association.
+  impossible resolution, of a project or of an account (`import_resolution_invalid`), a request for settings sections,
+  accounts or an agent's part of them the document does not carry (`import_settings_missing`, `import_accounts_missing`,
+  `import_agent_missing`), and whatever `create_console` would refuse of any console of the document
+  (`icon_not_an_image`, `icon_too_large`, with the console's name in `console_name`). Past that point nothing is refused
+  and nothing is undone: what goes wrong is reported in the result (below), because by then earlier consoles and
+  projects exist and have been broadcast, and a rollback would contradict that an import always creates and goes through
+  the ordinary association.
 - **Agents this build does not support.** An entry of `accounts`, `launch` or `project_session_launch` keyed by an
   agent that is not a registered provider is ignored, and so are such an agent's `provider_settings` and `agent_tags`
   entries; the rest of the document is read as it stands. A document that names such an agent anywhere else (in
@@ -2205,54 +2229,60 @@ Failure           { code, params, message }             // as an `error` reply c
   machine's: `default_disabled_applies`; `default_disabled_applied`, the flag it was changed to); (6) the Agent accounts
   settings (below). Every change is broadcast as the same change made by hand is (`settings_updated`). Nothing is logged
   in: the accounts are created without credentials, and the user logs each one in afterwards.
-- **Applying.** The order is the default clone directory (with `apply_settings`, unless `apply_clone_dir` is false),
-  then the accounts (with `apply_accounts`) and the Agent accounts settings after them, then the consoles and projects
-  (unless `apply_consoles` is false, which creates none and reads no `resolutions`), then the rest of the application
-  settings (with `apply_settings`). Every console of the document is created new, with its own working directory,
-  whether or not one of its name exists: console names are not unique. The projects of a console go through the ordinary
-  association (`add_project`), so each is checked and broadcast exactly as one added by hand: the directory must exist,
-  the tags and launch settings are normalised, and a directory already associated with that console is refused
-  (`all_projects_already_added`, reported on the project). A project's pin, tags, description, default agent (none stays
-  none and is not detected from the directory), account references, models, efforts and worktree override come from the
-  document; its `source` is `git` for a clone and `local` otherwise, and its `remote_url` is the one it was cloned from
-  or the one read from its directory. Folder trust is not in the document: an imported project is untrusted like any
-  other and goes through the trust flow when its first session opens.
-- **Application settings.** A document carries `settings` when they were exported; `settings` of the inspection
-  is present when the document has them, with the document's value and the value this machine has now, so a client can
-  show what applying would change. They are applied only when `import_configuration` is sent `apply_settings: true`,
-  because `auto_pull_repositories` makes the daemon fast-forward the user's repositories on its own and
-  `auto_delete_unresumable_archives` makes it delete archived sessions on its own, which changes how this machine
-  behaves. `auto_approve_session_requests`, `auto_approve_resume_requests`,
-  `auto_approve_account_switches`, `auto_approve_handoffs` and `ask_questions_as_choices` are carried and applied the
-  same way; the four approvals make the daemon approve agents' session and resume requests, account switches and
-  handoffs without asking the user, which is why the review states it when the document turns one on.
-  `ask_questions_as_choices` is on by default, so a document usually turns it off; the review shows either change as it
-  does for the other switches. `git_workflow` is carried and applied the same way, item by item. A project's own
-  `git_workflow` override is not a setting of this kind: it travels with the project in both export scopes and a created
-  project takes it, an item that is `null` following the application-wide value. They are applied last, through the same
-  path as `update_settings` (so they are normalised and `settings_updated` is broadcast when the value changes), and
-  `settings_applied` in the result reports what was applied. Asking for them of a document that has none is refused
-  (`import_settings_missing`) rather than ignored, so a request never silently does less than it was told to. Settings
-  that could not be applied are `settings_error`, and the import is reported all the same.
-- **The default clone directory.** `settings.default_clone_dir` is the exporting machine's, written `~/…` under its home
-  directory. The inspection gives it as it resolves here (`default_clone_dir`, absent when the document carries none or
-  the text is neither absolute nor starts with `~/`, which an import then leaves out; `foreign_default_clone_dir` is set
-  when that text is absolute in the other operating system's style, so a client can say why) beside this machine's
-  (`current_default_clone_dir`). Applying the settings writes it **before** any project is placed, so a project cloned
-  or derived by the same import goes under the directory in effect after the choice; `apply_clone_dir: false` keeps this
-  machine's own (the settings are applied without it, and the projects go under this machine's). `settings_applied`
-  carries `default_clone_dir` only when it was written, and `clone_dir_applied` says so even where `settings_applied`
-  is absent: the directory is written first, so it stays written when the rest of the settings then cannot be applied
+- **Choosing agents.** With `apply_agents` the steps above run for the listed agents only: the document's accounts are
+  reduced to those agents' entries, their places in `added_agents` and their `provider_settings` and `agent_tags`, with
+  the three switches kept whole, before anything is checked or announced, so progress items, results and the references
+  of consoles and projects see only what is applied. `account_resolutions` are indexed against the whole document, so
+  one naming an account of an agent left out is no refusal.
+- **Applying.** The order is the default clone directory (with `git` in `apply_settings`, unless `apply_clone_dir` is
+  false), then the accounts (with `apply_accounts`) and the Agent accounts settings after them, then the consoles and
+  projects (unless `apply_consoles` is false, which creates none and reads no `resolutions`), then the rest of the
+  application settings (with `apply_settings`, those of the sections listed). Every console of the document is created
+  new, with its own working directory, whether or not one of its name exists: console names are not unique. The projects
+  of a console go through the ordinary association (`add_project`), so each is checked and broadcast exactly as one
+  added by hand: the directory must exist, the tags and launch settings are normalised, and a directory already
+  associated with that console is refused (`all_projects_already_added`, reported on the project). A project's pin,
+  tags, description, default agent (none stays none and is not detected from the directory), account references, models,
+  efforts and worktree override come from the document; its `source` is `git` for a clone and `local` otherwise, and its
+  `remote_url` is the one it was cloned from or the one read from its directory. Folder trust is not in the document: an
+  imported project is untrusted like any other and goes through the trust flow when its first session opens.
+- **Application settings.** A document carries `settings` when they were exported; `settings` of the inspection is
+  present when the document has them, with the document's value and the value this machine has now, so a client can show
+  what applying would change. Only the sections `import_configuration` lists in `apply_settings` are applied, and only
+  their keys (the keys of the others are neither applied nor echoed), because `auto_pull_repositories` makes the daemon
+  fast-forward the user's repositories on its own and `auto_delete_unresumable_archives` makes it delete archived
+  sessions on its own, which changes how this machine behaves. `auto_approve_session_requests`,
+  `auto_approve_resume_requests`, `auto_approve_account_switches`, `auto_approve_handoffs` and
+  `ask_questions_as_choices` are carried and applied the same way; the four approvals make the daemon approve agents'
+  session and resume requests, account switches and handoffs without asking the user, which is why the review states it
+  when the document turns one on. `ask_questions_as_choices` is on by default, so a document usually turns it off; the
+  review shows either change as it does for the other switches. `git_workflow` is carried and applied the same way, item
+  by item. A project's own `git_workflow` override is not a setting of this kind: it travels with the project in both
+  export scopes and a created project takes it, an item that is `null` following the application-wide value. They are
+  applied last, through the same path as `update_settings` (so they are normalised and `settings_updated` is broadcast
+  when the value changes), and `settings_applied` in the result reports what was applied. Listing a section the document
+  does not carry is refused (`import_settings_missing`) rather than ignored, so a request never silently does less than
+  it was told to. Settings that could not be applied are `settings_error`, and the import is reported all the same.
+- **The default clone directory.** `settings.default_clone_dir` (Git section) is the exporting machine's, written `~/…`
+  under its home directory. The inspection gives it as it resolves here (`default_clone_dir`, absent when the document
+  carries none or the text is neither absolute nor starts with `~/`, which an import then leaves out;
+  `foreign_default_clone_dir` is set when that text is absolute in the other operating system's style, so a client can
+  say why) beside this machine's (`current_default_clone_dir`). Applying the settings with `git` listed writes it
+  **before** any project is placed, so a project cloned or derived by the same import goes under the directory in effect
+  after the choice; `apply_clone_dir: false`, or no `git` among the sections applied, keeps this machine's own (the
+  other settings are applied without it, and the projects go under this machine's). `settings_applied` carries
+  `default_clone_dir` only when it was written, and `clone_dir_applied` says so even where `settings_applied` is absent:
+  the directory is written first, so it stays written when the rest of the settings then cannot be applied
   (`settings_error`). A failure to write it is `settings_error` too and leaves the rest of the settings unapplied. The
   inspection's `in_document_clone_dir` gives each project's offers under the document's directory (the same
   `exported_path`, and the clone-dependent choices worked out there), for the review to show whichever the user picks.
 - **The language and the client's own settings.** `settings.interface_language` is applied through `update_settings`
   only when this build offers the tag (a tag it does not is skipped, the rest still apply and `settings_applied` carries
-  no `interface_language`). `appearance`,
-  `markdown_style`, `run_in_background`, `show_menu_bar_icon`, `keep_awake`, `keep_awake_when` and `keyboard_shortcuts` are the one kind of setting the daemon does not apply:
-  the client holds them, `{}` for the shortcuts meaning every shortcut at its default (which is what a client with
-  none changed writes), and the daemon echoes them in `settings_applied` when the settings were applied, as they came,
-  for the client to apply to itself, ignoring a value it does not know or a setting its platform lacks. A client also
+  no `interface_language`). `appearance`, `markdown_style`, `session_order`, `run_in_background`, `show_menu_bar_icon`,
+  `keep_awake`, `keep_awake_when` and `keyboard_shortcuts` are the one kind of setting the daemon does not apply: the
+  client holds them, `{}` for the shortcuts meaning every shortcut at its default (which is what a client with none
+  changed writes), and the daemon echoes them in `settings_applied` when the settings were applied, as they came, for
+  the client to apply to itself, ignoring a value it does not know or a setting its platform lacks. A client also
   applies `interface_language` from the echo, to its own language.
 - **The Agent accounts settings.** `accounts.agent_settings` (`auto_select_account`, `auto_switch_on_usage_limit`,
   `auto_start_quota_windows`, `provider_settings` and `agent_tags`) is applied with the accounts (`apply_accounts`),

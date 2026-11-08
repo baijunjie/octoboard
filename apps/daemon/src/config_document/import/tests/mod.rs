@@ -8,9 +8,10 @@ mod settings;
 use super::*;
 use crate::config_document::export;
 use crate::protocol::{
-    DirectoryChoiceKind, DirectoryOffers, GitWorkflowSettings, Launch, Project, ProjectSource,
+    DirectoryChoiceKind, DirectoryOffers, DocumentSettings, GitWorkflowSettings, Launch, Project,
+    ProjectSource,
 };
-use crate::test_support::{app_state, code_of, host_path, ScratchDir, PATIENCE};
+use crate::test_support::{app_state, code_of, host_path, param_of, ScratchDir, PATIENCE};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -107,14 +108,24 @@ async fn import(
         document,
         resolutions,
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await?
     .consoles)
+}
+
+/// The sections `document` carries: what an import of all of its settings lists.
+fn carried_sections(document: &serde_json::Value) -> Vec<SettingsSection> {
+    document
+        .get("settings")
+        .and_then(|settings| serde_json::from_value::<DocumentSettings>(settings.clone()).ok())
+        .map(|settings| settings.carried_sections())
+        .unwrap_or_default()
 }
 
 fn with_settings(
@@ -140,7 +151,7 @@ fn with_settings(
 fn export_everything(state: &Arc<AppState>) -> serde_json::Value {
     let selection = export::Selection {
         consoles: export::ConsoleScope::All,
-        settings: true,
+        settings: SettingsSection::ALL.to_vec(),
         accounts: true,
         paths: true,
     };

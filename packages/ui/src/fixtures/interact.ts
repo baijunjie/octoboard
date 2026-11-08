@@ -196,7 +196,7 @@ export interface Ui {
    * Settings item of an account's menu, and the rail's Settings button). */
   pressMenuItem: (matcher: Matcher) => Promise<void>;
   /** Presses the tab named `matcher`, for a name a tab shares with a control before it in the page (the import review's
-   * "Application settings" tab and the checkbox of that name above the tab bar). */
+   * "Agent accounts" tab and the checkbox of that name above the tab bar). */
   pressTab: (matcher: Matcher) => Promise<void>;
   /** Presses the control named `matcher` with a finger: the touch pointer events a touch screen sends, then the
    * click that follows. For a control that opens its text in a popover on a touch, pen or virtual press and

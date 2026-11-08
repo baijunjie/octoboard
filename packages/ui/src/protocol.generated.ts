@@ -776,8 +776,8 @@ export type ConfigurationDocument = {
    */
   exported_by: string | null,
   /**
-   * The application settings that are not console-scoped. Present exactly when the export
-   * included them, whichever consoles it holds.
+   * The application settings that are not console-scoped. Present when at least one section
+   * of them was exported, whichever consoles the export holds.
    */
   settings: DocumentSettings | null,
   /**
@@ -1127,25 +1127,78 @@ export type DocumentProject = {
   git_workflow: GitWorkflowOverride,
 };
 
+/**
+ * The client-held sorting choices of the General section: how sessions and projects are ordered.
+ * Each part is the id of an order, which the daemon neither reads nor checks.
+ */
+export type DocumentSessionOrder = {
+  sessions?: string,
+  active_projects?: string,
+  inactive_projects?: string,
+};
+
+/**
+ * The application settings of a document, by Settings section. Every key is optional: a key
+ * (absent or `null`) the document does not carry is left as this machine has it, and a section is
+ * carried when any of its keys is. A field's position sets the key order of an exported file and
+ * of the generated TypeScript, so within its section's group it follows the order of that
+ * section's rows on the Settings page.
+ */
 export type DocumentSettings = {
-  auto_close_idle_shell_terminals: boolean,
-  auto_pull_repositories: boolean,
-  auto_delete_unresumable_archives: boolean,
-  auto_approve_session_requests: boolean,
-  auto_approve_resume_requests: boolean,
-  auto_approve_account_switches: boolean,
-  auto_approve_handoffs: boolean,
-  ask_questions_as_choices: boolean,
+  /**
+   * The window's appearance (`light`, `dark` or `system`), which only the client holds (in its
+   * `localStorage`), carried like `run_in_background`. A value the importing client does not
+   * know is ignored.
+   */
+  appearance?: string,
+  /**
+   * The language tag of the exporting client's interface (see `Settings.interface_language`):
+   * the daemon writes the one it holds and the client replaces it with the one it shows, which
+   * is the language the user chose. An import applies it only when this build offers it. Absent
+   * when neither knew one.
+   */
+  interface_language?: string,
+  /**
+   * How a rendered Markdown document is styled (the style's id), carried like `appearance`.
+   */
+  markdown_style?: string,
+  /**
+   * How sessions and projects are sorted, carried like `appearance`. The client writes all three
+   * parts, so an import sets the sort exactly, and applies each part whose value it knows.
+   */
+  session_order?: DocumentSessionOrder,
   /**
    * Whether the daemon resumes the interrupted sessions when it starts (see
    * `Settings.resume_sessions_on_start`). Absent in a document from a build that had no such
    * setting, which an import then leaves as this machine has it.
    */
-  resume_sessions_on_start?: boolean | null,
+  resume_sessions_on_start?: boolean,
   /**
-   * The application-wide git workflow settings.
+   * Whether closing the window leaves the app running in the background, which only the client
+   * holds: the client adds it to a document it saves and applies it from an import's reply, so
+   * the daemon builds none, stores it nowhere and passes it through an import's reply as it
+   * came. Only a client that has the setting (the desktop app) writes it, and only such a
+   * client applies it.
    */
-  git_workflow: GitWorkflowSettings,
+  run_in_background?: boolean,
+  /**
+   * Whether the menu bar icon (the notification area icon on Windows) is shown, carried like
+   * `run_in_background`: only a client that has the icon (the desktop app) writes it, and only
+   * such a client applies it.
+   */
+  show_menu_bar_icon?: boolean,
+  /**
+   * Whether the desktop app holds the computer and its display awake (Prevent sleep), carried
+   * like `run_in_background`: only a client that can (the desktop app) writes it, and only such
+   * a client applies it.
+   */
+  keep_awake?: boolean,
+  /**
+   * When Prevent sleep holds: `always`, or `working` (while a session is working), carried like
+   * `keep_awake`. A value the importing client does not know is ignored.
+   */
+  keep_awake_when?: string,
+  auto_close_idle_shell_terminals?: boolean,
   /**
    * The default clone directory as `~/<relative path>` under the exporting machine's home
    * directory (also `~` for the home directory itself), otherwise the absolute path, whatever
@@ -1153,58 +1206,27 @@ export type DocumentSettings = {
    * usable here (absolute, or starting with `~/`). `null` in a document upgraded from version
    * 1, which did not carry it: importing it leaves this machine's as it is.
    */
-  default_clone_dir: string | null,
+  default_clone_dir?: string,
+  auto_pull_repositories?: boolean,
   /**
-   * The language tag of the exporting client's interface (see `Settings.interface_language`):
-   * the daemon writes the one it holds and the client replaces it with the one it shows, which
-   * is the language the user chose. An import applies it only when this build offers it. Absent
-   * when neither knew one.
+   * The application-wide git workflow settings; when present, all of its items are.
    */
-  interface_language?: string | null,
-  /**
-   * The window's appearance (`light`, `dark` or `system`), which only the client holds (in its
-   * `localStorage`): the client adds it to a document it saves and applies it from an import's
-   * reply, so the daemon builds none, stores it nowhere and passes it through an import's reply
-   * as it came. A value the importing client does not know is ignored. Absent in a document a
-   * client saved without it.
-   */
-  appearance?: string | null,
-  /**
-   * How a rendered Markdown document is styled (the style's id), carried like `appearance`.
-   */
-  markdown_style?: string | null,
-  /**
-   * Whether closing the window leaves the app running in the background, carried like
-   * `appearance`. Only a client that has the setting (the desktop app) writes it, and only
-   * such a client applies it.
-   */
-  run_in_background?: boolean | null,
-  /**
-   * Whether the menu bar icon (the notification area icon on Windows) is shown, carried like
-   * `run_in_background`: only a client that has the icon (the desktop app) writes it, and only
-   * such a client applies it.
-   */
-  show_menu_bar_icon?: boolean | null,
-  /**
-   * Whether the desktop app holds the computer and its display awake (Prevent sleep), carried
-   * like `run_in_background`: only a client that can (the desktop app) writes it, and only such
-   * a client applies it.
-   */
-  keep_awake?: boolean | null,
-  /**
-   * When Prevent sleep holds: `always`, or `working` (while a session is working), carried like
-   * `keep_awake`. A value the importing client does not know is ignored.
-   */
-  keep_awake_when?: string | null,
+  git_workflow?: GitWorkflowSettings,
+  auto_approve_session_requests?: boolean,
+  auto_approve_resume_requests?: boolean,
+  auto_approve_account_switches?: boolean,
+  auto_approve_handoffs?: boolean,
+  ask_questions_as_choices?: boolean,
   /**
    * The keyboard shortcuts the exporting client has changed, by command id, which only the
-   * client reads and writes: the client adds them to a full export it saves (an empty object
-   * when it has none changed, which on import means every shortcut at its default) and applies
-   * them from an import. The daemon builds none, stores them nowhere and does not read them, so
+   * client reads and writes: the client adds them to a document it saves (an empty object when
+   * it has none changed, which on import means every shortcut at its default) and applies them
+   * from an import. The daemon builds none, stores them nowhere and does not read them, so
    * they pass through an import's reply as they came. Absent in a document a client saved
    * without them: importing it leaves the client's shortcuts as they are.
    */
   keyboard_shortcuts?: unknown,
+  auto_delete_unresumable_archives?: boolean,
 };
 
 export type EntryKind = "file" | "directory" | "symlink" | "other";
@@ -1592,6 +1614,11 @@ export type Event = {
   "type": "configuration_inspected",
   id: string | null,
   settings: InspectedSettings | null,
+  /**
+   * The sections of Settings the document's settings carry, in Settings order; empty when
+   * it carries no settings.
+   */
+  settings_sections: Array<SettingsSection>,
   accounts: InspectedAccounts | null,
   consoles: Array<InspectedConsole>,
 }
@@ -2283,7 +2310,8 @@ export type InspectedProject = {
 
 /**
  * The application settings a document carries, beside the value this machine has now, so a client
- * can show what applying them would change.
+ * can show what applying them would change. A key the document does not carry is reported as this
+ * machine's value, so its line reads as no change.
  */
 export type InspectedSettings = {
   auto_close_idle_shell_terminals: boolean,
@@ -3109,7 +3137,7 @@ export type Request = {
   "type": "export_configuration",
   console?: string,
   consoles?: ExportedConsoles,
-  include_settings?: boolean,
+  settings_sections?: Array<SettingsSection>,
   include_accounts?: boolean,
   include_paths?: boolean,
 }
@@ -3122,16 +3150,25 @@ export type Request = {
   document: unknown,
   resolutions?: Array<ProjectResolution>,
   /**
-   * Whether to apply the document's application settings to this machine; absent means
-   * false. Asking for them of a document that carries none is refused with
-   * `import_settings_missing`.
+   * The sections of Settings whose application settings of the document to apply to this
+   * machine; absent or empty applies none, and a section listed twice counts once. Listing
+   * a section the document does not carry is refused with `import_settings_missing`.
    */
-  apply_settings?: boolean,
+  apply_settings?: Array<SettingsSection>,
   /**
    * Whether to create the document's accounts on this machine; absent means false. Asking
    * for them of a document that carries none is refused with `import_accounts_missing`.
    */
   apply_accounts?: boolean,
+  /**
+   * The agents whose part of the document's accounts to apply, with `apply_accounts`: the
+   * agent's place in the added agents, its default account's name and flag, its accounts,
+   * its provider settings and its tags. Absent applies every agent the document carries,
+   * and one listed twice counts once; the Agent accounts switches are applied whichever
+   * are listed. Listing an agent the document carries nothing for is refused with
+   * `import_agent_missing`.
+   */
+  apply_agents?: Array<Agent> | null,
   /**
    * The choices for document accounts; one that names an account the document lacks,
    * names one twice, gives both or neither of `directory` and `leave_out`, or gives a
@@ -3151,10 +3188,10 @@ export type Request = {
    */
   import_id?: string | null,
   /**
-   * Whether, applying the settings, to take the document's default clone directory; absent
-   * means true. Without it this machine's own stays, and the clones this import makes go
-   * there. It is written before the projects are placed, whatever the rest of the settings
-   * come to.
+   * Whether, applying the `git` section, to take the document's default clone directory;
+   * absent means true. Without it this machine's own stays, and the clones this import makes
+   * go there. It is written before the projects are placed, whatever the rest of the
+   * settings come to.
    */
   apply_clone_dir?: boolean,
 }
@@ -3851,7 +3888,7 @@ export type RequestBody = {
   "type": "export_configuration",
   console?: string,
   consoles?: ExportedConsoles,
-  include_settings?: boolean,
+  settings_sections?: Array<SettingsSection>,
   include_accounts?: boolean,
   include_paths?: boolean,
 }
@@ -3864,16 +3901,25 @@ export type RequestBody = {
   document: unknown,
   resolutions?: Array<ProjectResolution>,
   /**
-   * Whether to apply the document's application settings to this machine; absent means
-   * false. Asking for them of a document that carries none is refused with
-   * `import_settings_missing`.
+   * The sections of Settings whose application settings of the document to apply to this
+   * machine; absent or empty applies none, and a section listed twice counts once. Listing
+   * a section the document does not carry is refused with `import_settings_missing`.
    */
-  apply_settings?: boolean,
+  apply_settings?: Array<SettingsSection>,
   /**
    * Whether to create the document's accounts on this machine; absent means false. Asking
    * for them of a document that carries none is refused with `import_accounts_missing`.
    */
   apply_accounts?: boolean,
+  /**
+   * The agents whose part of the document's accounts to apply, with `apply_accounts`: the
+   * agent's place in the added agents, its default account's name and flag, its accounts,
+   * its provider settings and its tags. Absent applies every agent the document carries,
+   * and one listed twice counts once; the Agent accounts switches are applied whichever
+   * are listed. Listing an agent the document carries nothing for is refused with
+   * `import_agent_missing`.
+   */
+  apply_agents?: Array<Agent> | null,
   /**
    * The choices for document accounts; one that names an account the document lacks,
    * names one twice, gives both or neither of `directory` and `leave_out`, or gives a
@@ -3893,10 +3939,10 @@ export type RequestBody = {
    */
   import_id?: string | null,
   /**
-   * Whether, applying the settings, to take the document's default clone directory; absent
-   * means true. Without it this machine's own stays, and the clones this import makes go
-   * there. It is written before the projects are placed, whatever the rest of the settings
-   * come to.
+   * Whether, applying the `git` section, to take the document's default clone directory;
+   * absent means true. Without it this machine's own stays, and the clones this import makes
+   * go there. It is written before the projects are placed, whatever the rest of the
+   * settings come to.
    */
   apply_clone_dir?: boolean,
 }
@@ -4804,7 +4850,8 @@ export type Settings = {
    * The tag of the language the user last picked for the interface, one of the tags the
    * interface offers; `null` until a client reports one. The user's language, not a client's:
    * the clients keep their own choice locally, and this holds the one most recently reported.
-   * Not carried by an export; not visible to agents.
+   * Carried by a configuration export in its General section, where the exporting client
+   * replaces it with the language it shows.
    */
   interface_language: string | null,
   /**
@@ -4847,7 +4894,7 @@ export type Settings = {
   /**
    * The user's order of each agent's accounts, by agent wire name, which clients list them in
    * and automatic account selection takes them in; null entries represent the default account.
-   * Missing accounts are appended and stale IDs are ignored. Kept local to this machine.
+   * Missing accounts are appended and stale IDs are ignored.
    */
   account_order: Partial<Record<Agent, Array<string | null>>>,
   /**
@@ -4877,12 +4924,12 @@ export type Settings = {
   agent_tags: Partial<Record<Agent, Array<string>>>,
   /**
    * The name the user gave an agent's default account, by agent; an agent without an entry shows
-   * the client's own word for it. Not an account row and not carried by an export.
+   * the client's own word for it. Not an account row.
    */
   default_account_names: Partial<Record<Agent, string>>,
   /**
    * The agents, by wire name, whose default account the user turned off for new work, as
-   * `Account::disabled` does for an account row. Not carried by an export.
+   * `Account::disabled` does for an account row.
    */
   disabled_default_accounts: Array<Agent>,
   /**
@@ -4891,6 +4938,12 @@ export type Settings = {
    */
   git_workflow: GitWorkflowSettings,
 };
+
+/**
+ * A section of Settings whose application settings an export can carry and an import apply on
+ * its own; the Agent accounts section is the accounts region instead.
+ */
+export type SettingsSection = "general" | "app_behavior" | "git" | "agent_behavior" | "keyboard_shortcuts" | "cleanup";
 
 /**
  * Why something could not be brought in line, for a client to explain it in plain words; the

@@ -83,7 +83,7 @@ nothing of it (see "Grok Build's theme" in `docs/product/per-agent-launch-specif
 
 So the choice does not travel between clients. A desktop window and a browser tab, or two machines reaching the same
 daemon, each keep their own; a client whose storage has been cleared is back to System. A configuration export that
-includes the application settings carries the exporting client's choice, and an import asked to apply them sets it on
+includes the General section carries the exporting client's choice, and an import asked to apply that section sets it on
 the client that runs the import alone (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`).
 

@@ -85,7 +85,7 @@ their cascade order does not depend on which screen opened first.
 - `src/providers/` — one presentation module per provider (`claude.ts`, `codex.ts`, `grok.ts`: mark, quota colour and the `provider.<id>.*` catalog messages, among them the trust, sharing and directory-hint wording that `types.ts`'s `ProviderMessageName` names; each also owns the copy of every setting its descriptor declares (`provider.<id>.setting.<setting>.*`) and the record and wording of every code the descriptor declares (`codes`, `provider.<id>.<code>`, whose recovery may be the module's own `provider.<id>.<code>.remedy` copy); `planNames` for plan ids whose generic wording reads badly and `params`, the product-name placeholders its messages use, which `i18n/catalog.ts` merges into the catalogs' global params as `PROVIDER_PARAMS`), `registry.ts` listing them (the built-in three plus a test-only `testAgent` module registered under the test runner, one line each) and looking them up by provider id (`genericMark.ts` is the mark of a provider with no module), and `agentMarks.ts`, the `@octoboard/ui/agent-marks` entry. Imports nothing; the catalogs and the website import it.
 - `src/agents/` — agent rules (`agents.ts`: the pickable, listed and served agents, always taken from the providers the daemon serves in `snapshot`, in its registry order), provider names and facts read from the module or from the providers the daemon serves in `snapshot` (`providers.ts`, which also reads the served model display rule and capabilities; the store holds them as `State.providers`, read with `useProviders()`; `ProviderMessage.tsx` shows a provider's message with a generic fallback), model and effort picker rules, per-agent launch settings; `providers.ts` also holds `settingMessageKey` (the copy key of a provider setting), `idWords` (an id read as words, for a setting or choice a module has no copy for) and re-exports the providers' code records as `PROVIDER_CODES`.
 - `src/git/` — git workflow settings and git-badge wording, repository host links.
-- `src/sessions/` — pure session rules and wording (index, order — with the scope of an archive deletion, `archivedDeletionScope` — labels, status derivation — `sessionStatus.ts` holds the live and no-process status sets and `sessionIsWorking`, the predicate for a session that is doing or about to do work — colours, filtering, waiting).
+- `src/sessions/` — pure session rules and wording (index, order — with the scope of an archive deletion, `archivedDeletionScope` — labels, the session-order wording `orderWording.ts` shared by Settings and the configuration import, status derivation — `sessionStatus.ts` holds the live and no-process status sets and `sessionIsWorking`, the predicate for a session that is doing or about to do work — colours, filtering, waiting).
 - `src/accounts/` — pure account rules: order, quota of an account, quota formatting, the default account's name
   (`defaultAccount.ts`), how an account is found among the
   records (`accountRecords.ts`), and the account picker split by concern (`choiceEntries.ts`, `accountInheritance.ts`,
@@ -104,7 +104,7 @@ their cascade order does not depend on which screen opened first.
 
 ### Leaf layer and window shell
 
-- `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue), `dialog/` (the
+- `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue), `card/` (`FlatCard`, the flat card of a dialog: header, band, and rows or blocks set apart by inset hairlines), `dialog/` (the
   `Dialog` frame and toolkit), `form/`, `controls/`, `menus/`, `hint/` (the one component behind tooltips and floating
   popovers), `text/`, `status/`, `icons/`, `tabs/`, `motion/`, `scroll/` (the faded scroller and the sticky section
   heading), `focus/`, `announce/`, `panel/`, `host/`, `rows/` (the tree row, its icon and mark buttons, the
@@ -167,8 +167,7 @@ their cascade order does not depend on which screen opened first.
   its hooks.
 - `src/process/` — the Processes panel and its data, the polled global process count the rail shows
   (`processPolling.ts` holds the polling paces), and the rail's process panel (`ProcessCounts`).
-- `src/configuration/` — configuration export and import dialogs (with the cards and parts they share, `SettingsGroups.tsx`,
-  `AgentSettingsCard.tsx` and `importParts.tsx`; `clientSettings.ts` carries the settings only this client holds (appearance, Markdown style, run in the background, menu bar icon, keep awake, language) into and out of the document; the review and result show one line per distinct provider-setting heading, from the served schema and the providers' copy; `ImportProgress.tsx` shows a running import item by item, its state kept in `progressState.ts`, with `ResultCards.tsx` shared by progress and result), and the list of plain switch settings (`booleanSettings.ts`, grouped by the Settings section each belongs to).
+- `src/configuration/` — configuration export and import dialogs, by Settings section and by agent. Shared cards and parts: `SettingsGroups.tsx` (the sections' cards), `AgentSettingsCard.tsx` (the per-agent cards: `AgentCardSections` lays out an agent's card, `useAgentSettingLines` words one line per setting of that agent, from the served schema and the providers' copy, naming an unpresented setting by `idWords` of its id) and `importParts.tsx` (review rows, status lines, `ImportChoice` and `choiceHeader`, `LEFT_OUT_STATUS`); `settingsSections.ts` holds the Settings sections a document carries, in Settings order, with their labels; `useImportChoices.ts` holds the review's choice state (which parts, sections and agents are taken) and `useClientSettingsReview.ts` the values this client holds now, for the review to compare against; `clientSettings.ts` carries the settings only this client holds (appearance, Markdown style, run in the background, menu bar icon, keep awake, language, session order) into and out of the document, with `clientSettingsPlatform` saying which of them this platform has; `ImportProgress.tsx` shows a running import item by item, its state kept in `progressState.ts`, with `ResultCards.tsx` shared by progress and result; and the list of plain switch settings (`booleanSettings.ts`, grouped by the Settings section each belongs to).
 - `src/about/`, `src/updates/` — the licenses dialog and its data; the UI side of self-update.
 
 ### Dev-only and website-facing
@@ -245,7 +244,7 @@ dependency).
   A provider's settings are drawn from the schema the daemon serves (`ProviderInfo.settings`) by
   `AgentProviderSettings` (`src/settings/accounts/`), with their copy in the provider's presentation module; Settings
   does not show a setting whose provider has no heading copy for it, while the configuration import review still lists
-  such a setting, worded from the served label and the setting's id (`configuration.import.settingUnnamed`). Text that
+  such a setting in its agent's card, named by `idWords` of the setting's id. Text that
   names a provider sets its name apart through `ProviderName` (`src/components/text/`).
 - A new provider: its presentation module `src/providers/<id>.ts` (mark, colour, its messages in every language, the
   record and wording of each code it declares, with the code's recovery copy `provider.<id>.<code>.remedy`, the copy of

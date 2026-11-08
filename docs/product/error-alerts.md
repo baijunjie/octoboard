@@ -255,7 +255,7 @@ The places with a compact alert:
 - an account's connectors and MCP servers that could not be read, in place of them in the account's Connectors and MCP
   dialog, with **Try again** where reading again can help (see "The Connectors and MCP dialog" in
   `docs/product/account-mcp-servers-and-connectors.md`);
-- a configuration import's application settings, or its agent account settings, that could not be applied, in the
+- a configuration import's settings, or its agent account settings, that could not be applied, in the
   import's result (see "The import result" in `docs/product/configuration-import-progress-and-result.md`);
 - the lookups forms make on their own that stop the form from going on, directly under the field they are about,
   which they describe to assistive technology: a project folder's detection that could not be made, and a
@@ -387,7 +387,7 @@ The places with a warning mark:
   after its name — one mark saying both when the project has fallbacks too (see "Consoles and projects in the review"
   and "Account fallbacks" in `docs/product/configuration-export-and-import-dialogs.md`);
 - an account of a configuration import's review that cannot be created as the file has it — its directory in use, or a
-  name or directory the Add account form refuses — after its name (see "Accounts in the review" in
+  name or directory the Add account form refuses — after its name (see "Agent accounts in the review" in
   `docs/product/configuration-export-and-import-dialogs.md`);
 - a project removal's option to move the folder to the Trash, after its label, when what goes with the folder could
   not be looked up, with **Download Git** and **Try again** where that is because Git could not be found (see "With a

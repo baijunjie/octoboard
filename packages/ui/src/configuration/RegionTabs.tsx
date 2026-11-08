@@ -6,7 +6,7 @@ import { Tab, TabList, TabListContainer, TabPanel, Tabs, useKeyboardModality } f
 import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
 
-export type Region = "consoles" | "accounts" | "settings";
+export type Region = "consoles" | "settings" | "accounts";
 
 /** One region of a configuration document, as the import's review and result show it. */
 export interface RegionPanel {
@@ -21,9 +21,10 @@ export interface RegionPanel {
 const PANEL_CLASS = "mt-0 flex flex-col gap-4 p-0";
 
 /**
- * The regions of a configuration document as tabs, a panel for each: the consoles and projects, the accounts and the
- * application settings, each present only when the document carries it. With a single region there is no tab bar and
- * the content stands as it is; with none there is nothing. A tab whose panel needs attention carries a warning glyph
+ * The regions of a configuration document as tabs, a panel for each: the consoles and projects, the application settings
+ * and the accounts, each present only when the document carries it. With a single region there is no tab bar and
+ * the content stands as it is, unless `alwaysTabs` keeps the bar for it (the import's review does, whose tabs follow
+ * the checked parts); with none there is nothing. A tab whose panel needs attention carries a warning glyph
  * after its label and says so in its accessible name and in a tooltip beside the tab. Tabs that come and go move with
  * the shared list motion. The selection is the caller's (`selected`), which can then move it to the tab holding a
  * problem; a selection that is not among the regions is the first of them. A panel is mounted only while its tab is
@@ -34,16 +35,19 @@ export function RegionTabs({
   regions,
   selected,
   onSelect,
+  alwaysTabs = false,
 }: {
   /** The tab list's accessible name. */
   label: string;
   regions: RegionPanel[];
   selected: Region | undefined;
   onSelect: (region: Region) => void;
+  /** Keeps the tab bar for a single region, in place of letting its content stand alone. */
+  alwaysTabs?: boolean;
 }): React.ReactElement | null {
   const listRef = useListMotion<HTMLDivElement>({ contentWidth: true });
   if (regions.length === 0) return null;
-  if (regions.length === 1) return <>{regions[0].content}</>;
+  if (regions.length === 1 && !alwaysTabs) return <>{regions[0].content}</>;
   const current = regions.some((region) => region.id === selected) ? selected : regions[0].id;
   return (
     <Tabs selectedKey={current} onSelectionChange={(key) => onSelect(key as Region)} className="gap-4">

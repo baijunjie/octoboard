@@ -145,8 +145,8 @@ The choice is remembered **per client**, in that client's own browser storage, a
 the choice is stored" in `docs/product/appearance.md`). A desktop window and a browser tab, or two machines reaching the
 same daemon, each keep their own, and each renders its own whatever the daemon holds (see "The language the daemon
 holds" below). A client whose storage has been cleared picks the language from the system again on its next load.
-A configuration export that includes the application settings carries the language the exporting client shows, and an
-import asked to apply them switches the client that runs the import to it, when that client offers it (see "The
+A configuration export that includes the General section carries the language the exporting client shows, and an
+import asked to apply that section switches the client that runs the import to it, when that client offers it (see "The
 settings a client holds" in `docs/product/settings-in-a-configuration.md`).
 Without that storage nothing is kept: every load picks the language from the system, and a choice in Settings lasts
 until the page is reloaded.
@@ -167,8 +167,8 @@ A client reports its language:
   every start: the daemon keeps the most recent report.
 
 The first launch's pick from the system is not reported by itself; it reaches the daemon only through the report on
-connecting. A configuration export that includes the application settings carries the language the exporting client
-shows in its place, and an import asked to apply them sets the held language to it when it is one of the offered
+connecting. A configuration export that includes the General section carries the language the exporting client
+shows in its place, and an import asked to apply that section sets the held language to it when it is one of the offered
 languages, leaving it as it is otherwise (see "Application settings are left alone unless they are asked for" in
 `docs/product/settings-in-a-configuration.md`). A console session reads it and changes it through
 the settings tools, under the same rule about offered tags (see "Application settings: `get_settings` and

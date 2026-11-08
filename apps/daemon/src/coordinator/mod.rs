@@ -523,14 +523,14 @@ async fn handle_inner(
         RequestBody::ExportConfiguration {
             console,
             consoles,
-            include_settings,
+            settings_sections,
             include_accounts,
             include_paths,
         } => {
             let selection = export::Selection::from_request(
                 console,
                 consoles,
-                include_settings,
+                settings_sections,
                 include_accounts,
                 include_paths,
             )?;
@@ -545,6 +545,7 @@ async fn handle_inner(
             Ok(Some(Event::ConfigurationInspected {
                 id: request_id,
                 settings: inspection.settings,
+                settings_sections: inspection.settings_sections,
                 accounts: inspection.accounts,
                 consoles: inspection.consoles,
             }))
@@ -555,6 +556,7 @@ async fn handle_inner(
             resolutions,
             apply_settings,
             apply_accounts,
+            apply_agents,
             account_resolutions,
             apply_consoles,
             apply_clone_dir,
@@ -567,6 +569,7 @@ async fn handle_inner(
                 import::ApplyOptions {
                     settings: apply_settings,
                     accounts: apply_accounts.then_some(account_resolutions),
+                    agents: apply_agents,
                     consoles: apply_consoles,
                     clone_dir: apply_clone_dir,
                 },

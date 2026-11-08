@@ -7,7 +7,7 @@ import { currentLanguage, t } from "../i18n/language";
 import type { NotificationRequest, State, WindowNotification } from "../store";
 import { broadcastNotification } from "../store/notifications";
 
-import type { Agent, ClientRequestBody, Settings } from "../protocol";
+import type { Agent, ClientRequestBody, Settings, SettingsSection } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
 import { SAMPLE_CLAUDE_MODELS, SAMPLE_CLAUDE_MODELS_PRO } from "./agentModels";
 import { createFixtureDaemon } from "./fixtureDaemon";
@@ -2421,21 +2421,30 @@ describe("the fixture daemon's configuration export", () => {
     });
 
     it("chooses the consoles, the settings and the accounts independently", async () => {
-      const none = await exported({ consoles: "none", include_settings: true });
+      const none = await exported({ consoles: "none", settings_sections: ["git"] });
       expect(none.consoles).toEqual([]);
       expect(none.settings).toBeDefined();
-      const oneWithSettings = await exported({ consoles: "one", console: "c-2", include_settings: true, include_accounts: true });
+      const oneWithSettings = await exported({ consoles: "one", console: "c-2", settings_sections: ["general", "git"], include_accounts: true });
       expect(oneWithSettings.consoles.map((console) => console.name)).toEqual(["Home"]);
       expect(oneWithSettings.settings).toBeDefined();
       expect(oneWithSettings.accounts).toBeDefined();
-      const allWithoutSettings = await exported({ consoles: "all", include_settings: false });
+      const allWithoutSettings = await exported({ consoles: "all", settings_sections: [] });
       expect(allWithoutSettings.consoles).toHaveLength(2);
       expect(allWithoutSettings.settings).toBeNull();
     });
 
+    it("writes the daemon-held keys of the sections chosen only, and no settings region where none is chosen", async () => {
+      const keys = async (settings_sections: SettingsSection[]) => Object.keys((await exported({ consoles: "all", settings_sections })).settings ?? {}).sort();
+      expect(await keys(["cleanup"])).toEqual(["auto_delete_unresumable_archives"]);
+      expect(await keys(["git"])).toEqual(["auto_pull_repositories", "default_clone_dir", "git_workflow"]);
+      expect(await keys(["keyboard_shortcuts"])).toEqual([]);
+      expect(await keys(["general", "cleanup"])).not.toContain("auto_pull_repositories");
+      expect((await exported({ consoles: "all", settings_sections: [] })).settings).toBeNull();
+    });
+
     it("refuses an export of nothing, one of a console with none named, and one of a console it does not have", async () => {
       await expect(exported({ consoles: "none" })).rejects.toMatchObject({ code: "export_empty" });
-      await expect(exported({ consoles: "none", include_settings: false, include_accounts: false })).rejects.toMatchObject({ code: "export_empty" });
+      await expect(exported({ consoles: "none", settings_sections: [], include_accounts: false })).rejects.toMatchObject({ code: "export_empty" });
       await expect(exported({ consoles: "one" })).rejects.toMatchObject({ code: "field_required" });
       await expect(exported({ console: "c-9" })).rejects.toMatchObject({ code: "unknown_console" });
     });
@@ -2489,11 +2498,11 @@ describe("the fixture daemon's configuration export", () => {
     });
 
     it("writes the default clone directory like an account directory, whatever the paths choice, and a turned-off default account", async () => {
-      expect((await exported({ consoles: "none", include_settings: true, include_paths: false })).settings?.default_clone_dir).toBe("~/Projects");
+      expect((await exported({ consoles: "none", settings_sections: ["git"], include_paths: false })).settings?.default_clone_dir).toBe("~/Projects");
       const off = createFixtureDaemon({
         state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: ["codex"], default_clone_dir: "/Users/dev/Code", accounts: [], disabled_default_accounts: ["codex"] } }),
       });
-      const { document } = (await off.request({ type: "export_configuration", consoles: "none", include_settings: true, include_accounts: true })) as { document: ReturnType<typeof exportedDocument> };
+      const { document } = (await off.request({ type: "export_configuration", consoles: "none", settings_sections: ["general", "git"], include_accounts: true })) as { document: ReturnType<typeof exportedDocument> };
       expect(document.settings?.default_clone_dir).toBe("~/Code");
       expect(document.accounts?.agents).toEqual([{ agent: "codex", default_account: { name: null, position: 0, disabled: true }, accounts: [] }]);
     });

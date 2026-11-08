@@ -295,10 +295,11 @@ async fn a_document_without_a_console_session_prompt_imports_a_console_with_none
         &without,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await

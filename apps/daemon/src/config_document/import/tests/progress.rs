@@ -49,7 +49,7 @@ async fn import_named(
     state: &Arc<AppState>,
     document: &serde_json::Value,
     resolutions: Vec<ProjectResolution>,
-    apply_settings: bool,
+    apply_settings: Vec<SettingsSection>,
     import_id: Option<&str>,
 ) -> Imported {
     apply_reporting(
@@ -61,6 +61,7 @@ async fn import_named(
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
         import_id.map(str::to_string),
     )
@@ -93,7 +94,7 @@ async fn every_item_is_announced_waiting_then_reported_as_it_is_handled() {
             at(0, 2, DirectoryChoice::Clone),
             at(0, 3, DirectoryChoice::ExportedPath),
         ],
-        true,
+        carried_sections(&document),
         Some("one"),
     )
     .await;
@@ -143,10 +144,11 @@ async fn the_clone_directory_comes_first_and_the_agent_account_settings_follow_t
         &document,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&document),
             accounts: Some(Vec::new()),
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
         Some("order".to_string()),
     )
@@ -182,10 +184,11 @@ async fn the_clone_directory_is_not_announced_when_the_machines_own_is_kept() {
         &document,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&document),
             accounts: None,
             consoles: true,
             clone_dir: false,
+            agents: None,
         },
         Some("kept".to_string()),
     )
@@ -218,7 +221,7 @@ async fn a_failed_console_fails_its_resolved_projects_as_not_attempted() {
         &state,
         &document(vec![hub]),
         vec![at(0, 0, DirectoryChoice::ExportedPath)],
-        false,
+        Vec::new(),
         Some("two"),
     )
     .await;
@@ -245,7 +248,7 @@ async fn a_failure_is_reported_as_the_result_reports_it() {
         &state,
         &document(vec![hub]),
         vec![at(0, 0, DirectoryChoice::ExportedPath)],
-        false,
+        Vec::new(),
         Some("three"),
     )
     .await;
@@ -280,10 +283,11 @@ async fn a_refused_request_that_names_an_id_reports_nothing() {
         &document(vec![console("Hub", Vec::new()), bad_icon]),
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
         Some("five".to_string()),
     )
@@ -305,10 +309,60 @@ async fn an_import_that_names_no_id_reports_nothing() {
         &state,
         &document(vec![console("Hub", Vec::new())]),
         Vec::new(),
-        false,
+        Vec::new(),
         None,
     )
     .await;
 
     assert!(reported(&mut events, "none").is_empty());
+}
+
+#[tokio::test]
+async fn only_the_accounts_of_the_agents_listed_are_announced() {
+    let area = ScratchDir::new("import-progress-agents-area");
+    let (state, _dir) = app_state("import-progress-agents");
+    let entry = |agent: &str, name: &str| {
+        json!({
+            "agent": agent,
+            "default_account": { "name": null, "position": 0, "disabled": false },
+            "accounts": [{
+                "name": name,
+                "directory": directory(&area, name).to_string_lossy(),
+                "disabled": false,
+            }],
+        })
+    };
+    let mut document = document(Vec::new());
+    document["accounts"] = json!({
+        "added_agents": ["claude", "codex"],
+        "agents": [entry("claude", "Left"), entry("codex", "Kept")],
+        "agent_settings": null,
+    });
+    let mut events = state.subscribe();
+
+    apply_reporting(
+        &state,
+        &document,
+        Vec::new(),
+        ApplyOptions {
+            settings: Vec::new(),
+            accounts: Some(Vec::new()),
+            consoles: false,
+            clone_dir: true,
+            agents: Some(vec![AgentId::CODEX]),
+        },
+        Some("agents".to_string()),
+    )
+    .await
+    .unwrap();
+
+    let label = AgentId::CODEX.label();
+    assert_eq!(
+        reported(&mut events, "agents"),
+        [
+            format!("account {label}.0: waiting"),
+            format!("account {label}.0: creating"),
+            format!("account {label}.0: done"),
+        ]
+    );
 }

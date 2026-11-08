@@ -277,6 +277,61 @@ fn inspect_agent_settings(
     })
 }
 
+/// Whether the document's accounts have something for `agent`: one of its agent entries, a place
+/// in the added agents, or provider settings or tags of its own. A key of the settings that names
+/// no agent this build knows counts for none.
+fn carries_agent(document: &DocumentAccounts, agent: AgentId) -> bool {
+    let names_agent = |name: &String| AgentId::from_wire_name(name) == Some(agent);
+    document
+        .added_agents
+        .iter()
+        .flatten()
+        .any(|added| *added == agent)
+        || document.agents.iter().any(|entry| entry.agent == agent)
+        || document.agent_settings.iter().any(|settings| {
+            settings.provider_settings.keys().any(names_agent)
+                || settings.agent_tags.keys().any(names_agent)
+        })
+}
+
+/// The document's accounts reduced to what concerns `agents` (one listed twice counts once): their
+/// entries, their places in the added agents and their provider settings and tags. The three
+/// switches stay whole, since they are no agent's. An agent the document carries nothing for is
+/// refused with `import_agent_missing`, before anything is done.
+pub(super) fn only_agents(
+    document: &DocumentAccounts,
+    agents: &[AgentId],
+) -> Result<DocumentAccounts> {
+    if let Some(agent) = agents
+        .iter()
+        .find(|agent| !carries_agent(document, **agent))
+    {
+        return Err(CodedError::raised(
+            error_code::IMPORT_AGENT_MISSING,
+            format!(
+                "the document carries nothing for the {} agent to apply",
+                agent.label()
+            ),
+            &[("agent", agent.label())],
+        ));
+    }
+    let kept =
+        |name: &str| AgentId::from_wire_name(name).is_some_and(|agent| agents.contains(&agent));
+    let mut only = document.clone();
+    only.added_agents = only.added_agents.map(|added| {
+        added
+            .into_iter()
+            .filter(|agent| agents.contains(agent))
+            .collect()
+    });
+    only.agents.retain(|entry| agents.contains(&entry.agent));
+    if let Some(settings) = &mut only.agent_settings {
+        settings.provider_settings.retain(|name, _| kept(name));
+        settings.agent_tags.retain(|name, _| kept(name));
+    }
+    Ok(only)
+}
+
 /// The choice made for one account of the document.
 pub(super) enum AccountChoice {
     /// Another directory, as typed (an absolute path or one starting with `~/`).
@@ -600,8 +655,9 @@ mod tests {
     use crate::protocol::{
         AccountFallback, AccountName, DirectoryChoice, ProjectAccount, ProjectAccountRef,
     };
-    use crate::test_support::code_of;
+    use crate::providers::SettingValue;
     use crate::test_support::{app_state, ScratchDir};
+    use crate::test_support::{code_of, param_of};
     use serde_json::json;
     use std::path::Path;
 
@@ -982,7 +1038,7 @@ mod tests {
             &document,
             vec![at(0, 0, DirectoryChoice::ExportedPath)],
             ApplyOptions {
-                settings: false,
+                settings: Vec::new(),
                 accounts: Some(vec![
                     resolve(AgentId::CLAUDE, 2, None, true),
                     resolve(AgentId::CLAUDE, 3, Some(&path_text(&moved_to)), false),
@@ -990,6 +1046,7 @@ mod tests {
                 ]),
                 consoles: true,
                 clone_dir: true,
+                agents: None,
             },
         )
         .await
@@ -1105,7 +1162,7 @@ mod tests {
             &document,
             Vec::new(),
             ApplyOptions {
-                settings: false,
+                settings: Vec::new(),
                 accounts: Some(vec![AccountResolution {
                     agent: AgentId::CLAUDE,
                     account: 3,
@@ -1114,6 +1171,7 @@ mod tests {
                 }]),
                 consoles: true,
                 clone_dir: true,
+                agents: None,
             },
             Some("accounts".to_string()),
         )
@@ -1157,7 +1215,7 @@ mod tests {
             &document,
             Vec::new(),
             ApplyOptions {
-                settings: false,
+                settings: Vec::new(),
                 accounts: Some(vec![AccountResolution {
                     agent: AgentId::CLAUDE,
                     account: 0,
@@ -1166,6 +1224,7 @@ mod tests {
                 }]),
                 consoles: true,
                 clone_dir: true,
+                agents: None,
             },
             Some("existing".to_string()),
         )
@@ -1212,10 +1271,11 @@ mod tests {
             &document,
             Vec::new(),
             ApplyOptions {
-                settings: false,
+                settings: Vec::new(),
                 accounts: Some(Vec::new()),
                 consoles: true,
                 clone_dir: true,
+                agents: None,
             },
         )
         .await
@@ -1283,10 +1343,11 @@ mod tests {
             &document,
             Vec::new(),
             ApplyOptions {
-                settings: false,
+                settings: Vec::new(),
                 accounts: Some(Vec::new()),
                 consoles: true,
                 clone_dir: true,
+                agents: None,
             },
         )
         .await
@@ -1332,10 +1393,11 @@ mod tests {
             &document,
             Vec::new(),
             ApplyOptions {
-                settings: false,
+                settings: Vec::new(),
                 accounts: Some(Vec::new()),
                 consoles: true,
                 clone_dir: true,
+                agents: None,
             },
         )
         .await
@@ -1423,10 +1485,11 @@ mod tests {
             &with,
             Vec::new(),
             ApplyOptions {
-                settings: false,
+                settings: Vec::new(),
                 accounts: None,
                 consoles: true,
                 clone_dir: true,
+                agents: None,
             },
         )
         .await
@@ -1443,16 +1506,216 @@ mod tests {
             &document(vec![console("Other", Vec::new())]),
             Vec::new(),
             ApplyOptions {
-                settings: false,
+                settings: Vec::new(),
                 accounts: Some(Vec::new()),
                 consoles: true,
                 clone_dir: true,
+                agents: None,
             },
         )
         .await
         .expect_err("no accounts in the document");
         assert_eq!(code_of(&err), error_code::IMPORT_ACCOUNTS_MISSING);
         assert_eq!(state.store.list_consoles().unwrap().len(), before);
+    }
+
+    #[tokio::test]
+    async fn only_the_agents_asked_for_are_applied_and_one_the_document_lacks_is_refused() {
+        let area = ScratchDir::new("import-apply-agents-area");
+        let (state, _state_dir) = account_state("import-apply-agents", &area);
+        state
+            .store
+            .set_added_agents_if_undecided(&[AgentId::GROK])
+            .unwrap();
+        // The machine has the account "Left" of Claude Code already; "Right" only the document has.
+        claude_account(&state, "claude-left", "Left", &area.join("left"));
+        let referring_to = |name: &str, account: &str| {
+            let mut referring = console(name, Vec::new());
+            referring.accounts[AgentId::CLAUDE] = Some(AccountName {
+                name: account.to_string(),
+            });
+            referring
+        };
+        let mut claude_entry = agent_entry(
+            "claude",
+            Some("Main"),
+            vec![
+                doc_account("Left", &path_text(&area.join("left"))),
+                doc_account("Right", &path_text(&area.join("right"))),
+            ],
+        );
+        claude_entry["default_account"]["disabled"] = json!(true);
+        let mut document = with_accounts(
+            document(vec![
+                referring_to("Hub", "Left"),
+                referring_to("Second", "Right"),
+            ]),
+            &["claude", "codex"],
+            vec![
+                claude_entry,
+                agent_entry(
+                    "codex",
+                    Some("Primary"),
+                    vec![doc_account("Kept", &path_text(&area.join("kept")))],
+                ),
+            ],
+        );
+        document["accounts"]["agent_settings"] = json!({
+            "auto_select_account": true,
+            "auto_switch_on_usage_limit": true,
+            "auto_start_quota_windows": true,
+            "agent_tags": { "claude": ["one"], "codex": ["two"] },
+            "provider_settings": {
+                "claude": { "approval_mode": "accept_edits" },
+                "codex": { "approval_reviewer": "auto_review" },
+            },
+        });
+        let options = |agents: Vec<AgentId>| ApplyOptions {
+            settings: Vec::new(),
+            accounts: Some(Vec::new()),
+            consoles: true,
+            clone_dir: true,
+            agents: Some(agents),
+        };
+
+        let err = apply(
+            &state,
+            &document,
+            Vec::new(),
+            options(vec![AgentId::CODEX, AgentId::GROK]),
+        )
+        .await
+        .expect_err("the document carries nothing for Grok");
+        assert_eq!(code_of(&err), error_code::IMPORT_AGENT_MISSING);
+        assert_eq!(param_of(&err, "agent"), AgentId::GROK.label());
+        assert_eq!(state.store.list_accounts().unwrap().len(), 1);
+        assert!(state.store.list_consoles().unwrap().is_empty());
+        assert_eq!(
+            state.store.added_agents().unwrap(),
+            Some(vec![AgentId::GROK])
+        );
+
+        let imported = apply(
+            &state,
+            &document,
+            Vec::new(),
+            options(vec![AgentId::CODEX, AgentId::CODEX]),
+        )
+        .await
+        .unwrap();
+
+        let accounts = imported.accounts.unwrap();
+        assert_eq!(accounts.agents_added, [AgentId::CODEX]);
+        assert_eq!(
+            state.store.added_agents().unwrap(),
+            Some(vec![AgentId::GROK, AgentId::CODEX])
+        );
+        let reported: Vec<(AgentId, usize, bool)> = accounts
+            .agents
+            .iter()
+            .map(|a| (a.agent, a.accounts.len(), a.default_name_applied))
+            .collect();
+        assert_eq!(reported, [(AgentId::CODEX, 1, true)]);
+        let stored = state.store.list_accounts().unwrap();
+        assert_eq!(stored.len(), 2);
+        assert!(stored.iter().any(|a| a.name == "Left"));
+        assert!(stored.iter().any(|a| a.name == "Kept"));
+        let names = state.store.default_account_names().unwrap();
+        assert_eq!(names.keys().collect::<Vec<_>>(), ["codex"]);
+        // The switches are no agent's and still apply; the tags are those of the agent applied.
+        let settings = accounts.agent_settings_applied.unwrap();
+        assert!(settings.auto_select_account);
+        assert_eq!(settings.agent_tags.keys().collect::<Vec<_>>(), ["codex"]);
+        assert_eq!(
+            state.store.agent_tags().unwrap().keys().collect::<Vec<_>>(),
+            ["codex"]
+        );
+        // The agent left out has its provider settings and its default account's flag untouched.
+        let chosen = state.store.provider_settings().unwrap();
+        assert_eq!(chosen["claude"]["approval_mode"], None);
+        assert_eq!(
+            chosen["codex"]["approval_reviewer"],
+            Some(SettingValue::Choice("auto_review".to_string()))
+        );
+        assert!(state.store.disabled_default_accounts().unwrap().is_empty());
+        // The account of the agent left out is not created, so a reference to it falls back, but
+        // one to an account the machine has already still binds to it.
+        let consoles = state.store.list_consoles().unwrap();
+        let by_name = |name: &str| consoles.iter().find(|c| c.name == name).unwrap();
+        assert_eq!(
+            by_name("Hub").accounts[AgentId::CLAUDE].as_deref(),
+            Some("claude-left")
+        );
+        assert_eq!(by_name("Second").accounts[AgentId::CLAUDE], None);
+        let fallbacks = |name: &str| {
+            imported
+                .consoles
+                .iter()
+                .find(|c| c.name == name)
+                .unwrap()
+                .account_fallbacks
+                .clone()
+        };
+        assert_eq!(fallbacks("Hub"), []);
+        assert_eq!(
+            fallbacks("Second"),
+            [AccountFallback {
+                agent: AgentId::CLAUDE,
+                name: "Right".to_string(),
+            }]
+        );
+    }
+
+    #[tokio::test]
+    async fn an_empty_list_of_agents_applies_only_the_three_switches() {
+        let area = ScratchDir::new("import-apply-no-agents-area");
+        let (state, _state_dir) = account_state("import-apply-no-agents", &area);
+        let mut document = with_accounts(
+            document(vec![console("Hub", Vec::new())]),
+            &["codex"],
+            vec![agent_entry(
+                "codex",
+                Some("Primary"),
+                vec![doc_account("Kept", &path_text(&area.join("kept")))],
+            )],
+        );
+        document["accounts"]["agent_settings"] = json!({
+            "auto_select_account": true,
+            "auto_switch_on_usage_limit": true,
+            "auto_start_quota_windows": true,
+            "agent_tags": { "codex": ["two"] },
+            "provider_settings": { "codex": { "approval_reviewer": "auto_review" } },
+        });
+
+        let imported = apply(
+            &state,
+            &document,
+            Vec::new(),
+            ApplyOptions {
+                settings: Vec::new(),
+                accounts: Some(Vec::new()),
+                consoles: false,
+                clone_dir: true,
+                agents: Some(Vec::new()),
+            },
+        )
+        .await
+        .unwrap();
+
+        let accounts = imported.accounts.unwrap();
+        assert!(accounts.agents_added.is_empty());
+        assert!(accounts.agents.is_empty());
+        assert!(state.store.list_accounts().unwrap().is_empty());
+        assert!(state.store.default_account_names().unwrap().is_empty());
+        let settings = accounts.agent_settings_applied.unwrap();
+        assert!(settings.auto_select_account);
+        assert!(settings.agent_tags.is_empty());
+        assert!(settings.provider_settings.is_empty());
+        assert!(state.store.agent_tags().unwrap().is_empty());
+        assert_eq!(
+            state.store.provider_settings().unwrap()["codex"]["approval_reviewer"],
+            None
+        );
     }
 
     #[tokio::test]
@@ -1483,10 +1746,11 @@ mod tests {
             &document,
             vec![at(7, 7, DirectoryChoice::ExportedPath)],
             ApplyOptions {
-                settings: false,
+                settings: Vec::new(),
                 accounts: Some(Vec::new()),
                 consoles: false,
                 clone_dir: true,
+                agents: None,
             },
         )
         .await
@@ -1507,10 +1771,11 @@ mod tests {
             &document,
             vec![at(7, 7, DirectoryChoice::ExportedPath)],
             ApplyOptions {
-                settings: false,
+                settings: Vec::new(),
                 accounts: None,
                 consoles: true,
                 clone_dir: true,
+                agents: None,
             },
         )
         .await
@@ -1549,10 +1814,11 @@ mod tests {
                 &document,
                 Vec::new(),
                 ApplyOptions {
-                    settings: false,
+                    settings: Vec::new(),
                     accounts: Some(resolutions),
                     consoles: true,
                     clone_dir: true,
+                    agents: None,
                 },
             )
             .await
@@ -1606,7 +1872,7 @@ mod tests {
                 &source.store,
                 &export::Selection {
                     consoles: export::ConsoleScope::None,
-                    settings: false,
+                    settings: Vec::new(),
                     accounts: true,
                     paths: true,
                 },
@@ -1620,10 +1886,11 @@ mod tests {
             &exported,
             Vec::new(),
             ApplyOptions {
-                settings: false,
+                settings: Vec::new(),
                 accounts: Some(Vec::new()),
                 consoles: true,
                 clone_dir: true,
+                agents: None,
             },
         )
         .await

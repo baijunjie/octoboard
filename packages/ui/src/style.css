@@ -202,6 +202,13 @@ html {
   }
 }
 
+/* A divider on a flat surface (a card framed as a table, a table): one plain hairline in the colour of a
+   panel card's outline (`panel-edge`), where a raised surface takes a groove. It is a border-bottom of
+   `--hairline-width`, so `border-b-0` and the like still reset it. */
+@utility hairline-b {
+  border-bottom: var(--hairline-width) solid var(--panel-hairline);
+}
+
 /* The edge of a panel card (the floating pane, a drawer): a hairline outline, `--hairline-width`
    wide. It is a shadow, which takes no layout space unlike a border, so the card is exactly its
    box and its headers line up with the docked ones (`--pane-header-height-floating`). It carries

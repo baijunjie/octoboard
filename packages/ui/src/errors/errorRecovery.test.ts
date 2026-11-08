@@ -18,7 +18,7 @@ it.each([
   ["agent_not_installed", "tool"], ["agent_cli_update_unsupported", "none"], ["agent_cli_update_running", "none"], ["agent_availability_pending", "availability"], ["added_agents_undecided", "availability"],
   ["account_order_invalid", "refresh"], ["unknown_shell_terminal", "refresh"], ["queued_messages_lost", "refreshMessages"], ["queued_messages_dropped", "refreshMessages"], ["agent_already_added", "addedAgents"], ["agent_order_invalid", "addedAgents"], ["agent_not_added", "agentNotAdded"],
   ["provider.grok.sandbox_unsupported", "provider.grok.sandbox_unsupported.remedy"],
-  ["export_empty", "exportSelection"], ["import_accounts_missing", "configuration"], ["import_resolution_invalid", "configuration"], ["import_settings_missing", "configuration"],
+  ["export_empty", "exportSelection"], ["import_accounts_missing", "configuration"], ["import_agent_missing", "configuration"], ["import_resolution_invalid", "configuration"], ["import_settings_missing", "configuration"],
   ["default_account_not_shareable", "accountNotShareable"], ["account_sharing_failed", "accountSharing"], ["account_still_sharing", "accountBusy"],
   ["account_in_use", "accountBusy"], ["sharing_session_did_not_stop", "sharingStop"], ["account_sharing_in_progress", "accountChanging"], ["account_disabled", "accountDisabled"], ["account_not_signed_in", "accountNotSignedIn"], ["daemon_shutting_down", "none"],
   ["git_failed", "gitFailure"], ["git_clone_failed", "gitFailure"], ["git_push_failed", "gitFailure"],

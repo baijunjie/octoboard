@@ -32,7 +32,7 @@ use crate::protocol::{
     error_code, Account, AccountName, AgentId, CodedError, ConfigurationDocument, Console,
     DocumentAccount, DocumentAccounts, DocumentAgentAccounts, DocumentAgentSettings,
     DocumentConsole, DocumentDefaultAccount, DocumentProject, DocumentSettings, ExportedConsoles,
-    PerAgent, Project, ProjectAccount, ProjectAccountRef, CONFIGURATION_FORMAT,
+    PerAgent, Project, ProjectAccount, ProjectAccountRef, SettingsSection, CONFIGURATION_FORMAT,
     CONFIGURATION_VERSION,
 };
 use crate::store::Store;
@@ -45,25 +45,26 @@ pub enum ConsoleScope {
     None,
 }
 
-/// What an export holds: its consoles and projects, the application settings and the accounts,
-/// each region chosen on its own.
+/// What an export holds: its consoles and projects, the sections of the application settings and
+/// the accounts, each chosen on its own.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Selection {
     pub consoles: ConsoleScope,
-    pub settings: bool,
+    /// In Settings order, without repeats; empty writes no `settings` region.
+    pub settings: Vec<SettingsSection>,
     pub accounts: bool,
     /// Whether a project's absolute path is written in full rather than as its last segment.
     pub paths: bool,
 }
 
 impl Selection {
-    /// Every console, the application settings and no accounts: what an export with no choices
-    /// made holds.
+    /// Every console, every section of the application settings and no accounts: what an export
+    /// with no choices made holds.
     #[cfg(test)]
     pub fn full(paths: bool) -> Self {
         Self {
             consoles: ConsoleScope::All,
-            settings: true,
+            settings: SettingsSection::ALL.to_vec(),
             accounts: false,
             paths,
         }
@@ -74,7 +75,7 @@ impl Selection {
     pub fn console(id: &str, paths: bool) -> Self {
         Self {
             consoles: ConsoleScope::One(id.to_string()),
-            settings: false,
+            settings: Vec::new(),
             accounts: false,
             paths,
         }
@@ -86,7 +87,7 @@ impl Selection {
     pub fn from_request(
         console: Option<String>,
         consoles: Option<ExportedConsoles>,
-        include_settings: Option<bool>,
+        settings_sections: Option<Vec<SettingsSection>>,
         include_accounts: Option<bool>,
         paths: bool,
     ) -> Result<Self> {
@@ -103,12 +104,19 @@ impl Selection {
             None => console.map_or(ConsoleScope::All, ConsoleScope::One),
         };
         let selection = Self {
-            settings: include_settings.unwrap_or(consoles == ConsoleScope::All),
+            settings: match settings_sections {
+                Some(sections) => SettingsSection::normalized(&sections),
+                None if consoles == ConsoleScope::All => SettingsSection::ALL.to_vec(),
+                None => Vec::new(),
+            },
             accounts: include_accounts.unwrap_or(false),
             consoles,
             paths,
         };
-        if selection.consoles == ConsoleScope::None && !selection.settings && !selection.accounts {
+        if selection.consoles == ConsoleScope::None
+            && selection.settings.is_empty()
+            && !selection.accounts
+        {
             return Err(CodedError::raised(
                 error_code::EXPORT_EMPTY,
                 "nothing is selected to export",
@@ -149,34 +157,48 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
     };
     let mut projects = store.list_projects()?;
     projects.sort_by(|a, b| (&a.name, &a.id).cmp(&(&b.name, &b.id)));
-    let settings = if selection.settings {
-        Some(DocumentSettings {
-            auto_close_idle_shell_terminals: store.auto_close_idle_shell_terminals()?,
-            auto_pull_repositories: store.auto_pull_repositories()?,
-            auto_delete_unresumable_archives: store.auto_delete_unresumable_archives()?,
-            auto_approve_session_requests: store.auto_approve_session_requests()?,
-            auto_approve_resume_requests: store.auto_approve_resume_requests()?,
-            auto_approve_account_switches: store.auto_approve_account_switches()?,
-            auto_approve_handoffs: store.auto_approve_handoffs()?,
-            ask_questions_as_choices: store.ask_questions_as_choices()?,
-            resume_sessions_on_start: Some(store.resume_sessions_on_start()?),
-            git_workflow: store.git_workflow_settings()?,
-            default_clone_dir: Some(document_directory(
-                &store.default_clone_dir()?,
-                &crate::paths::home_dir(),
-            )),
-            interface_language: store.interface_language()?,
-            // Held by the client, which adds them to the document it saves.
-            appearance: None,
-            markdown_style: None,
-            run_in_background: None,
-            show_menu_bar_icon: None,
-            keep_awake: None,
-            keep_awake_when: None,
-            keyboard_shortcuts: None,
-        })
-    } else {
+    let settings = if selection.settings.is_empty() {
         None
+    } else {
+        // Only the keys the daemon holds; the client adds the ones it holds to the document it
+        // saves.
+        let mut settings = DocumentSettings::default();
+        for section in &selection.settings {
+            match section {
+                SettingsSection::General => {
+                    settings.interface_language = store.interface_language()?;
+                }
+                SettingsSection::AppBehavior => {
+                    settings.auto_close_idle_shell_terminals =
+                        Some(store.auto_close_idle_shell_terminals()?);
+                    settings.resume_sessions_on_start = Some(store.resume_sessions_on_start()?);
+                }
+                SettingsSection::Git => {
+                    settings.auto_pull_repositories = Some(store.auto_pull_repositories()?);
+                    settings.git_workflow = Some(store.git_workflow_settings()?);
+                    settings.default_clone_dir = Some(document_directory(
+                        &store.default_clone_dir()?,
+                        &crate::paths::home_dir(),
+                    ));
+                }
+                SettingsSection::AgentBehavior => {
+                    settings.auto_approve_session_requests =
+                        Some(store.auto_approve_session_requests()?);
+                    settings.auto_approve_resume_requests =
+                        Some(store.auto_approve_resume_requests()?);
+                    settings.auto_approve_account_switches =
+                        Some(store.auto_approve_account_switches()?);
+                    settings.auto_approve_handoffs = Some(store.auto_approve_handoffs()?);
+                    settings.ask_questions_as_choices = Some(store.ask_questions_as_choices()?);
+                }
+                SettingsSection::KeyboardShortcuts => {}
+                SettingsSection::Cleanup => {
+                    settings.auto_delete_unresumable_archives =
+                        Some(store.auto_delete_unresumable_archives()?);
+                }
+            }
+        }
+        Some(settings)
     };
     let document_accounts = if selection.accounts {
         Some(document_accounts(store, &all_accounts)?)
@@ -594,25 +616,18 @@ mod tests {
         assert_eq!(
             document.settings,
             Some(DocumentSettings {
-                auto_close_idle_shell_terminals: false,
-                auto_pull_repositories: true,
-                auto_delete_unresumable_archives: false,
-                auto_approve_session_requests: false,
-                auto_approve_resume_requests: false,
-                auto_approve_account_switches: false,
-                auto_approve_handoffs: false,
-                ask_questions_as_choices: true,
+                auto_close_idle_shell_terminals: Some(false),
+                auto_pull_repositories: Some(true),
+                auto_delete_unresumable_archives: Some(false),
+                auto_approve_session_requests: Some(false),
+                auto_approve_resume_requests: Some(false),
+                auto_approve_account_switches: Some(false),
+                auto_approve_handoffs: Some(false),
+                ask_questions_as_choices: Some(true),
                 resume_sessions_on_start: Some(false),
-                git_workflow: GitWorkflowSettings::default(),
+                git_workflow: Some(GitWorkflowSettings::default()),
                 default_clone_dir: Some(clone_dir),
-                interface_language: None,
-                appearance: None,
-                markdown_style: None,
-                run_in_background: None,
-                show_menu_bar_icon: None,
-                keep_awake: None,
-                keep_awake_when: None,
-                keyboard_shortcuts: None,
+                ..Default::default()
             })
         );
         // The Agent accounts settings travel with the accounts, not here.
@@ -937,13 +952,13 @@ mod tests {
     fn request(
         console: Option<&str>,
         consoles: Option<ExportedConsoles>,
-        include_settings: Option<bool>,
+        settings_sections: Option<Vec<SettingsSection>>,
         include_accounts: Option<bool>,
     ) -> Result<Selection> {
         Selection::from_request(
             console.map(str::to_string),
             consoles,
-            include_settings,
+            settings_sections,
             include_accounts,
             true,
         )
@@ -961,14 +976,14 @@ mod tests {
             RequestBody::ExportConfiguration {
                 console,
                 consoles,
-                include_settings,
+                settings_sections,
                 include_accounts,
                 include_paths,
             } => assert_eq!(
                 (
                     console.as_deref(),
                     consoles,
-                    include_settings,
+                    settings_sections,
                     include_accounts,
                     include_paths
                 ),
@@ -981,29 +996,97 @@ mod tests {
     #[test]
     fn each_region_is_chosen_on_its_own_and_settings_follow_the_consoles_only_while_unsaid() {
         use ExportedConsoles::{All, None as NoConsoles, One};
+        let all = || SettingsSection::ALL.to_vec();
         let selection = |consoles, settings, accounts| {
             request(Some("console-1"), Some(consoles), settings, accounts).unwrap()
         };
         let one = selection(One, None, None);
         assert_eq!(
             (one.consoles.clone(), one.settings, one.accounts),
-            (ConsoleScope::One("console-1".to_string()), false, false)
+            (
+                ConsoleScope::One("console-1".to_string()),
+                Vec::new(),
+                false
+            )
         );
-        let one_with_settings = selection(One, Some(true), Some(true));
-        assert!(one_with_settings.settings && one_with_settings.accounts);
-        let all_without_settings = selection(All, Some(false), None);
+        let one_with_settings = selection(One, Some(all()), Some(true));
+        assert!(one_with_settings.settings == all() && one_with_settings.accounts);
+        let all_without_settings = selection(All, Some(Vec::new()), None);
         assert_eq!(all_without_settings.consoles, ConsoleScope::All);
-        assert!(!all_without_settings.settings);
+        assert!(all_without_settings.settings.is_empty());
         // `console` is read for `one` alone.
         let none_with_accounts = selection(NoConsoles, None, Some(true));
         assert_eq!(none_with_accounts.consoles, ConsoleScope::None);
-        assert!(!none_with_accounts.settings && none_with_accounts.accounts);
-        assert!(selection(NoConsoles, Some(true), None).settings);
+        assert!(none_with_accounts.settings.is_empty() && none_with_accounts.accounts);
+        assert_eq!(selection(NoConsoles, Some(all()), None).settings, all());
         assert!(request(None, Some(NoConsoles), None, Some(true)).is_ok());
         // Without a console, accounts alone leave the default meaning of the rest.
         let only_accounts = request(None, None, None, Some(true)).unwrap();
         assert_eq!(only_accounts.consoles, ConsoleScope::All);
-        assert!(only_accounts.settings && only_accounts.accounts);
+        assert!(only_accounts.settings == all() && only_accounts.accounts);
+    }
+
+    #[test]
+    fn the_chosen_sections_are_kept_once_each_in_settings_order() {
+        use SettingsSection::{Cleanup, General, Git};
+        let selection =
+            request(None, None, Some(vec![Cleanup, General, Cleanup, Git]), None).unwrap();
+        assert_eq!(selection.settings, [General, Git, Cleanup]);
+    }
+
+    #[test]
+    fn an_export_of_some_sections_writes_only_their_keys() {
+        use SettingsSection::{
+            AgentBehavior, AppBehavior, Cleanup, General, Git, KeyboardShortcuts,
+        };
+        let keys = |sections: Vec<SettingsSection>| {
+            let (state, _dir) = crate::test_support::app_state("config-export-sections");
+            state.store.set_interface_language("de").unwrap();
+            let selection = Selection {
+                consoles: ConsoleScope::None,
+                settings: sections,
+                accounts: true,
+                paths: true,
+            };
+            let document = serde_json::to_value(build(&state.store, &selection).unwrap()).unwrap();
+            let mut keys: Vec<String> = document
+                .get("settings")
+                .and_then(|settings| settings.as_object())
+                .map(|settings| settings.keys().cloned().collect())
+                .unwrap_or_default();
+            keys.sort();
+            keys
+        };
+        assert_eq!(
+            keys(vec![Git]),
+            [
+                "auto_pull_repositories",
+                "default_clone_dir",
+                "git_workflow"
+            ]
+        );
+        assert_eq!(keys(vec![Cleanup]), ["auto_delete_unresumable_archives"]);
+        assert_eq!(keys(vec![General]), ["interface_language"]);
+        assert_eq!(
+            keys(vec![AppBehavior]),
+            [
+                "auto_close_idle_shell_terminals",
+                "resume_sessions_on_start"
+            ]
+        );
+        assert_eq!(
+            keys(vec![AgentBehavior]),
+            [
+                "ask_questions_as_choices",
+                "auto_approve_account_switches",
+                "auto_approve_handoffs",
+                "auto_approve_resume_requests",
+                "auto_approve_session_requests",
+            ]
+        );
+        // The client holds every key of this section, so the daemon's region is an empty object.
+        assert!(keys(vec![KeyboardShortcuts]).is_empty());
+        assert!(keys(Vec::new()).is_empty());
     }
 
     #[test]
@@ -1011,7 +1094,7 @@ mod tests {
         use ExportedConsoles::{None as NoConsoles, One};
         for refused in [
             request(None, Some(NoConsoles), None, None),
-            request(None, Some(NoConsoles), Some(false), Some(false)),
+            request(None, Some(NoConsoles), Some(Vec::new()), Some(false)),
             request(Some("console-1"), Some(NoConsoles), None, Some(false)),
         ] {
             let err = refused.expect_err("nothing to export");
@@ -1031,7 +1114,7 @@ mod tests {
     fn the_regions_of_a_document_follow_the_selection_whatever_the_consoles() {
         let (state, _dir) = crate::test_support::app_state("config-export-regions");
         populated(&state.store);
-        let built = |consoles, settings, accounts| {
+        let built = |consoles, settings: Vec<SettingsSection>, accounts| {
             let selection = Selection {
                 consoles,
                 settings,
@@ -1040,19 +1123,23 @@ mod tests {
             };
             build(&state.store, &selection).unwrap()
         };
-        let none = built(ConsoleScope::None, true, false);
+        let none = built(ConsoleScope::None, SettingsSection::ALL.to_vec(), false);
         assert!(none.consoles.is_empty() && none.settings.is_some() && none.accounts.is_none());
-        let one = built(ConsoleScope::One("console-2".to_string()), true, true);
+        let one = built(
+            ConsoleScope::One("console-2".to_string()),
+            SettingsSection::ALL.to_vec(),
+            true,
+        );
         assert_eq!(one.consoles.len(), 1);
         assert!(one.settings.is_some() && one.accounts.is_some());
-        let accounts_alone = built(ConsoleScope::None, false, true);
+        let accounts_alone = built(ConsoleScope::None, Vec::new(), true);
         assert!(accounts_alone.consoles.is_empty() && accounts_alone.settings.is_none());
         let text = serde_json::to_string(&accounts_alone).unwrap();
         assert!(
             text.contains(r#""accounts":{"#) && text.contains(r#""settings":null"#),
             "{text}"
         );
-        let all = built(ConsoleScope::All, false, false);
+        let all = built(ConsoleScope::All, Vec::new(), false);
         assert_eq!(all.consoles.len(), 3);
         assert!(all.settings.is_none());
         assert!(serde_json::to_value(&all)
@@ -1107,7 +1194,7 @@ mod tests {
     fn exported_accounts(store: &Store, paths: bool) -> DocumentAccounts {
         let selection = Selection {
             consoles: ConsoleScope::None,
-            settings: false,
+            settings: Vec::new(),
             accounts: true,
             paths,
         };
@@ -1311,7 +1398,7 @@ mod tests {
             RequestBody::ExportConfiguration {
                 console: Some("no-such-console".to_string()),
                 consoles: None,
-                include_settings: None,
+                settings_sections: None,
                 include_accounts: None,
                 include_paths: true,
             },
@@ -1327,7 +1414,7 @@ mod tests {
             RequestBody::ExportConfiguration {
                 console: None,
                 consoles: None,
-                include_settings: None,
+                settings_sections: None,
                 include_accounts: None,
                 include_paths: true,
             },

@@ -17,9 +17,10 @@ import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import { ConfigurationFileError } from "../platform";
 import type { Event, GitWorkflowSettings, ClientRequestBody } from "../protocol";
 import { bindingFor, shortcutOverrides } from "../shortcuts/store";
+import { sessionOrderPreference } from "../store";
 import { markdownStyle } from "../viewer/markdown/markdownStyle";
 import { ImportConfigurationDialog } from "./ImportConfigurationDialog";
-import { mountDialog, openTab, press, settingGroupsOf, settingLinesAcrossGroups, settingLinesOf } from "./testSupport";
+import { agentSettingLinesOf, cardTitled, mountDialog, openTab, press, settingGroupsOf, settingLinesAcrossGroups, settingLinesOf } from "./testSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -52,7 +53,11 @@ const consoleCard = (name: string) => Array.from(document.body.querySelectorAll(
 /** The checkbox that includes a region of the file in the import. */
 const regionBox = (label: string) =>
   Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((input) => input.labels?.[0]?.textContent === label)!;
-const settingsBox = () => regionBox("Application settings");
+const SECTIONS = ["General", "App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"];
+/** Checks the Settings, which brings every section the file carries with it. */
+async function checkSettings(): Promise<void> {
+  await act(async () => regionBox("Settings").click());
+}
 const tabNames = () => Array.from(document.body.querySelectorAll("[role=tab]")).map((tab) => tab.textContent);
 /** The lines of the settings cards of the result, by setting name. */
 function resultSettingLines(): ReturnType<typeof settingLinesOf> {
@@ -87,8 +92,8 @@ async function reviewing(options: Parameters<typeof mount>[0] = {}) {
 /** Reviewing with the application settings included, which they are not by default, and their tab open. */
 async function reviewingSettings(options: Parameters<typeof mount>[0] = {}) {
   const mounted = await reviewing(options);
-  await act(async () => settingsBox().click());
-  await openTab("Application settings");
+  await checkSettings();
+  await openTab("Settings");
   return mounted;
 }
 
@@ -278,15 +283,23 @@ it("sends the document unchanged with a resolution for every project that is pla
         { console: 0, project: 2, choice: { kind: "clone" } },
         { console: 1, project: 0, choice: { kind: "clone" } },
       ],
-      apply_settings: false,
+      apply_settings: [],
     },
   ]);
 });
 
-it("applies the application settings only once they are included", async () => {
+it("applies the settings of the sections checked and no other", async () => {
   const mounted = await reviewingSettings();
   await press("Import");
-  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: true });
+  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: ["general", "app_behavior", "git", "agent_behavior", "keyboard_shortcuts", "cleanup"] });
+});
+
+it("sends the sections still checked in Settings order, whichever order the others were unchecked in", async () => {
+  const mounted = await reviewingSettings();
+  for (const label of ["Keyboard shortcuts", "Git", "Agent behavior", "App behavior"]) await act(async () => regionBox(label).click());
+  await press("Import");
+  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: ["general", "cleanup"] });
+  expect(mounted.sent().at(-1)).not.toHaveProperty("apply_clone_dir");
 });
 
 const FOCUS = { code: "KeyK", primary: true, shift: true };
@@ -296,16 +309,16 @@ const FOCUS = { code: "KeyK", primary: true, shift: true };
 const echoing = (settings: Record<string, unknown> = {}) => (body: ClientRequestBody): Promise<Event> => {
   if (body.type !== "import_configuration") return reply(body);
   const document = (body.document as { settings?: Record<string, unknown> }).settings ?? {};
-  const passedThrough = Object.fromEntries(["keyboard_shortcuts", "appearance", "markdown_style", "run_in_background", "show_menu_bar_icon", "keep_awake", "keep_awake_when", "interface_language"].flatMap((field) => (document[field] === undefined || document[field] === null ? [] : [[field, document[field]]])));
+  const passedThrough = Object.fromEntries(["keyboard_shortcuts", "appearance", "markdown_style", "run_in_background", "show_menu_bar_icon", "keep_awake", "keep_awake_when", "interface_language", "session_order"].flatMap((field) => (document[field] === undefined || document[field] === null ? [] : [[field, document[field]]])));
   const applied = { ...MIXED_RESULT.settings_applied!, ...passedThrough, ...settings };
-  return Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: body.apply_settings ? applied : null });
+  return Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: body.apply_settings?.length ? applied : null });
 };
 const QUICK_CREATE = { code: "KeyJ", primary: true, shift: true };
 const withShortcuts = (shortcuts: unknown) => JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, keyboard_shortcuts: shortcuts } });
 
 it("says nothing of keyboard shortcuts when the document carries none", async () => {
   await reviewingSettings();
-  expect(text()).not.toContain("Keyboard shortcuts");
+  expect(settingLines()["Changed shortcuts"]).toBeUndefined();
 });
 
 it("says what the document's keyboard shortcuts would do on this device", async () => {
@@ -322,18 +335,19 @@ it("groups the application settings as the Settings dialog does, each group in t
   onTestFinished(() => shortcutOverrides.set({}));
   await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS }) });
   const groups = settingGroupsOf(document.body.querySelector("[role=tabpanel]")!);
-  expect(groups.map((group) => group.title)).toEqual(["App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"]);
-  expect(groups[0].lines).toEqual(["Resume sessions on start", "Close idle terminals when closing the panel"]);
-  expect(groups[1].lines).toEqual(["Default clone directory", "Automatically pull repositories", "Git workflow"]);
-  expect(groups[2].lines).toEqual([
+  expect(groups.map((group) => group.title)).toEqual(["General", "App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"]);
+  expect(groups[0].lines).toEqual([]);
+  expect(groups[1].lines).toEqual(["Resume sessions on start", "Close idle terminals when closing the panel"]);
+  expect(groups[2].lines).toEqual(["Default clone directory", "Automatically pull repositories", "Git workflow"]);
+  expect(groups[3].lines).toEqual([
     "Automatically approve session requests",
     "Automatically approve resume requests",
     "Automatically approve account switches",
     "Automatically approve handoffs",
     "Ask questions as choices",
   ]);
-  expect(groups[3].lines).toEqual(["Changed shortcuts"]);
-  expect(groups[4].lines).toEqual(["Automatically delete archived sessions whose conversation is gone"]);
+  expect(groups[4].lines).toEqual(["Changed shortcuts"]);
+  expect(groups[5].lines).toEqual(["Automatically delete archived sessions whose conversation is gone"]);
 });
 
 it("lists the App behavior card in the order of the section on a desktop app, the settings this client holds among the daemon's", async () => {
@@ -356,8 +370,8 @@ it("lists the App behavior card in the order of the section on a desktop app, th
     },
   );
   await press("Choose file");
-  await act(async () => settingsBox().click());
-  await openTab("Application settings");
+  await checkSettings();
+  await openTab("Settings");
   const appBehavior = settingGroupsOf(document.body.querySelector("[role=tabpanel]")!).find((group) => group.title === "App behavior");
   expect(appBehavior!.lines).toEqual([
     "Resume sessions on start",
@@ -376,7 +390,7 @@ it("replaces this device's keyboard shortcuts with the document's once the setti
   await press("Import");
   expect(bindingFor("focusMode")).toEqual(FOCUS);
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyN", primary: true, shift: true });
-  await openTab("Application settings");
+  await openTab("Settings");
   const applied = resultSettingLines();
   expect(applied["Changed shortcuts"]).toEqual({ badge: "1 change from the default", note: "1 shortcut in the file could not be applied here and was left out.", values: ["Toggle focus mode: CtrlShiftK"] });
 });
@@ -386,7 +400,7 @@ it("leaves this device's keyboard shortcuts alone unless the settings are includ
   await reviewing({ text: withShortcuts({ focusMode: FOCUS }), reply: echoing() });
   await press("Import");
   expect(bindingFor("focusMode")).not.toEqual(FOCUS);
-  expect(text()).not.toContain("Keyboard shortcuts");
+  expect(text()).not.toContain("Changed shortcuts");
 });
 
 async function importing(shortcuts: unknown, settings?: Record<string, unknown>) {
@@ -403,7 +417,7 @@ it("puts every shortcut back to its default when the document carries an empty s
   expect(text()).not.toContain("0 of them");
   await press("Import");
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyN", primary: true, shift: true });
-  await openTab("Application settings");
+  await openTab("Settings");
   expect(resultSettingLines()["Changed shortcuts"]).toEqual({ badge: "Defaults" });
   expect(text()).not.toContain("0 changes");
 });
@@ -416,7 +430,7 @@ it("leaves this device's keyboard shortcuts alone when the settings could not be
       : reply(body);
   shortcutOverrides.set({ quickCreate: QUICK_CREATE });
   await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS }), reply: failing });
-  await act(async () => settingsBox().click());
+  await checkSettings();
   await press("Import");
   expect(bindingFor("quickCreate")).toEqual(QUICK_CREATE);
   expect(bindingFor("focusMode")).not.toEqual(FOCUS);
@@ -483,7 +497,7 @@ describe("the settings only this client holds", () => {
     // The window is in the file's language now; the rest of the test reads it in English.
     expect(currentLanguage()).toBe("ja");
     act(() => setLanguage("en"));
-    await openTab("Application settings");
+    await openTab("Settings");
     // Not a platform that runs in the background: the value is not taken.
     expect(runInBackground.get()).toBe(false);
     const lines = resultSettingLines();
@@ -492,6 +506,37 @@ describe("the settings only this client holds", () => {
     expect(Object.keys(lines)).not.toContain("Keep running in the background when the window is closed");
     expect(Object.keys(lines).filter((label) => /^Show .* icon$/.test(label))).toEqual([]);
     expect(showMenuBarIcon.get()).toBe(true);
+  });
+
+  describe("the sorting", () => {
+    const restoreOrder = () => onTestFinished(() => sessionOrderPreference.set({ sessions: "status", activeProjects: "status", inactiveProjects: "name" }));
+
+    it("is reviewed as a setting of several items, listing only the items that would change", async () => {
+      restoreOrder();
+      await reviewingSettings({ text: carrying({ session_order: { sessions: "started", active_projects: "status", inactive_projects: "used" } }) });
+      expect(settingLines()["Sorting"]).toEqual({ badge: "Set to the file's", values: ["Sessions: Recently started (now Status)", "Inactive projects: Recently used (now Name)"] });
+    });
+
+    it("says nothing changes where the file's order is this client's", async () => {
+      restoreOrder();
+      await reviewingSettings({ text: carrying({ session_order: { sessions: "status", inactive_projects: "name" } }) });
+      expect(settingLines()["Sorting"]).toEqual({ badge: "No change" });
+    });
+
+    it("is not listed where the file carries no part this client knows", async () => {
+      restoreOrder();
+      await reviewingSettings({ text: carrying({ session_order: { sessions: "oldest" } }) });
+      expect(settingLines()["Sorting"]).toBeUndefined();
+    });
+
+    it("is applied part by part from what the daemon says it applied, and told in the result", async () => {
+      restoreOrder();
+      await reviewingSettings({ text: carrying({ session_order: { sessions: "started", active_projects: "used", inactive_projects: "oldest" } }), reply: echoing() });
+      await press("Import");
+      expect(sessionOrderPreference.get()).toEqual({ sessions: "started", activeProjects: "used", inactiveProjects: "name" });
+      await openTab("Settings");
+      expect(resultSettingLines()["Sorting"]).toEqual({ badge: "Matches the file", values: ["Sessions: Recently started", "Active projects: Recently used"] });
+    });
   });
 
   it("take the background running where the platform has it", async () => {
@@ -504,12 +549,12 @@ describe("the settings only this client holds", () => {
       { backgroundRun: { set: vi.fn(async () => {}) } },
     );
     await press("Choose file");
-    await act(async () => settingsBox().click());
-    await openTab("Application settings");
+    await checkSettings();
+    await openTab("Settings");
     expect(settingLines()["Keep running in the background when the window is closed"]).toEqual({ badge: "Set to the file's", note: "On (now Off)" });
     await press("Import");
     act(() => setLanguage("en"));
-    await openTab("Application settings");
+    await openTab("Settings");
     expect(runInBackground.get()).toBe(true);
     expect(resultSettingLines()["Keep running in the background when the window is closed"]).toEqual({ badge: "On" });
   });
@@ -525,13 +570,13 @@ describe("the settings only this client holds", () => {
       { statusItem },
     );
     await press("Choose file");
-    await act(async () => settingsBox().click());
-    await openTab("Application settings");
+    await checkSettings();
+    await openTab("Settings");
     // The test host is a Windows one, which names the icon as the notification area's.
     expect(settingLines()["Show notification area icon"]).toEqual({ badge: "Set to the file's", note: "Off (now On)" });
     await press("Import");
     act(() => setLanguage("en"));
-    await openTab("Application settings");
+    await openTab("Settings");
     expect(showMenuBarIcon.get()).toBe(false);
     expect(resultSettingLines()["Show notification area icon"]).toEqual({ badge: "Off" });
   });
@@ -546,13 +591,13 @@ describe("the settings only this client holds", () => {
       { keepAwake: { set: vi.fn(async () => {}) } },
     );
     await press("Choose file");
-    await act(async () => settingsBox().click());
-    await openTab("Application settings");
+    await checkSettings();
+    await openTab("Settings");
     expect(settingLines()["Prevent sleep"]).toEqual({ badge: "Set to the file's", note: "On (now Off)" });
     expect(settingLines()["When to prevent sleep"]).toEqual({ badge: "Set to the file's", note: "Always (now While sessions work)" });
     await press("Import");
     act(() => setLanguage("en"));
-    await openTab("Application settings");
+    await openTab("Settings");
     expect(keepAwake.get()).toBe(true);
     expect(keepAwakeWhen.get()).toBe("always");
     expect(resultSettingLines()["Prevent sleep"]).toEqual({ badge: "On" });
@@ -601,8 +646,8 @@ describe("the default clone directory", () => {
   it("is applied by default, without a word of it in the request", async () => {
     const mounted = await reviewingSettings();
     await press("Import");
-    await openTab("Application settings");
-    expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: true });
+    await openTab("Settings");
+    expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: expect.arrayContaining(["git"]) });
     expect(mounted.sent().at(-1)).not.toHaveProperty("apply_clone_dir");
     expect(resultSettingLines()["Default clone directory"]).toEqual({ badge: "Matches the file", note: "/Users/ana/Code/clones" });
   });
@@ -613,7 +658,7 @@ describe("the default clone directory", () => {
     // Its own sentence says what is kept and names the file's, not the change.
     expect(settingLines()["Default clone directory"]).toEqual({ badge: "No change", note: "/Users/dev/Projects is kept instead of the file's /Users/ana/Code/clones.Use the file's default clone directory" });
     await press("Import");
-    expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: true, apply_clone_dir: false });
+    expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: expect.arrayContaining(["git"]), apply_clone_dir: false });
   });
 
   it("is not offered a choice where it is this machine's own, nor when the file carries none", async () => {
@@ -661,12 +706,12 @@ describe("the default clone directory", () => {
       // The settings region is unchecked: nothing of the file's directory applies.
       expect(fields("Search API")["Placed in"]).toBe("/Users/dev/Projects/search-api");
       expect(fields("Dotfiles")["Clone into"]).toBe("/Users/dev/Projects/dotfiles");
-      await act(async () => settingsBox().click());
+      await checkSettings();
       // Taking the file's directory: nothing is under it for Search API, which is then left out, and Dotfiles, which
       // the user never touched, follows the file's preselection and is placed there.
       expect(fields("Search API")["Placed in"]).toBeUndefined();
       expect(fields("Dotfiles")["Placed in"]).toBe("/Users/ana/Code/clones/dotfiles");
-      await openTab("Application settings");
+      await openTab("Settings");
       await act(async () => cloneBox()!.click());
       await openTab("Consoles and projects");
       expect(fields("Search API")["Placed in"]).toBe("/Users/dev/Projects/search-api");
@@ -675,12 +720,31 @@ describe("the default clone directory", () => {
 
     it("send the choices as they stand under the directory the import takes", async () => {
       const mounted = await reviewing({ reply: inspecting });
-      await act(async () => settingsBox().click());
+      await checkSettings();
       await press("Import");
       const { resolutions } = mounted.sent().at(-1) as { resolutions: { console: number; project: number; choice: { kind: string } }[] };
       const dotfiles = resolutions.find((r) => r.console === 1 && r.project === 0);
       expect(dotfiles?.choice.kind).toBe("default_clone_dir");
       expect(resolutions.find((r) => r.console === 0 && r.project === 1)).toBeUndefined();
+    });
+
+    it("go back to this machine's when the Git section is unchecked, and the request never refuses the directory then", async () => {
+      const mounted = await reviewing({ reply: inspecting });
+      await checkSettings();
+      await openTab("Settings");
+      await act(async () => regionBox("Git").click());
+      await openTab("Consoles and projects");
+      expect(fields("Search API")["Placed in"]).toBe("/Users/dev/Projects/search-api");
+      expect(fields("Dotfiles")["Clone into"]).toBe("/Users/dev/Projects/dotfiles");
+      // The box to keep this machine's own directory is unchecked while the section is on; the section off after it leaves
+      // nothing for the box to refuse.
+      await openTab("Settings");
+      await act(async () => regionBox("Git").click());
+      await act(async () => cloneBox()!.click());
+      await act(async () => regionBox("Git").click());
+      await press("Import");
+      expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: expect.not.arrayContaining(["git"]) });
+      expect(mounted.sent().at(-1)).not.toHaveProperty("apply_clone_dir");
     });
   });
 
@@ -691,16 +755,37 @@ describe("the default clone directory", () => {
   });
 });
 
-it("offers the regions of the file as checkboxes above the tabs, the settings unchecked, and a tab only for a checked region", async () => {
+it("offers the parts of the file as checkboxes above the tabs, the Settings unchecked, and a tab only for a checked part", async () => {
   await reviewing();
   expect(regionBox("Consoles and projects").checked).toBe(true);
-  expect(settingsBox().checked).toBe(false);
-  // One checked region is one panel, without a tab bar.
-  expect(tabNames()).toEqual([]);
-  await act(async () => settingsBox().click());
-  expect(tabNames()).toEqual(["Consoles and projects", "Application settings"]);
+  expect(Array.from(document.body.querySelectorAll("input[type=checkbox]")).map((box) => (box as HTMLInputElement).labels?.[0]?.textContent)).toEqual([
+    "Consoles and projects", "Settings",
+  ]);
+  expect(regionBox("Settings").checked).toBe(false);
+  // One checked part is one tab, the bar kept.
+  expect(tabNames()).toEqual(["Consoles and projects"]);
+  // Checking the Settings brings their tab with every carried section checked, a card and a checkbox for each.
+  await checkSettings();
+  expect(tabNames()).toEqual(["Consoles and projects", "Settings"]);
+  await openTab("Settings");
+  expect(Array.from(document.body.querySelectorAll("[role=tabpanel] h3")).map((heading) => heading.textContent)).toEqual(SECTIONS);
+  for (const label of SECTIONS) expect(regionBox(label).checked, label).toBe(true);
+  // An unchecked section collapses to its title, marked as left out, and can be checked again.
+  await act(async () => regionBox("Cleanup").click());
+  const cleanup = () => Array.from(document.body.querySelectorAll("section")).find((card) => card.querySelector("h3")?.textContent === "Cleanup")!;
+  expect(cleanup().querySelector("ul")).toBeNull();
+  expect(cleanup().textContent).toContain("Left out");
+  await act(async () => regionBox("Cleanup").click());
+  expect(cleanup().querySelector("ul")).not.toBeNull();
+  expect(cleanup().textContent).not.toContain("Left out");
+  // Unchecking the Settings drops their tab; the sections keep their choice for when it is checked again.
+  await act(async () => regionBox("Cleanup").click());
+  await act(async () => regionBox("Settings").click());
+  expect(tabNames()).toEqual(["Consoles and projects"]);
+  await checkSettings();
+  expect(regionBox("Cleanup").checked).toBe(false);
   await act(async () => regionBox("Consoles and projects").click());
-  expect(tabNames()).toEqual([]);
+  expect(tabNames()).toEqual(["Settings"]);
   expect(text()).toContain("Automatically pull repositories");
   expect(text()).not.toContain("Set every project that offers it to");
   expect(document.body.textContent).not.toContain("Also apply the application settings");
@@ -724,9 +809,9 @@ it("starts an accounts region that holds no agent and no account unchecked like 
 
   // What a version 1 file with settings and no accounts is upgraded to: the Agent accounts settings alone.
   const mounted = await reviewing({ reply: inspecting({ agents_to_add: [], agents: [], agent_settings }) });
-  expect(regionBox("Accounts").checked).toBe(false);
+  expect(regionBox("Agent accounts").checked).toBe(false);
   expect(regionBox("Consoles and projects").checked).toBe(true);
-  expect(tabNames()).toEqual([]);
+  expect(tabNames()).toEqual(["Consoles and projects"]);
   await press("Import");
   expect(mounted.sent().at(-1)).not.toHaveProperty("apply_accounts");
 });
@@ -735,21 +820,50 @@ describe("the accounts region on opening", () => {
   const listed = { agent: "claude" as const, default_name: null, default_name_applies: false, default_disabled: null, default_disabled_applies: false, accounts: [] };
   const opened = async (accounts: NonNullable<typeof REVIEW.accounts>) => {
     await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve<Event>({ type: "configuration_inspected", ...REVIEW, accounts }) : reply(body)) });
-    return regionBox("Accounts").checked;
+    return regionBox("Agent accounts").checked;
   };
   const rows = [{ name: "Work", directory: "~/.work", foreign_directory: false, proposed_directory: "/Users/dev/.work", status: "new" as const, in_use_by: null, error: null, disabled: false }];
+
+  const switches = {
+    auto_select_account: true,
+    current_auto_select_account: false,
+    auto_switch_on_usage_limit: true,
+    current_auto_switch_on_usage_limit: false,
+    auto_start_quota_windows: true,
+    current_auto_start_quota_windows: false,
+    provider_settings: {},
+    current_provider_settings: {},
+    agent_tags: {},
+    current_agent_tags: {},
+  };
 
   it.each([
     ["an agent to add", { agents_to_add: ["codex" as const], agents: [], agent_settings: null }],
     ["an account", { agents_to_add: [], agents: [{ ...listed, accounts: rows }], agent_settings: null }],
     ["a default account's name that applies", { agents_to_add: [], agents: [{ ...listed, default_name: "Main", default_name_applies: true }], agent_settings: null }],
     ["a default account's switch that applies", { agents_to_add: [], agents: [{ ...listed, default_disabled: true, default_disabled_applies: true }], agent_settings: null }],
+    ["an agent's provider settings", { agents_to_add: [], agents: [], agent_settings: { ...switches, provider_settings: { codex: { claude_compatibility: true } } } }],
+    ["an agent's tags", { agents_to_add: [], agents: [], agent_settings: { ...switches, agent_tags: { codex: ["review"] } } }],
   ])("starts checked when the file brings %s", async (_name, accounts) => {
     expect(await opened(accounts)).toBe(true);
   });
 
   it("starts unchecked when the agents it lists bring nothing", async () => {
     expect(await opened({ agents_to_add: [], agents: [listed], agent_settings: null })).toBe(false);
+  });
+
+  it("starts unchecked when the file brings only the three global switches", async () => {
+    expect(await opened({ agents_to_add: [], agents: [], agent_settings: switches })).toBe(false);
+  });
+
+  it.each([
+    ["provider settings of an agent this daemon does not serve", { provider_settings: { unknown_agent: { claude_compatibility: true } } }],
+    ["a setting the provider does not have", { provider_settings: { codex: { not_a_setting: true } } }],
+    ["a value the setting does not take", { provider_settings: { codex: { claude_compatibility: "on" } } }],
+    ["tags of an agent this daemon does not serve", { agent_tags: { unknown_agent: ["review"] } }],
+  ])("starts unchecked when the file brings only %s", async (_name, settings) => {
+    const agent_settings = { ...switches, ...settings } as NonNullable<NonNullable<typeof REVIEW.accounts>["agent_settings"]>;
+    expect(await opened({ agents_to_add: [], agents: [], agent_settings })).toBe(false);
   });
 
   it("starts unchecked when the name or switch it lists does not apply", async () => {
@@ -767,23 +881,48 @@ it("keeps Import unavailable while no region is checked", async () => {
   expect(importButton().disabled).toBe(false);
 });
 
-it("shows no checkbox for a file that carries one region, and imports that region", async () => {
-  const only = { ...REVIEW, consoles: [], accounts: null };
+it("shows no checkbox for a file that carries one region, only its tab, and imports that region", async () => {
+  const only = { ...REVIEW, consoles: [], accounts: null, settings_sections: ["git" as const] };
   const mounted = await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...only }) : reply(body)) });
-  // No region to check: the only checkbox is the choice about the default clone directory.
-  expect(Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]"), (input) => input.labels?.[0]?.textContent)).toEqual(["Use the file's default clone directory"]);
+  // No region to check: the checkboxes are the Git section's own and the choice about the default clone directory.
+  expect(tabNames()).toEqual(["Settings"]);
+  expect(Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]"), (input) => input.labels?.[0]?.textContent)).toEqual(["Git", "Use the file's default clone directory"]);
   expect(text()).toContain("Automatically pull repositories");
   await press("Import");
-  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: true, resolutions: [] });
+  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: ["git"], resolutions: [] });
   expect(mounted.sent().at(-1)).not.toHaveProperty("apply_consoles");
+});
+
+it("keeps Import unavailable while the Settings are the only thing chosen and every section is unchecked", async () => {
+  const mounted = await reviewing();
+  const importButton = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Import")!;
+  await act(async () => regionBox("Consoles and projects").click());
+  await checkSettings();
+  await openTab("Settings");
+  expect(importButton().disabled).toBe(false);
+  for (const label of SECTIONS) await act(async () => regionBox(label).click());
+  expect(importButton().disabled).toBe(true);
+  await act(async () => regionBox("Git").click());
+  expect(importButton().disabled).toBe(false);
+  await press("Import");
+  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: ["git"] });
+});
+
+it("sends no sections while the Settings are unchecked, whatever the sections' boxes say", async () => {
+  const mounted = await reviewingSettings();
+  await act(async () => regionBox("Cleanup").click());
+  await openTab("Consoles and projects");
+  await act(async () => regionBox("Settings").click());
+  await press("Import");
+  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: [] });
 });
 
 it("imports without the consoles when their region is unchecked: none is asked for and no resolution is sent", async () => {
   const mounted = await reviewing();
-  await act(async () => settingsBox().click());
+  await checkSettings();
   await act(async () => regionBox("Consoles and projects").click());
   await press("Import");
-  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", resolutions: [], apply_settings: true, apply_consoles: false });
+  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", resolutions: [], apply_settings: expect.arrayContaining(["git"]), apply_consoles: false });
 });
 
 it("notes what applying each application setting would change with a badge, and what follows only for one it turns on", async () => {
@@ -867,6 +1006,7 @@ describe("the settings of the Agent accounts section", () => {
         type: "configuration_inspected" as const,
         ...REVIEW,
         settings: null,
+        settings_sections: [],
         consoles: [],
         accounts: {
           agents_to_add: [],
@@ -882,6 +1022,7 @@ describe("the settings of the Agent accounts section", () => {
       })
       : reply(body);
   const accountSettingLines = () => settingLinesOf(document.body.querySelector("[role=tabpanel] ul, section ul")!);
+  const agentLines = (agent: string) => agentSettingLinesOf(cardTitled(document.body, agent)!);
 
   it("note what applying each would change, in the accounts part", async () => {
     await reviewing({ reply: withAgentSettings({ auto_select_account: true, auto_start_quota_windows: true, current_auto_start_quota_windows: false }) });
@@ -892,7 +1033,7 @@ describe("the settings of the Agent accounts section", () => {
     expect(lines["Automatically switch accounts at the usage limit"]).toEqual({ badge: "No change" });
   });
 
-  it("list the agents applying the provider settings and tags would change, each with what it is now", async () => {
+  it("list, in each agent's card, what applying its provider settings and tags would change, with what it is now", async () => {
     await reviewing({
       reply: withAgentSettings({
         provider_settings: { codex: { claude_compatibility: false }, grok: { claude_compatibility: true } },
@@ -901,9 +1042,15 @@ describe("the settings of the Agent accounts section", () => {
         current_agent_tags: { codex: [], grok: ["old"], claude: ["same"] },
       }),
     });
-    const lines = accountSettingLines();
-    expect(lines["Claude compatibility"]).toEqual({ badge: "Set to the file's", values: ["Codex: Off (now On)"] });
-    expect(lines["Agent tags"]).toEqual({ badge: "Set to the file's", values: ["Codex: review, ci (now No tags)", "Grok Build: No tags (now old)"] });
+    const lines = agentLines("Codex");
+    expect(lines["Claude compatibility"]).toEqual({ badge: "Set to the file's", values: ["Off (now On)"] });
+    expect(lines["Tags"]).toEqual({ badge: "Set to the file's", values: ["review, ci (now No tags)"] });
+    const grok = agentLines("Grok Build");
+    expect(grok["Claude compatibility"]).toEqual({ badge: "No change" });
+    expect(grok["Tags"]).toEqual({ badge: "Set to the file's", values: ["No tags (now old)"] });
+    expect(agentLines("Claude Code")["Tags"]).toEqual({ badge: "No change" });
+    // Nothing of an agent stands in the card of the switches.
+    expect(Object.keys(accountSettingLines())).not.toContain("Tags");
   });
 
   it("list nothing when they are the same", async () => {
@@ -915,9 +1062,9 @@ describe("the settings of the Agent accounts section", () => {
         current_agent_tags: { codex: ["review"] },
       }),
     });
-    const lines = accountSettingLines();
+    const lines = agentLines("Codex");
     expect(lines["Claude compatibility"]).toEqual({ badge: "No change" });
-    expect(lines["Agent tags"]).toEqual({ badge: "No change" });
+    expect(lines["Tags"]).toEqual({ badge: "No change" });
   });
 });
 
@@ -985,7 +1132,7 @@ it("tells each project's result in a row of its console's card, writes a failure
   expect(document.body.textContent).not.toContain("Accounts that fell back");
   expect(await fallbackSentences(resultCard("Work laptop").querySelector("h3")!.parentElement!)).toContain("The Claude Code account Work is not set up here");
   expect(await fallbackSentences(row("Search API"))).toContain("The Codex account Personal is not set up here");
-  await openTab("Application settings");
+  await openTab("Settings");
   expect(resultSettingLines()["Automatically pull repositories"]).toEqual({ badge: "On" });
 });
 

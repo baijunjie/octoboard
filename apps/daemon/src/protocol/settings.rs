@@ -46,7 +46,8 @@ pub struct Settings {
     /// The tag of the language the user last picked for the interface, one of the tags the
     /// interface offers; `null` until a client reports one. The user's language, not a client's:
     /// the clients keep their own choice locally, and this holds the one most recently reported.
-    /// Not carried by an export; not visible to agents.
+    /// Carried by a configuration export in its General section, where the exporting client
+    /// replaces it with the language it shows.
     pub interface_language: Option<String>,
     /// Whether a new session whose account was left out runs on the account of its agent whose
     /// weekly quota resets soonest and still has some left. Off unless the user turned it on.
@@ -75,7 +76,7 @@ pub struct Settings {
     pub accounts: Vec<Account>,
     /// The user's order of each agent's accounts, by agent wire name, which clients list them in
     /// and automatic account selection takes them in; null entries represent the default account.
-    /// Missing accounts are appended and stale IDs are ignored. Kept local to this machine.
+    /// Missing accounts are appended and stale IDs are ignored.
     #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string | null>>>"))]
     pub account_order: std::collections::BTreeMap<String, Vec<Option<String>>>,
     /// The agents the user has added, in the order the user set; a newly added agent goes last. Only these are offered for a
@@ -103,11 +104,11 @@ pub struct Settings {
     #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
     pub agent_tags: std::collections::BTreeMap<String, Vec<String>>,
     /// The name the user gave an agent's default account, by agent; an agent without an entry shows
-    /// the client's own word for it. Not an account row and not carried by an export.
+    /// the client's own word for it. Not an account row.
     #[cfg_attr(test, ts(type = "Partial<Record<Agent, string>>"))]
     pub default_account_names: std::collections::BTreeMap<String, String>,
     /// The agents, by wire name, whose default account the user turned off for new work, as
-    /// `Account::disabled` does for an account row. Not carried by an export.
+    /// `Account::disabled` does for an account row.
     #[cfg_attr(test, ts(type = "Array<Agent>"))]
     pub disabled_default_accounts: std::collections::BTreeSet<String>,
     /// The application-wide git workflow settings; a project may override each item (see

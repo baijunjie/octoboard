@@ -1,30 +1,11 @@
 import React from "react";
 
 import { OptionSelect } from "../components/form/OptionSelect";
-import type { Translate } from "../i18n/catalog";
 import { useT } from "../i18n/react";
-import {
-  ACTIVE_PROJECT_SORTS,
-  type ActiveProjectSort,
-  INACTIVE_PROJECT_SORTS,
-  type InactiveProjectSort,
-  type SessionOrder,
-  SESSION_SORTS,
-  type SessionSort,
-} from "../sessions/order";
+import { ACTIVE_PROJECT_SORTS, INACTIVE_PROJECT_SORTS, type SessionOrder, SESSION_SORTS } from "../sessions/order";
+import { SESSION_ORDER_WORDS, sortLabel, type SortKey } from "../sessions/orderWording";
 import { sessionOrderPreference } from "../store";
 import { SettingRow } from "./SettingRow";
-
-type SortKey = SessionSort | ActiveProjectSort | InactiveProjectSort;
-
-function sortLabel(t: Translate, sort: SortKey): string {
-  switch (sort) {
-    case "status": return t("settings.sort.option.status");
-    case "started": return t("settings.sort.option.started");
-    case "name": return t("settings.sort.option.name");
-    case "used": return t("settings.sort.option.used");
-  }
-}
 
 /** One part of the session order, as a row of its choices (`sorts`, in the order they are offered). */
 function SortRow<S extends SortKey>({ label, description, sorts, value, onChange }: {
@@ -51,9 +32,9 @@ export function SessionOrderSettings(): React.ReactElement {
   const choose = <K extends keyof SessionOrder>(part: K) => (sort: SessionOrder[K]) => sessionOrderPreference.set({ ...sessionOrderPreference.get(), [part]: sort });
   return (
     <>
-      <SortRow label={t("settings.sort.sessions.label")} description={t("settings.sort.sessions.description")} sorts={SESSION_SORTS} value={order.sessions} onChange={choose("sessions")} />
-      <SortRow label={t("settings.sort.activeProjects.label")} description={t("settings.sort.activeProjects.description")} sorts={ACTIVE_PROJECT_SORTS} value={order.activeProjects} onChange={choose("activeProjects")} />
-      <SortRow label={t("settings.sort.inactiveProjects.label")} description={t("settings.sort.inactiveProjects.description")} sorts={INACTIVE_PROJECT_SORTS} value={order.inactiveProjects} onChange={choose("inactiveProjects")} />
+      <SortRow label={t(SESSION_ORDER_WORDS.sessions.label)} description={t(SESSION_ORDER_WORDS.sessions.description)} sorts={SESSION_SORTS} value={order.sessions} onChange={choose("sessions")} />
+      <SortRow label={t(SESSION_ORDER_WORDS.activeProjects.label)} description={t(SESSION_ORDER_WORDS.activeProjects.description)} sorts={ACTIVE_PROJECT_SORTS} value={order.activeProjects} onChange={choose("activeProjects")} />
+      <SortRow label={t(SESSION_ORDER_WORDS.inactiveProjects.label)} description={t(SESSION_ORDER_WORDS.inactiveProjects.description)} sorts={INACTIVE_PROJECT_SORTS} value={order.inactiveProjects} onChange={choose("inactiveProjects")} />
     </>
   );
 }

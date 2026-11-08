@@ -3,8 +3,8 @@
 Octoboard can lift its configuration out of one machine and build it again on another. What travels is a **configuration
 document**, made of up to three **regions**, each chosen on its own: the **consoles and projects** (one console, every
 console, or none), the **accounts** — the structure of the agents' accounts and the settings that apply to them, never
-anything to log one in with — and the **application settings**. Which settings travel in which region is in
-`docs/product/settings-in-a-configuration.md`. Nothing of what a machine is doing goes with it, so what arrives on the other side is the
+anything to log one in with — and the **application settings**, whose sections of Settings are chosen one by one.
+Which settings travel in which region is in `docs/product/settings-in-a-configuration.md`. Nothing of what a machine is doing goes with it, so what arrives on the other side is the
 layout of consoles, projects and accounts, with its accounts still to be logged in and its directories still to be
 trusted.
 
@@ -29,15 +29,17 @@ A document holds the regions its export chose, and has the same shape whichever 
 
 - **consoles and projects** — one console, every console, or none, each with its projects; a document without them has
   an empty list of consoles;
-- **application settings** — present exactly when they were chosen, whichever consoles were;
+- **application settings** — present exactly when at least one of their sections was chosen, whichever consoles were,
+  and then holding the settings of the sections chosen alone (see "Which settings travel" in
+  `docs/product/settings-in-a-configuration.md`);
 - **accounts** — present exactly when they were chosen, and then always every account, whichever consoles were.
 
 No region says anything about another: a document that carries the application settings is not therefore one of every
 console, and one that carries a single console may carry the settings and the accounts too. An export that would hold
-nothing — no console, no application settings and no accounts — is refused (`export_empty`). A request to the daemon
-that does not say which consoles exports the one it names, or every console when it names none; one that does not say
-whether the application settings are included includes them exactly when every console is exported; and one that does
-not say whether the accounts are included leaves them out.
+nothing — no console, no section of the application settings and no accounts — is refused (`export_empty`). A request
+to the daemon that does not say which consoles exports the one it names, or every console when it names none; one that
+does not say which sections of the application settings are included includes every section exactly when every
+console is exported, and none otherwise; and one that does not say whether the accounts are included leaves them out.
 
 Within a document the consoles stand in the order they were created and each console's projects by name, so the same
 configuration exports the same way every time. Every project of a console travels, whether or not its directory is a
@@ -96,8 +98,8 @@ document never carries one: `https://user:token@example.com/r.git` is written `h
   (empty for a path with none, such as `/`), and its remote URL is kept only when, without its credential, it may be
   cloned from (see "What may be cloned from" below); any other remote URL, such as a local path or a `file://` URL, is
   left out. Such a document holds no path of the exporting machine but, when it carries the accounts, an account
-  directory outside the home directory, and, when it carries the application settings, a default clone directory
-  outside it.
+  directory outside the home directory, and, when it carries the Git section of the application settings, a default
+  clone directory outside it.
 
 ### How an account reference travels
 
@@ -203,8 +205,8 @@ anything; the refusal names the versions it reads. Upgrading a version 1 documen
   machine's own as they are.
 
 Upgrading a version 2 document drops its application settings' setting for ordering the sidebar by status, which an
-import no longer reads: the order of sessions and projects is chosen in each client and is in no document (see
-"Choosing the sort" in `docs/product/order-of-projects-and-sessions.md`).
+import no longer reads: the order of sessions and projects travels instead as the Sorting of the General section (see
+"The application settings an export carries" in `docs/product/settings-in-a-configuration.md`).
 
 An export always writes an entry for every agent in `accounts`, `launch` and `project_session_launch`. An import reads
 an agent's entry that is left out as unset: a console's account is then the agent's default account, a project's
@@ -222,9 +224,10 @@ for diagnosing a document that misbehaves: an import never reads it and it has n
 
 An import is two steps. **Inspecting** reads a document and answers what importing it would meet on the daemon's host;
 it changes nothing and runs no `git`. **Applying** takes the same document, together with which of its regions to
-import, the choice made for each project and each account, and whether to keep the host's own default clone directory,
-and creates. The consoles and projects are imported unless the import is told to leave them out; the accounts, with the
-agent account settings, and the application settings only when it is asked for them.
+import, which sections of its application settings and which agents of its accounts, the choice made for each project
+and each account, and whether to keep the host's own default clone directory, and creates. The consoles and projects
+are imported unless the import is told to leave them out; the accounts, with the agent account settings, and each
+section of the application settings only when it is asked for them.
 The document is untrusted input: every path and URL in it is data the daemon's host checks, and nothing in it is acted
 on as it stands.
 
@@ -318,6 +321,14 @@ apply it: only when this machine's default account of that agent has no name of 
 nor "Default" and is no account's of that agent, the ones the import would create included; and, where the document
 says whether the default account is turned off, what it says and whether that differs from this machine's.
 
+An import of the accounts can be limited to some of the document's agents; without that it takes every agent the
+document carries something for — an entry of accounts, a place among the added agents, or provider settings or tags.
+Of an agent left out, nothing is applied: it is not appended to the added agents, its default account's name and
+turned-off choice are not applied, none of its accounts is created or used, and its provider settings and tags are not
+applied; the three switches of the agent account settings are applied whichever agents are taken. Naming an agent the
+document carries nothing for is refused (`import_agent_missing`, naming the agent). The steps below then run for the
+agents taken alone, and the progress and the result report only what they applied.
+
 Applying the accounts comes **before any console is created**, and nothing of it is undone:
 
 1. Every agent of the document's added agents that this machine has not added is appended to its list, in the
@@ -349,7 +360,7 @@ to the agent whose setting the reference sits in, matched **ignoring letter case
 unique within an agent in the first place (see "Adding, editing and removing an account" in
 `docs/product/agent-accounts.md`). When the accounts are imported too, they are created first, so a reference to an
 account the import creates binds to it, whichever directory it was given, and falls back only when that account was left
-out or failed. A reference that matches no account falls back to that agent's **default account**, pinned rather than
+out or failed, or belongs to an agent the import left out — unless an account of that name exists on the host already. A reference that matches no account falls back to that agent's **default account**, pinned rather than
 left inheriting, and every such fallback is listed one by one: the inspection says which references would fall back,
 the result of an import which ones did. Since no account the import would create exists yet when it inspects, the
 inspection lists the references to them as well; the import review tells them apart by what is being imported (see
@@ -358,13 +369,13 @@ accounts region holds no named reference (see "How an account reference travels"
 
 ### What applying does
 
-Applying goes region by region: first, when the application settings are asked for, the document's default clone
-directory, unless the import is told to keep the host's own, so that the projects placed under it follow the choice
+Applying goes region by region: first, when the Git section of the application settings is asked for, the document's
+default clone directory, unless the import is told to keep the host's own, so that the projects placed under it follow the choice
 (see "The default clone directory on import" in `docs/product/settings-in-a-configuration.md`); then the accounts and
 the agent account settings, when they are asked for, so that the consoles' and projects' references can bind to the
 accounts (see "Importing accounts" above); then the consoles and projects, unless the import is told to leave them out,
 in which case no console or project is created and no choice for a project is read; then the rest of the application
-settings, when they are asked for (see "Application settings are left alone unless they are asked for" in
+settings of the sections asked for (see "Application settings are left alone unless they are asked for" in
 `docs/product/settings-in-a-configuration.md`).
 
 **An import always creates.** Every console of the document becomes a new console, whether or not one of the same name
@@ -399,7 +410,9 @@ Refused before anything at all is created:
 - a choice for an account that cannot be right: it names an account the document does not have, it names one account
   twice, it gives both another directory and leaving the account out, or neither, or the directory it gives is neither
   absolute nor starts with `~/`;
-- a request to apply application settings, or to create accounts, that a document does not carry;
+- a request to apply a section of the application settings that a document does not carry
+  (`import_settings_missing`, naming the section), to create accounts it does not carry (`import_accounts_missing`), or
+  to import the accounts of an agent it carries nothing for (`import_agent_missing`, naming the agent);
 - anything creating a console by hand would refuse of any console in the document — an avatar that is not an image
   (`icon_not_an_image`), or one larger than 256 KiB (`icon_too_large`; see "Avatar" in `docs/product/consoles.md`).
   Since a document can carry several consoles, the refusal names the console whose avatar it is (the daemon gives its
@@ -423,10 +436,10 @@ exist and have already appeared:
   directory written before them stays written, and the result says so.
 
 The result says, for every console and every project of the document when the consoles were imported, whether it was
-created, left out for want of a choice, failed and why, or never attempted; and for every account of the document when
-the accounts were, whether it was created, already existed, was left out or failed and why, which agents were added,
-which default accounts were named and which were turned off or on, and what came of the agent account settings — so the
-outcome never has to be pieced together from what appeared in the window.
+created, left out for want of a choice, failed and why, or never attempted; and, when the accounts were imported, for
+every account of the agents taken whether it was created, already existed, was left out or failed and why, which
+agents were added, which default accounts were named and which were turned off or on, and what came of the agent
+account settings — so the outcome never has to be pieced together from what appeared in the window.
 
 ### How long an import takes
 
@@ -442,9 +455,9 @@ An import request may name itself with a token of the client's choosing (`import
 reports where each of its items stands while it runs, broadcasting `configuration_import_progress` events that carry the
 token, to every client; a client keeps those with its own token. An import that names none is reported on by no event.
 
-- **The items** are the default clone directory when the import writes it, each account the import handles, the agent
-  account settings when the accounts imported carry them, each console, each project it places, and the rest of the
-  application settings when they are applied. A project left out is not one, nor an account left out — but an account
+- **The items** are the default clone directory when the import writes it, each account the import handles — of the
+  agents taken alone —, the agent account settings when the accounts imported carry them, each console, each project
+  it places, and the rest of the application settings, of every section applied at once, when they are applied. A project left out is not one, nor an account left out — but an account
   that already exists is, whatever was chosen for it, since it is used as it is.
 - **Once nothing can be refused any more**, every item is reported waiting, in the order the import handles them: the
   default clone directory, the accounts, the agent account settings, then each console followed by its projects, then

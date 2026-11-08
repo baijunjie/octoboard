@@ -125,7 +125,7 @@ such requests approved automatically, in which case the call does not wait; for 
 An agent can neither read nor change any of the four settings through the settings tools (see "Application settings:
 `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), so a session cannot approve its own
 requests. Besides Settings, the only other way any of them changes is an import of a configuration document that
-carries the application settings, when the user asks to apply them, whose review says beforehand when the document
+carries the Agent behavior section, when the user asks to apply that section, whose review says beforehand when the document
 would turn one on (see "The application settings an export carries" in
 `docs/product/settings-in-a-configuration.md`).
 

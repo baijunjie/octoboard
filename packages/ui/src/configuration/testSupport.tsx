@@ -28,7 +28,6 @@ export function documentSettings(carried: Partial<DocumentSettings> = {}): Docum
     auto_approve_handoffs: false,
     ask_questions_as_choices: false,
     git_workflow: DEFAULT_GIT_WORKFLOW,
-    default_clone_dir: null,
     ...carried,
   };
 }
@@ -101,11 +100,24 @@ export function settingLinesOf(list: Element): Record<string, { badge: string; n
   );
 }
 
+/** The card titled `title` in `root`, by its heading. */
+export function cardTitled(root: Element, title: string): Element | undefined {
+  return Array.from(root.querySelectorAll("section[aria-labelledby]")).find((card) => card.querySelector(":scope > div h3")?.textContent === title);
+}
+
+/** The lines of settings in an agent's card, by name (see `settingLinesOf`): the list of lines among the card's lists,
+ * which is the one whose items start with a name, where an account's row starts with a block. */
+export function agentSettingLinesOf(card: Element): ReturnType<typeof settingLinesOf> {
+  const list = Array.from(card.querySelectorAll(":scope > ul, :scope > div > ul")).find((ul) => ul.querySelector(":scope > li > span:first-child"));
+  return list ? settingLinesOf(list) : {};
+}
+
 /** The titled cards of the settings in `root`, each with the names of its lines in the order they are drawn. */
 export function settingGroupsOf(root: Element): { title: string; lines: string[] }[] {
   return Array.from(root.querySelectorAll("section[aria-labelledby]")).map((card) => ({
-    title: card.querySelector(":scope > h3")!.textContent!,
-    lines: Object.keys(settingLinesOf(card.querySelector(":scope > ul")!)),
+    title: card.querySelector("h3")!.textContent!,
+    // A card collapsed to its title has no rows.
+    lines: Object.keys(card.querySelector(":scope > ul") ? settingLinesOf(card.querySelector(":scope > ul")!) : {}),
   }));
 }
 

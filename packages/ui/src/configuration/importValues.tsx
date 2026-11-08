@@ -1,23 +1,26 @@
 import React from "react";
 
-import { idWords, isKnownAgent, providerLabel, servedProvider, settingMessageKey } from "../agents/providers";
+import { idWords, servedProvider, settingMessageKey } from "../agents/providers";
 import { Tag } from "../components/form/Tag";
 import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
 import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES, GIT_WORKFLOW_ITEMS, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
 import type { MessageKey, PlainMessageKey, Translate } from "../i18n/catalog";
 import { Message } from "../i18n/react";
-import type { Agent, DocumentAgentSettings, GitWorkflowSettings, InspectedAgentSettings, ProviderInfo, SettingDescriptor } from "../protocol";
+import type { Agent, GitWorkflowSettings, InspectedAgentSettings, ProviderInfo, SettingDescriptor } from "../protocol";
 import type { Binding } from "../shortcuts/binding";
 import { REBINDABLE_COMMANDS } from "../shortcuts/commands";
 import type { Overrides } from "../shortcuts/store";
 import { BindingKbd } from "../shortcuts/ShortcutKbd";
 import { sameValue } from "../values/sameValue";
+import type { SessionOrder } from "../sessions/order";
+import { SESSION_ORDER_PARTS, sortLabel } from "../sessions/orderWording";
 import type { shortcutsReview } from "./importPlan";
 
-/** One value of a composite setting, listed under its line of the import cards: the item and what it is. */
+/** One value of a composite setting, listed under its line of the import cards: the item and what it is. A line that
+ * is about one thing already (a setting of the agent whose card it is in) has no `item`, only its value. */
 export interface SettingValue {
-  item: string;
+  item?: string;
   value: React.ReactNode;
 }
 
@@ -49,15 +52,26 @@ export function gitWorkflowValues(t: Translate, wanted: GitWorkflowSettings, cur
     }));
 }
 
+/** Each part of the session order `wanted` carries with its choice, named and worded as the settings page does. With
+ * `current`, only the parts that differ from it, each with what it is now. */
+export function sessionOrderValues(t: Translate, wanted: Partial<SessionOrder>, current?: SessionOrder): SettingValue[] {
+  return SESSION_ORDER_PARTS.flatMap(({ field, label }) => {
+    const value = wanted[field];
+    if (value === undefined || (current && value === current[field])) return [];
+    return [{ item: t(label), value: shown(sortLabel(t, value), current && sortLabel(t, current[field])) }];
+  });
+}
+
 /** The values in effect on this machine of the exported provider settings, which a choice left unset is `null` in. */
 export type CurrentProviderSettings = InspectedAgentSettings["current_provider_settings"];
 
-/** One line of the import cards for a provider setting: its name, and the agents' values for it. */
+/** One line of an agent's card of the import cards for a provider setting: its name, and the agent's value for it. */
 export interface ProviderSettingLine {
   /** Identifies the line among its siblings. */
   key: string;
-  /** The setting's name; a node where an agent's and a setting's names stand in a sentence, so each is isolated. */
-  label: React.ReactNode;
+  /** The setting's name. */
+  label: string;
+  /** The agent's value, or none where it would not change. */
   values: SettingValue[];
 }
 
@@ -82,56 +96,33 @@ function settingValueText(t: Translate, agent: string, setting: string, value: b
   return settingWord(t, agent, setting, `choice.${value}`) ?? idWords(value);
 }
 
-/** The name of a setting no presentation has a heading for: the agent's label and the setting's id, each in a `bdi` so
- * the sentence around them does not reorder them. */
-function unnamedSettingLabel(t: Translate, providers: readonly ProviderInfo[], agent: Agent, setting: string): React.ReactNode {
-  return (
-    <Message
-      id="configuration.import.settingUnnamed"
-      params={{ agent: <bdi dir="auto">{providerLabel(t, providers, agent)}</bdi>, setting: <bdi dir="auto">{idWords(setting)}</bdi> }}
-    />
-  );
-}
-
-/** The provider settings a document carries, one line for each setting, listing the agents' values under it (the
- * agents that declare a setting by the same id share its line, named by the first heading a provider has for it, as
- * Claude compatibility does). A setting counts when the providers this daemon serves declare it exported and the value
- * is one it takes, as the daemon applies it; one no provider has a heading for is a line of its own for the agent,
- * named by the agent's label and the setting's id. With `current`, a line lists only the agents applying would change, each with
- * what it is now: an agent counts only when this machine reports its value in `current` (for one it does not report
- * nothing is known to compare with). */
+/**
+ * The provider settings a document carries for one agent (`wanted`), one line for each, named by the setting alone as
+ * its provider's presentation words it (a setting no presentation has a heading for is named by its id) and holding
+ * the agent's value. A setting counts when the provider this daemon serves for `agent` declares it exported and the
+ * value is one it takes, as the daemon applies it. With `current`, a line has its value only where applying would
+ * change it, with what it is now: a setting this machine does not report has nothing to compare with, so it counts as
+ * unchanged.
+ */
 export function providerSettingLines(
   t: Translate,
   providers: readonly ProviderInfo[],
-  wanted: DocumentAgentSettings["provider_settings"],
+  agent: Agent,
+  wanted: Record<string, boolean | string> | undefined,
   current?: CurrentProviderSettings,
 ): ProviderSettingLine[] {
-  const lines = new Map<string, ProviderSettingLine>();
-  const headings = new Map<string, string>();
-  for (const agent of Object.keys(wanted)) {
-    for (const descriptor of servedProvider(providers, agent)?.settings ?? []) {
-      const heading = settingWord(t, agent, descriptor.id, "heading");
-      if (heading !== undefined && !headings.has(descriptor.id)) headings.set(descriptor.id, heading);
-    }
+  const lines: ProviderSettingLine[] = [];
+  for (const descriptor of servedProvider(providers, agent)?.settings ?? []) {
+    const value = wanted?.[descriptor.id];
+    if (!descriptor.exported || !isSettingValue(descriptor, value)) continue;
+    const now = current?.[agent]?.[descriptor.id];
+    lines.push({
+      key: descriptor.id,
+      label: settingWord(t, agent, descriptor.id, "heading") ?? idWords(descriptor.id),
+      values: current && (now === undefined || now === value) ? [] : [{ value: shown(settingValueText(t, agent, descriptor.id, value), now === undefined ? undefined : settingValueText(t, agent, descriptor.id, now)) }],
+    });
   }
-  for (const [agent, settings] of Object.entries(wanted) as [Agent, Record<string, boolean | string>][]) {
-    for (const descriptor of servedProvider(providers, agent)?.settings ?? []) {
-      const value = settings[descriptor.id];
-      if (!descriptor.exported || !isSettingValue(descriptor, value)) continue;
-      const heading = headings.get(descriptor.id);
-      const key = heading === undefined ? `${agent}\u0000${descriptor.id}` : descriptor.id;
-      const line = lines.get(key) ?? { key, label: heading ?? unnamedSettingLabel(t, providers, agent, descriptor.id), values: [] };
-      lines.set(key, line);
-      const values = line.values;
-      const now = current?.[agent]?.[descriptor.id];
-      if (current && (now === undefined || now === value)) continue;
-      values.push({
-        item: providerLabel(t, providers, agent),
-        value: shown(settingValueText(t, agent, descriptor.id, value), now === undefined ? undefined : settingValueText(t, agent, descriptor.id, now)),
-      });
-    }
-  }
-  return [...lines.values()];
+  return lines;
 }
 
 /** An agent's tags as the read-only tags the settings show them as, or the message for no tags. The joining text of
@@ -146,13 +137,13 @@ function tagsNode(t: Translate, language: Language, tags: string[]): React.React
   );
 }
 
-/** The tags of each agent the daemon serves (`providers`). With `current`, only the agents whose tags would change, each
- * with what it has now: the tags of each agent the document lists replace that agent's, an agent it does not list keeps
- * its own, and an agent missing from `current` has no tags. */
-export function agentTagsValues(t: Translate, language: Language, providers: readonly ProviderInfo[], wanted: Partial<Record<Agent, string[]>>, current?: Partial<Record<Agent, string[]>>): SettingValue[] {
-  return (Object.entries(wanted) as [Agent, string[]][])
-    .filter(([agent, tags]) => isKnownAgent(providers, agent) && (!current || !sameValue(tags, current[agent] ?? [])))
-    .map(([agent, tags]) => ({ item: providerLabel(t, providers, agent), value: shown(tagsNode(t, language, tags), current && tagsNode(t, language, current[agent] ?? [])) }));
+/** The tags `wanted` gives `agent`, as the value of its line, or nothing when it gives none. With `current`, nothing
+ * either when they are the ones the agent has now, which are none for an agent missing from `current`; else the value
+ * with what it has now. */
+export function agentTagsValues(t: Translate, language: Language, agent: Agent, wanted: Partial<Record<Agent, string[]>>, current?: Partial<Record<Agent, string[]>>): SettingValue[] {
+  const tags = wanted[agent];
+  if (!tags || (current && sameValue(tags, current[agent] ?? []))) return [];
+  return [{ value: shown(tagsNode(t, language, tags), current && tagsNode(t, language, current[agent] ?? [])) }];
 }
 
 /** A key combination at the size of the muted text it sits in: the key caps' own size is for a row of their own,

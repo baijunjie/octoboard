@@ -133,10 +133,11 @@ async fn the_documents_settings_are_shown_by_inspecting_and_applied_only_when_as
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -150,10 +151,11 @@ async fn the_documents_settings_are_shown_by_inspecting_and_applied_only_when_as
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&full),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -161,25 +163,16 @@ async fn the_documents_settings_are_shown_by_inspecting_and_applied_only_when_as
     assert_eq!(
         imported.settings_applied,
         Some(DocumentSettings {
-            auto_close_idle_shell_terminals: false,
-            auto_pull_repositories: true,
-            auto_delete_unresumable_archives: false,
-            auto_approve_session_requests: false,
-            auto_approve_resume_requests: false,
-            auto_approve_account_switches: false,
-            auto_approve_handoffs: false,
-            ask_questions_as_choices: true,
-            resume_sessions_on_start: None,
-            git_workflow: GitWorkflowSettings::default(),
-            default_clone_dir: None,
-            interface_language: None,
-            appearance: None,
-            markdown_style: None,
-            run_in_background: None,
-            show_menu_bar_icon: None,
-            keep_awake: None,
-            keep_awake_when: None,
-            keyboard_shortcuts: None,
+            auto_close_idle_shell_terminals: Some(false),
+            auto_pull_repositories: Some(true),
+            auto_delete_unresumable_archives: Some(false),
+            auto_approve_session_requests: Some(false),
+            auto_approve_resume_requests: Some(false),
+            auto_approve_account_switches: Some(false),
+            auto_approve_handoffs: Some(false),
+            ask_questions_as_choices: Some(true),
+            git_workflow: Some(GitWorkflowSettings::default()),
+            ..Default::default()
         })
     );
     assert!(state.store.auto_pull_repositories().unwrap());
@@ -222,10 +215,11 @@ async fn a_full_export_round_trips_both_settings_and_a_console_export_carries_no
         &single,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -237,10 +231,11 @@ async fn a_full_export_round_trips_both_settings_and_a_console_export_carries_no
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&full),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -277,10 +272,11 @@ async fn a_document_without_the_resume_setting_leaves_it_as_this_machine_has_it(
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&full),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -334,10 +330,11 @@ async fn the_automatic_approvals_round_trip_in_a_full_export() {
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -351,10 +348,11 @@ async fn the_automatic_approvals_round_trip_in_a_full_export() {
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&full),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -392,10 +390,11 @@ async fn turning_off_asking_questions_as_choices_round_trips_in_a_full_export() 
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -406,10 +405,11 @@ async fn turning_off_asking_questions_as_choices_round_trips_in_a_full_export() 
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&full),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -553,10 +553,11 @@ async fn provider_settings_round_trip_with_the_accounts_approval_settings_includ
         &hostile,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&hostile),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -567,10 +568,11 @@ async fn provider_settings_round_trip_with_the_accounts_approval_settings_includ
         &hostile,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: Some(Vec::new()),
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -611,10 +613,11 @@ async fn provider_settings_round_trip_with_the_accounts_approval_settings_includ
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: Some(Vec::new()),
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -677,10 +680,11 @@ async fn agent_tags_round_trip_with_the_accounts() {
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&full),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -691,10 +695,11 @@ async fn agent_tags_round_trip_with_the_accounts() {
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: Some(Vec::new()),
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -712,10 +717,11 @@ async fn agent_tags_round_trip_with_the_accounts() {
         &newer,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: Some(Vec::new()),
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -756,10 +762,11 @@ async fn the_agent_account_switches_round_trip_with_the_accounts() {
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&full),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -770,10 +777,11 @@ async fn the_agent_account_switches_round_trip_with_the_accounts() {
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: Some(Vec::new()),
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -817,10 +825,11 @@ async fn a_version_1_document_is_upgraded_and_applies_its_agent_account_settings
         &older,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&older),
             accounts: None,
             consoles: false,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -832,7 +841,7 @@ async fn a_version_1_document_is_upgraded_and_applies_its_agent_account_settings
         &older,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: Some(vec![AccountResolution {
                 agent: AgentId::CLAUDE,
                 account: 0,
@@ -841,6 +850,7 @@ async fn a_version_1_document_is_upgraded_and_applies_its_agent_account_settings
             }]),
             consoles: false,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -941,10 +951,11 @@ async fn the_interface_language_is_carried_and_an_unknown_setting_is_ignored() {
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -955,10 +966,11 @@ async fn the_interface_language_is_carried_and_an_unknown_setting_is_ignored() {
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&full),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -984,10 +996,11 @@ async fn the_interface_language_is_carried_and_an_unknown_setting_is_ignored() {
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&full),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1033,10 +1046,11 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
         &carried,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&carried),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1055,10 +1069,11 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&full),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1127,10 +1142,11 @@ async fn the_default_clone_directory_travels_and_the_user_may_keep_the_machines_
         &carried,
         place(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&carried),
             accounts: None,
             consoles: true,
             clone_dir: false,
+            agents: None,
         },
     )
     .await
@@ -1153,10 +1169,11 @@ async fn the_default_clone_directory_travels_and_the_user_may_keep_the_machines_
         &carried,
         place(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&carried),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1189,10 +1206,11 @@ async fn the_default_clone_directory_travels_and_the_user_may_keep_the_machines_
         &carried,
         Vec::new(),
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1213,10 +1231,11 @@ async fn the_default_clone_directory_travels_and_the_user_may_keep_the_machines_
         &unusable,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&unusable),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1236,10 +1255,11 @@ async fn the_default_clone_directory_travels_and_the_user_may_keep_the_machines_
         &home_relative,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&home_relative),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1299,10 +1319,11 @@ async fn the_inspection_offers_the_clone_dependent_targets_under_the_documents_c
         &carried,
         vec![at(0, 0, DirectoryChoice::DefaultCloneDir)],
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&carried),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1354,7 +1375,7 @@ async fn an_export_carries_the_default_clone_directory_without_the_paths_option(
     let (state, _dir) = app_state("export-clone-dir");
     let selection = |paths| export::Selection {
         consoles: export::ConsoleScope::None,
-        settings: true,
+        settings: SettingsSection::ALL.to_vec(),
         accounts: false,
         paths,
     };
@@ -1458,10 +1479,11 @@ async fn the_git_workflow_settings_and_a_projects_override_round_trip_in_an_expo
         &full,
         vec![at(0, 0, DirectoryChoice::ExportedPath)],
         ApplyOptions {
-            settings: false,
+            settings: Vec::new(),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1478,10 +1500,11 @@ async fn the_git_workflow_settings_and_a_projects_override_round_trip_in_an_expo
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&full),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1513,10 +1536,11 @@ async fn the_keyboard_shortcuts_of_a_document_pass_through_untouched() {
         &full,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&full),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1532,10 +1556,11 @@ async fn the_keyboard_shortcuts_of_a_document_pass_through_untouched() {
         &without,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&without),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1552,10 +1577,11 @@ async fn asking_for_settings_a_document_does_not_carry_is_refused_before_anythin
         &document(vec![console("Hub", Vec::new())]),
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: SettingsSection::ALL.to_vec(),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
@@ -1573,12 +1599,13 @@ async fn idle_terminal_cleanup_round_trips_through_configuration() {
         .set_auto_close_idle_shell_terminals(true)
         .unwrap();
     let document = export::build(&source.store, &export::Selection::full(false)).unwrap();
-    assert!(
+    assert_eq!(
         document
             .settings
             .as_ref()
             .unwrap()
-            .auto_close_idle_shell_terminals
+            .auto_close_idle_shell_terminals,
+        Some(true)
     );
     let document = serde_json::to_value(document).unwrap();
     let (target, _target_dir) = app_state("import-idle-cleanup-target");
@@ -1591,13 +1618,167 @@ async fn idle_terminal_cleanup_round_trips_through_configuration() {
         &document,
         Vec::new(),
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&document),
             accounts: None,
             consoles: false,
             clone_dir: true,
+            agents: None,
         },
     )
     .await
     .unwrap();
     assert!(target.store.auto_close_idle_shell_terminals().unwrap());
+}
+
+fn options(settings: Vec<SettingsSection>) -> ApplyOptions {
+    ApplyOptions {
+        settings,
+        accounts: None,
+        consoles: false,
+        clone_dir: true,
+        agents: None,
+    }
+}
+
+/// A settings region carrying every section: the daemon's own keys plus the client-held ones of
+/// General and Keyboard shortcuts.
+fn sectioned_document() -> serde_json::Value {
+    let mut value = with_settings(document(Vec::new()), true, true);
+    value["settings"]["default_clone_dir"] = json!("/srv/from-the-file");
+    value["settings"]["appearance"] = json!("dark");
+    value["settings"]["session_order"] =
+        json!({ "sessions": "started", "active_projects": "name", "inactive_projects": "used" });
+    value["settings"]["keyboard_shortcuts"] = json!({});
+    value
+}
+
+#[tokio::test]
+async fn only_the_listed_sections_are_applied_and_echoed() {
+    use SettingsSection::{AgentBehavior, Cleanup, General, Git};
+    let (state, _dir) = app_state("import-sections-applied");
+    let document = sectioned_document();
+    let before = (
+        state.store.auto_pull_repositories().unwrap(),
+        state.store.auto_delete_unresumable_archives().unwrap(),
+    );
+    assert!(!before.0);
+
+    let imported = apply(
+        &state,
+        &document,
+        Vec::new(),
+        options(vec![Git, Git, General]),
+    )
+    .await
+    .unwrap();
+
+    assert!(state.store.auto_pull_repositories().unwrap());
+    assert_eq!(
+        state.store.auto_delete_unresumable_archives().unwrap(),
+        before.1
+    );
+    assert_eq!(
+        state.store.default_clone_dir().unwrap(),
+        "/srv/from-the-file"
+    );
+    let echoed = imported.settings_applied.unwrap();
+    assert_eq!(echoed.auto_pull_repositories, Some(true));
+    assert_eq!(
+        echoed.default_clone_dir.as_deref(),
+        Some("/srv/from-the-file")
+    );
+    // General's client-held keys come back as they were; the other sections' keys do not.
+    assert_eq!(echoed.appearance.as_deref(), Some("dark"));
+    assert!(echoed.session_order.is_some());
+    assert_eq!(echoed.auto_delete_unresumable_archives, None);
+    assert_eq!(echoed.ask_questions_as_choices, None);
+    assert_eq!(echoed.keyboard_shortcuts, None);
+
+    // Without `git` the directory stays this machine's, whatever else is applied.
+    let (other, _other_dir) = app_state("import-sections-no-git");
+    let own = other.store.default_clone_dir().unwrap();
+    let imported = apply(
+        &other,
+        &document,
+        Vec::new(),
+        options(vec![Cleanup, AgentBehavior]),
+    )
+    .await
+    .unwrap();
+    assert_eq!(other.store.default_clone_dir().unwrap(), own);
+    assert_eq!(imported.clone_dir_applied, None);
+    assert!(!other.store.auto_pull_repositories().unwrap());
+    let echoed = imported.settings_applied.unwrap();
+    assert_eq!(echoed.default_clone_dir, None);
+    assert_eq!(echoed.auto_pull_repositories, None);
+    assert_eq!(echoed.appearance, None);
+    assert_eq!(echoed.auto_delete_unresumable_archives, Some(true));
+}
+
+#[tokio::test]
+async fn listing_a_section_the_document_does_not_carry_is_refused_before_anything_is_done() {
+    let (state, _dir) = app_state("import-sections-missing");
+    let mut document = with_settings(document(vec![console("Hub", Vec::new())]), true, true);
+    document["settings"]
+        .as_object_mut()
+        .unwrap()
+        .remove("auto_close_idle_shell_terminals");
+
+    let err = apply(
+        &state,
+        &document,
+        Vec::new(),
+        ApplyOptions {
+            consoles: true,
+            ..options(vec![SettingsSection::Git, SettingsSection::AppBehavior])
+        },
+    )
+    .await
+    .expect_err("refused");
+
+    assert_eq!(code_of(&err), error_code::IMPORT_SETTINGS_MISSING);
+    assert_eq!(param_of(&err, "section"), "app_behavior");
+    assert!(state.store.list_consoles().unwrap().is_empty());
+    assert!(!state.store.auto_pull_repositories().unwrap());
+}
+
+#[tokio::test]
+async fn the_inspection_lists_the_sections_the_document_carries() {
+    let (state, _dir) = app_state("import-sections-inspected");
+    let carried = |document: serde_json::Value| {
+        let state = state.clone();
+        async move { inspect(&state, &document).await.unwrap().settings_sections }
+    };
+    use SettingsSection::*;
+    assert_eq!(
+        carried(sectioned_document()).await,
+        [
+            General,
+            AppBehavior,
+            Git,
+            AgentBehavior,
+            KeyboardShortcuts,
+            Cleanup
+        ]
+    );
+    assert_eq!(carried(document(Vec::new())).await, []);
+    let mut partial = document(Vec::new());
+    partial["settings"] = json!({ "keep_awake": true, "session_order": { "sessions": "status" } });
+    assert_eq!(carried(partial).await, [General, AppBehavior]);
+}
+
+#[tokio::test]
+async fn a_version_1_and_a_version_2_document_carry_every_section_they_had() {
+    let (state, _dir) = app_state("import-sections-upgraded");
+    use SettingsSection::*;
+    for version in [1, 2] {
+        let mut older = with_settings(document(Vec::new()), true, true);
+        older["version"] = json!(version);
+        let sections = inspect(&state, &older).await.unwrap().settings_sections;
+        assert_eq!(
+            sections,
+            [AppBehavior, Git, AgentBehavior, Cleanup],
+            "version {version}"
+        );
+    }
 }

@@ -23,9 +23,11 @@ import type {
   ProjectAccount,
   ClientRequestBody,
   Settings,
+  SettingsSection,
 } from "../protocol";
 import type { ImportProgressEvent, State } from "../store";
 import type { Inspection } from "../configuration/importPlan";
+import { SETTINGS_SECTIONS } from "../configuration/settingsSections";
 import { refuseUnfillable } from "./banner";
 import type { FixtureError } from "./sampleFiles";
 import type { ConfigurationFixture, ImportProgressFixture } from "./fixture";
@@ -40,19 +42,22 @@ const isClonableRemote = (url: string): boolean =>
   /^(https?|ssh|git|git\+ssh|ssh\+git):\/\/\S/i.test(url) || /^[^\s/:]+:(?![:/]{1,2})\S/.test(url);
 
 type ExportRequest = Extract<ClientRequestBody, { type: "export_configuration" }>;
+type ImportRequest = Extract<ClientRequestBody, { type: "import_configuration" }>;
+type ImportResult = Omit<Extract<Event, { type: "configuration_imported" }>, "type">;
 
 /** The regions an export holds, settled as the daemon settles them: `consoles` absent is `one` when a console is named
- * and `all` otherwise, the settings are in exactly when every console is unless said, and the accounts only when asked. */
-function exportedRegions(request: ExportRequest): { consoles: NonNullable<ExportRequest["consoles"]>; settings: boolean; accounts: boolean } {
+ * and `all` otherwise, the settings sections are every one exactly when every console is unless said, and the accounts
+ * only when asked. */
+function exportedRegions(request: ExportRequest): { consoles: NonNullable<ExportRequest["consoles"]>; settings: readonly SettingsSection[]; accounts: boolean } {
   const consoles = request.consoles ?? (request.console !== undefined ? "one" : "all");
-  return { consoles, settings: request.include_settings ?? consoles === "all", accounts: request.include_accounts ?? false };
+  return { consoles, settings: request.settings_sections ?? (consoles === "all" ? SETTINGS_SECTIONS : []), accounts: request.include_accounts ?? false };
 }
 
 /** Why the daemon refuses an export request, before it reads anything: nothing selected, `one` with no console named, or a
  * console it does not have. `undefined` for one it answers. */
 export function exportRefusal(state: State, request: ExportRequest): FixtureError | undefined {
   const { consoles, settings, accounts } = exportedRegions(request);
-  if (consoles === "none" && !settings && !accounts) return { code: "export_empty", params: {}, message: "nothing is selected to export" };
+  if (consoles === "none" && settings.length === 0 && !accounts) return { code: "export_empty", params: {}, message: "nothing is selected to export" };
   if (consoles !== "one") return undefined;
   if (request.console === undefined) return { code: "field_required", params: { field: "console" }, message: "console is required" };
   if (!state.consoles.has(request.console)) return { code: "unknown_console", params: { console: request.console }, message: `unknown console ${request.console}` };
@@ -120,16 +125,42 @@ function mappedAgents<T, U>(group: PerAgent<T>, map: (value: T, agent: Agent) =>
   return Object.fromEntries((["claude", "codex", "grok"] as const).map((agent) => [agent, map(group[agent], agent)])) as PerAgent<U>;
 }
 
+/** The settings region of an export: the keys the daemon holds of the Settings `sections` chosen. */
+function exportedSettings(state: State, sections: readonly SettingsSection[]): DocumentSettings {
+  const { settings } = state;
+  const has = (section: SettingsSection) => sections.includes(section);
+  return {
+    ...(has("general") && settings.interface_language !== null && { interface_language: settings.interface_language }),
+    ...(has("app_behavior") && {
+      resume_sessions_on_start: settings.resume_sessions_on_start,
+      auto_close_idle_shell_terminals: settings.auto_close_idle_shell_terminals,
+    }),
+    ...(has("git") && {
+      default_clone_dir: documentDirectory(settings.default_clone_dir, state.homeDir),
+      auto_pull_repositories: settings.auto_pull_repositories,
+      git_workflow: settings.git_workflow,
+    }),
+    ...(has("agent_behavior") && {
+      auto_approve_session_requests: settings.auto_approve_session_requests,
+      auto_approve_resume_requests: settings.auto_approve_resume_requests,
+      auto_approve_account_switches: settings.auto_approve_account_switches,
+      auto_approve_handoffs: settings.auto_approve_handoffs,
+      ask_questions_as_choices: settings.ask_questions_as_choices,
+    }),
+    ...(has("cleanup") && { auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives }),
+  };
+}
+
 /** The document `export_configuration` answers: the regions the request chooses (see `exportedRegions`): the console
- * named or every console or none, the application settings, the accounts; consoles by creation time and a console's
+ * named or every console or none, the settings of the sections chosen, the accounts; consoles by creation time and a console's
  * projects by name, with no id and no console working directory in it, and an account carried by its name alone.
  * Without `include_paths` a project's path is only its last segment and a project's remote is kept only where it can
  * be cloned from; an account directory is written whatever it says. Without the accounts region no account is named:
  * every console's reference is `null` and a project's reference to an account is `inherit`. A document with the
- * settings carries the user's explicit provider setting `choices` of the settings that are exported (not the values
- * in effect, which `state.settings` holds), `{}` when the user chose for none. A document with the settings carries
- * the default clone directory, written like an account directory, and the language the daemon holds when a window
- * has reported one. */
+ * accounts carries the user's explicit provider setting `choices` of the settings that are exported (not the values
+ * in effect, which `state.settings` holds), `{}` when the user chose for none. The settings region holds the keys the
+ * daemon holds of the sections chosen: for General the language it holds when a window has reported one, for Git the
+ * default clone directory, written like an account directory; the client adds the keys only it holds. */
 export function exportedDocument(
   state: State,
   request: Omit<ExportRequest, "type"> = {},
@@ -185,22 +216,7 @@ export function exportedDocument(
     format: "octoboard-configuration",
     version: 1,
     exported_by: null,
-    settings: regions.settings
-      ? {
-        auto_close_idle_shell_terminals: state.settings.auto_close_idle_shell_terminals,
-        auto_pull_repositories: state.settings.auto_pull_repositories,
-        auto_delete_unresumable_archives: state.settings.auto_delete_unresumable_archives,
-        auto_approve_session_requests: state.settings.auto_approve_session_requests,
-        auto_approve_resume_requests: state.settings.auto_approve_resume_requests,
-        auto_approve_account_switches: state.settings.auto_approve_account_switches,
-        auto_approve_handoffs: state.settings.auto_approve_handoffs,
-        ask_questions_as_choices: state.settings.ask_questions_as_choices,
-        resume_sessions_on_start: state.settings.resume_sessions_on_start,
-        git_workflow: state.settings.git_workflow,
-        default_clone_dir: documentDirectory(state.settings.default_clone_dir, state.homeDir),
-        ...(state.settings.interface_language !== null && { interface_language: state.settings.interface_language }),
-      }
-      : null,
+    settings: regions.settings.length > 0 ? exportedSettings(state, regions.settings) : null,
     ...(regions.accounts && { accounts: exportedAccounts(state, choices) }),
     consoles,
   };
@@ -210,14 +226,11 @@ export function exportedDocument(
  * given a resolution, one placed or tried that was given none, consoles reported though none were to be created, a
  * created one placed another way than the one asked for, an account left out that was not given the resolution to
  * leave it out (or the other way about), accounts reported without being asked for or asked for and not reported,
- * application settings reported without being asked for or asked for and not reported, and a default clone directory
- * reported written without the settings or against the request keeping this machine's own. A console that could not
+ * settings reported without any section being asked for or asked for and not reported, and a default clone directory
+ * reported written without the Git section or against the request keeping this machine's own. A console that could not
  * be created is not looked into, since its projects are all not tried whatever was asked. `undefined` where the two
  * agree. */
-export function importDisagreement(
-  request: Extract<ClientRequestBody, { type: "import_configuration" }>,
-  result: Omit<Extract<Event, { type: "configuration_imported" }>, "type">,
-): string | undefined {
+export function importDisagreement(request: ImportRequest, result: ImportResult): string | undefined {
   // Without `apply_consoles` the daemon creates no console or project and reads no resolution.
   if (request.apply_consoles === false && result.consoles.length > 0) return "the result reports consoles, but the request asked for none to be created";
   const asked = new Map((request.apply_consoles === false ? [] : (request.resolutions ?? [])).map((r) => [`${r.console}:${r.project}`, r.choice.kind]));
@@ -251,13 +264,14 @@ export function importDisagreement(
     }
   }
   const reportsSettings = result.settings_applied != null || result.settings_error != null;
-  if (reportsSettings !== (request.apply_settings === true)) {
+  const asksSettings = (request.apply_settings ?? []).length > 0;
+  if (reportsSettings !== asksSettings) {
     return reportsSettings
-      ? "the result reports application settings, but the request did not ask for them"
-      : "the request asked for the application settings, but the result reports none";
+      ? "the result reports settings, but the request did not ask for any section"
+      : "the request asked for settings sections, but the result reports none";
   }
-  // The directory is written with the settings, and only where the request does not keep this machine's own.
-  const keepsOwnDir = request.apply_settings !== true || request.apply_clone_dir === false;
+  // The directory is written with the Git section, and only where the request does not keep this machine's own.
+  const keepsOwnDir = !(request.apply_settings ?? []).includes("git") || request.apply_clone_dir === false;
   if (keepsOwnDir && result.clone_dir_applied != null) {
     return "the result reports the default clone directory written, but the request did not ask for it to be applied";
   }
@@ -271,19 +285,60 @@ export function importDisagreement(
   return undefined;
 }
 
+/** Whether the document's accounts have something for `agent`, as the daemon settles it: an agent entry, a place among
+ * the agents to add, or provider settings or tags of its own. */
+function carriesAgent(accounts: NonNullable<Inspection["accounts"]>, agent: Agent): boolean {
+  return (
+    accounts.agents_to_add.includes(agent) ||
+    accounts.agents.some((entry) => entry.agent === agent) ||
+    (accounts.agent_settings !== null && (agent in accounts.agent_settings.provider_settings || agent in accounts.agent_settings.agent_tags))
+  );
+}
+
+/** Why the daemon refuses an import that lists an agent the document carries nothing for (`import_agent_missing`, which
+ * names the agent by its product name), before it does anything; `undefined` for one it answers. */
+export function importAgentRefusal(state: State, request: ImportRequest, inspection: Omit<Inspection, "type">): FixtureError | undefined {
+  if (request.apply_accounts !== true || !request.apply_agents || !inspection.accounts) return undefined;
+  const accounts = inspection.accounts;
+  const missing = request.apply_agents.find((agent) => !carriesAgent(accounts, agent));
+  if (missing === undefined) return undefined;
+  const label = state.providers.find((provider) => provider.id === missing)?.label ?? missing;
+  return { code: "import_agent_missing", params: { agent: label }, message: `the document carries nothing for the ${label} agent to apply` };
+}
+
+/** The result as the daemon reports it when the accounts' part is limited to `agents`: the accounts, the agents added
+ * and the provider settings and tags applied hold only those agents, and the three switches stay whole. */
+function resultOfAgents(result: ImportResult, agents: readonly Agent[]): ImportResult {
+  const accounts = result.accounts;
+  if (!accounts) return result;
+  const applied = accounts.agent_settings_applied;
+  const only = <T>(group: Partial<Record<Agent, T>>): Partial<Record<Agent, T>> => Object.fromEntries(Object.entries(group).filter(([agent]) => agents.includes(agent as Agent)));
+  return {
+    ...result,
+    accounts: {
+      ...accounts,
+      agents_added: accounts.agents_added.filter((agent) => agents.includes(agent)),
+      agents: accounts.agents.filter(({ agent }) => agents.includes(agent)),
+      agent_settings_applied: applied && { ...applied, agent_tags: only(applied.agent_tags), provider_settings: only(applied.provider_settings) },
+    },
+  };
+}
+
 /** The items an `import_configuration` request makes the daemon handle, in the order it announces and handles them:
- * the document's default clone directory (when the settings are asked for, the document has a usable one and the
- * request does not keep this machine's own), the accounts (when asked for) other than those left out, an account
- * that exists already included whatever was chosen for it, since it is used as it is and the choice is never read,
+ * the document's default clone directory (when the Git section is asked for, the document has a usable one and the
+ * request does not keep this machine's own), the accounts (when asked for) of the agents `apply_agents` lists (every
+ * agent when absent) other than those left out, an account that exists already included whatever was chosen for it,
+ * since it is used as it is and the choice is never read,
  * the Agent accounts settings (when the accounts are asked for and the document carries them), then each console
- * with the projects that have a resolution (unless the request asks for no consoles), then the application settings
- * (when asked for). */
-export function handledImportItems(request: Extract<ClientRequestBody, { type: "import_configuration" }>, inspection: Omit<Inspection, "type">): ImportItem[] {
+ * with the projects that have a resolution (unless the request asks for no consoles), then the settings (when any
+ * section is asked for). */
+export function handledImportItems(request: ImportRequest, inspection: Omit<Inspection, "type">): ImportItem[] {
   const items: ImportItem[] = [];
-  if (request.apply_settings === true && request.apply_clone_dir !== false && inspection.settings?.default_clone_dir) items.push({ kind: "clone_dir" });
+  if ((request.apply_settings ?? []).includes("git") && request.apply_clone_dir !== false && inspection.settings?.default_clone_dir) items.push({ kind: "clone_dir" });
   if (request.apply_accounts === true) {
     const leftOut = new Set((request.account_resolutions ?? []).filter((r) => r.leave_out === true).map((r) => `${r.agent}:${r.account}`));
     for (const { agent, accounts } of inspection.accounts?.agents ?? []) {
+      if (request.apply_agents && !request.apply_agents.includes(agent)) continue;
       accounts.forEach((entry, account) => {
         if (entry.status === "existing" || !leftOut.has(`${agent}:${account}`)) items.push({ kind: "account", agent, account });
       });
@@ -299,7 +354,7 @@ export function handledImportItems(request: Extract<ClientRequestBody, { type: "
       });
     });
   }
-  if (request.apply_settings === true) items.push({ kind: "settings" });
+  if ((request.apply_settings ?? []).length > 0) items.push({ kind: "settings" });
   return items;
 }
 
@@ -336,22 +391,35 @@ export function importProgressDisagreement(handled: ImportItem[], progress: Impo
   return undefined;
 }
 
-/** The settings only a client holds, which the daemon does not apply but hands back in what it applied. */
-const PASSED_THROUGH = ["keyboard_shortcuts", "appearance", "markdown_style", "run_in_background", "show_menu_bar_icon", "keep_awake", "keep_awake_when"] as const;
+/** The settings only a client holds, which the daemon does not apply but hands back in what it applied, each with the
+ * section it belongs to. */
+const PASSED_THROUGH = {
+  keyboard_shortcuts: "keyboard_shortcuts",
+  appearance: "general",
+  markdown_style: "general",
+  session_order: "general",
+  run_in_background: "app_behavior",
+  show_menu_bar_icon: "app_behavior",
+  keep_awake: "app_behavior",
+  keep_awake_when: "app_behavior",
+} as const satisfies Partial<Record<keyof DocumentSettings, SettingsSection>>;
 
-/** The result with the document's client-held settings (see `PASSED_THROUGH`) echoed in `settings_applied`, as the daemon
- * does when it applied the settings: it does not apply them itself, so it hands them back as they came, for the client to
- * apply. A document without them, or a result that reports no settings applied (none asked for, or a `settings_error`),
- * echoes nothing. */
+/** The result with the document's client-held settings (see `PASSED_THROUGH`) of the sections asked for echoed in
+ * `settings_applied`, as the daemon does when it applied the settings: it does not apply them itself, so it hands them
+ * back as they came, for the client to apply. A document without them, or a result that reports no settings applied
+ * (none asked for, or a `settings_error`), echoes nothing. */
 export function withClientValuesEcho(
-  request: Extract<ClientRequestBody, { type: "import_configuration" }>,
-  result: Omit<Extract<Event, { type: "configuration_imported" }>, "type">,
-): Omit<Extract<Event, { type: "configuration_imported" }>, "type"> {
+  request: ImportRequest,
+  result: ImportResult,
+): ImportResult {
   const carried = (request.document as { settings?: Record<string, unknown> | null } | null)?.settings;
   if (!result.settings_applied || !carried) return result;
-  const echoed = PASSED_THROUGH.flatMap((field) => (carried[field] === undefined || carried[field] === null ? [] : [[field, carried[field]] as const]));
+  const asked = request.apply_settings ?? [];
+  const echoed = (Object.keys(PASSED_THROUGH) as (keyof typeof PASSED_THROUGH)[]).flatMap((field) =>
+    asked.includes(PASSED_THROUGH[field]) && carried[field] !== undefined && carried[field] !== null ? [[field, carried[field]] as const] : [],
+  );
   if (echoed.length === 0) return result;
-  return { ...result, settings_applied: { ...result.settings_applied, ...(Object.fromEntries(echoed) as Pick<DocumentSettings, (typeof PASSED_THROUGH)[number]>) } };
+  return { ...result, settings_applied: { ...result.settings_applied, ...(Object.fromEntries(echoed) as Pick<DocumentSettings, keyof typeof PASSED_THROUGH>) } };
 }
 
 /** The reply to a configuration request, or `undefined` for a request that is not one. `fail`
@@ -379,6 +447,11 @@ export function createConfigurationReplies(
       case "import_configuration": {
         const imported = fixture?.imported;
         if (imported === undefined) return refuseUnfillable("the scenario gives no result to answer import_configuration with");
+        const inspected = fixture?.inspection;
+        if (inspected !== undefined && !("code" in inspected)) {
+          const refusal = importAgentRefusal(getState(), body, inspected);
+          if (refusal) return fail(refusal);
+        }
         if (fixture?.progress) {
           const inspection = fixture.inspection;
           if (inspection === undefined || "code" in inspection) return refuseUnfillable("the scenario gives progress for an import but no inspection to say what it handles");
@@ -395,9 +468,11 @@ export function createConfigurationReplies(
         }
         if (imported === "pending") return new Promise<Event>(() => {});
         if ("code" in imported) return fail(imported);
-        const disagreement = importDisagreement(body, imported);
+        // Only the agents `apply_agents` lists are applied, so the result the scenario gives holds only those.
+        const result = body.apply_accounts === true && body.apply_agents ? resultOfAgents(imported, body.apply_agents) : imported;
+        const disagreement = importDisagreement(body, result);
         if (disagreement !== undefined) return refuseUnfillable(`the scenario's import result does not follow from its steps: ${disagreement}`);
-        return { type: "configuration_imported", ...withClientValuesEcho(body, imported) };
+        return { type: "configuration_imported", ...withClientValuesEcho(body, result) };
       }
       default:
         return undefined;

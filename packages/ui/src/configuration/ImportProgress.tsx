@@ -7,7 +7,8 @@ import { useT } from "../i18n/react";
 import { Label, ProgressBar, ProgressBarTrack, Spinner } from "../primitives";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useProviders } from "../store";
-import { CardRows, EntryStatus, SHARED_STATUS, STATUS_TONE, type StatusEntry, StatusLine } from "./importParts";
+import { FlatCard } from "../components/card/FlatCard";
+import { EntryStatus, SHARED_STATUS, STATUS_TONE, type StatusEntry, StatusLine } from "./importParts";
 import type { Inspection } from "./importPlan";
 import { itemKey, progressCount, type ImportProgress, type ItemProgress } from "./progressState";
 import { ResultCard, ResultRow } from "./ResultCards";
@@ -50,8 +51,8 @@ function ItemRow({ name, item }: { name: string; item: ItemProgress }): React.Re
 
 /**
  * A running import, as the daemon's progress events say it: a progress bar of how many items have settled, then the
- * items it announced, grouped as the review is (each console with its projects, each agent with its accounts, the
- * Agent accounts settings, the default clone directory, the application settings), each with its state. A project the
+ * items it announced, grouped and in the order of the review (each console with its projects, the default clone
+ * directory, the application settings, the Agent accounts settings, each agent with its accounts), each with its state. A project the
  * import leaves out is not announced and so not listed. The bar is named for the import and its value is read as the
  * count, which is not announced on every step: a status speaks the import when it starts and again when every item has
  * settled. Until the first event there is no count, and the bar is indeterminate, described by the line saying what it
@@ -90,10 +91,13 @@ export function ImportProgressView({ inspection, progress }: { inspection: Inspe
         });
         return (
           <ResultCard key={`console-${c}`} name={console.name} status={<ItemState item={item} />} failure={item.state === "failed" ? item.error : undefined}>
-            {projects.length > 0 && <CardRows>{projects}</CardRows>}
+            {projects.length > 0 && <FlatCard.Rows>{projects}</FlatCard.Rows>}
           </ResultCard>
         );
       })}
+      {cloneDir && <ResultCard name={t("settings.cloneDir.label")} status={<ItemState item={cloneDir} />} failure={cloneDir.state === "failed" ? cloneDir.error : undefined} />}
+      {settings && <ResultCard name={t("settings.title")} status={<ItemState item={settings} />} failure={settings.state === "failed" ? settings.error : undefined} />}
+      {agentSettings && <ResultCard name={t("configuration.import.agentSettings.heading")} status={<ItemState item={agentSettings} />} failure={agentSettings.state === "failed" ? agentSettings.error : undefined} />}
       {inspection.accounts?.agents.map((agent) => {
         const rows = agent.accounts.flatMap((account, i) => {
           const state = progress.get(itemKey({ kind: "account", agent: agent.agent, account: i }));
@@ -102,13 +106,10 @@ export function ImportProgressView({ inspection, progress }: { inspection: Inspe
         if (rows.length === 0) return null;
         return (
           <ResultCard key={`agent-${agent.agent}`} name={providerLabel(t, providers, agent.agent)}>
-            <CardRows>{rows}</CardRows>
+            <FlatCard.Rows>{rows}</FlatCard.Rows>
           </ResultCard>
         );
       })}
-      {agentSettings && <ResultCard name={t("configuration.import.agentSettings.heading")} status={<ItemState item={agentSettings} />} failure={agentSettings.state === "failed" ? agentSettings.error : undefined} />}
-      {cloneDir && <ResultCard name={t("settings.cloneDir.label")} status={<ItemState item={cloneDir} />} failure={cloneDir.state === "failed" ? cloneDir.error : undefined} />}
-      {settings && <ResultCard name={t("configuration.import.tab.settings")} status={<ItemState item={settings} />} failure={settings.state === "failed" ? settings.error : undefined} />}
     </>
   );
 }

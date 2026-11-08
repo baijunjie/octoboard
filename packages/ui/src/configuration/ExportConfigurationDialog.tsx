@@ -11,10 +11,12 @@ import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { useOctoboardTheme } from "../preferences/theme";
-import type { Console, ExportedConsoles } from "../protocol";
+import type { Console, ExportedConsoles, SettingsSection } from "../protocol";
+import type { PlainMessageKey } from "../i18n/catalog";
 import { shortcutOverrides } from "../shortcuts/store";
 import { useDaemon } from "../store";
-import { heldClientSettings } from "./clientSettings";
+import { clientSettingsPlatform, heldClientSettings } from "./clientSettings";
+import { SECTION_LABEL, SETTINGS_SECTIONS } from "./settingsSections";
 import { fileFailure } from "./failureText";
 import { Radio, RadioGroup } from "../primitives";
 
@@ -27,21 +29,33 @@ export function exportFileName(console?: Pick<Console, "name">): string {
   return safe ? `${base}-${safe}.json` : `${base}-configuration.json`;
 }
 
+const SECTION_NOTE: Record<SettingsSection, PlainMessageKey> = {
+  general: "configuration.export.general.description",
+  app_behavior: "configuration.export.appBehavior.description",
+  git: "configuration.export.git.description",
+  agent_behavior: "configuration.export.agentBehavior.description",
+  keyboard_shortcuts: "configuration.export.shortcuts.description",
+  cleanup: "configuration.export.cleanup.description",
+};
+
 /**
  * Exports configuration to a file the user picks the place of. Its regions are chosen independently: the consoles and
- * projects (the console in hand, `console`, absent when there is none; every console; or none), and under the global
- * settings the application settings and the accounts. Full project paths of the daemon's host are left out unless asked
- * for, and while they are asked for a warning Alert under that choice says what sharing them exposes, so it is read
- * before the document exists. The choice is about project paths alone, whatever else is exported (the accounts'
- * directories are always in the file), so it is not shown while no console is exported, as there is no path to record,
- * and then it is not sent; and Export is unavailable while nothing at all is chosen. The daemon builds the document;
- * this saves it as the daemon sent it, through the platform's save dialog, and says what became of it: the name it was
- * saved under, or only that it was downloaded where the platform cannot say more. What is added are the settings this
- * client holds, which the daemon does not know of: a document with the application settings always gets this client's
- * keyboard shortcut changes (an empty set when none is changed), its appearance, Markdown style and, where the platform
- * has it, whether it runs in the background, whether it shows its menu bar icon and whether it prevents sleep, and
- * when (see `heldClientSettings`), and the language it shows in place of the one the daemon holds. Dismissing the
- * save dialog leaves this one open.
+ * projects (the console in hand, `console`, absent when there is none; every console; or none), under a Settings group
+ * the settings of each Settings section that carries something, and, under an Agent accounts group of their own, the
+ * agent accounts with their agent account settings, a set of records the import reviews one by one rather than
+ * settings; none of the sections or the accounts by default. Full project paths of the daemon's host are left out
+ * unless asked for, and while they are asked for a warning Alert under that choice says what sharing them exposes, so
+ * it is read before the document exists. The choice is about project paths alone, whatever else is exported (the
+ * accounts' directories are always in the file), so it is not shown while no console is exported, as there is no path
+ * to record, and then it is not sent; and Export is unavailable while nothing at all is chosen. The daemon builds the
+ * document; this saves it as the daemon sent it, through the platform's save dialog, and says what became of it: the
+ * name it was saved under, or only that it was downloaded where the platform cannot say more. What is added are the
+ * settings this client holds, which the daemon does not know of: a document that includes the Keyboard shortcuts
+ * section gets this client's shortcut changes (an empty set when none is changed), and with the section they belong to
+ * its appearance, Markdown style, session order and the language it shows in place of the one the daemon holds
+ * (General) and, where the platform has it, whether it runs in the background, whether it shows its menu bar icon and
+ * whether it prevents sleep, and when (App behavior; see `heldClientSettings`). Dismissing the save dialog leaves this
+ * one open.
  */
 export function ExportConfigurationDialog({
   console: inHand,
@@ -52,20 +66,34 @@ export function ExportConfigurationDialog({
 }): React.ReactElement {
   const t = useT();
   const { request, showNotice } = useDaemon();
-  const { configurationFile, backgroundRun, statusItem, keepAwake } = usePlatform();
+  const platform = usePlatform();
+  const { configurationFile, backgroundRun, statusItem, keepAwake } = platform;
   const { choice: appearance } = useOctoboardTheme();
   const language = useCurrentLanguage();
   const { busy, run } = useDialogAction(undefined, t("configuration.export.alertTitle"));
   const [consoles, setConsoles] = useState<ExportedConsoles>(inHand ? "one" : "all");
-  const [includeSettings, setIncludeSettings] = useState(true);
   const [includeAccounts, setIncludeAccounts] = useState(false);
+  const [included, setIncluded] = useState<Record<SettingsSection, boolean>>({
+    general: false,
+    app_behavior: false,
+    git: false,
+    agent_behavior: false,
+    keyboard_shortcuts: false,
+    cleanup: false,
+  });
   const [includePaths, setIncludePaths] = useState(false);
   const warningId = useId();
   const exported = consoles === "one" ? inHand : undefined;
-  const nothing = consoles === "none" && !includeSettings && !includeAccounts;
+  const sections = SETTINGS_SECTIONS.filter((section) => included[section]);
+  // The App behavior note lists the settings this client can hold only where the platform has all of them.
+  const heldHere = backgroundRun !== undefined && statusItem !== undefined && keepAwake !== undefined;
+  const nothing = consoles === "none" && sections.length === 0 && !includeAccounts;
   // A project's path is the only one the choice is about: with no console exported the option is not shown.
   const pathsApply = consoles !== "none";
   const pathsIncluded = includePaths && pathsApply;
+
+  const noteOf = (section: SettingsSection): PlainMessageKey =>
+    section === "app_behavior" && !heldHere ? "configuration.export.appBehavior.description.basic" : SECTION_NOTE[section];
 
   const submit = () => {
     if (!configurationFile || busy || nothing) return;
@@ -74,18 +102,19 @@ export function ExportConfigurationDialog({
         type: "export_configuration",
         console: exported?.id,
         consoles,
-        include_settings: includeSettings,
+        settings_sections: sections,
         include_accounts: includeAccounts,
         ...(pathsApply && { include_paths: pathsIncluded }),
       });
-      // The daemon knows nothing of this client's own settings: a document with the settings gets them here.
+      // The daemon knows nothing of this client's own settings: a document with the settings gets them here, for the
+      // sections that were chosen.
       const file = reply.document.settings
         ? {
           ...reply.document,
           settings: {
             ...reply.document.settings,
-            keyboard_shortcuts: shortcutOverrides.get(),
-            ...heldClientSettings({ appearance, language }, { backgroundRun: backgroundRun !== undefined, menuBarIcon: statusItem !== undefined, keepAwake: keepAwake !== undefined }),
+            ...(sections.includes("keyboard_shortcuts") && { keyboard_shortcuts: shortcutOverrides.get() }),
+            ...heldClientSettings({ appearance, language }, clientSettingsPlatform(platform), sections),
           },
         }
         : reply.document;
@@ -141,34 +170,36 @@ export function ExportConfigurationDialog({
           <Message id="configuration.export.paths.privacy" />
         </ChoiceWarning>
       )}
-      <LabelledGroup label={t("configuration.export.global")}>
-        <div className="flex flex-col gap-3">
-          <ConfirmOption
-            isSelected={includeSettings}
-            onChange={setIncludeSettings}
-            label={t("configuration.export.settings.include")}
-            hint={
-              <Message
-                id="configuration.export.settings.description"
-                params={{
-                  generalSection: <InlineReference>{t("settings.section.general")}</InlineReference>,
-                  appBehaviorSection: <InlineReference>{t("settings.section.appBehavior")}</InlineReference>,
-                  gitSection: <InlineReference>{t("settings.section.git")}</InlineReference>,
-                  behaviorSection: <InlineReference>{t("settings.section.agentPermissions")}</InlineReference>,
-                  shortcutsSection: <InlineReference>{t("settings.section.shortcuts")}</InlineReference>,
-                  cleanupSection: <InlineReference>{t("settings.section.cleanup")}</InlineReference>,
-                }}
+      {/* The body spaces its children 16px apart; a group starts 24px after what precedes it, so it reads apart from the
+          options of the one before. */}
+      <div className="mt-2">
+        <LabelledGroup label={t("settings.title")}>
+          {/* 16px from the label and between the options, as the radio group above spaces its own. */}
+          <div className="mt-2.5 flex flex-col gap-4">
+            {SETTINGS_SECTIONS.map((section) => (
+              <ConfirmOption
+                key={section}
+                isSelected={included[section]}
+                onChange={(on) => setIncluded((current) => ({ ...current, [section]: on }))}
+                label={t(SECTION_LABEL[section])}
+                hint={t(noteOf(section))}
               />
-            }
-          />
-          <ConfirmOption
-            isSelected={includeAccounts}
-            onChange={setIncludeAccounts}
-            label={t("configuration.export.accounts.include")}
-            hint={t("configuration.export.accounts.description")}
-          />
-        </div>
-      </LabelledGroup>
+            ))}
+          </div>
+        </LabelledGroup>
+      </div>
+      <div className="mt-2">
+        <LabelledGroup label={t("settings.section.accounts")}>
+          <div className="mt-2.5">
+            <ConfirmOption
+              isSelected={includeAccounts}
+              onChange={setIncludeAccounts}
+              label={t("configuration.export.accounts.include")}
+              hint={t("configuration.export.accounts.description")}
+            />
+          </div>
+        </LabelledGroup>
+      </div>
     </Dialog>
   );
 }

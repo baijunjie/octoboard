@@ -1,24 +1,35 @@
 import React from "react";
 
 import { useT } from "../i18n/react";
-import type { DocumentSettings, GitWorkflowSettings } from "../protocol";
+import type { DocumentSettings, GitWorkflowSettings, SettingsSection } from "../protocol";
 import { AGENT_BEHAVIOR_SWITCHES, APP_BEHAVIOR_SWITCHES, type ApplicationBooleanField, type BooleanSetting, CLEANUP_SWITCHES, GENERAL_SWITCHES, GIT_SWITCHES } from "./booleanSettings";
 import type { ClientSettings, ClientSettingValue } from "./clientSettings";
-import { BooleanSettingLine, Card, CardHeading, CompositeLine } from "./importParts";
+import { BooleanSettingLine, choiceHeader, CompositeLine, type ImportChoice } from "./importParts";
+import { FlatCard } from "../components/card/FlatCard";
 import { gitWorkflowValues } from "./importValues";
+import { SETTINGS_SECTIONS } from "./settingsSections";
+
+/** The application settings the cards show: the ones the daemon holds, each optional as a document carries them. */
+type GroupedSettings = Pick<DocumentSettings, ApplicationBooleanField | "git_workflow">;
 
 /** This machine's values of the application settings a document carries that the daemon holds, in the shape of the
  * document's own. */
 export type CurrentSettings = { [F in ApplicationBooleanField]: boolean } & { git_workflow: GitWorkflowSettings };
 
 /** One group of settings as a card: `title` as its heading, then `lines` (see `SettingLine`) as its rows; nothing when
- * there are none. */
-export function SettingsGroupCard({ title, lines }: { title: string; lines: React.ReactNode[] }): React.ReactElement | null {
-  if (lines.length === 0) return null;
+ * there are none. With a `choice` the heading carries a checkbox named by the title (see `choiceHeader`), the card stays
+ * when it has no rows, and a section that is not imported collapses to its heading row, marked as left out. */
+export function SettingsGroupCard({ title, lines, choice }: { title: string; lines: React.ReactNode[]; choice?: ImportChoice }): React.ReactElement | null {
+  if (!choice && lines.length === 0) return null;
   return (
-    <Card header={(headingId) => <CardHeading id={headingId}>{title}</CardHeading>}>
-      <ul className="flex flex-col px-4 py-1 [&>li]:groove-b [&>li:last-child]:border-b-0">{lines}</ul>
-    </Card>
+    <FlatCard>
+      {choice ? choiceHeader(title, choice) : (
+        <FlatCard.Header>
+          <FlatCard.Heading>{title}</FlatCard.Heading>
+        </FlatCard.Header>
+      )}
+      {(!choice || choice.on) && lines.length > 0 && <FlatCard.Rows padded>{lines}</FlatCard.Rows>}
+    </FlatCard>
   );
 }
 
@@ -30,24 +41,32 @@ export function SettingsGroupCard({ title, lines }: { title: string; lines: Reac
  * change with what each is now. Without it, it is the result's: each line says what `settings` were applied as, the
  * git workflow listing its values. The daemon holds the switches and the git workflow; the lines of what only the
  * client holds or carries are the caller's: `clientLine` words one of `clientSettings` (appearance, language, Markdown
- * style, run in background, menu bar icon, prevent sleep and when), `cloneDir` is the default clone directory's line
- * and `shortcuts` the keyboard shortcuts', each absent when the document carries none. A group with no line is not
- * drawn.
+ * style, run in background, menu bar icon, prevent sleep and when), `sorting` is the session order's line, `cloneDir`
+ * is the default clone directory's line and `shortcuts` the keyboard shortcuts', each absent when the document carries
+ * none. Only the `sections` given are drawn (all of them when absent), and a group with no line is not drawn: what
+ * `settings` lacks has no line. With `choices` (the review's) every section drawn is a card with a checkbox for
+ * importing it, drawn even with no line and collapsed while unchecked (see `SettingsGroupCard`).
  */
 export function SettingsGroups({
   settings,
   current,
   clientSettings,
   clientLine,
+  sorting,
   cloneDir,
   shortcuts,
+  sections = SETTINGS_SECTIONS,
+  choices,
 }: {
-  settings: DocumentSettings;
+  settings: GroupedSettings;
   current?: CurrentSettings;
   clientSettings: ClientSettingValue[];
   clientLine: (setting: ClientSettingValue) => React.ReactElement;
+  sorting?: React.ReactElement;
   cloneDir?: React.ReactElement;
   shortcuts?: React.ReactElement;
+  sections?: readonly SettingsSection[];
+  choices?: Record<SettingsSection, ImportChoice>;
 }): React.ReactElement {
   const t = useT();
   const comparing = current !== undefined;
@@ -60,13 +79,21 @@ export function SettingsGroups({
   const appBehaviorSwitches = (...fields: ApplicationBooleanField[]) => switchLines(APP_BEHAVIOR_SWITCHES.filter(({ field }) => fields.includes(field)));
   const clientLines = (...fields: (keyof ClientSettings)[]) =>
     clientSettings.filter(({ field }) => fields.includes(field)).map((setting) => React.cloneElement(clientLine(setting), { key: setting.field }));
-  return (
-    <>
+  const cards: Record<SettingsSection, React.ReactElement> = {
+    general: (
       <SettingsGroupCard
+        choice={choices?.general}
         title={t("settings.section.general")}
-        lines={[...clientLines("appearance", "interface_language", "markdown_style"), ...switchLines(GENERAL_SWITCHES)]}
+        lines={[
+          ...clientLines("appearance", "interface_language", "markdown_style"),
+          ...(sorting ? [React.cloneElement(sorting, { key: "sorting" })] : []),
+          ...switchLines(GENERAL_SWITCHES),
+        ]}
       />
+    ),
+    app_behavior: (
       <SettingsGroupCard
+        choice={choices?.app_behavior}
         title={t("settings.section.appBehavior")}
         lines={[
           ...appBehaviorSwitches("resume_sessions_on_start"),
@@ -74,17 +101,23 @@ export function SettingsGroups({
           ...appBehaviorSwitches("auto_close_idle_shell_terminals"),
         ]}
       />
+    ),
+    git: (
       <SettingsGroupCard
+        choice={choices?.git}
         title={t("settings.section.git")}
         lines={[
           ...(cloneDir ? [React.cloneElement(cloneDir, { key: "clone-dir" })] : []),
           ...switchLines(GIT_SWITCHES),
-          <CompositeLine key="git-workflow" label={t("configuration.import.gitWorkflow")} values={gitWorkflowValues(t, settings.git_workflow, current?.git_workflow)} comparing={comparing} />,
+          ...(settings.git_workflow
+            ? [<CompositeLine key="git-workflow" label={t("configuration.import.gitWorkflow")} values={gitWorkflowValues(t, settings.git_workflow, current?.git_workflow)} comparing={comparing} />]
+            : []),
         ]}
       />
-      <SettingsGroupCard title={t("settings.section.agentPermissions")} lines={switchLines(AGENT_BEHAVIOR_SWITCHES)} />
-      <SettingsGroupCard title={t("settings.section.shortcuts")} lines={shortcuts ? [React.cloneElement(shortcuts, { key: "shortcuts" })] : []} />
-      <SettingsGroupCard title={t("settings.section.cleanup")} lines={switchLines(CLEANUP_SWITCHES)} />
-    </>
-  );
+    ),
+    agent_behavior: <SettingsGroupCard choice={choices?.agent_behavior} title={t("settings.section.agentPermissions")} lines={switchLines(AGENT_BEHAVIOR_SWITCHES)} />,
+    keyboard_shortcuts: <SettingsGroupCard choice={choices?.keyboard_shortcuts} title={t("settings.section.shortcuts")} lines={shortcuts ? [React.cloneElement(shortcuts, { key: "shortcuts" })] : []} />,
+    cleanup: <SettingsGroupCard choice={choices?.cleanup} title={t("settings.section.cleanup")} lines={switchLines(CLEANUP_SWITCHES)} />,
+  };
+  return <>{SETTINGS_SECTIONS.filter((section) => sections.includes(section)).map((section) => <React.Fragment key={section}>{cards[section]}</React.Fragment>)}</>;
 }

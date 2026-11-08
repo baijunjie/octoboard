@@ -125,10 +125,10 @@ it("tells of the default accounts switched and of the Agent accounts settings, w
       }}
     />,
   );
-  expect(container.textContent).toContain("The default account of Claude Code is now disabled.");
-  expect(container.textContent).toContain("The default account of Codex is now enabled.");
+  expect(container.textContent).toContain("The default account is now disabled.");
+  expect(container.textContent).toContain("The default account is now enabled.");
   expect(container.textContent).not.toContain("The default account of Grok");
-  expect(container.querySelector("section > h3")?.textContent).toBe("Agent account settings");
+  expect(container.querySelector("section > div > h3")?.textContent).toBe("Agent account settings");
   expect(settingLinesOf(container.querySelector("section[aria-labelledby] > ul")!)).toEqual({
     "Automatically select an account": { badge: "On" },
     "Automatically switch accounts at the usage limit": { badge: "Off" },
@@ -149,13 +149,13 @@ it("says nothing failed for the consoles and the accounts beside a failure to ap
   const accounts = { ...NO_ACCOUNTS, agents: [{ agent: "claude" as const, default_name_applied: false, default_disabled_applied: null, accounts: [{ name: "Work", status: "created" as const, account: "a1", error: null }] }] };
   const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, accounts, settings_error, settings_applied: null }} />);
   // The settings failure brings its tab forward; each other region's totals depend on its own failures alone.
-  expect(container.textContent).toContain("The application settings could not be applied");
-  expect(container.querySelector("[role=tab][aria-selected=true]")!.textContent).toBe("Application settings");
+  expect(container.textContent).toContain("The settings could not be applied");
+  expect(container.querySelector("[role=tab][aria-selected=true]")!.textContent).toBe("Settings");
   // The failure's literal takes the danger tone of the line it is in.
   expect(container.querySelector("code")?.getAttribute("data-color")).toBe("danger");
   await openTab("Consoles and projects");
   expect(container.querySelector("ul[aria-label='Totals for consoles and projects']")!.textContent).toContain("Nothing failed");
-  await openTab("Accounts");
+  await openTab("Agent accounts");
   expect(container.querySelector("ul[aria-label='Totals for accounts']")!.textContent).toContain("Nothing failed");
 });
 
@@ -182,7 +182,7 @@ it("announces a failure to apply the settings once focus has settled, with its t
   act(() => vi.advanceTimersByTime(1));
   const alerts = container.querySelectorAll('[role="alert"]');
   expect(alerts).toHaveLength(1);
-  expect(alerts[0].textContent).toContain("The application settings could not be applied");
+  expect(alerts[0].textContent).toContain("The settings could not be applied");
   expect(alerts[0].textContent).not.toContain("/Users/dev/missing is");
 });
 
@@ -202,8 +202,8 @@ it("opens no error alert for partial import failures: the result screen already 
   expect(totals(container)).toEqual(["1 console created", "1 failed"]);
   expect(container.querySelector("section li")!.textContent).toContain("/missing does not exist.");
   // The tab with the settings' failure is marked, and shows it once opened.
-  expect(document.querySelector("[role=tab][aria-label='Application settings, needs attention']")).not.toBeNull();
-  await openTab("Application settings");
+  expect(document.querySelector("[role=tab][aria-label='Settings, needs attention']")).not.toBeNull();
+  await openTab("Settings");
   // The reason is the application's own sentence; what the system said is behind Details.
   expect(container.textContent).toContain("Something unexpected went wrong.");
   expect(container.textContent).not.toContain("Settings unavailable");
@@ -279,12 +279,12 @@ it("tells of the default clone directory only where it was applied, and of the c
 it("keeps the clone directory that was written when the settings could not be applied, in a card beside the alert", () => {
   const settings_error = { code: "path_not_found", params: { path: "/Users/dev/missing" }, message: "no" };
   const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: null, settings_error, clone_dir_applied: "/Users/dev/Code", accounts: null }} />);
-  expect(container.textContent).toContain("The application settings could not be applied");
+  expect(container.textContent).toContain("The settings could not be applied");
   expect(container.querySelector("[role=tab][aria-selected=true]")).toBeNull();
   // The one region stands without a tab bar, its alert first and the directory in the Git card, as the settings'.
   expect(settingGroupsOf(container)).toEqual([{ title: "Git", lines: ["Default clone directory"] }]);
   // The line says the directory was set before the rest failed, so it does not read as contradicting the alert.
-  expect(settingLines(container)["Default clone directory"]).toEqual({ badge: "Matches the file", note: "Set before the other application settings failed to apply./Users/dev/Code" });
+  expect(settingLines(container)["Default clone directory"]).toEqual({ badge: "Matches the file", note: "Set before the other settings failed to apply./Users/dev/Code" });
   const text = container.textContent!;
   expect(text.indexOf("could not be applied")).toBeLessThan(text.indexOf("Default clone directory"));
 });
@@ -324,7 +324,7 @@ it("marks a console and a project whose account fell back with a warning mark af
   expect(container.querySelector("section")!.textContent).not.toContain("is not set up");
   press(marks[1]);
   expect(document.querySelector("[data-status-mark-popover]")?.textContent).toBe("The Codex account Personal is not set up here, so the default account is used.");
-  await openTab("Application settings");
+  await openTab("Settings");
   expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["App behavior", "Git", "Agent behavior", "Cleanup"]);
 });
 
@@ -353,7 +353,7 @@ it("shows tabs only for the regions that were imported", () => {
   const accounts = NO_ACCOUNTS;
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
   const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, accounts, settings_applied: null, settings_error: null }} />);
-  expect(tabs()).toEqual(["Consoles and projects", "Accounts"]);
+  expect(tabs()).toEqual(["Consoles and projects", "Agent accounts"]);
   // Imported without the consoles, only the accounts are left: one panel, no tab bar.
   container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], accounts, settings_applied: null, settings_error: null }} />);
   expect(tabs()).toEqual([]);

@@ -99,8 +99,10 @@ The sort is chosen in the **Sorting** group at the end of Settings' General sect
 
 A choice applies at once, to the rules above. The three choices make **one sort, shared by every console and every
 view**; neither the sidebar nor a focus mode has a sort control of its own. The sort is kept by this client and
-survives reloading; it is not shared with other clients, the daemon does not hold it, and a configuration export does
-not carry it (see "Which settings travel" in `docs/product/settings-in-a-configuration.md`). Another page of the same
+survives reloading; it is not shared with other clients and the daemon does not hold it. A configuration export that
+includes the General section carries this client's sort, and an import asked to apply that section sets it on the
+client that runs the import alone (see "The application settings an export carries" and "The settings a client holds"
+in `docs/product/settings-in-a-configuration.md`). Another page of the same
 client open at the same time, such as a second browser tab, picks up a change only once reloaded. If client storage is
 unavailable, a choice lasts for the current page load only.
 

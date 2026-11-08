@@ -7,7 +7,9 @@ use serde::Deserialize;
 use super::agents::{AgentId, Change, Launch, LaunchChange, PerAgent};
 #[cfg(test)]
 use super::bindings;
-use super::configuration::{AccountResolution, ExportedConsoles, ProjectResolution};
+use super::configuration::{
+    AccountResolution, ExportedConsoles, ProjectResolution, SettingsSection,
+};
 use super::fields::{default_true, present_option};
 use super::git_workflow::{
     GitWorkflowOverride, GitWorkflowOverrideChanges, GitWorkflowSettingsChanges,
@@ -270,17 +272,21 @@ pub enum RequestBody {
         agent_session_id: String,
     },
     /// The configuration document, answered with `configuration_exported`: the regions picked by
-    /// `consoles` (`one`, the console `console`; `all`; or `none`), `include_settings` (the
-    /// application settings) and `include_accounts` (the account structure, never a credential).
-    /// Absent fields keep their older meaning: `consoles` is `one` when `console` is given and
-    /// `all` otherwise, `include_settings` is true exactly when every console is exported, and
-    /// `include_accounts` is false. A request that would export nothing is refused with
-    /// `export_empty`, `consoles: "one"` without a `console` with `field_required`, and a console
-    /// that does not exist with `unknown_console`. `console` is read only for `one`. Reads what is
-    /// stored; touches no session, runs no `git`. `include_paths` says whether each project's
-    /// absolute directory path is written; absent is true. False writes only the directory's name,
-    /// and a remote that cannot be cloned from (a local path) is left out, so the file reveals no
-    /// project path of this machine. An account directory is always written, whatever it says.
+    /// `consoles` (`one`, the console `console`; `all`; or `none`), `settings_sections` (the
+    /// application settings of those sections of Settings, written in one `settings` region) and
+    /// `include_accounts` (the account structure, never a credential). Absent fields keep their
+    /// older meaning: `consoles` is `one` when `console` is given and `all` otherwise,
+    /// `settings_sections` is every section exactly when every console is exported (none
+    /// otherwise; an empty list writes no `settings` region), and `include_accounts` is false.
+    /// A section is written with the keys the daemon holds, so General carries only
+    /// `interface_language`, and only when the daemon holds one. A request that would export
+    /// nothing is refused with `export_empty`, `consoles: "one"` without a `console` with
+    /// `field_required`, and a console that does not exist with `unknown_console`. `console` is
+    /// read only for `one`. Reads what is stored; touches no session, runs no `git`.
+    /// `include_paths` says whether each project's absolute directory path is written; absent is
+    /// true. False writes only the directory's name, and a remote that cannot be cloned from (a
+    /// local path) is left out, so the file reveals no project path of this machine. An account
+    /// directory is always written, whatever it says.
     ExportConfiguration {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
@@ -290,7 +296,7 @@ pub enum RequestBody {
         consoles: Option<ExportedConsoles>,
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
-        include_settings: Option<bool>,
+        settings_sections: Option<Vec<SettingsSection>>,
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         include_accounts: Option<bool>,
@@ -328,17 +334,26 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
         resolutions: Vec<ProjectResolution>,
-        /// Whether to apply the document's application settings to this machine; absent means
-        /// false. Asking for them of a document that carries none is refused with
-        /// `import_settings_missing`.
+        /// The sections of Settings whose application settings of the document to apply to this
+        /// machine; absent or empty applies none, and a section listed twice counts once. Listing
+        /// a section the document does not carry is refused with `import_settings_missing`.
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
-        apply_settings: bool,
+        apply_settings: Vec<SettingsSection>,
         /// Whether to create the document's accounts on this machine; absent means false. Asking
         /// for them of a document that carries none is refused with `import_accounts_missing`.
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
         apply_accounts: bool,
+        /// The agents whose part of the document's accounts to apply, with `apply_accounts`: the
+        /// agent's place in the added agents, its default account's name and flag, its accounts,
+        /// its provider settings and its tags. Absent applies every agent the document carries,
+        /// and one listed twice counts once; the Agent accounts switches are applied whichever
+        /// are listed. Listing an agent the document carries nothing for is refused with
+        /// `import_agent_missing`.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        apply_agents: Option<Vec<AgentId>>,
         /// The choices for document accounts; one that names an account the document lacks,
         /// names one twice, gives both or neither of `directory` and `leave_out`, or gives a
         /// `directory` that is neither an absolute path nor starts with `~/`, is refused with
@@ -357,10 +372,10 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
         import_id: Option<String>,
-        /// Whether, applying the settings, to take the document's default clone directory; absent
-        /// means true. Without it this machine's own stays, and the clones this import makes go
-        /// there. It is written before the projects are placed, whatever the rest of the settings
-        /// come to.
+        /// Whether, applying the `git` section, to take the document's default clone directory;
+        /// absent means true. Without it this machine's own stays, and the clones this import makes
+        /// go there. It is written before the projects are placed, whatever the rest of the
+        /// settings come to.
         #[serde(default = "default_true")]
         #[cfg_attr(test, ts(optional = nullable))]
         apply_clone_dir: bool,

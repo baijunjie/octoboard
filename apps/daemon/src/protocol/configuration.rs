@@ -39,8 +39,8 @@ pub struct ConfigurationDocument {
     /// The Octoboard version that produced the document, for diagnosing one that misbehaves. An
     /// import never reads it; `null` when the producer did not record one.
     pub exported_by: Option<String>,
-    /// The application settings that are not console-scoped. Present exactly when the export
-    /// included them, whichever consoles it holds.
+    /// The application settings that are not console-scoped. Present when at least one section
+    /// of them was exported, whichever consoles the export holds.
     pub settings: Option<DocumentSettings>,
     /// The account structure. Present exactly when the export included it; a reader that does not
     /// know the field ignores it.
@@ -131,74 +131,305 @@ pub struct DocumentAccount {
     pub disabled: bool,
 }
 
+/// A section of Settings whose application settings an export can carry and an import apply on
+/// its own; the Agent accounts section is the accounts region instead.
 #[cfg_attr(test, derive(ts_rs::TS))]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct DocumentSettings {
-    pub auto_close_idle_shell_terminals: bool,
-    pub auto_pull_repositories: bool,
-    pub auto_delete_unresumable_archives: bool,
-    pub auto_approve_session_requests: bool,
-    pub auto_approve_resume_requests: bool,
-    pub auto_approve_account_switches: bool,
-    pub auto_approve_handoffs: bool,
-    pub ask_questions_as_choices: bool,
-    /// Whether the daemon resumes the interrupted sessions when it starts (see
-    /// `Settings.resume_sessions_on_start`). Absent in a document from a build that had no such
-    /// setting, which an import then leaves as this machine has it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SettingsSection {
+    General,
+    AppBehavior,
+    Git,
+    AgentBehavior,
+    KeyboardShortcuts,
+    Cleanup,
+}
+
+impl SettingsSection {
+    /// Every section, in the order Settings lists them. A new variant goes here too: neither the
+    /// compiler nor the `wire_name` test notices one left out.
+    pub const ALL: [SettingsSection; 6] = [
+        Self::General,
+        Self::AppBehavior,
+        Self::Git,
+        Self::AgentBehavior,
+        Self::KeyboardShortcuts,
+        Self::Cleanup,
+    ];
+
+    /// The name it has on the wire, which is what the serialization writes.
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            Self::General => "general",
+            Self::AppBehavior => "app_behavior",
+            Self::Git => "git",
+            Self::AgentBehavior => "agent_behavior",
+            Self::KeyboardShortcuts => "keyboard_shortcuts",
+            Self::Cleanup => "cleanup",
+        }
+    }
+
+    /// `sections` without repeats, in Settings order.
+    pub fn normalized(sections: &[SettingsSection]) -> Vec<SettingsSection> {
+        Self::ALL
+            .into_iter()
+            .filter(|section| sections.contains(section))
+            .collect()
+    }
+}
+
+/// The client-held sorting choices of the General section: how sessions and projects are ordered.
+/// Each part is the id of an order, which the daemon neither reads nor checks.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentSessionOrder {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub resume_sessions_on_start: Option<bool>,
-    /// The application-wide git workflow settings.
-    pub git_workflow: GitWorkflowSettings,
-    /// The default clone directory as `~/<relative path>` under the exporting machine's home
-    /// directory (also `~` for the home directory itself), otherwise the absolute path, whatever
-    /// the export's paths choice. An import applies it only when the user asks to, and it must be
-    /// usable here (absolute, or starting with `~/`). `null` in a document upgraded from version
-    /// 1, which did not carry it: importing it leaves this machine's as it is.
-    pub default_clone_dir: Option<String>,
+    #[cfg_attr(test, ts(optional))]
+    pub sessions: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub active_projects: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub inactive_projects: Option<String>,
+}
+
+/// The application settings of a document, by Settings section. Every key is optional: a key
+/// (absent or `null`) the document does not carry is left as this machine has it, and a section is
+/// carried when any of its keys is. A field's position sets the key order of an exported file and
+/// of the generated TypeScript, so within its section's group it follows the order of that
+/// section's rows on the Settings page.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DocumentSettings {
+    // General.
+    /// The window's appearance (`light`, `dark` or `system`), which only the client holds (in its
+    /// `localStorage`), carried like `run_in_background`. A value the importing client does not
+    /// know is ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub appearance: Option<String>,
     /// The language tag of the exporting client's interface (see `Settings.interface_language`):
     /// the daemon writes the one it holds and the client replaces it with the one it shows, which
     /// is the language the user chose. An import applies it only when this build offers it. Absent
     /// when neither knew one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub interface_language: Option<String>,
-    /// The window's appearance (`light`, `dark` or `system`), which only the client holds (in its
-    /// `localStorage`): the client adds it to a document it saves and applies it from an import's
-    /// reply, so the daemon builds none, stores it nowhere and passes it through an import's reply
-    /// as it came. A value the importing client does not know is ignored. Absent in a document a
-    /// client saved without it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub appearance: Option<String>,
     /// How a rendered Markdown document is styled (the style's id), carried like `appearance`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub markdown_style: Option<String>,
-    /// Whether closing the window leaves the app running in the background, carried like
-    /// `appearance`. Only a client that has the setting (the desktop app) writes it, and only
-    /// such a client applies it.
+    /// How sessions and projects are sorted, carried like `appearance`. The client writes all three
+    /// parts, so an import sets the sort exactly, and applies each part whose value it knows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub session_order: Option<DocumentSessionOrder>,
+    // App behavior.
+    /// Whether the daemon resumes the interrupted sessions when it starts (see
+    /// `Settings.resume_sessions_on_start`). Absent in a document from a build that had no such
+    /// setting, which an import then leaves as this machine has it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub resume_sessions_on_start: Option<bool>,
+    /// Whether closing the window leaves the app running in the background, which only the client
+    /// holds: the client adds it to a document it saves and applies it from an import's reply, so
+    /// the daemon builds none, stores it nowhere and passes it through an import's reply as it
+    /// came. Only a client that has the setting (the desktop app) writes it, and only such a
+    /// client applies it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub run_in_background: Option<bool>,
     /// Whether the menu bar icon (the notification area icon on Windows) is shown, carried like
     /// `run_in_background`: only a client that has the icon (the desktop app) writes it, and only
     /// such a client applies it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub show_menu_bar_icon: Option<bool>,
     /// Whether the desktop app holds the computer and its display awake (Prevent sleep), carried
     /// like `run_in_background`: only a client that can (the desktop app) writes it, and only such
     /// a client applies it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub keep_awake: Option<bool>,
     /// When Prevent sleep holds: `always`, or `working` (while a session is working), carried like
     /// `keep_awake`. A value the importing client does not know is ignored.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub keep_awake_when: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub auto_close_idle_shell_terminals: Option<bool>,
+    // Git.
+    /// The default clone directory as `~/<relative path>` under the exporting machine's home
+    /// directory (also `~` for the home directory itself), otherwise the absolute path, whatever
+    /// the export's paths choice. An import applies it only when the user asks to, and it must be
+    /// usable here (absolute, or starting with `~/`). `null` in a document upgraded from version
+    /// 1, which did not carry it: importing it leaves this machine's as it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub default_clone_dir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub auto_pull_repositories: Option<bool>,
+    /// The application-wide git workflow settings; when present, all of its items are.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub git_workflow: Option<GitWorkflowSettings>,
+    // Agent behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub auto_approve_session_requests: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub auto_approve_resume_requests: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub auto_approve_account_switches: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub auto_approve_handoffs: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub ask_questions_as_choices: Option<bool>,
+    // Keyboard shortcuts.
     /// The keyboard shortcuts the exporting client has changed, by command id, which only the
-    /// client reads and writes: the client adds them to a full export it saves (an empty object
-    /// when it has none changed, which on import means every shortcut at its default) and applies
-    /// them from an import. The daemon builds none, stores them nowhere and does not read them, so
+    /// client reads and writes: the client adds them to a document it saves (an empty object when
+    /// it has none changed, which on import means every shortcut at its default) and applies them
+    /// from an import. The daemon builds none, stores them nowhere and does not read them, so
     /// they pass through an import's reply as they came. Absent in a document a client saved
     /// without them: importing it leaves the client's shortcuts as they are.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(test, ts(type = "unknown"))]
+    #[cfg_attr(test, ts(type = "unknown", optional))]
     pub keyboard_shortcuts: Option<serde_json::Value>,
+    // Cleanup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub auto_delete_unresumable_archives: Option<bool>,
+}
+
+impl DocumentSettings {
+    /// Whether the document carries `section`: any of its keys is present. Every field is named,
+    /// so a new one cannot be added without being placed in a section.
+    pub fn carries(&self, section: SettingsSection) -> bool {
+        let Self {
+            appearance,
+            interface_language,
+            markdown_style,
+            session_order,
+            resume_sessions_on_start,
+            run_in_background,
+            show_menu_bar_icon,
+            keep_awake,
+            keep_awake_when,
+            auto_close_idle_shell_terminals,
+            default_clone_dir,
+            auto_pull_repositories,
+            git_workflow,
+            auto_approve_session_requests,
+            auto_approve_resume_requests,
+            auto_approve_account_switches,
+            auto_approve_handoffs,
+            ask_questions_as_choices,
+            keyboard_shortcuts,
+            auto_delete_unresumable_archives,
+        } = self;
+        match section {
+            SettingsSection::General => {
+                appearance.is_some()
+                    || interface_language.is_some()
+                    || markdown_style.is_some()
+                    || session_order.is_some()
+            }
+            SettingsSection::AppBehavior => {
+                resume_sessions_on_start.is_some()
+                    || run_in_background.is_some()
+                    || show_menu_bar_icon.is_some()
+                    || keep_awake.is_some()
+                    || keep_awake_when.is_some()
+                    || auto_close_idle_shell_terminals.is_some()
+            }
+            SettingsSection::Git => {
+                default_clone_dir.is_some()
+                    || auto_pull_repositories.is_some()
+                    || git_workflow.is_some()
+            }
+            SettingsSection::AgentBehavior => {
+                auto_approve_session_requests.is_some()
+                    || auto_approve_resume_requests.is_some()
+                    || auto_approve_account_switches.is_some()
+                    || auto_approve_handoffs.is_some()
+                    || ask_questions_as_choices.is_some()
+            }
+            SettingsSection::KeyboardShortcuts => keyboard_shortcuts.is_some(),
+            SettingsSection::Cleanup => auto_delete_unresumable_archives.is_some(),
+        }
+    }
+
+    /// The sections the document carries, in Settings order.
+    pub fn carried_sections(&self) -> Vec<SettingsSection> {
+        SettingsSection::ALL
+            .into_iter()
+            .filter(|section| self.carries(*section))
+            .collect()
+    }
+
+    /// The document's keys of `sections` only; every other key is dropped. Every field is named,
+    /// so a new one cannot be added without being placed in a section.
+    pub fn only(self, sections: &[SettingsSection]) -> Self {
+        let keep = |section| sections.contains(&section);
+        let general = keep(SettingsSection::General);
+        let app_behavior = keep(SettingsSection::AppBehavior);
+        let git = keep(SettingsSection::Git);
+        let agent_behavior = keep(SettingsSection::AgentBehavior);
+        let keyboard = keep(SettingsSection::KeyboardShortcuts);
+        let cleanup = keep(SettingsSection::Cleanup);
+        let Self {
+            appearance,
+            interface_language,
+            markdown_style,
+            session_order,
+            resume_sessions_on_start,
+            run_in_background,
+            show_menu_bar_icon,
+            keep_awake,
+            keep_awake_when,
+            auto_close_idle_shell_terminals,
+            default_clone_dir,
+            auto_pull_repositories,
+            git_workflow,
+            auto_approve_session_requests,
+            auto_approve_resume_requests,
+            auto_approve_account_switches,
+            auto_approve_handoffs,
+            ask_questions_as_choices,
+            keyboard_shortcuts,
+            auto_delete_unresumable_archives,
+        } = self;
+        Self {
+            appearance: appearance.filter(|_| general),
+            interface_language: interface_language.filter(|_| general),
+            markdown_style: markdown_style.filter(|_| general),
+            session_order: session_order.filter(|_| general),
+            resume_sessions_on_start: resume_sessions_on_start.filter(|_| app_behavior),
+            run_in_background: run_in_background.filter(|_| app_behavior),
+            show_menu_bar_icon: show_menu_bar_icon.filter(|_| app_behavior),
+            keep_awake: keep_awake.filter(|_| app_behavior),
+            keep_awake_when: keep_awake_when.filter(|_| app_behavior),
+            auto_close_idle_shell_terminals: auto_close_idle_shell_terminals
+                .filter(|_| app_behavior),
+            default_clone_dir: default_clone_dir.filter(|_| git),
+            auto_pull_repositories: auto_pull_repositories.filter(|_| git),
+            git_workflow: git_workflow.filter(|_| git),
+            auto_approve_session_requests: auto_approve_session_requests.filter(|_| agent_behavior),
+            auto_approve_resume_requests: auto_approve_resume_requests.filter(|_| agent_behavior),
+            auto_approve_account_switches: auto_approve_account_switches.filter(|_| agent_behavior),
+            auto_approve_handoffs: auto_approve_handoffs.filter(|_| agent_behavior),
+            ask_questions_as_choices: ask_questions_as_choices.filter(|_| agent_behavior),
+            keyboard_shortcuts: keyboard_shortcuts.filter(|_| keyboard),
+            auto_delete_unresumable_archives: auto_delete_unresumable_archives.filter(|_| cleanup),
+        }
+    }
 }
 
 /// A reference to an account: its name, which is unique within its agent. The agent is the one
@@ -416,7 +647,8 @@ pub struct OffersUnderCloneDir {
 }
 
 /// The application settings a document carries, beside the value this machine has now, so a client
-/// can show what applying them would change.
+/// can show what applying them would change. A key the document does not carry is reported as this
+/// machine's value, so its line reads as no change.
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedSettings {
@@ -720,4 +952,73 @@ pub struct ImportedAccounts {
     pub agent_settings_applied: Option<DocumentAgentSettings>,
     /// Why the settings of the Agent accounts section were not applied.
     pub agent_settings_error: Option<ImportFailure>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A document that carries every key, so a key a section forgets shows up in its tests.
+    fn full() -> DocumentSettings {
+        DocumentSettings {
+            interface_language: Some("de".to_string()),
+            appearance: Some("dark".to_string()),
+            markdown_style: Some("github".to_string()),
+            session_order: Some(DocumentSessionOrder {
+                sessions: Some("recent".to_string()),
+                active_projects: None,
+                inactive_projects: None,
+            }),
+            resume_sessions_on_start: Some(true),
+            auto_close_idle_shell_terminals: Some(true),
+            run_in_background: Some(true),
+            show_menu_bar_icon: Some(true),
+            keep_awake: Some(true),
+            keep_awake_when: Some("always".to_string()),
+            default_clone_dir: Some("~/code".to_string()),
+            auto_pull_repositories: Some(true),
+            git_workflow: Some(GitWorkflowSettings::default()),
+            auto_approve_session_requests: Some(true),
+            auto_approve_resume_requests: Some(true),
+            auto_approve_account_switches: Some(true),
+            auto_approve_handoffs: Some(true),
+            ask_questions_as_choices: Some(true),
+            keyboard_shortcuts: Some(serde_json::json!({})),
+            auto_delete_unresumable_archives: Some(true),
+        }
+    }
+
+    #[test]
+    fn a_section_keeps_only_its_own_keys_and_the_sections_make_up_the_document() {
+        let document = full();
+        assert_eq!(document.carried_sections(), SettingsSection::ALL);
+        for section in SettingsSection::ALL {
+            let only = document.clone().only(&[section]);
+            assert_eq!(only.carried_sections(), [section]);
+        }
+        // Each key is in exactly one section's part: together the parts have as many keys as the
+        // document, and putting them back gives it.
+        let mut rebuilt = serde_json::Map::new();
+        let mut parts = 0;
+        for section in SettingsSection::ALL {
+            let only = serde_json::to_value(document.clone().only(&[section])).unwrap();
+            for (key, value) in only.as_object().unwrap() {
+                parts += 1;
+                rebuilt.insert(key.clone(), value.clone());
+            }
+        }
+        let whole = serde_json::to_value(&document).unwrap();
+        assert_eq!(parts, whole.as_object().unwrap().len());
+        assert_eq!(serde_json::Value::Object(rebuilt), whole);
+    }
+
+    #[test]
+    fn a_section_is_written_on_the_wire_as_its_wire_name() {
+        for section in SettingsSection::ALL {
+            assert_eq!(
+                serde_json::to_value(section).unwrap(),
+                serde_json::Value::String(section.wire_name().to_string())
+            );
+        }
+    }
 }

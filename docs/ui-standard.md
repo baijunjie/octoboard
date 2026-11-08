@@ -2071,16 +2071,19 @@ the trigger. Search fields keep their native clear action and return focus to th
 A hand-built card that its content already identifies has no outline of its own: it is set apart by the short two-layer
 panel shadow (`shadow-(--panel-shadow)`, as the focus-mode session cards are), with a transparent border holding the
 place a selected state's border takes. That edge is decorative and is not held to 3:1; a panel card's hairline
-(`panel-edge`) and a groove divider (`groove-b` and its other sides) are decorative in the same way. Its selected state
+(`panel-edge`), a groove divider (`groove-b` and its other sides) and a flat divider (`hairline-b`) are decorative in
+the same way. Its selected state
 takes the accent icon colour (`--accent-soft-foreground`, see "One definition per semantic colour"), which reaches 3:1.
 
 A card that sits on a dialog's own surface has no other surface to stand off from, and the panel shadow alone is
-invisible on white (and on the dark dialog, whose shadow is black on near-black). The import dialog's cards, in its
-review and its result alike (`CARD_CLASS` in `packages/ui/src/configuration/importParts.tsx`), are framed as a table
-instead: the `panel-edge` hairline round the card and a groove between rows, with no shadow, and the rows on the
-dialog's own background. A card's header row (`CARD_HEADER_CLASS`, the same file) takes the fill of the fields in the
-rows (`--control-fill`, the dialog's floating fill), so the heading reads apart from the rows under it in both
-appearances; no field sits in a header, so the shared fill hides nothing. That fill and the hairline are decorative and
+invisible on white (and on the dark dialog, whose shadow is black on near-black). Such a flat card is framed as a table
+instead, and it is built with `FlatCard` (`packages/ui/src/components/card/FlatCard.tsx`, the import dialog's cards in
+its review and its result alike): the component draws the `panel-edge` hairline round the card with no shadow and the
+rows on the dialog's own background, the header row and the heading band on the fields' fill (`--control-fill`, the
+dialog's floating fill) with no line of their own, and the plain inset hairline between rows and blocks. Its doc comment
+states the rules, so a caller writes no divider, inset or fill class of its own (see "Where a groove goes" below). The
+one control in a header is the import checkbox of a Settings section card or an agent card, which keeps HeroUI's default variant, since the
+secondary variant's box takes this same fill and would vanish on it. That fill and the hairline are decorative and
 not held to 3:1; the header's text and glyphs are held to their usual ratios against it, the muted project count
 being the closest at about 4.6:1. These fills stay in the import dialog: the dialog's surface and HeroUI's controls
 are not restyled for them.
@@ -2106,6 +2109,24 @@ at rest (about `oklch(0.275)`) no longer stands apart from the panel, and HeroUI
 Keeping the raised card is a kept shortfall by the user's decision (see "Conformance level and exceptions"), marked at
 `--panel-row` in `packages/ui/src/styles/surfaces.css` and at the card in `ProcessesPanel.tsx`; the buttons themselves keep
 HeroUI's look.
+
+#### Where a groove goes
+
+A groove (`groove-b` and its other sides, `packages/ui/src/style.css`) is a seam carved into a surface: a line darker
+and a line lighter than the ground it crosses. Its only purpose is depth, so it belongs only on the dimensional parts of
+the interface — the panes, panel headers and toolbars, the rail and sidebar, a floating panel with a shadow around it
+(such as the quota panel), a sticky heading over a pane's scrolling list, a section band in a pane such as the change
+list's — and nowhere flat. Whether a part has a fill does not decide it: a filled band in a dimensional pane takes a
+groove like any other divider there. A flat card or a table (the import dialog's cards, a list of rows in a dialog or on
+the Settings pages, a table's cells) divides its rows and blocks with one plain hairline, `hairline-b` (the colour of a
+panel card's outline, `--panel-hairline`, at `--hairline-width`), never a groove. A filled header or band on a flat
+card is set apart by its fill alone, with no line at its edges, and a divider inside a card body is inset by the
+card's padding. `FlatCard` (`packages/ui/src/components/card/FlatCard.tsx`) draws all of this, so a flat card is built
+with it rather than by hand.
+
+Known flat places that still draw a groove, to be migrated to `FlatCard`: the Settings rows (`SettingRow.tsx`,
+`SettingsLead.tsx`), the accounts table (`AccountsTable.tsx`), the confirmation sections (`ConfirmSection.tsx`) and the
+dialogs' row lists (`ThirdPartyLicensesDialog.tsx`, `AddAgentDialog.tsx`).
 
 ### A colour mark whose meaning is in words
 

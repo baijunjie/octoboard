@@ -64,18 +64,22 @@ fn a_document_without_exported_by_is_read_with_none() {
     assert_eq!(parsed.consoles.len(), 1);
 }
 
-/// Every export writes the whole settings region, so a document whose region lacks a part of
-/// it is not one an export produced, and is refused rather than filled in.
+/// A document carries only the settings of the sections it was exported with, so a key may be
+/// absent; the git workflow, once present, is whole.
 #[test]
-fn a_settings_region_missing_the_git_workflow_or_a_switch_is_refused() {
+fn an_absent_setting_is_read_as_not_carried_but_a_partial_git_workflow_is_refused() {
     let complete = with_settings(document(vec![console("Hub", Vec::new())]), true, false);
     parse(&complete).expect("a complete settings region is read");
 
     for key in ["git_workflow", "ask_questions_as_choices"] {
         let mut value = complete.clone();
         value["settings"].as_object_mut().unwrap().remove(key);
-        let err = parse(&value).expect_err(key);
-        assert_eq!(code_of(&err), error_code::CONFIGURATION_UNREADABLE, "{key}");
+        let parsed = parse(&value).expect(key);
+        let settings = parsed.settings.unwrap();
+        match key {
+            "git_workflow" => assert!(settings.git_workflow.is_none()),
+            _ => assert!(settings.ask_questions_as_choices.is_none()),
+        }
     }
     let mut value = complete;
     value["settings"]["git_workflow"]

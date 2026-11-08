@@ -1,11 +1,12 @@
-import { CircleAlert, CircleSlash, Info, type LucideIcon } from "lucide-react";
-import React, { useId } from "react";
+import { CircleAlert, CircleMinus, CircleSlash, Folder, Info, type LucideIcon } from "lucide-react";
+import React from "react";
 
-import { providerLabel } from "../agents/providers";
+import { FlatCard } from "../components/card/FlatCard";
+import { Checkbox } from "../primitives";
 import { DetailsButton } from "../components/alerts/DetailsButton";
+import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
 import { InlineReference } from "../i18n/InlineReference";
 import { TILDE_PARAMS } from "../components/text/literalParams";
-import { AgentNameList } from "../components/text/AgentNameList";
 import { MarkLineBox } from "../components/status/MarkLineBox";
 import { StatusMark } from "../components/status/StatusMark";
 import { StatusBadge, type StatusBadgeColor } from "../components/status/StatusBadge";
@@ -14,51 +15,22 @@ import { useDirectoryBrowse } from "../components/dialog/DirectoryPicker";
 import { TextInput } from "../components/form/TextInput";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
-import type { AccountFallback, Agent, ImportFailure } from "../protocol";
+import type { AccountFallback, ImportFailure } from "../protocol";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useFailureNode } from "./failureText";
 import { type DirectoryProblem } from "./importPlan";
 import type { ClientSettingValue } from "./clientSettings";
 import type { SettingValue } from "./importValues";
-import { useProviders } from "../store";
 import { ProviderName } from "../components/text/ProviderName";
 
-/**
- * The look of one card of the import dialog: a console's projects, an agent's accounts, the applied or applicable
- * settings. Its edge and the grooves between rows already frame it as a table, so the rows take the dialog's own
- * background and only the header is filled.
- */
-const CARD_CLASS = "flex flex-col rounded-xl panel-edge";
-/** A card's header row, filled like the fields in the rows so it reads apart from the rows under it. */
-export const CARD_HEADER_CLASS = "rounded-t-xl bg-(--control-fill) groove-b px-4 py-3 last:rounded-b-xl last:border-b-0";
-
-/**
- * A card: a section labelled by its heading, with the header row `header` draws for the id of that heading (the heading
- * is `CardHeading` where it is the header itself, else `CardTitle` within a header of its own), then the rows.
- */
-export function Card({ header, children }: { header: (headingId: string) => React.ReactNode; children: React.ReactNode }): React.ReactElement {
-  const headingId = useId();
-  return (
-    <section aria-labelledby={headingId} className={CARD_CLASS}>
-      {header(headingId)}
-      {children}
-    </section>
-  );
-}
-
-/** A card's heading as its whole header row. */
-export function CardHeading({ id, children }: { id: string; children: React.ReactNode }): React.ReactElement {
-  return <h3 id={id} className={`${CARD_HEADER_CLASS} text-base font-semibold text-foreground`}>{children}</h3>;
-}
-
-/** A card's heading inside a header row of its own: the name, and after it the warning mark of the account
+/** A flat card's heading inside a header row of its own: the name, and after it the warning mark of the account
  * references that fell back to a default account. `className` lays it out in the row. */
-export function CardTitle({ id, name, fallbacks, className }: { id: string; name: string; fallbacks: AccountFallback[]; className: string }): React.ReactElement {
+export function CardTitle({ name, fallbacks, className }: { name: string; fallbacks: AccountFallback[]; className: string }): React.ReactElement {
   return (
     <div className={`flex items-start gap-1 ${className}`}>
-      <h3 id={id} className="min-w-0 text-base font-semibold text-foreground [overflow-wrap:anywhere]" dir="auto">
+      <FlatCard.Heading className="min-w-0 [overflow-wrap:anywhere]" dir="auto">
         {name}
-      </h3>
+      </FlatCard.Heading>
       <FallbackMark subject={name} fallbacks={fallbacks} size="text-base" />
     </div>
   );
@@ -84,11 +56,6 @@ export function ItemName({ children }: { children: React.ReactNode }): React.Rea
   return <span className="min-w-0 font-medium text-foreground [overflow-wrap:anywhere]" dir="auto">{children}</span>;
 }
 
-/** The rows of a card, each divided from the next. */
-export function CardRows({ children }: { children: React.ReactNode }): React.ReactElement {
-  return <ul className="flex flex-col">{children}</ul>;
-}
-
 /**
  * One row of the review: `lead` (the name and what is known of the item) at the start, the `control` that decides
  * what to do with it, when it has one, at the end (under the lead where the row is narrow), and what the choice calls
@@ -96,7 +63,7 @@ export function CardRows({ children }: { children: React.ReactNode }): React.Rea
  */
 export function ReviewRow({ lead, control, children }: { lead: React.ReactNode; control?: React.ReactNode; children?: React.ReactNode }): React.ReactElement {
   return (
-    <li className="@container flex flex-col gap-2 groove-b px-4 py-3 last:border-b-0">
+    <li className="@container flex flex-col gap-2 py-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
         <div className="flex min-w-40 flex-1 flex-col gap-0.5">{lead}</div>
         {control && <div className="w-full @md:w-56">{control}</div>}
@@ -127,6 +94,9 @@ export const SHARED_STATUS = {
   failed: { label: "configuration.import.result.failed", icon: CircleAlert, tone: STATUS_TONE.danger },
   not_attempted: { label: "configuration.import.result.status.notAttempted", icon: CircleSlash, tone: STATUS_TONE.muted },
 } satisfies Record<string, StatusEntry>;
+
+/** An item or card the user left out of the import, as a result and a card left unchecked show it. */
+export const LEFT_OUT_STATUS: StatusEntry = { label: "configuration.import.result.leftOut", icon: CircleMinus, tone: STATUS_TONE.muted };
 
 /** The glyph of a status, `size` being its size (and margin) classes. */
 export function StatusGlyph({ entry, size }: { entry: StatusEntry; size: string }): React.ReactElement {
@@ -177,16 +147,24 @@ export function Field({ label, value, mark }: {
   );
 }
 
+/** A directory on a line of its own, led by a folder icon in place of a label repeated on every row. The icon is a
+ * mark that nothing else on screen names, so it is a named image (`label`) with the same words as its tooltip. Kept
+ * shortfall, marked here as "A tooltip on a mark that is not a control" in docs/ui-standard.md asks: a sighted user
+ * working from the keyboard reaches no tooltip, so the folder's name reaches them nowhere. */
+export function DirectoryLine({ label, value }: { label: string; value: string }): React.ReactElement {
+  return (
+    <div className="flex items-start gap-1.5 text-sm">
+      <IndicatorTooltip tooltip={label} label={label} className="mt-0.5 shrink-0 text-app-muted">
+        <Folder aria-hidden="true" className="size-3.5" />
+      </IndicatorTooltip>
+      <span className="min-w-0 font-mono [overflow-wrap:anywhere]" dir="ltr">{value}</span>
+    </div>
+  );
+}
+
 /** The `Field`s of a row, as the `dl` that lays them out in two columns. */
 export function FieldList({ children }: { children: React.ReactNode }): React.ReactElement {
   return <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">{children}</dl>;
-}
-
-/** The sentence `lead` introducing agents, and the agents under it as a list, one agent to an item. */
-export function AgentList({ lead, agents }: { lead: React.ReactNode; agents: Agent[] }): React.ReactElement {
-  const t = useT();
-  const providers = useProviders();
-  return <p className="text-sm"><AgentNameList lead={lead} labels={agents.map((agent) => providerLabel(t, providers, agent))} /></p>;
 }
 
 /**
@@ -246,8 +224,8 @@ export function SettingLine({ label, badge, tone = "default", values, children }
         // chips inside (blocks that would inherit the indent) take none.
         <ul className="flex flex-col text-sm leading-6 text-app-muted">
           {values.map(({ item, value }) => (
-            <li key={item} className="ps-4 -indent-4 [&_*]:indent-0">
-              <Message id="configuration.import.settingValue" params={{ item, value }} />
+            <li key={item ?? "value"} className="ps-4 -indent-4 [&_*]:indent-0">
+              {item === undefined ? value : <Message id="configuration.import.settingValue" params={{ item, value }} />}
             </li>
           ))}
         </ul>
@@ -343,5 +321,29 @@ export function FailureReason({ failure }: { failure: ImportFailure }): React.Re
       {remedy && <p className="min-w-0 text-app-muted [overflow-wrap:anywhere]" dir="auto">{remedy}</p>}
       {details && <DetailsButton>{details}</DetailsButton>}
     </div>
+  );
+}
+
+/** Whether one thing of the review (a Settings section or an agent's card) is imported, and the change of that. */
+export interface ImportChoice {
+  on: boolean;
+  onChange: (on: boolean) => void;
+}
+
+/** The header row of a card with a `choice` (the import checkbox of a Settings section card or an agent card): `title` as
+ * the heading holding a checkbox named by it, and, while the choice is off, the mark that the card is left out. */
+export function choiceHeader(title: string, choice: ImportChoice): React.ReactElement {
+  return (
+    <FlatCard.Header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <FlatCard.Heading className="min-w-0">
+        {/* The default variant, not `secondary`: the secondary box is filled with the page's field colour, which vanishes on the
+            card header's own fill. The box is centred on the first line of the content row's own line height (`Checkbox.css`), so the
+            row takes the title's size (`text-base`, a 24px line) rather than the `text-sm` of HeroUI's, which put it 2px high. */}
+        <Checkbox selected={choice.on} onSelectedChange={choice.onChange} contentClassName="min-h-6 text-base" labelClassName="text-base font-semibold text-foreground">
+          {title}
+        </Checkbox>
+      </FlatCard.Heading>
+      {!choice.on && <EntryStatus entry={LEFT_OUT_STATUS} />}
+    </FlatCard.Header>
   );
 }

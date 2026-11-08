@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 
+import { SETTINGS_SECTIONS } from "../configuration/settingsSections";
 import { documentSettings } from "../configuration/testSupport";
-import type { DocumentSettings, ImportedAccount, ImportedProject, ImportItem, InspectedAgentSettings } from "../protocol";
-import { inspected, inspectedProject, REVIEW } from "./configurationReview";
+import type { Agent, DocumentSettings, ImportedAccount, ImportedProject, ImportItem, InspectedAgentSettings, SettingsSection } from "../protocol";
+import { imported, inspected, inspectedProject, REVIEW } from "./configurationReview";
 import type { ImportProgressFixture } from "./fixture";
+import { createFixtureDaemon } from "./fixtureDaemon";
 import { handledImportItems, importDisagreement, importProgressDisagreement, withClientValuesEcho } from "./fixtureConfiguration";
 
 const project = (name: string, status: ImportedProject["status"], via: ImportedProject["via"] = null): ImportedProject => ({
@@ -26,7 +28,7 @@ const result = (
   accounts: null,
   consoles: [{ name: "Work", status, console: status === "created" ? "c-1" : null, error: null, account_fallbacks: [], projects }],
 });
-const request = (resolutions: { project: number; kind: "exported_path" | "clone" }[], apply_settings?: boolean) => ({
+const request = (resolutions: { project: number; kind: "exported_path" | "clone" }[], apply_settings?: SettingsSection[]) => ({
   type: "import_configuration" as const,
   document: {},
   resolutions: resolutions.map(({ project, kind }) => ({ console: 0, project, choice: { kind } })),
@@ -58,26 +60,26 @@ describe("importDisagreement", () => {
     expect(importDisagreement(request([{ project: 0, kind: "clone" }]), result([project("A", "created", "exported_path")]))).toMatch(/placed as exported_path/);
   });
 
-  it("finds application settings reported that the request did not ask for", () => {
-    expect(importDisagreement(request([], false), result([], { settings_applied: { auto_pull_repositories: true } }))).toMatch(/did not ask/);
+  it("finds settings reported that the request did not ask for", () => {
+    expect(importDisagreement(request([], []), result([], { settings_applied: { auto_pull_repositories: true } }))).toMatch(/did not ask/);
   });
 
-  it("finds application settings asked for that the result does not report", () => {
-    expect(importDisagreement(request([], true), result([]))).toMatch(/asked for the application settings/);
+  it("finds settings sections asked for that the result does not report", () => {
+    expect(importDisagreement(request([], ["git"]), result([]))).toMatch(/asked for settings sections/);
   });
 
   it("finds a clone directory reported written where the settings were not asked for or the machine's own is kept", () => {
     const written = { ...result([], { settings_applied: { auto_pull_repositories: true } }), clone_dir_applied: "/Users/dev/Code" };
-    expect(importDisagreement({ ...request([], true), apply_clone_dir: true }, written)).toBeUndefined();
-    expect(importDisagreement(request([], true), written)).toBeUndefined();
-    expect(importDisagreement({ ...request([], true), apply_clone_dir: false }, written)).toMatch(/clone directory written/);
+    expect(importDisagreement({ ...request([], ["git"]), apply_clone_dir: true }, written)).toBeUndefined();
+    expect(importDisagreement(request([], ["git"]), written)).toBeUndefined();
+    expect(importDisagreement({ ...request([], ["git"]), apply_clone_dir: false }, written)).toMatch(/clone directory written/);
     const kept = { ...result([], { settings_applied: { default_clone_dir: "/Users/dev/Code" } }) };
-    expect(importDisagreement({ ...request([], true), apply_clone_dir: false }, kept)).toMatch(/clone directory among the settings applied/);
-    expect(importDisagreement(request([], false), { ...result([]), clone_dir_applied: "/Users/dev/Code" })).toMatch(/clone directory written/);
+    expect(importDisagreement({ ...request([], ["git"]), apply_clone_dir: false }, kept)).toMatch(/clone directory among the settings applied/);
+    expect(importDisagreement(request([], []), { ...result([]), clone_dir_applied: "/Users/dev/Code" })).toMatch(/clone directory written/);
     const unwritten = result([], { settings_applied: { default_clone_dir: "/Users/dev/Code" } });
-    expect(importDisagreement(request([], true), unwritten)).toMatch(/not as the one written/);
-    expect(importDisagreement(request([], true), { ...unwritten, clone_dir_applied: "/Users/dev/Other" })).toMatch(/not as the one written/);
-    expect(importDisagreement(request([], true), { ...unwritten, clone_dir_applied: "/Users/dev/Code" })).toBeUndefined();
+    expect(importDisagreement(request([], ["git"]), unwritten)).toMatch(/not as the one written/);
+    expect(importDisagreement(request([], ["git"]), { ...unwritten, clone_dir_applied: "/Users/dev/Other" })).toMatch(/not as the one written/);
+    expect(importDisagreement(request([], ["git"]), { ...unwritten, clone_dir_applied: "/Users/dev/Code" })).toBeUndefined();
   });
 });
 
@@ -121,7 +123,7 @@ describe("importDisagreement over accounts", () => {
 
 describe("withClientValuesEcho", () => {
   const focusMode = { code: "KeyK", primary: true, shift: true };
-  const asked = (settings: unknown) => ({ type: "import_configuration" as const, document: { settings }, apply_settings: true });
+  const asked = (settings: unknown) => ({ type: "import_configuration" as const, document: { settings }, apply_settings: [...SETTINGS_SECTIONS] });
   const applied = result([], { settings_applied: { auto_pull_repositories: true } });
 
   it("hands back the document's shortcuts in what was applied, an empty object included", () => {
@@ -143,6 +145,17 @@ describe("withClientValuesEcho", () => {
       keep_awake: true,
       keep_awake_when: "always",
     });
+  });
+
+  it("hands back the session order, and only the values of the sections that were asked for", () => {
+    const order = { sessions: "started", active_projects: "name", inactive_projects: "used" };
+    const document = { session_order: order, appearance: "dark", keyboard_shortcuts: {} };
+    expect(withClientValuesEcho({ ...asked(document), apply_settings: ["general"] }, applied).settings_applied).toEqual({
+      ...documentSettings({ auto_pull_repositories: true }),
+      appearance: "dark",
+      session_order: order,
+    });
+    expect(withClientValuesEcho({ ...asked(document), apply_settings: ["git"] }, applied)).toBe(applied);
   });
 
   it("echoes nothing for a document without them or a result that applied no settings", () => {
@@ -184,7 +197,7 @@ describe("handledImportItems", () => {
   it("lists the clone directory, the accounts not left out (one that exists whatever was chosen for it), the Agent accounts settings, each console with the projects that have a resolution, then the settings, as the daemon announces them", () => {
     expect(
       handledImportItems(
-        { ...request, apply_accounts: true, account_resolutions: [{ agent: "claude", account: 0, leave_out: true }, { agent: "claude", account: 2, leave_out: true }], resolutions: [{ console: 0, project: 1, choice: { kind: "clone" } }], apply_settings: true },
+        { ...request, apply_accounts: true, account_resolutions: [{ agent: "claude", account: 0, leave_out: true }, { agent: "claude", account: 2, leave_out: true }], resolutions: [{ console: 0, project: 1, choice: { kind: "clone" } }], apply_settings: ["git"] },
         inspection,
       ),
     ).toEqual<ImportItem[]>([
@@ -200,7 +213,7 @@ describe("handledImportItems", () => {
   });
 
   it("lists no clone directory where this machine's own is kept or the document has no usable one, and no Agent accounts settings the document does not carry", () => {
-    const base = { ...request, apply_accounts: true, apply_consoles: false, apply_settings: true };
+    const base = { ...request, apply_accounts: true, apply_consoles: false, apply_settings: ["git"] as SettingsSection[] };
     expect(handledImportItems({ ...base, apply_clone_dir: false }, inspection)).toEqual([...accountItems, { kind: "agent_settings" }, { kind: "settings" }]);
     const without = { ...inspection, settings: { ...REVIEW.settings!, default_clone_dir: null }, accounts: { ...inspection.accounts!, agent_settings: null } };
     expect(handledImportItems(base, without)).toEqual([...accountItems, { kind: "settings" }]);
@@ -208,6 +221,79 @@ describe("handledImportItems", () => {
 
   it("lists no console or project where the request asks for none, and no account or settings it does not ask for", () => {
     expect(handledImportItems({ ...request, apply_consoles: false, resolutions: [{ console: 0, project: 0, choice: { kind: "clone" } }] }, inspection)).toEqual([]);
+  });
+
+  it("lists the accounts of the agents apply_agents lists alone, the Agent accounts settings staying whatever is listed", () => {
+    const base = { ...request, apply_accounts: true, apply_consoles: false };
+    expect(handledImportItems({ ...base, apply_agents: ["codex"] }, inspection)).toEqual<ImportItem[]>([{ kind: "agent_settings" }]);
+    expect(handledImportItems({ ...base, apply_agents: ["claude"] }, inspection)).toEqual([...accountItems, { kind: "agent_settings" }]);
+  });
+});
+
+describe("the import of chosen agents", () => {
+  const settings = (tags: Partial<Record<Agent, string[]>>, providers: Partial<Record<Agent, Record<string, boolean | string>>>) => ({
+    auto_select_account: true,
+    auto_switch_on_usage_limit: false,
+    auto_start_quota_windows: false,
+    agent_tags: tags,
+    provider_settings: providers,
+  });
+  const entry = (agent: Agent, name: string) => ({
+    agent,
+    default_name: null,
+    default_name_applies: false,
+    default_disabled: null,
+    default_disabled_applies: false,
+    accounts: [{ name, directory: `~/.${name}`, foreign_directory: false, proposed_directory: `/h/.${name}`, status: "new" as const, in_use_by: null, error: null, share_default_config: false, disabled: false }],
+  });
+  const inspection = inspected({
+    consoles: [],
+    accounts: {
+      agents_to_add: ["grok"],
+      agents: [entry("claude", "W"), entry("codex", "X")],
+      agent_settings: {
+        ...settings({ codex: ["t"] }, { claude: { mode: "a" } }),
+        current_auto_select_account: false,
+        current_auto_switch_on_usage_limit: false,
+        current_auto_start_quota_windows: false,
+        current_provider_settings: {},
+        current_agent_tags: {},
+      },
+    },
+  });
+  const applied = (agent: Agent, name: string) => ({ agent, accounts: [{ name, status: "created" as const, account: `a-${name}`, error: null }], default_name_applied: false, default_disabled_applied: null });
+  const result = imported({
+    consoles: [],
+    accounts: {
+      agents_added: ["grok"],
+      agents: [applied("claude", "W"), applied("codex", "X")],
+      agent_settings_applied: settings({ codex: ["t"] }, { claude: { mode: "a" } }),
+      agent_settings_error: null,
+    },
+  });
+  const importing = (apply_agents?: Agent[]) =>
+    createFixtureDaemon({ configuration: { inspection, imported: result } }).request({ type: "import_configuration", document: {}, apply_accounts: true, apply_consoles: false, apply_agents });
+
+  it("reports every agent the document carries where apply_agents is absent", async () => {
+    expect(await importing()).toMatchObject({ accounts: { agents_added: ["grok"], agents: [{ agent: "claude" }, { agent: "codex" }], agent_settings_applied: { agent_tags: { codex: ["t"] }, provider_settings: { claude: { mode: "a" } } } } });
+  });
+
+  it("reports the listed agents alone: their accounts, the agents added, the tags and provider settings, with the three switches kept", async () => {
+    const reply = await importing(["codex"]);
+    expect(reply).toMatchObject({ accounts: { agents_added: [], agents: [{ agent: "codex" }], agent_settings_applied: { auto_select_account: true, agent_tags: { codex: ["t"] }, provider_settings: {} } } });
+    expect(await importing(["grok"])).toMatchObject({ accounts: { agents_added: ["grok"], agents: [], agent_settings_applied: { auto_select_account: true, agent_tags: {}, provider_settings: {} } } });
+    expect(await importing([])).toMatchObject({ accounts: { agents_added: [], agents: [], agent_settings_applied: { agent_tags: {} } } });
+  });
+
+  it("refuses an agent the document carries nothing for, by its product name, before anything is done", async () => {
+    const only = inspected({ consoles: [], accounts: { ...inspection.accounts!, agents: [entry("codex", "X")], agents_to_add: [], agent_settings: { ...inspection.accounts!.agent_settings!, provider_settings: {}, agent_tags: {} } } });
+    await expect(
+      createFixtureDaemon({ configuration: { inspection: only, imported: result } }).request({ type: "import_configuration", document: {}, apply_accounts: true, apply_consoles: false, apply_agents: ["claude"] }),
+    ).rejects.toMatchObject({ code: "import_agent_missing", params: { agent: "Claude Code" } });
+    const byTags = inspected({ consoles: [], accounts: { ...inspection.accounts!, agents: [], agents_to_add: [], agent_settings: { ...inspection.accounts!.agent_settings!, provider_settings: {}, agent_tags: { codex: ["t"] } } } });
+    const carried = createFixtureDaemon({ configuration: { inspection: byTags, imported: result } });
+    await expect(carried.request({ type: "import_configuration", document: {}, apply_accounts: true, apply_consoles: false, apply_agents: ["codex"] })).resolves.toMatchObject({ type: "configuration_imported" });
+    await expect(carried.request({ type: "import_configuration", document: {}, apply_accounts: true, apply_consoles: false, apply_agents: ["claude"] })).rejects.toMatchObject({ code: "import_agent_missing" });
   });
 });
 

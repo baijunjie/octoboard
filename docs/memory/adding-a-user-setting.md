@@ -25,9 +25,9 @@ Octoboard act on files outside `~/.octoboard/` later as it runs. If you are unsu
 outside files, ask. In the same change, by where the setting sits:
 
 - An application setting the daemon holds (General, App behavior, Git, Agent behavior, Cleanup): a field of `DocumentSettings` in
-  `apps/daemon/src/protocol/configuration.rs`, filled in `build` in `apps/daemon/src/config_document/export.rs`; its
-  document and current values in `InspectedSettings`, filled by the inspection in
-  `apps/daemon/src/config_document/import/mod.rs`, and the `coordinator::settings::update_settings` call there that
+  `apps/daemon/src/protocol/configuration.rs`, filled under its Settings section in `build` in
+  `apps/daemon/src/config_document/export.rs`; its document and current values in `InspectedSettings`, filled by the
+  inspection in `apps/daemon/src/config_document/import/mod.rs`, and the `coordinator::settings::update_settings` call there that
   applies the document's settings.
 - A setting of the Agent accounts section: in the accounts region, `DocumentAgentSettings` and
   `InspectedAgentSettings`, inspected and applied in `apps/daemon/src/config_document/import/accounts.rs` — never in
@@ -35,9 +35,12 @@ outside files, ask. In the same change, by where the setting sits:
 - A setting only the client holds (kept in the client, like the appearance, the Markdown style, running in the
   background, the menu bar icon, Prevent sleep or the shortcuts): an optional field of `DocumentSettings` that the
   daemon neither builds nor reads and passes back as it came, handled on the client beside the others in
-  `packages/ui/src/configuration/clientSettings.ts`. The client adds it to a document it saves and applies it to
-  itself only from the import reply's `settings_applied`, never from the file it read, so it is not applied when the
-  daemon failed to apply the settings.
+  `packages/ui/src/configuration/clientSettings.ts`. The client adds it to a document it saves under its Settings
+  section in `heldClientSettings`, so it travels only when the export carries that section, and applies it to itself
+  only from the import reply's `settings_applied`, never from the file it read, so it is not applied when the daemon
+  failed to apply the settings. Its line in the import review and result comes from naming the field in the
+  `clientLines(...)` of its section's card in `packages/ui/src/configuration/SettingsGroups.tsx`, even for a switch
+  (it has no `COPY` entry); a field not named there is silently left out.
 
 A field added to the document is an `Option` with `#[serde(default)]`, applied by an import only when present: a
 document from a released build, the beta releases included, may lack it, and a required field would make it
@@ -47,9 +50,9 @@ removing a field goes by the version rule in `apps/daemon/PROTOCOL.md`, "Configu
 paragraph.
 
 In the window, the document's fields come from regenerating `packages/ui/src/protocol.generated.ts` after the Rust
-change (`docs/structure/daemon.md`, "Where new code goes"), never written by hand. A switch gets its entry in `COPY` in
-`packages/ui/src/configuration/booleanSettings.ts`, which the type check demands: its Settings section and place there,
-its settings-page label and on / off descriptions, an optional help tip, and a
+change (`docs/structure/daemon.md`, "Where new code goes"), never written by hand. A switch the daemon holds gets its
+entry in `COPY` in `packages/ui/src/configuration/booleanSettings.ts`, which the type check demands: its Settings
+section and place there, its settings-page label and on / off descriptions, an optional help tip, and a
 `configuration.import.settings.consequence.<name>` message saying what turning it on then does, added to every message
 catalog. The import review, the import result and the settings page all render from that entry; on the settings page
 the switch is `<DaemonSwitchSetting field="…" />` (`packages/ui/src/settings/DaemonSwitchSetting.tsx`), not a

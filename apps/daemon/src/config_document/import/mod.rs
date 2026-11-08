@@ -30,13 +30,13 @@ use crate::protocol::{
     DocumentSettings, ImportFailure, ImportItem, ImportItemState, ImportStatus, ImportedAccounts,
     ImportedConsole, ImportedProject, InspectedAccounts, InspectedConsole, InspectedProject,
     InspectedSettings, OffersUnderCloneDir, PerAgent, ProjectAccount, ProjectAccountRef,
-    ProjectResolution, CONFIGURATION_FORMAT, CONFIGURATION_VERSION,
+    ProjectResolution, SettingsSection, CONFIGURATION_FORMAT, CONFIGURATION_VERSION,
 };
 use crate::providers::SettingValue;
 use crate::state::AppState;
 
 use accounts::{
-    announce_accounts, apply_accounts, index_account_resolutions, inspect_accounts,
+    announce_accounts, apply_accounts, index_account_resolutions, inspect_accounts, only_agents,
     prepare_accounts,
 };
 use progress::Progress;
@@ -49,6 +49,8 @@ use projects::{
 pub struct Inspection {
     /// Absent when the document carries no settings.
     pub settings: Option<InspectedSettings>,
+    /// The sections of Settings the document's settings carry, in Settings order.
+    pub settings_sections: Vec<SettingsSection>,
     /// Absent when the document carries no accounts.
     pub accounts: Option<InspectedAccounts>,
     pub consoles: Vec<InspectedConsole>,
@@ -70,14 +72,19 @@ pub struct Imported {
 }
 
 /// What an import asks to apply. Consoles and accounts are created only when asked for, the
-/// application settings only when `settings`, and the default clone directory only when
-/// `clone_dir` allows it too.
+/// application settings only of the sections in `settings`, and the default clone directory only
+/// when `settings` lists `git` and `clone_dir` allows it too.
 #[derive(Debug)]
 pub struct ApplyOptions {
-    /// Apply the document's application settings.
-    pub settings: bool,
+    /// The sections of the document's application settings to apply.
+    pub settings: Vec<SettingsSection>,
     /// The resolutions for the document's accounts, when they are to be created.
     pub accounts: Option<Vec<AccountResolution>>,
+    /// The agents whose part of the document's accounts is applied (read only with `accounts`):
+    /// the agent's place in the added agents, its default account's name and flag, its accounts,
+    /// its provider settings and its tags. `None` applies every agent the document carries; the
+    /// Agent accounts switches are applied either way.
+    pub agents: Option<Vec<AgentId>>,
     /// Create the document's consoles and projects.
     pub consoles: bool,
     /// Take the document's default clone directory, rather than keep this machine's own.
@@ -331,43 +338,74 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
     );
 
     let resume_sessions_on_start_now = state.store.resume_sessions_on_start()?;
+    // A key the document does not carry is reported as this machine's own, so its line reads as no
+    // change; `settings_sections` says which sections the document carries.
     let settings = match &document.settings {
-        Some(settings) => Some(InspectedSettings {
-            auto_close_idle_shell_terminals: settings.auto_close_idle_shell_terminals,
-            current_auto_close_idle_shell_terminals: state
-                .store
-                .auto_close_idle_shell_terminals()?,
-            auto_pull_repositories: settings.auto_pull_repositories,
-            current_auto_pull_repositories: state.store.auto_pull_repositories()?,
-            auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives,
-            current_auto_delete_unresumable_archives: state
-                .store
-                .auto_delete_unresumable_archives()?,
-            auto_approve_session_requests: settings.auto_approve_session_requests,
-            current_auto_approve_session_requests: state.store.auto_approve_session_requests()?,
-            auto_approve_resume_requests: settings.auto_approve_resume_requests,
-            current_auto_approve_resume_requests: state.store.auto_approve_resume_requests()?,
-            auto_approve_account_switches: settings.auto_approve_account_switches,
-            current_auto_approve_account_switches: state.store.auto_approve_account_switches()?,
-            auto_approve_handoffs: settings.auto_approve_handoffs,
-            current_auto_approve_handoffs: state.store.auto_approve_handoffs()?,
-            ask_questions_as_choices: settings.ask_questions_as_choices,
-            current_ask_questions_as_choices: state.store.ask_questions_as_choices()?,
-            resume_sessions_on_start: settings
-                .resume_sessions_on_start
-                .unwrap_or(resume_sessions_on_start_now),
-            current_resume_sessions_on_start: resume_sessions_on_start_now,
-            git_workflow: settings.git_workflow,
-            current_git_workflow: state.store.git_workflow_settings()?,
-            default_clone_dir: usable_clone_dir(settings.default_clone_dir.as_deref()),
-            foreign_default_clone_dir: settings
-                .default_clone_dir
-                .as_deref()
-                .is_some_and(|text| is_foreign(text.trim())),
-            current_default_clone_dir: clone_dir,
-        }),
+        Some(settings) => {
+            let auto_close_idle_shell_terminals = state.store.auto_close_idle_shell_terminals()?;
+            let auto_pull_repositories = state.store.auto_pull_repositories()?;
+            let auto_delete_unresumable_archives =
+                state.store.auto_delete_unresumable_archives()?;
+            let auto_approve_session_requests = state.store.auto_approve_session_requests()?;
+            let auto_approve_resume_requests = state.store.auto_approve_resume_requests()?;
+            let auto_approve_account_switches = state.store.auto_approve_account_switches()?;
+            let auto_approve_handoffs = state.store.auto_approve_handoffs()?;
+            let ask_questions_as_choices = state.store.ask_questions_as_choices()?;
+            let git_workflow = state.store.git_workflow_settings()?;
+            Some(InspectedSettings {
+                auto_close_idle_shell_terminals: settings
+                    .auto_close_idle_shell_terminals
+                    .unwrap_or(auto_close_idle_shell_terminals),
+                current_auto_close_idle_shell_terminals: auto_close_idle_shell_terminals,
+                auto_pull_repositories: settings
+                    .auto_pull_repositories
+                    .unwrap_or(auto_pull_repositories),
+                current_auto_pull_repositories: auto_pull_repositories,
+                auto_delete_unresumable_archives: settings
+                    .auto_delete_unresumable_archives
+                    .unwrap_or(auto_delete_unresumable_archives),
+                current_auto_delete_unresumable_archives: auto_delete_unresumable_archives,
+                auto_approve_session_requests: settings
+                    .auto_approve_session_requests
+                    .unwrap_or(auto_approve_session_requests),
+                current_auto_approve_session_requests: auto_approve_session_requests,
+                auto_approve_resume_requests: settings
+                    .auto_approve_resume_requests
+                    .unwrap_or(auto_approve_resume_requests),
+                current_auto_approve_resume_requests: auto_approve_resume_requests,
+                auto_approve_account_switches: settings
+                    .auto_approve_account_switches
+                    .unwrap_or(auto_approve_account_switches),
+                current_auto_approve_account_switches: auto_approve_account_switches,
+                auto_approve_handoffs: settings
+                    .auto_approve_handoffs
+                    .unwrap_or(auto_approve_handoffs),
+                current_auto_approve_handoffs: auto_approve_handoffs,
+                ask_questions_as_choices: settings
+                    .ask_questions_as_choices
+                    .unwrap_or(ask_questions_as_choices),
+                current_ask_questions_as_choices: ask_questions_as_choices,
+                resume_sessions_on_start: settings
+                    .resume_sessions_on_start
+                    .unwrap_or(resume_sessions_on_start_now),
+                current_resume_sessions_on_start: resume_sessions_on_start_now,
+                git_workflow: settings.git_workflow.unwrap_or(git_workflow),
+                current_git_workflow: git_workflow,
+                default_clone_dir: usable_clone_dir(settings.default_clone_dir.as_deref()),
+                foreign_default_clone_dir: settings
+                    .default_clone_dir
+                    .as_deref()
+                    .is_some_and(|text| is_foreign(text.trim())),
+                current_default_clone_dir: clone_dir,
+            })
+        }
         None => None,
     };
+    let settings_sections = document
+        .settings
+        .as_ref()
+        .map(DocumentSettings::carried_sections)
+        .unwrap_or_default();
     let consoles = document
         .consoles
         .iter()
@@ -412,6 +450,7 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
         .collect();
     Ok(Inspection {
         settings,
+        settings_sections,
         accounts,
         consoles,
     })
@@ -492,26 +531,31 @@ fn naming_console(mut err: anyhow::Error, name: &str) -> anyhow::Error {
 ///
 /// What can be refused without side effects is refused before the first console is created: the
 /// document, the resolutions, whatever `create_console` would refuse of any console, and a request
-/// for settings or accounts the document does not carry. After that nothing is undone and nothing
-/// is thrown away: a console that cannot be created, a project that cannot be placed, or settings
-/// that cannot be applied is reported in the result, and the rest carry on. A console whose
-/// projects all failed is still created.
+/// for settings, accounts or an agent's part of them the document does not carry. After that
+/// nothing is undone and nothing is thrown away: a console that cannot be created, a project that
+/// cannot be placed, or settings that cannot be applied is reported in the result, and the rest
+/// carry on. A console whose projects all failed is still created.
 ///
 /// The document's accounts are created only when `options.accounts` (the resolutions for them) is
 /// given, first, so the consoles' and projects' account references bind to them; see
-/// [`apply_accounts`].
+/// [`apply_accounts`]. With `options.agents` only those agents' parts of them are applied (one the
+/// document carries nothing for is refused), and an account of another agent is neither created
+/// nor reused, so a reference to it falls back as one to an account left out does, except that a
+/// reference to an unlisted agent's account still binds to a same-named account already on this
+/// machine.
 ///
-/// The document's application settings are applied only when `options.settings` asks for it, last,
-/// through the path a settings update takes, since they change how this machine behaves rather
-/// than add something to it. The one exception is the default clone directory, which is written
-/// before anything is created when the settings are applied and `options.clone_dir` allows it, so
-/// a project cloned by the same import goes where the user's choice puts it; without
-/// `options.clone_dir` this machine's own directory stays and is the one used. Where the settings
-/// then fail to apply, the directory stays written and is reported as `clone_dir_applied`. A
-/// directory the document carries that is not usable here (neither absolute nor starting with
-/// `~/`) is left out. The settings of the Agent accounts section are applied with the accounts
-/// (see [`apply_accounts`]), a document of an earlier version having been upgraded so that they
-/// are there.
+/// The document's application settings are applied only for the sections `options.settings` lists
+/// (a section listed twice counts once, and one the document does not carry is refused), last,
+/// through the path a settings update takes, since they change how this machine behaves rather than
+/// add something to it. The keys of the other sections are neither applied nor echoed back. The one
+/// exception to the order is the default clone directory, which is written before anything is
+/// created when `git` is listed and `options.clone_dir` allows it, so a project cloned by the same
+/// import goes where the user's choice puts it; without `options.clone_dir` this machine's own
+/// directory stays and is the one used. Where the settings then fail to apply, the directory stays
+/// written and is reported as `clone_dir_applied`. A directory the document carries that is not
+/// usable here (neither absolute nor starting with `~/`) is left out. The settings of the Agent
+/// accounts section are applied with the accounts (see [`apply_accounts`]), a document of an
+/// earlier version having been upgraded so that they are there.
 ///
 /// Projects are placed one at a time, so a clone, which may run for minutes, holds one blocking
 /// thread for its whole length and no document, however large, holds more.
@@ -532,8 +576,9 @@ pub async fn apply_reporting(
     import_id: Option<String>,
 ) -> Result<Imported> {
     let ApplyOptions {
-        settings: apply_settings,
+        settings: settings_sections,
         accounts,
+        agents: apply_agents,
         consoles: apply_consoles,
         clone_dir: apply_clone_dir,
     } = options;
@@ -545,14 +590,27 @@ pub async fn apply_reporting(
         document.consoles.clear();
         HashMap::new()
     };
-    if apply_settings && document.settings.is_none() {
+    let settings_sections = SettingsSection::normalized(&settings_sections);
+    if let Some(section) = settings_sections.iter().find(|section| {
+        !document
+            .settings
+            .as_ref()
+            .is_some_and(|settings| settings.carries(**section))
+    }) {
+        let name = section.wire_name();
         return Err(CodedError::raised(
             error_code::IMPORT_SETTINGS_MISSING,
-            "the document carries no application settings to apply",
-            &[],
+            format!("the document carries no `{name}` settings to apply"),
+            &[("section", name)],
         ));
     }
-    let account_step = match accounts {
+    // From here on the settings are those of the sections asked for, and none when no section is.
+    document.settings = document
+        .settings
+        .take()
+        .filter(|_| !settings_sections.is_empty())
+        .map(|settings| settings.only(&settings_sections));
+    let account_choices = match accounts {
         None => None,
         Some(resolutions) => {
             let document_accounts = document.accounts.as_ref().ok_or_else(|| {
@@ -562,12 +620,16 @@ pub async fn apply_reporting(
                     &[],
                 )
             })?;
-            Some((
-                document_accounts,
-                index_account_resolutions(document_accounts, resolutions)?,
-            ))
+            // Resolved against the whole document, so one for an agent left out is no refusal.
+            let choices = index_account_resolutions(document_accounts, resolutions)?;
+            if let Some(agents) = &apply_agents {
+                let only = only_agents(document_accounts, agents)?;
+                document.accounts = Some(only);
+            }
+            Some(choices)
         }
     };
+    let account_step = account_choices.zip(document.accounts.as_ref());
 
     // What `create_console` would refuse of any console is refused before the first account is
     // created; the account references are not bound yet, and nothing in the check depends on them.
@@ -579,7 +641,7 @@ pub async fn apply_reporting(
     }
 
     let accounts_ready = match account_step {
-        Some((document_accounts, account_choices)) => Some((
+        Some((account_choices, document_accounts)) => Some((
             document_accounts,
             account_choices,
             prepare_accounts(state, document_accounts)?,
@@ -591,7 +653,6 @@ pub async fn apply_reporting(
     let clone_dir_choice = document
         .settings
         .as_ref()
-        .filter(|_| apply_settings)
         .and_then(|settings| usable_clone_dir(settings.default_clone_dir.as_deref()))
         .filter(|_| apply_clone_dir);
     if clone_dir_choice.is_some() {
@@ -613,7 +674,7 @@ pub async fn apply_reporting(
             }
         }
     }
-    if apply_settings {
+    if document.settings.is_some() {
         progress.waiting(ImportItem::Settings);
     }
 
@@ -749,26 +810,23 @@ pub async fn apply_reporting(
         // The settings are then left unapplied, which the item says as the result does.
         progress.failed(ImportItem::Settings, failure);
     }
-    if let Some(settings) = document
-        .settings
-        .filter(|_| apply_settings && settings_error.is_none())
-    {
+    if let Some(settings) = document.settings.filter(|_| settings_error.is_none()) {
         progress.report(ImportItem::Settings, ImportItemState::Creating);
         let interface_language = offered_language(settings.interface_language.as_deref());
         let changes = SettingsChanges {
-            auto_close_idle_shell_terminals: Some(settings.auto_close_idle_shell_terminals),
-            auto_pull_repositories: Some(settings.auto_pull_repositories),
-            auto_delete_unresumable_archives: Some(settings.auto_delete_unresumable_archives),
-            auto_approve_session_requests: Some(settings.auto_approve_session_requests),
-            auto_approve_resume_requests: Some(settings.auto_approve_resume_requests),
-            auto_approve_account_switches: Some(settings.auto_approve_account_switches),
-            auto_approve_handoffs: Some(settings.auto_approve_handoffs),
-            ask_questions_as_choices: Some(settings.ask_questions_as_choices),
+            auto_close_idle_shell_terminals: settings.auto_close_idle_shell_terminals,
+            auto_pull_repositories: settings.auto_pull_repositories,
+            auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives,
+            auto_approve_session_requests: settings.auto_approve_session_requests,
+            auto_approve_resume_requests: settings.auto_approve_resume_requests,
+            auto_approve_account_switches: settings.auto_approve_account_switches,
+            auto_approve_handoffs: settings.auto_approve_handoffs,
+            ask_questions_as_choices: settings.ask_questions_as_choices,
             interface_language: interface_language.clone(),
             resume_sessions_on_start: settings.resume_sessions_on_start,
             // Written above, before the projects.
             default_clone_dir: None,
-            git_workflow: settings.git_workflow.into(),
+            git_workflow: settings.git_workflow.map(Into::into).unwrap_or_default(),
             ..Default::default()
         };
         match coordinator::settings::update_settings(state, changes) {

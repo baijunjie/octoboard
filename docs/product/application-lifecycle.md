@@ -231,8 +231,8 @@ the file is missing, unreadable or cannot be written): the daemon neither stores
 the files under `~/.octoboard`. The application reads it as it starts, before the window's UI has loaded, so it holds
 from the first moment of a launch; turning the switch takes effect at once and is written straight away. It does not
 travel between two machines reaching the same daemon, and clearing the window's browser storage leaves it as it is. A
-configuration export that includes the application settings carries the exporting application's choice, and an import
-asked to apply them sets it on the application that runs the import, as turning the switch would; a browser, which has
+configuration export that includes the App behavior section carries the exporting application's choice, and an import
+asked to apply that section sets it on the application that runs the import, as turning the switch would; a browser, which has
 no such choice, neither writes nor applies it (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`).
 

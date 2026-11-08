@@ -7,12 +7,14 @@ whose terms this doc uses; how the export dialog and the import's review and res
 
 ## Which settings travel
 
-The **application settings** region carries every setting of Settings' **General**, **App behavior**, **Git**, **Agent
-behavior**, **Keyboard shortcuts** and **Cleanup** sections (see `docs/product/settings.md`), except App behavior's
-**Launch at login**, which is the system's own state rather than a setting Octoboard keeps (see
-`docs/product/launch-at-login.md`), and General's **Sorting** group, which no document carries: an export leaves it out
-and an import leaves this client's sort as it is (see "Choosing the sort" in
-`docs/product/order-of-projects-and-sessions.md`). The **accounts** region carries every setting of its **Agent
+The **application settings** region carries the settings of Settings' **General**, **App behavior**, **Git**, **Agent
+behavior**, **Keyboard shortcuts** and **Cleanup** sections (see `docs/product/settings.md`), every setting of them
+except App behavior's **Launch at login**, which is the system's own state rather than a setting Octoboard keeps (see
+`docs/product/launch-at-login.md`). Each of the six is a **section** of the region, chosen on its own: an export
+writes the settings of the sections chosen and nothing of the others, the region standing exactly when at least one
+section was chosen, and an import applies the sections it is asked for alone. A document **carries** a section when
+it holds any of that section's settings. The sections are named on the wire `general`, `app_behavior`, `git`,
+`agent_behavior`, `keyboard_shortcuts` and `cleanup`. The **accounts** region carries every setting of its **Agent
 accounts** section: the accounts themselves (see "The accounts" in `docs/product/configuration-export-and-import.md`)
 and the settings that apply to all of an agent's accounts or to every agent (see "The agent account settings an export
 carries" below). The one setting of those sections left out is an account's sharing of the default configuration (see
@@ -23,11 +25,13 @@ update channel (see "The Updates and Update channel rows" in `docs/product/in-ap
 
 ## The application settings an export carries
 
-Each under its own key, grouped here as Settings groups them. The import review notes each switch, and the line for
-turning one on says what then follows, in that setting's own words, as given below. A settings key the importing
-Octoboard does not know, such as `reply_in_interface_language` or `sidebar_order_by_status`, is ignored. The settings
-only a client holds are in a document only when a client saved it (see "The settings a client holds" below); every other
-one is in every document that has application settings.
+Each under its own key, grouped here by section, as Settings groups them. The import review notes each switch, and the
+line for turning one on says what then follows, in that setting's own words, as given below. A settings key the
+importing Octoboard does not know, such as `reply_in_interface_language` or `sidebar_order_by_status`, is ignored. Every
+key is optional: one a document does not carry, absent or `null`, is left as the importing machine has it. The settings
+only a client holds are in a document only when a client saved it (see "The settings a client holds" below), and the
+language only when the client or the daemon knows one; every other one is in every document whose export chose its
+section.
 
 **General**
 
@@ -38,6 +42,11 @@ one is in every document that has application settings.
   holds" in `docs/product/language.md`).
 - **Markdown style**, under `markdown_style`: `tailwind`, `github`, `newsprint` or `latex` (see
   `docs/product/markdown-documents.md`).
+- **Sorting**, under `session_order`, an object of its three parts, each the id of a choice (see "Choosing the sort" in
+  `docs/product/order-of-projects-and-sessions.md`): `sessions`, `status` or `started` (Recently started);
+  `active_projects`, `status`, `name` or `used` (Recently used); `inactive_projects`, `name` or `used`. The exporting
+  client writes all three, so an import sets the sort exactly; a part left out, or with a value the importing client
+  does not know, leaves that part as the client has it.
 
 **App behavior**
 
@@ -66,10 +75,11 @@ one is in every document that has application settings.
   `docs/product/project-git-status.md`), under `auto_pull_repositories`.
 - **The application-wide git workflow settings** (see "The five settings" in `docs/product/git-workflow-settings.md`),
   under `git_workflow`, an object holding all five of `development`, `squash_before_delivery`, `rebase_before_delivery`,
-  `delivery` and `revert_gate`. A settings region without `git_workflow`, with `null` there, or with an object that
-  leaves out any of the five cannot be read, and the import is refused (see "What is refused, and what is reported
-  instead" in `docs/product/configuration-export-and-import.md`). Applying the document's settings sets all five to the
-  document's values. The import review and its result each have one line for all five (see "The import review" in
+  `delivery` and `revert_gate`. A document without `git_workflow`, or with `null` there, leaves all five as the
+  importing machine has them; one with an object that leaves out any of the five cannot be read, and the import is
+  refused (see "What is refused, and what is reported instead" in
+  `docs/product/configuration-export-and-import.md`). Applying the Git section sets all five to the document's values.
+  The import review and its result each have one line for all five (see "The import review" in
   `docs/product/configuration-export-and-import-dialogs.md` and "The import result" in
   `docs/product/configuration-import-progress-and-result.md`).
 
@@ -103,7 +113,9 @@ one is in every document that has application settings.
 - **Automatically delete archived sessions whose conversation is gone** (see "Deleting archived sessions whose
   conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`.
 
-A document whose export did not include the application settings carries none of them, whichever consoles it holds.
+A document whose export did not choose a section carries none of its settings, whichever consoles it holds. The
+daemon builds a section of the keys it holds alone, so a document asked of it with Keyboard shortcuts alone has an
+empty application settings region, to which a client adds its shortcuts (see "The settings a client holds" below).
 
 ## The agent account settings an export carries
 
@@ -137,35 +149,38 @@ holds:
 
 ## The settings a client holds
 
-The appearance, the Markdown style, keeping running in the background, showing the menu bar icon, Prevent sleep with
-When to prevent sleep, and the keyboard shortcuts are each client's own, kept in that client rather than by the daemon,
-and the language a client shows is its own too. So the client adds them to the document it saves whenever that document
-carries the application settings — the appearance, the Markdown style, the language it shows, its changed shortcuts
-and, where it has those settings, keeping running in the background, showing the menu bar icon and Prevent sleep with
-When to prevent sleep — and the daemon builds none of them but the language and reads none of them. A document with application settings
-asked of the daemon by any other program therefore has none of them but the daemon's held language.
+The appearance, the Markdown style, the sorting, keeping running in the background, showing the menu bar icon, Prevent
+sleep with When to prevent sleep, and the keyboard shortcuts are each client's own, kept in that client rather than by
+the daemon, and the language a client shows is its own too. So the client adds them to the document it saves, for the
+sections chosen alone — for General the appearance, the Markdown style, the sorting and the language it shows; for App
+behavior, where it has those settings, keeping running in the background, showing the menu bar icon and Prevent sleep
+with When to prevent sleep; for Keyboard shortcuts its changed shortcuts — and the daemon builds none of them but the
+language and reads none of them. A document with application settings asked of the daemon by any other program
+therefore has none of them but the daemon's held language.
 
 On import they are applied by the client that runs the import, to itself alone, and only once the daemon reports the
-application settings applied, from what the daemon passes back as applied; when the settings could not be applied,
-neither are these. Other clients — another browser, or the desktop app — keep their own. A value the importing client
+application settings applied, from what the daemon passes back as applied — the keys of the sections applied alone;
+when the settings could not be applied, neither are these. Other clients — another browser, or the desktop app — keep their own. A value the importing client
 does not know, or a setting its platform does not have (keeping running in the background, showing the menu bar icon
 or Prevent sleep, in a browser), is ignored and leaves the client's own as it is.
 
 ## Application settings are left alone unless they are asked for
 
-A document's application settings are applied **only when the import is explicitly asked to apply them**, and are not
-applied by default, since applying them changes how the daemon's host behaves rather than only adding to what it
+A document's application settings are applied **only when the import is explicitly asked to apply them**, section by
+section, and are not applied by default, since applying them changes how the daemon's host behaves rather than only adding to what it
 holds: automatically pulling repositories makes the daemon fast-forward the user's own repositories by itself,
 automatically deleting archived sessions makes it delete sessions by itself, resuming sessions on start makes it
 relaunch agents by itself whenever it starts, the four automatic approvals let agents'
 requests, account switches and handoffs through without asking the user, asking questions as choices changes what
 sessions are told at launch, and the default clone directory decides where later clones go. The inspection says both
-what the document sets and what is set now, so what applying would change can be shown before anything is done.
-Asking to apply the settings of a document that carries none is refused rather than quietly ignored, so a request
-never does less than it was told to.
+what the document sets and what is set now — for a setting of the daemon's the document does not carry, what is set now
+in both places, so it reads as no change — and which sections the document carries, so what applying would change can
+be shown before anything is done. Only the sections asked for are applied, and only their settings: those of the other
+sections are neither applied nor passed back. Asking to apply a section the document does not carry is refused, naming
+the section, rather than quietly ignored, so a request never does less than it was told to.
 
-The default clone directory is applied first, before anything is created (see "The default clone directory on import"
-below); the rest of the settings are applied last, after the consoles and projects, through the same path as a change
+The default clone directory, when the Git section is applied, is applied first, before anything is created (see "The
+default clone directory on import" below); the rest of the settings of the sections asked for are applied last, after the consoles and projects, through the same path as a change
 made in Settings, and the result of the import reports what was applied. So:
 
 - an import that turns automatic pulling on runs the same immediate fast-forward pass turning it on by hand does (see
@@ -186,9 +201,9 @@ The inspection gives the document's default clone directory as it comes to on th
 the host's own. One that is neither absolute nor starts with `~/` is left out of the import rather than refusing the
 settings, and so is one that is absolute in the other operating system's style (see "A path written on another operating
 system" under "Where an imported project goes" in `docs/product/configuration-export-and-import.md`), which names
-nothing on the daemon's host; the inspection says when that is why, and the host's own directory stays. An import that
-applies the settings can be told to **keep the host's own** instead; then the document's is not applied, and everything
-else of the settings is.
+nothing on the daemon's host; the inspection says when that is why, and the host's own directory stays. The document's
+directory is applied only with the Git section, and an import that applies that section can be told to **keep the
+host's own** instead; then the document's is not applied, and everything else of the sections asked for is.
 
 Applied, the document's directory is written **before any account, console or project is created**, so a project the
 same import places under the default clone directory or clones (see "Where an imported project goes" in
@@ -199,8 +214,8 @@ it stays written when the rest of the settings then cannot be applied, and the r
 
 ### The keyboard shortcuts on import
 
-The keyboard shortcuts follow the same choice, and are applied by the client that runs the import as the other
-settings it holds are (see "The settings a client holds" above). They **replace** that client's shortcuts: every
+The keyboard shortcuts are applied when the Keyboard shortcuts section is, by the client that runs the import as the
+other settings it holds are (see "The settings a client holds" above). They **replace** that client's shortcuts: every
 command the document does not name goes back to its default. The document's shortcuts are judged as one set, under the
 same rules as a shortcut the user records, and an entry that cannot be used on the importing client is dropped and
 counted (see "The shortcuts as data" in `docs/product/keyboard-shortcuts.md`).
@@ -215,6 +230,9 @@ value in effect here of every setting a document can carry (`null` for a choice 
 would change can be shown first. Applying records each provider choice the document carries as the importing machine's
 own, setting by setting, and leaves a setting it does not carry as it is; it replaces the tags of each agent the
 document lists with the document's, normalised as the Tags row's are, and leaves an agent it does not list as it is.
+Where the import takes only some of the document's agents (see "Importing accounts" in
+`docs/product/configuration-export-and-import.md`), the provider settings and tags of the others are not applied; the
+three switches are applied whichever agents are taken.
 
 - An import that turns automatic account selection on or off changes no session already open.
 - One that turns automatic switching at the usage limit on or off changes no session.

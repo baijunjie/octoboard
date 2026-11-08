@@ -23,7 +23,8 @@ import {
   type ReviewState,
   type RowState,
 } from "./importPlan";
-import { Card, CARD_HEADER_CLASS, CardRows, CardTitle, DirectoryChoiceField, EmptyLine, FallbackLines, FallbackMark, Field, FieldList, ItemName, ReviewRow, type Shown, STATUS_TONE, type StatusEntry, StatusGlyph, ToneLine } from "./importParts";
+import { FlatCard } from "../components/card/FlatCard";
+import { CardTitle, DirectoryChoiceField, EmptyLine, FallbackLines, FallbackMark, Field, FieldList, ItemName, ReviewRow, type Shown, STATUS_TONE, type StatusEntry, StatusGlyph, ToneLine } from "./importParts";
 import { Button } from "../primitives";
 
 const CHOICE_LABEL: Record<RowState["choice"], PlainMessageKey> = {
@@ -164,20 +165,17 @@ function ConsoleGroup({
   const t = useT();
   const { style } = useHostPathsOrEmpty();
   return (
-    <Card
-      header={(headingId) => (
-        <div className={`flex flex-col gap-1.5 ${CARD_HEADER_CLASS}`}>
-          <div className="flex flex-wrap items-center gap-x-2">
-            <CardTitle id={headingId} name={console.name} fallbacks={console.account_fallbacks} className="min-w-0" />
-            <span className="text-sm text-app-muted">{t("configuration.import.console.projects", { count: console.projects.length })}</span>
-          </div>
+    <FlatCard>
+      <FlatCard.Header className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-x-2">
+          <CardTitle name={console.name} fallbacks={console.account_fallbacks} className="min-w-0" />
+          <span className="text-sm text-app-muted">{t("configuration.import.console.projects", { count: console.projects.length })}</span>
         </div>
-      )}
-    >
+      </FlatCard.Header>
       {console.projects.length === 0 ? (
         <EmptyLine>{t("configuration.import.console.noProjects")}</EmptyLine>
       ) : (
-        <CardRows>
+        <FlatCard.Rows>
           {console.projects.map((project, p) => {
             const row = review[index][p];
             return (
@@ -190,9 +188,9 @@ function ConsoleGroup({
               />
             );
           })}
-        </CardRows>
+        </FlatCard.Rows>
       )}
-    </Card>
+    </FlatCard>
   );
 }
 

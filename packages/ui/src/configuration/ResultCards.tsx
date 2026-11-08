@@ -1,8 +1,9 @@
-import { CircleCheck, CircleDot, CircleMinus } from "lucide-react";
+import { CircleCheck, CircleDot } from "lucide-react";
 import React from "react";
 
 import type { AccountFallback, AccountOutcome, ImportFailure, ImportStatus } from "../protocol";
-import { Card, CARD_HEADER_CLASS, CardTitle, EntryStatus, FailureReason, FallbackMark, ItemName, SHARED_STATUS, STATUS_TONE, type StatusEntry } from "./importParts";
+import { FlatCard } from "../components/card/FlatCard";
+import { CardTitle, EntryStatus, FailureReason, FallbackMark, ItemName, LEFT_OUT_STATUS, SHARED_STATUS, STATUS_TONE, type StatusEntry } from "./importParts";
 
 type Status = ImportStatus | AccountOutcome;
 
@@ -10,7 +11,7 @@ type Status = ImportStatus | AccountOutcome;
 const STATUS: Record<Status, StatusEntry> = {
   created: { label: "configuration.import.result.created", icon: CircleCheck, tone: STATUS_TONE.success },
   existing: { label: "configuration.import.result.existing", icon: CircleDot, tone: STATUS_TONE.muted },
-  left_out: { label: "configuration.import.result.leftOut", icon: CircleMinus, tone: STATUS_TONE.muted },
+  left_out: LEFT_OUT_STATUS,
   ...SHARED_STATUS,
 };
 
@@ -40,19 +41,16 @@ export function ResultCard({
   children?: React.ReactNode;
 }): React.ReactElement {
   return (
-    <Card
-      header={(headingId) => (
-        <div className={`flex flex-col gap-1.5 ${CARD_HEADER_CLASS}`}>
-          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-            <CardTitle id={headingId} name={name} fallbacks={fallbacks ?? []} className="min-w-40 flex-1" />
-            {status}
-          </div>
-          {failure && <FailureReason failure={failure} />}
+    <FlatCard>
+      <FlatCard.Header className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+          <CardTitle name={name} fallbacks={fallbacks ?? []} className="min-w-40 flex-1" />
+          {status}
         </div>
-      )}
-    >
+        {failure && <FailureReason failure={failure} />}
+      </FlatCard.Header>
       {children}
-    </Card>
+    </FlatCard>
   );
 }
 
@@ -75,7 +73,7 @@ export function ResultRow({
   failure?: ImportFailure | null;
 }): React.ReactElement {
   return (
-    <li className="flex flex-col gap-1.5 groove-b px-4 py-3 last:border-b-0">
+    <li className="flex flex-col gap-1.5 py-3">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
         <span className="flex min-w-40 flex-1 items-start gap-1">
           <ItemName>{name}</ItemName>

@@ -235,7 +235,7 @@ turning it on will do, and while it is on it says what is happening now. In the 
 the on state adds that a logout, restart or shutdown then quits Octoboard without asking (see "Quitting" in
 `docs/product/application-lifecycle.md`); other clients do not say it. The daemon stores it as
 `resume_sessions_on_start` and keeps it, so every window shows the same. A console session may read and change it, and a
-configuration export that includes the application settings carries it (see "Application settings: `get_settings` and
+configuration export that includes the App behavior section carries it (see "Application settings: `get_settings` and
 `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings an export carries" in
 `docs/product/settings-in-a-configuration.md`). Turning it on or off resumes nothing at once: it is read when the daemon
 next starts. Which sessions are resumed, and how, is in "Resuming the interrupted sessions at start" in
@@ -267,7 +267,7 @@ icon's menu lists the sessions waiting for the user, paused, done or awaiting in
 it is off, that once it is on the icon's menu does so — or, while Octoboard keeps running in the background, that once
 it is on the icon's menu opens the window and that meanwhile opening Octoboard again or clicking one of its
 notifications brings the window back. The choice is kept per client, as Keep running in the background is, and a
-configuration export that includes the application settings carries it (see "The settings a client holds" in
+configuration export that includes the App behavior section carries it (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`). What hiding the icon does is in "Hiding the icon" in
 `docs/product/menu-bar-icon.md`.
 
@@ -286,7 +286,7 @@ not shown and its value is kept; when the switch is turned off by something else
 import, say — focus moves to the switch.
 
 Both choices are kept per client, as Keep running in the background is, and a configuration export that includes the
-application settings carries them (see "The settings a client holds" in
+App behavior section carries them (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`). What is held, and exactly when, is in
 `docs/product/keeping-the-computer-awake.md`.
 
@@ -298,7 +298,7 @@ terminals with running programs stay open. Which closes count and which terminal
 in `docs/product/terminal-panel.md`. Turning it on closes nothing at once; it applies to later panel closes.
 
 The daemon stores it as `auto_close_idle_shell_terminals` and keeps it, so every window shows the same. A console
-session may read and change it, and a configuration export that includes the application settings carries it (see
+session may read and change it, and a configuration export that includes the App behavior section carries it (see
 "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
 application settings an export carries" in `docs/product/settings-in-a-configuration.md`).
 
@@ -331,7 +331,7 @@ stored one, and a blank value goes back to `~/Projects`. Browse opens the picker
 stored directory until something is typed — by the rules every directory field's Browse follows, which also say where it
 opens on a relative path or on a directory that does not exist yet (see "Browsing directories" in
 `docs/product/projects.md`). Where the directory applies is in "Associating a project" in the same document. A
-configuration export that includes the application settings carries it, and an import asked to apply them sets it
+configuration export that includes the Git section carries it, and an import asked to apply that section sets it
 unless the user keeps this machine's own (see "The default clone directory on import" in
 `docs/product/settings-in-a-configuration.md`).
 
@@ -387,7 +387,7 @@ turning it on will do, and while it is on it says what is happening now.
   the commit that undoes it (see "A deliberate revert" in `docs/product/revert-gate.md`).
 
 A console session may read and change all five git workflow settings, and a configuration export that includes the
-application settings carries them (see "Application settings: `get_settings` and `update_settings`" in
+Git section carries them (see "Application settings: `get_settings` and `update_settings`" in
 `docs/product/agent-settings-tools.md` and "The application settings an export carries" in
 `docs/product/settings-in-a-configuration.md`).
 
@@ -458,7 +458,7 @@ What a session may do without asking the user first, and how it asks the user. A
 much, above five rows: **Automatically approve session requests**, **Automatically approve resume requests**,
 **Automatically approve account switches**, **Automatically approve handoffs**, then **Ask questions as choices**. The
 section is the same in every client. Each switch is kept by the daemon, so every window shows the same, and besides its
-row only an import asked to apply a configuration document's application settings changes it (see "The application
+row only an import asked to apply a configuration document's Agent behavior section changes it (see "The application
 settings an export carries" in `docs/product/settings-in-a-configuration.md`); turning one on or
 off leaves the others as they are. What an automatic approval does, what turning one of the four approval switches on
 changes, and why agents cannot change any of them are in "Approving requests automatically" in
@@ -576,9 +576,9 @@ runs and what turning the switch off or on changes are in "Deleting archived ses
 
 ## Configuration
 
-Two rows, each opening its own dialog: **Export configuration**, which saves consoles and projects, the application
-settings or the accounts as a file, and **Import configuration**, which creates consoles, projects and accounts, and
-applies application settings, from such a file (see `docs/product/configuration-export-and-import.md` and
+Two rows, each opening its own dialog: **Export configuration**, which saves consoles and projects, settings or
+accounts as a file, and **Import configuration**, which creates consoles, projects and accounts, and applies settings,
+from such a file (see `docs/product/configuration-export-and-import.md` and
 `docs/product/configuration-export-and-import-dialogs.md`). A single console is exported from the one the sidebar shows,
 which is the first while none is chosen. Both rows need the window to be able to save and open files, and where it
 cannot the section holds a line saying that exporting and importing configuration files is not available here.

@@ -103,15 +103,18 @@ describe("the progress view", () => {
     expect(document.body.querySelector("button[aria-busy=true]")?.textContent).toBe("Import");
   });
 
-  it("lists the default clone directory, the Agent account settings and the application settings, each with its own state", async () => {
+  it("lists the default clone directory, the Agent account settings and the settings, each with its own state", async () => {
     const running = runningImport();
     mountImportDialog(running);
     await startImport();
 
     for (const item of [{ kind: "clone_dir" }, { kind: "agent_settings" }, { kind: "settings" }] as const) await running.report({ item, state: "waiting" });
     expect(progressBar().getAttribute("aria-valuetext")).toBe("0 of 3 processed");
-    for (const heading of ["Default clone directory", "Agent account settings", "Application settings"]) expect(text()).toContain(heading);
+    for (const heading of ["Default clone directory", "Agent account settings", "Settings"]) expect(text()).toContain(heading);
     expect(text().match(/Waiting/g)).toHaveLength(3);
+    // In the review's order: the clone directory and the settings, then the Agent account settings.
+    const headings = Array.from(document.body.querySelectorAll("section h3"), (heading) => heading.textContent);
+    expect(headings).toEqual(["Default clone directory", "Settings", "Agent account settings"]);
 
     await running.report({ item: { kind: "clone_dir" }, state: "done" });
     await running.report({ item: { kind: "agent_settings" }, state: "creating" });

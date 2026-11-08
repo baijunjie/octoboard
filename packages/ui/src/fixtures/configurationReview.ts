@@ -4,6 +4,7 @@
 // What the daemon would work out from the filesystem is written out here by hand.
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
+import { SETTINGS_SECTIONS } from "../configuration/settingsSections";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { type AccountFallback, type Agent, type GitWorkflowSettings, type InspectedProject } from "../protocol";
 
@@ -31,9 +32,10 @@ export const FILE_CLONE_DIR = "/Users/ana/Code/clones";
 const THIS_CLONE_DIR = "/Users/dev/Projects";
 
 /** An inspection of a document that carries no settings and no accounts unless `parts` gives them: the regions a document
- * does not carry are `null`, as the daemon sends them. */
+ * does not carry are `null`, as the daemon sends them. Settings given without `settings_sections` are taken to carry
+ * every section. */
 export function inspected(parts: Pick<Inspection, "consoles"> & Partial<Omit<Inspection, "type" | "consoles">>): Omit<Inspection, "type"> {
-  return { id: null, settings: null, accounts: null, ...parts };
+  return { id: null, settings: null, settings_sections: parts.settings ? [...SETTINGS_SECTIONS] : [], accounts: null, ...parts };
 }
 
 /** An import's result that applied no settings and no accounts unless `parts` says it did, likewise. */

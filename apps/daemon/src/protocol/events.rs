@@ -15,6 +15,7 @@ use super::codes::{error_code, Code};
 use super::configuration::{
     ConfigurationDocument, DocumentSettings, ImportFailure, ImportItem, ImportItemState,
     ImportedAccounts, ImportedConsole, InspectedAccounts, InspectedConsole, InspectedSettings,
+    SettingsSection,
 };
 use super::errors::{error_parts, params, Params};
 use super::fields::is_true;
@@ -414,6 +415,9 @@ pub enum Event {
     ConfigurationInspected {
         id: Option<String>,
         settings: Option<InspectedSettings>,
+        /// The sections of Settings the document's settings carry, in Settings order; empty when
+        /// it carries no settings.
+        settings_sections: Vec<SettingsSection>,
         accounts: Option<InspectedAccounts>,
         consoles: Vec<InspectedConsole>,
     },

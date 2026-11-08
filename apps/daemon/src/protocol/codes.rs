@@ -211,9 +211,12 @@ pub mod error_code {
     /// `console` and `project` it gave, as indexes, or for an account's resolution the `agent` and
     /// the `account` index within that agent's accounts of the document.
     pub const IMPORT_RESOLUTION_INVALID: Code = Code("import_resolution_invalid");
-    /// `import_configuration` was asked to apply a document's application settings and the
-    /// document carries none.
+    /// `import_configuration` was asked to apply a section of the application settings
+    /// (`apply_settings`) and the document does not carry it. `params` names the `section`.
     pub const IMPORT_SETTINGS_MISSING: Code = Code("import_settings_missing");
+    /// `import_configuration` was asked to apply the accounts' part of an agent (`apply_agents`)
+    /// and the document carries nothing for it. `params` names the `agent`.
+    pub const IMPORT_AGENT_MISSING: Code = Code("import_agent_missing");
     /// `import_configuration` was asked to create a document's accounts and the document carries
     /// none.
     pub const IMPORT_ACCOUNTS_MISSING: Code = Code("import_accounts_missing");

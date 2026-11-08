@@ -131,10 +131,11 @@ async fn a_refused_import_leaves_nothing_behind() {
             &document,
             resolutions,
             ApplyOptions {
-                settings: false,
+                settings: Vec::new(),
                 accounts: None,
                 consoles: true,
                 clone_dir: true,
+                agents: None,
             },
         )
         .await
@@ -210,10 +211,11 @@ async fn a_console_that_cannot_be_created_is_reported_and_the_import_goes_on_to_
         &applied,
         vec![at(0, 0, DirectoryChoice::ExportedPath)],
         ApplyOptions {
-            settings: true,
+            settings: carried_sections(&applied),
             accounts: None,
             consoles: true,
             clone_dir: true,
+            agents: None,
         },
     )
     .await

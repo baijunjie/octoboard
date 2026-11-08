@@ -5,8 +5,8 @@
 import type { Imported } from "../../configuration/ImportResult";
 import type { Inspection } from "../../configuration/importPlan";
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { DEFAULT_GIT_WORKFLOW } from "../../git/gitWorkflow";
-import { type DocumentAgentSettings, type DocumentSettings, type ImportedAccount, type ImportedAccounts, type InspectedAccount, type InspectedAccounts, type InspectedAgentSettings, type InspectedSettings } from "../../protocol";
+import { type DocumentAgentSettings, type DocumentSettings, type ImportedAccount, type ImportedAccounts, type InspectedAccount, type InspectedAccounts, type InspectedAgentSettings, type InspectedSettings, type SettingsSection } from "../../protocol";
+import { SECTION_LABEL, SETTINGS_SECTIONS } from "../../configuration/settingsSections";
 import { DEFAULT_ACCOUNT_NAME } from "../../accounts/defaultAccount";
 import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "../../fixtures/fixtureProviders";
 import type { Ui, Step } from "../../fixtures/interact";
@@ -95,13 +95,21 @@ const importFromSettings = [
 ];
 const chooseFile = (ui: Ui) => ui.press(ui.t("configuration.import.choose.submit"));
 const importNow = (ui: Ui) => ui.press(ui.t("configuration.import.review.submit"));
-// The "What to import" checkboxes stand above the tab bar and are named as the tabs are, so the tabs are pressed with
-// `pressTab`, and the checkboxes with `press`, which finds them first.
-const toggleConsoles = (ui: Ui) => ui.press(ui.t("configuration.import.include.consoles"));
-const toggleAccounts = (ui: Ui) => ui.press(ui.t("configuration.import.include.accounts"));
-const toggleSettings = (ui: Ui) => ui.press(ui.t("configuration.import.include.settings"));
-const settingsTab = (ui: Ui) => ui.pressTab(ui.t("configuration.import.tab.settings"));
-const accountsTab = (ui: Ui) => ui.pressTab(ui.t("configuration.import.tab.attention", { tab: ui.t("configuration.import.tab.accounts") }));
+// The "What to import" checkboxes stand above the tab bar, and two of them (Settings and Agent accounts) share a name with a
+// tab or a control behind the dialog's modal layer, so the tabs are pressed with `pressTab`, and the checkboxes with
+// `press`, which finds them first and leaves out what the layer holds inert.
+const toggleConsoles = (ui: Ui) => ui.press(ui.t("configuration.import.tab.consoles"));
+const toggleAccounts = (ui: Ui) => ui.press(ui.t("settings.section.accounts"));
+const toggleSettings = (ui: Ui) => ui.press(ui.t("settings.title"));
+const settingsTab = (ui: Ui) => ui.pressTab(ui.t("settings.title"));
+/** Checks the Settings, which brings every section the file carries, then unchecks in the Settings tab each section but
+ * `keep`: a card for each of them stays collapsed under its title. */
+const settingsKeeping = (...keep: SettingsSection[]): Step[] => [
+  toggleSettings,
+  settingsTab,
+  ...SETTINGS_SECTIONS.filter((section) => !keep.includes(section)).map((section): Step => (ui) => ui.press(ui.t(SECTION_LABEL[section]))),
+];
+const accountsTab = (ui: Ui) => ui.pressTab(ui.t("configuration.import.tab.attention", { tab: ui.t("settings.section.accounts") }));
 const consolesTab = (ui: Ui) => ui.pressTab(ui.t("configuration.import.tab.attention", { tab: ui.t("configuration.import.tab.consoles") }));
 const leaveAccountOut = (account: string): Step[] => [
   (ui) => ui.press(ui.t("configuration.import.accounts.choice.label", { account })),
@@ -111,7 +119,6 @@ const hoverAccountMark = (key: "directoryInUseMark" | "invalidMark", account: st
   ui.hoverStatusMark(ui.t(`configuration.import.accounts.status.${key}`, { account }));
 const importFromWelcome = [(ui: Ui) => ui.press(ui.t("welcome.importConfiguration")), chooseFile];
 const exportScope = (scope: "all" | "none") => (ui: Ui) => ui.press(ui.t(`configuration.export.scope.${scope}`));
-const toggleExportSettings = (ui: Ui) => ui.press(ui.t("configuration.export.settings.include"));
 const toggleExportAccounts = (ui: Ui) => ui.press(ui.t("configuration.export.accounts.include"));
 const toggleExportPaths = (ui: Ui) => ui.press(ui.t("configuration.export.paths.include"));
 
@@ -131,27 +138,12 @@ const placeIn = (project: string, path: string): Step[] => [
   (ui) => ui.type(path),
 ];
 
-/** The settings of a document, which always carries every one: each switch off, the default git workflow and no default clone
- * directory, except what `carried` sets. */
-function documentSettings(carried: Partial<DocumentSettings> = {}): DocumentSettings {
-  return {
-    auto_close_idle_shell_terminals: false,
-    auto_pull_repositories: false,
-    auto_delete_unresumable_archives: false,
-    auto_approve_session_requests: false,
-    auto_approve_resume_requests: false,
-    auto_approve_account_switches: false,
-    auto_approve_handoffs: false,
-    ask_questions_as_choices: false,
-    git_workflow: DEFAULT_GIT_WORKFLOW,
-    default_clone_dir: null,
-    ...carried,
-  };
-}
-
-/** The settings an inspection says its document carries, without this machine's values beside them. */
+/** The settings an inspection says its document carries, without this machine's values beside them: what the document
+ * does not carry (a default clone directory that is not usable here) is left out, not set to `null`. */
 export function carriedSettings(settings: InspectedSettings): DocumentSettings {
-  return documentSettings(Object.fromEntries(Object.entries(settings).filter(([key]) => !key.startsWith("current_") && key !== "foreign_default_clone_dir")));
+  return Object.fromEntries(
+    Object.entries(settings).filter(([key, value]) => !key.startsWith("current_") && key !== "foreign_default_clone_dir" && value !== null),
+  ) as DocumentSettings;
 }
 
 /** The settings that have a value of the document and one of this machine's in an inspection. */
@@ -173,19 +165,11 @@ type SettingKey = (typeof SETTING_KEYS)[number];
  * installation starts with) except what `carried` sets; the document carries no default clone directory, so that line is
  * not shown. */
 function inspectedSettings(carried: Partial<InspectedSettings> = {}): InspectedSettings {
-  const entries = (name: (key: SettingKey) => string) => SETTING_KEYS.map((key) => [name(key), DEFAULT_SETTINGS[key]]);
-  return {
-    ...documentSettings(Object.fromEntries(entries((key) => key))),
-    // Optional in a document, which an inspection always settles.
-    resume_sessions_on_start: DEFAULT_SETTINGS.resume_sessions_on_start,
-    ...(Object.fromEntries(entries((key) => `current_${key}`)) as { [K in SettingKey as `current_${K}`]: InspectedSettings[`current_${K}`] }),
-    current_default_clone_dir: DEFAULT_CLONE_DIR,
-    foreign_default_clone_dir: false,
-    ...carried,
-  };
+  const own = Object.fromEntries(SETTING_KEYS.flatMap((key) => [[key, DEFAULT_SETTINGS[key]], [`current_${key}`, DEFAULT_SETTINGS[key]]])) as Pick<InspectedSettings, SettingKey | `current_${SettingKey}`>;
+  return { ...own, default_clone_dir: null, foreign_default_clone_dir: false, current_default_clone_dir: DEFAULT_CLONE_DIR, ...carried };
 }
 
-/** One console's document: no application settings; a project at its recorded path, one that can
+/** One console's document: no settings; a project at its recorded path, one that can
  * only be cloned, and one nothing places. */
 const SINGLE = inspected({
   consoles: [
@@ -295,6 +279,7 @@ const FOREIGN_PATHS = inspected({
 const WITH_SETTING_OFF: Omit<Inspection, "type"> = {
   ...SINGLE,
   settings: inspectedSettings({ auto_pull_repositories: false, current_auto_pull_repositories: true }),
+  settings_sections: [...SETTINGS_SECTIONS],
 };
 
 const LONG_CONSOLE = LONG_NAMES.consoles[0].name;
@@ -481,7 +466,6 @@ const SHORTCUTS = {
     nextConsoleSession: { code: "KeyK", primary: true, shift: true },
   },
 };
-const SHORTCUTS_FILE = documentWith(SHORTCUTS);
 
 /** The machine's home directory, which a document's `~/` stands for. */
 const HOME = "/Users/dev";
@@ -671,11 +655,12 @@ const ACCOUNT_FOREIGN_DIRECTORY = inspected({
   },
 });
 
-/** A document of application settings alone, every one the machine's own, whose default clone directory was written on
+/** A document of the Git settings alone, every one the machine's own, whose default clone directory was written on
  * Windows: the document carries none this machine can use, and says it had one. */
 const SETTINGS_FOREIGN_CLONE_DIR = inspected({
   consoles: [],
   settings: inspectedSettings({ default_clone_dir: null, foreign_default_clone_dir: true }),
+  settings_sections: ["git"],
 });
 
 /** The accounts of `ACCOUNTS` that cannot be created as the file has them, alone: a directory another account uses, one the
@@ -689,6 +674,9 @@ const ACCOUNTS_UNUSABLE = inspected({
     agent_settings: null,
   },
 });
+
+/** `object` with only the `keys` it has. */
+const pick = <T extends object, K extends keyof T>(object: T, keys: K[]): Pick<T, K> => Object.fromEntries(keys.filter((key) => key in object).map((key) => [key, object[key]])) as Pick<T, K>;
 
 const importedAccount = (name: string, status: ImportedAccount["status"], extra: Partial<ImportedAccount> = {}): ImportedAccount => ({
   name,
@@ -734,17 +722,18 @@ const ACCOUNTS_RESULT_ACCOUNTS: ImportedAccounts = {
   agent_settings_error: null,
 };
 
-/** `MIXED_RESULT`'s consoles and projects, and the accounts above, the application settings not asked for. */
+/** `MIXED_RESULT`'s consoles and projects, and the accounts above, the settings not asked for. */
 const ACCOUNTS_RESULT = imported({
   accounts: ACCOUNTS_RESULT_ACCOUNTS,
   consoles: MIXED_RESULT.consoles.map((console) => (console.name === "Work laptop" ? { ...console, account_fallbacks: [] } : console)),
 });
 
-/** `ACCOUNTS_REVIEW` imported with the consoles and projects unchecked and the application settings checked, where nothing
- * went wrong: every account the review would create was created (Sandbox's directory was not taken after all), the settings were applied, and no console exists, as the daemon answers
+/** `ACCOUNTS_REVIEW` imported with the consoles and projects unchecked and the Git and Cleanup settings checked, where nothing
+ * went wrong: every account the review would create was created (Sandbox's directory was not taken after all), only the
+ * settings of those two sections were applied (the daemon reports no other), and no console exists, as the daemon answers
  * `apply_consoles` false. */
 const ACCOUNTS_SETTINGS_RESULT = imported({
-  settings_applied: MIXED_RESULT.settings_applied,
+  settings_applied: pick(MIXED_RESULT.settings_applied!, ["default_clone_dir", "auto_pull_repositories", "git_workflow", "auto_delete_unresumable_archives"]),
   clone_dir_applied: MIXED_RESULT.clone_dir_applied,
   accounts: {
     ...ACCOUNTS_RESULT_ACCOUNTS,
@@ -797,11 +786,40 @@ const SETTINGS_REVIEW: Omit<Inspection, "type"> = {
 
 /** The settings only a client holds, as a document saved by a desktop window carries them, each unlike the window the
  * gallery shows them in: the system appearance, the GitHub Markdown style where the window has the Tailwind one, the
- * app running in the background and the computer kept awake, always, where it does neither, and the menu bar icon
- * hidden where the window shows it. */
-const CLIENT_VALUES = { appearance: "system", markdown_style: "github", run_in_background: true, show_menu_bar_icon: false, keep_awake: true, keep_awake_when: "always" };
+ * session and project order that is not the default, the app running in the background and the computer kept awake,
+ * always, where it does neither, and the menu bar icon hidden where the window shows it. */
+const CLIENT_VALUES = {
+  appearance: "system",
+  markdown_style: "github",
+  // Each part unlike the order the window has, which a fresh one holds.
+  session_order: { sessions: "started", active_projects: "used", inactive_projects: "used" },
+  run_in_background: true,
+  show_menu_bar_icon: false,
+  keep_awake: true,
+  keep_awake_when: "always",
+};
 
-/** The document of those, beside the keyboard shortcuts of `SHORTCUTS_FILE`, with a language this window does not show. */
+/** The document an export of the sections `inspection` lists would be: what the file holds is what the inspection claims,
+ * since the review words the settings only the client holds (General's appearance, language, Markdown style and session
+ * order; App behavior's) and the keyboard shortcuts from the file's own text, so a section the inspection lists that the
+ * file gave nothing for would be a card with no line. A document that carries no settings is the bare `FILE`. General
+ * carries the Markdown style and the session order, but no language: a result scenario applies what its file carries, and
+ * a language of the file's would turn the window into it whatever language the gallery was opened in. `held` is what a
+ * scenario that is about those values has the file carry as well, or instead. */
+const fileOf = (inspection: Omit<Inspection, "type">, held?: Record<string, unknown>) => {
+  if (!inspection.settings) return FILE;
+  const sections = inspection.settings_sections;
+  return documentWith(
+    {
+      ...(sections.includes("general") && { markdown_style: CLIENT_VALUES.markdown_style, session_order: CLIENT_VALUES.session_order }),
+      ...(sections.includes("keyboard_shortcuts") && { keyboard_shortcuts: { focusMode: SHORTCUTS.keyboard_shortcuts.focusMode } }),
+      ...held,
+    },
+    inspection.settings,
+  );
+};
+
+/** The document of those, beside the keyboard shortcuts of `SHORTCUTS`, with a language this window does not show. */
 const CLIENT_FILE = documentWith({ ...SHORTCUTS, ...CLIENT_VALUES, interface_language: "ja" }, SETTINGS_REVIEW.settings!);
 
 /** The document of the result: the same with the language the window already shows, since applying another one would
@@ -837,21 +855,26 @@ const REVIEW_AGENT_SETTINGS_ONLY: Omit<Inspection, "type"> = {
   },
 };
 
-/** The default clone directory of a document of application settings alone, which is not this machine's. */
+/** The default clone directory of a document of the Git settings alone, which is not this machine's. */
 const CLONE_DIR_FILE_DIR = "/Users/ana/Code/clones";
 const CLONE_DIR_SETTINGS = inspected({
   consoles: [],
   settings: inspectedSettings({ default_clone_dir: CLONE_DIR_FILE_DIR, current_default_clone_dir: DEFAULT_CLONE_DIR }),
+  settings_sections: ["git"],
 });
 
-/** What importing `CLONE_DIR_SETTINGS` came to: the default clone directory written, then the rest of the settings could not be. */
+/** What importing `CLONE_DIR_SETTINGS` came to: the default clone directory written, then the rest of the Git settings
+ * could not be. */
 const CLONE_DIR_KEPT_RESULT = imported({
   consoles: [],
   settings_error: failure("internal_error", { detail: "the settings could not be written" }, "the settings could not be written"),
   clone_dir_applied: CLONE_DIR_FILE_DIR,
 });
 
-const reviewing = (extra: Partial<ConfigurationFixture> = {}): ConfigurationFixture => ({ file: FILE, inspection: REVIEW, imported: MIXED_RESULT, ...extra });
+const reviewing = (extra: Partial<ConfigurationFixture> = {}): ConfigurationFixture => {
+  const inspection = extra.inspection ?? REVIEW;
+  return { file: "code" in inspection ? FILE : fileOf(inspection), inspection, imported: MIXED_RESULT, ...extra };
+};
 
 /** `ACCOUNTS_REVIEW` with the console that cannot be created first, ahead of the one whose project is being cloned: the daemon
  * writes the default clone directory, creates the accounts, applies the Agent accounts settings, then creates each console
@@ -923,8 +946,11 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Export, from Settings with a console in the sidebar",
-    description: "The Consoles and projects radio has three options, each only a label with no description under it: \"Console Main and its projects\" (the sidebar's console, named), \"All consoles and their projects\" and \"Do not export consoles\", the first chosen. Under Include full project paths, a Global settings group holds Application settings, checked, and Accounts, unchecked, each with a description that begins \"Includes\" (\"Includes the settings of General, App behavior, Git, Agent behavior, Keyboard shortcuts and Cleanup, such as the language and the default clone directory.\", with the six section names as chips, \"Includes account names…\"). Include full project paths starts unchecked: its description says what checking it does (\"Once checked, the file records each project's full directory path, so an import can look for the project there first.\") and no alert stands beneath it. Export closes the dialog and raises a toast naming the saved file.",
+    description: "The Consoles and projects radio has three options, each only a label with no description under it: \"Console Main and its projects\" (the sidebar's console, named), \"All consoles and their projects\" and \"Do not export consoles\", the first chosen. Under Include full project paths, a group headed Settings holds six checkboxes in the order the Settings page lists its sections: General, App behavior, Git, Agent behavior, Keyboard shortcuts and Cleanup. After it, a group headed Agent accounts holds one checkbox, Include agent accounts. All seven checkboxes are unchecked, each with a one-sentence note under it that begins \"Includes\". App behavior's note, on this platform with the desktop app's background run, menu bar icon (named as the host names it: notification area icon on Windows and Linux) and sleep prevention, lists them all: \"Includes resuming sessions on start, running in the background, the menu bar icon, preventing sleep and closing idle terminals.\" Check that the lists and their notes lay out evenly, with the notes wrapping under their labels, that the label of each group sits 16px above its first option as the Consoles and projects radio group does, with the same 16px between options, and that each group starts 24px after what stands above it. Include full project paths starts unchecked: its description says what checking it does (\"Once checked, the file records each project's full directory path, so an import can look for the project there first.\") and no alert stands beneath it. Export closes the dialog and raises a toast naming the saved file.",
     state,
+    backgroundRun: true,
+    menuBarIcon: true,
+    keepAwake: true,
     steps: exportFromSettings,
   },
   {
@@ -950,7 +976,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Export, with the accounts included",
-    description: "With Accounts checked, its description (\"Includes account names, configuration directories, disabled settings, account order, added agents and the agent account settings.\") goes on to say that sharing the default configuration and login credentials are not included, so sharing has to be turned on and the accounts logged in again after an import. Include full project paths, still unchecked, keeps its own description about project paths and no alert stands beneath it: checking Accounts does not change it.",
+    description: "With Include agent accounts checked, under the Agent accounts group heading, its description (\"Includes account names, configuration directories, disabled settings, account order, added agents and the agent account settings.\") goes on to say that sharing the default configuration and login credentials are not included, so sharing has to be turned on and the accounts logged in again after an import. Include full project paths, still unchecked, keeps its own description about project paths and no alert stands beneath it: checking Include agent accounts does not change it.",
     state,
     steps: [...exportFromSettings, toggleExportAccounts],
   },
@@ -959,9 +985,18 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Export, only the accounts",
-    description: "With Do not export consoles chosen and Application settings unchecked, only Accounts is checked and Export stays available. Include full project paths is not shown at all, as no console is exported to have project paths: account directories are written whatever the choice. With Application settings and Accounts both unchecked, Export is unavailable.",
+    description: "With Do not export consoles chosen, only Include agent accounts, under the Agent accounts group heading, is checked and Export is available. Include full project paths is not shown at all, as no console is exported to have project paths: account directories are written whatever the choice.",
     state,
-    steps: [...exportFromSettings, exportScope("none"), toggleExportSettings, toggleExportAccounts],
+    steps: [...exportFromSettings, exportScope("none"), toggleExportAccounts],
+  },
+  {
+    id: "configuration-export-nothing",
+    group: GROUP,
+    category: "exceptional",
+    title: "Export, with nothing chosen to export",
+    description: "Do not export consoles is chosen and none of the checkboxes is checked, so there is nothing to export: Export is unavailable. Include full project paths is not shown.",
+    state,
+    steps: [...exportFromSettings, exportScope("none")],
   },
   {
     id: "configuration-export-saved",
@@ -1048,7 +1083,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review",
-    description: "The intro line reads \"These are the contents of octoboard-configuration.json.\". Above the review, a What to import group holds a checkbox for each of the three regions the file carries: Consoles and projects, checked, Accounts and Application settings, unchecked, Accounts because it holds only the Agent account settings, with no agent to add and no account. Only the checked region has a tab, and a single one has no tab bar, so the review stands as it is. The panel starts with the note that each console is created as a new one and the existing consoles stay as they are, then the apply-to-all buttons; cards for three consoles follow, with the clone note last. Project rows show each state: found at its exported path (only \"Placed in\"), found in the default clone directory, can be cloned (\"Clone from\" and \"Clone into\") and not found, left out, with a long exported path that wraps and no state line under its name. A warning triangle follows the name of the Work laptop console in its heading and the name of Search API in its row, where an account the file names is not set up here (the popover is in a scenario below); no sentence or alert repeats it. The not-found project, Notes, carries one warning triangle after its name, \"Notes not found, and accounts not set up\": the project is missing and its account falls back too, which are one point and so one mark (its popover is in a scenario below). The last console says it has no projects. The unchecked boxes (here Accounts and Application settings) show their edge against the dialog.",
+    description: "The intro line reads \"These are the contents of octoboard-configuration.json.\". Above the review, a What to import group holds three checkboxes: Consoles and projects, Settings and Agent accounts. Consoles and projects is checked; Settings is unchecked, as the settings of a file change how this machine behaves, and Agent accounts is unchecked because the file's accounts hold only the Agent account settings, with no agent to add and no account. Only a checked part has a tab, but the tab bar stays for a single one: it holds the one tab, Consoles and projects, and the review stands under it, with the targets under this machine's own default clone directory. The panel starts with the note that each console is created as a new one and the existing consoles stay as they are, then the apply-to-all buttons; cards for three consoles follow, with the clone note last. Project rows show each state: found at its exported path (only \"Placed in\"), found in the default clone directory, can be cloned (\"Clone from\" and \"Clone into\") and not found, left out, with a long exported path that wraps and no state line under its name. A warning triangle follows the name of the Work laptop console in its heading and the name of Search API in its row, where an account the file names is not set up here (the popover is in a scenario below); no sentence or alert repeats it. The not-found project, Notes, carries one warning triangle after its name, \"Notes not found, and accounts not set up\": the project is missing and its account falls back too, which are one point and so one mark (its popover is in a scenario below). The last console says it has no projects. The unchecked boxes (here Settings and Agent accounts) show their edge against the dialog. The What to import label sits 16px above its checkboxes. Each console card's header row is a filled band set apart from its body by fill alone, with no line at its edges, and the dividers between project rows are inset by the card's padding.",
     state,
     configuration: reviewing({ inspection: REVIEW_AGENT_SETTINGS_ONLY }),
     steps: [
@@ -1060,8 +1095,8 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-import-review-settings",
     group: GROUP,
     category: "normal",
-    title: "Import, review of the application settings",
-    description: "Application settings ticked in the What to import group: the Application settings tab appears beside Consoles and projects (with a warning glyph) and is the one open. It holds six cards titled and ordered as the Settings dialog's sections (General, App behavior, Git, Agent behavior, Keyboard shortcuts, Cleanup), with no checkbox of its own. Lines that turn a setting on carry a muted consequence line (the pull line, \"Automatically pull repositories\", in Git, says the repositories will then be pulled automatically), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), and \"Ask questions as choices\" (in Agent behavior), which the device already has as the file does, reads No change with nothing under it. General opens with the settings only the window itself holds, each \"Set to the file's\" with the file's value and the current one in brackets: Appearance (System, now Light), Language (日本語, now English) and Markdown style (GitHub, now Tailwind); Appearance and Language read No change under a viewing condition that already has the file's value. App behavior opens with the daemon's Resume sessions on start, turned on, with its muted consequence line, then holds, as this window offers each of them, the settings only the window itself holds, each \"Set to the file's\" with the file's value and the current one in brackets: Keep running in the background when the window is closed (On, now Off), Show menu bar icon (Off, now On), Prevent sleep (On, now Off) and When to prevent sleep (Always, now While sessions work); the terminal-cleanup switch ends the card. Git starts with Default clone directory, which gives the file's directory and this machine's, each in code style, above the checkbox \"Use the file's default clone directory\", checked, its label in normal text; unchecking it turns the badge to the neutral one and the line to \"<this machine's directory> is kept instead of the file's <file's directory>\". Then come the pull line and the Git workflow line, which reads \"Set to the file's\" and lists under the badge only what applying would change, each item as the file's value with what it is now in brackets: four of its five items (where sessions develop, rebase before delivery, delivery, revert gate; \"Squash commits before delivery\" is the same and is left out). Agent behavior holds the four auto-approve switches and Ask questions as choices. Keyboard shortcuts holds a \"Changed shortcuts\" line that says 3 of the file's shortcuts differ from the defaults and that shortcut changes apply only to the current browser, then lists each of the three as its key caps with the current ones in brackets. Cleanup holds the archive-cleanup switch alone.",
+    title: "Import, review of the settings",
+    description: "Settings ticked in the What to import group: the Settings tab appears beside Consoles and projects (with a warning glyph) and is the one open. It holds one card for each section the file carries, titled and ordered as the Settings dialog's sections (General, App behavior, Git, Agent behavior, Keyboard shortcuts, Cleanup), each title a checkbox named by the section, centred on the title line, and all six checked. Lines that turn a setting on carry a muted consequence line (the pull line, \"Automatically pull repositories\", in Git, says the repositories will then be pulled automatically), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), and \"Ask questions as choices\" (in Agent behavior), which the device already has as the file does, reads No change with nothing under it. General opens with the settings only the window itself holds, each \"Set to the file's\" with the file's value and the current one in brackets: Appearance (System, now Light), Language (日本語, now English) and Markdown style (GitHub, now Tailwind); Appearance and Language read No change under a viewing condition that already has the file's value. Sorting follows them: it reads \"Set to the file's\" and lists under the badge the three parts that differ, each as the file's value with what it is now in brackets: Sessions (Recently started, now Status), Active projects (Recently used, now Status) and Inactive projects (Recently used, now Name). App behavior opens with the daemon's Resume sessions on start, turned on, with its muted consequence line, then holds, as this window offers each of them, the settings only the window itself holds, each \"Set to the file's\" with the file's value and the current one in brackets: Keep running in the background when the window is closed (On, now Off), Show menu bar icon (Off, now On), Prevent sleep (On, now Off) and When to prevent sleep (Always, now While sessions work); the terminal-cleanup switch ends the card. Git starts with Default clone directory, which gives the file's directory and this machine's, each in code style, above the checkbox \"Use the file's default clone directory\", checked, its label in normal text; unchecking it turns the badge to the neutral one and the line to \"<this machine's directory> is kept instead of the file's <file's directory>\". Then come the pull line and the Git workflow line, which reads \"Set to the file's\" and lists under the badge only what applying would change, each item as the file's value with what it is now in brackets: four of its five items (where sessions develop, rebase before delivery, delivery, revert gate; \"Squash commits before delivery\" is the same and is left out). Agent behavior holds the four auto-approve switches and Ask questions as choices. Keyboard shortcuts holds a \"Changed shortcuts\" line that says 3 of the file's shortcuts differ from the defaults and that shortcut changes apply only to the current browser, then lists each of the three as its key caps with the current ones in brackets. Cleanup holds the archive-cleanup switch alone.",
     state,
     backgroundRun: true,
     menuBarIcon: true,
@@ -1078,14 +1113,14 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-import-review-tabs",
     group: GROUP,
     category: "normal",
-    title: "Import, review of a document with consoles, accounts and settings",
-    description: "A file with consoles, accounts and settings: the What to import group holds three checkboxes, Consoles and projects and Accounts checked and Application settings ticked here, so there are three tabs, Consoles and projects and Accounts each with a warning glyph (a project is not found; an account's directory is in use or cannot be used) and Application settings without; the first is open. With Application settings ticked, the file's default clone directory is the one applied, so the targets on the Consoles and projects tab already stand under it: Search API is placed in a folder of /Users/ana/Code/clones, Design System and Dotfiles are cloned into folders there, and Website, which this machine finds in its own default clone directory, can be cloned there instead (the apply-to-all buttons count Default clone directory (1) and Clone from remote (3)). With Accounts checked and every account left at its proposal, the references to accounts the import would create (the Work laptop console's Claude Code account Work, the Website project's Codex account Reports) carry no warning triangle, while Search API's and Notes's Codex account Personal, which the import does not create, still do. Switching the checkboxes on the page moves the tabs in and out with the list motion.",
+    title: "Import, review of a document with consoles, accounts and some of the settings",
+    description: "A file with consoles, settings and accounts: the What to import group holds three checkboxes, all checked, so there are three tabs, Consoles and projects, Settings and Agent accounts, the first and the last each with a warning glyph (a project is not found; an account's directory is in use or cannot be used) and Settings without. The Settings tab is the one open: Git and Agent behavior are checked and show their lines, and the other four sections (General, App behavior, Keyboard shortcuts, Cleanup) are unchecked, each collapsed to its title row with the Left out outcome at its right; in Git, the checkbox \"Use the file's default clone directory\" stands under the file's directory. With Git ticked, the file's default clone directory is the one applied, so the targets on the Consoles and projects tab stand under it: Search API is placed in a folder of /Users/ana/Code/clones, Design System and Dotfiles are cloned into folders there, and Website, which this machine finds in its own default clone directory, can be cloned there instead (the apply-to-all buttons count Default clone directory (1) and Clone from remote (3)). With Agent accounts checked and every account left at its proposal, the references to accounts the import would create (the Work laptop console's Claude Code account Work, the Website project's Codex account Reports) carry no warning triangle, while Search API's and Notes's Codex account Personal, which the import does not create, still do. Switching the checkboxes on the page moves the tabs in and out with the list motion; unchecking Git collapses the Git card and puts the targets back under this machine's own default clone directory, and checking a collapsed section opens it again.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
+    configuration: { file: fileOf(ACCOUNTS_REVIEW), inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
-      toggleSettings,
+      ...settingsKeeping("git", "agent_behavior"),
     ],
   },
   {
@@ -1093,15 +1128,15 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review, what a tab's warning glyph says",
-    description: "The mouse rests on the Accounts tab, whose warning glyph is about an account that cannot be created as it is: a tooltip opens against the tab, saying this part has something that needs attention. It opens in the same way while the tab has keyboard focus.",
+    description: "The mouse rests on the Agent accounts tab, whose warning glyph is about an account that cannot be created as it is: a tooltip opens against the tab, saying this part has something that needs attention. It opens in the same way while the tab has keyboard focus.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
+    configuration: { file: fileOf(ACCOUNTS_REVIEW), inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
       (ui) =>
         ui.hoverAnchored(
-          ui.t("configuration.import.tab.attention", { tab: ui.t("configuration.import.tab.accounts") }),
+          ui.t("configuration.import.tab.attention", { tab: ui.t("settings.section.accounts") }),
           ui.t("configuration.import.tab.attentionTip"),
         ),
     ],
@@ -1111,9 +1146,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of the accounts",
-    description: "The Accounts tab, opened from a tab bar of Consoles and projects and Accounts (the What to import group above it has both checked, Application settings unchecked): the sentence \"This agent will be added to the agent list:\" over a bulleted list holding Grok Build as its one item, then one line each saying the default account of Claude Code would be named Personal, the default account of Claude Code would be disabled and the default account of Codex would be enabled (Grok Build's default name, which is not applied, and its default account, which the file does not mention, have no line). Under them the \"Agent account settings\" card: \"Automatically select an account\" and \"Automatically switch accounts at the usage limit\" turn on, each with a muted consequence line, and \"Start usage windows automatically\", which the file leaves as this machine has it, reads No change with nothing under it. The lines with several values read \"Set to the file's\" and list under the badge only what applying would change, each as the file's value with what it is now in brackets: Permission approval lists Claude Code, Manual (now Follow account configuration); Codex compatibility lists Claude Code, On (now Off); a second Permission approval line lists Codex, Ask for approval (now Custom (config.toml)); Claude compatibility lists Codex, On (now Off); the setting of Acme Agent, a provider this build has no words for, is a line of its own headed by the agent and the setting's id and lists Acme Agent with the file's value (now Follow account configuration); Agent tags lists Codex with three tags (now No tags) and Claude Code with No tags (now personal), and not Grok Build, which the file does not list. Then a card for each agent the file gives accounts. A row's status line says only New or \"Already exists, used as it is\"; an account that cannot be created has no status line but a warning mark after its name instead (its popovers are in the scenarios below). Claude Code's rows: Work, New; Archive, New, with the \"Disabled\" badge and its choice set to Leave out (changed from \"Create it\"); Sandbox, New; Clients, Original and Default, each with the warning mark and its choice at Leave out (a directory in use by another account, one in use by the default account, a name Claude Code already has). Clients and Original can be given another directory; Default, whose name is the problem, offers only Leave out. Codex's: Home, \"Already exists, used as it is\", with no choice and no directory line; Reports, New; Backup, with the warning mark, its directory written as the bare name codex-backup, at Leave out. No row says anything about sharing the default configuration, which an import never turns on. Every row but Home has a \"Directory in the file\" line giving the directory as the file writes it. Grok Build, for which the file brings no account, has no card. A note says the accounts are created without being logged in.",
+    description: "The Agent accounts tab, opened from a tab bar of Consoles and projects and Agent accounts (the What to import group above it has Consoles and projects and Agent accounts checked, and Settings unchecked), is grouped by agent. The first card, \"Agent account settings\", holds the three switches and nothing per agent: \"Automatically select an account\" and \"Automatically switch accounts at the usage limit\" turn on, each with a muted consequence line, and \"Start usage windows automatically\", which the file leaves as this machine has it, reads No change with nothing under it. Then one card per agent, in this order: Claude Code, Codex, Grok Build and Acme Agent, each titled with its name beside a checkbox, checked. A card holds, in this order, the lines about the agent, its default account lines (which no longer name the agent, the card being its own) and its settings rows named by the setting alone, a Tags row, and under a filled \"Accounts\" band its account rows. Each card's header row and the Accounts band are set apart by their fill alone, with no line at their edges, and the dividers inside a card's body are inset by the card's padding, only the filled bands reaching the card's edges. Claude Code's card: \"The default account will be named Personal.\" and \"The default account will be disabled.\"; Permission approval, \"Set to the file's\" with Manual (now Follow account configuration); Codex compatibility, On (now Off); Tags, No tags (now personal). Codex's card: \"The default account will be enabled.\"; Permission approval, Ask for approval (now Custom (config.toml)); Claude compatibility, On (now Off); Tags, three tags (now No tags). Grok Build's card holds the one line \"Will be added to the agent list.\" (the card's title already names the agent), with no Accounts band (its default name, which is not applied, and its default account, which the file does not mention, have no line). The rows with several values list under the badge only what applying would change, each as the file's value with what it is now in brackets. Acme Agent, a provider this build has no words for, has a card of its own with one settings row, its setting's id, Careful (now Follow account configuration), and no accounts, so no Accounts band. A row's status is a badge after the account's name and before its \"Disabled\" badge: a success \"New\" badge with a check icon, or a neutral \"Already exists, used as it is\" badge with a dot icon; an account that cannot be created has no status badge but a warning mark after its name instead (its popovers are in the scenarios below). Claude Code's rows: Work, New; Archive, New, with the \"Disabled\" badge and its choice set to Leave out (changed from \"Create it\"); Sandbox, New; Clients, Original and Default, each with the warning mark and its choice at Leave out (a directory in use by another account, one in use by the default account, a name Claude Code already has). Clients and Original can be given another directory; Default, whose name is the problem, offers only Leave out. Codex's: Home, \"Already exists, used as it is\", with no choice and no directory line; Reports, New; Backup, with the warning mark, its directory written as the bare name codex-backup, at Leave out. No row says anything about sharing the default configuration, which an import never turns on. Every row but Home has a line led by a folder icon (its tooltip, \"Directory in the file\", opens on hover and on touch) giving the directory as the file writes it. A note says the accounts are created without being logged in.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
+    configuration: { file: fileOf(ACCOUNTS_REVIEW), inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1129,17 +1164,27 @@ export const configurationScenarios: Scenario[] = [
     title: "Import, review, why an account's directory cannot be used",
     description: "A document of accounts alone, with the three that cannot be created as the file has them. The mouse rests on the warning mark after the Clients name: its popover opens above it with no click and no focus taken, saying the directory is already in use by Studio and that the account is left out unless another directory is chosen for it. The directory being in use by the default account, or an account that cannot be created at all, puts its own sentence in the same popover.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_UNUSABLE },
+    configuration: { file: fileOf(ACCOUNTS_UNUSABLE), inspection: ACCOUNTS_UNUSABLE },
     steps: [...importFromSettings, chooseFile, hoverAccountMark("directoryInUseMark", "Clients")],
+  },
+  {
+    id: "configuration-import-review-accounts-agent-left-out",
+    group: GROUP,
+    category: "normal",
+    title: "Import, review of the accounts with agents left out",
+    description: "Claude Code's and Codex's checkboxes on the Agent accounts tab are unchecked: each card collapses to its title row with the Left out outcome at the right, and its default account lines, settings rows and account rows are gone, while the cards of Grok Build and Acme Agent stay open below them. Every account the file cannot create as it is belongs to these two agents, so the Agent accounts tab no longer carries a warning glyph (the Consoles and projects tab keeps its own). The Agent account settings card keeps its three switches whichever agents are checked, and Import stays available. The note that the accounts are created without being logged in is gone too, as no checked agent has an account to create (the review of the accounts shows it with them checked).",
+    state: accountsMachine,
+    configuration: { file: fileOf(ACCOUNTS_REVIEW), inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
+    steps: [...importFromSettings, chooseFile, accountsTab, (ui) => ui.press("Claude Code"), (ui) => ui.press("Codex")],
   },
   {
     id: "configuration-import-review-accounts-left-out",
     group: GROUP,
     category: "normal",
     title: "Import, review of the consoles when an account is left out",
-    description: "Work, an account the file would create, is set to Leave out on the Accounts tab, and the Consoles and projects tab is open again: the warning triangle is back after the Work laptop heading, as that console's Claude Code account Work will not exist. The Website project's Codex account Reports is still created, so its row has no triangle, unlike Search API's and Notes's account Personal, which the file does not create.",
+    description: "Work, an account the file would create, is set to Leave out on the Agent accounts tab, and the Consoles and projects tab is open again: the warning triangle is back after the Work laptop heading, as that console's Claude Code account Work will not exist. The Website project's Codex account Reports is still created, so its row has no triangle, unlike Search API's and Notes's account Personal, which the file does not create.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
+    configuration: { file: fileOf(ACCOUNTS_REVIEW), inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
     steps: [...importFromSettings, chooseFile, accountsTab, ...leaveAccountOut("Work"), consolesTab],
   },
   {
@@ -1147,9 +1192,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of the consoles when the accounts are not imported",
-    description: "With Accounts unchecked in the What to import group, the Accounts tab is gone, and the references to accounts the import would have created fall back after all: the Work laptop console and the Website project, both marked as such, now carry the warning triangle beside Search API's and Notes's. With one region left the tab bar is gone too.",
+    description: "With Agent accounts unchecked in the What to import group, the Agent accounts tab is gone, and the references to accounts the import would have created fall back after all: the Work laptop console and the Website project, both marked as such, now carry the warning triangle beside Search API's and Notes's. With one region left, the tab bar stays with the single tab Consoles and projects.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
+    configuration: { file: fileOf(ACCOUNTS_REVIEW), inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1161,9 +1206,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review with the consoles not imported",
-    description: "With Consoles and projects unchecked in the What to import group, its tab is gone and the review is the Accounts content alone, without a tab bar: the file's consoles and projects are not imported, so no project row is asked to be placed.",
+    description: "With Consoles and projects unchecked in the What to import group, its tab is gone and the tab bar holds the single tab Agent accounts, with its content: the file's consoles and projects are not imported, so no project row is asked to be placed.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
+    configuration: { file: fileOf(ACCOUNTS_REVIEW), inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1175,9 +1220,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review with nothing chosen to import",
-    description: "With Consoles and projects and Accounts both unchecked and Application settings left unchecked, no tab is left and the body under the What to import group is empty; Import is unavailable.",
+    description: "With Consoles and projects and Agent accounts both unchecked and Settings left unchecked, no tab is left and the body under the What to import group is empty; Import is unavailable.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
+    configuration: { file: fileOf(ACCOUNTS_REVIEW), inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1186,13 +1231,29 @@ export const configurationScenarios: Scenario[] = [
     ],
   },
   {
+    id: "configuration-import-review-settings-left-out",
+    group: GROUP,
+    category: "normal",
+    title: "Import, review with every Settings section left out",
+    description: "Settings is the only part checked and every section in its tab is unchecked: each of the six cards is collapsed to its title row with the Left out outcome at its right, and Import is unavailable, as nothing is left to import.",
+    state: accountsMachine,
+    configuration: { file: fileOf(ACCOUNTS_REVIEW), inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      toggleConsoles,
+      toggleAccounts,
+      ...settingsKeeping(),
+    ],
+  },
+  {
     id: "configuration-import-review-accounts-only",
     group: GROUP,
     category: "normal",
     title: "Import, review of a document of accounts alone",
-    description: "A document that carries only accounts has no What to import group and no tab bar: the review opens straight on the accounts, as on a new computer with no console. Existing accounts read \"Already exists, used as it is\" and have no choice; Personal, a new one, carries the \"Disabled\" badge; nothing carries a warning, and there are no lines about agents to add or default accounts and no Agent account settings card, as the file carries none.",
+    description: "A document that carries only accounts has no What to import group, and its tab bar holds the single tab Agent accounts: the review opens straight on the accounts, as on a new computer with no console. Existing accounts carry the \"Already exists, used as it is\" badge and have no choice or directory line; Personal, a new one, carries the \"New\" and \"Disabled\" badges, in that order; nothing carries a warning, and there are no lines about agents to add or default accounts and no Agent account settings card, as the file carries none.",
     state: noConsoleState,
-    configuration: { file: FILE, inspection: ACCOUNTS_ONLY, imported: ACCOUNTS_ONLY_RESULT },
+    configuration: { file: fileOf(ACCOUNTS_ONLY), inspection: ACCOUNTS_ONLY, imported: ACCOUNTS_ONLY_RESULT },
     steps: importFromWelcome,
   },
   {
@@ -1200,9 +1261,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of one console's document",
-    description: "A single console's document has no What to import group and no tab bar, as it carries only that region, and one card. \"Default clone directory (0)\" is disabled because no project offers it, and the clone note follows the card. The project nothing places, Releases, has no state line, only a warning triangle after its name.",
+    description: "A single console's document has no What to import group, as it carries only that region, and its tab bar holds the single tab Consoles and projects, over one card. \"Default clone directory (0)\" is disabled because no project offers it, and the clone note follows the card. The project nothing places, Releases, has no state line, only a warning triangle after its name.",
     state,
-    configuration: { file: FILE, inspection: SINGLE, imported: CLEAN_RESULT },
+    configuration: { file: fileOf(SINGLE), inspection: SINGLE, imported: CLEAN_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1215,7 +1276,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import, review with names that wrap",
     description: "The console name in its heading and both project names are too long for one line and wrap. Each warning triangle (the console's and the found project's account fallbacks, and the not-found project's \"not found\") stays one line high and centres on the first line of its name, not on the whole wrapped name.",
     state,
-    configuration: { file: FILE, inspection: LONG_NAMES },
+    configuration: { file: fileOf(LONG_NAMES), inspection: LONG_NAMES },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1228,7 +1289,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import, review of a document exported without full paths",
     description: "A project recorded only by its directory's name has no \"Exported path\" line: found in the default clone directory (only \"Placed in\"), can be cloned, or not found, with nothing to place it: that one has no state line under its name, only a warning triangle after it.",
     state,
-    configuration: { file: FILE, inspection: NO_PATHS },
+    configuration: { file: fileOf(NO_PATHS), inspection: NO_PATHS },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1239,9 +1300,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of a document written on another operating system",
-    description: "Each project's \"Exported path\" is a Windows path, which names nothing on this machine, and no loose sentence says so under the fields: a mark after the path does. Design System, offered a clone (\"Clone from\" and \"Clone into\"), has a note mark right after its \"Exported path\" value, named \"Exported path of Design System cannot be used\"; its popover says only that the exported path was written on another operating system, so it cannot be used here, with no remedy. Notes, found nowhere, whose long path wraps, has only the warning triangle after its name; its popover opens with the same sentence, then says it is skipped unless a directory is chosen for it. The accounts and the application settings of such a document are in the two scenarios below.",
+    description: "Each project's \"Exported path\" is a Windows path, which names nothing on this machine, and no loose sentence says so under the fields: a mark after the path does. Design System, offered a clone (\"Clone from\" and \"Clone into\"), has a note mark right after its \"Exported path\" value, named \"Exported path of Design System cannot be used\"; its popover says only that the exported path was written on another operating system, so it cannot be used here, with no remedy. Notes, found nowhere, whose long path wraps, has only the warning triangle after its name; its popover opens with the same sentence, then says it is skipped unless a directory is chosen for it. The accounts and the Git settings of such a document are in the two scenarios below.",
     state,
-    configuration: { file: FILE, inspection: FOREIGN_PATHS },
+    configuration: { file: fileOf(FOREIGN_PATHS), inspection: FOREIGN_PATHS },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1252,9 +1313,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of an account whose directory was written on another operating system",
-    description: "A document of accounts alone, whose Laptop account has a Windows directory. Its \"Directory in the file\" line shows the Windows path with no sentence under the account; its choice is Leave out. The mouse rests on the warning mark after the Laptop name: its popover opens above it with no click and no focus taken, saying first that the directory in the file was written on another operating system, so it cannot be used here, then that the account is left out unless another directory is chosen for it, and never that the path is not absolute.",
+    description: "A document of accounts alone, whose Laptop account has a Windows directory. Its folder-icon directory line shows the Windows path with no sentence under the account; its choice is Leave out. The mouse rests on the warning mark after the Laptop name: its popover opens above it with no click and no focus taken, saying first that the directory in the file was written on another operating system, so it cannot be used here, then that the account is left out unless another directory is chosen for it, and never that the path is not absolute.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNT_FOREIGN_DIRECTORY },
+    configuration: { file: fileOf(ACCOUNT_FOREIGN_DIRECTORY), inspection: ACCOUNT_FOREIGN_DIRECTORY },
     steps: [...importFromSettings, chooseFile, hoverAccountMark("invalidMark", "Laptop")],
   },
   {
@@ -1262,9 +1323,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of a default clone directory written on another operating system",
-    description: "A document of application settings alone, so there is no tab bar. In the Git card, Default clone directory reads No change and the line under it says the file's default clone directory was written on another operating system, so it cannot be used here, and that the current default clone directory is kept. It has no directory to show and no checkbox to choose the file's directory, unlike a directory this machine can use.",
+    description: "A document of the Git settings alone, so there is no What to import group, and its tab bar holds the single tab Settings. In the Git card, Default clone directory reads No change and the line under it says the file's default clone directory was written on another operating system, so it cannot be used here, and that the current default clone directory is kept. It has no directory to show and no checkbox to choose the file's directory, unlike a directory this machine can use.",
     state,
-    configuration: { file: FILE, inspection: SETTINGS_FOREIGN_CLONE_DIR },
+    configuration: { file: fileOf(SETTINGS_FOREIGN_CLONE_DIR), inspection: SETTINGS_FOREIGN_CLONE_DIR },
     steps: [...importFromSettings, chooseFile],
   },
   {
@@ -1300,13 +1361,13 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, in progress",
-    description: "Opened from Settings, the dialog stands over the Settings dialog, which stays open behind it. With Application settings ticked the import is part-way: the bar labelled \"Importing configuration\" is filled to the items that have settled, \"12 of 15 processed\". Below it are cards for the consoles, with their projects, then for each agent with its accounts, then for Agent account settings, Default clone directory and Application settings, each with its state: Done, Failed with the reason, Not attempted (the project of the console that could not be created), Waiting, and Creating… or Cloning… with a spinner. The Work laptop console is already Done, one of its projects failed, one is done and the last is being cloned; Agent account settings and Default clone directory are Done, and Application settings is still Waiting. The footer holds the pending Import button, with its spinner before the label, beside a disabled Cancel, and the close button is disabled too.",
+    description: "Opened from Settings, the dialog stands over the Settings dialog, which stays open behind it. With Settings checked and only its Git section kept the import is part-way: the bar labelled \"Importing configuration\" is filled to the items that have settled, \"12 of 15 processed\". Below it are cards in the review's order: the consoles, with their projects, then Default clone directory, Settings, Agent account settings and last each agent with its accounts, each with its state: Done, Failed with the reason, Not attempted (the project of the console that could not be created), Waiting, and Creating… or Cloning… with a spinner. The Work laptop console is already Done, one of its projects failed, one is done and the last is being cloned; Default clone directory and Agent account settings are Done, and Settings, which stands for all the checked sections at once, is still Waiting. The footer holds the pending Import button, with its spinner before the label, beside a disabled Cancel, and the close button is disabled too.",
     state: accountsMachine,
     configuration: reviewing({ inspection: PROGRESS_REVIEW, imported: "pending", progress: IMPORT_UNDER_WAY }),
     steps: [
       ...importFromSettings,
       chooseFile,
-      toggleSettings,
+      ...settingsKeeping("git"),
       importNow,
     ],
   },
@@ -1315,13 +1376,13 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, result where the settings could not be applied",
-    description: "With Application settings ticked, the import's result has a tab for it: it carries a warning glyph and is the one open, as the only tab with a failure: a danger Alert holds the settings failure's title and short reason, with Details at its end for the raw text, and no settings cards follow. The other two tabs have no glyph (the next scenario shows what they say).",
+    description: "With Settings checked and only its Git section kept, the import's result has a Settings tab for it: it carries a warning glyph and is the one open, as the only tab with a failure: a danger Alert holds the title \"Could not import settings\" and the short reason (\"The settings could not be applied: …\"), with Details at its end for the raw text, and no settings cards follow. The other two tabs have no glyph (the next scenario shows what they say).",
     state: autoPulling,
-    configuration: { file: FILE, inspection: WITH_ACCOUNTS_SETTING_OFF, imported: SETTINGS_FAILED_RESULT },
+    configuration: { file: fileOf(WITH_ACCOUNTS_SETTING_OFF), inspection: WITH_ACCOUNTS_SETTING_OFF, imported: SETTINGS_FAILED_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
-      toggleSettings,
+      ...settingsKeeping("git"),
       importNow,
     ],
   },
@@ -1330,15 +1391,15 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, result where only the settings failed, the other tabs",
-    description: "The settings could not be applied, yet the Accounts tab, open here, starts with its own totals, \"2 accounts created · 2 accounts already existed · Nothing failed\", since none of its accounts failed; the Consoles and projects tab has its own too (\"1 console created · 2 projects created · 1 project left out · Nothing failed\"), and only the Application settings tab carries the warning glyph.",
+    description: "The settings could not be applied, yet the Agent accounts tab, open here, starts with its own totals, \"2 accounts created · 2 accounts already existed · Nothing failed\", since none of its accounts failed; the Consoles and projects tab has its own too (\"1 console created · 2 projects created · 1 project left out · Nothing failed\"), and only the Settings tab carries the warning glyph.",
     state: autoPulling,
-    configuration: { file: FILE, inspection: WITH_ACCOUNTS_SETTING_OFF, imported: SETTINGS_FAILED_RESULT },
+    configuration: { file: fileOf(WITH_ACCOUNTS_SETTING_OFF), inspection: WITH_ACCOUNTS_SETTING_OFF, imported: SETTINGS_FAILED_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
-      toggleSettings,
+      ...settingsKeeping("git"),
       importNow,
-      (ui) => ui.pressTab(ui.t("configuration.import.tab.accounts")),
+      (ui) => ui.pressTab(ui.t("settings.section.accounts")),
     ],
   },
   {
@@ -1346,9 +1407,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import result, the clone directory kept although the settings failed",
-    description: "A document of application settings alone, so there is no tab bar: the settings could not be applied, but the default clone directory had been written before they failed. A danger Alert holds the settings failure's title and short reason, with Details at its end, and below it a Git card holds one line, Default clone directory, \"Matches the file\", with the note \"Set before the other application settings failed to apply.\" and the file's directory under it as plain monospace text.",
+    description: "A document of the Git settings alone, so there is no What to import group and no tab bar: the settings could not be applied, but the default clone directory had been written before they failed. A danger Alert holds the settings failure's title and short reason, with Details at its end, and below it a Git card holds one line, Default clone directory, \"Matches the file\", with the note \"Set before the other settings failed to apply.\" and the file's directory under it as plain monospace text.",
     state,
-    configuration: { file: FILE, inspection: CLONE_DIR_SETTINGS, imported: CLONE_DIR_KEPT_RESULT },
+    configuration: { file: fileOf(CLONE_DIR_SETTINGS), inspection: CLONE_DIR_SETTINGS, imported: CLONE_DIR_KEPT_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1378,9 +1439,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import placement validation of an account",
-    description: "On the Accounts tab, \"Another directory\" under an account shows a text field labelled \"Directory\" with a placeholder that follows the agent (\"Ex. ~/.claude-work\" in Claude Code's Clients, \"Ex. ~/.codex-work\" in Codex's Backup, both left empty) and a Browse button, in place of the \"Directory in the file\" line, which the other rows keep. Only a row whose directory is the problem offers it: Default, whose name is the problem, can only be left out. After Import is pressed, an empty directory (Clients, Backup) shows \"Enter a directory, or leave the account out.\" and a relative one (Original) shows that an absolute path, or one starting with ~/, is needed, together. The view is scrolled to Codex's Backup, whose empty field has focus and shows its own placeholder; Claude Code's Clients, empty too, is higher up the list.",
+    description: "On the Agent accounts tab, \"Another directory\" under an account shows a text field labelled \"Directory\" with a placeholder that follows the agent (\"Ex. ~/.claude-work\" in Claude Code's Clients, \"Ex. ~/.codex-work\" in Codex's Backup, both left empty) and a Browse button, in place of the folder-icon directory line, which the other rows keep. Only a row whose directory is the problem offers it: Default, whose name is the problem, can only be left out. After Import is pressed, an empty directory (Clients, Backup) shows \"Enter a directory, or leave the account out.\" and a relative one (Original) shows that an absolute path, or one starting with ~/, is needed, together. The view is scrolled to Codex's Backup, whose empty field has focus and shows its own placeholder; Claude Code's Clients, empty too, is higher up the list.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_REVIEW, imported: undefined },
+    configuration: { file: fileOf(ACCOUNTS_REVIEW), inspection: ACCOUNTS_REVIEW, imported: undefined },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1400,8 +1461,8 @@ export const configurationScenarios: Scenario[] = [
     category: "exceptional",
     title: "Import result with failures and fallbacks",
     state: state,
-    configuration: reviewing({ file: SHORTCUTS_FILE }),
-    description: "The Consoles and projects tab, with a warning glyph (the Application settings tab has none), is open. One line of totals counts only the consoles and projects: \"2 consoles created · 1 project created · 1 project left out · 3 failed · 1 project not attempted\", with no totals above the tabs. Below it a card per console, each with its own status in the header, always: Work laptop Created, Side projects Failed with its reason under the header (the daemon's generic sentence, with Details), Scratch Created with the note that it has no projects. Work laptop's rows: Website Failed with its reason written under the row (a path that does not exist, in code style); Search API Created with a muted line saying where it went; Design System Failed with its reason, Details behind a button; Notes Left out. Dotfiles, under the failed console, reads Not attempted with the muted line that its console could not be created. A warning triangle follows the Work laptop name and the Search API name, for the accounts that fell back to the default. Use the page's width control for how the rows wrap: the status goes under the name when the row is narrow.",
+    configuration: reviewing({ file: fileOf(REVIEW, SHORTCUTS) }),
+    description: "The Consoles and projects tab, with a warning glyph (the Settings tab has none), is open. One line of totals counts only the consoles and projects: \"2 consoles created · 1 project created · 1 project left out · 3 failed · 1 project not attempted\", with no totals above the tabs. Below it a card per console, each with its own status in the header, always: Work laptop Created, Side projects Failed with its reason under the header (the daemon's generic sentence, with Details), Scratch Created with the note that it has no projects. Work laptop's rows: Website Failed with its reason written under the row (a path that does not exist, in code style); Search API Created with a muted line saying where it went; Design System Failed with its reason, Details behind a button; Notes Left out. Dotfiles, under the failed console, reads Not attempted with the muted line that its console could not be created. A warning triangle follows the Work laptop name and the Search API name, for the accounts that fell back to the default. Use the page's width control for how the rows wrap: the status goes under the name when the row is narrow.",
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1413,8 +1474,8 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-import-result-settings",
     group: GROUP,
     category: "normal",
-    title: "Import result, the application settings applied",
-    description: "The only tab, as the consoles were not imported, so there is no tab bar: six cards titled and ordered as the Settings dialog's sections (General, App behavior, Git, Agent behavior, Keyboard shortcuts, Cleanup), their switches read On or Off. General lists the settings only the window itself holds, each with the value it was set to and no \"now\" value: Appearance (System), Language (English) and Markdown style (GitHub), then its switches. App behavior lists Resume sessions on start, then Keep running in the background when the window is closed (On), Show menu bar icon (Off), Prevent sleep (On) and When to prevent sleep (Always), then the terminal-cleanup switch. Git begins with Default clone directory (\"Matches the file\"), which gives the file's directory as plain monospace text, then the pull switch and Git workflow (\"Matches the file\"), which lists all five items. Agent behavior holds the four auto-approve switches and Ask questions as choices. Keyboard shortcuts holds a \"Changed shortcuts\" line (\"3 changes from the defaults\") that lists the three that were applied as key caps, under a muted line saying 2 shortcuts could not be applied. Cleanup holds the archive-cleanup switch alone.",
+    title: "Import result, the settings applied",
+    description: "The only tab, as the consoles were not imported, so there is no tab bar: one card for each of the six applied sections, titled and ordered as the Settings dialog's sections (General, App behavior, Git, Agent behavior, Keyboard shortcuts, Cleanup), their switches read On or Off. General lists the settings only the window itself holds, each with the value it was set to and no \"now\" value: Appearance (System), Language (English) and Markdown style (GitHub), then Sorting, which lists the three parts it was set to (Sessions: Recently started, Active projects: Recently used, Inactive projects: Recently used), then its switches. App behavior lists Resume sessions on start, then Keep running in the background when the window is closed (On), Show menu bar icon (Off), Prevent sleep (On) and When to prevent sleep (Always), then the terminal-cleanup switch. Git begins with Default clone directory (\"Matches the file\"), which gives the file's directory as plain monospace text, then the pull switch and Git workflow (\"Matches the file\"), which lists all five items. Agent behavior holds the four auto-approve switches and Ask questions as choices. Keyboard shortcuts holds a \"Changed shortcuts\" line (\"3 changes from the defaults\") that lists the three that were applied as key caps, under a muted line saying 2 shortcuts could not be applied. Cleanup holds the archive-cleanup switch alone.",
     state,
     backgroundRun: true,
     menuBarIcon: true,
@@ -1433,9 +1494,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import result of the accounts, with a failure",
-    description: "The Accounts tab, with a warning glyph beside the Consoles and projects one, is open. It starts with one line of totals counting only the accounts, \"3 accounts created · 1 account already existed · 4 accounts left out · 1 failed\", directly above the cards, and holds a card per agent with a row per account, each with its status: for Claude Code, Work Created, Archive Created, Sandbox Failed with the reason under the row, Clients, Original and Default Left out; for Codex, Home Already existed, Reports Created and Backup Left out; Grok Build has no card. Under the cards, the sentence \"This agent was added to the agent list:\" is followed by a bulleted list holding Grok Build as its one item, then one line says that the default account of Claude Code is now named as in the file, that the default account of Claude Code is now disabled and that the default account of Codex is now enabled. The \"Agent account settings\" card follows: the two switches that were turned on read On and the one left read Off; Permission approval (twice, for Claude Code and Codex), Codex compatibility, Claude compatibility, the setting of Acme Agent and Agent tags each read \"Matches the file\" and list the values that were set, Agent tags listing Codex with its three tags and Claude Code as No tags. A note with an info icon says the new accounts are not logged in yet; there is no Log in button.",
+    description: "The Agent accounts tab, with a warning glyph beside the Consoles and projects one, is open. It starts with one line of totals counting only the accounts, \"3 accounts created · 1 account already existed · 4 accounts left out · 1 failed\", directly above the cards. The first card, \"Agent account settings\", holds the three switches, the two that were turned on reading On and the one left Off. Then one card per agent, in the order Claude Code, Codex, Grok Build and Acme Agent, titled with its name and no checkbox: Claude Code's holds the lines \"The default account is now named as in the file.\" and \"The default account is now disabled.\", Permission approval, Codex compatibility and Tags (each \"Matches the file\" with the value that was set, Tags as No tags), then under a filled \"Accounts\" band a row per account with its status: Work Created, Archive Created, Sandbox Failed with the reason under the row, Clients, Original and Default Left out. Codex's holds the line \"The default account is now enabled.\", Permission approval, Claude compatibility and Tags (three tags), then Home Already existed, Reports Created and Backup Left out. Grok Build's card holds the one line \"Added to the agent list.\" and no Accounts band. Acme Agent, a provider this build has no words for, has a card of its own with one settings row and no accounts, so no Accounts band. A note with an info icon says the new accounts are not logged in yet; there is no Log in button.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
+    configuration: { file: fileOf(ACCOUNTS_REVIEW), inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1448,9 +1509,9 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import result, the agent account settings could not be applied",
-    description: "A document of accounts alone, so there is no tab bar: the cards of the accounts, none failed (the totals, \"2 accounts created · 2 accounts already existed\", do not add \"Nothing failed\" beside an alert about the settings), are followed by a danger Alert holding the title \"Could not import agent account settings\" and the short reason, with Details at its end for the raw text, and no Agent account settings card. The note that the new accounts are not logged in stays below the Alert.",
+    description: "A document of accounts alone, so there is no tab bar: the line of totals (\"2 accounts created · 2 accounts already existed\", which does not add \"Nothing failed\" beside an alert about the settings) is followed directly by a danger Alert holding the title \"Could not import agent account settings\" and the short reason, with Details at its end for the raw text. The cards of the accounts, none failed, come after it, with no Agent account settings card. The note that the new accounts are not logged in stays below the cards.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_ONLY_SETTINGS, imported: AGENT_SETTINGS_FAILED_RESULT },
+    configuration: { file: fileOf(ACCOUNTS_ONLY_SETTINGS), inspection: ACCOUNTS_ONLY_SETTINGS, imported: AGENT_SETTINGS_FAILED_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1462,14 +1523,14 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import result of a file with consoles, imported without them",
-    description: "The file carries consoles, but Consoles and projects was unchecked, so no console or project was created and the result has no Consoles and projects tab: only Accounts (open) and Application settings, which was ticked, neither with a warning glyph. Above the cards, one line of totals counts the accounts alone, \"4 accounts created · 1 account already existed · 4 accounts left out · Nothing failed\"; the Application settings tab has none.",
+    description: "The file carries consoles, but Consoles and projects was unchecked, so no console or project was created and the result has no Consoles and projects tab: only Settings and Agent accounts (open), neither with a warning glyph. Settings holds a card for each of the two sections kept, Git and Cleanup, and none for the sections left unchecked. Above the cards, one line of totals counts the accounts alone, \"4 accounts created · 1 account already existed · 4 accounts left out · Nothing failed\"; the Settings tab has none.",
     state: accountsMachine,
-    configuration: { file: FILE, inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_SETTINGS_RESULT },
+    configuration: { file: fileOf(ACCOUNTS_REVIEW), inspection: ACCOUNTS_REVIEW, imported: ACCOUNTS_SETTINGS_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
       toggleConsoles,
-      toggleSettings,
+      ...settingsKeeping("git", "cleanup"),
       importNow,
     ],
   },
@@ -1480,7 +1541,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result of a document of accounts alone",
     description: "No tab bar: the one line of totals above the cards says \"2 accounts created · 2 accounts already existed · Nothing failed\". Studio and Home read Already existed, Client and Personal Created; with no agent added and no default account named, the only line under the cards is the note, with an info icon, that the new accounts are not logged in; there is no Log in button.",
     state: noConsoleState,
-    configuration: { file: FILE, inspection: ACCOUNTS_ONLY, imported: ACCOUNTS_ONLY_RESULT },
+    configuration: { file: fileOf(ACCOUNTS_ONLY), inspection: ACCOUNTS_ONLY, imported: ACCOUNTS_ONLY_RESULT },
     steps: [...importFromWelcome, importNow],
   },
   {
@@ -1490,7 +1551,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result, accounts that fell back to the default",
     description: "Everything was created, so the only thing to report is the fallbacks: a warning triangle follows the Documentation name in its header row and the Style Guide name in its row, and nothing else (no alert, no list of accounts) stands above or below the card but the one line of totals above it (\"1 console created · 1 project created · Nothing failed\"), with no tab bar as there is one region.",
     state,
-    configuration: { file: FILE, inspection: FALLBACKS_ONLY, imported: FALLBACKS_ONLY_RESULT },
+    configuration: { file: fileOf(FALLBACKS_ONLY), inspection: FALLBACKS_ONLY, imported: FALLBACKS_ONLY_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -1519,7 +1580,7 @@ export const configurationScenarios: Scenario[] = [
     category: "exceptional",
     title: "Import result with long names and reasons",
     state,
-    configuration: { file: FILE, inspection: LONG_RESULT_REVIEW, imported: LONG_RESULT },
+    configuration: { file: fileOf(LONG_RESULT_REVIEW), inspection: LONG_RESULT_REVIEW, imported: LONG_RESULT },
     description: "Names and reasons too long for a line: each console's and project's name wraps beside its status, the warning triangle staying on the name's first line, and a reason, such as the long path in code style, wraps under its row instead of widening the card. Use the page's width control (420) to see the phone layout, where the names wrap onto more lines beside their statuses. Two projects failed (a path that does not exist, a clone), each with Details, and the second console Failed with its project Not attempted.",
     steps: [
       ...importFromSettings,
@@ -1535,7 +1596,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Successful import result",
     description: "A single region, so no tab bar: one line of totals, \"1 console created · 3 projects created · Nothing failed\", sits directly above the card, whose three projects read Created, each with a muted line for where it went (at its exported path, cloned from its remote, in the directory you chose).",
     state: state,
-    configuration: { file: FILE, inspection: SINGLE, imported: CLEAN_RESULT },
+    configuration: { file: fileOf(SINGLE), inspection: SINGLE, imported: CLEAN_RESULT },
     steps: [
       ...importFromSettings,
       chooseFile,

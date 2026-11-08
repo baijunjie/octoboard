@@ -1,8 +1,12 @@
+// @vitest-environment jsdom
 import { expect, it } from "vitest";
 
 import type { Imported } from "../../configuration/ImportResult";
-import type { Inspection } from "../../configuration/importPlan";
-import { type AccountFallback, type Agent, type ProviderInfo } from "../../protocol";
+import { APP_BEHAVIOR_SWITCHES, CLEANUP_SWITCHES, GENERAL_SWITCHES, GIT_SWITCHES, AGENT_BEHAVIOR_SWITCHES } from "../../configuration/booleanSettings";
+import { documentClientSettings } from "../../configuration/clientSettings";
+import { documentShortcuts, type Inspection } from "../../configuration/importPlan";
+import { SETTINGS_SECTIONS } from "../../configuration/settingsSections";
+import { type AccountFallback, type Agent, type ProviderInfo, type SettingsSection } from "../../protocol";
 import { DEFAULT_ACCOUNT_NAME } from "../../accounts/defaultAccount";
 import { SCENARIOS } from ".";
 import { currentExportedProviderSettings, effectiveProviderSettings } from "../../fixtures/builders";
@@ -284,15 +288,56 @@ it("reports accounts only for a document that carries them", () => {
   }
 });
 
-it("reports application settings only for a document that carries them", () => {
+it("reports settings only for a document that carries them, and only ones it carries", () => {
   for (const { id, inspection, result } of imported) {
     if (inspection.settings === undefined || inspection.settings === null) {
+      expect(inspection.settings_sections, id).toEqual([]);
       expect(result.settings_applied ?? null, id).toBeNull();
       expect(result.settings_error ?? null, id).toBeNull();
     } else if (result.settings_applied) {
-      // The language is the daemon's own to apply; the other client-held values are passed through.
+      // The language is the daemon's own to apply; the other client-held values are passed through. A result of some of
+      // the sections carries only the keys of those, so each key it holds is one the document carries, with its value.
       const { keyboard_shortcuts: _shortcuts, interface_language: _language, ...applied } = result.settings_applied;
-      expect(applied, id).toEqual(carriedSettings(inspection.settings));
+      const carried = carriedSettings(inspection.settings);
+      for (const [key, value] of Object.entries(applied)) expect(value, `${id}: ${key}`).toEqual(carried[key as keyof typeof carried]);
     }
+  }
+});
+
+it("carries settings sections exactly when it carries settings", () => {
+  for (const { id, inspection } of inspected) {
+    expect(inspection.settings_sections.length > 0, id).toBe(!!inspection.settings);
+  }
+});
+
+/** The sections of `inspection`'s settings the review has at least one line for, as the review words them: the daemon-held
+ * settings from the inspection, the settings only the client holds and the keyboard shortcuts from the file's own text. */
+function sectionsWithLines(inspection: Omit<Inspection, "type">, text: string): SettingsSection[] {
+  const settings = inspection.settings;
+  if (!settings) return [];
+  const document: unknown = JSON.parse(text);
+  // Every platform capability, so that a client-held App behavior setting the file carries counts as a line.
+  const client = documentClientSettings(document, { backgroundRun: true, menuBarIcon: true, keepAwake: true });
+  const switches = (list: readonly { field: keyof typeof settings }[]) => list.some(({ field }) => settings[field] != null);
+  const lines: Record<SettingsSection, boolean> = {
+    general: client.appearance !== undefined || client.interface_language !== undefined || client.markdown_style !== undefined || client.session_order !== undefined || switches(GENERAL_SWITCHES),
+    app_behavior: client.run_in_background !== undefined || client.show_menu_bar_icon !== undefined || client.keep_awake !== undefined || client.keep_awake_when !== undefined || switches(APP_BEHAVIOR_SWITCHES),
+    git: settings.default_clone_dir !== null || settings.foreign_default_clone_dir || settings.git_workflow != null || switches(GIT_SWITCHES),
+    agent_behavior: switches(AGENT_BEHAVIOR_SWITCHES),
+    keyboard_shortcuts: documentShortcuts(document) !== undefined,
+    cleanup: switches(CLEANUP_SWITCHES),
+  };
+  return SETTINGS_SECTIONS.filter((section) => lines[section]);
+}
+
+it("gives a file that carries what its inspection says it carries: every Settings section the inspection lists has a line in the review", () => {
+  const reviews = SCENARIOS.flatMap((s) => {
+    const { file, inspection } = s.configuration ?? {};
+    return typeof file === "object" && inspection && !("code" in inspection) && inspection.settings ? [{ id: s.id, file, inspection }] : [];
+  });
+  expect(reviews.length).toBeGreaterThan(0);
+  for (const { id, file, inspection } of reviews) {
+    const empty = inspection.settings_sections.filter((section) => !sectionsWithLines(inspection, file.text).includes(section));
+    expect(empty, `${id}: sections listed with no line in the file or the inspection`).toEqual([]);
   }
 });

@@ -117,6 +117,7 @@ it.each([
   ["import_resolution_invalid", { console: "0", project: "1" }],
   ["import_resolution_invalid", { agent: "Claude Code", account: "1" }],
   ["import_accounts_missing", {}],
+  ["import_agent_missing", { agent: "Claude Code" }],
   ["export_empty", {}],
   ["import_choice_unavailable", { choice: "clone" }],
   ["import_settings_missing", {}],

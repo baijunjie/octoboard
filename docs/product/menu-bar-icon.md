@@ -253,7 +253,7 @@ kept by the desktop application in its settings file, together with keeping Octo
 "Files Octoboard owns" in that document), and read as it starts: a hidden icon is hidden as the application creates it
 at launch, before the window's UI has loaded, so it stays hidden on the screen shown when the daemon failed to start
 too. Turning the switch takes effect at once and is written straight away. A configuration export that includes the
-application settings carries it (see "The settings a client holds" in
+App behavior section carries it (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`).
 
 ## The notification-area icon on Windows

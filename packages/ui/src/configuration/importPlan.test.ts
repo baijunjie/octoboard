@@ -8,24 +8,32 @@ import { TEST_PROVIDERS } from "../test/testProviders";
 import {
   accountChoicesFor,
   accountResolutionsOf,
+  agentImported,
   accountsNeedAttention,
   applyToAll,
   availableFor,
-  carriedRegions,
+  cardAgents,
+  carriedParts,
+  chosen,
   choicesFor,
   directoryProblem,
   documentShortcuts,
   hasAccountDirectoryProblem,
-  hasAgentTags,
-  importedRegions,
+  importedAgents,
+  importedParts,
+  importedSections,
   initialAccountReview,
   initialReview,
   outcomeOf,
+  regionsOf,
   resolutionsOf,
   reviewForOffers,
+  nothingToImport,
   shortcutsRecord,
   shortcutsReview as shortcutsReviewFor,
+  takesDocumentCloneDir,
   targetOf,
+  withAgentImported,
   withEffectiveFallbacks,
   withRow,
 } from "./importPlan";
@@ -105,6 +113,23 @@ it.each([
   { directory: "~/code/web", problem: undefined },
 ])("judges the directory typed for a project: $directory", ({ directory, problem }) => {
   expect(directoryProblem({ choice: "directory", directory })).toBe(problem);
+});
+
+it.each([
+  { directory: "relative\\dir", problem: "not_absolute" },
+  { directory: "/srv/web", problem: "not_absolute" },
+  { directory: "C:web", problem: "not_absolute" },
+  { directory: "~", problem: "not_absolute" },
+  { directory: "C:\\web", problem: undefined },
+  { directory: "\\\\server\\share\\web", problem: undefined },
+  { directory: "~\\code\\web", problem: undefined },
+  { directory: "~/code/web", problem: undefined },
+])("judges the directory typed for a project on a Windows host: $directory", ({ directory, problem }) => {
+  expect(directoryProblem({ choice: "directory", directory }, "windows")).toBe(problem);
+});
+
+it("takes a Windows path as no directory on a Unix host", () => {
+  expect(directoryProblem({ choice: "directory", directory: "C:\\web" })).toBe("not_absolute");
 });
 
 it("finds no fault with the directory of a row that does not use one", () => {
@@ -204,13 +229,12 @@ describe("the keyboard shortcuts of a document", () => {
   });
 });
 
-describe("agent tags in a document", () => {
-  it("count only for the agents the daemon serves", () => {
-    expect(hasAgentTags(TEST_PROVIDERS, {})).toBe(false);
-    expect(hasAgentTags(TEST_PROVIDERS, { someone_new: ["x"] } as never)).toBe(false);
-    expect(hasAgentTags(TEST_PROVIDERS, { constructor: ["x"] } as never)).toBe(false);
-    expect(hasAgentTags(TEST_PROVIDERS, { codex: ["review"] })).toBe(true);
-    expect(hasAgentTags(TEST_PROVIDERS, { someone_new: ["x"], grok: ["research"] } as never)).toBe(true);
+describe("cardAgents", () => {
+  it("lists the agents given first, then the agents the settings or tags name, those the daemon serves only", () => {
+    expect(cardAgents(TEST_PROVIDERS, undefined, ["claude"])).toEqual(["claude"]);
+    expect(cardAgents(TEST_PROVIDERS, { provider_settings: { codex: { claude_compatibility: false } }, agent_tags: { codex: ["a"], grok: [] } }, ["grok"])).toEqual(["grok", "codex"]);
+    expect(cardAgents(TEST_PROVIDERS, { provider_settings: {}, agent_tags: { someone_new: ["x"], constructor: ["x"], claude: [] } as never }, [])).toEqual(["claude"]);
+    expect(cardAgents(TEST_PROVIDERS, { provider_settings: {}, agent_tags: { claude: ["a"] } }, ["grok"], ["codex", "grok"])).toEqual(["grok", "codex", "claude"]);
   });
 });
 
@@ -235,15 +259,16 @@ describe("accounts", () => {
   };
 
   it("creates what can be created as proposed and leaves out what cannot", () => {
-    expect(initialAccountReview(accounts).map((rows) => rows.map((row) => row.choice))).toEqual([["create", "create", "leave_out", "leave_out"], ["create"]]);
-    expect(initialAccountReview(undefined)).toEqual([]);
+    expect(initialAccountReview(accounts).rows.map((rows) => rows.map((row) => row.choice))).toEqual([["create", "create", "leave_out", "leave_out"], ["create"]]);
+    expect(initialAccountReview(accounts).leftOut).toEqual([]);
+    expect(initialAccountReview(undefined)).toEqual({ rows: [], leftOut: [] });
   });
 
   it("sends a resolution only for an account moved or left out, named by its index among its agent's accounts, never for an existing one", () => {
     const review = initialAccountReview(accounts);
-    review[0][0] = { choice: "leave_out", directory: "" };
-    review[0][1] = { choice: "leave_out", directory: "" };
-    review[0][3] = { choice: "directory", directory: "~/moved" };
+    review.rows[0][0] = { choice: "leave_out", directory: "" };
+    review.rows[0][1] = { choice: "leave_out", directory: "" };
+    review.rows[0][3] = { choice: "directory", directory: "~/moved" };
     expect(accountResolutionsOf(accounts, review)).toEqual([
       { agent: "claude", account: 0, leave_out: true },
       { agent: "claude", account: 2, leave_out: true },
@@ -253,18 +278,47 @@ describe("accounts", () => {
 
   it("finds a typed account directory the daemon would refuse only on an account placed in a directory", () => {
     const review = initialAccountReview(accounts);
-    expect(hasAccountDirectoryProblem(review)).toBe(false);
-    review[0][2] = { choice: "directory", directory: "" };
-    expect(hasAccountDirectoryProblem(review)).toBe(true);
-    review[0][2] = { choice: "directory", directory: "relative" };
-    expect(hasAccountDirectoryProblem(review)).toBe(true);
-    review[0][2] = { choice: "directory", directory: "~/x" };
-    expect(hasAccountDirectoryProblem(review)).toBe(false);
+    expect(hasAccountDirectoryProblem(accounts, review)).toBe(false);
+    review.rows[0][2] = { choice: "directory", directory: "" };
+    expect(hasAccountDirectoryProblem(accounts, review)).toBe(true);
+    review.rows[0][2] = { choice: "directory", directory: "relative" };
+    expect(hasAccountDirectoryProblem(accounts, review)).toBe(true);
+    review.rows[0][2] = { choice: "directory", directory: "~/x" };
+    expect(hasAccountDirectoryProblem(accounts, review)).toBe(false);
+  });
+
+  it("sends nothing for an agent left out and ignores a directory typed for its accounts", () => {
+    const review = withAgentImported(initialAccountReview(accounts), "claude", false);
+    review.rows[0][0] = { choice: "leave_out", directory: "" };
+    review.rows[0][2] = { choice: "directory", directory: "" };
+    expect(agentImported(review, "claude")).toBe(false);
+    expect(agentImported(review, "codex")).toBe(true);
+    expect(accountResolutionsOf(accounts, review)).toEqual([]);
+    expect(hasAccountDirectoryProblem(accounts, review)).toBe(false);
+    const back = withAgentImported(review, "claude", true);
+    expect(back.leftOut).toEqual([]);
+    expect(back.rows).toBe(review.rows);
+    expect(accountResolutionsOf(accounts, back)).toHaveLength(3);
+  });
+
+  it("applies the agents of its cards that are checked", () => {
+    const withSettings = { ...accounts, agents_to_add: ["grok" as const], agent_settings: { provider_settings: { codex: {} }, agent_tags: { claude: ["x"] } } as never };
+    const review = initialAccountReview(withSettings);
+    expect(importedAgents(TEST_PROVIDERS, withSettings, review)).toEqual(["claude", "codex", "grok"]);
+    expect(importedAgents(TEST_PROVIDERS, withSettings, withAgentImported(review, "codex", false))).toEqual(["claude", "grok"]);
   });
 
   it("asks for attention for a directory in use or an invalid account, not for a new or existing one", () => {
-    expect(accountsNeedAttention(accounts)).toBe(true);
-    expect(accountsNeedAttention({ ...accounts, agents: [{ ...accounts.agents[1] }, { ...accounts.agents[0], accounts: [account("a", "new"), account("b", "existing")] }] })).toBe(false);
+    const review = initialAccountReview(accounts);
+    expect(accountsNeedAttention(accounts, review)).toBe(true);
+    const settled = { ...accounts, agents: [{ ...accounts.agents[1] }, { ...accounts.agents[0], accounts: [account("a", "new"), account("b", "existing")] }] };
+    expect(accountsNeedAttention(settled, initialAccountReview(settled))).toBe(false);
+  });
+
+  it("does not ask for attention for an account of an agent left out", () => {
+    const review = initialAccountReview(accounts);
+    expect(accountsNeedAttention(accounts, withAgentImported(review, "claude", false))).toBe(false);
+    expect(accountsNeedAttention(accounts, withAgentImported(withAgentImported(review, "claude", false), "claude", true))).toBe(true);
   });
 
   describe("a reference to an account of the document", () => {
@@ -283,12 +337,20 @@ describe("accounts", () => {
       const review = initialAccountReview(accounts);
       // A is new and created, and E too; C and D cannot be created as proposed and start left out.
       expect(fallenBack(review)).toEqual(["c", "D", "gone"]);
-      review[0][2] = { choice: "directory", directory: "~/c" };
-      review[0][3] = { choice: "directory", directory: "~/d" };
+      review.rows[0][2] = { choice: "directory", directory: "~/c" };
+      review.rows[0][3] = { choice: "directory", directory: "~/d" };
       expect(fallenBack(review)).toEqual(["gone"]);
-      review[0][0] = { choice: "leave_out", directory: "" };
-      review[1][0] = { choice: "leave_out", directory: "" };
+      review.rows[0][0] = { choice: "leave_out", directory: "" };
+      review.rows[1][0] = { choice: "leave_out", directory: "" };
       expect(fallenBack(review)).toEqual(["A", "gone", "E"]);
+    });
+
+    it("falls back for a new account of an agent left out, as for one left out, but not for one that exists already", () => {
+      const review = withAgentImported(initialAccountReview(accounts), "claude", false);
+      // A is new and E is of the agent still imported; B exists and is bound whatever the agent's choice.
+      expect(fallenBack(review)).toEqual(["A", "c", "D", "gone"]);
+      const withExisting = [{ ...referencing[0], account_fallbacks: [reference("B")] }];
+      expect(withEffectiveFallbacks(withExisting, accounts, review, true)[0].account_fallbacks).toEqual([]);
     });
 
     it("keeps the fallback for an account that cannot be created for its name, which no directory cures", () => {
@@ -300,7 +362,7 @@ describe("accounts", () => {
       expect(accountChoicesFor(blankName)).toEqual(["leave_out"]);
       const blankDirectory = { ...account("A", "invalid"), error: { code: "field_required", params: { field: "config_dir" }, message: "blank" } };
       expect(accountChoicesFor(blankDirectory)).toEqual(["directory", "leave_out"]);
-      const [hub] = withEffectiveFallbacks(referencing, named, [[{ choice: "directory", directory: "~/a" }]], true);
+      const [hub] = withEffectiveFallbacks(referencing, named, { rows: [[{ choice: "directory", directory: "~/a" }]], leftOut: [] }, true);
       expect(hub.account_fallbacks.map((fallback) => fallback.name)).toContain("A");
     });
 
@@ -316,35 +378,52 @@ describe("accounts", () => {
   });
 });
 
-describe("the regions of a document", () => {
+describe("the parts of a document", () => {
   it("lists the ones it carries in the dialog's order, and its consoles when it carries nothing at all", () => {
-    expect(carriedRegions({ consoles, accounts: {}, settings: {} })).toEqual(["consoles", "accounts", "settings"]);
-    expect(carriedRegions({ consoles: [], accounts: {} })).toEqual(["accounts"]);
-    expect(carriedRegions({ consoles: [], settings: {} })).toEqual(["settings"]);
-    expect(carriedRegions({ consoles: [] })).toEqual(["consoles"]);
+    expect(carriedParts({ consoles, accounts: {}, settings_sections: ["cleanup", "general", "git"] })).toEqual(["consoles", "settings", "accounts"]);
+    expect(carriedParts({ consoles: [], accounts: {}, settings_sections: [] })).toEqual(["accounts"]);
+    expect(carriedParts({ consoles: [], settings_sections: ["keyboard_shortcuts"] })).toEqual(["settings"]);
+    expect(carriedParts({ consoles: [], settings_sections: [] })).toEqual(["consoles"]);
   });
+
+  const unchecked = { consoles: false, accounts: false, settings: false };
+  const allSections = { general: true, app_behavior: true, git: true, agent_behavior: true, keyboard_shortcuts: true, cleanup: true };
 
   it("imports the checked ones, or the only one a document carries whatever its box says", () => {
-    const checked = { consoles: true, accounts: false, settings: true };
-    expect(importedRegions(["consoles", "accounts", "settings"], checked)).toEqual(["consoles", "settings"]);
-    expect(importedRegions(["accounts"], checked)).toEqual(["accounts"]);
-    expect(importedRegions(["consoles", "accounts"], { ...checked, consoles: false })).toEqual([]);
+    const checked = { ...unchecked, consoles: true, settings: true };
+    expect(importedParts(["consoles", "settings", "accounts"], checked)).toEqual(["consoles", "settings"]);
+    expect(importedParts(["accounts"], checked)).toEqual(["accounts"]);
+    expect(importedParts(["consoles", "accounts"], { ...checked, consoles: false })).toEqual([]);
   });
-});
 
-it.each([
-  { directory: "relative\\dir", problem: "not_absolute" },
-  { directory: "/srv/web", problem: "not_absolute" },
-  { directory: "C:web", problem: "not_absolute" },
-  { directory: "~", problem: "not_absolute" },
-  { directory: "C:\\web", problem: undefined },
-  { directory: "\\\\server\\share\\web", problem: undefined },
-  { directory: "~\\code\\web", problem: undefined },
-  { directory: "~/code/web", problem: undefined },
-])("judges the directory typed for a project on a Windows host: $directory", ({ directory, problem }) => {
-  expect(directoryProblem({ choice: "directory", directory }, "windows")).toBe(problem);
-});
+  it("comes to a settings tab while the settings are imported", () => {
+    expect(regionsOf(["consoles", "settings", "accounts"])).toEqual(["consoles", "settings", "accounts"]);
+    expect(regionsOf(["accounts"])).toEqual(["accounts"]);
+    expect(regionsOf([])).toEqual([]);
+  });
 
-it("takes a Windows path as no directory on a Unix host", () => {
-  expect(directoryProblem({ choice: "directory", directory: "C:\\web" })).toBe("not_absolute");
+  it("applies the checked sections in Settings order only while the settings are imported", () => {
+    const carries = ["cleanup", "general", "git"] as const;
+    expect(importedSections(["consoles", "settings"], carries, { ...allSections, git: false })).toEqual(["general", "cleanup"]);
+    expect(importedSections(["consoles"], carries, allSections)).toEqual([]);
+    expect(importedSections(["settings"], ["general"], allSections)).toEqual(["general"]);
+  });
+
+  it("works out the parts and sections the choices import, and whether the document's own clone directory is taken", () => {
+    const document = { consoles, accounts: null, settings_sections: ["general" as const, "git" as const] };
+    const checked = { consoles: true, settings: true, accounts: false };
+    expect(chosen(document, checked, { ...allSections, general: false })).toEqual({ parts: ["consoles", "settings"], sections: ["git"] });
+    expect(takesDocumentCloneDir(document, checked, allSections, true)).toBe(true);
+    expect(takesDocumentCloneDir(document, checked, { ...allSections, git: false }, true)).toBe(false);
+    expect(takesDocumentCloneDir(document, { ...checked, settings: false }, allSections, true)).toBe(false);
+    expect(takesDocumentCloneDir(document, checked, allSections, false)).toBe(false);
+  });
+
+  it("has nothing to import when no part is chosen, or only settings with every section unchecked", () => {
+    expect(nothingToImport([], [])).toBe(true);
+    expect(nothingToImport(["settings"], [])).toBe(true);
+    expect(nothingToImport(["settings"], ["git"])).toBe(false);
+    expect(nothingToImport(["settings", "accounts"], [])).toBe(false);
+    expect(nothingToImport(["consoles"], [])).toBe(false);
+  });
 });

@@ -3,11 +3,12 @@ import React from "react";
 import { useShortcutScopeDescription } from "../components/hooks/useShortcutScopeDescription";
 import { InlineReference } from "../i18n/InlineReference";
 import { Message, useT } from "../i18n/react";
+import type { SettingsSection } from "../protocol";
 import { APPLICATION_SWITCHES } from "./booleanSettings";
 import type { ClientSettingValue } from "./clientSettings";
 import type { Inspection, shortcutsReview } from "./importPlan";
-import { ClientSettingLine, SettingLine } from "./importParts";
-import { shortcutChangeValues } from "./importValues";
+import { ClientSettingLine, CompositeLine, type ImportChoice, SettingLine } from "./importParts";
+import { shortcutChangeValues, type SettingValue } from "./importValues";
 import { SettingsGroups, type CurrentSettings } from "./SettingsGroups";
 import { Checkbox } from "../primitives";
 
@@ -52,23 +53,31 @@ function CloneDirLine({
 }
 
 /**
- * The application settings of the document, the panel of the review's Application settings tab: cards grouped as the
- * Settings dialog groups them (see `SettingsGroups`), saying what applying each setting would change here. The git
- * workflow lists, when applying would change it, the items that would change with what each is now. The General and
- * App behavior cards take the settings only this client holds (`clientSettings`, each with the value this client has),
- * the Git card the default clone directory with the choice to keep this machine's own (`cloneDir`; for a directory
- * written on another operating system, only a line saying it is not used here) and the Keyboard shortcuts card
- * `shortcuts`, what the document's keyboard shortcuts would do on this device; each is absent when the document carries
- * none.
+ * The settings of the document, the panel of the review's Settings tab: a card for each of the `sections` the document
+ * carries, each with the checkbox that imports it (`choices`; one left unchecked collapses to its title), grouped as
+ * the Settings dialog groups them (see `SettingsGroups`), saying what applying each setting would change here. The git
+ * workflow lists, when applying would change it, the items that would change with what each is now. The General and App
+ * behavior cards take the settings only this client holds (`clientSettings`, each with the value this client has;
+ * `sorting`, the session order's items that would change, in General), the Git card the default clone directory with
+ * the choice to keep this machine's own (`cloneDir`; for a directory written on another operating system, only a line
+ * saying it is not used here) and the Keyboard shortcuts card `shortcuts`, what the document's keyboard shortcuts would
+ * do on this device; each is absent when the document carries none.
  */
 export function ImportSettings({
   settings,
+  sections,
+  choices,
   clientSettings,
+  sorting,
   shortcuts,
   cloneDir,
 }: {
   settings: NonNullable<Inspection["settings"]>;
+  sections: readonly SettingsSection[];
+  choices: Record<SettingsSection, ImportChoice>;
   clientSettings: ClientSettingValue[];
+  /** The items of the session order the document carries that would change; `undefined` when it carries none. */
+  sorting?: SettingValue[];
   shortcuts?: ReturnType<typeof shortcutsReview>;
   /** Whether the file's default clone directory is applied, and the change of that choice. */
   cloneDir: { use: boolean; onUse: (use: boolean) => void };
@@ -80,7 +89,10 @@ export function ImportSettings({
     <SettingsGroups
       settings={settings}
       current={currentSettings(settings)}
+      sections={sections}
+      choices={choices}
       clientSettings={clientSettings}
+      sorting={sorting && <CompositeLine label={t("settings.sort.group")} values={sorting} comparing />}
       clientLine={(setting) => <ClientSettingLine setting={setting} />}
       cloneDir={
         settings.default_clone_dir !== null

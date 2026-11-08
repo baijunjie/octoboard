@@ -42,6 +42,6 @@ says that Octoboard is keeping the computer awake (see "The icon's look" in `doc
 
 Prevent sleep and When to prevent sleep are kept **per client**, in that client's own browser storage, under the same
 rules as the appearance (see "Where the choice is stored" in `docs/product/appearance.md`): the daemon neither stores
-nor reads them. A configuration export that includes the application settings carries the exporting application's
-choices, and an import asked to apply them sets them on the application that runs the import (see "The settings a
+nor reads them. A configuration export that includes the App behavior section carries the exporting application's
+choices, and an import asked to apply that section sets them on the application that runs the import (see "The settings a
 client holds" in `docs/product/settings-in-a-configuration.md`).

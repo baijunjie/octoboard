@@ -196,7 +196,7 @@ both the project's own values and its effective ones. A project session reads it
 `update_project`" and "Application settings: `get_settings` and `update_settings`" in
 `docs/product/agent-settings-tools.md`.
 
-**Through configuration export and import.** An export that includes the application settings carries the
+**Through configuration export and import.** An export that includes the Git section carries the
 application-wide values, and every export of consoles, of one or of all, carries each project's own values (see "The
 application settings an export carries" in `docs/product/settings-in-a-configuration.md` and "What each project
 carries" in `docs/product/configuration-export-and-import.md`).

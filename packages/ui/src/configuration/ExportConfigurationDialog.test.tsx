@@ -25,11 +25,13 @@ const exported = (_body: ClientRequestBody): Promise<Event> => Promise.resolve({
 
 type Save = (name: string, text: string) => Promise<SavedConfigurationFile | undefined>;
 
-const mount = (save = vi.fn<Save>(async (name) => ({ kind: "saved", name })), inHand: typeof main | null = main) => {
+const mount = (save = vi.fn<Save>(async (name) => ({ kind: "saved", name })), inHand: typeof main | null = main, capabilities: Parameters<typeof mountDialog>[4] = {}) => {
   const mounted = mountDialog(
     (onClose) => <ExportConfigurationDialog console={inHand ?? undefined} onClose={onClose} />,
     exported,
     { save, open: vi.fn() },
+    {},
+    capabilities,
   );
   return { ...mounted, save };
 };
@@ -109,13 +111,14 @@ it("asks for the paths only when the box is checked", async () => {
   const mounted = mount();
   await act(async () => pathsBox().click());
   await press("Export");
-  expect(mounted.sent()).toEqual([{ type: "export_configuration", console: "c-main", consoles: "one", include_settings: true, include_accounts: false, include_paths: true }]);
+  expect(mounted.sent()).toEqual([{ type: "export_configuration", console: "c-main", consoles: "one", settings_sections: [], include_accounts: false, include_paths: true }]);
 });
 
 it.each([
-  { scope: undefined, sent: { type: "export_configuration", console: "c-main", consoles: "one", include_settings: true, include_accounts: false, include_paths: false } },
-  { scope: "All consoles and their projects", sent: { type: "export_configuration", consoles: "all", include_settings: true, include_accounts: false, include_paths: false } },
-  { scope: "Do not export consoles", sent: { type: "export_configuration", consoles: "none", include_settings: true, include_accounts: false } },
+  { scope: undefined, sent: { type: "export_configuration", console: "c-main", consoles: "one", settings_sections: [], include_accounts: false, include_paths: false } },
+  { scope: "All consoles and their projects", sent: { type: "export_configuration", consoles: "all", settings_sections: [], include_accounts: false, include_paths: false } },
+  // With no console, something else must be chosen for there to be anything to export.
+  { scope: "Do not export consoles", sent: { type: "export_configuration", consoles: "none", settings_sections: ["general"], include_accounts: false } },
 ])("asks for the document of the scope chosen: $scope", async ({ scope, sent }) => {
   const mounted = mount();
   if (scope) {
@@ -124,6 +127,7 @@ it.each([
     );
     await act(async () => radio?.click());
   }
+  if (sent.consoles === "none") await act(async () => box("General").click());
   await press("Export");
   expect(mounted.sent()).toEqual([sent]);
 });
@@ -141,56 +145,80 @@ const box = (label: string) =>
   Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((input) => input.labels?.[0]?.textContent === label)!;
 const exportButton = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Export")!;
 
-it("names the five groups of application settings it carries, each as a reference", () => {
+const SECTIONS = ["General", "App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"];
+const OPTIONS = [...SECTIONS, "Include agent accounts"];
+
+it("offers a checkbox for each Settings section that carries something, named as Settings names it and in Settings order, then one for the Agent accounts, all unchecked", () => {
   mount();
-  const hint = document.getElementById(box("Application settings").getAttribute("aria-describedby")!)!;
-  expect(hint.textContent).toBe("Includes the settings of General, App behavior, Git, Agent behavior, Keyboard shortcuts and Cleanup, such as the language and the default clone directory.");
-  expect(Array.from(hint.querySelectorAll("[data-color]"), (chip) => chip.textContent)).toEqual(["General", "App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"]);
+  expect(Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]"), (input) => input.labels?.[0]?.textContent)).toEqual(["Include full project paths", ...OPTIONS]);
+  for (const label of OPTIONS) expect(box(label).checked, label).toBe(false);
 });
 
-it("exports the global regions on their own, the application settings checked and the accounts not by default", async () => {
+it("notes under each section what it includes", () => {
+  mount();
+  const note = (label: string) => document.getElementById(box(label).getAttribute("aria-describedby")!)!.textContent;
+  expect(note("General")).toBe("Includes appearance, language, Markdown style and sorting.");
+  expect(note("Git")).toContain("default clone directory");
+  expect(note("Keyboard shortcuts")).toBe("Includes the keyboard shortcuts you have changed.");
+  expect(note("Include agent accounts")).toContain("login credentials are not included");
+});
+
+it("notes under App behavior only the settings its platform can hold", () => {
+  const note = () => document.getElementById(box("App behavior").getAttribute("aria-describedby")!)!.textContent;
+  mount();
+  expect(note()).toBe("Includes resuming sessions on start and closing idle terminals.");
+});
+
+it("notes under App behavior the background run, the host's name for its icon and preventing sleep where its platform has them", () => {
+  const statusItem = { setMenu: async () => {}, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  mount(undefined, main, { backgroundRun: { set: vi.fn(async () => {}) }, statusItem, keepAwake: { set: vi.fn(async () => {}) } });
+  expect(document.getElementById(box("App behavior").getAttribute("aria-describedby")!)!.textContent).toBe(
+    "Includes resuming sessions on start, running in the background, the notification area icon, preventing sleep and closing idle terminals.",
+  );
+});
+
+it("sends the sections checked, in Settings order, and the accounts on their own flag", async () => {
   const mounted = mount();
-  expect(box("Application settings").checked).toBe(true);
-  expect(box("Accounts").checked).toBe(false);
-  expect(text()).toContain("login credentials are not included");
-  await act(async () => radio("Do not export consoles").click());
-  await act(async () => box("Accounts").click());
-  await act(async () => box("Application settings").click());
+  await act(async () => box("Cleanup").click());
+  await act(async () => box("Include agent accounts").click());
+  await act(async () => box("General").click());
   await press("Export");
-  expect(mounted.sent()).toEqual([{ type: "export_configuration", consoles: "none", include_settings: false, include_accounts: true }]);
+  expect(mounted.sent()).toEqual([{ type: "export_configuration", console: "c-main", consoles: "one", settings_sections: ["general", "cleanup"], include_accounts: true, include_paths: false }]);
 });
 
-it("keeps Export unavailable while nothing is selected", async () => {
+it("keeps Export unavailable while no console is exported and no section is checked, whichever one it is", async () => {
   mount();
   await act(async () => radio("Do not export consoles").click());
-  expect(exportButton().disabled).toBe(false);
-  await act(async () => box("Application settings").click());
   expect(exportButton().disabled).toBe(true);
-  await act(async () => box("Accounts").click());
-  expect(exportButton().disabled).toBe(false);
+  for (const label of OPTIONS) {
+    await act(async () => box(label).click());
+    expect(exportButton().disabled, label).toBe(false);
+    await act(async () => box(label).click());
+    expect(exportButton().disabled, label).toBe(true);
+  }
 });
 
 it("keeps the paths option about project paths alone, whatever the accounts choice, and shows and sends it only while consoles are exported", async () => {
   const mounted = mount();
   const wording = () => hint().textContent;
   const before = wording();
-  await act(async () => box("Accounts").click());
+  await act(async () => box("Include agent accounts").click());
   expect(wording()).toBe(before);
   expect(wording()).not.toContain("account");
   await act(async () => pathsBox().click());
   const alert = document.body.querySelector("[data-slot=alert-root]")!.textContent;
   expect(alert).toContain("The file contains project paths");
-  await act(async () => box("Accounts").click());
+  await act(async () => box("Include agent accounts").click());
   expect(document.body.querySelector("[data-slot=alert-root]")!.textContent).toBe(alert);
 
   // Not shown while no console is exported, with or without accounts, and then not sent.
   await act(async () => radio("Do not export consoles").click());
   expect(box("Include full project paths")).toBeUndefined();
   expect(document.body.querySelector("[data-slot=alert-root]")).toBeNull();
-  await act(async () => box("Accounts").click());
+  await act(async () => box("Include agent accounts").click());
   expect(box("Include full project paths")).toBeUndefined();
   await press("Export");
-  expect(mounted.sent()).toEqual([{ type: "export_configuration", consoles: "none", include_settings: true, include_accounts: true }]);
+  expect(mounted.sent()).toEqual([{ type: "export_configuration", consoles: "none", settings_sections: [], include_accounts: true }]);
 });
 
 it("saves the document as the daemon sent it, under a name for the console, and says where it went", async () => {
@@ -203,12 +231,15 @@ it("saves the document as the daemon sent it, under a name for the console, and 
 
 const FOCUS = { code: "KeyK", primary: true, shift: true };
 
-/** Exports a full document whose settings are the daemon's own (it holds the language `daemon` reports), from a client with
- * `capabilities`, and returns the settings that were saved. */
-async function savedSettings(daemonLanguage: string | undefined, capabilities: Parameters<typeof mountDialog>[4] = {}) {
+/** Exports a document whose settings are the daemon's own (it holds the language `daemon` reports), from a client with
+ * `capabilities` having checked the `sections` (every one by default), and returns the settings that were saved. */
+async function savedSettings(daemonLanguage: string | undefined, capabilities: Parameters<typeof mountDialog>[4] = {}, sections: string[] = SECTIONS) {
   const full: ConfigurationDocument = { ...DOCUMENT, settings: documentSettings({ auto_pull_repositories: true, ...(daemonLanguage && { interface_language: daemonLanguage }) }) };
   const save = vi.fn<Save>(async (name) => ({ kind: "saved", name }));
   mountDialog((onClose) => <ExportConfigurationDialog onClose={onClose} />, () => Promise.resolve({ type: "configuration_exported", id: null, document: full }), { save, open: vi.fn() }, {}, capabilities);
+  // By position: the labels follow the language the test has set. The first checkbox is the paths option.
+  const boxes = Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).slice(1);
+  for (const label of sections) await act(async () => boxes[SECTIONS.indexOf(label)].click());
   // By its type: the label follows the language the test has set.
   await act(async () => document.body.querySelector<HTMLButtonElement>("button[type=submit]")!.click());
   return { saved: JSON.parse(save.mock.calls[0][1]).settings as Record<string, unknown>, full };
@@ -219,6 +250,42 @@ it("adds this client's changed keyboard shortcuts to a full export, and to nothi
   onTestFinished(() => shortcutOverrides.set({}));
   const { saved, full } = await savedSettings(undefined);
   expect(saved).toMatchObject({ ...full.settings, keyboard_shortcuts: { focusMode: FOCUS } });
+});
+
+it("adds the client's settings of the sections checked only, each under its own section", async () => {
+  shortcutOverrides.set({ focusMode: FOCUS });
+  runInBackground.set(true);
+  markdownStyle.set("github");
+  onTestFinished(() => {
+    shortcutOverrides.set({});
+    runInBackground.set(false);
+    markdownStyle.set("tailwind");
+  });
+  const capabilities = { backgroundRun: { set: vi.fn(async () => {}) } };
+  const general = (await savedSettings("de", capabilities, ["General"])).saved;
+  expect(general).toMatchObject({ markdown_style: "github", interface_language: expect.any(String), session_order: { sessions: "status", active_projects: "status", inactive_projects: "name" } });
+  expect(general).not.toHaveProperty("run_in_background");
+  expect(general).not.toHaveProperty("keyboard_shortcuts");
+});
+
+it("adds the app behavior settings of its platform and the keyboard shortcuts only with their sections", async () => {
+  shortcutOverrides.set({ focusMode: FOCUS });
+  runInBackground.set(true);
+  onTestFinished(() => {
+    shortcutOverrides.set({});
+    runInBackground.set(false);
+  });
+  const behavior = (await savedSettings(undefined, { backgroundRun: { set: vi.fn(async () => {}) } }, ["App behavior"])).saved;
+  expect(behavior.run_in_background).toBe(true);
+  expect(behavior).not.toHaveProperty("appearance");
+  expect(behavior).not.toHaveProperty("session_order");
+  expect(behavior).not.toHaveProperty("keyboard_shortcuts");
+});
+
+it("adds the keyboard shortcuts, an empty set where none is changed, with the Keyboard shortcuts section alone", async () => {
+  const { saved } = await savedSettings(undefined, {}, ["Keyboard shortcuts"]);
+  expect(saved.keyboard_shortcuts).toEqual({});
+  expect(saved).not.toHaveProperty("appearance");
 });
 
 it("adds the appearance, Markdown style and language this client has to a full export, the language replacing the daemon's", async () => {

@@ -3,6 +3,7 @@ import type {
   AccountResolution,
   Agent,
   DirectoryChoiceKind,
+  DocumentAgentSettings,
   ImportedAccounts,
   ImportedConsole,
   InspectedAccount,
@@ -11,6 +12,7 @@ import type {
   InspectedProject,
   ProjectResolution,
   ProviderInfo,
+  SettingsSection,
 } from "../protocol";
 import type { ReplyOf } from "../requests";
 import { isKnownAgent } from "../agents/providers";
@@ -20,6 +22,7 @@ import { sameKeys, type Binding, type ModifierHost } from "../shortcuts/binding"
 import { REBINDABLE_COMMANDS } from "../shortcuts/commands";
 import { effectiveBindings, sanitizeOverrides, type Overrides } from "../shortcuts/store";
 import type { Region } from "./RegionTabs";
+import { SETTINGS_SECTIONS } from "./settingsSections";
 
 /** What the daemon answers to inspecting a configuration document. */
 export type Inspection = ReplyOf<"inspect_configuration">;
@@ -182,9 +185,13 @@ export interface AccountRowState {
   directory: string;
 }
 
-/** The review's state of the accounts, indexed as the inspection lists them: `[agent][account]`, the account being
- * its index among the document's accounts of that agent, which is also how a resolution names it. */
-export type AccountReviewState = AccountRowState[][];
+/** The review's state of the accounts: `rows` indexed as the inspection lists them, `[agent][account]`, the account being
+ * its index among the document's accounts of that agent, which is also how a resolution names it; and the agents the
+ * user has unchecked (`leftOut`), whose part of the document is not imported at all. */
+export interface AccountReviewState {
+  rows: AccountRowState[][];
+  leftOut: Agent[];
+}
 
 /** Whether an account is invalid for its name (taken, or blank), which no other directory fixes. `field_required`
  * names the field that is blank, which is the directory as often as the name. */
@@ -215,38 +222,54 @@ export function accountChoicesFor(account: InspectedAccount): AccountRowState["c
   }
 }
 
-/** Every account that can be created as proposed on `create`, and every one that cannot left out. */
+/** Every account that can be created as proposed on `create`, every one that cannot left out, and every agent
+ * imported. */
 export function initialAccountReview(accounts: InspectedAccounts | null | undefined): AccountReviewState {
-  return (accounts?.agents ?? []).map((agent) =>
-    agent.accounts.map((account) => ({ choice: account.status === "new" || account.status === "existing" ? "create" : "leave_out", directory: "" })),
-  );
+  return {
+    rows: (accounts?.agents ?? []).map((agent) =>
+      agent.accounts.map((account) => ({ choice: account.status === "new" || account.status === "existing" ? "create" : "leave_out", directory: "" })),
+    ),
+    leftOut: [],
+  };
 }
 
 /** Replaces one account's row; every other row is the same object as before. */
 export function withAccountRow(review: AccountReviewState, agent: number, account: number, row: AccountRowState): AccountReviewState {
-  return review.map((rows, a) => (a === agent ? rows.map((existing, i) => (i === account ? row : existing)) : rows));
+  return { ...review, rows: review.rows.map((rows, a) => (a === agent ? rows.map((existing, i) => (i === account ? row : existing)) : rows)) };
 }
 
-/** Whether any account that would be created has a typed directory the daemon would refuse. */
-export function hasAccountDirectoryProblem(review: AccountReviewState, style: PathStyle = "unix"): boolean {
-  return review.some((rows) => rows.some((row) => directoryProblem(row, style) !== undefined));
+/** Whether `agent`'s part of the document is imported. */
+export function agentImported(review: AccountReviewState, agent: Agent): boolean {
+  return !review.leftOut.includes(agent);
 }
 
-/** The resolutions to send: one per account the user moved to another directory or left out; an account created as
- * proposed, and one that exists already, has none. */
+/** The review with `agent` imported or left out; the rows of its accounts keep their choices. */
+export function withAgentImported(review: AccountReviewState, agent: Agent, imported: boolean): AccountReviewState {
+  return { ...review, leftOut: imported ? review.leftOut.filter((left) => left !== agent) : [...review.leftOut, agent] };
+}
+
+/** Whether any account that would be created, of an agent that is imported, has a typed directory the daemon would
+ * refuse. */
+export function hasAccountDirectoryProblem(accounts: InspectedAccounts, review: AccountReviewState, style: PathStyle = "unix"): boolean {
+  return accounts.agents.some((agent, a) => agentImported(review, agent.agent) && review.rows[a].some((row) => directoryProblem(row, style) !== undefined));
+}
+
+/** The resolutions to send: one per account of an imported agent that the user moved to another directory or left out;
+ * an account created as proposed, one that exists already and any of an agent left out has none. */
 export function accountResolutionsOf(accounts: InspectedAccounts, review: AccountReviewState): AccountResolution[] {
   return accounts.agents.flatMap((agent, a) =>
     agent.accounts.flatMap((account, i): AccountResolution[] => {
-      const row = review[a][i];
-      if (account.status === "existing" || row.choice === "create") return [];
+      const row = review.rows[a][i];
+      if (!agentImported(review, agent.agent) || account.status === "existing" || row.choice === "create") return [];
       return [row.choice === "leave_out" ? { agent: agent.agent, account: i, leave_out: true } : { agent: agent.agent, account: i, directory: row.directory }];
     }),
   );
 }
 
-/** Whether the accounts panel has something that needs attention: an account that cannot be created as proposed. */
-export function accountsNeedAttention(accounts: InspectedAccounts): boolean {
-  return accounts.agents.some((agent) => agent.accounts.some((account) => account.status === "directory_in_use" || account.status === "invalid"));
+/** Whether the accounts panel has something that needs attention: an account that cannot be created as proposed, of an
+ * agent that is imported. */
+export function accountsNeedAttention(accounts: InspectedAccounts, review: AccountReviewState): boolean {
+  return accounts.agents.some((agent) => agentImported(review, agent.agent) && agent.accounts.some((account) => account.status === "directory_in_use" || account.status === "invalid"));
 }
 
 /** An account's agent and name as the daemon compares names: trimmed and without regard to case. */
@@ -255,13 +278,14 @@ function accountKey(agent: Agent, name: string): string {
 }
 
 /** The accounts of the document a console or project reference would bind to once the import has run: the ones that
- * exist already, the new ones created as proposed and the ones given another directory. An account left out is not
- * among them. The daemon binds a reference by name after it has created the accounts, whichever directory they got. */
+ * exist already, the new ones created as proposed and the ones given another directory. An account left out, and a new
+ * one of an agent left out, is not among them. The daemon binds a reference by name after it has created the accounts,
+ * whichever directory they got. */
 function boundAccounts(accounts: InspectedAccounts, review: AccountReviewState): Set<string> {
   const bound = new Set<string>();
   accounts.agents.forEach((agent, a) =>
     agent.accounts.forEach((account, i) => {
-      if (account.status === "existing" || (review[a]?.[i]?.choice !== "leave_out" && !hasNameProblem(account))) bound.add(accountKey(agent.agent, account.name));
+      if (account.status === "existing" || (agentImported(review, agent.agent) && review.rows[a]?.[i]?.choice !== "leave_out" && !hasNameProblem(account))) bound.add(accountKey(agent.agent, account.name));
     }),
   );
   return bound;
@@ -297,20 +321,65 @@ export function consolesNeedAttention(consoles: InspectedConsole[]): boolean {
   return consoles.some((console) => console.account_fallbacks.length > 0 || console.projects.some((project) => project.default === null || project.account_fallbacks.length > 0));
 }
 
-/** The regions a document carries, in the order the dialog lists them. A document with nothing in it at all still
- * counts as carrying its (empty) consoles. */
-export function carriedRegions(document: { consoles: InspectedConsole[]; accounts?: unknown; settings?: unknown }): Region[] {
-  const regions: Region[] = [];
-  if (document.consoles.length > 0 || (!document.accounts && !document.settings)) regions.push("consoles");
-  if (document.accounts) regions.push("accounts");
-  if (document.settings) regions.push("settings");
-  return regions;
+/** One thing of a document the user chooses to import or not: its consoles and projects, its Settings (within which
+ * each carried section is chosen on its own), or its accounts. */
+export type ImportPart = "consoles" | "settings" | "accounts";
+
+/** The parts a document carries, in the order the dialog lists them: the consoles and projects, the settings, then the
+ * accounts; the settings count as carried when the document carries at least one Settings section. A document with nothing in
+ * it at all still counts as carrying its (empty) consoles. */
+export function carriedParts(document: { consoles: InspectedConsole[]; accounts?: unknown; settings_sections: readonly SettingsSection[] }): ImportPart[] {
+  const parts: ImportPart[] = [];
+  const settings = document.settings_sections.length > 0;
+  if (document.consoles.length > 0 || (!document.accounts && !settings)) parts.push("consoles");
+  if (settings) parts.push("settings");
+  if (document.accounts) parts.push("accounts");
+  return parts;
 }
 
-/** The regions an import takes, of the ones the document `carried`: the checked ones, or the one region a document
- * carries alone, which has no checkbox because importing that file is importing that region. */
-export function importedRegions(carried: Region[], checked: Record<Region, boolean>): Region[] {
-  return carried.length === 1 ? carried : carried.filter((region) => checked[region]);
+/** The parts an import takes, of the ones the document `carried`: the checked ones, or the one part a document carries
+ * alone, which has no checkbox because importing that file is importing that part. */
+export function importedParts(carried: ImportPart[], checked: Record<ImportPart, boolean>): ImportPart[] {
+  return carried.length === 1 ? carried : carried.filter((part) => checked[part]);
+}
+
+/** The Settings sections an import applies: none unless the settings are among the `parts` imported, else the sections
+ * the document `carries` that are checked, in Settings order. */
+export function importedSections(parts: ImportPart[], carries: readonly SettingsSection[], checked: Record<SettingsSection, boolean>): SettingsSection[] {
+  return parts.includes("settings") ? SETTINGS_SECTIONS.filter((section) => carries.includes(section) && checked[section]) : [];
+}
+
+/** The parts and Settings sections an import takes for the choices made (`checked`, `sectionsChecked`) on `inspection`. */
+export function chosen(
+  inspection: Pick<Inspection, "consoles" | "accounts" | "settings_sections">,
+  checked: Record<ImportPart, boolean>,
+  sectionsChecked: Record<SettingsSection, boolean>,
+): { parts: ImportPart[]; sections: SettingsSection[] } {
+  const parts = importedParts(carriedParts(inspection), checked);
+  return { parts, sections: importedSections(parts, inspection.settings_sections, sectionsChecked) };
+}
+
+/** Whether the import takes the document's own default clone directory: the box for it (`use`) is checked and the Git
+ * section is among the sections the choices import. The review's clone-dependent offers follow this. */
+export function takesDocumentCloneDir(
+  inspection: Pick<Inspection, "consoles" | "accounts" | "settings_sections">,
+  checked: Record<ImportPart, boolean>,
+  sectionsChecked: Record<SettingsSection, boolean>,
+  use: boolean,
+): boolean {
+  return use && chosen(inspection, checked, sectionsChecked).sections.includes("git");
+}
+
+/** Whether an import of `parts` with the Settings `sections` applied would do nothing: no consoles and no accounts, and
+ * the settings either not imported or with every section unchecked. */
+export function nothingToImport(parts: ImportPart[], sections: SettingsSection[]): boolean {
+  return !parts.includes("consoles") && !parts.includes("accounts") && sections.length === 0;
+}
+
+/** The regions (tabs) `parts` come to: the consoles, the settings, which keep their tab while checked
+ * even with every section unchecked, and the accounts. */
+export function regionsOf(parts: ImportPart[]): Region[] {
+  return (["consoles", "settings", "accounts"] as const).filter((region) => parts.includes(region));
 }
 
 /** What an import's accounts came to, counted from the daemon's result. */
@@ -393,8 +462,24 @@ export function shortcutsReview(
   return { count: Object.keys(overrides).length, changed };
 }
 
-/** Whether a document's agent tags say anything: an empty object is a machine where no agent has tags, and a key for
- * an agent the daemon does not serve counts for nothing. */
-export function hasAgentTags(providers: readonly ProviderInfo[], tags: Partial<Record<Agent, string[]>>): boolean {
-  return Object.keys(tags).some((agent) => isKnownAgent(providers, agent));
+/** The agents the Agent accounts tab and its result draw a card for: `listed` (the agents the document gives accounts
+ * or default-account changes, in its order), then each agent of `added` (the agents added to the list) not among them,
+ * and then each other agent the daemon serves that the document's provider settings or tags name. A key for an agent
+ * the daemon does not serve counts for nothing. */
+export function cardAgents(
+  providers: readonly ProviderInfo[],
+  settings: Pick<DocumentAgentSettings, "provider_settings" | "agent_tags"> | null | undefined,
+  listed: readonly Agent[],
+  added: readonly Agent[] = [],
+): Agent[] {
+  const first = [...listed, ...added.filter((agent) => !listed.includes(agent))];
+  const named = [...Object.keys(settings?.provider_settings ?? {}), ...Object.keys(settings?.agent_tags ?? {})];
+  const others = named.filter((agent, i) => isKnownAgent(providers, agent) && !first.includes(agent as Agent) && named.indexOf(agent) === i);
+  return [...first, ...(others as Agent[])];
+}
+
+/** The agents of the document's accounts that are imported: those of its cards (see `cardAgents`) the user has not
+ * unchecked, which are what the import is told to apply. */
+export function importedAgents(providers: readonly ProviderInfo[], accounts: InspectedAccounts, review: AccountReviewState): Agent[] {
+  return cardAgents(providers, accounts.agent_settings, accounts.agents.map(({ agent }) => agent), accounts.agents_to_add).filter((agent) => agentImported(review, agent));
 }

@@ -6,26 +6,24 @@ import { Dialog } from "../components/dialog/Dialog";
 import { useDialogAction, useSubmitValidation } from "../components/dialog/dialogHooks";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { isolate } from "../i18n/isolate";
-import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import { runInBackground } from "../lifecycle/runInBackground";
-import { keepAwake, keepAwakeWhen } from "../lifecycle/keepAwake";
-import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
+import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
-import { useOctoboardTheme } from "../preferences/theme";
-import { markdownStyle } from "../viewer/markdown/markdownStyle";
 import { replaceOverrides, shortcutOverrides, type Overrides } from "../shortcuts/store";
-import { useDaemon } from "../store";
-import { applyClientSettings, clientSettingsOf, clientSettingValues, documentClientSettings, type ClientSettings } from "./clientSettings";
+import { useDaemon, useProviders } from "../store";
+import { applyClientSettings, clientSettingsOf, clientSettingValues, type ClientSettings } from "./clientSettings";
+import { sessionOrderValues } from "./importValues";
+import { useClientSettingsReview } from "./useClientSettingsReview";
+import { useImportChoices } from "./useImportChoices";
 import { useHostPaths } from "../components/hooks/useHostPaths";
 import { onWindowFocusReturn } from "../components/hooks/windowFocus";
 import { fileFailure } from "./failureText";
 import {
   accountResolutionsOf,
-  carriedRegions,
+  carriedParts,
   documentShortcuts,
   hasAccountDirectoryProblem,
   hasDirectoryProblem,
-  importedRegions,
+  importedAgents,
   initialAccountReview,
   initialReview,
   resolutionsOf,
@@ -33,9 +31,9 @@ import {
   shortcutsRecord,
   shortcutsReview,
   type AccountReviewState,
+  nothingToImport,
   type Inspection,
   type ReviewState,
-  withCloneDirOffers,
 } from "./importPlan";
 import { ImportProgressView } from "./ImportProgress";
 import { newImportId, NO_PROGRESS, withProgress, type ImportProgress } from "./progressState";
@@ -79,68 +77,43 @@ async function whileListening<T>(subscribe: () => () => void, work: () => Promis
   }
 }
 
-/** The regions checked on opening a review: the application settings change how this machine behaves rather than add
- * something to it, so they start unchecked. */
-const DEFAULT_CHECKED: Record<Region, boolean> = { consoles: true, accounts: true, settings: false };
-
-/** `DEFAULT_CHECKED` for `inspection`, except that an accounts region bringing nothing to the accounts (one that carries
- * only the Agent accounts settings, as a file of an earlier version may) starts unchecked like the settings: there is
- * nothing in it to add. What it brings is an agent to add, an account, or a default account's name or switch that
- * applies. */
-function checkedOnOpening(inspection: Inspection): Record<Region, boolean> {
-  const { accounts } = inspection;
-  const adds =
-    !!accounts &&
-    (accounts.agents_to_add.length > 0 ||
-      accounts.agents.some((agent) => agent.accounts.length > 0 || (agent.default_name_applies && !!agent.default_name) || agent.default_disabled_applies));
-  return { ...DEFAULT_CHECKED, accounts: adds };
-}
-
 /**
  * Imports a configuration document in three steps inside one dialog. The user picks a file through the platform's open
  * dialog and the daemon inspects it; what it answers is reviewed here, a row for every project and for every account,
  * before anything is created; and applying sends the document as it was read with the choice made for each project and
  * account, and shows what came of it: while the daemon works, the body lists every item being imported with the state
  * the daemon's progress reports give it (`ImportProgressView`), and the result takes its place when the reply comes.
- * The regions of the file are imported as the user checks them (the consoles and projects and the accounts by default,
- * the application settings not, nor accounts that bring nothing to the accounts), and only a checked region is sent,
- * reviewed or shown in the result; with none checked there is nothing to import. A directory typed for a project or an
- * account that the daemon would refuse stops the import at the row, bringing its tab forward. A document the daemon
- * refuses leaves the dialog on the first step, with the reason, for another file to be tried. The settings only this
- * client holds (appearance, Markdown style, running in the background, the menu bar icon, Prevent sleep and when,
- * language) and the keyboard shortcuts travel in the application settings: the review says what each would change here,
- * and they are applied here from the daemon's reply, for what it says it applied. The file's default clone directory is
- * applied unless the user keeps this machine's own. The daemon's reply to an import comes only after its last clone, so
- * the dialog cannot be dismissed while one is out. Waiting for the file is not such a time: a browser without the file
- * input's `cancel` event never answers for a dismissed picker, so the dialog is held busy only from the file onwards.
- * The button shows it is waiting and ignores another press meanwhile, but Escape and the close button still work. Where
- * the picker is never reported dismissed, the window regaining focus with no file chosen frees the step to be tried
- * again; a file that arrives from that picker after all is still honoured, until a newer press opens another one.
+ * The parts of the file are imported as the user checks them (the consoles and projects and the accounts by default,
+ * the Settings not, nor accounts that bring nothing for any agent, only the three global switches; once the Settings
+ * are checked, each section the file carries is imported unless unchecked in the Settings tab), and only a checked part
+ * is sent, reviewed or shown in the result; with nothing chosen (no part, or only Settings with every section
+ * unchecked) there is nothing to import. A directory typed for a project or an account that the daemon would refuse
+ * stops the import at the row, bringing its tab forward. A document the daemon refuses leaves the dialog on the first
+ * step, with the reason, for another file to be tried. The settings only this client holds (appearance, Markdown style,
+ * running in the background, the menu bar icon, Prevent sleep and when, language, session order) and the keyboard
+ * shortcuts travel in the settings of their sections: the review says what each would change here, and they are applied
+ * here from the daemon's reply, for what it says it applied. The file's default clone directory is applied with the Git
+ * settings unless the user keeps this machine's own. The daemon's reply to an import comes only after its last clone,
+ * so the dialog cannot be dismissed while one is out. Waiting for the file is not such a time: a browser without the
+ * file input's `cancel` event never answers for a dismissed picker, so the dialog is held busy only from the file
+ * onwards. The button shows it is waiting and ignores another press meanwhile, but Escape and the close button still
+ * work. Where the picker is never reported dismissed, the window regaining focus with no file chosen frees the step to
+ * be tried again; a file that arrives from that picker after all is still honoured, until a newer press opens another
+ * one.
  */
 export function ImportConfigurationDialog({ onClose }: { onClose: () => void }): React.ReactElement {
   const t = useT();
   const { request, onImportProgress } = useDaemon();
+  const providers = useProviders();
   const { style } = useHostPaths();
-  const { configurationFile, backgroundRun, statusItem, keepAwake: keepAwakeCapability, host } = usePlatform();
-  const { choice: appearance, setChoice: setAppearance } = useOctoboardTheme();
-  const language = useCurrentLanguage();
-  const markdown = markdownStyle.useValue();
-  const inBackground = runInBackground.useValue();
-  const menuBarIconShown = showMenuBarIcon.useValue();
-  const keepingAwake = keepAwake.useValue();
-  const keepAwakeWhenValue = keepAwakeWhen.useValue();
+  const { configurationFile, host } = usePlatform();
   const { busy, run } = useDialogAction(undefined, t("configuration.import.alertTitle"));
   const { shown, attempt } = useSubmitValidation();
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
   const [review, setReview] = useState<ReviewState>([]);
-  const [accountReview, setAccountReview] = useState<AccountReviewState>([]);
-  // Which regions of the file are imported: an unchecked one has no tab and is not sent. Read only for a file that
-  // carries more than one (see `importedRegions`).
-  const [checked, setChecked] = useState<Record<Region, boolean>>(DEFAULT_CHECKED);
+  const [accountReview, setAccountReview] = useState<AccountReviewState>(initialAccountReview(undefined));
   // The review's selected tab, kept here so an import stopped by a row's problem can bring the row's tab forward.
   const [tab, setTab] = useState<Region>();
-  // Whether the file's default clone directory is applied with the application settings, or this machine's own is kept.
-  const [useCloneDir, setUseCloneDir] = useState(true);
   // Counts the imports a row's problem stopped, so the first such row gets focus once its message
   // is on screen.
   const [stopped, setStopped] = useState(0);
@@ -169,19 +142,11 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       clearTimeout(timer);
     };
   }, [waiting]);
+  const inReview = stage.kind === "review" ? stage : undefined;
+  const choices = useImportChoices(inReview?.inspection, (offers) => setReview(reviewForOffers(review, offers)));
+  const clientSettings = useClientSettingsReview(inReview?.document);
   const currentShortcuts = shortcutOverrides.useValue();
-  const shortcuts = stage.kind === "review" ? documentShortcuts(stage.document) : undefined;
-  const platformSettings = { backgroundRun: backgroundRun !== undefined, menuBarIcon: statusItem !== undefined, keepAwake: keepAwakeCapability !== undefined };
-  const clientSettings = stage.kind === "review"
-    ? clientSettingValues(t, documentClientSettings(stage.document, platformSettings), {
-      appearance,
-      markdown_style: markdown,
-      ...(platformSettings.backgroundRun && { run_in_background: inBackground }),
-      ...(platformSettings.menuBarIcon && { show_menu_bar_icon: menuBarIconShown }),
-      ...(platformSettings.keepAwake && { keep_awake: keepingAwake, keep_awake_when: keepAwakeWhenValue }),
-      interface_language: language,
-    })
-    : [];
+  const shortcuts = inReview ? documentShortcuts(inReview.document) : undefined;
   const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (stopped > 0) bodyRef.current?.querySelector<HTMLElement>("input[aria-invalid=true]")?.focus();
@@ -227,39 +192,21 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       const inspection = await request({ type: "inspect_configuration", document });
       setReview(initialReview(inspection.consoles));
       setAccountReview(initialAccountReview(inspection.accounts));
-      setChecked(checkedOnOpening(inspection));
-      setUseCloneDir(true);
+      choices.reset(inspection);
       setTab(undefined);
       setStage({ kind: "review", fileName: opened.name, document, inspection });
     });
   };
 
-  // The targets the review offers follow the choice about the default clone directory: under the file's while it is
-  // applied (the settings imported and the box checked), else under this machine's.
-  const takesDocumentCloneDir = (inspection: Inspection, regions: Record<Region, boolean>, use: boolean) =>
-    use && importedRegions(carriedRegions(inspection), regions).includes("settings");
-  const reviewedConsoles =
-    stage.kind === "review" ? withCloneDirOffers(stage.inspection.consoles, takesDocumentCloneDir(stage.inspection, checked, useCloneDir)) : [];
-  // Changes what is checked or the clone directory choice, moving the rows whose offers that changes.
-  const changeBasis = (nextChecked: Record<Region, boolean>, nextUse: boolean) => {
-    if (stage.kind === "review") {
-      const next = withCloneDirOffers(stage.inspection.consoles, takesDocumentCloneDir(stage.inspection, nextChecked, nextUse));
-      setReview(reviewForOffers(review, next));
-    }
-    setChecked(nextChecked);
-    setUseCloneDir(nextUse);
-  };
-
   const apply = () => {
     if (stage.kind !== "review" || busy) return;
     const accounts = stage.inspection.accounts;
-    const inFile = carriedRegions(stage.inspection);
-    const regions = importedRegions(inFile, checked);
-    if (regions.length === 0) return;
-    const importingConsoles = regions.includes("consoles");
-    const creatingAccounts = regions.includes("accounts") && !!accounts;
+    const { parts, sections } = choices;
+    if (nothingToImport(parts, sections)) return;
+    const importingConsoles = parts.includes("consoles");
+    const creatingAccounts = parts.includes("accounts") && !!accounts;
     const consolesProblem = importingConsoles && hasDirectoryProblem(review, style);
-    const accountsProblem = creatingAccounts && hasAccountDirectoryProblem(accountReview, style);
+    const accountsProblem = creatingAccounts && hasAccountDirectoryProblem(accounts, accountReview, style);
     if (!attempt(consolesProblem || accountsProblem ? "directory" : undefined)) {
       setTab(consolesProblem ? "consoles" : "accounts");
       setStopped((count) => count + 1);
@@ -274,11 +221,11 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
         import_id: importId,
         document: reviewing.document,
         resolutions: importingConsoles ? resolutionsOf(review) : [],
-        apply_settings: regions.includes("settings"),
+        apply_settings: sections,
         // Absent means true, so only a refusal is spelled out.
-        ...(inFile.includes("consoles") && !importingConsoles && { apply_consoles: false }),
-        ...(regions.includes("settings") && !useCloneDir && { apply_clone_dir: false }),
-        ...(creatingAccounts && { apply_accounts: true, account_resolutions: accountResolutionsOf(accounts, accountReview) }),
+        ...(carriedParts(stage.inspection).includes("consoles") && !importingConsoles && { apply_consoles: false }),
+        ...(sections.includes("git") && !choices.useCloneDir && { apply_clone_dir: false }),
+        ...(creatingAccounts && { apply_accounts: true, apply_agents: importedAgents(providers, accounts, accountReview), account_resolutions: accountResolutionsOf(accounts, accountReview) }),
       });
     void run(async () => {
       setProgress(NO_PROGRESS);
@@ -296,14 +243,12 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       // to apply: it does so only for what the daemon says it applied.
       const carried = shortcutsRecord(result.settings_applied?.keyboard_shortcuts);
       const applied = carried && replaceOverrides(carried, host);
-      const clientApplied = clientSettingsOf(result.settings_applied, platformSettings);
-      applyClientSettings(clientApplied, setAppearance);
+      const clientApplied = clientSettingsOf(result.settings_applied, clientSettings.platformSettings);
+      applyClientSettings(clientApplied, clientSettings.setAppearance);
       setStage({ kind: "result", result, shortcuts: applied, clientSettings: clientApplied });
     });
   };
 
-  // Nothing checked is nothing to import.
-  const nothingToImport = stage.kind === "review" && importedRegions(carriedRegions(stage.inspection), checked).length === 0;
   // The footer's buttons stay while the body changes: the same keys in every step's footer keep each one mounted. The
   // import step shows this footer too: the daemon has no way to stop an import, so Cancel is disabled beside the
   // pending Import, and the Import button that was pressed stays the same element and keeps focus as it turns pending.
@@ -312,7 +257,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       <Button key="cancel" type="button" variant="secondary" onPress={onClose}>
         {t("common.cancel")}
       </Button>
-      <Button key="import" type="submit" pending={busy} disabled={nothingToImport}>
+      <Button key="import" type="submit" pending={busy} disabled={choices.nothingChosen}>
         {t("configuration.import.review.submit")}
       </Button>
     </>
@@ -358,23 +303,26 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
         {stage.kind === "review" && (
           <ImportReview
             fileName={stage.fileName}
-            inspection={{ ...stage.inspection, consoles: reviewedConsoles }}
+            inspection={{ ...stage.inspection, consoles: choices.offered }}
             review={review}
             onReview={setReview}
             accountReview={accountReview}
             onAccountReview={setAccountReview}
-            checked={checked}
-            onChecked={(region, on) => changeBasis({ ...checked, [region]: on }, useCloneDir)}
+            checked={choices.checked}
+            onChecked={(part, on) => choices.change({ checked: { ...choices.checked, [part]: on } })}
+            sectionsChecked={choices.sectionsChecked}
+            onSectionChecked={(section, on) => choices.change({ sectionsChecked: { ...choices.sectionsChecked, [section]: on } })}
             tab={tab}
             onTab={setTab}
             shortcuts={shortcuts && shortcutsReview(shortcuts, currentShortcuts, host)}
-            clientSettings={clientSettings}
-            cloneDir={{ use: useCloneDir, onUse: (use) => changeBasis(checked, use) }}
+            clientSettings={clientSettings.values}
+            sorting={clientSettings.sorting}
+            cloneDir={{ use: choices.useCloneDir, onUse: (use) => choices.change({ useCloneDir: use }) }}
             shown={shown}
           />
         )}
         {stage.kind === "importing" && <ImportProgressView inspection={stage.inspection} progress={progress} />}
-        {stage.kind === "result" && <ImportResult result={stage.result} shortcuts={stage.shortcuts} clientSettings={clientSettingValues(t, stage.clientSettings)} />}
+        {stage.kind === "result" && <ImportResult result={stage.result} shortcuts={stage.shortcuts} clientSettings={clientSettingValues(t, stage.clientSettings)} sorting={stage.clientSettings.session_order && sessionOrderValues(t, stage.clientSettings.session_order)} />}
       </div>
     </Dialog>
   );
