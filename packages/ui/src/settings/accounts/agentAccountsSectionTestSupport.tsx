@@ -96,8 +96,15 @@ export function mount(tab?: string, strict = false) {
   /** Puts `patch` over one stored account, as a `settings_updated` event does. */
   const setAccount = (id: string, patch: Partial<Account>) =>
     setSettings({ accounts: store.getState().settings.accounts.map((held) => (held.id === id ? { ...held, ...patch } : held)) });
-  onTestFinished(() => {
+  let mounted = true;
+  /** Unmounts the section ahead of the test's end, as a navigation away does. */
+  const unmount = () => {
+    if (!mounted) return;
+    mounted = false;
     act(() => root.unmount());
+  };
+  onTestFinished(() => {
+    unmount();
     container.remove();
     entry.remove();
     sectionEntry.current = null;
@@ -125,7 +132,7 @@ export function mount(tab?: string, strict = false) {
     navigation = { ...navigation, account, dismissForms: navigation.dismissForms + 1 };
     render();
   };
-  return { container, selects, change, opening, render, navigate, showSharingOf, store, set, setSettings, setAccount, setSharing };
+  return { container, selects, change, opening, render, unmount, navigate, showSharingOf, store, set, setSettings, setAccount, setSharing };
 }
 
 export const sharingSwitches = (container: HTMLElement) => [...container.querySelectorAll<HTMLInputElement>('input[role="switch"]')].filter((input) => input.getAttribute("aria-label")?.includes("Share default configuration"));

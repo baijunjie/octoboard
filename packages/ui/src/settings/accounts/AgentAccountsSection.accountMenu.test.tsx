@@ -852,3 +852,18 @@ it("lets Manage accounts recovery dismiss a stale editor and focus the real Sett
   expect(selected?.textContent).toContain("Agent accounts");
   expect(document.activeElement).toBe(selected);
 });
+
+it("drops a focus handoff still waiting when the section unmounts, so the next section's row keeps focus", async () => {
+  const first = mount();
+  const dialog = await openDetailsOf(first.container, "claude-work");
+  // The dialog's close starts the handoff to the row's menu button, which waits for a frame.
+  act(() => dialog.querySelector<HTMLElement>('button[aria-label="Close"]')!.click());
+  first.unmount();
+  const second = mount();
+  const trigger = rowOf(second.container, "claude-work").querySelector<HTMLElement>("[data-row-actions] button")!;
+  // A waiting handoff looks its target up in the whole document and gives up after 30 frames.
+  await act(async () => {
+    for (let frame = 0; frame < 40; frame++) await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
+  expect(document.activeElement).not.toBe(trigger);
+});

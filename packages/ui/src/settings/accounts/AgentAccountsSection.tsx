@@ -58,10 +58,11 @@ const MAX_FRAMES_TO_WAIT_FOR_CLOSE = 30;
  * `MAX_FRAMES_TO_WAIT_FOR_CLOSE`. Coming as the dialog goes, it runs ahead of React Aria's restore, which then finds
  * focus off `<body>` and leaves it; but a dialog that a menu item opened gives focus back where that menu chose a turn
  * after it unmounts, which would undo the move, so the move is made again after that if focus has left the target. The
- * user did not aim focus there, so the destination shows its ring.
+ * user did not aim focus there, so the destination shows its ring. Returns what drops it while it still waits; the
+ * second try after it lands still runs, and does nothing once the target has left the document.
  */
-function handFocusOnceClosed(find: () => HTMLElement | null | undefined): void {
-  tryEachFrame(() => {
+function handFocusOnceClosed(find: () => HTMLElement | null | undefined): () => void {
+  return tryEachFrame(() => {
     const target = find();
     if (!canTakeFocus(target)) return false;
     ringForAutomaticFocus();
@@ -122,12 +123,25 @@ export function AgentAccountsSection(): React.ReactElement {
   const [loggingIn, setLoggingIn] = useState<{ agent: Agent; account: string | null; start: boolean; returnFocus?: ReturnLoginFocus }>();
   const accountsNavigation = useContext(AccountsNavigationContext);
   const focusSectionTab = useContext(SettingsFocusContext);
+  // A handoff still waiting is dropped when another starts or the section unmounts: `find` looks the target up in the
+  // whole document, so one left running would put focus on the same row of the next section to mount.
+  const [handoff] = useState(() => {
+    let cancel: (() => void) | undefined;
+    return {
+      start: (find: () => HTMLElement | null | undefined) => {
+        cancel?.();
+        cancel = handFocusOnceClosed(find);
+      },
+      stop: () => cancel?.(),
+    };
+  });
+  useEffect(() => handoff.stop, [handoff]);
   // For a dialog the section opens by itself — on Settings' request, or for a login found running as it opens — which
   // has no control to close onto: React Aria gives focus back to what held it as the dialog mounted, and Settings has
   // not focused anything of its own by then (its tabs attach a render later), so focus would end on Settings' own
   // element, or on `<body>` after a press without a pointer opened Settings, where Escape no longer reaches it. The
   // section's tab takes it instead, where Settings opens.
-  const returnToSectionTab = () => handFocusOnceClosed(focusSectionTab);
+  const returnToSectionTab = () => handoff.start(focusSectionTab);
   // The Add agent dialog is open when Settings was asked to put it in front, on opening or by a later request,
   // which the section takes up once; closing that one then puts focus on the button that opens it, as no
   // control had it before: the agent strip's Add agent button, or the empty panel's while no agent is added (the two
@@ -163,7 +177,7 @@ export function AgentAccountsSection(): React.ReactElement {
     setAddingAgent(false);
     if (!openedWithAddAgent.current) return;
     openedWithAddAgent.current = false;
-    handFocusOnceClosed(() => addAgentButton.current);
+    handoff.start(() => addAgentButton.current);
   };
   // A login found running as the section opens (after a reload, or started by another window) is taken up in the
   // modal, where it can be followed or cancelled.
@@ -217,7 +231,7 @@ export function AgentAccountsSection(): React.ReactElement {
       // Opened from a row's menu, the dialog closes onto that menu's button, whichever way the menu left focus, or
       // onto the section's tab when the row has gone with its account.
       const row = open.account === null ? `default:${open.agent}` : open.account;
-      if (open.fromRow) handFocusOnceClosed(() => rowActionsTrigger(row) ?? focusSectionTab());
+      if (open.fromRow) handoff.start(() => rowActionsTrigger(row) ?? focusSectionTab());
       else returnToSectionTab();
     };
     const key = `${open.view}:${open.account ?? `default:${open.agent}`}`;
@@ -289,6 +303,7 @@ export function AgentAccountsSection(): React.ReactElement {
               onRenameDefault={setRenamingDefault}
               onOpenAccount={(view, account) => setAccountDialog({ view, agent, account, fromRow: true })}
               onLogin={(agent, account, returnFocus) => setLoggingIn({ agent, account, start: true, returnFocus })}
+              handOff={handoff.start}
             />
           ))}
         </Tabs>
@@ -364,10 +379,12 @@ interface AgentAccountsPanelProps {
   onRenameDefault: (agent: Agent) => void;
   onOpenAccount: (view: AccountView, account: string | null) => void;
   onLogin: (agent: Agent, account: string | null, returnFocus?: ReturnLoginFocus) => void;
+  /** `handFocusOnceClosed`, held by the section so that a handoff still waiting ends with it. */
+  handOff: (find: () => HTMLElement | null | undefined) => void;
 }
 
 /** Pending writes stay with the tab's wrapper; drag cleanup follows the panel's mounted content instead. */
-function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, onOpenAccount, onLogin, order }: AgentAccountsPanelProps & { order: ReturnType<typeof useAccountOrder> }): React.ReactElement {
+function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, onOpenAccount, onLogin, handOff, order }: AgentAccountsPanelProps & { order: ReturnType<typeof useAccountOrder> }): React.ReactElement {
   const t = useT();
   const logins = useDaemonStore((s) => s.accountLogins);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
@@ -379,7 +396,7 @@ function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, o
   const accountMenu = (account: Account | null): ActionMenuEntry[] => {
     const row = account?.id ?? `default:${agent}`;
     // Whatever the login state, so an account that is logged in can log in again; focus goes back to the menu's button.
-    const login = { label: t("settings.accounts.login"), icon: LogIn, disabled: loginIsActive(accountLoginOf(logins, agent, account?.id ?? null)), onClick: () => onLogin(agent, account?.id ?? null, () => handFocusOnceClosed(() => rowActionsTrigger(row))) };
+    const login = { label: t("settings.accounts.login"), icon: LogIn, disabled: loginIsActive(accountLoginOf(logins, agent, account?.id ?? null)), onClick: () => onLogin(agent, account?.id ?? null, () => handOff(() => rowActionsTrigger(row))) };
     const details = { label: t("settings.accounts.detailsItem"), icon: Info, onClick: () => onOpenAccount("details", account?.id ?? null) };
     const settings = { label: t("settings.accounts.settingsItem"), icon: Settings, onClick: () => onOpenAccount("settings", account?.id ?? null) };
     const index = order.ids.indexOf(account?.id ?? null);
