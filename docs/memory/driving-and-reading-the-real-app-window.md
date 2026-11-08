@@ -41,6 +41,12 @@ the event in the query string. The packaged window's native rules block every ot
 `fetch` or a `sendBeacon` to the listener sends nothing and reads as "no event" (`docs/product/report-panel.md`, "What
 a page may contain, and what it cannot do"); a development build lets `localhost` through and hides this.
 
+A probe registered after a listener that stops the event measures that listener, not the engine. Register it as a
+capture listener ahead of every capture listener that can stop propagation — in `packages/ui/src/main.tsx`, import it
+before `input/focusGuard`, which swallows window-targeted focus events during a press — since at the target capture
+listeners run before every non-capture one whatever the registration order, and a non-capture probe registered first
+is silenced as well. Before reading "the webview fires no such event" off a probe, confirm it would have run first.
+
 ## A scripted GUI probe can only confirm a positive, never a negative
 
 A key combination that fails to arrive may be the probe's fault rather than the app's: through `osascript` / System

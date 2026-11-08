@@ -66,8 +66,7 @@ their cascade order does not depend on which screen opened first.
   (the only place that imports `@tauri-apps/*`) and `browser.ts`, exposed by `react.tsx`; `host.ts` the `HostFacts`
   every adapter carries as `host` (the system, the shortcut modifier, the window chrome and which native features exist,
   read from the window's `?host=` query under the shell and derived from the browser's platform otherwise);
-  `useAppVersion.ts` the hook that asks the shell for the running application's version. `windowFocus` is present only
-  under the shell (see "Shared entry points").
+  `useAppVersion.ts` the hook that asks the shell for the running application's version.
 - `src/preferences/` — the `localStorage` key of every persisted preference, the guarded store behind them, the theme.
 - `src/input/` — shortcut modifier and key predicates, touch, IME and focus workarounds.
 - `src/i18n/` — languages, the typed English catalog and translated ones (`messages/`), lookup, the React side; every
@@ -110,7 +109,7 @@ their cascade order does not depend on which screen opened first.
   popovers), `text/`, `status/`, `icons/`, `tabs/`, `motion/`, `scroll/` (the faded scroller and the sticky section
   heading), `focus/`, `announce/`, `panel/`, `host/`, `rows/` (the tree row, its icon and mark buttons, the
   hover-actions class), `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, lazy readiness for capture hosts,
-  polling, window focus (`windowFocus.ts`, with `windowFocusTestSupport.ts`, its test fake), the latest-request hook,
+  polling, window focus (`windowFocus.ts`), the latest-request hook,
   `useLatest` and `useRenderLatest`, `useSerialPush`, `settle`, a `try`/`finally` helper kept outside components because
   the React Compiler skips a function holding one).
 - `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry`
@@ -322,7 +321,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Which accounts a quota list shows | `listedQuotaAccounts` (`src/quota/quotaListing.ts`) |
 | The tags offered to a tag field (projects and agents) | `tagVocabulary` (`src/components/form/tagVocabulary.ts`) with `TagsInput` |
 | Platform capabilities (native menu, menu bar icon visibility, keep awake, launch at login, updater, clipboard, directory picker, permissions) | the `PlatformAdapter` through `src/platform/` |
-| Follow the user leaving the window and coming back (whether the window has focus, a change of it, a return to it) | `windowHasFocus`, `subscribeWindowFocus` and `onWindowFocusReturn` (`src/components/hooks/windowFocus.ts`) over the `windowFocus` capability (`WindowFocusCapability`, `src/platform/index.ts`; the Tauri adapter, none in the browser's), never the window's own `focus` and `blur` events or `document.hasFocus()`, which the macOS webview does not keep in step with the app being deactivated and reactivated; tests fake it with `src/components/hooks/windowFocusTestSupport.ts`. Users: `useWindowAttended`, `usePoll`, `useMacosPermissions`, `useNotificationPermission`, `LaunchAtLoginSetting` |
+| Follow the user leaving the window and coming back (whether the window has focus, a change of it, a return to it, a loss of it) | `windowHasFocus`, `subscribeWindowFocus`, `onWindowFocusReturn` and `onWindowFocusLoss` (`src/components/hooks/windowFocus.ts`), which follow the webview's own window `focus` and `blur` and `document.hasFocus()` in the desktop app as in a browser; they arrive only because `src/input/focusGuard.ts` swallows window-targeted focus events solely between a press's mousedown and the tick after the next frame, then replays a swallowed change. Users of the return: `usePoll`, `useMacosPermissions`, `useNotificationPermission`, `LaunchAtLoginSetting`, `ImportConfigurationDialog`; of the loss: `useQuickCreateModifier`, `tabDrag`, `AgentTabList`, `accountDrag`, `useNavigationHistory`; `useWindowAttended` uses the subscription and `windowHasFocus` |
 | A behaviour or a word that differs by operating system | on the client's machine, `PlatformAdapter.host` (`HostFacts`, `src/platform/host.ts`), read with `usePlatform()` or `useHost()`; on the daemon's machine (its paths, its Trash), `snapshot.host` in the store (`useHostPaths()`, the daemon's words in `platformTerms.ts`); never `navigator`, and a pure function takes the host as an argument |
 | Read the store | the barrel `src/store/index.ts` (`useDaemon`, `useDaemonStore`, `useDaemonStoreEqual`, session hooks); below `src/` the barrel is the only store import allowed |
 | The provider tree around `App` in a new host of the app | `AppRoot` (`src/AppRoot.tsx`), as `main.tsx`, the gallery frame and the website preview use it |

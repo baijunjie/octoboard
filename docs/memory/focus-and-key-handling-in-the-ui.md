@@ -210,25 +210,30 @@ Applies to `packages/ui`, to any rule of the shape "hide this, close this, hand 
 `focusout` (React's `onBlur`) carrying no `relatedTarget` has three causes, and only one of them is the user moving
 on: focus fell to `<body>` in this document; focus went into another document — the report panel's iframe, which this
 document then shows as its own active element; or the window itself lost focus, with the element still active and the
-user about to come back to it. A rule that answers all three takes its region off the screen while the user is in
-another application, and moves keyboard focus behind their back with it.
+user about to come back to it (in a browser; the packaged macOS app fires no `focusout` as it is deactivated). A rule
+that answers all three takes its region off the screen while the user is in another application, and moves keyboard
+focus behind their back with it.
 
-So gate such a rule on whether the window has focus, which is false in the third case alone, read through
-`windowHasFocus` with the platform's `windowFocus` (`docs/structure/ui.md`, "Shared entry points"), not through
-`document.hasFocus()` itself, which in the macOS app follows the window only some time after it loses focus. Where the
-iframe has to be told apart from `<body>` as well, read `document.activeElement` a task later, once focus has settled —
-the iframe element is what it shows then.
+So gate such a rule on whether the window has focus, which is false in the third case alone, and follow the window's
+focus only through `packages/ui/src/components/hooks/windowFocus.ts` (`docs/structure/ui.md`, "Shared entry points").
+The macOS app's webview fires the window's own `focus` / `blur` as the app is deactivated and reactivated, with
+`document.hasFocus()` already matching when they arrive, as a browser does; do not reach for `visibilitychange`, which
+fires there only at launch and when the window is covered, nor for `focusin` / `focusout`, none of which deactivation
+fires. Where the iframe has to be told apart from `<body>` as well, read `document.activeElement` a task later, once
+focus has settled — the iframe element is what it shows then.
 
 jsdom (30) has no window focus to report: its `hasFocus()` answers whether anything in the document has been focused,
 so it is `false` in a test that never focuses anything and `true` from the first focus on, whatever the test means the
 window to be doing. A test of a rule gated on it therefore sets the answer itself — not through a hand-rolled spy — or
-a gated rule looks dead in a test that focuses nothing. Cover both sources of the answer: the browser's, with
-`windowAttention()` in `packages/ui/src/components/announce/windowTestSupport.ts`, which starts the window attended and
-returns a setter that moves `hasFocus()` and dispatches the window's `focus` / `blur` together; and the shell's, with
-`shellWindowFocus()` in `packages/ui/src/components/hooks/windowFocusTestSupport.ts`, handed to the platform adapter as
-its `windowFocus`, which moves neither, as the macOS app does not. A test with `windowAttention()` alone passes against
-a rule that reads `document.hasFocus()` or the window's events directly. Only such tests of the window-left case catch
-the ungated rule; no gallery scenario leaves the window for another application.
+a gated rule looks dead in a test that focuses nothing: use `windowAttention()` in
+`packages/ui/src/components/announce/windowTestSupport.ts`, which starts the window attended and returns a setter that
+moves `hasFocus()` and dispatches the window's `focus` / `blur` together, as the webview does. Such a test file imports
+`input/focusGuard` before anything else, as `packages/ui/src/main.tsx` does: the guard's capture listener on the window
+runs, at the target, before every non-capture window listener whatever the registration order, so a guard that
+swallows the window's focus events outside a press silences every consumer in the app, and only a test with the guard
+loaded first fails for it. To recognise a window-targeted event, test `!(event.target instanceof Node)` as the guard
+does, never `event.target === window`: in jsdom the target is not the global `window`. Only such tests of the
+window-left case catch the ungated rule; no gallery scenario leaves the window for another application.
 
 ## Inside a dialog, a focused control that unmounts or turns disabled takes Escape and Tab with it
 

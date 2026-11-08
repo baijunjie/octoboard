@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
+// Loaded first, as `main.tsx` loads it, so a guard that swallows the window's focus events fails this test.
+import "../input/focusGuard";
 import { act } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
-import { shellWindowFocus } from "../components/hooks/windowFocusTestSupport";
 import { ActionableError } from "../errors/actionableError";
 import { LanguageProvider } from "../i18n/react";
 import type { LaunchAtLoginCapability, LaunchAtLoginStatus, PlatformAdapter } from "../platform";
@@ -63,27 +64,6 @@ it("reads the state again when the window is focused, as the user can change it 
   await act(async () => {
     window.dispatchEvent(new Event("focus"));
   });
-  expect(toggleOf(container)!.checked).toBe(true);
-});
-
-it("reads the state again when the shell reports the window coming back, not on the shell's first answer", async () => {
-  const { capability: windowFocus, focus } = shellWindowFocus(true);
-  const status = vi.fn<() => Promise<LaunchAtLoginStatus>>(() => Promise.resolve("disabled"));
-  const platform: PlatformAdapter = { kind: "tauri", host: MAC_HOST, launchAtLogin: login({ status, set: vi.fn() }), windowFocus };
-  const container = mountHost(
-    <LanguageProvider>
-      <LaunchAtLoginSetting />
-    </LanguageProvider>,
-    { platform },
-  );
-  await act(async () => {});
-  expect(status).toHaveBeenCalledTimes(1);
-  status.mockImplementation(() => Promise.resolve("enabled"));
-  focus(false);
-  expect(status).toHaveBeenCalledTimes(1);
-  focus(true);
-  await act(async () => {});
-  expect(status).toHaveBeenCalledTimes(2);
   expect(toggleOf(container)!.checked).toBe(true);
 });
 

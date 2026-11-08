@@ -1,9 +1,10 @@
+import { onWindowFocusLoss } from "../../components/hooks/windowFocus";
 import { DRAG_THRESHOLD } from "../../components/tabs/tabDrag";
 import { releaseListMotion } from "../../components/motion/useListMotion";
 import { onReducedMotion, prefersReducedMotion } from "../../components/motion/reducedMotion";
 
 /** A grip moves the table rows visually until drop. Touch keeps its native scrolling; Escape, pointer cancellation,
- * blur and teardown restore the rows without writing an order. */
+ * the window losing focus and teardown restore the rows without writing an order. */
 export function beginAccountDrag(event: PointerEvent, source: HTMLTableRowElement, onDrop: (to: number) => void): () => void {
   if (event.button !== 0 || event.pointerType === "touch") return () => {};
   const rows = Array.from(source.parentElement!.querySelectorAll<HTMLTableRowElement>(":scope > tr[data-account-row]"));
@@ -42,7 +43,7 @@ export function beginAccountDrag(event: PointerEvent, source: HTMLTableRowElemen
     document.removeEventListener("pointercancel", pointerCancel, true);
     document.removeEventListener("keydown", key, true);
     document.removeEventListener("selectstart", noSelect, true);
-    window.removeEventListener("blur", cancel);
+    undoFocusLoss();
     for (const row of rows) {
       row.style.transform = "";
       row.style.transition = "";
@@ -71,6 +72,6 @@ export function beginAccountDrag(event: PointerEvent, source: HTMLTableRowElemen
   document.addEventListener("pointercancel", pointerCancel, true);
   document.addEventListener("keydown", key, true);
   document.addEventListener("selectstart", noSelect, true);
-  window.addEventListener("blur", cancel);
+  const undoFocusLoss = onWindowFocusLoss(cancel);
   return cancel;
 }

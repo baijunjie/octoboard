@@ -19,7 +19,7 @@ import { SettingRow, SettingSwitch } from "./SettingRow";
  * a button that opens that list. */
 export function LaunchAtLoginSetting(): React.ReactElement | null {
   const t = useT();
-  const { launchAtLogin, windowFocus } = usePlatform();
+  const { launchAtLogin } = usePlatform();
   const [status, setStatus] = useState<LaunchAtLoginStatus | undefined>();
   // Whether a change is out, and which stretch of changes a read began in: a read that began before the change, or
   // answers while one is out, shows a state the change is about to replace.
@@ -43,12 +43,12 @@ export function LaunchAtLoginSetting(): React.ReactElement | null {
       );
     };
     read();
-    const undoFocus = onWindowFocusReturn(windowFocus, read);
+    const undoFocus = onWindowFocusReturn(read);
     return () => {
       current = false;
       undoFocus();
     };
-  }, [launchAtLogin, windowFocus]);
+  }, [launchAtLogin]);
 
   if (!launchAtLogin || status === undefined) return null;
   const on = status !== "disabled";

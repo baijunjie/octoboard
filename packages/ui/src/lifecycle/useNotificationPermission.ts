@@ -19,7 +19,7 @@ export function useNotificationPermission(): {
   status: NotificationPermissionStatus | undefined;
   request: (() => Promise<void>) | undefined;
 } {
-  const { notifications, windowFocus } = usePlatform();
+  const { notifications } = usePlatform();
   const prompt = notifications?.permissionPrompt;
   const [status, setStatus] = useState(() => prompt?.status());
 
@@ -27,12 +27,12 @@ export function useNotificationPermission(): {
     if (!prompt) return;
     const refresh = () => setStatus(prompt.status());
     askedListeners.add(refresh);
-    const undoFocus = onWindowFocusReturn(windowFocus, refresh);
+    const undoFocus = onWindowFocusReturn(refresh);
     return () => {
       askedListeners.delete(refresh);
       undoFocus();
     };
-  }, [prompt, windowFocus]);
+  }, [prompt]);
 
   return {
     status,

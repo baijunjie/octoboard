@@ -21,7 +21,6 @@ import type {
   UpdaterCapability,
   UpdateProgress,
   WindowChromeCapability,
-  WindowFocusCapability,
 } from "./index";
 import { tauriHost, type HostFacts } from "./host";
 import { UpdaterError } from "./updaterError";
@@ -39,7 +38,6 @@ export function tauriPlatform(): PlatformAdapter {
     badge: host.badge ? tauriBadge() : undefined,
     nativeWindow: tauriNativeWindow(),
     windowChrome: host.chrome === "overlay-left" ? tauriWindowChrome(host.trafficLightInset ?? 0) : undefined,
-    windowFocus: tauriWindowFocus(),
     translucentWindow: host.translucent,
     appMenu: host.appMenu ? tauriAppMenu() : undefined,
     statusItem: host.statusItem === "none" ? undefined : tauriStatusItem(),
@@ -116,51 +114,6 @@ function tauriWindowChrome(controlsInset: number): WindowChromeCapability {
       return () => {
         callbacks.delete(callback);
         undo();
-      };
-    },
-  };
-}
-
-/** From the window's own focus events (`WindowEvent::Focused`, which tao raises as the window system gives the
- * window focus or takes it away; on macOS, as AppKit makes it the key window or stops), listened to while anything is
- * subscribed. Once listening, the shell is asked once; an event that comes in while that answer is on its way is
- * newer, so the answer is then dropped. */
-function tauriWindowFocus(): WindowFocusCapability {
-  let focused: boolean | undefined;
-  let events = 0;
-  let undo: (() => void) | undefined;
-  const callbacks = new Set<() => void>();
-  const set = (next: boolean) => {
-    if (next === focused) return;
-    focused = next;
-    for (const notify of callbacks) notify();
-  };
-  const start = () => {
-    const tracker = unlistenTracker();
-    undo = tracker.undo;
-    void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
-      const win = getCurrentWindow();
-      tracker.track(await win.onFocusChanged(({ payload }) => {
-        events++;
-        set(payload);
-      }));
-      const asked = events;
-      const answer = await win.isFocused().catch(() => undefined);
-      // Dropped too when the subscription it was asked for has ended since.
-      if (answer !== undefined && asked === events && undo === tracker.undo) set(answer);
-    });
-  };
-  return {
-    focused: () => focused,
-    subscribe(callback) {
-      callbacks.add(callback);
-      if (callbacks.size === 1) start();
-      return () => {
-        if (!callbacks.delete(callback) || callbacks.size > 0) return;
-        undo?.();
-        undo = undefined;
-        // Nothing hears the window while nothing is subscribed, so what was last heard is not kept.
-        focused = undefined;
       };
     },
   };

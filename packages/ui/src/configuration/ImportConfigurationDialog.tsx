@@ -17,6 +17,7 @@ import { replaceOverrides, shortcutOverrides, type Overrides } from "../shortcut
 import { useDaemon } from "../store";
 import { applyClientSettings, clientSettingsOf, clientSettingValues, documentClientSettings, type ClientSettings } from "./clientSettings";
 import { useHostPaths } from "../components/hooks/useHostPaths";
+import { onWindowFocusReturn } from "../components/hooks/windowFocus";
 import { fileFailure } from "./failureText";
 import {
   accountResolutionsOf,
@@ -162,9 +163,9 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       clearTimeout(timer);
       timer = setTimeout(givenUp, FOCUS_GRACE_MS);
     };
-    window.addEventListener("focus", onFocus);
+    const stop = onWindowFocusReturn(onFocus);
     return () => {
-      window.removeEventListener("focus", onFocus);
+      stop();
       clearTimeout(timer);
     };
   }, [waiting]);

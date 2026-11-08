@@ -8,17 +8,57 @@
 // the refocusing that follows never runs, and focus ends up on `<body>` — off the terminal, which must keep keyboard
 // focus.
 //
-// A listener registered before react-aria's, which are added per press, swallows exactly those window-targeted
-// events. Nothing here relies on them: react-aria's focus-visible tracking registers its own window listeners at
-// module load (`main.tsx` imports the App, and react-aria with it, before this file, so they are registered first and
-// still run), and the only event it loses is the window `blur`, whose state the next window `focus` re-arms. Every
-// other focus listener in the UI is on an element.
+// The guard is a capture listener on the window, and at the target capture listeners run before non-capture ones
+// whatever the order of registration, so while it is armed it silences every non-capture window listener, and the
+// capture ones registered after it, react-aria's press listeners among them. It is armed from a press's `mousedown`:
+// react-aria's listeners are added then and removed in its own animation frame at the latest, and the guard disarms
+// one tick after that frame, so the two never end in the same frame whatever order their callbacks run in. Outside the
+// armed span it stops nothing: the window's own `focus` and `blur`, as the user leaves the window for another
+// application or a frame and comes back, reach every listener.
+//
+// It must load after react-aria's module-level focus-visible capture listener on the window, so that listener still
+// runs before the guard: registered after it, it would be silenced like the rest while the guard is armed.
+//
+// The span can swallow a real change: a click that activates the window can send its `mousedown` before its `focus`, and
+// no frame runs while the document is hidden, which keeps the guard armed until one does. So on disarming, the guard
+// compares `document.hasFocus()` with what the last `focus` or `blur` it let through said, and replays the missed one
+// once it is off, for whatever follows the window's focus to catch up.
+
+let pressing = false;
+let frame = 0;
+let timer: ReturnType<typeof setTimeout> | undefined;
+// Whether the window had focus as of the last `focus` or `blur` the guard let through.
+let heard = document.hasFocus();
+
+function disarm() {
+  pressing = false;
+  if (document.hasFocus() !== heard) window.dispatchEvent(new Event(heard ? "blur" : "focus"));
+}
+
+window.addEventListener(
+  "mousedown",
+  () => {
+    pressing = true;
+    cancelAnimationFrame(frame);
+    clearTimeout(timer);
+    frame = requestAnimationFrame(() => {
+      // A timer from within the frame, not a nested frame: it runs after every callback of this frame, react-aria's
+      // cleanup included, and a pause of frames while the document is hidden is waited out once, not twice.
+      timer = setTimeout(disarm, 0);
+    });
+  },
+  true,
+);
 
 for (const type of ["focus", "blur", "focusin", "focusout"]) {
   window.addEventListener(
     type,
     (event) => {
-      if (event.target === window) event.stopImmediatePropagation();
+      // Whether the target is not a Node, which is what `contains` refuses, rather than whether it is `window`: the
+      // same in a browser, and also true of the window jsdom dispatches on in tests.
+      if (event.target instanceof Node) return;
+      if (pressing) event.stopImmediatePropagation();
+      else if (type === "focus" || type === "blur") heard = type === "focus";
     },
     true,
   );

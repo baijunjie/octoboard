@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// Loaded first, as `main.tsx` loads it, so a guard that swallows the window's focus events fails this test.
+import "../input/focusGuard";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";

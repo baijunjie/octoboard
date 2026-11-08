@@ -9,6 +9,7 @@ import { AgentIcon } from "../icons/AgentIcon";
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { beginTabDrag, DRAG_THRESHOLD } from "./tabDrag";
 import { useLatest, useStableHandler } from "../hooks/useLatest";
+import { onWindowFocusLoss } from "../hooks/windowFocus";
 import { DURATION, releaseListMotion, useListMotion } from "../motion/useListMotion";
 import { itemKeySelector, partSelector, Tab, TabList, TabListContainer, useKeyboardModality, useObjectRef } from "../../primitives";
 
@@ -281,7 +282,7 @@ function AgentTab({ providers, agent, tabRef, notInstalledTip, elements, onDragS
 const TAB_ACTION_SIZE = 24;
 const TAB_ACTION_INSET = 4;
 /** How long a moving tab is followed after its motion should have ended: list motion's duration and a margin. */
-const MOTION_MS = DURATION + 50;
+export const MOTION_MS = DURATION + 50;
 
 type TabActionPlace = { left: number; top: number };
 
@@ -382,7 +383,7 @@ function useTabActionPlaces(overlay: React.RefObject<HTMLElement | null>, agents
     // Only a mouse's: a pen's or finger's implicit capture is released by `usePress` while the drag goes on.
     const onLostCapture = (event: PointerEvent) => { if (event.pointerType === "mouse") onRelease(); };
     document.addEventListener("lostpointercapture", onLostCapture, true);
-    window.addEventListener("blur", onRelease);
+    const undoFocusLoss = onWindowFocusLoss(onRelease);
     // A reorder asked for another way (the menu's Move earlier / later) moves the tabs with list motion too, but the
     // first order shown is not a move.
     const order = agents.join();
@@ -400,7 +401,7 @@ function useTabActionPlaces(overlay: React.RefObject<HTMLElement | null>, agents
       document.removeEventListener("pointerup", onRelease, true);
       document.removeEventListener("pointercancel", onRelease, true);
       document.removeEventListener("lostpointercapture", onLostCapture, true);
-      window.removeEventListener("blur", onRelease);
+      undoFocusLoss();
     };
   }, [enabled, agents, measureLater]);
   return { places, moving };

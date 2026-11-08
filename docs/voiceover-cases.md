@@ -44,10 +44,11 @@ application, not as written in source:
   marker. These three count as the same; a region under an open modal without a marker is hidden, and a write into it is
   a different item (see KNW-2).
 - **Window attention.** Whether the write is held until the window is attended (visible and focused) or happens whatever
-  the window is doing. In the desktop application the window's focus comes from the shell's native window focus (the
-  platform's `windowFocus`), not from the web view's `focus` and `blur` events, which the macOS web view does not fire
-  as the application is deactivated or reactivated; the attended wait there starts on the native focus event. The
-  recordings of an attended wait made before E12 (E5, E10) were heard on the earlier DOM-based predicate.
+  the window is doing. The window's focus is the web view's own window `focus` and `blur` with `document.hasFocus()`;
+  E12 was heard while it came from the shell's native window focus, and the web view's event, measured in the packaged
+  macOS application, follows the native one by 1–2 ms with `document.hasFocus()` already updated, a gap far inside
+  `AFTER_FOCUS_MOVE_DELAY_MS`, so the two count as the same item. E5 and E10 were heard while `packages/ui/src/input/focusGuard.ts`
+  held back every window focus event, a different predicate.
 - **Region lifetime.** Whether the region is mounted empty and stays mounted, or is mounted already holding its text,
   and what ends its life (a panel switch, a removed row, a closing dialog).
 - **Change shape.** Text replaced in place, text first set in an empty region, or text read on demand only.
@@ -690,9 +691,9 @@ mapping.
   to the announcer as one text), `packages/ui/src/components/announce/AttendedStatusAnnouncer.tsx` (writes each text
   after `AFTER_FOCUS_MOVE_DELAY_MS` of attended time, restarting the wait on each return to the window, and writes
   nothing again while the text has not changed; heard as a local `PermissionsAnnouncer` holding the same code),
-  `packages/ui/src/components/announce/useWindowAttended.ts` (on the desktop it takes the window's focus from the shell's
-  native window focus, through `packages/ui/src/components/hooks/windowFocus.ts`; E5 was heard on the earlier
-  DOM-based predicate) and `StatusAnnouncer` with its default 100 ms long elapsed (the wait is the caller's, not
+  `packages/ui/src/components/announce/useWindowAttended.ts` (it takes the window's focus through
+  `packages/ui/src/components/hooks/windowFocus.ts`; heard while that came from the shell's native window focus, which
+  the web view's own event follows by 1–2 ms, see "Window attention") and `StatusAnnouncer` with its default 100 ms long elapsed (the wait is the caller's, not
   `firstWriteDelayMs`). Inside Settings' own dialog; the Permissions tab keeps focus. The
   wording heard below predates the current catalog sentences (one message of whole sentences per permission and state,
   such as "Screen Recording is not granted."): the same composition, a name and a state per permission in one text, with
@@ -1591,7 +1592,7 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `shell/ConnectionBanner.tsx` | outage | SA-B | Heard | Matches in full. |
 | `settings/accounts/AccountLoginDialog.tsx` | login progress | SA-C for the dialog opening; no match for the rest | Heard | After Log in again the announcer remounts with a footer focus move, not a dialog opening, which was not heard. |
 | `settings/accounts/AccountLogin.tsx`, `AccountLoginAnnouncer` | login success | SA-D on the current table and the second mount in `settings/accounts/AccountDetailsDialog.tsx` (E10) | Heard | Current table direct/menu/return paths and the owned-account details path were heard in E10; SA-E heard the table remount. |
-| `settings/PermissionsSection.tsx`, through `AttendedStatusAnnouncer` | permission states | SA-L for the section opening, a return with the states unchanged and a grant made in System Settings, returned to by Command-Tab (E12) | Heard | The window's focus comes from the shell's native window focus on the desktop; E12 heard the return on that predicate. A revoked permission is not heard, and Settings opened directly onto Permissions is unreachable from production controls and untested. |
+| `settings/PermissionsSection.tsx`, through `AttendedStatusAnnouncer` | permission states | SA-L for the section opening, a return with the states unchanged and a grant made in System Settings, returned to by Command-Tab (E12) | Heard | E12 heard the return while the window's focus came from the shell's native window focus; the web view's own event, used now, follows it by 1–2 ms (see "Window attention"). A revoked permission is not heard, and Settings opened directly onto Permissions is unreachable from production controls and untested. |
 | `configuration/ImportReview.tsx` | "apply to all" applied | SA-A | Candidate | Mounted empty in the review step, text written after a press while focus rests, inside the modal's own subtree, default delay. Writing the identical sentence again does not rewrite it. |
 | `project-browser/git/ChangeList.tsx` | filter no-match | SA-A for typing; no match for a first render holding the text | Candidate | Typing in the filter writes in place at rest. The text can also be present at the first render (a persisted filter, a branch change that closes a popover and returns focus), a mount SA-H does not clearly cover. |
 | `viewer/ViewerContentView.tsx`, `ViewerContentView` | loading, disconnected | SA-J for navigation loading; SA-C for the dialog opening as a candidate; no match for disconnected | Heard for SA-J, candidate for SA-C | The navigation text is written at once with focus on Next file (SA-J). The region is mounted with the dialog with a 1500 ms first delay as focus moves, the shape of SA-C, but the opening was heard on the login dialog only. The disconnected text was not exercised. |
@@ -1696,7 +1697,7 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 - A window visible but not frontmost, and a minimized window with the application also not frontmost (KNW-4's condition,
   not rerun on E4): not tested for SA-D or FOCUS-1. E12 heard a Command-Tab return with the window visible for SA-L
   only; the login-success announcer (SA-D) over a Command-Tab return was not heard, and SA-D's E10 recordings predate
-  the shell-reported window focus.
+  the window's focus events reaching the page (`packages/ui/src/input/focusGuard.ts` held them all back then).
 - A transient web-area utterance before the correct button phrase after a cancel (FOCUS-1): still observed on the
   current table and in account details in E10, accepted, not explained. The artificially delayed start/cancel race was
   heard only on the E4 row, not rerun on the current table; the default account's details fallback was not heard.

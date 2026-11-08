@@ -1908,10 +1908,12 @@ element, an error from `role="alert"`.
   return, so it is not gone before the user is back to hear it. A success already present when the row mounts is not
   said. The instance is `AccountLoginAnnouncer` with `useClearSucceededLogin` in
   `packages/ui/src/settings/accounts/AccountLogin.tsx`.
-  Where the shell reports the native window's focus (the platform's `windowFocus`), that is the window's focus: the macOS
-  web view fires no `focus` or `blur` as the application is deactivated or reactivated, so anything re-read or resumed
-  on the user's return goes through `onWindowFocusReturn` or `subscribeWindowFocus` in
-  `packages/ui/src/components/hooks/windowFocus.ts`, never the window's own `focus` event.
+  Anything re-read or resumed on the user's return, or let go when the window loses focus, goes through
+  `onWindowFocusReturn`, `onWindowFocusLoss` or `subscribeWindowFocus` in
+  `packages/ui/src/components/hooks/windowFocus.ts`, not a listener of its own on the window: the web view fires the
+  window's `focus` and `blur` as the application is reactivated or deactivated, in the desktop application as in a
+  browser, but `packages/ui/src/input/focusGuard.ts` holds them back during a press and replays a missed change after,
+  and a test of such a consumer loads that guard first, as the application does.
 - A state whose visible form is durable copy rather than a placeholder — the sentence saying where a macOS permission
   stands, in `packages/ui/src/settings/PermissionsSection.tsx` — stays readable in place, not `aria-hidden`, and is
   announced from a `StatusAnnouncer` the section mounts itself, through `AttendedStatusAnnouncer`, `sr-only`, beside the

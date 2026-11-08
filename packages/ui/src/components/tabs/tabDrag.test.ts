@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// Loaded first, as `main.tsx` loads it, so a guard that swallows the window's focus events fails this test.
+import "../../input/focusGuard";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import type { Agent } from "../../protocol";

@@ -1,4 +1,5 @@
 import type { Agent } from "../../protocol";
+import { onWindowFocusLoss } from "../hooks/windowFocus";
 import { onReducedMotion, prefersReducedMotion } from "../motion/reducedMotion";
 
 /** How far the pointer has to move before a press on a tab is a drag rather than a press. */
@@ -86,7 +87,7 @@ export function beginTabDrag({ agent, agents, elements, event, onDrop }: {
     document.removeEventListener("pointercancel", cancel, true);
     document.removeEventListener("keydown", key, true);
     document.removeEventListener("lostpointercapture", lost, true);
-    window.removeEventListener("blur", cancel);
+    undoFocusLoss();
     reset();
   };
   const swallowClick = () => {
@@ -122,5 +123,5 @@ export function beginTabDrag({ agent, agents, elements, event, onDrop }: {
   // A press that loses its pointer without either event (the capture taken away, the window losing focus) ends too, so
   // text stays selectable. Only a mouse's: a pen's implicit capture is released by the tab's press handling meanwhile.
   document.addEventListener("lostpointercapture", lost, true);
-  window.addEventListener("blur", cancel);
+  const undoFocusLoss = onWindowFocusLoss(cancel);
 }

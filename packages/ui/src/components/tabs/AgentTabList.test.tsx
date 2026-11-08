@@ -1,15 +1,21 @@
 // @vitest-environment jsdom
+// Loaded first, as `main.tsx` loads it, so a guard that swallows the window's focus events fails this test.
+import "../../input/focusGuard";
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import type { Agent } from "../../protocol";
-import { AgentTabList } from "./AgentTabList";
+import { AgentTabList, MOTION_MS } from "./AgentTabList";
+import { DRAG_THRESHOLD } from "./tabDrag";
 import { presence, stubListMotion } from "../motion/listMotionTestSupport";
 import { Tabs } from "../../primitives";
 import { TEST_PROVIDERS } from "../../test/testProviders";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/** Longer than the strip follows its tabs after a press ends. */
+const MOTION_WAIT_MS = MOTION_MS + 100;
 
 /** Lays the strip out under jsdom: each tab 100 pixels wide with 10 between, at the place its agent holds in
  * `order`, and shown where its `transform` puts it. */
@@ -64,6 +70,42 @@ it("moves a dropped tab into its new place from where the drag left it, and the 
   // stays put.
   expect(motion.played().map(({ element, frames }) => [element, presence(frames) ?? frames[0]])).toEqual([[claude, { translate: "20px 0px" }]]);
   expect(claude.style.transform).toBe("");
+});
+
+it("ends a drag, and the press the strip's controls fade for, when the window loses focus", async () => {
+  stubListMotion();
+  const order: Agent[] = ["claude", "codex"];
+  layOut(() => order);
+  const onReorder = vi.fn();
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => { act(() => root.unmount()); host.remove(); });
+  act(() => root.render(
+    <Tabs selectedKey="claude">
+      <AgentTabList providers={TEST_PROVIDERS} agents={order} label="Agents" onReorder={onReorder} tabActions={(agent) => <button type="button" aria-label={`Actions for ${agent}`} />} />
+    </Tabs>,
+  ));
+  // The tabs, which the collection makes a render after the strip.
+  await act(async () => {});
+  const claude = host.querySelector<HTMLElement>('[data-list-motion="claude"]')!;
+  const faded = () => host.querySelector<HTMLElement>('[data-tab-actions="codex"]')!.className.includes("opacity-0");
+  expect(faded()).toBe(false);
+  act(() => {
+    claude.dispatchEvent(new PointerEvent("pointerdown", { clientX: 50, button: 0, pointerType: "mouse", bubbles: true }));
+    document.dispatchEvent(new PointerEvent("pointermove", { clientX: 50 + DRAG_THRESHOLD + 125, bubbles: true }));
+  });
+  await act(async () => {});
+  expect(claude.style.transform).toBe("translateX(130px)");
+  expect(faded()).toBe(true);
+  // The controls stay faded for as long as the press lasts, well past the motion that follows a release.
+  await act(() => new Promise((resolve) => setTimeout(resolve, MOTION_WAIT_MS)));
+  expect(faded()).toBe(true);
+  act(() => void window.dispatchEvent(new Event("blur")));
+  expect(claude.style.transform).toBe("");
+  await act(() => new Promise((resolve) => setTimeout(resolve, MOTION_WAIT_MS)));
+  expect(faded()).toBe(false);
+  act(() => void document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true })));
+  expect(onReorder).not.toHaveBeenCalled();
 });
 
 it("gives focus back to an agent's actions button when reordering the tabs dropped it", async () => {

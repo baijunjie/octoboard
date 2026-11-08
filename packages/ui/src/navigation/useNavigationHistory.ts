@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 import { refocusIfLost } from "../components/focus/refocusIfLost";
+import { onWindowFocusLoss } from "../components/hooks/windowFocus";
 import { MODAL_OPEN } from "../components/focus/selectors";
 import type { HostFacts } from "../platform/host";
 import { usePlatform } from "../platform/react";
@@ -132,7 +133,7 @@ export function useNavigationHistory({
     // window losing focus), which no release follows.
     const stop = () => {
       for (const type of ["pointerup", "pointercancel"]) window.removeEventListener(type, release, true);
-      window.removeEventListener("blur", release);
+      undoFocusLoss();
       endJoin.current = undefined;
     };
     const release = () => {
@@ -144,7 +145,7 @@ export function useNavigationHistory({
       }, 50);
     };
     for (const type of ["pointerup", "pointercancel"]) window.addEventListener(type, release, true);
-    window.addEventListener("blur", release);
+    const undoFocusLoss = onWindowFocusLoss(release);
     endJoin.current = stop;
   };
 

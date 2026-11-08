@@ -37,7 +37,7 @@ export function useMacosPermissions(): {
   request: (kind: MacosPermissionKind) => Promise<void>;
   openSystemSettings: (kind: MacosPermissionKind) => Promise<void>;
 } {
-  const { macosPermissions, windowFocus } = usePlatform();
+  const { macosPermissions } = usePlatform();
   const [status, setStatus] = useState<MacosPermissionsStatus | undefined>();
   const [loaded, setLoaded] = useState(false);
   const [unreadable, setUnreadable] = useState(false);
@@ -69,12 +69,12 @@ export function useMacosPermissions(): {
   useEffect(() => {
     mounted.current = true;
     void refresh();
-    const undoFocus = onWindowFocusReturn(windowFocus, () => void refresh());
+    const undoFocus = onWindowFocusReturn(() => void refresh());
     return () => {
       mounted.current = false;
       undoFocus();
     };
-  }, [refresh, windowFocus]);
+  }, [refresh]);
 
   const request = useCallback(
     async (kind: MacosPermissionKind) => {

@@ -1,6 +1,5 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
-import { useOptionalPlatform } from "../../platform/react";
 import { subscribeWindowFocus, windowHasFocus } from "../hooks/windowFocus";
 
 /** Whether the user is in this window: its document is visible and the window has focus. A window that is minimized,
@@ -8,14 +7,18 @@ import { subscribeWindowFocus, windowHasFocus } from "../hooks/windowFocus";
  * VoiceOver speaks the window's focused control when the user comes back rather than an earlier status. Focus moved
  * into a frame of this document still counts as attended. */
 export function useWindowAttended(): boolean {
-  const windowFocus = useOptionalPlatform()?.windowFocus;
-  const subscribe = useCallback((onChange: () => void) => {
-    const undoFocus = subscribeWindowFocus(windowFocus, onChange);
-    document.addEventListener("visibilitychange", onChange);
-    return () => {
-      undoFocus();
-      document.removeEventListener("visibilitychange", onChange);
-    };
-  }, [windowFocus]);
-  return useSyncExternalStore(subscribe, () => document.visibilityState === "visible" && windowHasFocus(windowFocus));
+  return useSyncExternalStore(subscribe, isAttended);
+}
+
+function isAttended(): boolean {
+  return document.visibilityState === "visible" && windowHasFocus();
+}
+
+function subscribe(onChange: () => void): () => void {
+  const undoFocus = subscribeWindowFocus(onChange);
+  document.addEventListener("visibilitychange", onChange);
+  return () => {
+    undoFocus();
+    document.removeEventListener("visibilitychange", onChange);
+  };
 }

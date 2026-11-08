@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
+// Loaded first, as `main.tsx` loads it, so a guard that swallows the window's focus events fails this test.
+import "../../input/focusGuard";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import type { PlatformAdapter } from "../../platform";
-import { PlatformProvider } from "../../platform/react";
-import { BROWSER_HOST } from "../../test/hosts";
 import { useWindowAttended } from "./useWindowAttended";
-import { shellWindowFocus } from "../hooks/windowFocusTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,31 +48,4 @@ it("follows the document's visibility and the window's focus, as each changes", 
     window.dispatchEvent(new Event("focus"));
   });
   expect(container.textContent).toBe("true");
-});
-
-it("follows the shell's window focus where the shell reports one, whatever the document says", async () => {
-  const hasFocus = vi.spyOn(document, "hasFocus").mockImplementation(() => false);
-  const { capability, focus, subscribers } = shellWindowFocus(true);
-  const platform: PlatformAdapter = { kind: "tauri", host: BROWSER_HOST, windowFocus: capability };
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-    hasFocus.mockRestore();
-  });
-  // Until the shell's first answer is in, the document's is all there is.
-  act(() => root.render(<PlatformProvider value={platform}><Probe /></PlatformProvider>));
-  expect(container.textContent).toBe("false");
-  await act(async () => {});
-  expect(container.textContent).toBe("true");
-  focus(false);
-  expect(container.textContent).toBe("false");
-  hasFocus.mockImplementation(() => true);
-  act(() => void window.dispatchEvent(new Event("focus")));
-  expect(container.textContent).toBe("false");
-  focus(true);
-  expect(container.textContent).toBe("true");
-  act(() => root.unmount());
-  expect(subscribers()).toBe(0);
 });

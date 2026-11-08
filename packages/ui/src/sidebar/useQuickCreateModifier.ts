@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 
+import { onWindowFocusLoss } from "../components/hooks/windowFocus";
 import { isPrimaryModifier } from "../input/keys";
 import type { HostFacts } from "../platform/host";
 import { useHost } from "../platform/react";
@@ -28,12 +29,13 @@ function install(): void {
   if (installed) return;
   installed = true;
   // The capture phase, so a key the terminal or a dialog swallows still counts. The keyup of a
-  // modifier is not delivered once the window has lost focus, hence `blur` and `visibilitychange`
-  // letting go; the pointer's own modifiers catch up a key pressed while the window was away.
+  // modifier is not delivered once the window has lost focus, hence the loss of focus and
+  // `visibilitychange` letting go; the pointer's own modifiers catch up a key pressed while the
+  // window was away.
   window.addEventListener("keydown", onKey, { capture: true });
   window.addEventListener("keyup", onKey, { capture: true });
   window.addEventListener("pointermove", onPointerMove, { capture: true, passive: true });
-  window.addEventListener("blur", release);
+  onWindowFocusLoss(release);
   document.addEventListener("visibilitychange", onVisibilityChange);
 }
 
