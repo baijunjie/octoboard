@@ -29,3 +29,12 @@ have, and the opposite setup hides defects:
 Building and running the test suite over ssh is fine; a behaviour that any of the above can change is confirmed in the
 setup above. What each of these does to the daemon is in `docs/architecture.md`, "Known pitfalls of the Tauri / Rust
 approach".
+
+## On a Windows runner, call System32's `tar.exe` by its full path
+
+Applies to a script that extracts an archive with `tar` and can run in a GitHub Actions Windows job. Those jobs here run
+in Git Bash (`shell: bash`), which puts its own GNU tar first on the PATH at every start: it reads no zip and takes the
+`D:` of an absolute path for a remote host, so a bare `tar` that works on a Windows machine and on macOS fails there.
+`scripts/fetch-conpty.mjs` names `%SystemRoot%\System32\tar.exe` for this reason, as `update-archive.mjs` names
+`/usr/bin/tar` on macOS. Adding a directory with `$GITHUB_PATH` does not get ahead of Git Bash's own; `release.yml`
+sets the PATH through `BASH_ENV` where a tag's code cannot be changed.

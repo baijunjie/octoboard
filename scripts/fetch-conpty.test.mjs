@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { fetchConpty, installerLayout, machineArchitecture, packageFiles, parseArguments, verifiedPackage } from "./fetch-conpty.mjs";
+import { TAR, fetchConpty, installerLayout, machineArchitecture, packageFiles, parseArguments, verifiedPackage } from "./fetch-conpty.mjs";
 
 function scratch(t) {
   const dir = mkdtempSync(path.join(os.tmpdir(), "conpty-"));
@@ -75,10 +75,10 @@ test("the installer layout is one conpty.dll and an OpenConsole.exe per architec
 });
 
 // A stand-in package with the real one's paths, zipped (a `.nupkg` is a zip) by the system `tar` that `fetchConpty`
-// extracts with: bsdtar, as on macOS and Windows, which writes a zip given `--format zip`. GNU tar, the usual `tar` on
+// extracts with (`TAR`, by its full path on Windows): bsdtar, as on macOS and Windows, which writes a zip given `--format zip`. GNU tar, the usual `tar` on
 // Linux, neither writes nor reads a zip, so where it is the system's the tests that need the package are skipped:
 // `fetchConpty` cannot extract a real `.nupkg` there either.
-const zipTar = spawnSync("tar", ["--version"], { encoding: "utf8" }).stdout?.includes("bsdtar") ?? false;
+const zipTar = spawnSync(TAR, ["--version"], { encoding: "utf8" }).stdout?.includes("bsdtar") ?? false;
 const needsZipTar = zipTar ? {} : { skip: "the system tar is not bsdtar, which fetchConpty needs to read a zip" };
 
 function standInPackage(t) {
@@ -91,7 +91,7 @@ function standInPackage(t) {
   mkdirSync(path.join(content, "runtimes/win-arm64/native"), { recursive: true });
   writeFileSync(path.join(content, "runtimes/win-arm64/native/conpty.dll"), "runtimes/win-arm64/native/conpty.dll");
   const archive = path.join(dir, "package.zip");
-  const packed = spawnSync("tar", ["--format", "zip", "-cf", archive, "-C", content, "."], { encoding: "utf8" });
+  const packed = spawnSync(TAR, ["--format", "zip", "-cf", archive, "-C", content, "."], { encoding: "utf8" });
   assert.equal(packed.status, 0, packed.stderr);
   const bytes = readFileSync(archive);
   // A zip's local file header, so the test reads the format the real package comes in.

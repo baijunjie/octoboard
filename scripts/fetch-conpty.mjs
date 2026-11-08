@@ -14,6 +14,8 @@
 // The package is checked against its pinned SHA-256 before anything is extracted, and kept under `target/`
 // once verified, so a rerun needs no network. A `.nupkg` is a zip, extracted with the system `tar`, which has to
 // read zips: bsdtar, the `tar` of macOS and of Windows 10 and later. GNU tar, the usual `tar` on Linux, does not.
+// On Windows it is named by its full path, as the first `tar` on the PATH may be another: Git Bash puts its GNU
+// tar first, which also takes the `D:` of a path for a remote host.
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -101,8 +103,12 @@ async function downloadBytes(url) {
 }
 
 // `tar` reads a zip on Windows 10 and later and on macOS; the package is one.
+export const TAR = process.platform === "win32"
+  ? path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe")
+  : "tar";
+
 function extract(archive, dir) {
-  const result = spawnSync("tar", ["-xf", archive, "-C", dir], { encoding: "utf8" });
+  const result = spawnSync(TAR, ["-xf", archive, "-C", dir], { encoding: "utf8" });
   if (result.error || result.status !== 0) {
     throw new Error(`Extracting ${archive} failed: ${result.error?.message ?? result.stderr}`);
   }
