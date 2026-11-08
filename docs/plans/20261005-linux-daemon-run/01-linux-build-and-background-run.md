@@ -31,9 +31,9 @@
 - **Development notes**:
   - Anything macOS-specific surfaces here; fix it or record it, do not paper over it.
   - Agent processes are planned to move later under separate holder processes, each a systemd user service of its
-    own, so that they outlive a daemon restart. Keep the per-launch cgroup handling from depending on agents living
-    inside the daemon's own service; where the subtree is delegated from once holders own the agents is not settled
-    yet.
+    own, so that they outlive a daemon restart. Each holder's unit will then delegate its own cgroup subtree and make
+    the per-launch groups inside it, so keep the per-launch cgroup handling from depending on agents living inside the
+    daemon's own service.
 - **Testing the cgroup groups**: the plain `docker run --init` container the Linux tests use has no systemd and a
   read-only `/sys/fs/cgroup`, so it only exercises the fallback to the ledger. Testing the groups themselves needs a
   container with a writable cgroup v2 subtree (`--privileged`, or a private cgroup namespace mounted read-write), or
