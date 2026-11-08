@@ -394,6 +394,32 @@ describe("the fixture daemon's system terminal and push actions", () => {
   });
 });
 
+describe("the fixture daemon's Git re-check", () => {
+  const project = projectOf("p", "c", "Website");
+  const missing = gitStatusOf(project.id, { branch: null, upstream: null, error: "git was not found", error_code: "binary_not_found" });
+
+  it("broadcasts the check running, then answers with the status it ended with", async () => {
+    vi.useFakeTimers();
+    try {
+      const daemon = createFixtureDaemon({ state: snapshotState({ projects: [project], gitStatuses: [missing] }) });
+      const answer = daemon.request({ type: "refresh_project_git_status", project: project.id });
+      expect(daemon.store.getState().gitStatuses.get(project.id)).toMatchObject({ activity: "checking", error_code: "binary_not_found" });
+      await vi.runAllTimersAsync();
+      const ended = { ...missing, activity: "idle" };
+      await expect(answer).resolves.toEqual({ type: "project_git_rechecked", id: null, status: ended });
+      expect(daemon.store.getState().gitStatuses.get(project.id)).toEqual(ended);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("answers with no status for a project that has none, and refuses an unknown one", async () => {
+    const daemon = createFixtureDaemon({ state: snapshotState({ projects: [project] }) });
+    await expect(daemon.request({ type: "refresh_project_git_status", project: project.id })).resolves.toEqual({ type: "project_git_rechecked", id: null, status: null });
+    await expect(daemon.request({ type: "refresh_project_git_status", project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
+  });
+});
+
 describe("the fixture daemon's project removal", () => {
   const project = projectOf("p", "c", "Website");
   const error = { code: "project_directory_shared", params: { project: "Billing" }, message: "shared" };

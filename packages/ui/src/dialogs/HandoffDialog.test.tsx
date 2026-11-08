@@ -28,7 +28,7 @@ const branch = (name: string): SessionBranchItem => ({
   kind: "branch", repository: "/r", branch: name, path: null, uncommitted: false, project: project.id, session: "s-1", state: "removable", detail: null,
 });
 
-function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" | "failTwice" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}, added: Agent[] | null = null, accountQuotas: AccountQuota[] = [], settings: Partial<Settings> = {}, handoffError?: Error) {
+function mount(session: Session, others: Session[] = [], branches: SessionBranchItem[] | "fail" | "failTwice" | "gitMissing" = [], availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {}, added: Agent[] | null = null, accountQuotas: AccountQuota[] = [], settings: Partial<Settings> = {}, handoffError?: Error) {
   const sessions = new Map([session, ...others].map((s) => [s.id, s]));
   const initial: Partial<State> = {
     consoles: new Map([[parentConsole.id, parentConsole]]),
@@ -44,6 +44,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
     if (body.type === "inspect_session_branches" && branches === "failTwice" && ++inspections <= 2) throw new Error("git failed");
     if (body.type === "inspect_session_branches" && branches === "failTwice") return { type: "session_branches_inspected", id: null, items: [] };
     if (body.type === "inspect_session_branches" && branches === "fail") throw new Error("git failed");
+    if (body.type === "inspect_session_branches" && branches === "gitMissing") throw new CodedError("`git` was not found", "binary_not_found", { binary: "git" });
     if (body.type === "inspect_session_branches") return { type: "session_branches_inspected", id: null, items: branches };
     if (body.type === "handoff_session" && handoffError) throw handoffError;
     if (body.type === "handoff_session") return { type: "session_opened", id: null, session: sessionOf("s-new", parentConsole.id, session.project_id ?? undefined, session.title, "working", { agent: "codex" }) };
@@ -157,6 +158,22 @@ it("says the branches could not be checked rather than that nothing moves, in a 
   expect(mark()).not.toBeNull();
   expect(announcements()).toEqual(["Could not check which branches it is responsible for."]);
   expect(spoken).toEqual(["Could not check which branches it is responsible for."]);
+});
+
+it("offers Download Git before Try again in the mark's popover when no Git is found, and Try again asks the check again", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  const { request } = mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle"), [], "gitMissing");
+  await elapse(0);
+  press(mark()!);
+  const popover = document.body.querySelector<HTMLElement>('[data-status-mark-popover] [role="dialog"]')!;
+  expect(popover.textContent).toContain("Git is not installed, or it is not on PATH.");
+  expect(popover.textContent).toContain("Install Git in the environment where sessions run");
+  const controls = [...popover.querySelectorAll("a, button")].map((control) => control.textContent);
+  expect(controls.slice(-2)).toEqual([expect.stringContaining("Download Git"), "Try again"]);
+  expect(popover.querySelector("a")?.getAttribute("href")).toBe("https://git-scm.com/downloads");
+  await act(async () => popoverRetry()!.click());
+  expect(request.mock.calls.filter(([body]) => body.type === "inspect_session_branches")).toHaveLength(2);
 });
 
 it("keeps focus inside the dialog when a retry of the check succeeds and takes the mark away", async () => {

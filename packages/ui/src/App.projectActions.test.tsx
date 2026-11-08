@@ -356,6 +356,10 @@ it("says a truncated branch list is limited, as a muted note after the branches 
   expect(notice.querySelector("svg")).toBeNull();
   expect([...notice.closest("[role=menu]")!.querySelectorAll("[role^=menuitem]")].at(-1)).toBe(notice);
   expect(menuHas("Some branches could not be listed")).toBe(false);
+  // Asked by the person opening the menu, so the daemon looks again for a Git it found missing.
+  for (const type of ["list_project_branches", "get_project_source"]) {
+    expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type, asked_by_person: true }));
+  }
 });
 
 it("keeps a native operation rejection string as the error diagnostic", async () => {

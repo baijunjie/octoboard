@@ -1306,13 +1306,17 @@ async fn adding_a_missing_local_directory_creates_an_empty_repository_only_on_su
         "unchanged"
     );
 
+    // No `git` in the cached snapshot, nor in a fresh one.
     let original_tools = state.host_tools.get();
     let mut tools = original_tools;
-    tools.git = || anyhow::bail!("git unavailable for this test");
+    tools.git = crate::test_support::git_not_found;
+    tools.fresh_git = crate::test_support::git_not_found;
     state.host_tools.replace(tools);
     let failed = dir.join("unmade/failed");
     let err = add_local(state.clone(), failed.clone()).await.unwrap_err();
-    assert!(format!("{err:#}").contains("git unavailable"));
+    let (code, params, _) = crate::protocol::error_parts(&err);
+    assert_eq!(code, crate::protocol::error_code::BINARY_NOT_FOUND);
+    assert_eq!(params.get("binary").map(String::as_str), Some("git"));
     assert!(!dir.join("unmade").exists());
     assert_eq!(state.store.list_projects().unwrap().len(), 2);
 
@@ -1329,10 +1333,58 @@ async fn adding_a_missing_local_directory_creates_an_empty_repository_only_on_su
     assert_eq!(std::fs::read_dir(dir.join("unmade")).unwrap().count(), 0);
     assert_eq!(state.store.list_projects().unwrap().len(), 2);
 
-    state.host_tools.replace(original_tools);
+    // `git` installed since the cached snapshot was taken: the fresh one finds it.
+    state.host_tools.replace(crate::host_tools::Tools {
+        git: crate::test_support::git_not_found,
+        ..original_tools
+    });
     add_local(state.clone(), failed.clone()).await.unwrap();
     assert!(failed.join(".git").is_dir());
     assert_eq!(state.store.list_projects().unwrap().len(), 3);
+}
+
+/// A probe the user's typing asks for takes the `git` of the cached snapshot and never a fresh one,
+/// so a `git` installed since stays unfound until the cache refreshes; the probe a person asks for
+/// by pressing Try again looks once more in a fresh snapshot and finds it.
+#[tokio::test]
+async fn a_probe_a_person_asked_for_finds_a_git_installed_since_the_cached_snapshot() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-probe-git-remote");
+    let remote = crate::test_support::repo_with("coordinator-probe-remote", &[(b"CLAUDE.md", b"")]);
+    let remote_url = format!("file://{}", remote.display());
+    let probe = |asked_by_person| {
+        handle(
+            &state,
+            None,
+            RequestBody::ProbeGitRemote {
+                remote_url: remote_url.clone(),
+                asked_by_person,
+            },
+        )
+    };
+    let tools = state.host_tools.get();
+
+    state.host_tools.replace(crate::host_tools::Tools {
+        git: crate::test_support::git_not_found,
+        fresh_git: || unreachable!("a probe asked as the user types takes no fresh snapshot"),
+        ..tools
+    });
+    let err = probe(false).await.unwrap_err();
+    let (code, params, _) = crate::protocol::error_parts(&err);
+    assert_eq!(code, error_code::BINARY_NOT_FOUND);
+    assert_eq!(params.get("binary").map(String::as_str), Some("git"));
+
+    state.host_tools.replace(crate::host_tools::Tools {
+        git: crate::test_support::git_not_found,
+        fresh_git: crate::test_support::system_git,
+        ..tools
+    });
+    assert!(matches!(
+        probe(true).await.unwrap(),
+        Some(Event::AgentDetected {
+            directory_exists: None,
+            ..
+        })
+    ));
 }
 
 #[tokio::test]
@@ -1414,4 +1466,58 @@ async fn project_detection_and_creation_reject_a_file_ancestor() {
     }
     assert_eq!(std::fs::read_to_string(dir.join("file")).unwrap(), "keep");
     assert!(state.store.list_projects().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_recheck_of_an_unknown_project_is_refused() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-recheck-unknown");
+    let err = handle(
+        &state,
+        None,
+        RequestBody::RefreshProjectGitStatus {
+            project: "nowhere".to_string(),
+        },
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(
+        err.downcast_ref::<CodedError>().unwrap().code,
+        error_code::UNKNOWN_PROJECT
+    );
+}
+
+/// A re-check is answered once its check has ended, with the status it ended with.
+#[tokio::test]
+async fn a_recheck_is_answered_with_the_status_its_check_ended_with() {
+    let (state, dir) = crate::test_support::app_state("coordinator-recheck-answer");
+    let repo = crate::test_support::repo_with("coordinator-recheck-answer-repo", &[(b"f", b"1")]);
+    state
+        .store
+        .insert_console(&crate::test_support::console(&dir))
+        .unwrap();
+    crate::test_support::insert_project(&state, &repo);
+    let reply = handle(
+        &state,
+        Some("r1".to_string()),
+        RequestBody::RefreshProjectGitStatus {
+            project: "p1".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    let Some(Event::ProjectGitRechecked {
+        id,
+        status: Some(status),
+    }) = reply
+    else {
+        panic!("expected project_git_rechecked with a status, got {reply:?}");
+    };
+    assert_eq!(id.as_deref(), Some("r1"));
+    assert!(status.repository && status.branch.is_some());
+    let held = state.git_status("p1").expect("broadcast");
+    assert_eq!(
+        serde_json::to_value(held).unwrap(),
+        serde_json::to_value(status).unwrap(),
+        "as broadcast"
+    );
 }

@@ -39,8 +39,8 @@ per-entity work, `each_blocking` for an async caller, `blocking_pass/within.rs`'
 runtime, and, in `blocking_pass/stalled.rs`, `StalledPasses`, the blocking work that outran its deadline and whose
 thread is still running), `git_workflow.rs` (the one place the application-wide git workflow values and a project's
 overrides are combined: `effective`; the settings types are in `protocol/`), `host_tools.rs` (`HostTools`, the seam
-tests substitute stand-ins behind, `git` among them: the one place a project's git gets the user's `git`, which
-`isolated_git` hands to browse reads), `instance_lock.rs` (one daemon per data directory), `interface_language.rs` (the
+tests substitute stand-ins behind, `git` among them: the one place a project's git gets the user's `git`, handed out by
+pace with `Tools::git_for`, which `isolated_git` and `isolated_git_per_request` give browse reads), `instance_lock.rs` (one daemon per data directory), `interface_language.rs` (the
 languages the interface is offered in, mirroring the UI's `i18n/languages.ts`), `log_file.rs` (the rotated
 `daemon.log`), `loopback.rs` (the std-only HTTP client to the daemon's own loopback address that the CLI modes, the git
 hook modes and the MCP stdio bridge call the running daemon with), `paths.rs` (where Octoboard keeps its files under the
@@ -473,7 +473,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 
 | Need | Entry point |
 |---|---|
-| Run `git` in a user's repository or against their remote | `src/git/run.rs`: a family's `Runner` (`UserGit` with the call site's `Policy` and `Limits`; `read`, `write`, and `write_remote` for a command that may reach a remote) and `GitError`, the one error type. A command that reaches a remote is built with `remote_command` so the user's own ssh applies (`src/git/env.rs`). Get the user's `git` from `HostTools::git`. Browse reads use `IsolatedGit` (`src/git/isolated.rs`). The revert gate's own `src/revert_gate/git.rs`, which runs inside the user's hook, is the one exception |
+| Run `git` in a user's repository or against their remote | `src/git/run.rs`: a family's `Runner` (`UserGit` with the call site's `Policy` and `Limits`; `read`, `write`, and `write_remote` for a command that may reach a remote) and `GitError`, the one error type. A command that reaches a remote is built with `remote_command` so the user's own ssh applies (`src/git/env.rs`). Get the user's `git` from `HostTools::get().git_for(Pace)` (`src/host_tools.rs`): a lookup a person triggers is `Pace::Person`, which looks once more with a fresh login-shell snapshot where `git` is not found; anything repeating (a sweep, a poll, an MCP tool, background cleanup) is `Pace::Scheduled`, which never takes a login shell per call. A project's own repository goes through `project_git::project_git(state, pace)`. Browse reads use `IsolatedGit` (`src/git/isolated.rs`) from `isolated_git` (scheduled) or, for a browse request carrying `asked_by_person`, `isolated_git_per_request`. The revert gate's own `src/revert_gate/git.rs`, which runs inside the user's hook, is the one exception |
 | Replace a file whole | `hostfs::replace::replace_file` (`src/hostfs/replace.rs`) |
 | Read from the disk within a bound | `hostfs::read_bounded` (with cancel), `read_regular` / `open_regular` for files the project does not own (`src/hostfs/mod.rs`); a project's files go through `browse::live` |
 | Read an agent's record | `src/records/line_file.rs`, the bounded line reader (also what record watches use) |
@@ -509,6 +509,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Share the steps of the two transfer tools | `Parties` and friends in `src/mcp/tools/transfer/mod.rs` |
 | Change a session's model and effort; resume checks | `coordinator::model_change::set_session_model`; `coordinator::resume::check_can_resume` and `locate_conversation` |
 | Drop a live session | `coordinator::exit_watch::unregister_live`, which runs `AppState::remove_live` and `after_live_removed` around withdrawing the session's request |
+| Keep a missing `git`'s `binary_not_found` through to a reply or a `GitStatus` (never flatten the error to a string first) | `project_git::no_git_or` for an action that words its other failures itself; `StepFailure::no_git` for a step recorded on a `GitStatus` (`src/project_git/mod.rs`) |
 | Re-read projects when a session's git moves refs | `project_git::ref_moves::moved` |
 | Cap a pass of blocking per-entity work | `blocking_pass::each_blocking` from async code; from a thread with no runtime, a pass waited for only until a deadline, with a stuck key skipped while it is stuck: `blocking_pass::within_deadline` (the async sibling for paths is `hostfs::place::looked_within`) |
 | Read the system's process table | `src/platform/proc_table/` (`ledger/table.rs` and `terminal/shell/busy.rs` read through it) |

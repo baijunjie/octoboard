@@ -232,6 +232,14 @@ pub enum Event {
         id: Option<String>,
         shell_terminal: ShellTerminal,
     },
+    /// The reply to `refresh_project_git_status`: the status the check that answers it ended with,
+    /// as also broadcast in `project_git_status`, or `None` when that check was abandoned before
+    /// it ended (its project removed before it ran or reran, a panic) or had not ended when the
+    /// daemon stopped waiting.
+    ProjectGitRechecked {
+        id: Option<String>,
+        status: Option<GitStatus>,
+    },
     /// A project's `GitStatus` changed, including every transition of `activity` — the animated
     /// icon has something to follow. Nothing is sent when a project is removed; the client drops
     /// its status along with it.

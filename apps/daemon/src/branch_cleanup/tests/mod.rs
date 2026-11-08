@@ -16,6 +16,7 @@ use super::report::*;
 use super::survey::*;
 use crate::branch_origin::bound::bound_in;
 use crate::git::repo_files::repository_of;
+use crate::host_tools::{is_git_not_found, Pace, Tools};
 use crate::protocol::{
     error_code, Event, RequestBody, Role, Session, SessionBranchCause, SessionBranchItem,
     SessionBranchKind, SessionBranchState, SessionBranchTarget, SessionKind, SessionStatus,
@@ -24,8 +25,8 @@ use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::bare_session;
 use crate::test_support::{
-    app_state, branch_made_by, console, fixture_git, git, host_tools, insert_project, repo_with,
-    running, ScratchDir, PATIENCE,
+    app_state, branch_made_by, console, fixture_git, git, git_not_found, host_tools,
+    insert_project, repo_with, running, system_git, ScratchDir, PATIENCE,
 };
 use crate::time::now_millis;
 use crate::wire_path;
@@ -108,7 +109,7 @@ impl Fixture {
 
     async fn inspect(&self, sessions: &[Session]) -> Vec<SessionBranchItem> {
         let (state, sessions) = (self.state.clone(), sessions.to_vec());
-        tokio::task::spawn_blocking(move || inspect(&state, &sessions))
+        tokio::task::spawn_blocking(move || inspect(&state, &sessions, Pace::Scheduled))
             .await
             .unwrap()
             .unwrap()
@@ -225,7 +226,7 @@ fn carry_out_now(
 ) -> Vec<SessionBranchItem> {
     let tools = fixture.state.host_tools.get();
     project::carry_out(
-        &super::cleanup_git(&tools).unwrap(),
+        &super::cleanup_git(&tools, Pace::Scheduled).unwrap(),
         removal,
         forced,
         tools.trash,

@@ -2,7 +2,7 @@
 import { act } from "react";
 import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
-import { expect, it } from "vitest";
+import { expect, it, onTestFinished } from "vitest";
 
 import { CodedError } from "../errors/codedError";
 import { projectOf } from "../fixtures/builders";
@@ -125,7 +125,9 @@ it("keeps an Alert under the Directory field when the check could not run", asyn
   await settle(500);
   await act(async () => pending[0].reject(new CodedError("plain", "directory_unreachable", { path: "/Users/dev/code/a" })));
   const alert = document.body.querySelector('[data-slot="alert-root"]')!.parentElement!;
-  expect(input("Directory").getAttribute("aria-describedby")?.split(" ")).toContain(alert.id);
+  const described = input("Directory").getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id)!);
+  // The text of the Alert, not the whole of it with its buttons.
+  expect(described.some((node) => alert.contains(node) && node !== alert)).toBe(true);
   expect(document.body.querySelector('[data-slot="field-error"] [role="alert"]')?.textContent ?? "").toBe("");
   expect(input("Name").disabled).toBe(true);
 });
@@ -152,6 +154,101 @@ it("keeps the git form locked until the probe succeeds", async () => {
   expect(clone().disabled).toBe(true);
   await answer(pending[0], null);
   expect(clone().disabled).toBe(false);
+});
+
+it("offers Download Git, then Try again, under the Repository URL when no Git is found, and asks again as a person", async () => {
+  const pending = render();
+  await chooseSource("Git repository URL");
+  type(input("Repository URL"), "https://example.com/o/r.git");
+  await settle(900);
+  await act(async () => pending[0].reject(new CodedError("plain", "binary_not_found", { binary: "git" })));
+  const alert = document.body.querySelector<HTMLElement>('[data-slot="alert-root"]')!;
+  const controls = [...alert.querySelectorAll("a, button")].map((control) => control.textContent);
+  expect(controls.slice(-2)).toEqual([expect.stringContaining("Download Git"), "Try again"]);
+  expect(alert.querySelector("a")?.getAttribute("href")).toBe("https://git-scm.com/downloads");
+  expect(pending).toHaveLength(1);
+  const retry = [...alert.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
+  await act(async () => retry.click());
+  // At once, as a person's request; the failure stays shown, its button busy, until the answer.
+  expect(pending[1].body).toEqual({ type: "probe_git_remote", remote_url: "https://example.com/o/r.git", asked_by_person: true });
+  expect(document.body.querySelector('[data-slot="alert-root"]')).not.toBeNull();
+  expect(input("Clone into (parent directory)").disabled).toBe(true);
+  await answer(pending[1], null);
+  expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(input("Clone into (parent directory)").disabled).toBe(false);
+});
+
+const urlAlert = () => document.body.querySelector<HTMLElement>('[data-slot="alert-root"]');
+const tryAgain = () => [...(urlAlert()?.querySelectorAll("button") ?? [])].find((button) => button.textContent === "Try again")!;
+
+/** Opens the Git source with a repository URL whose first probe has failed with `error`. */
+async function failedProbe(error: Error) {
+  const pending = render();
+  await chooseSource("Git repository URL");
+  type(input("Repository URL"), "https://example.com/o/r.git");
+  await settle(900);
+  await act(async () => pending[0].reject(error));
+  return pending;
+}
+
+it("offers Try again for a remote that could not be reached, and describes the field by the failure's words alone", async () => {
+  const pending = await failedProbe(new CodedError("plain", "git_remote_unreachable", { detail: "fatal: unable to access" }));
+  expect(urlAlert()!.textContent).toContain("The repository could not be read.");
+  expect(tryAgain()).toBeDefined();
+  const described = input("Repository URL").getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id)!.textContent).join(" ");
+  expect(described).toContain("The repository could not be read.");
+  expect(described).not.toContain("Try again");
+  await act(async () => tryAgain().click());
+  expect(pending[1].body).toEqual({ type: "probe_git_remote", remote_url: "https://example.com/o/r.git", asked_by_person: true });
+});
+
+it("hands focus to the Repository URL when a keyboard Try again succeeds and takes the alert, and its button, away", async () => {
+  const pending = await failedProbe(new CodedError("plain", "binary_not_found", { binary: "git" }));
+  act(() => tryAgain().focus());
+  expect(document.activeElement).toBe(tryAgain());
+  await act(async () => tryAgain().click());
+  await answer(pending[1], null);
+  expect(urlAlert()).toBeNull();
+  expect(document.activeElement).toBe(input("Repository URL"));
+});
+
+it("announces a retry that fails again in the same words", async () => {
+  const pending = await failedProbe(new CodedError("plain", "binary_not_found", { binary: "git" }));
+  const button = tryAgain();
+  const spoken: string[] = [];
+  const observer = new MutationObserver((records) => records.forEach((record) => record.addedNodes.forEach((node) => {
+    if (urlAlert()?.contains(record.target) && node.textContent?.includes("Git is not installed")) spoken.push(node.textContent);
+  })));
+  observer.observe(document.body, { childList: true, subtree: true });
+  onTestFinished(() => observer.disconnect());
+  await act(async () => tryAgain().click());
+  expect(spoken).toEqual([]);
+  await act(async () => pending[1].reject(new CodedError("plain", "binary_not_found", { binary: "git" })));
+  expect(urlAlert()).not.toBeNull();
+  expect(spoken.length).toBeGreaterThan(0);
+  // Only the announcing part is replaced; the button is the same one, so focus on it is kept.
+  expect(tryAgain()).toBe(button);
+});
+
+it("drops the answer of a retry once the URL has been typed over", async () => {
+  const pending = await failedProbe(new CodedError("plain", "binary_not_found", { binary: "git" }));
+  await act(async () => tryAgain().click());
+  type(input("Repository URL"), "https://example.com/o/other.git");
+  await settle(900);
+  await answer(pending[1], null);
+  // The retry was for the URL before; its answer does not unlock the form for the one entered now.
+  expect(input("Clone into (parent directory)").disabled).toBe(true);
+  await answer(pending[2], null);
+  expect(input("Clone into (parent directory)").disabled).toBe(false);
+});
+
+it("offers no Try again under the Directory field for a failed directory check", async () => {
+  const pending = render();
+  type(input("Directory"), "~/code/a");
+  await settle(500);
+  await act(async () => pending[0].reject(new CodedError("plain", "directory_unreachable", { path: "/Users/dev/code/a" })));
+  expect(document.body.querySelector('[data-slot="alert-root"]')).not.toBeNull();
+  expect([...document.body.querySelectorAll('[data-slot="alert-root"] button')].some((button) => button.textContent === "Try again")).toBe(false);
 });
 
 it.each([

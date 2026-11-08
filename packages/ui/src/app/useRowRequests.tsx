@@ -59,9 +59,10 @@ export function useRowRequests() {
   };
 
   const loadProjectBranches = async (project: Project): Promise<ActionMenuEntry[]> => {
+    // Asked once as the menu opens, by the person opening it: a Git installed since the daemon last looked is found.
     const [reply, source] = await Promise.all([
-      listLane.send(() => request({ type: "list_project_branches", project: project.id })),
-      listLane.send(() => request({ type: "get_project_source", project: project.id })),
+      listLane.send(() => request({ type: "list_project_branches", project: project.id, asked_by_person: true })),
+      listLane.send(() => request({ type: "get_project_source", project: project.id, asked_by_person: true })),
     ]);
     const git = source.source.git;
     const currentBranch = git?.worktrees.find((worktree) => worktree.id === git.worktree)?.branch;

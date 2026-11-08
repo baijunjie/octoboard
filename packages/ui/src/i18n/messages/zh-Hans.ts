@@ -113,6 +113,9 @@ export const zhHans: Translation<"other"> = {
   "error.recovery.sharingStop": "没有做任何更改。请重试；若会话仍在运行，请先在它的终端中结束它。",
   "error.recovery.account": "请选择配置目录可访问的可用账户；需要时让智能体 CLI 使用该配置目录登录。",
   "error.recovery.tool": "请在会话运行环境中安装提示的智能体 CLI 或 {git}，并将其加入登录 shell 的 {pathVar}，然后重新打开 {appName} 并重试。",
+  "error.recovery.installGit": "请在会话运行环境中安装 {git}，并确保其已加入 {pathVar}，然后重试。",
+  "error.recovery.installGit.action": "下载 Git",
+  "error.recovery.installGitNoRetry": "请在会话运行环境中安装 {git}，并确保其已加入 {pathVar}。",
   "error.recovery.shell": "请在 {terminal} 打开登录 shell，修复配置中耗时或阻塞的启动命令，然后重试。",
   "error.recovery.unlock": "请打开提示中相关会话的操作菜单，选择 {unlock}，然后重试。",
   "error.recovery.unlockOriginal": "请打开原会话的操作菜单，选择 {unlock}。",
@@ -611,6 +614,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.session_request_not_waiting": "此会话已不再等待回应，因此它的请求没有执行。",
   "daemon.session_request_answered": "这项请求已得到回应。",
   "daemon.binary_not_found": "在已快照的 shell 环境的 {pathVar} 中找不到 {binary}。",
+  "daemon.binary_not_found.git": "未安装 {git}，或它不在 {pathVar} 中。",
   "daemon.shell_environment_timeout.summary": "无法获取 shell 环境。",
   "daemon.shell_environment_timeout":
     "{shell} -l -i -c '{command}' 未在 {timeout} 内完成。某个 shell 启动文件可能卡在了 stdin 以外的地方，或留下了占住 shell 输出的后台进程。{appName} 不会在环境未知时凭猜测启动。请修复 shell 的 rc 文件中缓慢的步骤，或跳过它。",
@@ -913,6 +917,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.restore_not_on_branch": "此项目当前不在分支上。请先切换到分支，再还原文件更改。",
   "daemon.git_restore_failed": "{git} 无法还原文件更改：{detail}",
   "daemon.project_branches_not_determined": "项目 {name} 已移除，但无法确定随其文件夹一并移除的内容，因此文件夹以外的工作树已保留；若仓库仍保留，其分支也已保留。",
+  "daemon.project_branches_not_determined.git": "项目 {name} 已移除，但未安装 {git}，或它不在 {pathVar} 中，因此无法确定随其文件夹一并移除的内容。文件夹以外的工作树已保留；若仓库仍保留，其分支也已保留。",
   "daemon.session_branches_not_removed": {
     other: "以下内容本应删除，但仍然保留：{items}",
   },
@@ -1000,6 +1005,7 @@ export const zhHans: Translation<"other"> = {
   "sidebar.git.failed": "{git} 检查失败",
   "sidebar.git.failed.reason": "上次检查或拉取此项目的仓库时，{git} 报告了错误。",
   "sidebar.git.failed.remedy": "会自动再次检查仓库。如果错误仍然存在，请在仓库中用 {git} 解决。",
+  "sidebar.git.checkFailedTitle": "无法检查分支",
 
   "archive.heading.project": "已归档会话",
   "archive.heading.consoleSessions": "已归档的控制台会话",

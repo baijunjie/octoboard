@@ -904,6 +904,17 @@ const reviewScenarios: Scenario[] = [
     steps: openGit,
   },
   {
+    id: "git-unreadable-no-git",
+    group: GROUP,
+    category: "exceptional",
+    title: "Git review on a machine without Git",
+    description: "The standalone failure takes the empty-state shape: a danger glyph, the heading, then the sentence that Git is not installed or not on PATH and the remedy to install it where sessions run and try again, as text with no diagnostic block, then two buttons below it: Download Git (external-link icon) and Try again, the primary button (the repository-unreadable failure has neither).",
+    state,
+    preferences,
+    git: { worktrees: [], changes: {}, gitError: "git was not found on the login shell's PATH", gitErrorCode: "binary_not_found" },
+    steps: openGit,
+  },
+  {
     id: "git-change-viewer",
     group: "File viewer",
     category: "normal",

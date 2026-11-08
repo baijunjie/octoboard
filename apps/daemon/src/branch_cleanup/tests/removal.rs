@@ -263,7 +263,8 @@ async fn a_worktree_with_submodules_goes_only_when_forced() {
 #[test]
 fn a_branch_counts_as_merged_into_its_upstream_where_it_has_one() {
     let fixture = Fixture::new("cleanup-upstream");
-    let git_ = crate::branch_cleanup::cleanup_git(&fixture.state.host_tools.get()).unwrap();
+    let git_ = crate::branch_cleanup::cleanup_git(&fixture.state.host_tools.get(), Pace::Scheduled)
+        .unwrap();
     let repo = repository_of(&fixture.repo).unwrap();
     // `ahead` is ahead of `HEAD` but merged into its upstream, `up`.
     git(&fixture.repo, &["switch", "-q", "-c", "up"]);
@@ -293,14 +294,16 @@ fn a_branch_counts_as_merged_into_its_upstream_where_it_has_one() {
 async fn a_git_that_cannot_run_leaves_every_bound_item_failed() {
     let fixture = Fixture::new("cleanup-no-git");
     branch_made_by(&fixture.state, &fixture.repo, "mine", "s1");
-    fixture.state.host_tools.replace(crate::host_tools::Tools {
+    fixture.state.host_tools.replace(Tools {
         git: || anyhow::bail!("git is not on the PATH"),
         ..host_tools()
     });
     let archived = [session("s1", SessionStatus::Archived)];
     let (state, sessions) = (fixture.state.clone(), archived.clone());
-    let inspected =
-        tokio::task::spawn_blocking(move || inspect(&state, &sessions).map(|_| ())).await;
+    let inspected = tokio::task::spawn_blocking(move || {
+        inspect(&state, &sessions, Pace::Scheduled).map(|_| ())
+    })
+    .await;
     assert!(inspected.unwrap().is_err());
     let left = fixture.remove(&archived, &[]).await;
     assert_eq!(
@@ -308,6 +311,30 @@ async fn a_git_that_cannot_run_leaves_every_bound_item_failed() {
         expect(&[(false, "mine", SessionBranchState::Failed)])
     );
     assert!(fixture.has_branch("mine"));
+}
+
+/// The removal after an archive or a deletion, and the unforced inspection it follows on from,
+/// are no request of a person's own: a `git` that cannot be found is not looked for again.
+#[tokio::test]
+async fn work_that_follows_on_takes_no_fresh_snapshot_for_a_missing_git() {
+    let fixture = Fixture::new("cleanup-no-git-follows-on");
+    branch_made_by(&fixture.state, &fixture.repo, "mine", "s1");
+    fixture.state.host_tools.replace(Tools {
+        git: git_not_found,
+        fresh_git: || unreachable!("work that follows on took a fresh snapshot"),
+        ..host_tools()
+    });
+    let archived = [session("s1", SessionStatus::Archived)];
+    let (state, sessions) = (fixture.state.clone(), archived.clone());
+    let unforced = tokio::task::spawn_blocking(move || inspect_unforced(&state, &sessions))
+        .await
+        .unwrap();
+    assert!(is_git_not_found(&unforced.unwrap_err()));
+    let left = fixture.remove(&archived, &[]).await;
+    assert_eq!(
+        summary(&left),
+        expect(&[(false, "mine", SessionBranchState::Failed)])
+    );
 }
 
 #[tokio::test]

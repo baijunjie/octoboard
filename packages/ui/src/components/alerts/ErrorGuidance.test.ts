@@ -7,5 +7,5 @@ import { recoveryAction } from "./ErrorGuidance";
 const t: Translate = translatorFor("en");
 
 it("offers the way to Settings' Agent accounts for a reset credit refused for want of a sign-in", () => {
-  expect(recoveryAction(t, "resetCreditLogin")).toEqual({ label: "Manage accounts" });
+  expect(recoveryAction(t, "resetCreditLogin")).toEqual({ kind: "settings", label: "Manage accounts" });
 });

@@ -132,7 +132,9 @@ const CORE_CODES = {
   agent_not_installed: { origin: "daemon", recovery: "tool" },
   agent_order_invalid: { origin: "daemon", recovery: "addedAgents" },
   all_projects_already_added: { origin: "daemon", recovery: "existingProject" },
-  binary_not_found: { origin: "daemon", recovery: "tool", codeParams: ["binary", "pathVar"], uiParams: { pathVar: "PATH" } },
+  // A missing `git` is worded on its own: Git is a tool the application needs, not an agent CLI the user chose, and the
+  // download page is the way to it.
+  binary_not_found: { origin: "daemon", recovery: "tool", codeParams: ["binary", "pathVar"], uiParams: { pathVar: "PATH", git: "Git" }, variants: { git: { codeParams: ["pathVar"] } }, variantOf: (params) => params.binary === "git" ? "git" : undefined },
   clean_filtered: { origin: "daemon", recovery: "scope", codeParams: ["path", "filter"] },
   config_dir_not_absolute: { origin: "daemon", recovery: "path", codeParams: ["tilde"], uiParams: { tilde: "~/" } },
   config_dir_taken: { origin: "daemon", recovery: "accountDirectory", defaultAccountParams: ["name"], nameParams: ["name"] },
@@ -251,7 +253,9 @@ const CORE_CODES = {
   // the first of them was left.
   process_not_stopped: { origin: "ui", recovery: "none", recoveryLine: true, variantOf: (params) => params.reason === "access_denied" ? "accessDenied" : undefined },
   process_shares_agent_console: { origin: "daemon", recovery: "none", recoveryLine: true },
-  project_branches_not_determined: { origin: "daemon", recovery: "projectBranches", alertTitle: true, detailBlock: true, summaryForDetail: false, nameParams: ["name"] },
+  // The failure it nests (`reason_code`) words it only where Git could not be found, whose remedy (`classifyError`) is
+  // to install Git, before looking at what was left: any other reason stays the raw text of its `detail`.
+  project_branches_not_determined: { origin: "daemon", recovery: "projectBranches", alertTitle: true, detailBlock: true, summaryForDetail: false, nameParams: ["name"], uiParams: { git: "Git", pathVar: "PATH" }, variants: { git: { nameParams: ["name"], codeParams: ["pathVar"] } }, variantOf: (params) => params.reason_code === "binary_not_found" && params.binary === "git" ? "git" : undefined },
   project_directory_protected: { origin: "daemon", recovery: "trash" },
   project_directory_shared: { origin: "daemon", recovery: "trash", recoveryLine: true, nameParams: ["project"], variants: { retryTrash: { nameParams: ["project"] } } },
   project_directory_trash_failed: { origin: "daemon", recovery: "trash", detailBlock: true, recoveryLine: true, variantOf: (params) => params.cause === "unanswered" || params.cause === "unreadable" ? params.cause : undefined },

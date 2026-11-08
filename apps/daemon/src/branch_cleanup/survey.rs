@@ -14,6 +14,7 @@ use crate::git::repo_files::uses_reftable;
 use crate::git::run::Runner;
 use crate::git::tree_entries::entries;
 use crate::git::worktrees::{changes, worktrees, Listed};
+use crate::host_tools::Pace;
 use crate::hostfs::place::Looking;
 use crate::platform::names;
 use crate::protocol::{
@@ -23,15 +24,19 @@ use crate::removal_safety::{Blocked, Unresolved, Worktrees, TRASH_LOOK_DEADLINE}
 use crate::state::AppState;
 use crate::wire_path;
 
-/// What is bound to `sessions`, and where each item stands now. Runs no `git` when none of the
-/// sessions is responsible for a branch, which is most sessions. Blocking, waiting for its looks
-/// as [`WorktreeRemovability::look`] says.
-pub fn inspect(state: &AppState, sessions: &[Session]) -> Result<Vec<SessionBranchItem>> {
+/// What is bound to `sessions`, and where each item stands now, with the user's `git` for `pace`.
+/// Runs no `git` when none of the sessions is responsible for a branch, which is most sessions.
+/// Blocking, waiting for its looks as [`WorktreeRemovability::look`] says.
+pub fn inspect(
+    state: &AppState,
+    sessions: &[Session],
+    pace: Pace,
+) -> Result<Vec<SessionBranchItem>> {
     let bound = bound_in(state, sessions)?;
     if bound.is_empty() {
         return Ok(Vec::new());
     }
-    let git = super::cleanup_git(&state.host_tools.get())?;
+    let git = super::cleanup_git(&state.host_tools.get(), pace)?;
     let mut judge = WorktreeRemovability::of_projects(state, None)?;
     let mut items = Vec::new();
     for repo in &bound {
@@ -48,7 +53,7 @@ pub fn inspect(state: &AppState, sessions: &[Session]) -> Result<Vec<SessionBran
 /// out, which the confirmation offers to force along with that worktree. With nothing forced the
 /// worktree stays, and the branch with it, as checked out there. Blocking.
 pub fn inspect_unforced(state: &AppState, sessions: &[Session]) -> Result<Vec<SessionBranchItem>> {
-    let mut items = inspect(state, sessions)?;
+    let mut items = inspect(state, sessions, Pace::Scheduled)?;
     let refused: Vec<(String, String)> = items
         .iter()
         .filter(|item| item.kind == SessionBranchKind::Worktree && refused_by_git(item.state))

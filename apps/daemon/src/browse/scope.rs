@@ -11,6 +11,7 @@ use anyhow::Result;
 use crate::browse::source::{self, Discovery, ProjectRoot, Repository};
 use crate::browse::{blob, live, BrowseGit};
 use crate::git::isolated::IsolatedGit;
+use crate::host_tools::is_git_not_found;
 use crate::platform::names;
 use crate::protocol::{
     error_code, CodedError, ContentSource, GitSourceInfo, Project, ProjectSourceInfo, WorktreeInfo,
@@ -140,11 +141,17 @@ pub(super) fn project_source(
         root_id: root.id.clone(),
         git: None,
         git_error: None,
+        git_error_code: None,
     };
     let repository = match source::discover(&root, git, cancel)? {
         Discovery::NotARepository => return Ok(info),
         Discovery::Unreadable(message) => {
             info.git_error = Some(message);
+            return Ok(info);
+        }
+        Discovery::NoGit(err) => {
+            info.git_error = Some(format!("{err:#}"));
+            info.git_error_code = is_git_not_found(&err).then_some(error_code::BINARY_NOT_FOUND);
             return Ok(info);
         }
         Discovery::Repository(repository) => repository,
@@ -184,7 +191,9 @@ pub(super) fn project_source(
     Ok(info)
 }
 
-/// The project's repository, refusing a project that is in none.
+/// The project's repository, refusing a project that is in none, or one there is no `git` to read
+/// with: as `binary_not_found` for a `git` that cannot be found, which a client words as Git not
+/// being installed, else as `git_unavailable`, as for a repository `git` cannot read.
 fn repository(
     root: &ProjectRoot,
     project: &str,
@@ -198,12 +207,14 @@ fn repository(
             "the project is not in a git repository",
             &[("project", project)],
         )),
-        Discovery::Unreadable(message) => Err(CodedError::raised(
-            error_code::GIT_UNAVAILABLE,
-            message.clone(),
-            &[("detail", &message)],
-        )),
+        Discovery::NoGit(err) if is_git_not_found(&err) => Err(err),
+        Discovery::NoGit(err) => Err(git_unavailable(&format!("{err:#}"))),
+        Discovery::Unreadable(message) => Err(git_unavailable(&message)),
     }
+}
+
+fn git_unavailable(message: &str) -> anyhow::Error {
+    CodedError::raised(error_code::GIT_UNAVAILABLE, message, &[("detail", message)])
 }
 
 /// The directory a live read or listing is scoped to: the project's own, or — with `worktree` —

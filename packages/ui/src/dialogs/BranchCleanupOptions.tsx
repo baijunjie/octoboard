@@ -1,7 +1,11 @@
-import React, { useId, useState } from "react";
+import React, { useEffect, useId, useState } from "react";
 
 import { BranchGroups, type BranchGroup, type BranchRow } from "../components/alerts/BranchGroups";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
+import { RetryStatusMark } from "../components/status/RetryStatusMark";
 import { StatusMark } from "../components/status/StatusMark";
+import { classifyError } from "../errors/errorRecovery";
 import { Message, useT } from "../i18n/react";
 import { display } from "../format/hostPath";
 import { type SessionBranchItem } from "../protocol";
@@ -155,16 +159,32 @@ export function useBranchCleanup({ items, pending }: Inspected): {
   };
 }
 
-/** The Trash option of a project's removal and what goes along with its folder, asked afresh
- * whenever the option is ticked: under the option, the disclosure of the worktrees moved to the
- * Trash and the branches deleted, each as a group, and the disclosure of the worktrees that stay because whether they
- * are or hold another project's folder could not be told; then the locked worktrees as an option of their
- * own. `consequences` are the lines the confirmation's consequence text adds while the options are ticked. A
- * lookup that failed, so that the daemon could not say what else goes, is a mark after the Trash
- * option's label instead. A branch a locked worktree has checked
- * out goes only with it. `pending` holds Confirm while the answer is on its way. `choices` carries the token of a
- * refusal that a path that could not be resolved decided, for the removal to repeat it, or of an answer that held
- * worktrees back, for the removal to leave them too. */
+/** Speaks `text` once it has stood for `AFTER_FOCUS_MOVE_DELAY_MS`: the failure it announces arrives as the Trash
+ * checkbox is ticked or as Try again hands focus back to the mark, and VoiceOver drops what is written within about
+ * 300 ms of either. While `text` is `undefined` (a retry is out) the region is empty, so a retry that fails again in
+ * the same words is written, and so spoken, again. */
+function DelayedAnnouncer({ text }: { text: string | undefined }): React.ReactElement {
+  const [written, setWritten] = useState<string>();
+  if (text === undefined && written !== undefined) setWritten(undefined);
+  useEffect(() => {
+    if (text === undefined) return;
+    const timer = setTimeout(() => setWritten(text), AFTER_FOCUS_MOVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
+  return <StatusAnnouncer text={written} />;
+}
+
+/** The Trash option of a project's removal and what goes along with its folder, asked afresh whenever the option is
+ * ticked: under the option, the disclosure of the worktrees moved to the Trash and the branches deleted, each as a
+ * group, and the disclosure of the worktrees that stay because whether they are or hold another project's folder could
+ * not be told; then the locked worktrees as an option of their own. `consequences` are the lines the confirmation's
+ * consequence text adds while the options are ticked. A lookup that failed, so that the daemon could not say what else
+ * goes, is a mark after the Trash option's label instead; where it is a missing Git its popover also holds Try again,
+ * whose success (or a retry ending in a lost connection) takes that mark away, so focus it held goes to the Trash
+ * checkbox, and whose failure in the same words is spoken again. A branch a locked worktree has checked out goes only
+ * with it. `pending` holds Confirm while the answer is on its way. `choices` carries the token of a refusal that a
+ * path that could not be resolved decided, for the removal to repeat it, or of an answer that held worktrees back, for
+ * the removal to leave them too. */
 export function useProjectRemovalCleanup(projectId: string, trash: boolean, setTrash: (trash: boolean) => void): {
   choices: ReturnType<typeof branchChoices> & { inspection?: string };
   pending: boolean;
@@ -176,6 +196,8 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
   const t = useT();
   const rows = useRows();
   const trashId = useId();
+  const markId = useId();
+  const handoffFrom = useHandoffAfterRemoval(() => document.getElementById(trashId)?.querySelector("input"));
   const found = useProjectRemovalBranches(projectId, trash);
   const locked = lockedWorktrees(found.items);
   const [removeLocked, setRemoveLocked] = useChoiceOver(locked);
@@ -185,6 +207,21 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
   const trashed = found.items.filter((item) => item.kind === "worktree" && item.state !== "locked" && !isProjectFolderUnknown(item));
   const deleted = found.items.filter((item) => item.kind === "branch" && !keptBranches.has(`${item.repository}:${item.branch}`));
   const along = [...trashed, ...deleted];
+  // A missing Git says so, with the link to get it and Try again, which asks what goes along again.
+  const failure = found.error === undefined ? undefined : classifyError(found.error);
+  const gitMissing = failure?.kind === "actionable" && failure.recovery === "installGit" ? found.error : undefined;
+  const unknownMark = gitMissing !== undefined
+    ? (
+      <>
+        {/* The check answers as a retry succeeds or the connection is lost; focus the mark or its popover held goes to
+            the Trash option. */}
+        {handoffFrom(`[data-status-mark-id="${markId}"]`)}
+        <RetryStatusMark markId={markId} tone="warning" label={t("dialog.removeProject.alongUnknownMark")} error={gitMissing} onRetry={found.reinspect} retrying={found.pending}>
+          <p>{t("dialog.removeProject.alongUnknown")}</p>
+        </RetryStatusMark>
+      </>
+    )
+    : <StatusMark tone="warning" label={t("dialog.removeProject.alongUnknownMark")}>{t("dialog.removeProject.alongUnknown")}</StatusMark>;
   return {
     // The branches go only as listed, at the commits shown, so they are named back with the locked worktrees forced.
     choices: { ...branchChoices(trash ? [...(removeLocked ? locked : []), ...deleted] : []), ...(trash && found.inspection ? { inspection: found.inspection } : {}) },
@@ -202,8 +239,9 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
         <div className="flex flex-col gap-2">
           <div id={trashId}>
             <ConfirmOption isSelected={trash} onChange={setTrash} label={t("dialog.removeProject.trash")} hint={<Message id="dialog.removeProject.trashHint" />}
-              mark={trash && found.failed ? <StatusMark tone="warning" label={t("dialog.removeProject.alongUnknownMark")}>{t("dialog.removeProject.alongUnknown")}</StatusMark> : undefined} />
+              mark={trash && found.failed ? unknownMark : undefined} />
           </div>
+          <DelayedAnnouncer text={trash && gitMissing !== undefined && !found.pending ? t("dialog.removeProject.alongUnknown") : undefined} />
           <KeepFocusInDialog>
             {trash && along.length > 0 && (
               <div className="ps-7">

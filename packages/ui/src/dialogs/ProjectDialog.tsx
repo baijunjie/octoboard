@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useState } from "react";
+import React, { useId, useMemo, useRef, useState } from "react";
 
 import { orderedAccounts } from "../accounts/accountOrder";
 import { accountDisabled } from "../accounts/choiceEntries";
@@ -9,6 +9,7 @@ import { providerLabel } from "../agents/providers";
 import { agentIconPickerOptions, AgentIcon } from "../components/icons/AgentIcon";
 import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { FailureAlert } from "../components/alerts/FailureAlert";
+import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { HelpTip } from "../components/hint/HelpTip";
 import { InlineReference } from "../i18n/InlineReference";
 import { changedGitWorkflowItems, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
@@ -129,7 +130,7 @@ export function ProjectDialog({
   // A single directory's agent is read as its path is entered, a git remote's by probing it, which
   // also checks the remote can be read. A parent directory has no pre-read: each repository found
   // is detected on adding.
-  const detection = useDetectedAgent(
+  const { detection, retry: retryDetection } = useDetectedAgent(
     request,
     editing
       ? undefined
@@ -145,6 +146,10 @@ export function ProjectDialog({
   // entered now has arrived: a failure keeps them locked, and a git URL is asked about from the
   // first character, so it stays locked while empty too.
   const detectionAlertId = useId();
+  // A retry of the remote's check that succeeds takes the alert, and the Try again focused in it, away: focus goes
+  // back to the Repository URL, the field the alert was about.
+  const urlFieldRef = useRef<HTMLDivElement>(null);
+  const urlFieldHandoff = useFocusHandoff(() => urlFieldRef.current?.querySelector("input")?.focus());
   const directoryDescriptionId = useId();
   const directoryDescription = source === "local" ? detection.status === "checking" ? t("dialog.project.pathChecking")
     : detection.status === "ready" && detection.directoryExists === false ? t("dialog.project.createEmptyHint") : undefined : undefined;
@@ -152,8 +157,18 @@ export function ProjectDialog({
   const locationProblem = source === "local" && detection.status === "failed" && typeof detection.error !== "string" && LOCATION_PROBLEMS.has(detection.error.code) ? detection.error : undefined;
   const detectionAlert = detection.status === "failed" && !locationProblem ? (
     // A lookup the form makes on its own that could not run, so its failure is an Alert directly under the field
-    // it is about, which describes that field.
-    <FailureAlert id={detectionAlertId} announce title={t("dialog.project.detectFailedTitle")} message={detection.error} />
+    // it is about, whose text describes that field. Where the lookup is a git remote's, Try again asks it again as a
+    // person (`useDetectedAgent`): the typed lookups keep to the daemon's cached look for a `git`, so one installed
+    // since is found only by this.
+    <FailureAlert
+      textId={detectionAlertId}
+      announce
+      title={t("dialog.project.detectFailedTitle")}
+      message={detection.error}
+      onRetry={source === "git" ? retryDetection : undefined}
+      pending={detection.retrying}
+      attempt={detection.attempt}
+    />
   ) : undefined;
   const locked = !editing && (source === "git" ? detection.status !== "ready" : detection.status === "checking" || detection.status === "failed");
 
@@ -272,7 +287,7 @@ export function ProjectDialog({
       >
         {!editing && <OptionSelect label={t("dialog.project.source")} options={SOURCE_OPTIONS.map((option) => ({ ...option, label: t(option.label) }))} value={source} onChange={changeSource} />}
         {!editing && source === "git" && (
-          <div className="flex flex-col gap-2">
+          <div ref={urlFieldRef} className="flex flex-col gap-2" {...urlFieldHandoff}>
             <TextInput
               label={t("dialog.project.repositoryUrl")}
               value={remoteUrl}

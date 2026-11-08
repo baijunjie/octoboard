@@ -336,7 +336,17 @@ branches of the project's sessions — and, while the locked box is checked, tha
 to the Trash, uncommitted changes included. When the lookup fails, no line is added: an amber warning mark named that
 the other worktrees are unknown follows the Trash option's label instead, its popover saying that worktrees of the
 repository outside the project folder may be moved to the Trash with it, and its branches deleted permanently; it
-appears without being announced. A removal that would be refused (see "Moving the project folder to the Trash" in
+appears without being announced. When the lookup failed because the user's `git` could not be found (see "Where `git`
+is found" in `docs/product/project-git-status.md`), the mark, named the same, goes on to say that Git is not installed
+or not on `PATH`, with the remedy to install it where sessions run, make sure it is on `PATH` and try again, and its
+popover ends with **Download Git** then **Try again** (see "Recovery and unexpected errors" in
+`docs/product/error-alerts.md`). Try again closes the popover and looks up what goes along again, as a person's request,
+so it finds a Git installed since; the mark stays, its Try again busy and Confirm pending, until the answer arrives.
+This mark is announced: its sentence that worktrees may go along is heard once, as a status that does not interrupt, a
+short moment after it appears, whether as the option is ticked or as a Try again fails again, so each failing retry is
+heard again. When this mark goes — the lookup succeeds, or turns into the plain mark above because it fails for
+another reason or the connection is lost — keyboard focus that was on the mark or in its popover moves to the Trash
+option's checkbox. A removal that would be refused (see "Moving the project folder to the Trash" in
 `docs/product/removing-projects.md`), whether as protected, as shared, or as a failed move because a folder it depends
 on could not be looked at or did not answer in time, lists nothing, adds no line and shows no unknown mark; confirming
 it shows the refusal.
@@ -356,4 +366,10 @@ then shown an error alert, `project_branches_not_determined`, titled "Branches a
 removed project and saying that the worktrees outside its folder, and its branches if the repository stays, were left,
 with the reason under the sentence as a block of code. Its recovery guidance is to open a Terminal in the repository and
 run `git worktree list` and `git branch` to see what was left, then remove what is no longer needed with Git, or leave
-it in place. When the folder's own move fails, the project is not removed and nothing else goes.
+it in place. When the reason is that the user's `git` could not be found (see "Where `git` is found" in
+`docs/product/project-git-status.md`), the sentence says so — Git is not installed or not on `PATH`, so the related
+worktrees and branches could not be determined — and the guidance first asks for Git to be installed where sessions
+run and put on `PATH`, with no step to try again, since the removal is done, then gives the guidance above on what was
+left; the footer offers **Download Git** before the acknowledgement button (see "Recovery and unexpected errors" in
+`docs/product/error-alerts.md`), and the reason is shown as for any other. When the folder's own move fails, the project
+is not removed and nothing else goes.

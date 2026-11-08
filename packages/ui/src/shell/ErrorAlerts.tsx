@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import { recoveryAction } from "../components/alerts/ErrorGuidance";
+import { RecoveryLink, recoveryAction, type RecoveryAction } from "../components/alerts/ErrorGuidance";
 import { alertFailures, errorAlerts } from "../components/alerts/errorAlerts";
 import { useT } from "../i18n/react";
 import { openSettingsFromAnywhere } from "../settings/settingsLauncher";
@@ -11,6 +11,22 @@ import { Dialog } from "../components/dialog/Dialog";
 import { openSessionModelFromAnywhere } from "../dialogs/sessionModelLauncher";
 import { ErrorAlertBody, alertTitle } from "../components/dialog/ErrorAlertBody";
 import { Button, ModalStatusIcon } from "../primitives";
+
+/** The alert's control for its remedy (see `recoveryAction`): a link out, or a button that acknowledges the alert and
+ * opens what the remedy is done in. */
+function RecoveryControl({ action, session }: { action: RecoveryAction; session: string | undefined }): React.ReactElement {
+  switch (action.kind) {
+    case "link": return <RecoveryLink action={action} />;
+    case "sessionModel":
+    case "settings": return (
+      <Button variant="secondary" onPress={() => {
+        errorAlerts.acknowledge();
+        if (action.kind === "settings") openSettingsFromAnywhere("accounts", { addAgent: action.addAgent });
+        else if (session) openSessionModelFromAnywhere(session);
+      }}>{action.label}</Button>
+    );
+  }
+}
 
 /** Mounted outside the application boundary, so an alert raised while the application is not on screen can still be
  * acknowledged. */
@@ -59,7 +75,8 @@ function ErrorAlertHost(): React.ReactElement | null {
   // A button for the remedy when it is the one remedy of every failure the alert is about.
   // Change model needs the session the alert is about; without one there is nothing to open it for.
   const found = error.sharedRecovery ? recoveryAction(t, error.sharedRecovery) : undefined;
-  const action = found?.sessionModel && !error.session ? undefined : found;
+  const session = error.session;
+  const action = found?.kind === "sessionModel" && !session ? undefined : found;
   return (
     <Dialog
       key={error.id}
@@ -72,13 +89,7 @@ function ErrorAlertHost(): React.ReactElement | null {
       topLayerAtMount
       footer={<>
         {unexpected && issue.link}
-        {action && (
-          <Button variant="secondary" onPress={() => {
-            errorAlerts.acknowledge();
-            if (action.sessionModel && error.session) openSessionModelFromAnywhere(error.session);
-            else openSettingsFromAnywhere("accounts", { addAgent: action.addAgent });
-          }}>{action.label}</Button>
-        )}
+        {action && <RecoveryControl action={action} session={session} />}
         <Button ref={acknowledge} variant="danger" onPress={() => errorAlerts.acknowledge()}>{t("error.acknowledge")}</Button>
       </>}
     >

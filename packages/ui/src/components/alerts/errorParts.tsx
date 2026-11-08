@@ -2,11 +2,13 @@ import React from "react";
 
 import { CodedError, type MessageParams } from "../../errors/codedError";
 import { hasCodeParams, hasShellTimeoutDetails, isStructuredFailure, type ErrorPresentation } from "../../errors/errorPresentation";
+import { classifyError } from "../../errors/errorRecovery";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { errorText } from "../../errors/errorText";
 import { isolate } from "../../i18n/isolate";
 import { DaemonErrorMessage, type DaemonErrorPart } from "./DaemonErrorMessage";
 import { hasErrorDetails, hasErrorRemedy, hasRawDetails } from "./errorPartPresence";
+import { RecoveryGuidance } from "./ErrorGuidance";
 
 /** The details of a failure for an alert's Details popover or an empty-state failure's details surface
  * (further explanation, then raw text), or nothing when there is neither. */
@@ -21,9 +23,16 @@ export function rawErrorDetails(error: ErrorPresentation): React.ReactNode {
 }
 
 /** The one main thing to do about a failure, in the application's own words, shown in the alert's
- * description and never behind Details, or nothing when the failure has none. */
+ * description and never behind Details, or nothing when the failure has none. A Git that could not be found has its
+ * remedy from its classification (`classifyError`), its code's record carrying no remedy line of its own, so the
+ * remedy reads the same wherever that failure is shown. */
 export function errorRemedy(error: ErrorPresentation): React.ReactNode {
-  return typeof error !== "string" && hasErrorRemedy(error) ? <DaemonErrorMessage error={error} part="remedy" /> : undefined;
+  if (typeof error === "string") return undefined;
+  if (hasErrorRemedy(error)) return <DaemonErrorMessage error={error} part="remedy" />;
+  const classification = classifyError(error);
+  return classification.kind === "actionable" && (classification.recovery === "installGit" || classification.recovery === "installGitNoRetry")
+    ? <RecoveryGuidance recovery={classification.recovery} />
+    : undefined;
 }
 
 /** The popover body of a failure mark, which is itself the details surface: the sentence (`summary`, or

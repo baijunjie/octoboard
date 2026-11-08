@@ -24,7 +24,8 @@ use std::time::Duration;
 
 use crate::git::repo_files::repository_of;
 use crate::git::run::{Limits, Policy, Runner};
-use crate::protocol::Project;
+use crate::host_tools::{is_git_not_found, Pace};
+use crate::protocol::{error_code, Code, GitStatus, Project};
 use crate::state::AppState;
 
 /// Upper bound on one `git` subprocess other than a push (`fetch`, `status`, `merge`).
@@ -51,16 +52,65 @@ const GIT_PUSH_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 /// which `git` sends to stderr, the `pre-push` hook's included, is what a failed push reports.
 pub(crate) const PUSH_LIMITS: Limits = Limits::deadline(GIT_PUSH_TIMEOUT);
 
-/// The `git` of a project's own repository: the user's own, as the host tools hand it out (the
-/// stand-in a test puts in its place), under the plain policy and [`LIMITS`].
+/// The `git` of a project's own repository: the user's own, as the host tools hand it out for
+/// `pace` (the stand-in a test puts in its place), under the plain policy and [`LIMITS`]. One that
+/// cannot be found is `binary_not_found`, kept as it is: a reply carries it with its code, and a
+/// `GitStatus` records it as its `error_code` ([`StepFailure::no_git`]).
 ///
 /// A failed run's error is the verbatim stderr of `git`, the operating-system message of a failure
 /// to even start it, or a timeout — carried as is, untranslated, into `GitStatus` or the error of
-/// the step that failed; so is the error here, of a `git` that cannot be had at all.
-pub(crate) fn project_git(state: &AppState) -> Result<Runner, String> {
-    (state.host_tools.get().git)()
-        .map(project_runner)
-        .map_err(|err| format!("{err:#}"))
+/// the step that failed.
+pub(crate) fn project_git(state: &AppState, pace: Pace) -> anyhow::Result<Runner> {
+    state.host_tools.get().git_for(pace).map(project_runner)
+}
+
+/// `err`, the failure to have a `git` at all ([`project_git`]), as an action that words its other
+/// failures with `failed` replies it: one that cannot be found keeps `binary_not_found`, which a
+/// client words as Git not being installed, and any other (a shell snapshot that failed or timed
+/// out) is the action's own failure, with the text as its detail.
+pub(crate) fn no_git_or(
+    err: anyhow::Error,
+    failed: impl FnOnce(&str) -> anyhow::Error,
+) -> anyhow::Error {
+    if is_git_not_found(&err) {
+        err
+    } else {
+        failed(&format!("{err:#}"))
+    }
+}
+
+/// Why a step of a project's git work failed, as a `GitStatus` records it: the text, and the code
+/// of a failure a client words itself.
+pub(crate) struct StepFailure {
+    message: String,
+    code: Option<Code>,
+}
+
+impl StepFailure {
+    /// The failure to have a `git` at all ([`project_git`]): `binary_not_found` for one that cannot
+    /// be found, which a client words as Git not being installed.
+    pub(crate) fn no_git(err: &anyhow::Error) -> Self {
+        Self {
+            message: format!("{err:#}"),
+            code: is_git_not_found(err).then_some(error_code::BINARY_NOT_FOUND),
+        }
+    }
+
+    /// Records it on `status` as the last failed step, in place of whatever failure was there.
+    pub(crate) fn record(self, status: &mut GitStatus) {
+        status.error = Some(self.message);
+        status.error_code = self.code;
+    }
+}
+
+/// A step's own failure: `git`'s or the system's text, with no code.
+impl From<String> for StepFailure {
+    fn from(message: String) -> Self {
+        Self {
+            message,
+            code: None,
+        }
+    }
 }
 
 /// Creates a missing directory with an empty repository, leaving existing directories untouched.
@@ -72,8 +122,7 @@ pub(crate) fn create_empty(state: &AppState, path: &Path) -> anyhow::Result<()> 
     if crate::hostfs::directory_exists_or_creatable(path)? {
         return Ok(());
     }
-    let git = project_git(state)
-        .map_err(anyhow::Error::msg)
+    let git = project_git(state, Pace::Person)
         .with_context(|| format!("initializing `{}`", path.display()))?;
     let parent = path
         .parent()

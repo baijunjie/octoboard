@@ -41,7 +41,8 @@ interface StatusMarkProps {
   /** Tells this mark and its popover (which floats outside the mark's own element) from every other mark: both
    * carry it as `data-status-mark-id`, for whatever must act on this mark alone (a focus handoff). */
   markId?: string;
-  /** The popover's last line, the recovery button (Try again), given a function that closes the popover. */
+  /** The popover's last line, the recovery controls (a link out, then Try again), given a function that closes the
+   * popover. */
   actions?: (close: () => void) => React.ReactNode;
 }
 

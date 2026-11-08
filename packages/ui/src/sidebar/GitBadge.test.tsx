@@ -10,7 +10,9 @@ import type { GitStatus } from "../protocol";
 import type { Daemon, State } from "../store";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
-import { ProjectFocusView } from "./FocusView";
+import { windowAttention } from "../components/announce/windowTestSupport";
+import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS, READ_TIME_MS } from "../components/announce/StatusAnnouncer";
+import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { Sidebar } from "./Sidebar";
 import type { SidebarHandlers } from "./types";
@@ -235,6 +237,207 @@ for (const placement of PLACEMENTS) {
     expect(badge.getAttribute("tabindex")).toBeNull();
   });
 }
+
+it("words a check that found no Git as Git missing, with the install remedy and a link to the download page in place of Git's text", () => {
+  const raw = "`git` was not found on PATH in the snapshotted shell environment";
+  const container = renderHeader(gitStatusOf(web.id, { branch: null, upstream: null, error: raw, error_code: "binary_not_found" }));
+  const mark = markOf(container);
+  expect(mark.getAttribute("aria-label")).toBe("Git check failed");
+  act(() => mark.focus());
+  tap(mark, "Enter");
+  const popover = openPopover()!;
+  expect(Array.from(popover.querySelectorAll("p"), (p) => p.textContent)).toEqual([
+    "Git is not installed, or it is not on PATH.",
+    "Install Git in the environment where sessions run and make sure it is on PATH, then try again.",
+  ]);
+  expect(popover.textContent).not.toContain(raw);
+  const link = [...popover.querySelectorAll<HTMLAnchorElement>("a")].find((a) => a.textContent?.includes("Download Git"));
+  expect(link?.getAttribute("href")).toBe("https://git-scm.com/downloads");
+});
+
+it("checks the project again from the Git-missing mark's Try again, after the download link, without pulling", async () => {
+  const { container, request } = mountRetrying((project) => <ProjectFocusView handlers={handlers()} console={main} project={project} sessions={sessions} owners={new Map()} />);
+  const mark = markOf(container);
+  act(() => mark.focus());
+  tap(mark, "Enter");
+  const popover = openPopover()!;
+  const controls = [...popover.querySelectorAll("a, button")].map((control) => control.textContent);
+  expect(controls.slice(-2)).toEqual([expect.stringContaining("Download Git"), "Try again"]);
+  const check = [...popover.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
+  await act(async () => check.click());
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "refresh_project_git_status", project: web.id });
+  expect(openPopover()).toBeNull();
+});
+
+const api = projectOf("p-api", main.id, "API");
+const MISSING = gitStatusOf(web.id, { branch: null, upstream: null, error: "`git` was not found", error_code: "binary_not_found" });
+// A console session with a session of the website bound to it, for its focus mode's group of that project.
+const hub = sessionOf("s-hub", main.id, undefined, "Hub", "idle");
+const retrySessions = [...sessions, hub, sessionOf("web-bound", main.id, web.id, "Bound", "idle", { bound_to: hub.id })];
+
+/** Mounts `view` for the project the test shows (the website at first, `show` switching it without remounting), over
+ * a daemon where both projects' last check found no Git and whose re-checks the test answers, oldest first, with
+ * `answer`. */
+function mountRetrying(view: (project: typeof web) => React.ReactElement) {
+  const answers: Array<(reply: unknown) => void> = [];
+  const request = vi.fn((body: { type: string }) =>
+    body.type === "refresh_project_git_status" ? new Promise((resolve) => answers.push(resolve)) : Promise.resolve({ type: "ack", id: null }),
+  );
+  const daemon = testDaemon({
+    state: { gitStatuses: new Map([[web.id, MISSING], [api.id, { ...MISSING, project: api.id }]]), sessions: new Map(retrySessions.map((session) => [session.id, session])) },
+    request: request as never,
+  });
+  store = daemon.store;
+  let show: (project: typeof web) => void = () => {};
+  let hide: () => void = () => {};
+  function Shown(): React.ReactElement | null {
+    const [project, setProject] = React.useState(web);
+    const [gone, setGone] = React.useState(false);
+    show = setProject;
+    hide = () => setGone(true);
+    return gone ? null : view(project);
+  }
+  const container = mountForTooltip(<TestHost daemon={daemon}><Shown /></TestHost>);
+  const answer = (status: GitStatus | null) => act(async () => answers.shift()!({ type: "project_git_rechecked", id: null, status }));
+  return { container, request, answer, show: (project: typeof web) => act(() => show(project)), hide: () => act(() => hide()) };
+}
+
+/** Presses the Git-missing mark's Try again, then has the check start, which takes the mark away. */
+async function tryAgain(container: HTMLElement, project = web.id): Promise<void> {
+  const mark = markOf(container);
+  act(() => mark.focus());
+  tap(mark, "Enter");
+  const check = [...openPopover()!.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
+  await act(async () => check.click());
+  act(() => store.setState({ gitStatuses: new Map([[project, { ...MISSING, project, activity: "checking" }]]) }));
+}
+
+/** What the badge's placement has spoken through its status region for the Git check, if anything. */
+const spokenOf = (container: HTMLElement): string | undefined =>
+  [...container.querySelectorAll("[role=status]")].map((region) => region.textContent ?? "").find((text) => text.startsWith("Git check failed"));
+
+const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+
+const RETRY_PLACEMENTS = [
+  { name: "a sidebar project row", view: () => <Sidebar {...handlers()} projects={[web]} shownConsole={main} open sidebarWidth={sidebarWidth} /> },
+  { name: "focus mode's header", view: (project: typeof web) => <ProjectFocusView handlers={handlers()} console={main} project={project} sessions={sessions} owners={new Map()} /> },
+  {
+    name: "a console session's focus mode",
+    view: (project: typeof web) => <ConsoleSessionFocusView handlers={handlers()} console={main} consoleSession={hub} projects={[project]} sessions={retrySessions} />,
+  },
+];
+
+for (const placement of RETRY_PLACEMENTS) {
+  it(`speaks a Try again that finds no Git again once its answer is in and focus has settled, outside any row's button, on ${placement.name}`, async () => {
+    withFakeTimers();
+    const { container, answer } = mountRetrying(placement.view);
+    advance(FIRST_WRITE_DELAY_MS);
+    await tryAgain(container);
+    act(() => store.setState({ gitStatuses: new Map([[web.id, MISSING]]) }));
+    await answer(MISSING);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(spokenOf(container)).toBeUndefined();
+    advance(1);
+    expect(spokenOf(container)).toBe("Git check failed");
+    const region = [...container.querySelectorAll("[role=status]")].find((element) => element.textContent === "Git check failed")!;
+    expect(region.closest("[role=button]")).toBeNull();
+    // Emptied once read, since the mark it names is on the screen.
+    advance(READ_TIME_MS);
+    expect(spokenOf(container)).toBeUndefined();
+  });
+}
+
+it("speaks a Try again that fails again in the same words again, each one after focus has settled", async () => {
+  withFakeTimers();
+  const { container, answer } = mountRetrying(RETRY_PLACEMENTS[0].view);
+  advance(FIRST_WRITE_DELAY_MS);
+  for (const spoken of ["Git check failed", "Git check failed\u00A0", "Git check failed"]) {
+    await tryAgain(container);
+    act(() => store.setState({ gitStatuses: new Map([[web.id, MISSING]]) }));
+    await answer(MISSING);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(spokenOf(container)).toBeUndefined();
+    advance(1);
+    expect(spokenOf(container)).toBe(spoken);
+    advance(READ_TIME_MS);
+  }
+});
+
+it("holds a Try again's announcement while the window is not attended, and speaks it once the user is back and focus has settled", async () => {
+  withFakeTimers();
+  const attend = windowAttention();
+  const { container, answer } = mountRetrying(RETRY_PLACEMENTS[0].view);
+  advance(FIRST_WRITE_DELAY_MS);
+  await tryAgain(container);
+  attend(false);
+  await answer(MISSING);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS + READ_TIME_MS);
+  expect(spokenOf(container)).toBeUndefined();
+  attend(true);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(spokenOf(container)).toBeUndefined();
+  advance(1);
+  expect(spokenOf(container)).toBe("Git check failed");
+});
+
+it("schedules nothing for a Try again answered after its placement went away", async () => {
+  withFakeTimers();
+  const { container, answer, hide } = mountRetrying(RETRY_PLACEMENTS[1].view);
+  advance(FIRST_WRITE_DELAY_MS);
+  await tryAgain(container);
+  hide();
+  const timers = vi.getTimerCount();
+  await answer(MISSING);
+  expect(vi.getTimerCount()).toBe(timers);
+});
+
+it("says nothing for a Try again that finds Git, nor for a sweep that finds none, nor for an answer that came too late", async () => {
+  withFakeTimers();
+  const { container, answer } = mountRetrying(RETRY_PLACEMENTS[1].view);
+  advance(FIRST_WRITE_DELAY_MS);
+  // A sweep's check that finds no Git again: no request, so nothing to answer.
+  act(() => store.setState({ gitStatuses: new Map([[web.id, { ...MISSING, activity: "checking" }]]) }));
+  act(() => store.setState({ gitStatuses: new Map([[web.id, MISSING]]) }));
+  advance(AFTER_FOCUS_MOVE_DELAY_MS + READ_TIME_MS);
+  expect(spokenOf(container)).toBeUndefined();
+  // A check that had not ended when the daemon stopped waiting for it.
+  await tryAgain(container);
+  await answer(null);
+  act(() => store.setState({ gitStatuses: new Map([[web.id, MISSING]]) }));
+  advance(AFTER_FOCUS_MOVE_DELAY_MS + READ_TIME_MS);
+  expect(spokenOf(container)).toBeUndefined();
+  // A Try again that finds Git: the badge shows the branch.
+  await tryAgain(container);
+  act(() => store.setState({ gitStatuses: new Map([[web.id, gitStatusOf(web.id)]]) }));
+  await answer(gitStatusOf(web.id));
+  advance(AFTER_FOCUS_MOVE_DELAY_MS + READ_TIME_MS);
+  expect(spokenOf(container)).toBeUndefined();
+  expect(container.querySelector("svg.lucide-git-branch")).not.toBeNull();
+});
+
+it("speaks a Try again only for the project it asked about, in a focus view reused for the next project", async () => {
+  withFakeTimers();
+  const { container, answer, show } = mountRetrying(RETRY_PLACEMENTS[1].view);
+  advance(FIRST_WRITE_DELAY_MS);
+  // The answer arrives once another project is shown.
+  await tryAgain(container);
+  show(api);
+  await answer(MISSING);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS + 1);
+  expect(spokenOf(container)).toBeUndefined();
+  // An announcement waiting for focus to settle, or still in the region, is not carried over, nor back.
+  show(web);
+  act(() => store.setState({ gitStatuses: new Map([[web.id, MISSING]]) }));
+  await tryAgain(container);
+  act(() => store.setState({ gitStatuses: new Map([[web.id, MISSING]]) }));
+  await answer(MISSING);
+  show(api);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS + 1);
+  expect(spokenOf(container)).toBeUndefined();
+  show(web);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS + 1);
+  expect(spokenOf(container)).toBeUndefined();
+});
 
 it("keeps a clipped branch's end in view and a detached commit id's start, also when a branch gives way to a commit id", () => {
   stubOverflow();

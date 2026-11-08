@@ -5,9 +5,10 @@ use std::path::Path;
 
 use crate::git::layout::is_git_repo;
 use crate::git::run::WorkDir;
+use crate::host_tools::Pace;
 use crate::platform::names;
 use crate::project_git::header;
-use crate::project_git::project_git;
+use crate::project_git::{no_git_or, project_git};
 use crate::protocol::{error_code, CodedError, Project};
 use crate::state::AppState;
 use crate::wire_path::RelPath;
@@ -21,7 +22,7 @@ pub fn switch_branch(state: &AppState, project: &Project, branch: &str) -> anyho
             &[("project", &project.id)],
         ));
     }
-    let git = project_git(state).map_err(|detail| failed(&detail))?;
+    let git = project_git(state, Pace::Person).map_err(|err| no_git_or(err, failed))?;
     // A switch can fetch from the promisor remote of a partial clone, so it runs the user's ssh
     // as a fetch does. A switch is a user action, so the one read of the configuration costs
     // nothing a sweep would feel.

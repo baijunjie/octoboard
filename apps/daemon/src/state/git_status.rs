@@ -8,6 +8,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
+use tokio::sync::oneshot;
+
 use super::AppState;
 use crate::protocol::{Event, GitActivity, GitStatus};
 use crate::time::now_millis;
@@ -23,6 +25,7 @@ fn blank_git_status(project_id: &str) -> GitStatus {
         behind: 0,
         activity: GitActivity::Idle,
         error: None,
+        error_code: None,
     }
 }
 
@@ -81,11 +84,25 @@ impl Drop for GitPushActivity<'_> {
 pub(super) struct GitCheck {
     /// Still waiting for a place to run, as a sweep's check does; false once it runs.
     queued: bool,
-    /// A manual pull (`pull_project_branch`) arrived while the check was queued or running: a
-    /// queued check then runs forced from the start, a running one is owed one forced rerun.
-    rerun_owed: bool,
-    /// Woken when a manual pull finds the check queued.
+    /// The check a request that arrived while the check was queued or running is owed: a queued
+    /// check then starts at once as that check, a running one runs it once more before letting go.
+    owed: Option<OwedCheck>,
+    /// The re-check requests (`refresh_project_git_status`) waiting for the end of the owed check,
+    /// each answered with the status it ends with.
+    waiting: Vec<oneshot::Sender<GitStatus>>,
+    /// Woken when a manual pull or a re-check finds the check queued.
     promote: Arc<tokio::sync::Notify>,
+}
+
+/// The check a request owes the holder of a project's claim, once its current check ends (or at
+/// once, if it is still waiting for a place). Both look for a `git` that cannot be found once more;
+/// a pull, which also fast-forwards, covers a re-check, hence the order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum OwedCheck {
+    /// A re-check (`refresh_project_git_status`).
+    Recheck,
+    /// A manual pull (`pull_project_branch`).
+    Pull,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -102,51 +119,63 @@ pub struct GitCheckClaim {
     state: Arc<AppState>,
     project_id: String,
     promote: Arc<tokio::sync::Notify>,
+    /// The re-check requests the holder's next check answers ([`Self::answer`]); dropped
+    /// unanswered with the claim, which ends their wait without a status.
+    answering: Vec<oneshot::Sender<GitStatus>>,
     released: bool,
 }
 
 impl GitCheckClaim {
-    /// Resolves when a manual pull finds this claim still queued, for the holder to stop waiting
-    /// for a place and run at once.
+    /// Resolves when a manual pull or a re-check finds this claim still queued, for the holder to
+    /// stop waiting for a place and run at once.
     pub async fn promoted(&self) {
         self.promote.notified().await;
     }
 
-    /// Marks a queued claim as running, for the holder that has stopped waiting, and returns
-    /// whether a manual pull arrived meanwhile, in which case the check runs forced and owes no
-    /// rerun for that request. Done under the lock the request is marked under, so one arriving
-    /// after this is owed a rerun instead.
-    pub fn start(&mut self) -> bool {
+    /// Marks a queued claim as running, for the holder that has stopped waiting, and returns the
+    /// check a request that arrived meanwhile is owed, which the check then runs as, owing no rerun
+    /// for it; the re-checks waiting for it are answered by this check. Done under the lock
+    /// requests are marked under, so one arriving after this is owed a rerun instead.
+    pub fn start(&mut self) -> Option<OwedCheck> {
         let mut checks = self
             .state
             .git_checks
             .lock()
             .expect("git check lock poisoned");
-        let Some(check) = checks.get_mut(&self.project_id) else {
-            return false;
-        };
+        let check = checks.get_mut(&self.project_id)?;
         check.queued = false;
-        std::mem::take(&mut check.rerun_owed)
+        self.answering.append(&mut check.waiting);
+        check.owed.take()
     }
 
-    /// Releases the claim, unless a manual pull arrived while it was held: then the claim is kept,
-    /// the owed rerun is cleared and `true` is returned, for the holder to run one more check that
-    /// fast-forwards. Done under the lock `claim_git_check_forced` marks it under, so a request is
-    /// either seen here or finds the project unclaimed.
-    pub fn release_unless_rerun_owed(&mut self) -> bool {
+    /// Releases the claim, unless a request arrived while it was held: then the claim is kept and
+    /// the check that request is owed is returned, for the holder to run once more, and the
+    /// re-checks waiting for it are answered by that run. Done under the lock requests are marked
+    /// under, so a request is either seen here or finds the project unclaimed.
+    pub fn release_unless_rerun_owed(&mut self) -> Option<OwedCheck> {
         let mut checks = self
             .state
             .git_checks
             .lock()
             .expect("git check lock poisoned");
         if let Some(check) = checks.get_mut(&self.project_id) {
-            if std::mem::take(&mut check.rerun_owed) {
-                return true;
+            if let Some(owed) = check.owed.take() {
+                self.answering.append(&mut check.waiting);
+                return Some(owed);
             }
         }
         checks.remove(&self.project_id);
         self.released = true;
-        false
+        None
+    }
+
+    /// Answers the re-check requests this check was run for with `status`, the status it ended
+    /// with.
+    pub fn answer(&mut self, status: &GitStatus) {
+        for waiting in self.answering.drain(..) {
+            // A request that stopped waiting has nothing left to answer.
+            let _ = waiting.send(status.clone());
+        }
     }
 }
 
@@ -165,8 +194,8 @@ impl AppState {
     /// returned guard is dropped, so a wedged step cannot leave its project excluded from every
     /// later sweep for the rest of the daemon's life. `None` means a check for it is already
     /// running and the caller must not start another. The claim is held from the moment it is
-    /// queued, so another sweep does not queue the project twice, and a manual pull that finds it
-    /// still waiting takes it over instead of waiting behind the sweep (see
+    /// queued, so another sweep does not queue the project twice, and a manual pull or a re-check
+    /// that finds it still waiting takes it over instead of waiting behind the sweep (see
     /// [`GitCheckClaim::start`]).
     pub fn claim_git_check_queued(self: &Arc<Self>, project_id: &str) -> Option<GitCheckClaim> {
         self.claim_git_check_with(project_id, GitCheckRequest::Queued)
@@ -182,6 +211,32 @@ impl AppState {
         self.claim_git_check_with(project_id, GitCheckRequest::Forced)
     }
 
+    /// The re-check of `refresh_project_git_status`: a claim for a check that starts at once, when
+    /// the project has none, and the receiver of the status the check that answers the request
+    /// ends with. When a check already holds the claim, nothing is claimed: the holder is owed a
+    /// re-check, which it runs once its current check ends, or at once in its stead while it still
+    /// waits for a place, and that run answers. Owed even to a check that already looks for a
+    /// missing `git` again, which may have looked before the person installed one. The receiver
+    /// gets nothing (its sender dropped) when the check is abandoned: its project removed, a panic.
+    pub fn claim_git_recheck(
+        self: &Arc<Self>,
+        project_id: &str,
+    ) -> (Option<GitCheckClaim>, oneshot::Receiver<GitStatus>) {
+        let (answer, answered) = oneshot::channel();
+        let mut checks = self.git_checks.lock().expect("git check lock poisoned");
+        if let Some(check) = checks.get_mut(project_id) {
+            check.owed = check.owed.max(Some(OwedCheck::Recheck));
+            check.waiting.push(answer);
+            if check.queued {
+                check.promote.notify_one();
+            }
+            return (None, answered);
+        }
+        let mut claim = self.insert_git_check(&mut checks, project_id, false);
+        claim.answering.push(answer);
+        (Some(claim), answered)
+    }
+
     fn claim_git_check_with(
         self: &Arc<Self>,
         project_id: &str,
@@ -190,28 +245,41 @@ impl AppState {
         let mut checks = self.git_checks.lock().expect("git check lock poisoned");
         if let Some(check) = checks.get_mut(project_id) {
             if request == GitCheckRequest::Forced {
-                check.rerun_owed = true;
+                check.owed = Some(OwedCheck::Pull);
                 if check.queued {
                     check.promote.notify_one();
                 }
             }
             return None;
         }
+        Some(self.insert_git_check(&mut checks, project_id, request == GitCheckRequest::Queued))
+    }
+
+    /// Enters `project_id` in the in-flight map `checks`, which the caller holds locked and has
+    /// found without it, and returns the claim to it.
+    fn insert_git_check(
+        self: &Arc<Self>,
+        checks: &mut HashMap<String, GitCheck>,
+        project_id: &str,
+        queued: bool,
+    ) -> GitCheckClaim {
         let promote = Arc::new(tokio::sync::Notify::new());
         checks.insert(
             project_id.to_string(),
             GitCheck {
-                queued: request == GitCheckRequest::Queued,
-                rerun_owed: false,
+                queued,
+                owed: None,
+                waiting: Vec::new(),
                 promote: promote.clone(),
             },
         );
-        Some(GitCheckClaim {
+        GitCheckClaim {
             state: self.clone(),
             project_id: project_id.to_string(),
             promote,
+            answering: Vec::new(),
             released: false,
-        })
+        }
     }
 
     fn release_git_check(&self, project_id: &str) {
@@ -248,12 +316,15 @@ impl AppState {
     /// Records a local re-read of the branch header and broadcasts the result. Only what the read
     /// produced is merged into the held status, under the lock: a read that finished after an
     /// overlapping check or pull published must not bring back that check's older `error` or end
-    /// its `activity`. A failed read records its own `error` and leaves the header as it was. As
-    /// with [`Self::publish_git_status`], a project no longer in the store is dropped instead.
+    /// its `activity`. A failed read records its own `error` and leaves the header as it was. A read
+    /// that succeeded clears a held failure to find `git` at all (`error_code` `binary_not_found`),
+    /// which its own run has just disproved, though no other: those stand until their own step
+    /// succeeds. As with [`Self::publish_git_status`], a project no longer in the store is dropped
+    /// instead.
     pub(crate) fn publish_git_reread(
         &self,
         project_id: &str,
-        header: Result<crate::project_git::header::BranchHeader, String>,
+        header: Result<crate::project_git::header::BranchHeader, crate::project_git::StepFailure>,
     ) {
         if let Ok(None) = self.store.get_project(project_id) {
             self.remove_git_status(project_id);
@@ -269,8 +340,14 @@ impl AppState {
             .or_insert_with(|| blank_git_status(project_id));
         status.repository = true;
         match header {
-            Ok(header) => crate::project_git::header::apply_header(status, header),
-            Err(err) => status.error = Some(err),
+            Ok(header) => {
+                crate::project_git::header::apply_header(status, header);
+                if status.error_code == Some(crate::protocol::error_code::BINARY_NOT_FOUND) {
+                    status.error = None;
+                    status.error_code = None;
+                }
+            }
+            Err(err) => err.record(status),
         }
         let status = status.clone();
         self.broadcast(Event::ProjectGitStatus {
@@ -414,9 +491,10 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
+    use super::blank_git_status;
     use crate::protocol::{Event, GitActivity, GitStatus, SessionStatus};
     use crate::state::test_support::insert_record;
-    use crate::state::AppState;
+    use crate::state::{AppState, OwedCheck};
     use crate::test_support::app_state;
 
     /// A check that panics must still release its project's claim, or a wedged step excludes that
@@ -448,16 +526,18 @@ mod tests {
         assert!(state.claim_git_check_forced("p1").is_none());
         assert!(state.claim_git_check_forced("p1").is_none());
 
-        assert!(
+        assert_eq!(
             claim.release_unless_rerun_owed(),
+            Some(OwedCheck::Pull),
             "the request is handed back"
         );
         assert!(
             state.claim_git_check_queued("p1").is_none(),
             "the claim is still held for the rerun"
         );
-        assert!(
-            !claim.release_unless_rerun_owed(),
+        assert_eq!(
+            claim.release_unless_rerun_owed(),
+            None,
             "owed once, however many asked"
         );
         assert!(
@@ -478,9 +558,10 @@ mod tests {
         tokio::time::timeout(crate::test_support::PATIENCE, claim.promoted())
             .await
             .expect("the queued claim is woken");
-        assert!(claim.start(), "it runs forced");
-        assert!(
-            !claim.release_unless_rerun_owed(),
+        assert_eq!(claim.start(), Some(OwedCheck::Pull), "it runs forced");
+        assert_eq!(
+            claim.release_unless_rerun_owed(),
+            None,
             "the request is not owed a second run"
         );
         assert!(state.claim_git_check_queued("p1").is_some());
@@ -492,9 +573,96 @@ mod tests {
     fn a_manual_pull_after_a_queued_check_started_is_owed_a_rerun() {
         let (state, _dir) = app_state("state-git-claim-started");
         let mut claim = state.claim_git_check_queued("p1").expect("the first claim");
-        assert!(!claim.start(), "nothing asked yet");
+        assert_eq!(claim.start(), None, "nothing asked yet");
         assert!(state.claim_git_check_forced("p1").is_none());
-        assert!(claim.release_unless_rerun_owed());
+        assert_eq!(claim.release_unless_rerun_owed(), Some(OwedCheck::Pull));
+    }
+
+    /// A re-check of a project nobody is checking claims it, to run at once, and is answered by
+    /// that check.
+    #[test]
+    fn a_recheck_of_an_unclaimed_project_runs_it_and_is_answered_by_it() {
+        let (state, _dir) = app_state("state-git-recheck-unclaimed");
+        let (claim, mut answered) = state.claim_git_recheck("p1");
+        let mut claim = claim.expect("the project was free");
+        assert!(state.claim_git_check_queued("p1").is_none(), "it runs");
+        assert_eq!(claim.start(), None, "already running, nothing owed");
+        claim.answer(&blank_git_status("p1"));
+        assert_eq!(answered.try_recv().unwrap().project, "p1");
+        assert_eq!(claim.release_unless_rerun_owed(), None);
+        assert!(state.claim_git_check_queued("p1").is_some());
+    }
+
+    /// A re-check that finds a check running is owed a rerun, answered by that rerun rather than
+    /// by the check it found, however many re-checks asked.
+    #[test]
+    fn a_recheck_during_a_running_check_is_answered_by_the_rerun_it_is_owed() {
+        let (state, _dir) = app_state("state-git-recheck-running");
+        let mut claim = state.claim_git_check_queued("p1").expect("the first claim");
+        assert_eq!(claim.start(), None);
+        let (none, mut first) = state.claim_git_recheck("p1");
+        assert!(none.is_none());
+        let (_, mut second) = state.claim_git_recheck("p1");
+
+        claim.answer(&blank_git_status("p1"));
+        assert!(first.try_recv().is_err(), "not by the check it found");
+        assert_eq!(claim.release_unless_rerun_owed(), Some(OwedCheck::Recheck));
+        claim.answer(&GitStatus {
+            branch: Some("main".to_string()),
+            ..blank_git_status("p1")
+        });
+        for answered in [&mut first, &mut second] {
+            assert_eq!(answered.try_recv().unwrap().branch.as_deref(), Some("main"));
+        }
+        assert_eq!(claim.release_unless_rerun_owed(), None, "owed once");
+    }
+
+    /// A re-check that finds a sweep's check still waiting for a place takes it over, as a pull
+    /// does, and is answered by it.
+    #[tokio::test]
+    async fn a_recheck_promotes_a_queued_check_and_is_answered_by_it() {
+        let (state, _dir) = app_state("state-git-recheck-queued");
+        let mut claim = state.claim_git_check_queued("p1").expect("the first claim");
+        let (_, mut answered) = state.claim_git_recheck("p1");
+        tokio::time::timeout(crate::test_support::PATIENCE, claim.promoted())
+            .await
+            .expect("the queued claim is woken");
+        assert_eq!(claim.start(), Some(OwedCheck::Recheck));
+        claim.answer(&blank_git_status("p1"));
+        assert!(answered.try_recv().is_ok());
+        assert_eq!(claim.release_unless_rerun_owed(), None);
+    }
+
+    /// A pull covers a re-check: both asked during one check are owed one rerun, a pull, which
+    /// answers the re-check.
+    #[test]
+    fn a_pull_and_a_recheck_during_one_check_are_owed_one_pull() {
+        let (state, _dir) = app_state("state-git-recheck-and-pull");
+        let mut claim = state.claim_git_check_queued("p1").expect("the first claim");
+        assert_eq!(claim.start(), None);
+        let (_, mut answered) = state.claim_git_recheck("p1");
+        assert!(state.claim_git_check_forced("p1").is_none());
+        let (_, mut later) = state.claim_git_recheck("p1");
+        assert_eq!(claim.release_unless_rerun_owed(), Some(OwedCheck::Pull));
+        claim.answer(&blank_git_status("p1"));
+        assert!(answered.try_recv().is_ok() && later.try_recv().is_ok());
+        assert_eq!(claim.release_unless_rerun_owed(), None);
+    }
+
+    /// A check abandoned with re-checks waiting on it (its project removed, a panic) ends their
+    /// wait without a status rather than leaving them waiting.
+    #[test]
+    fn a_dropped_claim_ends_the_wait_of_the_rechecks_it_owed() {
+        let (state, _dir) = app_state("state-git-recheck-dropped");
+        let (claim, mut own) = state.claim_git_recheck("p1");
+        let (_, mut owed) = state.claim_git_recheck("p1");
+        drop(claim);
+        for answered in [&mut own, &mut owed] {
+            assert!(matches!(
+                answered.try_recv(),
+                Err(tokio::sync::oneshot::error::TryRecvError::Closed)
+            ));
+        }
     }
 
     #[test]
@@ -582,6 +750,96 @@ mod tests {
         assert_eq!(state.git_statuses()[0].activity, GitActivity::Pushing);
         drop(first);
         assert_eq!(state.git_statuses()[0].activity, GitActivity::Idle);
+    }
+
+    #[test]
+    fn a_push_a_switch_or_a_restore_without_git_is_refused_as_git_not_found() {
+        let (state, _dir) = app_state("state-git-push-no-git");
+        let repo = crate::test_support::repo_with("state-git-push-no-git-repo", &[(b"f", b"one")]);
+        let project = git_project(&state, &repo);
+        state.host_tools.replace(crate::host_tools::Tools {
+            git: crate::test_support::git_not_found,
+            fresh_git: crate::test_support::git_not_found,
+            ..state.host_tools.get()
+        });
+        let pushed = crate::project_git::push::push_current_branch(&state, &project);
+        let switched = crate::project_git::switch::switch_branch(&state, &project, "main");
+        let restored = crate::project_git::restore::restore_project(&state, &project);
+        for err in [
+            pushed.unwrap_err(),
+            switched.unwrap_err(),
+            restored.unwrap_err(),
+        ] {
+            let (code, params, _) = crate::protocol::error_parts(&err);
+            assert_eq!(code, crate::protocol::error_code::BINARY_NOT_FOUND);
+            assert_eq!(params["binary"], "git");
+        }
+    }
+
+    /// Any other failure to have a `git` (a login shell that timed out) is the push's or the
+    /// switch's own failure, as before a missing `git` had a code of its own, and takes no fresh
+    /// snapshot.
+    #[test]
+    fn a_push_or_a_switch_whose_git_cannot_be_had_fails_as_the_action() {
+        let (state, _dir) = app_state("state-git-push-shell-failed");
+        let repo =
+            crate::test_support::repo_with("state-git-push-shell-failed-repo", &[(b"f", b"one")]);
+        let project = git_project(&state, &repo);
+        state.host_tools.replace(crate::host_tools::Tools {
+            git: || anyhow::bail!("the login shell timed out"),
+            fresh_git: || unreachable!("a fresh snapshot for another failure"),
+            ..state.host_tools.get()
+        });
+        let pushed = crate::project_git::push::push_current_branch(&state, &project);
+        let switched = crate::project_git::switch::switch_branch(&state, &project, "main");
+        for (err, expected) in [
+            (
+                pushed.unwrap_err(),
+                crate::protocol::error_code::GIT_PUSH_FAILED,
+            ),
+            (
+                switched.unwrap_err(),
+                crate::protocol::error_code::GIT_SWITCH_FAILED,
+            ),
+        ] {
+            let (code, params, _) = crate::protocol::error_parts(&err);
+            assert_eq!(code, expected);
+            assert!(params["detail"].contains("timed out"));
+        }
+    }
+
+    #[test]
+    fn a_reread_records_a_missing_git_with_its_code_until_one_runs() {
+        let (state, dir) = app_state("state-git-reread-no-git");
+        let project = git_project(&state, &dir);
+        state.publish_git_status(git_reading());
+        let tools = state.host_tools.get();
+        state.host_tools.replace(crate::host_tools::Tools {
+            git: crate::test_support::git_not_found,
+            ..tools
+        });
+        crate::project_git::header::publish_reread(&state, &project);
+        let status = state.git_statuses().pop().unwrap();
+        assert_eq!(
+            status.error_code,
+            Some(crate::protocol::error_code::BINARY_NOT_FOUND)
+        );
+        assert_eq!(status.branch.as_deref(), Some("main"));
+
+        let header = || {
+            Ok(crate::project_git::header::BranchHeader {
+                branch: Some("main".to_string()),
+                ..Default::default()
+            })
+        };
+        state.publish_git_reread("p1", header());
+        let status = state.git_statuses().pop().unwrap();
+        assert_eq!((status.error, status.error_code), (None, None));
+        // A failure of a step that ran `git` stands until that step succeeds.
+        state.publish_git_status(git_reading());
+        state.publish_git_reread("p1", header());
+        let status = state.git_statuses().pop().unwrap();
+        assert_eq!(status.error.as_deref(), Some("fetch failed"));
     }
 
     #[test]
@@ -674,6 +932,7 @@ mod tests {
             behind: 0,
             activity: crate::protocol::GitActivity::Idle,
             error: None,
+            error_code: None,
         });
         assert!(state.git_statuses().is_empty());
     }
@@ -698,6 +957,7 @@ mod tests {
             behind: 0,
             activity: crate::protocol::GitActivity::Idle,
             error: None,
+            error_code: None,
         });
         assert!(state.git_statuses().is_empty());
         assert!(state.git_check_completed_at("ghost").is_none());
@@ -719,6 +979,7 @@ mod tests {
             behind: 1,
             activity: GitActivity::Idle,
             error: Some("fetch failed".to_string()),
+            error_code: None,
         }
     }
 }

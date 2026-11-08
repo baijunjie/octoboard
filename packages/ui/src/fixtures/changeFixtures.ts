@@ -83,6 +83,9 @@ export interface FixtureGit {
   scope?: string;
   changes: Record<string, FixtureChange[] | FixtureError>;
   gitError?: string;
+  /** The code the daemon gives `gitError` where it has one (`git_error_code`): `binary_not_found` for a `git` it cannot
+   * find. */
+  gitErrorCode?: "binary_not_found";
   branches?: BranchInfo[];
   comparisons?: Record<string, FixtureChange[]>;
   commits?: Record<string, FixtureCommitList>;

@@ -49,12 +49,9 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
 /// so no test runs the user's profile or fills their Trash.
 pub(crate) fn host_tools() -> crate::host_tools::Tools {
     crate::host_tools::Tools {
-        git: || {
-            Ok(crate::git::run::UserGit::new(
-                SYSTEM_GIT,
-                isolated_git_env(),
-            ))
-        },
+        git: system_git,
+        // A fresh snapshot finds the same `git`: no test takes the user's login shell.
+        fresh_git: system_git,
         trash: |path| {
             if path.is_dir() {
                 std::fs::remove_dir_all(path)
@@ -67,6 +64,25 @@ pub(crate) fn host_tools() -> crate::host_tools::Tools {
         shell_env: || Ok(shell_env()),
         scheduled_shell_env: || Ok(shell_env()),
     }
+}
+
+/// The `git` a test's host tools hand out, from the cached snapshot or a fresh one alike:
+/// [`SYSTEM_GIT`] over [`isolated_git_env`].
+pub(crate) fn system_git() -> anyhow::Result<crate::git::run::UserGit> {
+    Ok(crate::git::run::UserGit::new(
+        SYSTEM_GIT,
+        isolated_git_env(),
+    ))
+}
+
+/// A stand-in for [`crate::host_tools::Tools::git`] or `fresh_git` on a machine without `git`: the
+/// refusal `crate::env_shell::resolve_program` gives for one that is not on the `PATH`.
+pub(crate) fn git_not_found() -> anyhow::Result<crate::git::run::UserGit> {
+    Err(crate::protocol::CodedError::raised(
+        crate::protocol::error_code::BINARY_NOT_FOUND,
+        "`git` was not found on PATH in the snapshotted shell environment",
+        &[("binary", "git")],
+    ))
 }
 
 /// The shell a test's shell terminal runs: an interactive `bash` reading no profile on Unix; on

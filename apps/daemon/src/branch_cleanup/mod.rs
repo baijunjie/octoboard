@@ -33,7 +33,7 @@ use std::path::{Path, PathBuf};
 use crate::branch_origin::KeyedGates;
 use crate::git::run::{Policy, Runner};
 use crate::git::worktrees::WORKTREE_GIT_LIMITS;
-use crate::host_tools::Tools;
+use crate::host_tools::{Pace, Tools};
 
 pub mod project;
 pub mod remove;
@@ -48,10 +48,12 @@ mod tests;
 /// gets the setting a second time from its guard, which changes nothing.
 const UNMONITORED: Policy = Policy::new(&["-c", "core.fsmonitor=false"], &[]);
 
-/// The cleanup's `git`: the user's own, as `tools` hands it out, under [`UNMONITORED`] and
-/// [`WORKTREE_GIT_LIMITS`].
-pub(crate) fn cleanup_git(tools: &Tools) -> anyhow::Result<Runner> {
-    (tools.git)().map(|git| Runner::new(git, UNMONITORED, WORKTREE_GIT_LIMITS))
+/// The cleanup's `git`: the user's own, as `tools` hands it out for `pace`, under [`UNMONITORED`]
+/// and [`WORKTREE_GIT_LIMITS`].
+pub(crate) fn cleanup_git(tools: &Tools, pace: Pace) -> anyhow::Result<Runner> {
+    tools
+        .git_for(pace)
+        .map(|git| Runner::new(git, UNMONITORED, WORKTREE_GIT_LIMITS))
 }
 
 /// What `AppState` holds for the cleanup: one gate per repository, which keeps an archive's and a

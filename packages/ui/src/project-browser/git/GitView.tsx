@@ -3,6 +3,7 @@ import React, { useMemo, useState } from "react";
 
 import { CopyButton } from "../../components/controls/CopyButton";
 import { errorDetails, failureParam } from "../../components/alerts/errorParts";
+import { RecoveryGuidance, RecoveryLink, recoveryAction } from "../../components/alerts/ErrorGuidance";
 import { CenteredEmptyPanel } from "../../components/panel/EmptyPanel";
 import { LoadingState } from "../../components/panel/LoadingState";
 import { FailureAlert } from "../../components/alerts/FailureAlert";
@@ -12,13 +13,14 @@ import { PaneFailure } from "../../components/alerts/PaneFailure";
 import { ROW_ICON_BUTTON_CLASS } from "../../components/controls/RowControls";
 import { useHasPainted } from "../../components/motion/useHasPainted";
 import { CodedError } from "../../errors/codedError";
+import { CODE } from "../../errors/codes";
 import { InlineReference } from "../../i18n/InlineReference";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../../components/focus/useFocusHandoff";
 import { useStableHandler } from "../../components/hooks/useLatest";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
 import type { ScopeCause } from "../../errors/causes";
-import { retryCanHelp } from "../../errors/errorRecovery";
+import { classifyError, retryCanHelp } from "../../errors/errorRecovery";
 import type { PlainMessageKey, Translate } from "../../i18n/catalog";
 import { isolate } from "../../i18n/isolate";
 import { joinPhrases } from "../../i18n/joinPhrases";
@@ -102,14 +104,31 @@ function GitContent(props: { source: SourceState } & ChangesViewProps): React.Re
   const t = useT();
   const { source, onRetry } = props;
   const diagnostic = source.state === "loaded" ? source.source.git_error ?? undefined : undefined;
-  const failure = useMemo(() => diagnostic === undefined ? undefined : new CodedError(diagnostic, "git_unavailable", { detail: diagnostic }), [diagnostic]);
+  // A Git that cannot be found is worded as Git missing, with its install remedy as text and the link to the download
+  // page before Try again, which looks for it again; any other failure is Git unable to read the repository.
+  const gitMissing = source.state === "loaded" && source.source.git_error_code === CODE.binary_not_found;
+  const failure = useMemo(
+    () => diagnostic === undefined ? undefined : gitMissing ? new CodedError(diagnostic, CODE.binary_not_found, { binary: "git" }) : new CodedError(diagnostic, "git_unavailable", { detail: diagnostic }),
+    [diagnostic, gitMissing],
+  );
   const painted = useHasPainted();
   if (source.state === "loading") return <LoadingState label={t("git.loading")} />;
   if (source.state === "error") return <PaneFailure title={t("git.error.source")} message={source.message} announce={painted} onRetry={onRetry} />;
   const git = source.source.git;
   if (!git) {
+    // The remedy and its link come from what the failure classifies as, its code's record, so a missing Git reads
+    // the same here as wherever else that code is shown.
+    const classified = gitMissing && failure ? classifyError(failure) : undefined;
+    const recovery = classified?.kind === "actionable" ? classified.recovery : undefined;
     return failure ? (
-      <PaneFailure title={UNAVAILABLE_TITLE} message={failure} announce={painted} />
+      <PaneFailure
+        title={UNAVAILABLE_TITLE}
+        message={failure}
+        remedy={recovery && <RecoveryGuidance recovery={recovery} />}
+        linkAction={recovery && <RecoveryLink action={recoveryAction(t, recovery)} size="sm" />}
+        announce={painted}
+        onRetry={gitMissing ? onRetry : undefined}
+      />
     ) : (
       <CenteredEmptyPanel icon={GitFork} message={<Message id="git.notARepository" />} />
     );

@@ -91,7 +91,8 @@ export function ProjectBrowser({
     files.openFile(path, fragment);
   };
 
-  const refresh = () => (mode === "files" ? files.refresh() : git.refresh());
+  // `askedByPerson` for the Refresh button and Try again, not for the refresh a branch change brings.
+  const refresh = (askedByPerson = false) => (mode === "files" ? files.refresh() : git.refresh(askedByPerson));
 
   const branch = useDaemonStore((state) => {
     const status = state.gitStatuses.get(project.id);
@@ -110,7 +111,7 @@ export function ProjectBrowser({
   const [spinning, setSpinning] = useState(0);
   const pressRefresh = () => {
     setSpinning((n) => n + 1);
-    void Promise.all([refresh(), new Promise((resolve) => setTimeout(resolve, MIN_SPIN_MS))]).finally(() => setSpinning((n) => n - 1));
+    void Promise.all([refresh(true), new Promise((resolve) => setTimeout(resolve, MIN_SPIN_MS))]).finally(() => setSpinning((n) => n - 1));
   };
 
   return (
@@ -165,7 +166,7 @@ export function ProjectBrowser({
                   // The failure and its button go as the request starts again; focus on it moves to
                   // the header's Refresh, which stays.
                   handFocusOff(from, refreshRef.current, true);
-                  refresh();
+                  refresh(true);
                 }}
               />
             </RowPathScope.Provider>

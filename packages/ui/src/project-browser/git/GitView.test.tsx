@@ -112,6 +112,38 @@ it("retains source Git stderr as structured diagnostics in the pane, which opens
 });
 
 
+it("words a repository with no Git to read it as Git missing, with the install remedy as text, the download link and Try again", () => {
+  const raw = "`git` was not found on PATH in the snapshotted shell environment";
+  const onRetry = vi.fn();
+  const container = mountRows(
+    <GitView
+      source={{ state: "loaded", source: { ...source("/r", "/r"), git: null, git_error: raw, git_error_code: "binary_not_found" }, sentAt: 0 }}
+      branches={{ state: "loading" }}
+      branch={undefined}
+      onBranchChange={() => {}}
+      uncommitted={{ state: "none" }}
+      committed={{ state: "none" }}
+      items={[]}
+      selectedChange={undefined}
+      onOpen={() => {}}
+      onRetry={onRetry}
+      listRef={() => {}}
+      selectorsRef={{ current: null }}
+      changeView={changeViewFixture()}
+      selectedSessionId={undefined}
+    />,
+  );
+  const panel = container.querySelector('[data-slot="empty-state"]')!;
+  expect(panel.textContent).toContain("Git review unavailable");
+  expect(panel.textContent).toContain("Git is not installed, or it is not on PATH.");
+  expect(panel.textContent).toContain("Install Git in the environment where sessions run and make sure it is on PATH, then try again.");
+  // The download page is linked before Try again, which is last.
+  expect(panel.querySelector("a")!.getAttribute("href")).toBe("https://git-scm.com/downloads");
+  expect([...panel.querySelectorAll("a, button")].map((control) => control.textContent)).toEqual([expect.stringContaining("Download Git"), "Try again"]);
+  press([...panel.querySelectorAll("button")].find((button) => button.textContent === "Try again")!);
+  expect(onRetry).toHaveBeenCalledTimes(1);
+});
+
 it("keeps a pending comparison rich in visible prose and isolated plain text in its announcement", async () => {
   const branch = "feature/مراجعة-中文(2)";
   const base = "origin/أساس-中文(1)";

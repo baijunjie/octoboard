@@ -62,6 +62,7 @@ export const REPLY_TYPES = {
   update_settings: "ack",
   refresh_git_status: "ack",
   pull_project_branch: "ack",
+  refresh_project_git_status: "project_git_rechecked",
   create_shell_terminal: "shell_terminal_created",
   rename_shell_terminal: "ack",
   close_shell_terminal: "ack",

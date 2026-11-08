@@ -36,7 +36,13 @@ What it holds, in this order:
   reported an error the last time the project's repository was checked or pulled, then that Octoboard checks it again on
   its own and that an error that does not go away is to be resolved in the repository with Git, and last, as raw text in
   a block of its own, the message `git` or the operating system itself gave. That message is shown nowhere else: not in
-  the badge's tooltip and not in any name. The two sentences are the same for every failure. A press on the mark on a
+  the badge's tooltip and not in any name. The two sentences are the same for every failure but one: a check that found
+  no `git` at all (see "Where `git` is found" below). Its popover words that failure as an error alert does (see "Recovery
+  and unexpected errors" in `docs/product/error-alerts.md`) — Git is not installed or not on `PATH`, then the remedy to
+  install it where sessions run, make sure it is on `PATH` and try again — shows no raw text, and ends with two
+  buttons at its trailing edge: **Download Git**, a link in the shape of a button that opens Git's download page,
+  `https://git-scm.com/downloads`, in the browser, then **Try again** (see "Checking again after Git was not found"
+  below). The mark's name is the same as for any other failure. A press on the mark on a
   sidebar row never reaches the row, so it does not fold the project. A failed check does not blank the rest of the
   badge: the branch and the counts are still read from the repository and shown beside the mark; a failed read with no
   branch and no counts shows the mark alone.
@@ -106,6 +112,15 @@ own message. The mark itself is reached on its own, as a button named that the G
 placement the badge is not inside such a row and carries its own name, without the failure, beside the mark's. The badge
 is deliberately not a live region, so a check or push starting or finishing is not announced.
 
+One outcome is announced: a **Try again** on the mark of a check that found no `git` whose check again finds none (see
+"Checking again after Git was not found" below). Assistive technology then hears the mark's name, that the Git check
+failed, once, as a status that does not interrupt, in every placement of the badge. It is said only once the window has
+the user's attention, a short moment after the answer arrives or after the user comes back to the window, and goes by
+the answer to that Try again, not by the statuses broadcast meanwhile. A check that finds `git` says nothing, the badge
+then showing the branch, and so does a check of a round, which no one asked for. Each Try again that fails again is
+heard again, except that a second failing answer arriving before the first has been said may not be heard. An answer
+about another project than the placement now shows, as when focus mode moves to another project, is dropped.
+
 ## When a project is checked
 
 **Only the projects of the current console** — the one the sidebar shows, see "The console switcher" in
@@ -160,6 +175,36 @@ again until its next check, or until its refs change (see "Following changes to 
   stop this read, so the branch and the counts still show.
 - Finally the branch may be pulled; see "Automatically pulling repositories" and "Pulling one project by hand"
   below.
+
+A check that finds no `git` to run (see "Where `git` is found" below) runs none of these steps: it records that failure
+for the badge, with no branch and no counts read, so the badge shows the failure mark alone.
+
+### Checking again after Git was not found
+
+**Try again** in the popover of the failure mark of a check that found no `git` (see "The branch badge" above) closes
+the popover and has that one project checked at once — what a person does after installing Git, without restarting
+anything. It is a check as in "What one check does" above, except that:
+
+- `git` is looked for once more in a fresh capture of the user's environment where the one Octoboard holds finds none
+  (see "Where `git` is found" below);
+- the one-minute floor does not apply, and the check does not wait its turn behind the four at once (see "When a
+  project is checked" above);
+- it shows as in flight at once, without the 0.4-second wait;
+- it **never fast-forwards**, whether or not **Automatically pull repositories** is on.
+
+If a check of the project is already running, nothing starts alongside it: as soon as it ends, one more check runs —
+even when the running one also looked for `git` again, since it may have looked before Git was installed — and that
+later check is the one that answers. If a check of the project is only waiting its turn, in a round or in the pass
+that turning **Automatically pull repositories** on starts (see "Turning the switch on" below), that check starts at
+once in its place and looks for `git` again, fast-forwarding only as the round or the pass would have. Try again and
+Pull current branch requests arriving while one check runs share the one check that follows it, which fast-forwards
+if a Pull current branch was among them.
+
+Try again is answered once the check that answers it has ended, with the status it ended with; that answer is what
+the announcement in "What assistive technology hears" above goes by. An answer that does not come — the check was
+abandoned, as when the project is removed first, or has not ended within ten minutes — announces nothing, and a check
+still running then goes on and shows its result on the badge as any check does. A request that fails is an error alert
+titled that the branch could not be checked.
 
 ### Reading the status from a session
 
@@ -237,7 +282,9 @@ directory is not a repository.
 
 The re-read changes only the branch, its upstream and the counts. It also runs while a check, a pull or a push is in
 flight, and leaves the badge's in-flight indication alone. A failure the last check left stays on the badge, since a
-local read says nothing about the remote. A re-read that fails puts its own message on the badge as the failure, and
+local read says nothing about the remote — except a check that found no `git` at all: a re-read that succeeds has just
+run `git`, so it clears that failure. This holds for every local read of the branch that reaches the badge, the ones a
+push, a branch switch or a restore makes included. A re-read that fails puts its own message on the badge as the failure, and
 the branch and the counts stay as they were. A project with no status yet — never checked, or not since the daemon
 restarted — gets its badge from the re-read.
 
@@ -288,6 +335,39 @@ user's configuration may name (`core.fsmonitor`), and never rewrites the reposit
 the fetch, the fast-forward, the push and its hooks among them, keeps the user's monitor; only restoring file changes
 (see "Restoring file changes" in `docs/product/project-git-actions.md`) and the branch and worktree cleanup turn it off
 for their writes too.
+
+### Where `git` is found
+
+Every `git` Octoboard runs for the user's repositories — this page's, the Git actions', the project pane's Git mode,
+adding and cloning a project, the branch and worktree cleanup — is the one the `PATH` of a capture of the user's
+environment resolves: their login shell's, or on a Windows daemon host the environment built as in "The launch
+environment" in `docs/product/launching-agents.md`. Which capture depends on who is asking:
+
+- **Work that repeats or that no person asked for** uses the capture Octoboard already holds, which may be up to an
+  hour old, a failed one included, and never captures afresh to find `git`, so a `git` that is missing does not cost a
+  login shell on every round. That is the checks of a round, the local re-reads of the branch, the form's check of a
+  git URL as it is typed (see "Associating a project" in `docs/product/projects.md`), the removal of branches and
+  worktrees that follows an archive or a deletion, the project pane's reads repeated while it is on screen, and every
+  tool a session calls.
+- **A request a person makes** looks once more where that capture finds no `git`: it takes a fresh capture and uses
+  the `git` found there. The fresh capture becomes the one Octoboard holds, so the repeating work finds that `git` from
+  then on too. So installing Git, or putting it on `PATH`, and then retrying works without restarting anything. That is
+  **Pull current branch** and **Try again** on the branch badge's failure mark (see "Checking again after Git was not
+  found" above), **Push current branch**, **Switch branch** — the list of branches read as its submenu opens, its Try
+  again, and the switch — and **Restore file changes** (see `docs/product/project-git-actions.md`), adding a single
+  directory that does not exist yet, cloning a git URL and **Try again** on the form's failed check of one (see
+  "Associating a project" in `docs/product/projects.md`; a clone looks first in the capture a session launch would
+  use), the confirmations to archive, delete or hand off sessions and to remove a project as they look up what goes
+  along, the **Try again** of the handoff's and the project removal's marks included, and the removal of a project's folder as it works
+  that out again, and in the project pane's Git mode **Refresh** and **Try again** (see "The repository and its
+  worktrees" in `docs/product/project-pane-git-mode.md`).
+
+A `git` that none of the captures finds is the failure `binary_not_found` naming `git`. It is the error a request is
+refused with, the failure the badge records (see "The branch badge" above), the reason the Git mode gives for Git review
+being unavailable, and the reason a project removal could not work out what went along with its folder (see "With a
+project's folder moved to the Trash" in `docs/product/branch-and-worktree-cleanup.md`). Wherever it is shown, it is
+worded as Git not being installed or not on `PATH` (see "Recovery and unexpected errors" in
+`docs/product/error-alerts.md`).
 
 ## Automatically pulling repositories
 

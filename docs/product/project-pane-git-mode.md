@@ -67,9 +67,14 @@ stopping below the home directory: the home directory is taken for a project's r
 project's own folder.
 
 - A project in no repository says it is not in a Git repository.
-- A repository Git cannot read — `git` not installed or older than 2.36, a repository belonging to another user, a
-  damaged one — shows an empty-state failure headed that Git review is unavailable, with Git's own message under
-  its line and no Try again.
+- A repository Git cannot read — `git` older than 2.36, a repository belonging to another user, a damaged one —
+  shows an empty-state failure headed that Git review is unavailable, with Git's own message under its line and no Try
+  again.
+- With no `git` found at all (see "Where `git` is found" in `docs/product/project-git-status.md`), the failure has the
+  same heading, then the sentence that Git is not installed or not on `PATH` and the remedy to install it where sessions
+  run, make sure it is on `PATH` and try again, with no raw text. Its actions are **Download Git**, a link in the shape
+  of a button that opens Git's download page in the browser, then **Try again** as the primary button. Try again, like
+  the pane's **Refresh**, looks for `git` again, so it finds a Git installed since.
 - Either way the Files mode still works.
 
 The repository's worktrees are every one there is now — not a bare main repository, and not a worktree Git reports as

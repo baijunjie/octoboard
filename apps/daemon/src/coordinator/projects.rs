@@ -201,9 +201,11 @@ pub async fn add_project(
                 None => PathBuf::from(state.store.default_clone_dir()?),
             };
             check_new_project_launch(state, &console, &settings, &accounts, check_launch).await?;
-            let cloned =
-                tokio::task::spawn_blocking(move || project_git::clone::clone_repo(&url, &parent))
-                    .await??;
+            let tools = state.host_tools.get();
+            let cloned = tokio::task::spawn_blocking(move || {
+                project_git::clone::clone_repo(&tools, &url, &parent)
+            })
+            .await??;
             vec![cloned]
         }
     };
@@ -502,7 +504,7 @@ pub(super) async fn delete_project(
         .await?
         {
             Ok(along) => (along, None),
-            Err(err) => (None, Some(format!("{err:#}"))),
+            Err(err) => (None, Some(err)),
         }
     } else {
         (None, None)
@@ -552,17 +554,11 @@ pub(super) async fn delete_project(
     state.broadcast(Event::ProjectDeleted {
         project: id.clone(),
     });
-    if let Some(detail) = undetermined {
-        let failure = CodedError::raised(
-            error_code::PROJECT_BRANCHES_NOT_DETERMINED,
-            format!(
-                "what goes with the project folder could not be determined, so the \
-                 worktrees outside it, and its branches if the repository stays, were \
-                 left: {detail}"
-            ),
-            &[("name", &deleted.name), ("detail", &detail)],
-        );
-        state.broadcast(Event::from_error(None, &failure));
+    if let Some(err) = undetermined {
+        state.broadcast(Event::from_error(
+            None,
+            &branches_not_determined(&deleted.name, &err),
+        ));
     }
     if let Some(along) = along {
         let state = Arc::clone(state);
@@ -578,6 +574,25 @@ pub(super) async fn delete_project(
         });
     }
     Ok(())
+}
+
+/// The `project_branches_not_determined` notice of a removal of the project `name`, whose plan of
+/// what goes along with the folder failed with `err`: `detail` is the whole failure as text, and the
+/// failure itself is nested as `reason_code` with its params, so a client words a missing `git`
+/// (`binary_not_found`) as Git not being installed.
+fn branches_not_determined(name: &str, err: &anyhow::Error) -> anyhow::Error {
+    let detail = format!("{err:#}");
+    CodedError::nesting(
+        error_code::PROJECT_BRANCHES_NOT_DETERMINED,
+        err,
+        &[("name", name), ("detail", &detail)],
+        |_| {
+            format!(
+                "what goes with the project folder could not be determined, so the worktrees \
+                 outside it, and its branches if the repository stays, were left: {detail}"
+            )
+        },
+    )
 }
 
 /// Answers an `inspect_project_removal` request: what removing `project` with its folder would

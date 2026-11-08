@@ -265,6 +265,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
                 ? { repository: "repo", common_dir: `${main.root}/.git`, worktree: own.id, scope, worktrees: git.worktrees }
                 : null,
             git_error: git?.gitError ?? null,
+            ...(git?.gitError && git.gitErrorCode ? { git_error_code: git.gitErrorCode } : {}),
           },
         };
       }

@@ -620,6 +620,12 @@ pub struct GitStatus {
     /// cleared only by that same step succeeding again — a failed fetch does not stop the local
     /// read, so a status can carry both an error and usable numbers.
     pub error: Option<String>,
+    /// The code of the failure `error` describes where the daemon has one, so a client words it
+    /// itself: only `binary_not_found`, for a `git` that cannot be found on the login shell's
+    /// `PATH`. Left out for any other failure, and with no `error`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub error_code: Option<super::codes::Code>,
 }
 
 /// Whether a shell terminal's shell is still running.

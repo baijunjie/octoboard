@@ -32,7 +32,9 @@ The form an empty state takes wherever it fills an area of its own, centred in i
 - **an action that reaches something outside the window**, a link in the shape of a secondary button with the
   external-link glyph. **Report issue** is one, on the screens for a daemon that could not start, for a daemon of
   another version and for a UI that failed: it follows the recovery where there is one, and is otherwise the row's only action (see "The window chrome
-  and the content panel" in `docs/product/window-layout.md`).
+  and the content panel" in `docs/product/window-layout.md`). A link that is a step the button then retries comes
+  before the button instead: **Download Git**, before **Try again**, on the project pane's Git mode failure for a
+  missing Git (see "The repository and its worktrees" in `docs/product/project-pane-git-mode.md`).
 
 The heading is a heading for assistive technology as well, so the panel shows in the outline of the view it fills, at
 the level of the heading naming whatever the panel stands in for: the two then read as one thing rather than the panel

@@ -300,6 +300,13 @@ fn an_envelope_id_never_shadows_what_a_request_acts_on() {
             },
         ),
         (
+            r#"{"type":"refresh_project_git_status","id":"request-1","project":"project-7"}"#,
+            |body| match body {
+                RequestBody::RefreshProjectGitStatus { project } => Some(project),
+                _ => None,
+            },
+        ),
+        (
             r#"{"type":"open_project_terminal","id":"request-1","project":"project-7"}"#,
             |body| match body {
                 RequestBody::OpenProjectTerminal { project } => Some(project),

@@ -439,12 +439,13 @@ both lead to the same account management view.
 **Button order follows the group's alignment.** A trailing-aligned group — a dialog's or a popover's footer, an Alert's
 buttons — puts the secondary buttons first and the primary at the trailing edge (Cancel, then Confirm). A start-aligned
 or centred group — an empty state's row, a status strip, a startup screen's row — puts the primary first and the
-secondary after it. A settings row's controls, and a settings section's own buttons beside its introduction, are a
-trailing-aligned group; when they stack beneath the text at a narrow width they stay aligned to the trailing edge,
-keeping that order (falling back to the leading edge only where the group is wider than the row, so it overflows at its
-end rather than off its start), except that a field (a select, a text field, a path picker) fills the row's width with
-the buttons beside it. Whatever the alignment, a group has at most one primary button, and a centred row holds at most
-two buttons: a third way out becomes a mark or goes.
+secondary after it, except a missing tool's download link (see "A whole subject that failed"). A settings row's
+controls, and a settings section's own buttons beside its introduction, are a trailing-aligned group; when they stack
+beneath the text at a narrow width they stay aligned to the trailing edge, keeping that order (falling back to the
+leading edge only where the group is wider than the row, so it overflows at its end rather than off its start), except
+that a field (a select, a text field, a path picker) fills the row's width with the buttons beside it. Whatever the
+alignment, a group has at most one primary button, and a centred row holds at most two buttons: a third way out becomes
+a mark or goes.
 
 Every button is the wrapper layer's `Button` (HeroUI's, through `primitives`). A custom-drawn button, such as a whole
 band or row that is itself the control, uses the layer's `BareButton`, which marks the states React Aria's buttons
@@ -1439,23 +1440,27 @@ an Alert at the top of its body.
 The Alert holds, beside `AlertIndicator`: an `AlertTitle` saying what happened, then at most two sentences in the
 application's own words: an `AlertDescription` saying why, when that is known, and a second one with the one main thing
 to do about it. At its end, in the place HeroUI's own Alert puts its action button, stand at most two buttons:
-**Details** when there is more to show, then the recovery action when there is one (Try again, or the action that fixes
-it) at the trailing edge, where the primary button of a trailing-aligned group goes (see "Button order follows the
-group's alignment" under "Buttons"). Details opens a popover holding the rest: first any further explanation in the
-application's own words (a reason per cause, each cause's own fix, further guidance), then what is not written for the
-reader — a message passed through from the system, Git or an agent, a diagnostic block, raw entries, each block on a
-surface of its own (see "References in copy use `InlineReference`"). An Alert never shows raw text outside Details (a
-whole subject that failed shows it on the page, see "A whole subject that failed"), and the one-sentence description and
-main remedy are never hidden in it; an error with nothing beyond those two sentences has no Details button. A catalog
-message keeps the same split: its visible summary and remedy carry no raw parameter (no system text, no `{detail}`), and
-any further explanation is a `.details` entry of its own that Details shows first. Try again appears only where trying
-again can change the answer; a failure that is the subject's state (no common commit, not a repository, a file outside
-the scope) has none. The buttons take the Alert's status colour, as HeroUI's own Alert examples do: the recovery action
-is the solid button of that colour (HeroUI's `danger` variant in a danger Alert; the same solid treatment from
-`--warning` / `--warning-foreground` in a warning one, HeroUI having no warning button), and Details is the soft button
-of that colour (`danger-soft`, or its warning counterpart), so neither reads as a neutral control dropped onto a
-coloured box. A Details shown outside an Alert, on a line of a result, takes that line's status the same way: the
-warning's beside a warning, danger under a failure (`AlertStatusContext`).
+**Details** when there is more to show — or, for a missing tool, whose failure has nothing behind Details, the external
+link its remedy offers (Download Git for a missing Git) — then the recovery action when there is one (Try again, or the
+action that fixes it) at the trailing edge, where the primary button of a trailing-aligned group goes (see "Button order
+follows the group's alignment" under "Buttons"). Details opens a popover holding the rest: first any further explanation
+in the application's own words (a reason per cause, each cause's own fix, further guidance), then what is not written
+for the reader — a message passed through from the system, Git or an agent, a diagnostic block, raw entries, each block
+on a surface of its own (see "References in copy use `InlineReference`"). An Alert never shows raw text outside Details
+(a whole subject that failed shows it on the page, see "A whole subject that failed"), and the one-sentence description
+and main remedy are never hidden in it; an error with nothing beyond those two sentences has no Details button. A
+catalog message keeps the same split: its visible summary and remedy carry no raw parameter (no system text, no
+`{detail}`), and any further explanation is a `.details` entry of its own that Details shows first. Try again appears
+only where trying again can change the answer; a failure that is the subject's state (no common commit, not a
+repository, a file outside the scope) has none. The buttons take the Alert's status colour, as HeroUI's own Alert
+examples do: the recovery action is the solid button of that colour (HeroUI's `danger` variant in a danger Alert; the
+same solid treatment from `--warning` / `--warning-foreground` in a warning one, HeroUI having no warning button), and
+Details is the soft button of that colour (`danger-soft`, or its warning counterpart), so neither reads as a neutral
+control dropped onto a coloured box. The one exception is that external link, which keeps the secondary-button look
+every link in the button appearance has (see "External links"), so it reads as leaving the app rather than as one of the
+Alert's own actions. The row wraps where the Alert is too narrow for the buttons side by side, never clipping a button.
+A Details shown outside an Alert, on a line of a result, takes that line's status the same way: the warning's beside a
+warning, danger under a failure (`AlertStatusContext`).
 
 Every Alert — an error, a warning — has a title. HeroUI centres the indicator on the title's 24px line, so an Alert
 that opens with its 20px description draws its first line off the glyph's centre; the title is what keeps them
@@ -1481,12 +1486,15 @@ state's shape (see "An empty state is a glyph, a heading, and what fills it") ra
 heading saying what could not be loaded, the line under it in the application's own words (why, and how to recover),
 then what an Alert's Details holds — further explanation in the application's own words, then the raw text — on a
 `Surface` of its own under those lines, bordered with the separator colour so it stands apart on a dialog or a viewer as
-on a pane, start-aligned and outside the announcement, its raw blocks keeping their original line breaks within
-bounded scrollers rather than pushing the row off the page, and in its centred row the recovery action (Try again) as
-the primary button. Nothing else marks it as an error: no status mark beside the heading and no Details button, since
-the page has room for the whole failure. The cap on a raw block is a share of the window, so where the panel fills a pane (which does
-not scroll) or a dialog's body, it scrolls in its place, a region named by its heading (see "A scroller nothing else on
-screen scrolls takes focus itself"). An Alert is for a failure shown among other content.
+on a pane, start-aligned and outside the announcement, its raw blocks keeping their original line breaks within bounded
+scrollers rather than pushing the row off the page, and in its centred row the recovery action (Try again) as the
+primary button. Where the remedy is installing a tool the application needs and did not find, such as Download Git for a
+missing Git, the row also holds that external link, before Try again and in the button appearance (see "External
+links"): the exception to a centred row's primary-first order. Nothing else marks it as an error: no status mark beside
+the heading and no Details button, since the page has room for the whole failure. The cap on a raw block is a share of
+the window, so where the panel fills a pane (which does not scroll) or a dialog's body, it scrolls in its place, a
+region named by its heading (see "A scroller nothing else on screen scrolls takes focus itself"). An Alert is for a
+failure shown among other content.
 
 A startup screen whose whole subject failed — the daemon that failed to start, the crash screen, and the screen for a
 daemon of another protocol generation — is a page whose whole subject failed like any other: it takes the empty state's
@@ -1599,20 +1607,22 @@ This section sets how every mark is drawn and opened, wherever "On the screen: a
 point otherwise" places it: its popover, its name, the input that opens it, and its in-heading and inline forms.
 
 A failure, a warning or a note belonging to one item of a collection, one part of a compact layout (one section of a
-side pane, such as the Committed section of the Git change list or the Git pane's branch list, with the rest of the
-pane still shown), or one spot in rendered content does not break that row, section or sentence into an error block.
-The item shows a minimal mark (`StatusMark`): a danger, warning or note glyph with an accessible name, placed **right
-after the name on a row that has one** (a tree folder's, the account name line's), not at the row's trailing edge: the
-name keeps its clipping and fade, so a long name clips and the mark stays visible after its visible text, and a hover
-marquee, if the name has one, stays the name's alone ("Hover marquees belong to one text label"). Elsewhere it takes
-the place of its own layout: a status column of a table, beside the section's heading for a part of a compact layout,
-inline with the text in a document. A failed Git check of a project stands at the start of its
-Git badge, in place of the badge's branch glyph, outside the badge's tooltip trigger and as a tab stop of its own; while
-a check, pull or push runs the refresh glyph takes its place, and the mark comes back when that run ends unless a check
-in it succeeded. The row's accessible name adds the mark's name ("Git check failed") as its own phrase; Git's text is
-in no name and no tooltip, only in the mark's popover. A press on the mark keeps to itself and does not reach the
-pressable row around it, and when the mark goes away while it or its popover holds focus, focus goes to the row (or
-focus mode's header). No sentence of error text is written into the row, except in a report of outcomes (below).
+side pane, such as the Committed section of the Git change list or the Git pane's branch list, with the rest of the pane
+still shown), or one spot in rendered content does not break that row, section or sentence into an error block. The item
+shows a minimal mark (`StatusMark`): a danger, warning or note glyph with an accessible name, placed **right after the
+name on a row that has one** (a tree folder's, the account name line's), not at the row's trailing edge: the name keeps
+its clipping and fade, so a long name clips and the mark stays visible after its visible text, and a hover marquee, if
+the name has one, stays the name's alone ("Hover marquees belong to one text label"). Elsewhere it takes the place of
+its own layout: a status column of a table, beside the section's heading for a part of a compact layout, inline with the
+text in a document. A failed Git check of a project stands at the start of its Git badge, in place of the badge's branch
+glyph, outside the badge's tooltip trigger and as a tab stop of its own; while a check, pull or push runs the refresh
+glyph takes its place, and the mark comes back when that run ends unless a check in it succeeded. The row's accessible
+name adds the mark's name ("Git check failed") as its own phrase; Git's text is in no name and no tooltip, only in the
+mark's popover. A check that found no Git at all is worded as the error alert dialog words a missing Git (its sentence
+and remedy), shows no raw text, and offers Download Git before its Try again. A press on the mark keeps to itself and
+does not reach the pressable row around it, and when the mark goes away while it or its popover holds focus, focus goes
+to the row (or focus mode's header). No sentence of error text is written into the row, except in a report of outcomes
+(below).
 
 A mark placed after a line of text is centred on that line by construction: the box holding it is one line of that
 text's own size and line height (`MarkLineBox`, `h-[1lh]` under the text's size class), the mark centred in it, so it
@@ -1629,13 +1639,14 @@ like every floating surface of the application. A mark with a body, a button or 
 laid out inside. The exception is a mark that draws a word beside its glyph and has nothing more to say: the word
 already says it on screen, so it stays the glyph and the word as plain text, with no button and no popover. The popover
 holds the reason in the application's own words, then the main remedy, any further explanation, then the raw text, then
-the recovery action (Try again, at the popover's trailing edge). A mark whose content is one line and raw text holds
-that line, then the raw text in a diagnostic block under it; raw text in a mark is always such a block, never inline
-text or a chip. The glyph is a button named for what it is about, with no tooltip (the popover says everything one
-would). A note (an informational mark, circled `i`) is the same button and the same popover with nothing to press in it:
-marks of every tone side by side look alike, take the pointer alike, are each reachable from the keyboard (a tab stop,
-or a step of their collection's own walk) and open the same way, so they differ only in glyph and colour. Glyphs per
-tone: circled `!` for danger, a triangle for a warning, circled `i` for a note.
+the external link a missing tool's remedy offers (Download Git for a missing Git) where there is one, and the recovery
+action (Try again) at the popover's trailing edge. A mark whose content is one line and raw text holds that line, then
+the raw text in a diagnostic block under it; raw text in a mark is always such a block, never inline text or a chip. The
+glyph is a button named for what it is about, with no tooltip (the popover says everything one would). A note (an
+informational mark, circled `i`) is the same button and the same popover with nothing to press in it: marks of every
+tone side by side look alike, take the pointer alike, are each reachable from the keyboard (a tab stop, or a step of
+their collection's own walk) and open the same way, so they differ only in glyph and colour. Glyphs per tone: circled
+`!` for danger, a triangle for a warning, circled `i` for a note.
 
 The popover is `Hint` of kind `popover` and follows the input matrix of "A floating panel that does not take the
 window": **a mouse click opens nothing**, and its buttons and text are reached with the mouse by moving the pointer into
@@ -1839,7 +1850,8 @@ Every place that has nothing to show takes one shape, through `EmptyPanel`
 it, optionally a failure's details on a surface under that line, and optionally a centred row of at most two buttons
 that wraps — the action that fills it, then a second way out of the state (on a startup failure, Report issue as a link
 in the shape of a button, in place of a secondary action) — putting its primary first, as "Button order follows the
-group's alignment" under "Buttons" has it. The whole shape, and which state takes which part, is
+group's alignment" under "Buttons" has it (a missing tool's download link is the exception, see "A whole subject
+that failed"). The whole shape, and which state takes which part, is
 `docs/product/empty-states.md`. Nothing builds a second one out of centred text, and a state with no glyph is not one of
 these — HeroUI's bare `EmptyState` is reached only through this component.
 
@@ -1914,7 +1926,12 @@ element, an error from `role="alert"`.
   `StatusAnnouncer` defers its first write for that, so announce a state with it.
 - VoiceOver also drops a status written within about 300 ms of a focus move (a dialog opening or closing, say), so a
   surface that takes focus as it opens delays its first status write (`StatusAnnouncer`'s `firstWriteDelayMs`, with
-  `AFTER_FOCUS_MOVE_DELAY_MS`).
+  `AFTER_FOCUS_MOVE_DELAY_MS`). `StatusAnnouncer` writes later changes at once, so a later write that follows a focus
+  move or a control's own spoken change (a checkbox ticked, a retry handing focus back) waits
+  `AFTER_FOCUS_MOVE_DELAY_MS` too, held by its caller or through `AttendedStatusAnnouncer`.
+- A region set to the words it already holds does not change and says nothing: a repeat in the same words (a retry
+  that fails again) is spoken only if the region was emptied in between or the text alternates a trailing no-break
+  space.
 - A status written while its region sits under an open modal is effectively written into a hidden region: the modal
   hides everything outside it from assistive technology, except an element marked a live announcer (the layer's
   `liveAnnouncerProps`) or a top layer (`topLayerProps`), and closing the modal moves focus, which replaces what was

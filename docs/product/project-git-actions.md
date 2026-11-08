@@ -29,7 +29,8 @@ is carried as the failure's `detail` and shown under **Error details**, followin
 
 Once the directory is a repository, the branch is read first, locally, and what it says — the branch, its upstream
 and the counts — is published to every window showing the project before the push is shown in flight. So the ahead
-count the push is drawn on includes commits nothing had re-read yet. A warning the last check left stays. The
+count the push is drawn on includes commits nothing had re-read yet. A warning the last check left stays, except a
+check that found no `git` (see "Following changes to the repository's refs" in `docs/product/project-git-status.md`). The
 repository's remotes are read next; that read is filtered and non-interactive in the same way, and is given at most 30
 seconds. If either read fails, the push fails and `git push` is not run, so a detached `HEAD` whose remotes cannot be
 read is reported as that failed read rather than as not being on a branch. A branch read that fails publishes nothing,
@@ -46,12 +47,17 @@ What is pushed, when both reads succeed:
   remote, and that push records the upstream under the local branch's own name.
 
 Nothing is pushed when the push is refused. A refusal leaves the last check's error on the badge as it was and is
-reported by its error alert. Every refusal other than `unknown_project`, `not_a_git_repository` and a branch read that
-fails comes after the branch read was published, so the badge already shows that read's branch and counts:
+reported by its error alert. Every refusal other than `unknown_project`, `not_a_git_repository`, `binary_not_found`
+and a branch read that fails comes after the branch read was published, so the badge already shows that read's branch
+and counts:
 
 - The project directory is not a git repository when the push runs: `not_a_git_repository`. The rule is the badge's
   (see "What one check does" in `docs/product/project-git-status.md`): `.git` must be in the project directory
   itself. A subdirectory of a repository is not one.
+- The user's `git` cannot be found: `binary_not_found` (see "Where `git` is found" in
+  `docs/product/project-git-status.md`). Its alert says Git is not installed or not on `PATH` and offers **Download
+  Git** (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`); the push can be chosen again once Git
+  is installed.
 - A push of the same project is already in flight: `push_in_progress`. The alert says to wait for it to finish,
   without a separate remedy line or an Issue-reporting action. This guard is reached after the branch read, so an
   earlier repository or branch-read failure is reported instead.
@@ -114,8 +120,12 @@ refusal fails with an error alert. Running agent sessions do not prevent a switc
 underneath them. Other Git operations are not serialized with the switch.
 
 The directory must contain its own `.git` entry, as for the badge. A missing project is `unknown_project`, a
-directory that is not a repository under that rule is `not_a_git_repository`, and an invalid or vanished local
-branch or a Git failure is `git_switch_failed`, with the reason as `detail`. Each Git call uses the filtered,
+directory that is not a repository under that rule is `not_a_git_repository`, a `git` that cannot be found is
+`binary_not_found` (see "Where `git` is found" in `docs/product/project-git-status.md`), and an invalid or vanished local
+branch or a Git failure is `git_switch_failed`, with the reason as `detail`. With no `git`, the submenu's read of the
+branches fails too: its alert says that Git is not installed or not on `PATH`, with the remedy to install it and try
+again, and offers **Download Git** before **Try again** (see "Recovery and unexpected errors" in
+`docs/product/error-alerts.md`); Try again, still the control focus moves to, then finds a Git installed since. Each Git call uses the filtered,
 non-interactive environment described in "The environment a check runs `git` in" in
 `docs/product/project-git-status.md` and has at most two minutes.
 
@@ -146,6 +156,8 @@ subdirectory is refused. The other refusals are:
   `not_a_git_repository`.
 - Detached `HEAD`: `restore_not_on_branch`; a branch with no commit yet: `no_commits_to_restore`.
 - A merge, rebase, cherry-pick, revert or bisect in progress: `git_operation_in_progress`. Finish or abort it first.
+- The user's `git` cannot be found: `binary_not_found` (see "Where `git` is found" in
+  `docs/product/project-git-status.md`).
 - A tracked path blocked by a directory, or an ancestor blocked by a file or symbolic link; or a path in `HEAD`
   removed from the index but still present on disk: `git_restore_failed`. These collisions are refused before
   restoration to preserve untracked or ignored content; move the obstruction aside first.

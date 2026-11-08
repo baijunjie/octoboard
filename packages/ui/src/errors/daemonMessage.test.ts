@@ -165,6 +165,15 @@ it("puts the reason what goes with a removed project's folder is unknown on a li
   expect(message.endsWith(".\nfatal: not a git repository")).toBe(true);
 });
 
+it("says a removed project's leftovers are unknown because Git is missing when the notice nests that refusal", () => {
+  const params = { name: "Docs", detail: "`git` was not found on PATH", reason: "`git` was not found on PATH", reason_code: "binary_not_found", binary: "git" };
+  expect(messageCode("project_branches_not_determined", params)).toBe("project_branches_not_determined.git");
+  const message = daemonMessage("en", "project_branches_not_determined", params, "fallback", records);
+  expect(message.startsWith(`Project ${isolate("Docs")} was removed, but ${isolate("Git")} is not installed, or it is not on ${isolate("PATH")}, so its related worktrees and branches could not be determined.`)).toBe(true);
+  // Any other nested failure keeps the general sentence.
+  expect(messageCode("project_branches_not_determined", { ...params, reason_code: "internal_error", binary: "" })).toBe("project_branches_not_determined");
+});
+
 it("words a worktree kept for a project folder that could not be checked by its own group, with what to do after it", () => {
   const items = JSON.stringify([
     { kind: "worktree", name: "/home/dev/wt", branch: null, state: "failed", uncommitted: false, detail: "whether it is or holds another project's folder could not be told", cause: "project_folder_unknown" },

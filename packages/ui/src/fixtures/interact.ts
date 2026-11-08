@@ -397,7 +397,7 @@ export interface Ui {
    * beside it. */
   hoverGitBadge: (status: GitStatus, over: "glyph" | "line", row?: Matcher) => Promise<void>;
   /** Presses the failure mark of a git badge with a finger and returns once its popover is up in its
-   * press form (modal, focus inside), holding the reason, the remedy and Git's own text. With `row` it is
+   * press form (modal, focus inside), holding the reason, the remedy and, for a failure with Git's own text, that text. With `row` it is
    * the mark of the sidebar project row named `row`, found by its own name among the row's controls;
    * without it, the one in the sidebar (focus mode's header). Fails if there is no such mark, which also
    * catches a status that did not fail, or if what opens is not a popover. */

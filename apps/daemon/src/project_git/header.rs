@@ -6,7 +6,8 @@
 use std::path::Path;
 
 use crate::git::run::Runner;
-use crate::project_git::project_git;
+use crate::host_tools::Pace;
+use crate::project_git::{project_git, StepFailure};
 use crate::protocol::{GitStatus, Project};
 use crate::state::AppState;
 
@@ -41,7 +42,7 @@ pub(crate) fn read_branch_header(git: &Runner, path: &Path, status: &mut GitStat
         Ok(header) => apply_header(status, header),
         Err(err) => {
             tracing::debug!(%err, "reading the local branch state failed");
-            status.error = Some(err);
+            StepFailure::from(err).record(status);
         }
     }
 }
@@ -137,9 +138,12 @@ pub(crate) fn parse_branch_header(output: &str) -> BranchHeader {
 /// Re-reads the local branch header and publishes it. A push moves the ahead count without a
 /// fetch, and this is what the badge shows afterwards; nothing here goes to the remote. Only the
 /// header, or the error of failing to read it, reaches the held status: see
-/// `AppState::publish_git_reread`.
+/// `AppState::publish_git_reread`. It follows on from something else (a push, a switch, a change of
+/// the refs), so a `git` that cannot be found is not looked for again.
 pub(crate) fn publish_reread(state: &AppState, project: &Project) {
-    let header = project_git(state).and_then(|git| read_header(&git, Path::new(&project.path)));
+    let header = project_git(state, Pace::Scheduled)
+        .map_err(|err| StepFailure::no_git(&err))
+        .and_then(|git| read_header(&git, Path::new(&project.path)).map_err(StepFailure::from));
     state.publish_git_reread(&project.id, header);
 }
 

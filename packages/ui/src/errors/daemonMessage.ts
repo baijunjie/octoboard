@@ -107,9 +107,9 @@ export function messageCode(code: string, params: MessageParams): string {
 
 /** A message's params as the UI shapes them: the daemon's over the UI's own (`uiParams` in `codes.ts`), and the name of
  * the operating system of the daemon's host, where what the message tells of happened, which a message names as a
- * reference. */
+ * reference. A variant of a code takes the UI params of the code itself. */
 export function withUiParams(code: string, params: MessageParams): MessageParams {
-  return { osName: daemonOsName(), ...codeRecord(messageCode(code, params))?.uiParams, ...params };
+  return { osName: daemonOsName(), ...codeRecord(code)?.uiParams, ...params };
 }
 
 /** The names of the providers the daemon serves, in their order, for a message that lists the supported agents. */

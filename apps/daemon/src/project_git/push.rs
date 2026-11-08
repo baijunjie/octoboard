@@ -12,9 +12,10 @@ use std::path::Path;
 use crate::git::layout::is_git_repo;
 use crate::git::remote_branch::split_remote_branch;
 use crate::git::run::WorkDir;
+use crate::host_tools::Pace;
 use crate::project_git::header::{self, BranchHeader};
 use crate::project_git::remote::{self, Remote};
-use crate::project_git::{project_git, PUSH_LIMITS};
+use crate::project_git::{no_git_or, project_git, PUSH_LIMITS};
 use crate::protocol::{error_code, CodedError, Project};
 use crate::state::AppState;
 
@@ -84,7 +85,7 @@ pub fn push_current_branch(state: &AppState, project: &Project) -> Result<(), an
             &[("project", &project.id)],
         ));
     }
-    let git = project_git(state).map_err(|detail| push_failed(&detail))?;
+    let git = project_git(state, Pace::Person).map_err(|err| no_git_or(err, push_failed))?;
     let header = header::read_header(&git, path).map_err(|detail| push_failed(&detail))?;
     // Published before the push is marked in flight: the badge draws the push on its ahead count,
     // which a commit nothing has re-read yet would leave at zero, and nothing drawn.

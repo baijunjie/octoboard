@@ -11,6 +11,7 @@ use super::survey::{exists, failed, survey, BranchSurvey, WorktreeRemovability, 
 use crate::branch_origin::bound::{bound_in, Bound};
 use crate::git::run::Runner;
 use crate::git::worktrees::worktrees;
+use crate::host_tools::Pace;
 use crate::platform::names;
 use crate::protocol::{
     Session, SessionBranchItem, SessionBranchKind, SessionBranchState, SessionBranchTarget,
@@ -60,7 +61,7 @@ pub async fn remove_once_stopped(
     }
     let unfinished = bound.clone();
     let removed = tokio::task::spawn_blocking(move || {
-        let git = match super::cleanup_git(&state.host_tools.get()) {
+        let git = match super::cleanup_git(&state.host_tools.get(), Pace::Scheduled) {
             Ok(git) => git,
             Err(err) => return all_failed(&bound, &format!("{err:#}")),
         };

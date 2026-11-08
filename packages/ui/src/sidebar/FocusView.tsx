@@ -30,6 +30,7 @@ import { sessionOrderPreference, useDaemon, useDaemonStore, useDaemonStoreEqual,
 import { BindingBadge } from "../components/status/BindingBadge";
 import { CountBadge } from "../components/status/CountBadge";
 import { GitBadge } from "./GitBadge";
+import { useGitRetryAnnouncement } from "./useGitRetryAnnouncement";
 import { projectMenu } from "./menus";
 import { NewSessionButton } from "./NewSessionButton";
 import { SessionEmptyRow } from "./SessionEmptyRow";
@@ -144,6 +145,7 @@ export function ProjectFocusView({
   const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
   const viewAll = () => handlers.onOpenArchive({ console: project.console_id, project: project.id });
   const headerRef = useRef<HTMLDivElement>(null);
+  const gitRetry = useGitRetryAnnouncement(project.id);
   const switchFocus = useFocusHandoff(() => headerRef.current?.querySelector("button")?.focus());
   // When `GitBadge` draws nothing (no status yet, not a repository), the title takes the row alone.
   const showsBranch = gitStatus?.repository === true;
@@ -155,7 +157,7 @@ export function ProjectFocusView({
         {/* Alone in the header, so a tap on it opens the popover. */}
         {showsBranch && (
           <FocusBranch>
-            <GitBadge status={gitStatus} touchPopover returnFocusTo={headerRef} />
+            <GitBadge status={gitStatus} touchPopover returnFocusTo={headerRef} onRetried={gitRetry.onRetried} />
           </FocusBranch>
         )}
         <RowIconGroup>
@@ -167,6 +169,7 @@ export function ProjectFocusView({
           />
         </RowIconGroup>
       </FocusHeader>
+      {gitRetry.announcer}
       <FadedScroller stickyHeadingHeight={STICKY_HEADING_HEIGHT.list} className="min-h-0 flex-1 px-(--row-fill-inset) pb-2">
         <section>
           <StickyHeading
@@ -448,6 +451,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
     return consoleSession && { kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } };
   };
   const headerRef = useRef<HTMLDivElement>(null);
+  const gitRetry = useGitRetryAnnouncement(project.id);
   // Where focus goes when the pin button, ahead of it, is unpinned away.
   const openSessionHolder = useRef<HTMLDivElement>(null);
   return (
@@ -464,7 +468,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
         </h4>
         {/* After the heading rather than in it, so the name stays the heading's whole text. Shown
             here so the actions menu's disabled Push has its cause in view. */}
-        <GitBadge status={gitStatus} touchPopover returnFocusTo={headerRef} />
+        <GitBadge status={gitStatus} touchPopover returnFocusTo={headerRef} onRetried={gitRetry.onRetried} />
         <RowControls fixed={project.pinned ? <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={openSessionHolder} /> : undefined}>
           {/* Named for its project: the header's "+" is beside it in the same view. */}
           <NewSessionButton
@@ -484,6 +488,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
           />
         </RowControls>
       </div>
+      {gitRetry.announcer}
       <SessionCards handlers={handlers} sessions={boundHere} selectedSessionId={selectedSessionId} />
     </>
   );

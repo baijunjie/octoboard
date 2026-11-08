@@ -5,22 +5,47 @@ import { classifyError, type ErrorRecovery, type ProviderRemedy } from "../../er
 import { globalParam, type MessageKey, type Translate } from "../../i18n/catalog";
 import { Message, useT } from "../../i18n/react";
 import { InlineReference } from "../../i18n/InlineReference";
+import { ExternalLink } from "../text/ExternalLink";
 
-/** The button a recovery offers besides its words: it opens Settings on Agent accounts, with the Add agent
- * dialog in front when `addAgent` is set, or, when `sessionModel` is set, Change model for the session the alert is
- * about. None for a recovery with nothing to open. */
-export function recoveryAction(t: Translate, recovery: ErrorRecovery): { label: string; addAgent?: boolean; sessionModel?: boolean } | undefined {
+/** Where Git is downloaded from, for the recovery of a missing `git`. */
+const GIT_DOWNLOAD_URL = "https://git-scm.com/downloads";
+
+/** What the control a recovery offers besides its words opens: Settings on Agent accounts, with the Add agent dialog in
+ * front when `addAgent` is set; Change model for the session the alert is about; or the address `href`, as a link. */
+export type RecoveryAction =
+  | { kind: "settings"; label: string; addAgent?: boolean }
+  | { kind: "sessionModel"; label: string }
+  | { kind: "link"; label: string; href: string };
+
+/** The control a recovery offers besides its words, or none for a recovery with nothing to open. */
+export function recoveryAction(t: Translate, recovery: ErrorRecovery): RecoveryAction | undefined {
   switch (recovery) {
     case "account":
     case "accountDisabled":
     case "accountNotSignedIn":
     case "resetCreditLogin":
-    case "addedAgents": return { label: t("sidebar.session.manageAccounts") };
+    case "addedAgents": return { kind: "settings", label: t("sidebar.session.manageAccounts") };
     case "changeModelSetting":
-    case "modelChange": return { label: t("sidebar.session.changeModel"), sessionModel: true };
-    case "agentNotAdded": return { label: t("agents.addAction"), addAgent: true };
+    case "modelChange": return { kind: "sessionModel", label: t("sidebar.session.changeModel") };
+    case "installGit":
+    case "installGitNoRetry": return { kind: "link", label: t("error.recovery.installGit.action"), href: GIT_DOWNLOAD_URL };
+    case "agentNotAdded": return { kind: "settings", label: t("agents.addAction"), addAgent: true };
     default: return undefined;
   }
+}
+
+/** The control the recovery of `error` offers besides its words (see `recoveryAction`), or none for a failure that is
+ * not actionable or whose recovery has nothing to open. */
+export function failureRecoveryAction(t: Translate, error: unknown): RecoveryAction | undefined {
+  const classification = classifyError(error);
+  return classification.kind === "actionable" ? recoveryAction(t, classification.recovery) : undefined;
+}
+
+/** The button of a recovery's link out (Download Git), for the footer or popover that holds its other controls, at
+ * their `size`; nothing for a recovery whose control is not a link. */
+export function RecoveryLink({ action, size }: { action: RecoveryAction | undefined; size?: "xs" | "sm" }): ReactElement | null {
+  if (action?.kind !== "link") return null;
+  return <ExternalLink href={action.href} appearance="button" size={size} variant="secondary">{action.label}</ExternalLink>;
 }
 
 /** Plain recovery parameters stay suitable for accessibility and system text. The same values are
@@ -49,8 +74,9 @@ function ProviderRemedyGuidance({ remedy }: { remedy: ProviderRemedy }): ReactEl
   return <Message id={remedy as MessageKey} params={params as never} />;
 }
 
-/** A recovery's words; the button it may offer besides them is the alert's (see `recoveryAction`), never part
- * of the body. Nothing for the plain alert that has no remedy. */
+/** A recovery's words; the control it may offer besides them (see `recoveryAction`) stands among the actions of
+ * whatever shows them, an alert's footer or a mark's popover, never in the text. Nothing for the plain alert that has
+ * no remedy. */
 export function RecoveryGuidance({ recovery }: { recovery: ErrorRecovery }): ReactElement | null {
   const t = useT();
   if (recovery === "none") return null;

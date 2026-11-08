@@ -79,6 +79,9 @@ pub enum Discovery {
     Repository(Repository),
     /// There is a `.git`, but `git` could not read the repository; the message is its own.
     Unreadable(String),
+    /// There is a `.git`, but no `git` to read it with: the failure to have one, which for a `git`
+    /// that cannot be found is `binary_not_found` (`crate::host_tools::is_git_not_found`).
+    NoGit(anyhow::Error),
 }
 
 /// Finds the repository and worktree holding `root`, and `root`'s place in that worktree.
@@ -90,7 +93,7 @@ pub fn discover(root: &ProjectRoot, git: &BrowseGit, cancel: &AtomicBool) -> Res
     }
     let env = match git.env() {
         Ok(env) => env,
-        Err(err) => return Ok(Discovery::Unreadable(format!("{err:#}"))),
+        Err(err) => return Ok(Discovery::NoGit(err)),
     };
     let rev_parse = |flag: &str| -> Result<std::result::Result<PathBuf, String>> {
         let args: &[&[u8]] = &[b"--path-format=absolute", flag.as_bytes()];

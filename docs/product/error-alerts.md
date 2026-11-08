@@ -206,8 +206,10 @@ and for a UI that failed take this shape too, their row holding the recovery, wh
 **A compact alert** is a component-level error shown among other content — one that blocks what the user is doing,
 or one a component cannot do its job without: in a form dialog, a settings section, a popover or a submenu, or above
 content still shown. It is red, with the danger glyph. It always has a title, with its sentences under it, and at its
-trailing end at most two buttons, in the alert's own colour: **Details**, where there is more to show, then the
-recovery action, where there is one — usually **Try again**, or the action that fixes it. It is used even where the
+trailing end its buttons, in the alert's own colour: **Details**, where there is more to show, then the link its remedy
+offers, where it has one (**Download Git** for a missing Git, see "Recovery and unexpected errors" below), then the
+recovery action, where there is one — usually **Try again**, or the action that fixes it. In an alert too narrow to hold
+them beside its text the buttons go under it, and onto lines of their own where they do not fit side by side. It is used even where the
 error can be located: a failed lookup a form makes on its own stops the form from going on, so it shows its alert
 directly under the field it is about, which it describes to assistive technology, and the Git mode's uncommitted
 changes that could not be listed leave the change list without them, so their alert stands at the top of that list.
@@ -257,7 +259,7 @@ The places with a compact alert:
   import's result (see "The import result" in `docs/product/configuration-import-progress-and-result.md`);
 - the lookups forms make on their own that stop the form from going on, directly under the field they are about,
   which they describe to assistive technology: a project folder's detection that could not be made, and a
-  repository's check (see "Associating a project" in `docs/product/projects.md`), and the session dialog's Session ID
+  repository's check, with **Try again** (see "Associating a project" in `docs/product/projects.md`), and the session dialog's Session ID
   lookup that failed, or that found the conversation held by a session elsewhere or by an agent or account no longer
   offered (see "Finding the conversation" in `docs/product/resuming-a-conversation-by-its-session-id.md`), and the
   remove-account confirmation's check of whether the account directory can be moved to the Trash, under its option,
@@ -335,7 +337,8 @@ triangle, and a note's, which only informs, an accent-coloured circled `i`. Noth
 as loose text. The mark is a button with an accessible name saying what it is about, and it has no tooltip: what it has
 to say opens from it in one **popover**, the only floating thing it shows. The popover holds what happened, the one main
 thing to do about it, any further explanation, then any raw text (see "Failures shown on the screen" above), and, where
-the failure can be retried from there, **Try again** at its trailing end. A reason that is one short line and has
+the failure can be retried from there, **Try again** at its trailing end, with the link its remedy offers, where it has
+one, before it (**Download Git** for a missing Git, see "Recovery and unexpected errors" below). A reason that is one short line and has
 nothing more to it (an image or a formula in a document that could not be shown) is that popover with the one line in
 it. A popover taller than the room beside its mark scrolls its content within itself, with **Try again** kept in view
 under it, and the scrolling content is then a stop for the keyboard, so it can be scrolled from there.
@@ -365,7 +368,8 @@ The places with an error mark:
   `docs/product/project-pane.md`);
 - a project's branch badge whose last check failed, where the mark stands in for the badge's branch glyph, and is a
   tab stop of its own on the sidebar row and in focus mode's header; Git's own message is the last thing in its
-  popover and in no tooltip or name (see "The branch badge" in `docs/product/project-git-status.md`);
+  popover and in no tooltip or name, except for a check that found no `git`, whose popover shows no raw text and ends
+  with **Download Git** then **Try again** (see "The branch badge" in `docs/product/project-git-status.md`);
 - an account whose quota could not be read, in Settings and the rail's quota panel (see "Quota states" in
   `docs/product/account-quotas.md`);
 - in the Git mode, the committed part of the change list that could not be read — the branch not compared, or its
@@ -386,7 +390,8 @@ The places with a warning mark:
   name or directory the Add account form refuses — after its name (see "Accounts in the review" in
   `docs/product/configuration-export-and-import-dialogs.md`);
 - a project removal's option to move the folder to the Trash, after its label, when what goes with the folder could
-  not be looked up (see "With a project's folder moved to the Trash" in
+  not be looked up, with **Download Git** and **Try again** where that is because Git could not be found (see "With a
+  project's folder moved to the Trash" in
   `docs/product/branch-and-worktree-cleanup.md`);
 - the model list a session, project or console dialog could not read, after the Model field's label — in the console
   dialog, after the Model row's name — with no **Try again** (see "While the list is being fetched, and when there is
@@ -552,6 +557,13 @@ For example:
   refuse it, such as a file or folder in the way of a tracked file (a restore discards uncommitted changes by design).
   A restore refused because a Git operation is unfinished (`git_operation_in_progress`) has no remedy: its sentence
   already says to finish or abort the operation. None of these offers **Report issue**.
+- The user's `git` that cannot be found (`binary_not_found` naming `git`; see "Where `git` is found" in
+  `docs/product/project-git-status.md`) is worded on its own, wherever it is shown: its sentence says Git is not
+  installed or not on `PATH`, and its remedy asks the user to install Git in the environment where sessions run and
+  make sure it is on `PATH`, then try again. Where nothing is left to try again — a project removal that could not work
+  out what went along with its folder (see "With a project's folder moved to the Trash" in
+  `docs/product/branch-and-worktree-cleanup.md`) — the remedy leaves out trying again. It offers **Download Git** (see
+  below) and no **Report issue**. Trying again after installing Git works without restarting Octoboard.
 - A system application that would not open — the system terminal (`terminal_unavailable`), the file manager
   (`directory_unavailable`) or the default application (`path_open_failed`), whether from a project's action menu, the
   project pane's row menu, the file viewer or a terminal's path link — gets a remedy of its own that names only that
@@ -618,6 +630,22 @@ acknowledgement button, instead of the step naming where to go:
 Pressing the button acknowledges the alert and opens Settings there, above whatever dialog was open; when Settings is
 already open, it moves to that section instead (see "Opening and closing Settings" in `docs/product/settings.md`). The
 step in the alert's body then says only what to do, such as adding the agent and trying again.
+
+**A remedy that needs a tool installed has a link to get it**: the Git that cannot be found (above) has **Download
+Git** in the footer, a link in the shape of a secondary button with the external-link glyph, before the acknowledgement
+button. Pressing it opens Git's download page, `https://git-scm.com/downloads`, in the browser, and does not acknowledge
+the alert; a page that does not open is reported as any other link that does not open, in an alert of its own
+(described below). The same
+link stands wherever else a missing Git is reported, before **Try again** where there is one: among a compact alert's
+buttons, at the end of a failure mark's popover (see "Failures shown on the screen" and "Failures, warnings and notes
+marked at their point" above), and in an empty-state failure's row. Those places show the missing Git's sentence and
+remedy as the error alert does. They include the branch badge's failure mark (see "The branch badge" in
+`docs/product/project-git-status.md`), the project pane's Git mode (see "The repository and its worktrees" in
+`docs/product/project-pane-git-mode.md`), the Switch branch submenu (see "Switching the local branch" in
+`docs/product/project-git-actions.md`), the add-project form's check of a repository URL (see "Associating a project" in
+`docs/product/projects.md`), the handoff dialog's check of the branches that move (see "Handing off from the window" in
+`docs/product/handing-off-sessions.md`) and a project removal's mark for what goes with the folder (see "With a
+project's folder moved to the Trash" in `docs/product/branch-and-worktree-cleanup.md`).
 
 **A model-change remedy has a Change model button** when the alert identifies its session: an unsupported launch setting
 returned by Change model (`invalid_launch_setting`), or a restart that did not come up (`model_change_did_not_come_up`).

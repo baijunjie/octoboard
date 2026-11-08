@@ -69,7 +69,7 @@ pub mod validate;
 use std::path::Path;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use crate::accounts::mcp_sign_in::{self, McpAuthAction};
 use crate::accounts::{mcp_inventory, quotas};
@@ -79,6 +79,7 @@ use crate::config_document::export;
 use crate::config_document::import;
 use crate::env_shell;
 use crate::host_open;
+use crate::host_tools::Pace;
 use crate::hostfs;
 use crate::project_git;
 use crate::protocol::{Event, ModelChangeOutcome, Origin, RequestBody};
@@ -370,13 +371,21 @@ async fn handle_inner(
             }))
         }
 
-        RequestBody::ProbeGitRemote { remote_url } => {
-            // Asked as the user types, so the shell environment is the cached one rather than a
-            // fresh login shell per probe.
+        RequestBody::ProbeGitRemote {
+            remote_url,
+            asked_by_person,
+        } => {
+            // Asked as the user types, so the `git` is the cached snapshot's rather than a fresh
+            // login shell per probe; only a person's Try again looks once more for a `git` that
+            // snapshot does not find.
+            let tools = state.host_tools.get();
+            let pace = if asked_by_person {
+                Pace::Person
+            } else {
+                Pace::Scheduled
+            };
             let probed = tokio::task::spawn_blocking(move || {
-                let shell_env = crate::env_shell::cached_snapshot()
-                    .context("snapshotting the shell environment")?;
-                project_git::clone::probe_remote_names(&remote_url, &shell_env)
+                project_git::clone::probe_remote_names(&remote_url, tools.git_for(pace)?)
             })
             .await??;
             let detected = detect_agent_from_names(probed.iter().map(String::as_str));
@@ -953,6 +962,15 @@ async fn handle_inner(
             let project = state.store.require_project(&project)?;
             project_git::status::pull_project_now(state, project);
             Ok(None)
+        }
+
+        RequestBody::RefreshProjectGitStatus { project } => {
+            let project = state.store.require_project(&project)?;
+            let status = project_git::status::recheck_project_now(state, project).await;
+            Ok(Some(Event::ProjectGitRechecked {
+                id: request_id,
+                status,
+            }))
         }
 
         RequestBody::CreateShellTerminal {

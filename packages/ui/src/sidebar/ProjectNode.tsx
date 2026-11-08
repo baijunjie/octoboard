@@ -21,6 +21,7 @@ import { projectMenu } from "./menus";
 import { NewSessionButton } from "./NewSessionButton";
 import { SessionEmptyRow } from "./SessionEmptyRow";
 import { SessionRow } from "./SessionRow";
+import { useGitRetryAnnouncement } from "./useGitRetryAnnouncement";
 import { useNoAgentReason } from "./useNewSessionMode";
 import type { SidebarHandlers } from "./types";
 
@@ -56,6 +57,7 @@ export const ProjectNode = memo(function ProjectNode({
   const sessions = useProjectSessions(project.id);
   const rowRef = useRef<HTMLDivElement>(null);
   const order = sessionOrderPreference.useValue();
+  const gitRetry = useGitRetryAnnouncement(project.id);
   const rows = useDaemonStoreEqual((s) => {
     const index = indexSessions(s.sessions);
     return liveSessionRows(sessionsOf(index.byProject, project.id), index.delegatingIds, s.queuedAccountSwitches, order.sessions);
@@ -99,13 +101,15 @@ export const ProjectNode = memo(function ProjectNode({
           )}
         </div>
         {/* No touch popover: a tap on the project row folds it. A failure mark is a button that answers its own tap. */}
-        <GitBadge status={gitStatus} decorative touchPopover={false} returnFocusTo={rowRef} />
+        <GitBadge status={gitStatus} decorative touchPopover={false} returnFocusTo={rowRef} onRetried={gitRetry.onRetried} />
         {isCollapsed && <TopStatusMarker status={status} />}
         <RowControls fixed={project.pinned ? <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={rowRef} /> : undefined}>
           <NewSessionButton label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
           <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, { gitRepository: gitStatus?.repository, pushing: gitStatus?.activity === "pushing" })} contextTargetRef={rowRef} />
         </RowControls>
       </TreeRow>
+      {/* Beside the row rather than in it: the row is a `role="button"`, whose children are never read. */}
+      {gitRetry.announcer}
       <div ref={bodiesRef} className="relative flow-root">
         {!isCollapsed && (
           // Marked so collapsing every project at once can tell whether keyboard focus is standing in

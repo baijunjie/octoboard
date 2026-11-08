@@ -335,7 +335,7 @@ async fn a_retried_removal_still_holds_back_what_its_inspection_held_back() {
         )
     };
 
-    state.host_tools.replace(crate::host_tools::Tools {
+    state.host_tools.replace(Tools {
         trash: |path| {
             Err(crate::hostfs::trash::TrashFailure::new(
                 path,
@@ -383,7 +383,7 @@ async fn a_removal_that_cannot_run_git_keeps_why_it_held_a_worktree_back() {
         .await
         .unwrap();
     drop(stuck);
-    state.host_tools.replace(crate::host_tools::Tools {
+    state.host_tools.replace(Tools {
         git: || anyhow::bail!("git is not on the PATH"),
         ..host_tools()
     });
@@ -528,7 +528,9 @@ fn removed_with(
     data: PathBuf,
 ) -> Vec<SessionBranchItem> {
     blocking(|| {
-        let git = crate::branch_cleanup::cleanup_git(&fixture.state.host_tools.get()).unwrap();
+        let git =
+            crate::branch_cleanup::cleanup_git(&fixture.state.host_tools.get(), Pace::Scheduled)
+                .unwrap();
         let bound = bound_in(&fixture.state, archived).unwrap();
         let mut judge = WorktreeRemovability::of(&fixture.state, None, Some(home), data).unwrap();
         remove_in(&fixture.state, &git, &bound[0], &mut judge, &[])

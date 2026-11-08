@@ -2,7 +2,7 @@
 // it, the branch switch and the restore that change its files, and its shell terminals.
 import type { ReplyOf } from "../requests";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
-import { type ProjectAccount, type Project, type ClientRequestBody, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges } from "../protocol";
+import { type ProjectAccount, type Project, type ClientRequestBody, type ShellTerminal, type GitStatus, type GitWorkflowOverride, type GitWorkflowOverrideChanges } from "../protocol";
 import { scopeCause, type SourceUnavailableCause } from "../errors/causes";
 import { createGitReplies } from "./fixtureGit";
 import { refuseUnfillable } from "./banner";
@@ -25,6 +25,9 @@ const SCOPE_UNAVAILABLE: Record<SourceUnavailableCause, string> = {
 
 /** The system's text for a read it denied. */
 const PERMISSION_DENIED_DETAIL = "Permission denied (os error 13)";
+
+/** How long a re-check of a project's Git status shows its check running before the check ends. */
+const RECHECK_MS = 400;
 
 /** Mutable project account and launch settings on top of the project they change, retaining absent-versus-cleared values. */
 function projectFields(current: Pick<Project, "accounts" | "launch">, body: Extract<ClientRequestBody, { type: "add_project" | "update_project" }>): Partial<Project> & Pick<Project, "accounts" | "launch"> {
@@ -157,6 +160,19 @@ export function createProjectReplies({ scenario, store, fail, git, restored, sta
       restored.files.set(body.project, result.files);
       restored.git.set(body.project, createGitReplies(result.git, fail));
       return { type: "ack", id: null };
+    },
+    // A person-paced re-check: the project's status is broadcast checking, then as it ended (the fixture's check finds
+    // what the status already holds), and the answer carries that final status. A project with no status has none to give.
+    refresh_project_git_status: async (body) => {
+      refuseUnknownProject(body.project);
+      const current = store.getState().gitStatuses.get(body.project);
+      if (!current) return { type: "project_git_rechecked", id: null, status: null };
+      const publish = (status: GitStatus) => store.setState((state) => ({ gitStatuses: new Map(state.gitStatuses).set(body.project, status) }));
+      publish({ ...current, activity: "checking" });
+      await new Promise((resolve) => setTimeout(resolve, RECHECK_MS));
+      const status = { ...current, activity: "idle" } satisfies GitStatus;
+      publish(status);
+      return { type: "project_git_rechecked", id: null, status };
     },
     // Native path operations are acknowledged without launching anything on the host.
     open_project_path: openPath,

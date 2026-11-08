@@ -6,20 +6,19 @@ import { useT } from "../../i18n/react";
 import { AlertButton } from "./AlertButton";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";
 import { errorDetails, errorRemedy } from "./errorParts";
+import { failureRecoveryAction, RecoveryLink } from "./ErrorGuidance";
 import { ErrorAlert, type AlertStatus } from "./ErrorAlert";
 
-/** The Alert of a failure that is the state of what the screen shows: `title` says what failed, the
- * failure's sentence is the description with the one main thing to do under it, Try again, and the rest
- * (further explanation, then the raw text: the system's message, the diagnostics) is behind the
- * `ErrorAlert`'s Details button, left out when there is none.
- * `onRetry` is optional: without it, or for a failure no retry can change (`retryCanHelp`), the Alert
- * has no Try again. `pending` keeps the button where it is, unavailable, while the retry
- * runs, so focus on it is not lost; the failure stays shown until the retry answers. `announce`,
- * `announceDelayMs` and `attempt` (which makes a failure that repeats itself in the same words
- * announce again) are `ErrorAlert`'s. The button never takes focus from a press, so a retry started
- * with the pointer leaves focus where it was. */
+/** The Alert of a failure that is the state of what the screen shows: `title` says what failed, the failure's sentence
+ * is the description with the one main thing to do under it, Try again, and the rest (further explanation, then the raw
+ * text: the system's message, the diagnostics) is behind the `ErrorAlert`'s Details button, left out when there is
+ * none. `onRetry` is optional: without it, or for a failure no retry can change (`retryCanHelp`), the Alert has no Try
+ * again. A failure whose remedy is a link out (a missing Git: Download Git) has the link before Try again. `pending`
+ * keeps the button where it is, unavailable, while the retry runs, so focus on it is not lost; the failure stays shown
+ * until the retry answers. `announce`, `announceDelayMs` and `attempt` (which makes a failure that repeats itself in
+ * the same words announce again) are `ErrorAlert`'s. The button never takes focus from a press, so a retry started with
+ * the pointer leaves focus where it was. */
 export function FailureAlert({
-  id,
   textId,
   title,
   message,
@@ -31,8 +30,6 @@ export function FailureAlert({
   status,
   className,
 }: {
-  /** For a field that is described by the alert. */
-  id?: string;
   /** For a field that is described by what the failure says, and not by its buttons (`ErrorAlert`'s). */
   textId?: string;
   title: React.ReactNode;
@@ -46,9 +43,16 @@ export function FailureAlert({
   className?: string;
 }): React.ReactElement {
   const t = useT();
+  const action = failureRecoveryAction(t, message);
+  // Only a link out stands among the buttons; any other recovery's control is not this alert's.
+  const link = action?.kind === "link" ? <RecoveryLink action={action} size="sm" /> : null;
+  const retry = onRetry && retryCanHelp(message) && (
+    <AlertButton kind="action" size="sm" focusOnPress={false} pending={pending} onPress={onRetry}>
+      {t("error.tryAgain")}
+    </AlertButton>
+  );
   return (
     <ErrorAlert
-      id={id}
       textId={textId}
       className={className}
       title={title}
@@ -58,11 +62,7 @@ export function FailureAlert({
       status={status}
       remedy={errorRemedy(message)}
       details={errorDetails(message)}
-      actions={onRetry && retryCanHelp(message) && (
-        <AlertButton kind="action" size="sm" focusOnPress={false} pending={pending} onPress={onRetry}>
-          {t("error.tryAgain")}
-        </AlertButton>
-      )}
+      actions={(link || retry) && <>{link}{retry}</>}
     >
       <DaemonErrorMessage error={message} part="summary" />
     </ErrorAlert>

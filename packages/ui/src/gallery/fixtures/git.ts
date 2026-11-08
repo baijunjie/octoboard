@@ -132,6 +132,12 @@ const longFailureState = snapshotState({
   consoles: [console_], projects: [squeezeProject], sessions: [squeezeSession],
   gitStatuses: [{ ...squeezeStatus, activity: "idle", error: `fetch: Could not resolve host 'origin'; remote URL: ssh://git@ssh.github.com:443/octoboard/${"long-diagnostic-segment/".repeat(30)}repository.git; END-OF-DIAGNOSTIC` }],
 });
+const gitMissingProject = projectOf("p-git-missing", console_.id, "Without Git");
+const gitMissingState = snapshotState({
+  consoles: [console_], projects: [gitMissingProject],
+  sessions: [sessionOf("s-git-missing", console_.id, gitMissingProject.id, "Working on it", "idle")],
+  gitStatuses: [gitStatusOf(gitMissingProject.id, { branch: null, upstream: null, error: "git was not found on the login shell's PATH", error_code: "binary_not_found" })],
+});
 const restoreProject = projectOf("p-restore", console_.id, "Search API مرحبا 東京 UnbrokenProjectNameForRestoreConfirmationWrapping");
 const restoreState = snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id)] });
 const restoreFixture = { state: restoreState, git: RESTORE_GIT, files: RESTORE_FILES };
@@ -231,6 +237,13 @@ export const gitScenarios: Scenario[] = [
     steps: [(ui) => ui.openGitFailure((name) => name.startsWith(unreadableProject.name))],
   },
   {
+    id: "git-badge-git-missing", group: GROUP, category: "exceptional",
+    title: "Branch badge when Git is missing",
+    description: "The status check found no Git on the machine: the badge is the failure mark alone, with no branch or counts, and its popover is held open. It words the failure as an error alert does: the sentence that Git is not installed or not on PATH, the remedy to install it where sessions run and try again, and last two buttons at the trailing edge: Download Git (external-link icon), then Try again. Git's own error text is not shown, so there is no diagnostic block or Copy button.",
+    state: gitMissingState, preferences: { sidebarWidth: 260 },
+    steps: [(ui) => ui.openGitFailure()],
+  },
+  {
     id: "git-badge-focus-long-error", group: GROUP, category: "exceptional",
     title: "Fetch failure at the narrowest project focus header",
     description: "The failure is deliberate: fetch cannot resolve origin. The failure mark's popover is open with the reason, remedy and a single long diagnostic line. Scroll all the way to the right: END-OF-DIAGNOSTIC must be fully readable clear of the floating Copy button, which stays at the top right and copies the entire line. At the narrowest sidebar the mark and the two counts take more than half of the header's free width, so the branch has no room and the badge shows only them, while the title (console over project name) keeps the rest and fades at its end. Hovering the counts shows the badge's tooltip, which does not mention the failure.",
@@ -275,6 +288,14 @@ export const gitScenarios: Scenario[] = [
     description: "The third menu is replaced by a danger Alert in the popover holding the title Could not load the items, Git's own sentence for the failure, a Details button for Git's diagnostic and Try again at the trailing edge, with no menu items.",
     ...switchFixture,
     projectBranches: { [restoreProject.id]: { code: "git_failed", params: { detail: "fatal: unable to read refs/heads" }, message: "Unable to list local branches" } },
+    steps: openSwitch,
+  },
+  {
+    id: "git-switch-branch-no-git", group: "Projects", category: "exceptional",
+    title: "Local branches could not be read, Git missing",
+    description: "The third menu is replaced by a danger Alert in the popover holding the title Could not load the items, the sentence that Git is not installed or not on PATH and the remedy to install it where sessions run and try again, with no Details button, then Download Git (external-link icon) and Try again at the trailing edge, wrapping onto two lines where the language's labels are wider, with no menu items.",
+    ...switchFixture,
+    projectBranches: { [restoreProject.id]: { code: "binary_not_found", params: { binary: "git" }, message: "git was not found on the login shell's PATH" } },
     steps: openSwitch,
   },
   {

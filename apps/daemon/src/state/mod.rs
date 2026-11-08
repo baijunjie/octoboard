@@ -65,7 +65,7 @@ pub(crate) use auto_switch::AutoSwitchHooks;
 pub(crate) use background::EMPTY_TASKS_DELAY;
 pub(crate) use claims::session_archived;
 pub use claims::{ClaimKind, LaunchClaim};
-pub use git_status::GitCheckClaim;
+pub use git_status::{GitCheckClaim, OwedCheck};
 pub use live::Running;
 pub use sessions::Deletion;
 pub use sharing_lock::AccountSharingLock;

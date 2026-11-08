@@ -137,7 +137,7 @@ async fn a_project_removal_that_cannot_find_out_what_goes_along_says_so_and_leav
     let fixture = Fixture::new("cleanup-remove-project-unknown");
     fixture.store("s1", SessionStatus::Archived);
     let outside = fixture.worktree("outside", "s1");
-    fixture.state.host_tools.replace(crate::host_tools::Tools {
+    fixture.state.host_tools.replace(Tools {
         git: || anyhow::bail!("git is not on the PATH"),
         ..host_tools()
     });
@@ -170,6 +170,110 @@ async fn a_project_removal_that_cannot_find_out_what_goes_along_says_so_and_leav
         told.1
     );
     assert!(outside.exists());
+}
+
+/// A removal that finds no `git` nests that refusal in its notice, beside the reason as text, so a
+/// client words it as Git not being installed.
+#[tokio::test]
+async fn a_project_removal_without_git_nests_its_refusal_in_the_notice() {
+    let fixture = Fixture::new("cleanup-remove-project-no-git");
+    fixture.store("s1", SessionStatus::Archived);
+    fixture.worktree("outside", "s1");
+    let name = project_p1(&fixture.state).name;
+    fixture.state.host_tools.replace(Tools {
+        git: git_not_found,
+        fresh_git: git_not_found,
+        ..host_tools()
+    });
+    let mut events = fixture.state.subscribe();
+    crate::coordinator::handle(
+        &fixture.state,
+        None,
+        RequestBody::DeleteProject {
+            project: "p1".to_string(),
+            stop_sessions: true,
+            trash_directory: true,
+            force_remove: Vec::new(),
+            inspection: None,
+        },
+    )
+    .await
+    .unwrap();
+    let params = loop {
+        match events.try_recv() {
+            Ok(Event::Error { code, params, .. }) => {
+                assert_eq!(code, error_code::PROJECT_BRANCHES_NOT_DETERMINED);
+                break params;
+            }
+            Ok(_) => continue,
+            Err(err) => panic!("not told: {err:?}"),
+        }
+    };
+    assert_eq!(params["reason_code"], error_code::BINARY_NOT_FOUND.as_str());
+    assert_eq!(params["binary"], "git");
+    assert_eq!(params["name"], name);
+    assert!(params["detail"].contains("not found"), "{params:?}");
+}
+
+/// A project's removal is asked for by a person, inspected and planned alike: a `git` the
+/// cached snapshot does not find is looked for again.
+#[tokio::test]
+async fn a_project_removal_looks_for_a_git_installed_since_the_cached_snapshot() {
+    let fixture = Fixture::new("cleanup-remove-project-fresh-git");
+    fixture.store("s1", SessionStatus::Archived);
+    fixture.worktree("outside", "s1");
+    fixture.state.host_tools.replace(Tools {
+        git: git_not_found,
+        fresh_git: system_git,
+        ..host_tools()
+    });
+    crate::coordinator::handle(
+        &fixture.state,
+        None,
+        RequestBody::InspectProjectRemoval {
+            project: "p1".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    let state = fixture.state.clone();
+    let removal = tokio::task::spawn_blocking(move || {
+        project::plan(&state, &project_p1(&state), project::Reads::Removal, &[])
+    })
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(removal.is_some());
+}
+
+/// So is the inspection before a session is archived or deleted.
+#[tokio::test]
+async fn inspecting_a_sessions_branches_looks_for_a_git_installed_since_the_cached_snapshot() {
+    let fixture = Fixture::new("cleanup-inspect-fresh-git");
+    fixture.store("s1", SessionStatus::Idle);
+    branch_made_by(&fixture.state, &fixture.repo, "mine", "s1");
+    fixture.state.host_tools.replace(Tools {
+        git: git_not_found,
+        fresh_git: system_git,
+        ..host_tools()
+    });
+    let reply = crate::coordinator::handle(
+        &fixture.state,
+        None,
+        RequestBody::InspectSessionBranches {
+            sessions: vec!["s1".to_string()],
+            processes: false,
+        },
+    )
+    .await
+    .unwrap();
+    let Some(Event::SessionBranchesInspected { items, .. }) = reply else {
+        panic!("{reply:?}");
+    };
+    assert_eq!(
+        summary(&items),
+        expect(&[(false, "mine", SessionBranchState::Removable)])
+    );
 }
 
 #[tokio::test]

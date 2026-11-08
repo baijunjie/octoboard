@@ -33,6 +33,21 @@ it.each([
   expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
 });
 
+it("classifies a missing git as its own remedy, and any other missing binary as the generic tool one", () => {
+  expect(classifyError(new CodedError("raw", "binary_not_found", { binary: "git" }))).toEqual({ kind: "actionable", recovery: "installGit" });
+  expect(classifyError(new CodedError("raw", "binary_not_found", { binary: "claude" }))).toEqual({ kind: "actionable", recovery: "tool" });
+});
+
+it("remedies a removal that could not tell its leftovers for want of Git by installing it, then looking at what was left", () => {
+  const params = { name: "Docs", detail: "raw", reason: "raw", reason_code: "binary_not_found", binary: "git" };
+  const noGit = new CodedError("raw", "project_branches_not_determined", params);
+  expect(classifyError(noGit)).toEqual({ kind: "actionable", recovery: "installGitNoRetry" });
+  expect(additionalRecovery(noGit)).toBe("projectBranches");
+  const other = new CodedError("raw", "project_branches_not_determined", { ...params, reason_code: "internal_error" });
+  expect(classifyError(other)).toEqual({ kind: "actionable", recovery: "projectBranches" });
+  expect(additionalRecovery(other)).toBeUndefined();
+});
+
 it("gives a list of leftovers that are all worktrees kept for a project folder that could not be checked, or as a protected folder, no remedy of its own", () => {
   const untold = { kind: "worktree", name: "/wt", branch: "a", state: "failed", uncommitted: false, detail: "could not be told", cause: "project_folder_unknown" };
   const failed = { kind: "branch", name: "fix/a", branch: "fix/a", state: "failed", uncommitted: false, detail: "error: refused", cause: null };

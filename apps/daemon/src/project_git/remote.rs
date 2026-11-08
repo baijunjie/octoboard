@@ -21,6 +21,7 @@ use crate::git::env::SshConfiguration;
 use crate::git::layout::is_git_repo;
 use crate::git::remote_branch::split_remote_branch;
 use crate::git::run::{GitError, Limits, Runner};
+use crate::host_tools::Pace;
 use crate::protocol::{Event, Project};
 use crate::state::AppState;
 
@@ -300,7 +301,7 @@ fn url_with(run: RunGit) -> Option<Option<String>> {
 }
 
 fn observe(state: &AppState, path: &Path) -> Option<Option<String>> {
-    observe_with(path, || match super::project_git(state) {
+    observe_with(path, || match super::project_git(state, Pace::Scheduled) {
         Ok(git) => url_with(&runner(&git, path)),
         Err(err) => {
             tracing::debug!(%err, "no git to read the project's remotes with");

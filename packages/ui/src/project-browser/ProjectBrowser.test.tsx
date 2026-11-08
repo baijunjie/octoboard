@@ -275,6 +275,18 @@ it("says the changes are loading once, from one status region, across the source
 });
 
 
+it("asks for the Git mode's source as a person's request on Refresh, and not on the refresh a branch change brings", async () => {
+  const project = "git-refresh-person";
+  const icon = await mount(project, "git");
+  const asked = () => pending.filter((request) => request.body.type === "get_project_source").map((request) => "asked_by_person" in request.body && request.body.asked_by_person === true);
+  expect(asked()).toEqual([false]);
+  await answer("get_project_source", source(project));
+  await answer("list_project_changes", changes(project));
+  await answer("list_project_branches", branches(project));
+  await press(icon());
+  expect(asked()).toEqual([true]);
+});
+
 it.each(["files", "git"] as const)("refreshes the visible %s pane when a switched branch is published", async (mode) => {
   const project = `switch-${mode}`;
   const publish = async (branch: string) => act(async () => {

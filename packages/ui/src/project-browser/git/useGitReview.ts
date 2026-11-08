@@ -30,8 +30,9 @@ export interface GitReview {
    * the project's directory, or when no worktree has the branch checked out. */
   worktree: string | undefined;
   /** Asks again for everything the Git mode shows: the worktrees, the branches, the uncommitted
-   * changes, the comparison and the commits. Settles once those have been answered or have failed. */
-  refresh: () => Promise<void>;
+   * changes, the comparison and the commits. Settles once those have been answered or have failed.
+   * `askedByPerson` for a refresh a person asked for (see `useProjectSource`). */
+  refresh: (askedByPerson?: boolean) => Promise<void>;
   /** The change the viewer shows, when one is open. */
   viewer?: { subject: ViewerSubject; onClose: () => void; navigation?: ViewerNavigation };
   /** Closes the change viewer without moving focus to its row. */
@@ -120,8 +121,8 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     setBranch(next);
   };
 
-  const refresh = async () => {
-    await Promise.all([source.refresh(), branches.refresh(), changes.refresh(), committedChanges.refresh()]);
+  const refresh = async (askedByPerson = false) => {
+    await Promise.all([source.refresh(askedByPerson), branches.refresh(), changes.refresh(), committedChanges.refresh()]);
   };
 
   // The selection is kept in view, while the viewer moves through the changes. The layout and the

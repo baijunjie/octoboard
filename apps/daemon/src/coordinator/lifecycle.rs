@@ -209,7 +209,7 @@ pub(super) async fn inspect_session_branches(
         for id in &sessions {
             found.extend(inspected.store.get_session(id)?);
         }
-        branch_cleanup::survey::inspect(&inspected, &found)
+        branch_cleanup::survey::inspect(&inspected, &found, crate::host_tools::Pace::Person)
     })
     .await??;
     let processes = match ids {

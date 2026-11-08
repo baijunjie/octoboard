@@ -87,7 +87,8 @@ inspection that fails** leaves the dialog usable, as the handoff does not depend
 **Moves to the new session** heading, named that the branches to move are unknown, and the list says nothing of
 branches. The mark's popover says that the branches the session is responsible for could not be checked, with the
 reason, what to do, any details and, where trying again can help, **Try again**, which closes the popover and inspects
-them again; the mark stays while that runs, and goes once an inspection succeeds, focus then moving to the dialog when
+them again — preceded by **Download Git** when the reason is that Git could not be found (see "Recovery and unexpected
+errors" in `docs/product/error-alerts.md`), the retry then finding a Git installed since; the mark stays while that runs, and goes once an inspection succeeds, focus then moving to the dialog when
 the mark or its popover held it. The dialog's status region says the failure after the announcement of the dialog's
 opening focus move, and again each time a retry fails again, in the same words or not; it opens no error alert (see
 "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). While the handoff request is

@@ -1620,16 +1620,18 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `dialogs/SessionRequestForms.tsx`, `IncompleteSharingAnnouncer` | an account's unfinished sharing change marked after the dialog opened | none | none | Mounted with the request dialog; text appears after the opening. Not heard. |
 | `dialogs/HandoffDialog.tsx` | branch check failed (`firstWriteDelayMs` of `AFTER_FOCUS_MOVE_DELAY_MS`) | none | none | Region mounted with the dialog; a failure arrives after it opened and again on each failed retry. Not heard. |
 | `report/ReportPanel.tsx` | list failure mark's words | none | none | Region mounted through every state of the panel. Not heard. |
+| `sidebar/useGitRetryAnnouncement.tsx`, through `AttendedStatusAnnouncer` | "Git check failed" after a Try again on the branch badge's Git-missing mark that still finds no Git | SA-D is the nearest recorded mechanism (a caller timer of `AFTER_FOCUS_MOVE_DELAY_MS`, attended wait); no complete match established | none | One region per placement, mounted empty for the placement's lifetime outside the row's `role="button"` (beside `TreeRow` in `ProjectNode`, after the focus header, after a focus project group's header); written from the request's answer, `clearAfterRead`, a repeat made distinct by alternating a trailing no-break space. Focus has moved from the mark to the row or header before the answer. Not heard; the sibling-of-a-row-button placement has no recorded case. |
+| `dialogs/BranchCleanupOptions.tsx`, `DelayedAnnouncer` | the missing-Git sentence of the project-removal dialog's "Other worktrees unknown" mark, at its arrival and after a retry that fails again | none | none | Region mounted with the Trash option; each failure written `AFTER_FOCUS_MOVE_DELAY_MS` after it arrives (after a checkbox tick or a retry that closed the mark's popover), emptied while a retry is out so a repeat in the same words is written again. Not heard. |
 
-Totals: of 32 callers, 13 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
+Totals: of 34 callers, 13 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
 `AccountLoginAnnouncer`, `PermissionsSection`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
 `ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`), 5 are candidates (`ImportReview`, `ChangeList`,
-`FilesPanel`, `TerminalPane`, `ShellTerminalView`) and 14 have no complete match (`ShellTerminalPanel`,
-`SpotNotice`, `BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the ten callers listed
-after it). Of the heard callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer`
-matches the E10 table and owned-account details paths recorded in SA-D; the other eleven match for some writes only,
-with SA-N's native-capture limits stated in that case. Of the candidates, `ImportReview` matches for every write it
-makes; `ChangeList`, `FilesPanel`, `TerminalPane` and `ShellTerminalView` for some.
+`FilesPanel`, `TerminalPane`, `ShellTerminalView`) and 16 have no complete match (`ShellTerminalPanel`, `SpotNotice`,
+`BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the twelve callers listed after it). Of
+the heard callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer` matches the E10
+table and owned-account details paths recorded in SA-D; the other eleven match for some writes only, with SA-N's
+native-capture limits stated in that case. Of the candidates, `ImportReview` matches for every write it makes;
+`ChangeList`, `FilesPanel`, `TerminalPane` and `ShellTerminalView` for some.
 
 Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 

@@ -333,7 +333,7 @@ fn a_locked_worktree_whose_move_to_the_trash_fails_keeps_its_lock() {
     std::fs::remove_dir_all(&folder).unwrap();
     let tools = fixture.state.host_tools.get();
     let left = project::carry_out(
-        &crate::branch_cleanup::cleanup_git(&tools).unwrap(),
+        &crate::branch_cleanup::cleanup_git(&tools, Pace::Scheduled).unwrap(),
         removal,
         &forced,
         |path| {
@@ -360,11 +360,11 @@ fn the_cleanups_read_and_write_build_their_command_lines() {
     use crate::git::run::{Access, UserGit, WorkDir};
     use crate::test_support::{pinned_shell_env, CommandLine};
 
-    let tools = crate::host_tools::Tools {
+    let tools = Tools {
         git: || Ok(UserGit::new("/opt/git", pinned_shell_env())),
         ..crate::test_support::host_tools()
     };
-    let git = crate::branch_cleanup::cleanup_git(&tools).unwrap();
+    let git = crate::branch_cleanup::cleanup_git(&tools, Pace::Scheduled).unwrap();
     let read = git.command(
         Access::Read,
         WorkDir::At(Path::new("/repo")),
@@ -409,4 +409,35 @@ fn the_cleanups_read_and_write_build_their_command_lines() {
             Some("/repo")
         )
     );
+}
+
+/// A project's removal is carried out once its sessions have stopped, following on from the
+/// request: a `git` that cannot be found by then is not looked for again, and what was to go is
+/// left, failed.
+#[tokio::test]
+async fn a_project_removal_carried_out_takes_no_fresh_snapshot_for_a_missing_git() {
+    let fixture = Fixture::new("cleanup-project-no-git-carry-out");
+    fixture.store("s1", SessionStatus::Archived);
+    let outside = fixture.worktree("outside", "s1");
+    let state = fixture.state.clone();
+    let removal = tokio::task::spawn_blocking(move || {
+        project::plan(&state, &project_p1(&state), project::Reads::Removal, &[])
+    })
+    .await
+    .unwrap()
+    .unwrap()
+    .unwrap();
+    fixture.state.host_tools.replace(Tools {
+        git: git_not_found,
+        fresh_git: || unreachable!("a removal carried out took a fresh snapshot"),
+        ..host_tools()
+    });
+    let left =
+        project::carry_out_once_stopped(fixture.state.clone(), Vec::new(), removal, Vec::new())
+            .await;
+    assert!(!left.is_empty(), "{left:?}");
+    assert!(left
+        .iter()
+        .all(|item| item.state == SessionBranchState::Failed));
+    assert!(outside.exists());
 }

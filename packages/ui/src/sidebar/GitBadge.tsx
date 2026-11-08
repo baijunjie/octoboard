@@ -1,7 +1,13 @@
 import { ArrowDown, ArrowUp, GitBranch, GitCommitHorizontal, RefreshCw } from "lucide-react";
-import React, { type RefObject } from "react";
+import React, { useState, type RefObject } from "react";
 
 import { DiagnosticBlock } from "../components/alerts/DiagnosticBlock";
+import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
+import { recoveryAction, RecoveryGuidance, RecoveryLink } from "../components/alerts/ErrorGuidance";
+import { alertFailure } from "../components/alerts/raiseError";
+import { CodedError } from "../errors/codedError";
+import { CODE } from "../errors/codes";
+import { classifyError } from "../errors/errorRecovery";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
 import { focusHolderOrButton } from "../components/focus/handFocusOff";
@@ -11,6 +17,9 @@ import { gitBadgeContent } from "../git/gitStatusCopy";
 import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../git/gitStatusLabel";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { GitStatus } from "../protocol";
+import { useDaemon } from "../store";
+import { Button } from "../primitives";
+import type { GitRetried } from "./useGitRetryAnnouncement";
 
 function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React.ReactElement {
   const up = direction === "up";
@@ -22,6 +31,44 @@ function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React
         <Icon className={`absolute inset-x-0 size-3 ${up ? "top-full" : "-top-full"}`} />
       </span>
     </span>
+  );
+}
+
+/** The failure mark of a check that found no `git`: the sentence and remedy of `binary_not_found` for `git`, as an
+ * error alert gives them, then the remedy's link to the download page and Try again, which closes the popover and has
+ * the daemon check `project` once more (`refresh_project_git_status`), looking for a `git` installed since, without
+ * pulling. Once the check runs the badge's in-flight glyph stands in for the mark, which is what shows it pending;
+ * before that, while the request is out, the button is busy. The status the check ends with goes to `onRetried`, even
+ * once this mark is gone; a request that fails is an error alert instead. */
+function GitNotFoundMark({ project, error, onRetried }: { project: string; error: string; onRetried?: GitRetried }): React.ReactElement {
+  const t = useT();
+  const { request } = useDaemon();
+  const [checking, setChecking] = useState(false);
+  const failure = new CodedError(error, CODE.binary_not_found, { binary: "git" });
+  const recovery = classifyError(failure);
+  const action = recovery.kind === "actionable" ? recoveryAction(t, recovery.recovery) : undefined;
+  const tryAgain = () => {
+    setChecking(true);
+    request({ type: "refresh_project_git_status", project })
+      .then((reply) => onRetried?.(project, reply.status))
+      .catch(alertFailure({ title: t("sidebar.git.checkFailedTitle") }))
+      .finally(() => setChecking(false));
+  };
+  return (
+    <StatusMark
+      label={gitFailureLabel(t)}
+      actions={(close) => (
+        <span className="flex flex-wrap justify-end gap-2">
+          <RecoveryLink action={action} size="sm" />
+          <Button size="sm" variant="secondary" focusOnPress={false} pending={checking} onPress={() => { close(); tryAgain(); }}>
+            {t("error.tryAgain")}
+          </Button>
+        </span>
+      )}
+    >
+      <p><DaemonErrorMessage error={failure} part="summary" /></p>
+      {recovery.kind === "actionable" && <p><RecoveryGuidance recovery={recovery.recovery} /></p>}
+    </StatusMark>
   );
 }
 
@@ -37,16 +84,18 @@ function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React
  * scrolls downward during a fast-forward. Both scroll inside a fixed count-arrow-sized clip.
  * The ahead/behind counts are likewise never colour alone.
  *
- * A failed check is a failure mark (`StatusMark`, "How a mark is drawn and opened" in
- * `docs/ui-standard.md`) at the badge's start, standing in for the idle glyph: a button named in
- * the application's own words, whose popover holds the reason, the remedy and, last, Git's or the
- * system's own text, which is shown nowhere else. While a check, a pull or a push runs, the refresh
- * glyph takes its place (`gitFailureShown`), and it comes back when that run ends unless a check in it succeeded. It stands outside the tooltip's
- * trigger, since a mark is a popover and never also a tooltip, and outside the `aria-hidden` box
- * below. In a sidebar row it is a tab stop of its own, as the row's other buttons are, and its press
- * (react-aria's, which keeps the click to itself) does not reach the row, which would fold the project. When it goes away while it or its popover holds
- * focus (a check starting, or succeeding), focus goes to `returnFocusTo` (itself when it is a tab stop, else
- * its first button), as for any control a state change removes.
+ * A failed check is a failure mark (`StatusMark`, "How a mark is drawn and opened" in `docs/ui-standard.md`) at the
+ * badge's start, standing in for the idle glyph: a button named in the application's own words, whose popover holds
+ * the reason, the remedy and, last, Git's or the system's own text, which is shown nowhere else. A failure the daemon
+ * gives a code (`error_code`: a `git` that cannot be found) is worded as the error alerts word it instead, with its
+ * remedy's link (Download Git) and Try again last (`GitNotFoundMark`), whose outcome goes to `onRetried`. While a
+ * check, a pull or a push runs, the refresh glyph takes its place (`gitFailureShown`), and it comes back when that run
+ * ends unless a check in it succeeded. It stands outside the tooltip's trigger, since a mark is a popover and never
+ * also a tooltip, and outside the `aria-hidden` box below. In a sidebar row it is a tab stop of its own, as the row's
+ * other buttons are, and its press (react-aria's, which keeps the click to itself) does not reach the row, which would
+ * fold the project. When it goes away while it or its popover holds focus (a check starting, or succeeding), focus
+ * goes to `returnFocusTo` (itself when it is a tab stop, else its first button), as for any control a state change
+ * removes.
  *
  * The rest of the badge is one `IndicatorTooltip` (hover only, so it adds no tab stop to its row)
  * whose rich facts mirror the accessible-name sentence: one tooltip for the glyph, the branch and
@@ -64,10 +113,12 @@ function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React
  * without a change of its own, and it costs nothing: the trigger, which stays outside the hidden
  * wrapper, is `tabIndex={-1}`, and nothing inside the wrapper is focusable.
  *
- * No `role="status"` here: `activity` changing on its own (a sweep starting or finishing) is
- * exactly the kind of unprompted update that would otherwise need one, but a live region on every
- * row would announce each project's `checking` → `idle` roundtrip every five minutes, for every
- * project, which is noise rather than news. Left unannounced on purpose.
+ * The badge has no `role="status"` of its own: `activity` changing on its own (a sweep starting or finishing) is the
+ * kind of unprompted update that would otherwise need one, but a live region on every row would announce each
+ * project's `checking` → `idle` roundtrip every five minutes, for every project, which is noise rather than news. The
+ * one change that is spoken is a Try again on the Git-missing mark that finds no `git` again, which the person asked
+ * for and waits on; the placement says it (`useGitRetryAnnouncement`), outside a row's button, whose children are
+ * never read.
  *
  * Only the branch name gives way and runs as a marquee. The grid reserves room for the state
  * glyph and upstream counts, keeping them visible even when none of the branch name fits.
@@ -77,6 +128,7 @@ export function GitBadge({
   decorative,
   touchPopover,
   returnFocusTo,
+  onRetried,
 }: {
   status: GitStatus | undefined;
   decorative?: boolean;
@@ -84,6 +136,8 @@ export function GitBadge({
   touchPopover?: boolean;
   /** What takes keyboard focus when the failure mark goes away holding it: the row, or the header around the badge. */
   returnFocusTo?: RefObject<HTMLElement | null>;
+  /** Told what a Try again on the Git-missing mark was answered with, for the placement's announcement. */
+  onRetried?: GitRetried;
 }): React.ReactElement | null {
   const t = useT();
   const language = useCurrentLanguage();
@@ -161,11 +215,15 @@ export function GitBadge({
     // No `min-w-0`: the box's automatic minimum is the mark and the facts' own minimum, so only the branch gives way.
     <span className="flex items-center">
       <span className="flex shrink-0" {...markFocus}>
-        <StatusMark label={gitFailureLabel(t)}>
-          <p><Message id="sidebar.git.failed.reason" /></p>
-          <p><Message id="sidebar.git.failed.remedy" /></p>
-          <DiagnosticBlock>{status.error}</DiagnosticBlock>
-        </StatusMark>
+        {status.error_code === CODE.binary_not_found ? (
+          <GitNotFoundMark project={status.project} error={status.error} onRetried={onRetried} />
+        ) : (
+          <StatusMark label={gitFailureLabel(t)}>
+            <p><Message id="sidebar.git.failed.reason" /></p>
+            <p><Message id="sidebar.git.failed.remedy" /></p>
+            <DiagnosticBlock>{status.error}</DiagnosticBlock>
+          </StatusMark>
+        )}
       </span>
       {facts}
     </span>

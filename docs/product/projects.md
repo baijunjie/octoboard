@@ -57,7 +57,11 @@ check, another association source or editing a project shows no creation descrip
 Submitting a missing single directory initializes a repository without template files, project files or an initial
 commit. Existing directories are never initialized by this association. If creation or initialization fails, no project
 is associated; any parent directories already created may remain. A failed git initialization leaves the target
-directory absent, so submitting again retries initialization. Configuration import still requires an existing directory
+directory absent, so submitting again retries initialization. Initializing needs the user's `git`: when it cannot be
+found, the submit is refused with `binary_not_found` before anything is created, in an error alert saying that Git is
+not installed or not on `PATH`, with the remedy to install it and **Download Git** (see "Recovery and unexpected errors"
+in `docs/product/error-alerts.md`), the form staying open behind it. Submitting again once Git is installed looks for
+it again (see "Where `git` is found" in `docs/product/project-git-status.md`). Configuration import still requires an existing directory
 when associating a local project (see "Where an imported project goes" in
 `docs/product/configuration-export-and-import.md`).
 
@@ -66,7 +70,14 @@ commit without file contents or history into a scratch directory, which proves t
 credentials and shows its top-level names. Every field below the URL (clone into, name, description, tags, default
 agent) and the submit button stay disabled until that check has succeeded for the URL as it stands, an empty one
 included; while it runs the form says it is checking, and a failure is shown in an alert directly under the URL field,
-saying the repository could not be read with git's own reason behind Details, and keeps them disabled. Both alerts are
+saying the repository could not be read with git's own reason behind Details, and keeps them disabled. That alert has
+**Try again** where trying again can help, an unreachable repository and a missing Git among them: it checks the URL
+as it stands again at once, the alert staying, its Try again busy, until the answer replaces it, and a check that fails
+again in the same words is announced again. Unlike the checks made as the URL is typed, this one is a person's request,
+so it finds a Git installed since (see "Where `git` is found" in `docs/product/project-git-status.md`). When it
+succeeds, the alert goes and keyboard focus that was in it goes back to the URL field. A missing Git's alert also offers
+**Download Git** before Try again (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). The path
+field's alert has no Try again: changing the path checks it again. Both alerts are
 titled that the location could not be checked, with the failure under the title. Neither the path field's error nor
 either alert opens an error alert (see "Errors under a field" and "Failures shown on the screen" in
 `docs/product/error-alerts.md`). A success enables them and preselects the detected agent. The check is bounded by a
@@ -101,7 +112,10 @@ For a git association:
   point git at another repository, set configuration items outright or turn TLS certificate verification off does not
   reach the clone, nor the form's check of a git URL. Capturing that environment is bounded the same way a session
   launch's is, and a capture that does not complete refuses the clone (see "The launch environment" in
-  `docs/product/launching-agents.md`).
+  `docs/product/launching-agents.md`). A `git` that cannot be found refuses the clone with `binary_not_found` before
+  anything is cloned, as for initializing a single directory (above); the clone looks for it again in a fresh capture
+  first, while the form's check of the URL, made as it is typed, uses the capture Octoboard already holds, and only its
+  **Try again** (above) looks again in a fresh one (see "Where `git` is found" in `docs/product/project-git-status.md`).
 - A clone can take minutes; other state updates keep flowing while it runs. A clone still running after **30
   minutes** is stopped and fails, and the directory it had begun is removed, so the same clone can be requested again.
 

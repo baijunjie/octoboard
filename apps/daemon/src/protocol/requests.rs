@@ -236,9 +236,14 @@ pub enum RequestBody {
     },
     /// Whether the git remote `remote_url` can be read with the user's credentials, and which
     /// agent its top level is set up for, answered with `agent_detected` or, when it cannot be
-    /// read, `git_remote_unreachable`.
+    /// read, `git_remote_unreachable`. `asked_by_person` is set when a person pressed Try again
+    /// rather than the client asking as the user types: a `git` the cached shell snapshot does not
+    /// find is then looked for once more in a fresh one.
     ProbeGitRemote {
         remote_url: String,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        asked_by_person: bool,
     },
     /// The models `agent` offers right now, answered with `agent_models`. `account` names the
     /// account whose catalogue to read, by id; absent is the default account. An account that
@@ -1013,6 +1018,15 @@ pub enum RequestBody {
     /// `project_git_status` broadcasts. A project already being checked gets one more forced check
     /// once that check ends.
     PullProjectBranch {
+        project: String,
+    },
+    /// Checks one project's git status against its remote right now, as `refresh_git_status` does
+    /// for each project of a console, but ignoring the one-minute floor, looking once more for a
+    /// `git` the cached shell snapshot does not find, and never fast-forwarding, whether or not
+    /// `auto_pull_repositories` is on. Answered with `project_git_rechecked` once that check has
+    /// ended, its statuses broadcast as `project_git_status` meanwhile. A project already being
+    /// checked gets the check once the one under way ends.
+    RefreshProjectGitStatus {
         project: String,
     },
     /// Starts a shell terminal in the project's directory, or with `worktree` in the project's

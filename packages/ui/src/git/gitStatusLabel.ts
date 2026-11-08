@@ -57,8 +57,8 @@ export function gitFailureShown(status: GitStatus): status is GitStatus & { erro
   return Boolean(status.error) && status.activity === "idle";
 }
 
-/** The name of the badge's failure mark, in the application's own words: `GitStatus.error` is Git's or
- * the system's raw text with no code to word it by, so the name is the same for every failure. */
+/** The name of the badge's failure mark, in the application's own words: the same for every failure, the one
+ * `GitStatus.error_code` words (a `git` that cannot be found) included, which its popover says. */
 export function gitFailureLabel(t: Translate): string {
   return t("sidebar.git.failed");
 }

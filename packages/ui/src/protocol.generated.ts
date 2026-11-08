@@ -504,6 +504,12 @@ export type BrowseEntry = {
 export type BrowseRequest = {
   id?: string,
   slot?: string,
+  /**
+   * Whether a person has just asked for this reply (opened a menu, pressed Try again or
+   * Refresh), rather than a client asking again while it is on screen: a `git` the cached shell
+   * snapshot does not find is then looked for once more in a fresh one.
+   */
+  asked_by_person?: boolean,
 } & ({
   "type": "get_project_source",
   project: string,
@@ -1415,6 +1421,11 @@ export type Event = {
   shell_terminal: ShellTerminal,
 }
 | {
+  "type": "project_git_rechecked",
+  id: string | null,
+  status: GitStatus | null,
+}
+| {
   "type": "project_git_status",
   status: GitStatus,
 }
@@ -1881,6 +1892,12 @@ export type GitStatus = {
    * read, so a status can carry both an error and usable numbers.
    */
   error: string | null,
+  /**
+   * The code of the failure `error` describes where the daemon has one, so a client words it
+   * itself: only `binary_not_found`, for a `git` that cannot be found on the login shell's
+   * `PATH`. Left out for any other failure, and with no `error`.
+   */
+  error_code?: string,
 };
 
 /**
@@ -2736,6 +2753,12 @@ export type ProjectSourceInfo = {
    * failed on it; `null` otherwise.
    */
   git_error: string | null,
+  /**
+   * The code of the failure `git_error` describes where the daemon has one, so a client words it
+   * itself: only `binary_not_found`, for a `git` that cannot be found on the login shell's
+   * `PATH`. Left out for any other failure, and with no `git_error`.
+   */
+  git_error_code?: string,
 };
 
 /**
@@ -3064,6 +3087,7 @@ export type Request = {
   | {
   "type": "probe_git_remote",
   remote_url: string,
+  asked_by_person?: boolean,
 }
   | {
   "type": "list_agent_models",
@@ -3532,6 +3556,10 @@ export type Request = {
   project: string,
 }
   | {
+  "type": "refresh_project_git_status",
+  project: string,
+}
+  | {
   "type": "create_shell_terminal",
   project: string,
   worktree?: string,
@@ -3801,6 +3829,7 @@ export type RequestBody = {
 | {
   "type": "probe_git_remote",
   remote_url: string,
+  asked_by_person?: boolean,
 }
 | {
   "type": "list_agent_models",
@@ -4266,6 +4295,10 @@ export type RequestBody = {
 }
 | {
   "type": "pull_project_branch",
+  project: string,
+}
+| {
+  "type": "refresh_project_git_status",
   project: string,
 }
 | {

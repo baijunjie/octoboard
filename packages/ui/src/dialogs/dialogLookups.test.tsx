@@ -50,7 +50,7 @@ function mountDetected() {
   const hook = mount((request) => useDetectedAgent(request, query, DELAY_MS, onDetected));
   return {
     ...hook,
-    detection: (): Detection => hook.result(),
+    detection: (): Detection => hook.result().detection,
     ask: (path: string) => {
       query = { type: "detect_directory_agent", path };
       hook.render();

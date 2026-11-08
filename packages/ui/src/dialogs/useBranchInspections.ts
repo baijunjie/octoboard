@@ -62,14 +62,15 @@ export function useSessionBranches(sessionIds: string[]): Inspected {
 }
 
 /** What a project's removal inspection last answered, in the `round` it was asked. */
-type RemovalAnswer = { round: number; items: SessionBranchItem[]; failed: boolean; inspection?: string };
+type RemovalAnswer = { round: number; items: SessionBranchItem[]; failed: boolean; error?: ErrorPresentation; inspection?: string };
 
 /** What removing project `projectId` with its folder moved to the Trash would also remove, asked
  * afresh each time `asking` turns on (the Trash option ticked) and each time `reinspect` is called;
- * `failed` when the daemon could not say, in which case anything may go. A removal that would be
+ * `failed` when the daemon could not say, in which case anything may go, and `error` is what it answered (none for a
+ * connection lost). A removal that would be
  * refused lists nothing and has not failed; `inspection` is the token its refusal carried, or its
  * answer where it held worktrees back, for the removal to send back. */
-export function useProjectRemovalBranches(projectId: string, asking: boolean): Inspected & { failed: boolean; inspection: string | undefined; reinspect: () => void } {
+export function useProjectRemovalBranches(projectId: string, asking: boolean): Inspected & { failed: boolean; error: ErrorPresentation | undefined; inspection: string | undefined; reinspect: () => void } {
   const { request } = useDaemon();
   const [round, setRound] = useState(0);
   const { value, send } = useLatestRequest<RemovalAnswer | undefined>({ scope: undefined, initial: undefined });
@@ -98,7 +99,7 @@ export function useProjectRemovalBranches(projectId: string, asking: boolean): I
         if (reply instanceof CodedError) return { round, items: [], failed: false, inspection: reply.params.inspection || undefined };
         return { round, items: reply.items, failed: false, inspection: reply.inspection || undefined };
       },
-      failed: () => inspectionFailed,
+      failed: (failure, _held, t) => ({ ...inspectionFailed, error: shownError(failure, t) }),
       disconnected: () => inspectionFailed,
       wanted: () => latest.current.asking,
     });
@@ -108,6 +109,7 @@ export function useProjectRemovalBranches(projectId: string, asking: boolean): I
     items: value?.items ?? [],
     pending: asking && !current,
     failed: !!value?.failed,
+    error: value?.error,
     inspection: current?.inspection,
     reinspect: () => { if (asking) setRound((n) => n + 1); },
   };

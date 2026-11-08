@@ -3,6 +3,7 @@ import { pathLinkRefusedCause, relocationCause, sourceUnavailableCause, storeWri
 import { ActionableError } from "./actionableError";
 import { CODE, codeRecord } from "./codes";
 import { CodedError } from "./codedError";
+import { messageCode } from "./daemonMessage";
 import { isUncataloguedFailure } from "./uncataloguedFailure";
 
 /** A remedy a provider's presentation module words itself, for a failure of its own: the key of the module's message
@@ -11,7 +12,7 @@ export type ProviderRemedy = `provider.${string}.${string}.remedy`;
 
 export type ErrorRecovery =
   | ProviderRemedy
-  | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "shell"
+  | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "installGit" | "installGitNoRetry" | "shell"
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
   | "configuration" | "exportSelection" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "branch"
   | "refresh" | "refreshMessages" | "scope" | "limit" | "openExternal" | "openTerminal" | "openFileManager" | "openDefaultApplication" | "issueAddress"
@@ -95,6 +96,7 @@ function onlyKeptForTheirFolder(error: CodedError): boolean {
 /** The remedy for a failure of an operation with nothing left to retry, a session that could not be brought back up:
  * the recovery's variant without a step that retries it ("retry the operation", "choose another accessible folder"). */
 function withoutRetry(recovery: ErrorRecovery | undefined): ErrorRecovery | undefined {
+  if (recovery === "installGit") return "installGitNoRetry";
   if (recovery === "appDataAccess") return "appDataAccessNoRetry";
   if (recovery === "appDataDiskSpace") return "appDataDiskSpaceNoRetry";
   if (recovery === "appDataOther") return "appDataOtherNoRetry";
@@ -127,6 +129,8 @@ export function namedSystemCause(error: unknown): ErrorRecovery | undefined {
  * remedy that prevents losing that item; and, for a handoff that failed after the work moved, what the failure left
  * behind (an original still open, or both sessions running), whatever the cause. */
 export function additionalRecovery(error: unknown): ErrorRecovery | undefined {
+  // What was left still has to be looked at once Git is there, which is the remedy the notice has when Git is.
+  if (isProjectBranchesWithoutGit(error)) return "projectBranches";
   // Said whatever the failure's own remedy is, or whether it has one: the original is still open, and after a failed
   // move both sessions are running.
   if (error instanceof CodedError && error.code === CODE.handoff_archive_failed) return "archiveOriginal";
@@ -134,6 +138,12 @@ export function additionalRecovery(error: unknown): ErrorRecovery | undefined {
   if (isNotRestored(error)) return environmentRecovery(error);
   const cause = error instanceof CodedError && error.code === CODE.account_switch_automatically_failed ? nestedFailure(error) : undefined;
   return cause && isNotRestored(cause) ? withoutRetry(environmentRecovery(cause)) : undefined;
+}
+
+/** Whether `error` is a project's removal that could not tell what went along with its folder because the user's `git`
+ * could not be found (`project_branches_not_determined` nesting `binary_not_found` for `git`). */
+function isProjectBranchesWithoutGit(error: unknown): boolean {
+  return error instanceof CodedError && error.code === CODE.project_branches_not_determined && messageCode(error.code, error.params) === "project_branches_not_determined.git";
 }
 
 /** The failure a failed automatic switch or a handoff that failed after the work moved reports, as a failure of its
@@ -217,6 +227,10 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
     if (code === CODE.source_unavailable) return { kind: "actionable", recovery: SOURCE_CAUSE_RECOVERY[sourceUnavailableCause(error.params.cause)] };
     if (code === CODE.path_link_refused) return { kind: "actionable", recovery: PATH_LINK_REFUSED_RECOVERY[pathLinkRefusedCause(error.params.cause)] };
     if (onlyKeptForTheirFolder(error)) return { kind: "actionable", recovery: "none" };
+    // Remedied as it is worded: the variant its record names for a missing `git`. A removal that could not tell what
+    // went along with its folder for want of one has nothing to try again; what it left follows (`additionalRecovery`).
+    if (code && messageCode(code, error.params) === "binary_not_found.git") return { kind: "actionable", recovery: "installGit" };
+    if (isProjectBranchesWithoutGit(error)) return { kind: "actionable", recovery: "installGitNoRetry" };
     const domain = code ? codeRecord(code)?.recovery : undefined;
     if (domain) return { kind: "actionable", recovery: domain };
     const relocation = code === CODE.relocation_failed ? RELOCATION_CAUSE_RECOVERY[relocationCause(error.params.cause)] : undefined;

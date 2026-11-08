@@ -260,6 +260,18 @@ it.each([
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 });
 
+it("answers a missing Git with its sentence, the install remedy and a link to the download page, not the unexpected-error guidance", () => {
+  mount();
+  act(() => raiseError(new CodedError("raw", "binary_not_found", { binary: "git" }), { title: "Could not add the project" }));
+  const dialog = document.querySelector('[role="alertdialog"]')!;
+  expect(dialog.textContent).toContain("Git is not installed, or it is not on PATH.");
+  expect(dialog.textContent).toContain("Install Git in the environment where sessions run and make sure it is on PATH, then try again.");
+  expect(dialog.textContent).not.toContain(issueUrl);
+  const link = [...dialog.querySelectorAll<HTMLAnchorElement>("a")].find((a) => a.textContent?.includes("Download Git"));
+  expect(link?.getAttribute("href")).toBe("https://git-scm.com/downloads");
+  expect([...dialog.querySelectorAll("a")].some((a) => a.textContent === "Report issue")).toBe(false);
+});
+
 it.each(["modelChange", "changeModelSetting"] as const)("offers a button for %s recovery that opens Change model for the alert's session", (recovery) => {
   mount();
   const open = vi.fn();

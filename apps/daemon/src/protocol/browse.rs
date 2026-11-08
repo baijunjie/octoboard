@@ -23,6 +23,12 @@ pub struct ProjectSourceInfo {
     /// Why the repository could not be read, verbatim, when its directory looks like one but `git`
     /// failed on it; `null` otherwise.
     pub git_error: Option<String>,
+    /// The code of the failure `git_error` describes where the daemon has one, so a client words it
+    /// itself: only `binary_not_found`, for a `git` that cannot be found on the login shell's
+    /// `PATH`. Left out for any other failure, and with no `git_error`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub git_error_code: Option<super::codes::Code>,
 }
 
 #[cfg_attr(test, derive(ts_rs::TS))]
@@ -421,6 +427,12 @@ pub struct BrowseRequest {
     #[serde(default)]
     #[cfg_attr(test, ts(optional))]
     pub slot: Option<String>,
+    /// Whether a person has just asked for this reply (opened a menu, pressed Try again or
+    /// Refresh), rather than a client asking again while it is on screen: a `git` the cached shell
+    /// snapshot does not find is then looked for once more in a fresh one.
+    #[serde(default)]
+    #[cfg_attr(test, ts(optional = nullable))]
+    pub asked_by_person: bool,
     #[serde(flatten)]
     pub body: BrowseBody,
 }

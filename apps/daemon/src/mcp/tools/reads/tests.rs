@@ -896,6 +896,7 @@ async fn a_projects_git_status_is_given_as_last_read() {
         behind: 1,
         activity: crate::protocol::GitActivity::Idle,
         error: Some("unable to access 'https://user:token@example.com/r.git/'".to_string()),
+        error_code: None,
     });
     let listed = call(&state, "a", "list_projects", &Map::new())
         .await

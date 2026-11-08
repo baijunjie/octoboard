@@ -9,9 +9,16 @@ import { useWindowAttended } from "./useWindowAttended";
  * region's first render, or written within about 300 ms of a focus move, is not said; and on the way back into the
  * window VoiceOver speaks the control focus is on, so a status written meanwhile is not said either. So every text,
  * the first included, is written `AFTER_FOCUS_MOVE_DELAY_MS` of attended time after it arrived, the wait started over
- * each time the user comes back; a text that is replaced while it waits is never said.
+ * each time the user comes back; a text that is replaced while it waits is never said. `clearAfterRead` is that of
+ * `StatusAnnouncer`.
  */
-export function AttendedStatusAnnouncer({ text }: { text: string | undefined }): React.ReactElement {
+export function AttendedStatusAnnouncer({
+  text,
+  clearAfterRead = false,
+}: {
+  text: string | undefined;
+  clearAfterRead?: boolean;
+}): React.ReactElement {
   const attended = useWindowAttended();
   const [said, setSaid] = useState<string>();
   useEffect(() => {
@@ -19,5 +26,5 @@ export function AttendedStatusAnnouncer({ text }: { text: string | undefined }):
     const timer = setTimeout(() => setSaid(text), AFTER_FOCUS_MOVE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [text, said, attended]);
-  return <StatusAnnouncer text={said} />;
+  return <StatusAnnouncer text={said} clearAfterRead={clearAfterRead} />;
 }

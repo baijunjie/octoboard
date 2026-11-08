@@ -151,9 +151,23 @@ impl Cache {
 
     /// A fresh snapshot, waited for whatever the cache holds, and stored. Takes its turn on the
     /// same lock as every other snapshot, so it never runs alongside one a launch or a sweep
-    /// started.
+    /// started. A capture stored after the call began is served instead of taking another, so
+    /// concurrent callers share one snapshot; it is stored after the call began, not necessarily
+    /// taken after it, so the shell behind it may have started up to one snapshot's length before
+    /// the call.
     pub fn refresh(&self, take: fn() -> Result<Env>) -> Result<Env> {
+        self.refresh_asked_at(Instant::now(), take)
+    }
+
+    /// [`Cache::refresh`] for a call that began at `asked_at`.
+    fn refresh_asked_at(&self, asked_at: Instant, take: fn() -> Result<Env>) -> Result<Env> {
         let _taking = self.taking.lock().expect("shell env taking lock poisoned");
+        {
+            let stored = self.stored.lock().expect("shell env cache lock poisoned");
+            if let Some(capture) = stored.capture.as_ref().filter(|c| c.taken_at >= asked_at) {
+                return Ok(capture.env.clone());
+            }
+        }
         let env = take()?;
         self.store(&env);
         Ok(env)
@@ -393,6 +407,34 @@ mod tests {
             assert!(caller.join().unwrap());
         }
         assert!(CACHE.servable(Policy::Launch).is_some());
+    }
+
+    #[test]
+    fn concurrent_refreshes_share_the_snapshot_stored_while_they_waited() {
+        static CACHE: Cache = Cache::new();
+        static TAKEN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        // The first snapshot meets the test here once it has started, and again before it ends.
+        static STARTED: std::sync::Barrier = std::sync::Barrier::new(2);
+        static RELEASED: std::sync::Barrier = std::sync::Barrier::new(2);
+        fn take() -> Result<Env> {
+            if TAKEN.fetch_add(1, Ordering::SeqCst) == 0 {
+                STARTED.wait();
+                RELEASED.wait();
+            }
+            Ok(env_with_path("/"))
+        }
+        let first = thread::spawn(|| CACHE.refresh(take).is_ok());
+        STARTED.wait();
+        // Begun while the first snapshot runs, so before its capture is stored, whenever the
+        // second caller reaches the lock.
+        let asked_at = Instant::now();
+        let second = thread::spawn(move || CACHE.refresh_asked_at(asked_at, take).is_ok());
+        RELEASED.wait();
+        assert!(first.join().unwrap() && second.join().unwrap());
+        assert_eq!(TAKEN.load(Ordering::SeqCst), 1);
+        // A call that begins after the capture takes its own.
+        assert!(CACHE.refresh(take).is_ok());
+        assert_eq!(TAKEN.load(Ordering::SeqCst), 2);
     }
 
     #[test]

@@ -67,6 +67,46 @@ fn search_request_resolves_the_stored_project_and_echoes_the_query() {
     );
 }
 
+/// A repository there is no `git` to read is still a source whose files can be browsed: its
+/// `git_error` carries the refusal and `git_error_code` names a `git` that cannot be found, and a
+/// Git read of it, or a listing of another of its worktrees, is refused with that code rather than
+/// as `git_unavailable`. Whether the request was asked for by a person travels beside it.
+#[test]
+fn a_repository_without_git_names_the_missing_git() {
+    let fixture = Fixture::new();
+    let repo = repo_with("browse-no-git", &[(b"a.txt", b"one")]);
+    let project = fixture.project("no-git", &repo);
+    let no_git = || crate::test_support::git_not_found().map(IsolatedGit::of);
+    let serve_without_git =
+        |body| serve(&fixture.state, None, body, &no_git, &AtomicBool::new(false));
+    let Ok(Event::ProjectSource { source, .. }) = serve_without_git(BrowseBody::GetProjectSource {
+        project: project.clone(),
+    }) else {
+        panic!("no source");
+    };
+    assert!(source.git.is_none());
+    assert!(source.git_error.is_some());
+    assert_eq!(source.git_error_code, Some(error_code::BINARY_NOT_FOUND));
+    for body in [
+        BrowseBody::ListProjectBranches {
+            project: project.clone(),
+        },
+        BrowseBody::ListProjectDir {
+            project: project.clone(),
+            worktree: Some("any".to_string()),
+            path: String::new(),
+        },
+    ] {
+        let err = serve_without_git(body).unwrap_err();
+        assert!(crate::host_tools::is_git_not_found(&err), "{err:#}");
+    }
+    let request: BrowseRequest = serde_json::from_value(serde_json::json!({
+        "type": "list_project_branches", "project": project, "asked_by_person": true
+    }))
+    .unwrap();
+    assert!(request.asked_by_person);
+}
+
 pub(crate) struct Fixture {
     pub(crate) state: Arc<AppState>,
     _dir: ScratchDir,

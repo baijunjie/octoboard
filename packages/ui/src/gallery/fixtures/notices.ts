@@ -613,6 +613,22 @@ export const noticeScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
+    id: "toast-project-branches-not-determined-git-missing",
+    group: TRUST,
+    category: "exceptional",
+    title: "Project removed, Git missing so what went with its folder not found out",
+    description: "The danger alert says Git is not installed or not on PATH, so the worktrees and branches could not be determined, then the remedy to install Git with no \"try again\" (nothing is left to retry) and the line on what the removal left to look at. Its footer holds a Download Git link button before OK; Git's reason is in the Error details disclosure, open here.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    notifications: [broadcastErrorNotification("project_branches_not_determined", {
+      name: "Docs Site",
+      detail: "git was not found on the login shell's PATH",
+      reason: "git was not found on the login shell's PATH",
+      reason_code: "binary_not_found",
+      binary: "git",
+    })],
+    steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
+  },
+  {
     id: "toast-running-session-titles",
     group: TRUST,
     category: "exceptional",

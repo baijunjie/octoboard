@@ -215,6 +215,16 @@ export const handoffScenarios: Scenario[] = [
     steps: [...openHandoff(coordinator.title), (ui) => ui.hoverStatusMark(ui.t("dialog.handoff.movesBranchesFailed.mark"))],
   },
   {
+    id: "dialog-handoff-branches-no-git",
+    group: GROUP,
+    category: "exceptional",
+    title: "Hand off when the branches could not be checked, Git missing, mark opened",
+    description: "The danger mark after the heading is hovered, and its popover says \"Could not check which branches it is responsible for.\", then the sentence that Git is not installed or not on PATH and the remedy to install it where sessions run and try again, with no raw message, and Download Git (external-link icon) then Try again.",
+    state,
+    sessionBranches: { code: "binary_not_found", params: { binary: "git" }, message: "git was not found on the login shell's PATH" },
+    steps: [...openHandoff(coordinator.title), (ui) => ui.hoverStatusMark(ui.t("dialog.handoff.movesBranchesFailed.mark"))],
+  },
+  {
     id: "dialog-handoff-no-agent",
     group: GROUP,
     category: "exceptional",

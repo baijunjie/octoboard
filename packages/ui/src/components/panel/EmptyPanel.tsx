@@ -27,8 +27,9 @@ interface Announcement {
  * whose subject could not be loaded): a danger glyph, the heading saying what could not be loaded,
  * the line under it, `remedy` (the one main thing to do) as a second line, then `details` (further
  * explanation in the application's own words, then raw text) on a surface of its own under them, and
- * the recovery `action` in the centred row. `announce`, `announceKey` and `announceDelayMs` are
- * `ErrorAlert`'s: the heading and the first line, and nothing else, are spoken as an alert. */
+ * the recovery `action` in the centred row, with the optional `linkAction` (a step to take outside the
+ * app, such as a download) beside it, after it or, with `linkFirst`, before it. `announce`, `announceKey` and
+ * `announceDelayMs` are `ErrorAlert`'s: the heading and the first line, and nothing else, are spoken as an alert. */
 export function EmptyPanel({
   icon: Icon,
   message,
@@ -39,6 +40,7 @@ export function EmptyPanel({
   action,
   secondaryAction,
   linkAction,
+  linkFirst,
   details,
   compact,
   silent,
@@ -92,16 +94,19 @@ export function EmptyPanel({
       /** A second way out beside the action, quieter than it, for a full panel only. */
       secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
       linkAction?: never;
+      linkFirst?: never;
     }
     | {
       /** A link in the shape of a button (`ExternalLink` with `appearance="button"` and `size="sm"`) in the second
        * place beside the action, for a way to reach something outside the window; the full panel only. It stands
-       * where the secondary action would, so a row never holds three. */
+       * where the secondary action would, so a row never holds three. `linkFirst` puts it before the action instead,
+       * for a link that is a step the action then retries (Download Git, then Try again). */
       linkAction?: React.ReactNode;
+      linkFirst?: boolean;
       secondaryAction?: never;
     }
   ) & Announcement)
-  | (Announcement & { action?: never; actionRef?: never; secondaryAction?: never; linkAction?: never; details?: never; silent?: true })
+  | (Announcement & { action?: never; actionRef?: never; secondaryAction?: never; linkAction?: never; linkFirst?: never; details?: never; silent?: true })
 )): React.ReactElement {
   const messageId = useId();
   const actionId = useId();
@@ -179,6 +184,7 @@ export function EmptyPanel({
       )}
       {(action || linkAction || secondaryAction) && (
         <div className="flex flex-wrap items-center justify-center gap-3">
+          {linkFirst && linkAction}
           {action && (
             // A press never takes focus: it would drop to `<body>` when the panel goes away, and
             // whatever the action opens or starts places focus itself.
@@ -195,7 +201,7 @@ export function EmptyPanel({
               {action.label}
             </Button>
           )}
-          {linkAction}
+          {!linkFirst && linkAction}
           {secondaryAction && (
             <Button size="sm" variant="secondary" focusOnPress={false} onPress={secondaryAction.onPress}>
               {SecondaryIcon && <SecondaryIcon aria-hidden="true" className="size-4" />}

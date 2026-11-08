@@ -49,6 +49,14 @@ impl UserGit {
         Self::from_env(env_shell::cached_snapshot()?)
     }
 
+    /// The user's `git` from a fresh snapshot of their login shell, which also becomes what
+    /// [`UserGit::cached_shell`] is served from. A snapshot another caller stored after this call
+    /// began is shared rather than taken again, so the shell behind it may have started up to one
+    /// snapshot's length before the call.
+    pub fn fresh_shell() -> Result<Self> {
+        Self::from_env(env_shell::snapshot()?)
+    }
+
     /// The `git` that `env`'s `PATH` resolves, run in `env`.
     pub fn from_env(env: HashMap<String, String>) -> Result<Self> {
         let program = env_shell::resolve_program("git", &env)?;

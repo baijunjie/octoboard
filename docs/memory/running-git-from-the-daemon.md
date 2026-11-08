@@ -4,7 +4,8 @@
 
 Every `git` the daemon starts goes through `apps/daemon/src/git/run.rs` (`docs/structure/daemon.md`, "Shared entry
 points", which also names the one exception). A family of call sites gets one `Runner`: the user's `UserGit` from
-`HostTools::git`, with a `Policy` and `Limits` defined as constants beside its users (`UNMONITORED` in
+`HostTools::get().git_for(Pace)` (which pace, that same section), never the `git` field read directly, with a `Policy`
+and `Limits` defined as constants beside its users (`UNMONITORED` in
 `apps/daemon/src/branch_cleanup/mod.rs` is the shape). Run through its `read` (anything that only reads the repository,
 a status-only `git diff --quiet` included, which adds the index guard), `write` or `write_remote`; where the command needs
 adjusting first, build it with `Runner::command` or `remote_command` and hand it to `Runner::run`. Start from there

@@ -6,6 +6,7 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../alerts/errorAlerts";
 import { detailsButton } from "../alerts/detailsTestSupport";
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
@@ -169,6 +170,28 @@ it("loads a submenu on open and retries its failed load without closing", async 
   // ... and from there into the menu that took its place.
   expect(document.activeElement).not.toBe(document.body);
   expect(document.activeElement?.closest("[role=menu]")).not.toBeNull();
+});
+
+it("offers Download Git before Try again in a submenu whose load found no Git", async () => {
+  const load = vi.fn().mockRejectedValueOnce(new CodedError("`git` was not found", "binary_not_found", { binary: "git" })).mockResolvedValueOnce([
+    { label: "feature", icon: Trash2, onClick: () => {} },
+  ]);
+  await openMenu([{ label: "Switch branch", icon: Trash2, items: [], loadItems: load }]);
+  await act(async () => {
+    const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+    item.focus();
+    item.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  });
+  const alert = document.querySelector<HTMLElement>('[data-slot="alert-root"]')!;
+  expect(alert.textContent).toContain("Git is not installed, or it is not on PATH.");
+  const controls = [...alert.querySelectorAll("a, button")].map((control) => control.textContent);
+  expect(controls.slice(-2)).toEqual([expect.stringContaining("Download Git"), "Try again"]);
+  expect(alert.querySelector("a")?.getAttribute("href")).toBe("https://git-scm.com/downloads");
+  // Try again is the last control, which the failure's focus move lands on.
+  expect(document.activeElement).toBe([...alert.querySelectorAll("button")].find((button) => button.textContent === "Try again"));
+  await act(async () => (document.activeElement as HTMLElement).click());
+  expect(load).toHaveBeenCalledTimes(2);
+  expect(document.body.textContent).toContain("feature");
 });
 
 /** Content that puts focus on its own first control as it mounts when asked to, as a list box does. */

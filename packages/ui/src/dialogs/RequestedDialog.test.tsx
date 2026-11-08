@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, StrictMode } from "react";
 import { setInteractionModality } from "react-aria";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import type { RequestHandler } from "../requests";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
@@ -977,6 +977,122 @@ it("holds a project's removal while what goes along is asked, and says more may 
   expect(document.querySelector("[data-status-mark-popover]")?.textContent).toContain("its branches deleted permanently");
   await submitDialog();
   expect(sent(daemon, "delete_project")).toHaveLength(1);
+});
+
+it("says no Git is found in the mark beside the Trash option, with Download Git before Try again, which asks what goes along again", async () => {
+  const { daemon } = mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => {
+      if (body.type === "inspect_project_removal") throw new CodedError("`git` was not found", "binary_not_found", { binary: "git" });
+      return body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null };
+    },
+  });
+  checkAll();
+  await act(async () => {});
+  await act(async () => unknownMark()!.click());
+  const popover = document.querySelector<HTMLElement>("[data-status-mark-popover]")!;
+  expect(popover.textContent).toContain("its branches deleted permanently");
+  expect(popover.textContent).toContain("Git is not installed, or it is not on PATH.");
+  expect(popover.textContent).toContain("Install Git in the environment where sessions run");
+  const controls = [...popover.querySelectorAll("a, button")].map((control) => control.textContent).filter(Boolean);
+  expect(controls).toEqual([expect.stringContaining("Download Git"), "Try again"]);
+  expect(popover.querySelector("a")?.getAttribute("href")).toBe("https://git-scm.com/downloads");
+  await act(async () => [...popover.querySelectorAll("button")].find((button) => button.textContent === "Try again")!.click());
+  expect(sent(daemon, "inspect_project_removal")).toHaveLength(2);
+});
+
+const markRetry = () => [...document.querySelectorAll<HTMLElement>("[data-status-mark-popover] button")].find((button) => button.textContent === "Try again");
+
+it("keeps focus on the Trash option when a retry of the missing-Git check succeeds and takes the mark away", async () => {
+  let release!: () => void;
+  const answered = new Promise<void>((resolve) => { release = resolve; });
+  let asked = 0;
+  mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => {
+      if (body.type === "inspect_project_removal") {
+        // The first answer is a missing Git, the retry is held until the test lets it answer with nothing along.
+        if (asked++ === 0) throw new CodedError("`git` was not found", "binary_not_found", { binary: "git" });
+        await answered;
+        return { type: "project_removal_inspected", id: null, items: [], processes: [] };
+      }
+      return body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null };
+    },
+  });
+  checkAll();
+  await act(async () => {});
+  await act(async () => unknownMark()!.click());
+  await act(async () => markRetry()!.click());
+  // The retry is out, the mark stays, and focus is on it when the answer takes it away.
+  act(() => unknownMark()!.focus());
+  expect(document.activeElement).toBe(unknownMark());
+  await act(async () => release());
+  expect(unknownMark()).toBeNull();
+  expect(document.activeElement).toBe(checkbox());
+});
+
+it("keeps focus on the Trash option when a retry of the check ends in a lost connection", async () => {
+  let release!: () => void;
+  const answered = new Promise<void>((resolve) => { release = resolve; });
+  let asked = 0;
+  mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => {
+      if (body.type === "inspect_project_removal") {
+        // The first answer is a missing Git, the retry is held until the test lets it end in a lost connection.
+        if (asked++ === 0) throw new CodedError("`git` was not found", "binary_not_found", { binary: "git" });
+        await answered;
+        throw new Error("Connection lost");
+      }
+      return body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null };
+    },
+  });
+  checkAll();
+  await act(async () => {});
+  await act(async () => unknownMark()!.click());
+  await act(async () => markRetry()!.click());
+  act(() => unknownMark()!.focus());
+  expect(document.activeElement).toBe(unknownMark());
+  await act(async () => release());
+  // Focus is not left on the mark that went; the mark that replaces it is the plain one, which has no Try again.
+  expect(document.activeElement).toBe(checkbox());
+  expect(unknownMark()).not.toBeNull();
+  await act(async () => unknownMark()!.click());
+  expect(markRetry()).toBeUndefined();
+});
+
+/** What the dialog's status regions hold; the popover's paragraph saying the same sentence is not one of them. */
+const statusText = () => [...document.body.querySelectorAll('[role="status"]')].map((node) => node.textContent).join("");
+
+it("speaks the missing-Git sentence once the delay after a focus move has passed, and again after a retry fails in the same words", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  let release!: () => void;
+  let asked = 0;
+  mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => {
+      if (body.type === "inspect_project_removal") {
+        if (asked++ === 1) await new Promise<void>((resolve) => { release = resolve; });
+        throw new CodedError("`git` was not found", "binary_not_found", { binary: "git" });
+      }
+      return body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null };
+    },
+  });
+  const passTime = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  checkAll();
+  await passTime(0);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
+  expect(unknownMark()).not.toBeNull();
+  expect(statusText()).toBe("");
+  await passTime(200);
+  expect(statusText()).toContain("may be moved to the");
+  // The retry empties the region while it is out, and writes the same words again once the delay has passed.
+  await act(async () => unknownMark()!.click());
+  await act(async () => markRetry()!.click());
+  expect(statusText()).toBe("");
+  await act(async () => release());
+  await passTime(0);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
+  expect(statusText()).toBe("");
+  await passTime(200);
+  expect(statusText()).toContain("may be moved to the");
 });
 
 it("takes a locked worktree, and the branch it has checked out, along with a project only when chosen, naming the branches back at their tips", async () => {

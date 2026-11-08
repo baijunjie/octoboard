@@ -8,6 +8,7 @@ use crate::git::pathspec;
 use crate::git::repo_files::operation_in_progress;
 use crate::git::run::{Access, Limits, Policy, Runner, WorkDir};
 use crate::git::tree_entries::entries;
+use crate::host_tools::Pace;
 use crate::platform::names;
 use crate::project_git::header;
 use crate::protocol::{error_code, CodedError, Project};
@@ -27,7 +28,11 @@ const RESTORE: Policy = Policy::new(
 );
 
 pub fn restore_project(state: &AppState, project: &Project) -> anyhow::Result<()> {
-    let git = Runner::new((state.host_tools.get().git)()?, RESTORE, LIMITS);
+    let git = Runner::new(
+        state.host_tools.get().git_for(Pace::Person)?,
+        RESTORE,
+        LIMITS,
+    );
     restore(Path::new(&project.path), &project.id, &git)?;
     header::publish_reread(state, project);
     Ok(())

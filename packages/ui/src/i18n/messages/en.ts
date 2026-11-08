@@ -138,6 +138,9 @@ export const en = {
   "error.recovery.sharingStop": "Nothing was changed. Try again, and if the session keeps running, end it in its terminal first.",
   "error.recovery.account": "Select an available account whose configuration directory is accessible. If needed, log in through the agent CLI using that configuration directory.",
   "error.recovery.tool": "Install the named agent CLI or {git} in the environment where sessions run, make it available in the login shell {pathVar}, then reopen {appName} and retry.",
+  "error.recovery.installGit": "Install {git} in the environment where sessions run and make sure it is on {pathVar}, then try again.",
+  "error.recovery.installGit.action": "Download Git",
+  "error.recovery.installGitNoRetry": "Install {git} in the environment where sessions run and make sure it is on {pathVar}.",
   "error.recovery.shell": "Open your login shell in {terminal} and fix slow or blocked startup commands in its configuration, then retry.",
   "error.recovery.unlock": "Open the affected session’s action menu, choose {unlock}, then retry.",
   // For a handoff that failed once the work had moved: nothing is left to retry, and the original is the session to act on.
@@ -702,6 +705,7 @@ export const en = {
   "daemon.session_request_not_waiting": "This session is no longer waiting for an answer, so its request was not carried out.",
   "daemon.session_request_answered": "This request has already been answered.",
   "daemon.binary_not_found": "{binary} was not found on {pathVar} in the snapshotted shell environment.",
+  "daemon.binary_not_found.git": "{git} is not installed, or it is not on {pathVar}.",
   "daemon.shell_environment_timeout.summary": "The shell environment could not be captured.",
   "daemon.shell_environment_timeout":
     "{shell} -l -i -c '{command}' did not finish within {timeout}. A shell startup file is probably blocked on something other than stdin, or it left a background process holding the shell's output open. {appName} will not launch while the environment is unknown, because it will not guess at one. Fix or skip the slow step in the shell's rc files.",
@@ -1021,6 +1025,7 @@ export const en = {
   "daemon.restore_not_on_branch": "This project is not on a branch. Switch to a branch before restoring file changes.",
   "daemon.git_restore_failed": "{git} could not restore the file changes: {detail}",
   "daemon.project_branches_not_determined": "Project {name} was removed, but its related worktrees and branches could not be determined. Worktrees outside its folder were kept. If the repository remains, its branches were kept too.",
+  "daemon.project_branches_not_determined.git": "Project {name} was removed, but {git} is not installed, or it is not on {pathVar}, so its related worktrees and branches could not be determined. Worktrees outside its folder were kept. If the repository remains, its branches were kept too.",
   "daemon.session_branches_not_removed": {
     one: "This was to be removed and is still there: {items}",
     other: "These were to be removed and are still there: {items}",
@@ -1123,6 +1128,7 @@ export const en = {
   "sidebar.git.failed": "{git} check failed",
   "sidebar.git.failed.reason": "{git} reported an error the last time this project’s repository was checked or pulled.",
   "sidebar.git.failed.remedy": "The repository is checked again automatically. If the error persists, resolve it in the repository with {git}.",
+  "sidebar.git.checkFailedTitle": "Could not check the branch",
 
   "archive.heading.project": "Archived sessions",
   "archive.heading.consoleSessions": "Archived console sessions",

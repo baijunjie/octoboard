@@ -20,9 +20,10 @@ export type SourceState =
  * of the daemon once `wanted` first holds, again on `refresh`, and after a reconnect while wanted.
  * A reply is taken only for the latest request, and only while the hook is mounted; the caller
  * mounts one per project. `refresh` settles once the request has been answered or has failed, or
- * when a newer request has taken its place.
+ * when a newer request has taken its place. `askedByPerson` is for a refresh a person asked for
+ * (Refresh, Try again), on which the daemon looks again for a Git it found missing.
  */
-export function useProjectSource(project: string, wanted: boolean): { source: SourceState; refresh: () => Promise<void> } {
+export function useProjectSource(project: string, wanted: boolean): { source: SourceState; refresh: (askedByPerson?: boolean) => Promise<void> } {
   const { request } = useDaemon();
   const latest = useLatestRequest<SourceState>({
     scope: project,
@@ -33,7 +34,7 @@ export function useProjectSource(project: string, wanted: boolean): { source: So
     },
   });
 
-  const refresh = (): Promise<void> => {
+  const refresh = (askedByPerson = false): Promise<void> => {
     const slot = `source:${project}`;
     let sentAt = 0;
     return latest.send({
@@ -41,7 +42,7 @@ export function useProjectSource(project: string, wanted: boolean): { source: So
       slot,
       request: () => {
         sentAt = gitMoment();
-        return request({ type: "get_project_source", project, slot });
+        return request({ type: "get_project_source", project, slot, ...(askedByPerson && { asked_by_person: true }) });
       },
       accept: (reply) =>
         reply.source.project === project ? () => ({ state: "loaded", source: reply.source, sentAt }) : undefined,

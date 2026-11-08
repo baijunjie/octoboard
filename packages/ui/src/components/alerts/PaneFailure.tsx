@@ -18,7 +18,8 @@ import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
  * (`retryCanHelp`), there is no Try again) and gets the element the pane is drawn in, which the pressed
  * button does not outlive, to hand focus on from. `announce` is `ErrorAlert`'s: for a failure that
  * appears after the pane has painted; `attempt`, `announceDelayMs` and `pending` are `FailureAlert`'s.
- * `landing` makes Try again the landing of an F6 cycle (`data-region-landing`). */
+ * `linkAction` is `EmptyPanel`'s, put before Try again (a step to take, then retry). `landing` makes Try again
+ * the landing of an F6 cycle (`data-region-landing`). */
 export function PaneFailure({
   title,
   message,
@@ -30,6 +31,7 @@ export function PaneFailure({
   attempt,
   announceDelayMs,
   pending,
+  linkAction,
   landing,
 }: {
   title: React.ReactNode;
@@ -42,6 +44,7 @@ export function PaneFailure({
   attempt?: number;
   announceDelayMs?: number;
   pending?: boolean;
+  linkAction?: React.ReactNode;
   landing?: boolean;
 }): React.ReactElement {
   const t = useT();
@@ -65,6 +68,8 @@ export function PaneFailure({
           remedy={remedy ?? (message !== undefined && errorRemedy(message))}
           details={details ?? (message !== undefined && errorDetails(message))}
           action={onRetry && (message === undefined || retryCanHelp(message)) ? { label: t("error.tryAgain"), variant: "primary", isPending: pending, landing, onPress: () => onRetry(ref.current) } : undefined}
+          linkAction={linkAction}
+          linkFirst
           announce={announce}
           announceKey={attempt}
           announceDelayMs={announceDelayMs}

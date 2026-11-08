@@ -46,6 +46,7 @@ use crate::branch_origin::bound::bound_in;
 use crate::git::repo_files::repository_of;
 use crate::git::run::Runner;
 use crate::git::worktrees::{changes, worktrees, Listed};
+use crate::host_tools::Pace;
 use crate::hostfs::trash::TrashFailure;
 use crate::platform::names;
 use crate::protocol::{
@@ -171,7 +172,9 @@ impl Removal {
 /// `git` for a project in no repository, nor where the repository survives and none of the
 /// project's sessions is responsible for a branch. An outside worktree whose root is among
 /// `held_back`, those its inspection held back, is held back again however it stands now.
-/// Blocking, waiting for its looks as [`WorktreeRemovability::look`] says.
+/// Only a person's request reaches it (the inspection and the removal), so a `git` that cannot be
+/// found is looked for once more (`Pace::Person`). Blocking, waiting for its looks as
+/// [`WorktreeRemovability::look`] says.
 pub fn plan(
     state: &AppState,
     project: &Project,
@@ -216,7 +219,7 @@ pub(super) fn plan_with(
     if survives && bound.is_empty() {
         return Ok(None);
     }
-    let git = super::cleanup_git(&state.host_tools.get())?;
+    let git = super::cleanup_git(&state.host_tools.get(), Pace::Person)?;
     let mut judge = WorktreeRemovability::of(state, Some(&project.id), home, data)?;
     let listing = BoundListing::of(&git, &repo, &bound)?;
     let full = reads == Reads::Inspection;
@@ -356,7 +359,7 @@ pub async fn carry_out_once_stopped(
     let unfinished = removal.clone_items();
     let done = tokio::task::spawn_blocking(move || {
         let tools = state.host_tools.get();
-        match super::cleanup_git(&tools) {
+        match super::cleanup_git(&tools, Pace::Scheduled) {
             Ok(git) => {
                 let repo = removal.repo.clone();
                 state.branch_cleanups.serialized(&repo, || {

@@ -243,7 +243,9 @@ async fn submit_browse(state: &Arc<AppState>, lane: &Arc<Lane>, request: BrowseR
             &state,
             id,
             request.body,
-            &|| state.host_tools.isolated_git(),
+            &state
+                .host_tools
+                .isolated_git_per_request(request.asked_by_person),
             cancel,
         )
     })
