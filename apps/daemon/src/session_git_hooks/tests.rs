@@ -503,12 +503,25 @@ fn a_drive_letter_hooks_path_is_run_as_it_is() {
 /// Runs the dispatcher of the hook `hook` from this very process, as the session `a`'s git would,
 /// from `fixture`'s repository: with `args` and `input` on its stdin, and `hooks` its directory.
 fn run_dispatcher(fixture: &Fixture, hooks: &Path, hook: &str, args: &[&str], input: &str) {
+    run_dispatcher_in(fixture, &fixture.repo, hooks, hook, args, input);
+}
+
+/// [`run_dispatcher`] from the repository `dir` rather than `fixture`'s, its reports still going to
+/// `fixture`.
+fn run_dispatcher_in(
+    fixture: &Fixture,
+    dir: &Path,
+    hooks: &Path,
+    hook: &str,
+    args: &[&str],
+    input: &str,
+) {
     let runner = shell::command_runner(shell::Dialect::Posix);
     let mut command = Command::new(&runner.program);
     command
         .arg(shell::posix_path(&hooks.join(hook)))
         .args(args)
-        .current_dir(&fixture.repo)
+        .current_dir(dir)
         .env_clear()
         .envs(isolated_git_env())
         .envs(injected(0, hooks, "a", 1, TEST_KEY))
@@ -520,11 +533,17 @@ fn run_dispatcher(fixture: &Fixture, hooks: &Path, hook: &str, args: &[&str], in
     assert!(child.wait().unwrap().success());
 }
 
-/// One state of a transaction creating `branch` at `oid`.
+/// One state of a transaction creating `branch` at `oid` in `fixture`'s repository.
 fn run_transaction_state(fixture: &Fixture, state: &str, branch: &str, oid: &str) {
+    run_transaction_state_in(fixture, &fixture.repo, state, branch, oid);
+}
+
+/// [`run_transaction_state`] in the repository `dir`.
+fn run_transaction_state_in(fixture: &Fixture, dir: &Path, state: &str, branch: &str, oid: &str) {
     let line = format!("{} {oid} refs/heads/{branch}\n", "0".repeat(oid.len()));
-    run_dispatcher(
+    run_dispatcher_in(
         fixture,
+        dir,
         dispatchers(),
         "reference-transaction",
         &[state],
@@ -553,6 +572,48 @@ fn transactions_in_one_repository_at_once_do_not_share_state() {
         .collect();
     created.sort();
     assert_eq!(created, ["refs/heads/one", "refs/heads/two"]);
+}
+
+/// Transactions of two repositories at once that create the same branch at the same commit each
+/// report it, however long the start their paths share: repositories made alike, as every test's
+/// and many a user's worktrees are, differ in their paths' last characters alone.
+#[test]
+fn transactions_in_repositories_of_alike_paths_do_not_share_state() {
+    let fixture = Fixture::new();
+    let head = String::from_utf8(git(&fixture.repo, &["rev-parse", "HEAD"])).unwrap();
+    let head = head.trim();
+    let shared = fixture.dir.join(format!("worktrees-{}", "w".repeat(70)));
+    let repos = [shared.join("one"), shared.join("two")];
+    for repo in &repos {
+        std::fs::create_dir_all(repo).unwrap();
+        git(repo, &["init", "-q"]);
+    }
+
+    for state in ["prepared", "committed"] {
+        for repo in &repos {
+            run_transaction_state_in(&fixture, repo, state, "mine", head);
+        }
+    }
+
+    let reports = fixture.reports(2);
+    let mut created: Vec<_> = reports
+        .iter()
+        .flat_map(|(_, report)| {
+            let repo = Path::new(&report.cwd).file_name().unwrap().to_owned();
+            report
+                .refs
+                .iter()
+                .map(move |created| (repo.clone(), created.name.clone()))
+        })
+        .collect();
+    created.sort();
+    assert_eq!(
+        created,
+        [
+            ("one".into(), "refs/heads/mine".to_string()),
+            ("two".into(), "refs/heads/mine".to_string()),
+        ]
+    );
 }
 
 /// A long list of updates or pushed refs is spooled to a file of the run's own, not of its

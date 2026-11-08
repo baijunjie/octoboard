@@ -44,11 +44,13 @@ case ${GIT_CONFIG_COUNT-} in
 esac
 
 # Sets octo_key to a name for the words $@, the same wherever it is computed from the same words:
-# two numbers folded from the first 64 characters of each of the first 64 words, and the number of
-# words. Letters, digits and a few marks count as themselves and any other character as one more.
-# It is made of parameter expansions and arithmetic alone, as every process a hook starts costs a
-# Windows git tens of milliseconds, and it takes words rather than a string to cut at, which
-# removing a suffix from a long string is quadratic in.
+# two numbers folded from every character of each of the first 64 words, and the number of words.
+# Letters, digits and a few marks count as themselves and any other character as one more. Every
+# character counts: paths made alike, such as a project's worktrees, may share far more than their
+# first characters and differ only in their last. It is made of parameter expansions and
+# arithmetic alone, as every process a hook starts costs a Windows git tens of milliseconds, and
+# it takes words rather than a string, and a long word 64 characters at a time, as each character
+# removed from the front of a string costs time in proportion to the string's length.
 octo_hash() {
 	octo_count=$#
 	octo_h1=7
@@ -59,15 +61,22 @@ octo_hash() {
 	for octo_word; do
 		[ "$octo_pos" -lt 64 ] || break
 		octo_pos=$((octo_pos + 1))
-		if [ "${#octo_word}" -gt 64 ]; then
-			octo_word=${octo_word%"${octo_word#$octo_cut}"}
-		fi
 		while [ -n "$octo_word" ]; do
-			octo_char=${octo_word%"${octo_word#?}"}
-			octo_word=${octo_word#?}
-			octo_prefix=${octo_cs%%"$octo_char"*}
-			octo_h1=$(((octo_h1 * 31 + ${#octo_prefix} + 1) % 1000000007))
-			octo_h2=$(((octo_h2 * 131 + ${#octo_prefix} + octo_pos) % 998244353))
+			if [ "${#octo_word}" -gt 64 ]; then
+				octo_tail=${octo_word#$octo_cut}
+				octo_part=${octo_word%"$octo_tail"}
+			else
+				octo_tail=
+				octo_part=$octo_word
+			fi
+			octo_word=$octo_tail
+			while [ -n "$octo_part" ]; do
+				octo_char=${octo_part%"${octo_part#?}"}
+				octo_part=${octo_part#?}
+				octo_prefix=${octo_cs%%"$octo_char"*}
+				octo_h1=$(((octo_h1 * 31 + ${#octo_prefix} + 1) % 1000000007))
+				octo_h2=$(((octo_h2 * 131 + ${#octo_prefix} + octo_pos) % 998244353))
+			done
 		done
 		octo_h1=$(((octo_h1 * 31 + 67) % 1000000007))
 	done
