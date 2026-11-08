@@ -17,8 +17,6 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
   preview scratch location are as it says.
 - The project's conventions for code, comments and UI copy; scenarios and mocks follow them too.
 - The existing scenarios, mocks and helpers; reuse what can be reused rather than rewriting it.
-- Before starting, run the checks you will run at the end on the range you are about to change, and note the failures
-  that already exist.
 
 ## What you own
 
@@ -33,8 +31,6 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
   or write it into the report. What is in the "Preview scratch location" is not reviewed or deleted by you; when
   dispatched to turn a temporary scenario into a formal one, you may use it as reference and rewrite it to the formal
   standard.
-- In this project the mocks and helpers you own include `packages/ui/src/fixtures/`, the shared fixtures runtime that
-  both the gallery and the website preview use; no one else writes it.
 - Do the work yourself, without handing it on: only one writer should be active at a time.
 
 ## Hold both ends
@@ -59,11 +55,9 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
   coexist on screen go into one scenario, and confirmation targets are split only where showing one would replace or
   displace another. Being able to switch back and forth between two targets does not make them the same view.
 - **Viewing conditions do not get their own scenarios**: theme, language, window size and other conditions switched by
-  the gallery's viewing controls do not earn a copy of the same target, and a layout that differs under a condition is
-  what those controls are for: the scenario that shows the state points at the condition in its description. Steps
-  are written to run under whatever condition the controls pick, so no copy is made just to reach a control under it.
-  A condition is fixed in the scenario only where the confirmation target cannot be reached by choosing that
-  condition with the controls on another scenario, with the title or description saying why.
+  the gallery's viewing controls do not earn a copy of the same target; only where the confirmation target itself
+  exists only under some condition (a drawer that appears only in a narrow window, the width where text starts to
+  truncate) is the condition fixed in the scenario, with the title or description saying why.
 - **Mocks are shaped for the target and follow the real contract**: supply only the fields and conditions the target
   needs; mocks use the same types or contract as the real interface, so a contract change makes the mock fail rather
   than relying on someone remembering to sync it.
@@ -75,23 +69,10 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
 
 ## Finishing
 
-- Run the project's type check and the relevant tests; the quick check's range and conditions are set by the next two
-  items.
-- For what you wrote into the gallery, the quick check runs only the scenarios you added or changed; when you changed
-  something many scenarios use, run the full check, since which scenarios it reaches cannot be told from the ones you
-  changed (the conventions' "What many scenarios share" lists only the known part and is not the limit).
-- The quick check runs only in the source language (the language the UI copy was originally written in) and the
-  default theme; a scenario that fixes a language or theme runs under its own condition. Whether language-dependent
-  things are right (translations complete, formats correct, a scenario's steps finding their controls in other
-  languages) belongs to type checking and the tests, and what can be written as a script check does not rely on
-  rendering several languages. Sweeping other languages and themes happens only when the user asks, and for a subagent
-  that means what whoever dispatched it passed on.
-- Change only what you own: a failure your change caused is fixed within it; one that cannot be removed, that predates
-  your change, or that is the app's behaviour being wrong is not fixed — keep your change, write it into the report with
-  whose it is, and mark it uncertain where you cannot tell.
+- A failure the quick check reports whose cause is in a scenario, mock or the gallery machinery is fixed; one that
+  cannot be fixed goes into the report.
 - Pass only by making things right: do not delete scenarios, skip or loosen checks to make it pass, and do not change a
-  scenario or mock to accommodate an app error; updating a screenshot baseline after a deliberate scenario change is not
-  loosening.
+  scenario or mock to accommodate an app error.
 - Passing the check only shows the scenarios run, not that they show the latest UI: where appearance and interaction
   need confirming, look at them for real.
 - Check the affected scenarios against the component's current data requirements.
@@ -107,8 +88,7 @@ Conclusions only:
   target, not by data set or test step
 - States that cannot be shown and why; where app code would have to change, say where
 - Scenarios that still need interaction to reach, and why
-- Scenarios whose address changed or broke; which screenshot baselines were updated
+- Scenarios whose address changed or broke
 - If the quick-check script changed: what and why, and which commands or check items in the conventions no longer hold
-- Which range the quick check ran and its result; failures not fixed and whose they are (predating your change, not
-  yours, the app's behaviour being wrong, uncertain); changes that need the preview restarted to be seen
+- Quick check failures not fixed, and why; changes that need the preview restarted to be seen
 - Trade-offs you could not settle

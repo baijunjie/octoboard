@@ -16,7 +16,10 @@ When unsure, report back: stop, spell out what needs deciding (with the options)
 
 The ticket directory defaults to `docs/bugs/`; follow the project's own convention where it already has one.
 
-- One file per bug, `YYYYMMDD-{short-description}.md`, dated by the ticket's creation date, with the short description in the language the repo's existing docs use.
+- One file per bug, `YYYYMMDD-{short-description}.md`, dated by the ticket's creation date, with the short description in the language the repo's existing docs use. When the ticket needs other files besides the body, make it a directory `YYYYMMDD-{short-description}/` instead: the body is its `README.md`, and every other file goes inside it, never next to the `.md`.
+- **A ticket must stand on its own**: anyone on the team can pick it up and reproduce from it, with no dependence on data or files that exist only on one machine and are not committed with the repo. Reliable reproduction steps matter more than attachments; do not attach a file for what words can say.
+- Beyond the body, attach only small constructed text files that help delimit or reproduce the problem (a minimal reproduction script, a constructed sample input); images, screen recordings and other binaries, and real data such as real logs or user data, never go into a ticket. Write what they show into the matching section, and quote only the relevant lines of an error or log.
+- **Values meaningful only to one particular machine, account or environment never go into a ticket** (credentials, personal data, local paths, internal network addresses, account and session identifiers), including inside excerpts; give locations inside the repo as relative paths.
 - File by defect: a new symptom of the same defect is appended to its existing ticket; symptoms that look alike but have different root causes get separate tickets.
 
 ## Ticket format

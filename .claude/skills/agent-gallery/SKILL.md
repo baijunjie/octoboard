@@ -1,6 +1,6 @@
 ---
 name: agent-gallery
-description: Entry point for the UI state gallery — keep the gallery in step after a change to UI states, mocks or the interface contract mocks depend on, run the quick check on what was written to it, start a preview from this task's branch for the user to confirm at delivery, and clean it up after confirmation. Bring it to mind when a UI state is added or changed, or a UI change is to be handed to the user for confirmation. Use when the user says "add a gallery scenario", "show this state in the gallery", "the gallery is out of date", "clean up the gallery", "start a preview for me".
+description: Entry point for the UI state gallery — keep the gallery in step after a change to UI states, mocks or the interface contract mocks depend on, handle a failed quick check, start a preview from this task's branch for the user to confirm at delivery, and clean it up after confirmation. Bring it to mind when a UI state is added or changed, or a UI change is to be handed to the user for confirmation. Use when the user says "add a gallery scenario", "show this state in the gallery", "the gallery is out of date", "clean up the gallery", "start a preview for me".
 ---
 
 # UI state gallery
@@ -32,9 +32,9 @@ row each, and the items below the table say so where packages differ.
   or `--lang all` (every language with a catalog) when the user asks for other languages. It loads exactly the
   scenarios it is given, never skipping one; its page loads wait for a heavy-step slot (the lock `pnpm verify` also
   takes). The flags are in `packages/ui/README.md`, section "Sweeping the gallery".
-  Narrow widths: the quick check also runs its scenarios with `--width 420,800`, as the page's width control would
-  load them, since steps must run at any width the control picks.
   Kept out of the quick check and run only when the user asks: the dark theme, `pnpm gallery:sweep --theme dark`;
+  narrow widths, `pnpm gallery:sweep --width 420,800` (as the page's width control would load the scenarios, since
+  steps must run at any width the control picks);
   chip geometry, self-built on Playwright, `node scripts/gallery-chip-geometry.mjs http://localhost:<port>` in
   `packages/ui` against a gallery served from this checkout (unlike the sweep it falls back to no other browser:
   without Playwright's own Chromium, set `OCTOBOARD_CHROMIUM` to one).
@@ -60,6 +60,39 @@ row each, and the items below the table say so where packages differ.
   showing one replaces the other, and being able to switch between them does not make them separate views; and
   "Viewing conditions do not get their own scenarios" extends beyond the gallery's own viewing controls to copy and
   form-control values. (Source: user instruction)
+- Viewing conditions: in this project this narrows `.claude/agents/gallery-writer.md`'s "Scenario standard", under
+  "Viewing conditions do not get their own scenarios". A layout that differs under a condition is what the gallery's
+  viewing controls are for: the scenario that shows the state points at the condition in its description. Steps are
+  written to run under whatever condition the controls pick, so no copy is made just to reach a control under it. A
+  condition is fixed in the scenario only where the confirmation target cannot be reached by choosing that condition
+  with the controls on another scenario, with the title or description saying why.
+- Quick check scope and handling: this sets what the quick check covers and how a failure is handled; when it runs is
+  set by `CLAUDE.md`'s "This project", not here. In this project this narrows "Quick check failure" below and
+  `.claude/agents/gallery-writer.md`'s "Finishing" where they differ. (Source: user instruction)
+  - What it guards: the gallery, not the app, whose correctness is for type checking and the tests.
+  - What it covers: the scenarios `gallery-writer` wrote into the gallery and the scenarios previewed for the user, by
+    id ("Quick check (selected scenarios)"); scenarios that already passed are not rerun unless this change has
+    changed since. Of what was written into the gallery, only the scenarios added or changed, and the full check when
+    something many scenarios use was changed, since which scenarios it reaches cannot be told from the ones changed
+    ("What many scenarios share" lists only the known part and is not the limit).
+  - Conditions: only the source language (`en`) and the light theme; a scenario that fixes a language or theme runs
+    under its own condition. Whether language-dependent things are right (translations complete, formats correct, a
+    scenario's steps finding their controls in other languages) belongs to type checking and the tests, and what can
+    be written as a script check does not rely on rendering several languages. Other languages and themes are swept
+    only when the user asks, and for a subagent that means what whoever dispatched it passed on.
+  - Passing and baseline failures: every scenario that runs must pass. A failure that also occurs on the baseline
+    before the change (e.g. the branch to merge back into) is not fixed and does not block delivery; state in the final
+    reply that it failed before the change and does not count as passing. Verify the baseline in a separate copy,
+    isolated from other checkouts as the "Opening the gallery" column says and removed after use, leaving this working
+    copy alone.
+  - Rerun and final reply: once a failure is fixed, whoever fixed it reruns the scenarios that failed, by id, until
+    they pass. State in the final reply whether the full check, which scenarios, or none were run, and the result.
+- `gallery-writer` also runs the project's type check and the relevant tests, and before starting runs the checks it
+  will run at the end on the range it is about to change, noting the failures that already exist. A failure its change
+  caused it fixes within what it owns; one that cannot be removed, that predates its change, or that is the app's
+  behaviour being wrong it does not fix: it keeps its change and reports the failure with whose it is, marked uncertain
+  where it cannot tell. In this project this narrows `.claude/agents/gallery-writer.md`'s "Finishing". (Source: user
+  instruction)
 
 ## Changing the gallery
 
@@ -77,42 +110,15 @@ row each, and the items below the table say so where packages differ.
   dispatch, the install is incomplete: stop and ask the user to rerun the installer that installed this skill. Without
   a subagent mechanism, read the installed definition and do the work by its rules yourself.
 
-## Quick check
+## Quick check failure
 
-- The quick check guards the gallery, not the app (the app's correctness is for type checking and the tests); it runs
-  only in the two places below, and when the user asks:
-  - what `gallery-writer` wrote into the gallery, which it runs itself before reporting, with the range set by the next
-    item;
-  - the scenarios to be previewed for the user: sweep them by id ("Quick check (selected scenarios)") before giving the
-    entries; those that passed when `gallery-writer` ran them are not rerun unless this change has changed since.
-- For what was written into the gallery, the quick check runs only the scenarios added or changed; when something many
-  scenarios use was changed, run the full check, since which scenarios it reaches cannot be told from the ones changed
-  (the conventions' "What many scenarios share" lists only the known part and is not the limit).
-- The quick check runs only in the source language (the language the UI copy was originally written in) and the default
-  theme; a scenario that fixes a language or theme runs under its own condition. Whether language-dependent things are
-  right (translations complete, formats correct, a scenario's steps finding their controls in other languages)
-  belongs to type checking and the tests, and what can be written as a script check does not rely on rendering several
-  languages. Sweeping other languages and themes happens only when the user asks, and for a subagent that means what
-  whoever dispatched it passed on.
-- Every scenario that runs must pass.
 - Pass only by making things right: never delete scenarios, skip or loosen checks to make it pass, and never change a
-  scenario or mock to accommodate an app error; updating a screenshot baseline after a deliberate scenario change is
-  not loosening.
-
-- Handle a failure by its cause:
-
-  | Cause of failure | What to do |
-  |---|---|
-  | This change broke the app | Change the app code |
-  | A scenario, mock or the gallery machinery is broken or behind | Dispatch `gallery-writer` to fix or delete it |
-  | The command runs, and some scenario fails the same way on the baseline before the change (e.g. the branch to merge back into) | Do not fix, do not block delivery; state in the final reply that it failed before the change and does not count as passing |
-
-  Verify the baseline in a separate copy, isolated as the conventions say and removed after use, leaving this working
-  copy alone. Once fixed, whoever fixed it reruns the scenarios that failed, by id, until they pass.
-
+  scenario or mock to accommodate an app error.
+- Every failure gets fixed, by cause: where the app code is wrong, change the app code; where a scenario, mock or the
+  gallery machinery is broken or behind, dispatch `gallery-writer` to fix it, and delete a scenario only where its UI
+  state no longer exists in the app.
 - Passing the check only shows the scenarios run, not that they show the latest UI: where appearance and interaction
   need confirming, look at them for real.
-- State in the final reply whether the full check, which scenarios, or none were run, and the result.
 
 ## Previewing for the user to confirm
 
@@ -131,7 +137,7 @@ row each, and the items below the table say so where packages differ.
 - Scenarios and mocks added only for the preview go into the "Preview scratch location", never mixed into the formal
   scenarios; when asking for confirmation, ask whether to keep them, and where you are not waiting for confirmation,
   still wait for the answer to this question; those to keep are handed to `gallery-writer` at once to be made formal
-  scenarios, which it checks itself.
+  scenarios.
 - Record the services you start and the builds you install in the "Preview scratch location", enough to recognise at
   cleanup that they are this working copy's.
 - Never overwrite, stop or uninstall a service or build not started or installed by this working copy; when unsure,

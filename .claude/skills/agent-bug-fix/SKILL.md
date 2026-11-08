@@ -14,7 +14,7 @@ When unsure, report back: stop, spell out what needs deciding (with the options)
 
 The ticket directory defaults to `docs/bugs/`; follow the project's own convention where it already has one.
 
-A ticket is a single file `YYYYMMDD-{short-description}.md` in that directory, opening with `> Severity: <one of Critical / Major / Moderate / Minor>`, and a body with sections for symptom, reproduction steps, expected vs. actual, environment, scope of impact, leads, and acceptance criteria: use the reproduction steps to reproduce it, the basis stated under expected vs. actual to confirm the expected behavior, the acceptance criteria to verify the fix, and each lead's verified/inferred mark as given.
+A ticket is a file `YYYYMMDD-{short-description}.md` in that directory, or a directory `YYYYMMDD-{short-description}/` with attached files (the body is its `README.md`). The body opens with `> Severity: <one of Critical / Major / Moderate / Minor>`, and the body has sections for symptom, reproduction steps, expected vs. actual, environment, scope of impact, leads, and acceptance criteria: use the reproduction steps to reproduce it, the basis stated under expected vs. actual to confirm the expected behavior, the acceptance criteria to verify the fix, and each lead's verified/inferred mark as given.
 
 - **Work one ticket at a time**, and only ones already filed in the directory; a defect the user describes directly with no ticket does not go through this skill — say so and stop.
 - If the user names one, work only that one. Left unnamed, pick for yourself: prefer higher severity, and skip anything with an unmerged fix already in flight (e.g. an open PR that already removes it). If the choice isn't clear, report back with the candidates instead of forcing a pick.
@@ -38,11 +38,11 @@ If the root cause is in the product design itself and a code-only fix can't addr
 
 - Fix the root cause, don't paper over the symptom; where only a temporary workaround is possible, mark it in the code with a `TODO` stating what it's working around and under what condition it can be properly fixed.
 - Change only what's related to this bug; note anything else you notice along the way in your final reply instead of fixing it in passing.
-- This reproduction path needs regression test coverage — who writes it and how follows the project's rules; when handing it to someone else, spell out the reproduction path and the acceptance criteria as the expectation. Where you reproduced with a restored suspended case, that restored case is the regression test.
+- This reproduction path needs regression test coverage — who writes it and how follows the project's rules; when handing it to someone else, spell out the reproduction path and the acceptance criteria as the expectation. Where you reproduced with a restored suspended case, that restored case is the regression test. Build the test data yourself where the project keeps test data, not from data captured in a real run.
 - **Never go back and edit the ticket**: no checking off progress, no status transitions, no fix log.
-- Code comments, commit messages, and PR descriptions never reference the ticket file — it's gone once deleted, so anything needed from it goes in directly.
+- The ticket is deleted with the fix: code, tests, comments, commit messages, and PR descriptions neither reference nor depend on the ticket or the files in it — anything needed from it goes in directly.
 
 ## Verification and wrap-up
 
 1. **Verify**: check off the ticket's acceptance criteria one by one — not fixed until verified. Where a criterion can't be verified, fall back to confirming the symptom is gone per the reproduction steps, and say plainly which one and why.
-2. **Delete the ticket**: delete it only once every acceptance criterion has been verified one by one and the fix is at the root cause; submit the deletion together with the fix in the same change, and send them for review together. If a criterion couldn't be verified, only a workaround was applied, or verification didn't pass, don't delete it — report back and let the user decide.
+2. **Delete the ticket**: delete it only once every acceptance criterion has been verified one by one and the fix is at the root cause (delete the chosen ticket itself: for the `YYYYMMDD-{short-description}/` form, the whole directory with the files in it; the ticket directory `docs/bugs/` stays); submit the deletion together with the fix in the same change, and send them for review together. If a criterion couldn't be verified, only a workaround was applied, or verification didn't pass, don't delete it — report back and let the user decide.

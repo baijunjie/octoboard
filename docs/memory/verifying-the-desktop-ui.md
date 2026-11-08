@@ -55,10 +55,10 @@ terminal, and it is not the app's WKWebView. A pointer interaction or a WebKit r
 the gallery page loaded in Playwright's `webkit`, a paint defect still in the real window, and behaviour that depends on
 the daemon, the shell or how the window starts up still in the real app.
 
-Whether to sweep the gallery (`pnpm gallery:sweep`) at all, and on which scenarios, languages and themes, is set by the
-"Quick check" section of `.claude/skills/agent-gallery/SKILL.md`; a change touching the UI is not by itself a reason to
-sweep. A page with no errors does not establish that its mocks supply what the current components need: verify the
-fields, data conditions and contracts behind a new UI state against the code.
+When to sweep the gallery (`pnpm gallery:sweep`) is set by `CLAUDE.md`'s "This project", and on which scenarios,
+languages and themes by the "Project conventions" section of `.claude/skills/agent-gallery/SKILL.md`; a change touching
+the UI is not by itself a reason to sweep. A page with no errors does not establish that its mocks supply what the
+current components need: verify the fields, data conditions and contracts behind a new UI state against the code.
 
 How the bundle loads what it fetches at run time — lazy chunks, a worker, WebAssembly, assets — and anything a
 build-only Vite plugin changes are not settled there either: the gallery runs Vite's unbundled dev modules from

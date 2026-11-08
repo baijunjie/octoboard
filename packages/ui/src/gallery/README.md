@@ -154,11 +154,12 @@ new reply, are in [`../fixtures/README.md`](../fixtures/README.md).
 `pnpm gallery:sweep [ids or patterns]` (`packages/ui/scripts/gallery-sweep.mjs`) loads the selected scenarios (all by
 default) in a headless browser and fails on any gallery failure; `pnpm gallery:sweep --help` lists the flags (`--group`,
 `--lang`, `--theme`, `--width`, `--jobs`, `--list`, `--url`, `--playwright`, `--chromium`). It loads the scenarios it is
-given, every time; run it on the scenarios just written or changed, at the default width and again with
-`--width 420,800`, and on the ones shown for confirmation. `--width 420,800` loads each scenario that carries no width
-of its own at those widths, as the page's width control would, to prove that its steps hold in a narrow window; a
-scenario with a `minWidth` is loaded no narrower than it. `--url <origin>` sweeps a gallery already being served instead
-of starting a dev server of this checkout. A scenario's live changes are applied after its steps.
+given, every time; when to run it is set by `CLAUDE.md`'s "This project", and on which scenarios, widths, languages and
+themes by the "Project conventions" section of `.claude/skills/agent-gallery/SKILL.md`. `--width 420,800` loads each
+scenario that carries no width of its own at those widths, as the page's width control would, to prove that its steps
+hold in a narrow window; a scenario with a `minWidth` is loaded no narrower than it. `--url <origin>` sweeps a gallery
+already being served instead of starting a dev server of this checkout. A scenario's live changes are applied after its
+steps.
 
 Playwright is a devDependency of `packages/ui`, so `pnpm install` is everything the script needs, but it installs no
 browser: run `pnpm exec playwright install chromium` from `packages/ui` once, or point `--chromium <path>` /

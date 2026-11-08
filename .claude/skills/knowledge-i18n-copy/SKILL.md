@@ -53,7 +53,7 @@ the source language for this.
 | de | du, verbal sentences | Nominalized openings (Bei Aktivierung → Wenn du das einschaltest) |
 | es | tú | Mixing tú / usted in one product |
 | it | tu | Mixing tu / Lei in one product |
-| pt | você | Over-formal address such as o senhor |
+| pt | Default Brazilian usage, address as você | Over-formal address such as o senhor |
 | th | Omit the pronoun | ท่าน, ครับ / ค่ะ on every sentence |
 | vi | Pronoun-less imperatives; keep bạn có thể where it means "you can" | bạn có thể or quý khách added only for politeness |
 

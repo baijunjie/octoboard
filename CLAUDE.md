@@ -88,8 +88,7 @@ At delivery:
   re-judge once you have acted on it.
 - Otherwise, self-check item by item in the following order:
 
-1. **Gallery**: bring the gallery up to date and run the quick check via the `agent-gallery` skill; whether to do it
-   and what scope to run is up to its judgement.
+1. **Gallery**: bring the gallery up to date via the `agent-gallery` skill; whether to do it is up to its judgement.
 2. **UI preview**: as soon as the previous step is done, preview for the user via the `agent-gallery` skill, without
    waiting for the later steps; whether to preview and whether to wait for confirmation is up to its judgement. UI the
    user said they wanted to see first is shown at this step too, not reported before the self-check. Where it has to
