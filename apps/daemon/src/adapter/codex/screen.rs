@@ -80,17 +80,17 @@ fn written_during_turn(written: usize) -> String {
 /// from the composer by one blank row. Unknown footer shapes hold delivery instead of guessing
 /// where a draft ends; empty lines inside the composer remain text.
 ///
-/// On a host whose paths are Windows ones (`style`), the footer may also take two rows, a model
-/// and directory row and then a hints row, and name its directory the Windows way or from the
-/// home directory, as Codex 0.166.0 was captured drawing it there (`testdata/conhost-captures.md`).
-/// Elsewhere only the one-row footer measured before is read. Either is read in each shape Codex
-/// 0.166.0's source gives it at narrower widths and in other states (`testdata/codex-composer.md`,
-/// section "Footer shapes from Codex 0.166.0's source").
+/// The footer may also take two rows, a model and directory row and then a hints row, as Codex
+/// 0.166.0 was captured drawing it by default on Windows and on macOS
+/// (`testdata/conhost-captures.md`, `testdata/codex-composer.md`). Its directory may be named
+/// from the home directory on any host, and the Windows way only where the host's paths are
+/// Windows ones (`style`). Either layout is read in each shape Codex 0.166.0's source gives it at
+/// narrower widths and in other states (`testdata/codex-composer.md`, section "Footer shapes from
+/// Codex 0.166.0's source").
 fn composer(screen: &str, style: PathStyle) -> Option<Vec<String>> {
     let rows: Vec<&str> = screen.lines().map(str::trim_end).collect();
     let last = rows.iter().rposition(|row| !row.trim().is_empty())?;
-    let footer = if style == PathStyle::Windows
-        && last >= 1
+    let footer = if last >= 1
         && is_hints(rows[last].trim())
         && is_footer(rows[last - 1].trim(), style, true)
     {
@@ -207,8 +207,8 @@ fn is_footer(row: &str, style: PathStyle, first_of_two: bool) -> bool {
 }
 
 /// Whether `body` is Codex's status line with its default items: the model with its reasoning
-/// effort, the directory, and, where Codex was captured drawing two rows, the thread's name once
-/// the thread has one; at an empty composer the agents hint follows them.
+/// effort, the directory, and the thread's name once the thread has one; at an empty composer the
+/// agents hint follows them.
 ///
 /// A row too narrow for the line ends it with `…` where it was cut, so a cut directory need only
 /// begin like one, and the line may be cut right after the model's separator. `bare_model`, for
@@ -244,12 +244,8 @@ fn is_status_line(body: &str, style: PathStyle, bare_model: bool) -> bool {
         [directory] => {
             shows_directory(directory, style) || last_cut && begins_directory(directory, style)
         }
-        // Where Codex was captured drawing two rows, the model row ends with the thread's name
-        // once the thread has one.
         [directory, thread @ ..] => {
-            style == PathStyle::Windows
-                && shows_directory(directory, style)
-                && thread.iter().any(|part| !part.is_empty())
+            shows_directory(directory, style) && thread.iter().any(|part| !part.is_empty())
         }
     }
 }
@@ -363,11 +359,12 @@ fn is_token_count(tokens: &str) -> bool {
     }
 }
 
-/// Whether `directory`, as Codex's footer prints it, names a directory: an absolute Unix path on
-/// any host (a macOS capture replayed on Windows shows one), and on a host whose paths are Windows
-/// ones (`style`) also a drive or UNC path or one from the home directory (`~`, `~\…`).
+/// Whether `directory`, as Codex's footer prints it, names a directory: an absolute Unix path or
+/// one from the home directory (`~`, `~/…`), as Codex prints them on a Unix host, on any host (a
+/// macOS capture replayed on Windows shows them), and on a host whose paths are Windows ones
+/// (`style`) also a drive or UNC path or one from the home directory the Windows way (`~\…`).
 fn shows_directory(directory: &str, style: PathStyle) -> bool {
-    if directory.starts_with('/') {
+    if directory.starts_with('/') || directory == "~" || directory.starts_with("~/") {
         return true;
     }
     if style != PathStyle::Windows {
@@ -375,9 +372,7 @@ fn shows_directory(directory: &str, style: PathStyle) -> bool {
     }
     let bytes = directory.as_bytes();
     directory.starts_with("\\\\")
-        || directory == "~"
         || directory.starts_with("~\\")
-        || directory.starts_with("~/")
         || (bytes.len() >= 3
             && bytes[0].is_ascii_alphabetic()
             && bytes[1] == b':'
@@ -387,14 +382,14 @@ fn shows_directory(directory: &str, style: PathStyle) -> bool {
 /// Whether `prefix`, the part of a directory left before a cut, can begin one that
 /// [`shows_directory`] takes.
 fn begins_directory(prefix: &str, style: PathStyle) -> bool {
-    if prefix.starts_with('/') {
+    if prefix.starts_with('/') || prefix == "~" || prefix.starts_with("~/") {
         return true;
     }
     if style != PathStyle::Windows {
         return false;
     }
     match prefix.as_bytes() {
-        [b'~'] | [b'~', b'\\' | b'/', ..] | [b'\\'] | [b'\\', b'\\', ..] => true,
+        [b'~', b'\\', ..] | [b'\\'] | [b'\\', b'\\', ..] => true,
         [drive] | [drive, b':'] | [drive, b':', b'\\' | b'/', ..] => drive.is_ascii_alphabetic(),
         _ => false,
     }
@@ -464,9 +459,9 @@ mod tests {
     use super::composer;
     use crate::platform::names::PathStyle;
 
-    /// The footer's directory is the agent's text: an absolute Unix path ends the composer on any
-    /// host, and a home-relative or Windows one, or a footer of two rows, where the host's paths
-    /// are Windows ones.
+    /// The footer's directory is the agent's text: an absolute Unix path or one from the home
+    /// directory (`~`, `~/…`) ends the composer on any host, in a footer of one row or two and
+    /// followed by the thread's name; a Windows one only where the host's paths are Windows ones.
     #[test]
     fn codex_s_footer_ends_the_composer_in_the_shapes_of_the_host() {
         let hints = "  ? for shortcuts                ⚠ 2 warnings · f2 to view";
@@ -474,22 +469,26 @@ mod tests {
         let two_rows =
             |directory: &str| format!("› draft\n\n  probe default · {directory}\n{hints}\n");
         for style in [PathStyle::Unix, PathStyle::Windows] {
-            assert!(composer(&one_row("/tmp/project"), style).is_some());
+            for directory in ["/tmp/project", "~/project", "~"] {
+                assert!(
+                    composer(&one_row(directory), style).is_some(),
+                    "{directory}"
+                );
+                assert!(
+                    composer(&two_rows(directory), style).is_some(),
+                    "{directory}"
+                );
+                let named = format!("{directory} · Say hi");
+                assert!(composer(&one_row(&named), style).is_some(), "{named}");
+                assert!(composer(&two_rows(&named), style).is_some(), "{named}");
+            }
         }
-        for directory in [
-            "~/project",
-            "~",
-            "~\\project",
-            "C:\\project",
-            "\\\\host\\share",
-        ] {
+        for directory in ["~\\project", "C:\\project", "\\\\host\\share"] {
             assert!(composer(&one_row(directory), PathStyle::Windows).is_some());
             assert!(composer(&one_row(directory), PathStyle::Unix).is_none());
-        }
-        for directory in ["/tmp/project", "~\\project"] {
             assert!(composer(&two_rows(directory), PathStyle::Windows).is_some());
+            assert!(composer(&two_rows(directory), PathStyle::Unix).is_none());
         }
-        assert!(composer(&two_rows("/tmp/project"), PathStyle::Unix).is_none());
         let named = "› draft\n\n  probe default · ~\\project · Say hi\n";
         assert!(composer(named, PathStyle::Windows).is_some());
         assert!(composer(named, PathStyle::Unix).is_none());
@@ -500,7 +499,9 @@ mod tests {
             "› draft\n\n  ? for shortcuts\n",
             "› draft\n  probe default · /tmp/project\n  ? for shortcuts\n",
         ] {
-            assert!(composer(screen, PathStyle::Windows).is_none(), "{screen:?}");
+            for style in [PathStyle::Unix, PathStyle::Windows] {
+                assert!(composer(screen, style).is_none(), "{screen:?}");
+            }
         }
     }
 
@@ -533,6 +534,33 @@ mod tests {
                 .unwrap_or_else(|| panic!("a composer in\n{}", screen.visible_text()));
             let text = rows.join("\n");
             assert_eq!(text.trim_start_matches('›').trim(), draft, "{rows:?}");
+        }
+    }
+
+    /// Codex 0.166.0's default two-row footer as a macOS terminal recorded it at 120 and at 44
+    /// columns (`testdata/codex-composer.md`): the empty composer after the folder-trust screen,
+    /// then the same screen once `draft line one` is typed.
+    #[test]
+    fn codex_s_two_row_footer_is_read_from_a_macos_recording() {
+        for (capture, columns, empty_at) in [
+            (
+                &include_bytes!("../../../testdata/codex_0166_macos_120x40.bin")[..],
+                120,
+                12769,
+            ),
+            (
+                include_bytes!("../../../testdata/codex_0166_macos_44x40.bin"),
+                44,
+                6009,
+            ),
+        ] {
+            for (bytes, draft) in [(&capture[..empty_at], ""), (capture, "draft line one")] {
+                let mut screen = crate::terminal::snapshot::TerminalSnapshot::new(40, columns);
+                screen.process(bytes);
+                let rows = composer(&screen.visible_text_undimmed(), PathStyle::Unix)
+                    .unwrap_or_else(|| panic!("a composer in\n{}", screen.visible_text()));
+                assert_eq!(rows, [draft], "{columns}");
+            }
         }
     }
 
@@ -646,16 +674,35 @@ mod tests {
         );
     }
 
-    /// The footer of two rows Codex 0.166.0 draws where it owns the screen, read where the
-    /// host's paths are Windows ones at every width that leaves the model whole: the shortcuts
+    /// The footer of two rows Codex 0.166.0 draws where it owns the screen, read on either host,
+    /// with a directory of its kind, at every width that leaves the model whole: the shortcuts
     /// hint or the queue hint, clipped; the warnings in full or as their count; the status line
     /// whole or cut, or the model alone, as the inbox console host was seen drawing it.
     #[test]
     fn codex_s_two_row_footer_is_read_at_every_width() {
-        let status = "GPT-6.1-Sol default · ~\\code\\codex-trust";
-        let named = "GPT-6.1-Sol default · ~\\code\\codex-trust · Say hi";
+        for (style, directory) in [
+            (PathStyle::Windows, "~\\code\\codex-trust"),
+            (PathStyle::Unix, "~/code/codex-trust"),
+        ] {
+            two_row_footer_is_read_at_every_width(style, directory);
+        }
+        // The VM's captures: the queue hint below the model row, and the narrow row's warnings.
+        for footer in [
+            "  GPT-6.1-Sol default · ~\\code\\codex-trust\n  tab to queue message",
+            "  GPT-6.1-Sol default\n  ? for shortcuts                 ⚠ 2 · f2",
+        ] {
+            let screen = format!("› draft\n\n{footer}\n");
+            assert!(composer(&screen, PathStyle::Windows).is_some(), "{screen}");
+        }
+    }
+
+    /// The two-row footer read where the host's paths are `style` ones, with `directory` on its
+    /// status line, at every width, hint and warnings count above.
+    fn two_row_footer_is_read_at_every_width(style: PathStyle, directory: &str) {
+        let status = format!("GPT-6.1-Sol default · {directory}");
+        let named = format!("{status} · Say hi");
         for width in [120, 80, 52, 44, 30, 24, 16] {
-            for status in [status, named, "GPT-6.1-Sol default"] {
+            for status in [&status, &named, "GPT-6.1-Sol default"] {
                 for (draft, hint, warned) in [
                     ("", "? for shortcuts", 2),
                     ("", "? for shortcuts", 0),
@@ -667,19 +714,11 @@ mod tests {
                         "› {draft}\n\n{}\n",
                         two_row_footer(width, status, hint, warned)
                     );
-                    let rows = composer(&screen, PathStyle::Windows)
+                    let rows = composer(&screen, style)
                         .unwrap_or_else(|| panic!("a composer in\n{screen}"));
                     assert_eq!(rows.join("\n"), draft, "{screen}");
                 }
             }
-        }
-        // The VM's captures: the queue hint below the model row, and the narrow row's warnings.
-        for footer in [
-            "  GPT-6.1-Sol default · ~\\code\\codex-trust\n  tab to queue message",
-            "  GPT-6.1-Sol default\n  ? for shortcuts                 ⚠ 2 · f2",
-        ] {
-            let screen = format!("› draft\n\n{footer}\n");
-            assert!(composer(&screen, PathStyle::Windows).is_some(), "{screen}");
         }
     }
 
@@ -748,24 +787,11 @@ mod tests {
     /// hold delivery: no guess is made where a draft ends.
     #[test]
     fn codex_s_unknown_footers_give_no_composer() {
-        let two_rows = |hints: &str| {
-            format!("› draft\n\n  GPT-6.1-Sol default · ~\\code\\codex-trust\n{hints}\n")
-        };
-        for screen in [
-            // The transcript's own hints, while it is scrolled back.
-            two_rows("  New activity"),
-            // A remapped warnings key, or queue key.
-            two_rows("  ? for shortcuts                 ⚠ 2 · f3"),
-            two_rows("  ctrl+q to queue message"),
-            // The queue hint is never drawn beside the warnings.
-            two_rows("  tab to queue message            ⚠ 2 · f2"),
-            // The model cut to one word.
-            format!(
-                "› draft\n\n{}\n",
-                two_row_footer(12, "GPT-6.1-Sol default", "", 2)
-            ),
+        for (style, directory) in [
+            (PathStyle::Windows, "~\\code\\codex-trust"),
+            (PathStyle::Unix, "~/code/codex-trust"),
         ] {
-            assert!(composer(&screen, PathStyle::Windows).is_none(), "{screen}");
+            unknown_two_row_footers_give_no_composer(style, directory);
         }
         for style in [PathStyle::Unix, PathStyle::Windows] {
             for footer in [
@@ -790,11 +816,41 @@ mod tests {
         }
     }
 
-    /// A one-row footer cut inside a Windows directory is read where the host's paths are Windows
-    /// ones, from wherever the cut leaves the directory's beginning.
+    /// Two-row footers Codex does not draw with its default keys, with `directory` on the status
+    /// line, give no composer where the host's paths are `style` ones.
+    fn unknown_two_row_footers_give_no_composer(style: PathStyle, directory: &str) {
+        let two_rows =
+            |hints: &str| format!("› draft\n\n  GPT-6.1-Sol default · {directory}\n{hints}\n");
+        for screen in [
+            // The transcript's own hints, while it is scrolled back.
+            two_rows("  New activity"),
+            // A remapped warnings key, or queue key.
+            two_rows("  ? for shortcuts                 ⚠ 2 · f3"),
+            two_rows("  ctrl+q to queue message"),
+            // The queue hint is never drawn beside the warnings.
+            two_rows("  tab to queue message            ⚠ 2 · f2"),
+            // The model cut to one word.
+            format!(
+                "› draft\n\n{}\n",
+                two_row_footer(12, "GPT-6.1-Sol default", "", 2)
+            ),
+        ] {
+            assert!(composer(&screen, style).is_none(), "{screen}");
+        }
+    }
+
+    /// A one-row footer cut inside a directory from the home directory is read on any host, and
+    /// one cut inside a Windows directory where the host's paths are Windows ones, from wherever
+    /// the cut leaves the directory's beginning.
     #[test]
-    fn codex_s_one_row_footer_is_read_cut_inside_a_windows_directory() {
-        for directory in ["C:…", "C:\\Us…", "~…", "~\\co…", "\\…", "\\\\h…"] {
+    fn codex_s_one_row_footer_is_read_cut_inside_a_home_or_windows_directory() {
+        for directory in ["~…", "~/co…"] {
+            let screen = format!("› draft\n\n  GPT-6.1-Sol default · {directory}\n");
+            for style in [PathStyle::Unix, PathStyle::Windows] {
+                assert!(composer(&screen, style).is_some(), "{screen}");
+            }
+        }
+        for directory in ["C:…", "C:\\Us…", "~\\co…", "\\…", "\\\\h…"] {
             let screen = format!("› draft\n\n  GPT-6.1-Sol default · {directory}\n");
             assert!(composer(&screen, PathStyle::Windows).is_some(), "{screen}");
             assert!(composer(&screen, PathStyle::Unix).is_none(), "{screen}");

@@ -1,6 +1,6 @@
 # Codex composer captures and footer shapes
 
-The captures below were taken from Codex 0.163.0 in a 45-row, 140-column PTY, with an isolated configuration
+The first captures below were taken from Codex 0.163.0 in a 45-row, 140-column PTY, with an isolated configuration
 directory, no initial task and a local model provider. Each binary capture contains all raw output from startup. The
 footer shapes Codex 0.166.0's source gives are recorded after them.
 
@@ -12,6 +12,17 @@ footer shapes Codex 0.166.0's source gives are recorded after them.
 
 These captures check the empty-composer gate before PTY message delivery.
 
+The two captures below were taken from Codex 0.166.0 (`codex-cli 0.166.0`, the standalone install) on macOS in a
+40-row PTY with `TERM=xterm-256color`, a scratch `HOME` and `CODEX_HOME` holding only the folder's trust entry and a
+symlinked `auth.json`, in a git repository under `/private/tmp`, with no model request: Enter at the folder-trust
+screen, then `draft line one` typed without Enter. Both show Codex's default two-row footer, the status line cut with
+`…` inside its absolute directory, above `← for agents · ? for shortcuts`, which goes blank once the draft is typed.
+
+- `codex_0166_macos_120x40.bin`: 120 columns; the first 12769 bytes end at the empty composer, the whole 12922 with
+  the draft.
+- `codex_0166_macos_44x40.bin`: 44 columns; the first 6009 bytes end at the empty composer, the whole 6162 with the
+  draft.
+
 `grok_user_prompt_submit.json` captures a Grok Build 1.0.70 `UserPromptSubmit` hook for a 181-line prompt.
 Its `prompt` is plain text, with all 180 LF separators preserved.
 
@@ -21,15 +32,15 @@ and preserves internal line breaks.
 
 ## Footer shapes from Codex 0.166.0's source
 
-Read from the `rust-v0.166.0` tag of `openai/codex` (`codex-rs/tui/src`) and its insta snapshots, where no capture
-shows them. The composer reader (`src/adapter/codex/screen.rs`) takes them with Codex's default keys and default
-status line items (`model-with-reasoning`, `current-dir`, `thread-name`; `chatwidget.rs`). Where the host's paths
-are Unix ones it still rejects a thread's name on the status line, a directory from the home directory (`~/…`) and
-the two-row footer, so on macOS it gains only one-row footers, before the thread is named, outside the home directory.
+Read from the `rust-v0.166.0` tag of `openai/codex` (`codex-rs/tui/src`) and its insta snapshots, for the shapes the
+captures above do not show. The composer reader (`src/adapter/codex/screen.rs`) takes them with Codex's default keys
+and default status line items (`model-with-reasoning`, `current-dir`, `thread-name`; `chatwidget.rs`) on any host,
+with an absolute or home-relative directory (`/…`, `~`, `~/…`) on any host and a Windows one only where the host's
+paths are Windows ones. The queue hint under the status line and a thread's name on it are not captured on macOS.
 
 - Two layouts. With the fullscreen transcript (`tui.fullscreen_transcript`, on by default, and the alternate screen),
   the footer is two rows: the status line, then a hint row (`chatwidget/rendering.rs` sets `separate_status_line`;
-  `chat_composer/status_surface.rs`). In the terminal's own scrollback it is one row (the captures above).
+  `chat_composer/status_surface.rs`). In the terminal's own scrollback it is one row (the Codex 0.163.0 captures above).
 - A status line wider than its row is cut at its end with `…` (`truncate_line_with_ellipsis_if_overflow`), so the
   thread's name goes first, then the directory, the separator and the model. No item is left out whole.
 - The hint row holds `? for shortcuts` at an empty composer (`← for agents · ? for shortcuts` with agents to switch
@@ -55,7 +66,7 @@ the two-row footer, so on macOS it gains only one-row footers, before the thread
 
 The reader still gives no composer for:
 
-- where the host's paths are Unix ones, a two-row footer, a `~/…` directory or a thread's name;
+- where the host's paths are Unix ones, a Windows directory (a drive, a UNC path, `~\…`);
 - a remapped key, or a status line of the user's own;
 - the vim mode indicator, or the collaboration mode on the left of a row without the status line;
 - a flash or a hint override in the hint row, the transcript's hints while it is scrolled back (`New activity`,
