@@ -38,7 +38,7 @@ interface Section {
 
 /** What each section of `SETTINGS_SECTION_IDS` shows; a section missing here does not compile. */
 const SECTIONS: Record<SettingsSectionId, Section> = {
-  general: { label: "settings.section.general", Icon: Settings2, Content: GeneralSection },
+  general: { label: "settings.section.general", Icon: Settings2, Content: GeneralSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   "app-behavior": { label: "settings.section.appBehavior", Icon: AppWindow, Content: AppBehaviorSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   git: { label: "settings.section.git", Icon: GitBranch, Content: GitSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   accounts: { label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection, stickyHeadingHeight: AGENT_STRIP_HEIGHT },

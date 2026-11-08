@@ -10,6 +10,8 @@ import { isolate } from "../i18n/isolate";
 import { PANE_ID } from "../layout/paneOverlay";
 import type { PanePeek } from "../layout/usePaneToggles";
 import type { Agent, AgentAvailability, Session } from "../protocol";
+import { DEFAULT_SESSION_ORDER } from "../sessions/order";
+import { sessionOrderPreference } from "../store";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { Sidebar } from "./Sidebar";
@@ -51,6 +53,10 @@ const sessionMap = (list: Session[]) => new Map(list.map((session) => [session.i
 
 function isExpanded(container: HTMLElement, projectId: string): boolean {
   return container.querySelector(`[data-list-motion="${projectId}"] [aria-expanded="true"]`) !== null;
+}
+
+function projectOrder(container: HTMLElement): (string | null)[] {
+  return Array.from(container.querySelectorAll("[data-list-motion]"), (node) => node.getAttribute("data-list-motion"));
 }
 
 function toggleProject(container: HTMLElement, projectId: string): void {
@@ -683,4 +689,18 @@ it.each(["list", "focus"] as const)("%s project emptiness explains unavailable a
   expect(row).toBeDefined();
   act(() => row!.querySelector<HTMLButtonElement>("button")!.click());
   expect(handlers.onOpenDialog).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: { kind: view === "list" ? "choose" : "unbound" } });
+});
+
+it("orders the inactive projects by when an archived session of each ended last, with Recently used chosen", () => {
+  onTestFinished(() => sessionOrderPreference.set(DEFAULT_SESSION_ORDER));
+  const alpha = projectOf("p-alpha", main.id, "Alpha");
+  const beta = projectOf("p-beta", main.id, "Beta");
+  const archived = [
+    sessionOf("alpha-archived", main.id, alpha.id, "Older", "archived", { started_at: 1_000, ended_at: 2_000 }),
+    sessionOf("beta-archived", main.id, beta.id, "Newer", "archived", { started_at: 500, ended_at: 3_000 }),
+  ];
+  const { container } = mountSidebar({ projects: [alpha, beta], sessions: archived });
+  expect(projectOrder(container)).toEqual(["p-alpha", "p-beta"]);
+  act(() => sessionOrderPreference.set({ ...DEFAULT_SESSION_ORDER, inactiveProjects: "used" }));
+  expect(projectOrder(container)).toEqual(["p-beta", "p-alpha"]);
 });

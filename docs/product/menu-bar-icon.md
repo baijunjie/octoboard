@@ -78,7 +78,7 @@ From top to bottom:
 
 1. **The sessions**, only those whose shown status is **waiting for the user**, **paused**, **done** or **awaiting
    instructions**, in that order, one group per status. Each group has a heading that cannot be chosen and names
-   the status with the number of sessions in it, regardless of **Order the sidebar by status**. A group with no
+   the status with the number of sessions in it, whatever sort is chosen. A group with no
    sessions is left out. The shown status is the one given by "Which status a session shows" in
    `docs/product/session-statuses.md`: all other shown statuses are excluded, including starting and switching
    account even when the session would become done or awaiting instructions afterwards.
@@ -100,9 +100,9 @@ From top to bottom:
      submenu's opening line (below) carries the mark of its agent in the same way; the title is what is read, the
      mark adds nothing to it.
    - Within a group, sessions come in the order the sidebar lists them: console by console in the order the consoles
-     were created, its console sessions before its projects' sessions, both in the sidebar's own order (see "Order of
-     projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). Every console is included, not only
-     the one the sidebar shows.
+     were created, its console sessions before its projects' sessions, both in the sidebar's order, as the sort chosen
+     in Settings orders them (see "Choosing the sort" in `docs/product/order-of-projects-and-sessions.md`). Every
+     console is included, not only the one the sidebar shows.
    - Each session reads as its title and where it is — the project it runs in, or the console whose console session it
      is — worded as its system notification names it (see "The raised hand" in `docs/product/session-statuses.md`). A
      session titled after its project reads as the title alone rather than naming it twice. Like every other place, it

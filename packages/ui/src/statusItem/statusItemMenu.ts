@@ -6,7 +6,7 @@ import { remainingPercentAt } from "../accounts/quotaFormat";
 import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
 import { sessionWithLocation, statusLabel } from "../sessions/sessionLabel";
 import { sessionShownStatusKind, SUMMARY_STATUSES, type ShownStatusKind } from "../sessions/sessionStatus";
-import { sessionsInTreeOrder } from "../sessions/order";
+import { type SessionOrder, sessionsInTreeOrder } from "../sessions/order";
 import { agentIconKey, statusIconKey } from "./statusItemIconKeys";
 import { buildQuotaSubmenus, type StatusItemQuotaSource } from "./statusItemQuota";
 
@@ -34,8 +34,8 @@ export interface StatusItemMenuSource {
   delegating: ReadonlySet<string>;
   /** The sessions an account-switch batch of this window has not finished with (`State.queuedAccountSwitches`). */
   queuedSwitches: ReadonlySet<string>;
-  /** Whether the sidebar ranks by status (`Settings.sidebar_order_by_status`), which this menu's order follows. */
-  byStatus: boolean;
+  /** How sessions and projects are ordered, which this menu's order follows. */
+  order: SessionOrder;
   quota: StatusItemQuotaSource;
   selectedSessionId?: string;
   currentConsoleId?: string;
@@ -49,7 +49,7 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
   const { consoles, projects, sessions, consoleMap, projectMap, quota } = source;
   const statuses = new Map(sessions.map((session) => [session, sessionShownStatusKind(session, source.delegating, source.queuedSwitches)]));
   const inOrder = (listed: (status: ShownStatusKind) => boolean) =>
-    sessionsInTreeOrder(consoles, projects, sessions, (session) => listed(statuses.get(session)!), source.delegating, source.queuedSwitches, source.byStatus);
+    sessionsInTreeOrder(consoles, projects, sessions, (session) => listed(statuses.get(session)!), source.delegating, source.queuedSwitches, source.order);
   // Each section is ordered with only its own status present, as the sidebar orders a list of them alone.
   const perStatus = SUMMARY_STATUSES.map((status) => ({ status, listed: inOrder((shown) => shown === status) }));
   const sections = perStatus.flatMap(({ status, listed }): StatusItemSection[] => {

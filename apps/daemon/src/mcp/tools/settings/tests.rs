@@ -812,7 +812,6 @@ async fn settings_are_listed_without_directories_and_the_general_switches_are_wr
         .unwrap();
     assert_eq!(read["auto_delete_unresumable_archives"], false);
     assert_eq!(read["auto_select_account"], false);
-    assert_eq!(read["sidebar_order_by_status"], true);
     // Octoboard's own switching of sessions is the user's alone to turn on: it is neither
     // listed nor taken.
     let ignored = call(
@@ -825,16 +824,6 @@ async fn settings_are_listed_without_directories_and_the_general_switches_are_wr
     .unwrap();
     assert!(ignored.get("auto_switch_on_usage_limit").is_none());
     assert!(!state.store.auto_switch_on_usage_limit().unwrap());
-    let ordered = call(
-        &state,
-        "a",
-        "update_settings",
-        &arguments(json!({ "sidebar_order_by_status": false })),
-    )
-    .await
-    .unwrap();
-    assert_eq!(ordered["sidebar_order_by_status"], false);
-    assert!(!state.store.sidebar_order_by_status().unwrap());
     // Resuming the interrupted sessions when Octoboard starts is a setting an agent may read and change.
     assert_eq!(read["resume_sessions_on_start"], false);
     let resumed = call(

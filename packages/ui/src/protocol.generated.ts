@@ -3,7 +3,7 @@
 // The UI imports it only through `protocol.ts`, which re-exports it.
 
 /** The protocol generation this file describes; see `hello`. */
-export const PROTOCOL_GENERATION = 2;
+export const PROTOCOL_GENERATION = 3;
 
 /**
  * A named config directory of one agent, kept once for the whole application and referred to by
@@ -1089,7 +1089,6 @@ export type DocumentSettings = {
   auto_close_idle_shell_terminals: boolean,
   auto_pull_repositories: boolean,
   auto_delete_unresumable_archives: boolean,
-  sidebar_order_by_status: boolean,
   auto_approve_session_requests: boolean,
   auto_approve_resume_requests: boolean,
   auto_approve_account_switches: boolean,
@@ -2230,8 +2229,6 @@ export type InspectedSettings = {
   current_auto_pull_repositories: boolean,
   auto_delete_unresumable_archives: boolean,
   current_auto_delete_unresumable_archives: boolean,
-  sidebar_order_by_status: boolean,
-  current_sidebar_order_by_status: boolean,
   auto_approve_session_requests: boolean,
   current_auto_approve_session_requests: boolean,
   auto_approve_resume_requests: boolean,
@@ -3271,7 +3268,6 @@ export type Request = {
   interface_language?: string,
   auto_select_account?: boolean,
   auto_switch_on_usage_limit?: boolean,
-  sidebar_order_by_status?: boolean,
   auto_start_quota_windows?: boolean,
   resume_sessions_on_start?: boolean,
   /**
@@ -3985,7 +3981,6 @@ export type RequestBody = {
   interface_language?: string,
   auto_select_account?: boolean,
   auto_switch_on_usage_limit?: boolean,
-  sidebar_order_by_status?: boolean,
   auto_start_quota_windows?: boolean,
   resume_sessions_on_start?: boolean,
   /**
@@ -4620,11 +4615,6 @@ export type Settings = {
    * an agent's request for a switch (`auto_approve_account_switches`).
    */
   auto_switch_on_usage_limit: boolean,
-  /**
-   * Whether the client's sidebar orders sessions and projects by status. On unless the user
-   * turned it off; the daemon only stores it, the ordering is the client's.
-   */
-  sidebar_order_by_status: boolean,
   /**
    * Whether the daemon starts an account's usage window that has reset but not begun counting,
    * by sending one minimal request on that account. Off unless the user turned it on.

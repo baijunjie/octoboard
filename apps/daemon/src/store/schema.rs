@@ -32,8 +32,10 @@ pub(super) const APPLICATION_ID: i64 = 0x4F43_5442;
 pub(super) const MIGRATIONS: &[&str] = &[
     // 1 to 2: the id of the owner a release left with the notice told at the next launch.
     "ALTER TABLE sessions ADD COLUMN owner_notice_former_owner TEXT;",
-    // 2 to 3: the setting that resumes the interrupted sessions when the daemon starts.
-    "ALTER TABLE settings ADD COLUMN resume_sessions_on_start INTEGER NOT NULL DEFAULT 0;",
+    // 2 to 3: the sidebar's ordering moved into the client's own preferences, and the setting that
+    // resumes the interrupted sessions when the daemon starts is added.
+    "ALTER TABLE settings DROP COLUMN sidebar_order_by_status;
+     ALTER TABLE settings ADD COLUMN resume_sessions_on_start INTEGER NOT NULL DEFAULT 0;",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -302,7 +304,6 @@ CREATE TABLE settings (
     ask_questions_as_choices INTEGER NOT NULL DEFAULT 1,
     auto_select_account INTEGER NOT NULL DEFAULT 0,
     auto_switch_on_usage_limit INTEGER NOT NULL DEFAULT 0,
-    sidebar_order_by_status INTEGER NOT NULL DEFAULT 1,
     auto_start_quota_windows INTEGER NOT NULL DEFAULT 0,
     -- NULL until the user sets one; see `Store::default_clone_dir`.
     default_clone_dir      TEXT,
@@ -962,6 +963,58 @@ mod tests {
                 row("loner", "Loner", None, 0, None),
             ]
         );
+    }
+
+    /// Migrating a version 2 database drops the sidebar order column from its settings row and
+    /// keeps the values the row holds in the columns that remain.
+    #[test]
+    fn migrating_a_populated_version_2_database_keeps_its_settings() {
+        let path = temp_db("migrate-populated-v2");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(PAST_SCHEMAS[1])
+                .expect("version 2 schema");
+            conn.pragma_update(None, "user_version", 2)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+            conn.execute_batch(
+                "INSERT INTO settings (id, auto_pull_repositories, auto_start_quota_windows,
+                                       sidebar_order_by_status, interface_language)
+                 VALUES ('app', 1, 1, 0, 'ja');",
+            )
+            .expect("settings");
+        }
+
+        migrate(&path, 2, MIGRATIONS).expect("migrated");
+        let conn = Connection::open(&path).unwrap();
+        assert_eq!(user_version(&conn).unwrap(), SCHEMA_VERSION);
+        let row: (String, i64, i64, Option<String>, i64) = conn
+            .query_row(
+                "SELECT id, auto_pull_repositories, auto_start_quota_windows, interface_language,
+                        resume_sessions_on_start
+                 FROM settings",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(row, ("app".to_string(), 1, 1, Some("ja".to_string()), 0));
+        let columns = conn
+            .prepare("SELECT name FROM pragma_table_info('settings')")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(!columns.iter().any(|name| name == "sidebar_order_by_status"));
     }
 
     /// Adds a session whose project does not exist, which the check after the steps refuses.

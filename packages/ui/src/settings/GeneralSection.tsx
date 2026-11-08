@@ -1,19 +1,27 @@
 import React from "react";
 
+import { useT } from "../i18n/react";
 import { AppearanceSetting } from "./AppearanceSetting";
-import { DaemonSwitchSetting } from "./DaemonSwitchSetting";
 import { LanguageSetting } from "./LanguageSetting";
 import { MarkdownStyleSetting } from "./MarkdownStyleSetting";
+import { SessionOrderSettings } from "./SessionOrderSettings";
+import { SettingsGroup } from "./SettingsGroup";
 
-/** The small app-wide settings: the window's appearance, how a Markdown document is styled, the
- * language and whether the sidebar is ordered by status. */
+/** The small app-wide settings: the window's appearance, the language and how a Markdown document
+ * is styled, then the Sorting group, in which sessions and projects are ordered. */
 export function GeneralSection(): React.ReactElement {
+  const t = useT();
   return (
     <>
-      <AppearanceSetting />
-      <LanguageSetting />
-      <MarkdownStyleSetting />
-      <DaemonSwitchSetting field="sidebar_order_by_status" />
+      {/* Wrapped so the last ungrouped row ends with the gap above the group's heading, not a second line. */}
+      <div>
+        <AppearanceSetting />
+        <LanguageSetting />
+        <MarkdownStyleSetting />
+      </div>
+      <SettingsGroup title={t("settings.sort.group")}>
+        <SessionOrderSettings />
+      </SettingsGroup>
     </>
   );
 }

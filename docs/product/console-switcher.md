@@ -17,7 +17,7 @@ its console sessions included. Only sessions whose shown status is **waiting for
 **awaiting instructions** can supply the badge, in that priority order, with the most recently started session breaking a tie
 (see "The top status" in `docs/product/session-statuses.md`). With none in these four states, the avatar has no badge,
 even while other sessions are running. Starting and switching-account sessions are excluded by their shown status.
-Pinning, project grouping and the sidebar's choice to order by status or date do not affect the choice.
+Pinning, project grouping and the sort chosen for the sidebar do not affect the choice.
 The badge extends outside the button, with enough space around each avatar to keep it complete at the scrolling
 column's edge.
 

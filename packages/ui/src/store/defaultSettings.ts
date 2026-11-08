@@ -14,7 +14,6 @@ export const DEFAULT_SETTINGS: Settings = {
   interface_language: null,
   auto_select_account: false,
   auto_switch_on_usage_limit: false,
-  sidebar_order_by_status: true,
   auto_start_quota_windows: false,
   resume_sessions_on_start: false,
   default_clone_dir: "",

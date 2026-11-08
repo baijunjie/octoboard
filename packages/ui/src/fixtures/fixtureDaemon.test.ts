@@ -680,12 +680,6 @@ describe("the fixture daemon's settings and trusted folders", () => {
     await daemon.request({ type: "update_settings", auto_select_account: false });
     expect(daemon.store.getState().settings.auto_switch_on_usage_limit).toBe(true);
     expect(exportedDocument(daemon.store.getState(), { include_accounts: true }).accounts?.agent_settings?.auto_switch_on_usage_limit).toBe(true);
-    expect(exportedDocument(daemon.store.getState()).settings?.sidebar_order_by_status).toBe(DEFAULT_SETTINGS.sidebar_order_by_status);
-    await daemon.request({ type: "update_settings", sidebar_order_by_status: false });
-    expect(daemon.store.getState().settings.sidebar_order_by_status).toBe(false);
-    await daemon.request({ type: "update_settings", auto_pull_repositories: true });
-    expect(daemon.store.getState().settings.sidebar_order_by_status).toBe(false);
-    expect(exportedDocument(daemon.store.getState()).settings?.sidebar_order_by_status).toBe(false);
     expect(exportedDocument(daemon.store.getState(), { include_accounts: true }).accounts?.agent_settings?.auto_start_quota_windows).toBe(DEFAULT_SETTINGS.auto_start_quota_windows);
     await daemon.request({ type: "update_settings", auto_start_quota_windows: true });
     expect(daemon.store.getState().settings.auto_start_quota_windows).toBe(true);

@@ -201,7 +201,7 @@ pub(super) const GET_SETTINGS: ToolDef = ToolDef {
     description: "The application-wide settings: `auto_close_idle_shell_terminals`, `auto_pull_repositories`, \
                   `auto_delete_unresumable_archives`, `resume_sessions_on_start`, \
                   `auto_select_account`, `interface_language` (the user's language, a tag; \
-                  `null` until a window reported one), `sidebar_order_by_status`, \
+                  `null` until a window reported one), \
                   `default_clone_dir`, the `git_workflow` settings, \
                   `provider_settings` (the settings the user made for each agent's \
                   provider that you may read, by agent and then setting id, with the value \
@@ -257,13 +257,6 @@ pub(super) const UPDATE_SETTINGS: ToolDef = ToolDef {
                                     interface is offered in (such as `en`, `ja` or \
                                     `zh-Hans`). Sessions are told to talk to the user in \
                                     it; the user's windows keep their own choice.",
-                },
-                "sidebar_order_by_status": {
-                    "type": "boolean",
-                    "description": "Whether the user's sidebar orders sessions and projects by \
-                                    status. When off, it ranks none by status: sessions go \
-                                    pinned first, then most recently started; projects keep \
-                                    the active-first grouping, then pinned, then name.",
                 },
                 "default_clone_dir": {
                     "type": "string",

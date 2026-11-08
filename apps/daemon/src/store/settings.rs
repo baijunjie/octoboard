@@ -49,7 +49,6 @@ impl Store {
             interface_language: read_setting(&conn, "interface_language")?,
             auto_select_account: read_setting(&conn, "auto_select_account")?,
             auto_switch_on_usage_limit: read_setting(&conn, "auto_switch_on_usage_limit")?,
-            sidebar_order_by_status: read_setting(&conn, "sidebar_order_by_status")?,
             auto_start_quota_windows: read_setting(&conn, "auto_start_quota_windows")?,
             resume_sessions_on_start: read_setting(&conn, "resume_sessions_on_start")?,
             default_clone_dir: clone_dir_or_built_in(read_setting(&conn, "default_clone_dir")?),
@@ -294,7 +293,6 @@ bool_settings! {
     ask_questions_as_choices, set_ask_questions_as_choices;
     auto_select_account, set_auto_select_account;
     auto_switch_on_usage_limit, set_auto_switch_on_usage_limit;
-    sidebar_order_by_status, set_sidebar_order_by_status;
     auto_start_quota_windows, set_auto_start_quota_windows;
     resume_sessions_on_start, set_resume_sessions_on_start;
 }
@@ -585,13 +583,6 @@ mod tests {
                 read: |settings| settings.auto_switch_on_usage_limit,
                 get: Store::auto_switch_on_usage_limit,
                 set: Store::set_auto_switch_on_usage_limit,
-            },
-            Setting {
-                column: "sidebar_order_by_status",
-                default: true,
-                read: |settings| settings.sidebar_order_by_status,
-                get: Store::sidebar_order_by_status,
-                set: Store::set_sidebar_order_by_status,
             },
             Setting {
                 column: "auto_start_quota_windows",

@@ -8,7 +8,7 @@ import { useProjectProcesses } from "../../process/useProjectProcesses";
 import { type Project } from "../../protocol";
 import { isLive } from "../../sessions/sessionStatus";
 import { compareSessions } from "../../sessions/order";
-import { useDaemon, useDaemonStore, useDelegatingIds, useProjectSessions, useQueuedAccountSwitches } from "../../store";
+import { sessionOrderPreference, useDaemon, useDelegatingIds, useProjectSessions, useQueuedAccountSwitches } from "../../store";
 import { useProjectRemovalCleanup } from "../BranchCleanupOptions";
 import { isRemovalRefusal } from "../branchInspection";
 import { ConfirmSection } from "./ConfirmSection";
@@ -31,10 +31,10 @@ export function DeleteProjectDialog({ project, onClose }: { project: Project; on
   const projectSessions = useProjectSessions(project.id);
   const delegatingIds = useDelegatingIds();
   const queuedSwitches = useQueuedAccountSwitches();
-  const byStatus = useDaemonStore((s) => s.settings.sidebar_order_by_status);
+  const { sessions: sort } = sessionOrderPreference.useValue();
   const running = projectSessions
     .filter((s) => isLive(s.status))
-    .sort((a, b) => compareSessions(a, b, delegatingIds, queuedSwitches, byStatus));
+    .sort((a, b) => compareSessions(a, b, delegatingIds, queuedSwitches, sort));
   const showRunning = running.length > 0;
   return (
     <ConfirmDialog

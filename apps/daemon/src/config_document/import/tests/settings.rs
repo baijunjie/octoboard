@@ -164,7 +164,6 @@ async fn the_documents_settings_are_shown_by_inspecting_and_applied_only_when_as
             auto_close_idle_shell_terminals: false,
             auto_pull_repositories: true,
             auto_delete_unresumable_archives: false,
-            sidebar_order_by_status: true,
             auto_approve_session_requests: false,
             auto_approve_resume_requests: false,
             auto_approve_account_switches: false,
@@ -197,7 +196,6 @@ async fn a_full_export_round_trips_both_settings_and_a_console_export_carries_no
         .store
         .set_auto_delete_unresumable_archives(false)
         .unwrap();
-    source.store.set_sidebar_order_by_status(false).unwrap();
     source.store.set_resume_sessions_on_start(true).unwrap();
     let hub = crate::test_support::console(&source_dir);
     source.store.insert_console(&hub).unwrap();
@@ -249,8 +247,6 @@ async fn a_full_export_round_trips_both_settings_and_a_console_export_carries_no
     .unwrap();
     assert!(target.store.auto_pull_repositories().unwrap());
     assert!(!target.store.auto_delete_unresumable_archives().unwrap());
-    assert!(!target.store.sidebar_order_by_status().unwrap());
-    assert_eq!(full["settings"]["sidebar_order_by_status"], false);
     assert!(target.store.resume_sessions_on_start().unwrap());
     assert_eq!(full["settings"]["resume_sessions_on_start"], true);
 }
@@ -854,6 +850,36 @@ async fn a_version_1_document_is_upgraded_and_applies_its_agent_account_settings
         .unwrap()
         .switch("claude_compatibility"));
     assert!(imported.accounts.unwrap().agent_settings_applied.is_some());
+}
+
+/// A version 2 document still carries `settings.sidebar_order_by_status`; the upgrade drops it, on
+/// its own and as the last step of a version 1 document's chain.
+#[test]
+fn a_version_2_document_loses_the_sidebar_order_setting() {
+    let mut older = with_settings(document(Vec::new()), true, false);
+    older["version"] = json!(2);
+    older["settings"]["sidebar_order_by_status"] = json!(true);
+    let mut raw = older.as_object().unwrap().clone();
+    crate::config_document::upgrade::upgrade(&mut raw, 2);
+    assert_eq!(raw["version"], json!(CONFIGURATION_VERSION));
+    assert!(!raw["settings"]
+        .as_object()
+        .unwrap()
+        .contains_key("sidebar_order_by_status"));
+
+    let v1: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/configuration-v1-beta2.json")).unwrap();
+    assert!(v1["settings"]
+        .as_object()
+        .unwrap()
+        .contains_key("sidebar_order_by_status"));
+    let mut raw = v1.as_object().unwrap().clone();
+    crate::config_document::upgrade::upgrade(&mut raw, 1);
+    assert_eq!(raw["version"], json!(CONFIGURATION_VERSION));
+    assert!(!raw["settings"]
+        .as_object()
+        .unwrap()
+        .contains_key("sidebar_order_by_status"));
 }
 
 /// A version 1 document with settings but no accounts region keeps its Agent accounts settings:

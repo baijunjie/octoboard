@@ -6,6 +6,7 @@ import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Account, AccountQuota, Agent, QuotaWindow, Session, SessionStatus } from "../protocol";
 import { displayColumns } from "../i18n/displayColumns";
+import { DEFAULT_SESSION_ORDER } from "../sessions/order";
 import { delegatingSessionIds } from "../sessions/sessionStatus";
 import { TEST_PROVIDERS } from "../test/testProviders";
 import { iconKeysOf } from "./statusItemIcons";
@@ -32,7 +33,7 @@ const menuOf = (sessions: Session[], quota: StatusItemQuotaSource = NO_QUOTA, qu
     projectMap: new Map(projects.map((p) => [p.id, p])),
     delegating: delegatingSessionIds(sessions),
     queuedSwitches,
-    byStatus: true,
+    order: DEFAULT_SESSION_ORDER,
   });
 
 const inProject = (id: string, status: SessionStatus, title = id, terminal_title?: string) =>
@@ -406,7 +407,7 @@ describe("buildStatusItemMenu quota submenus", () => {
     const quota = source({ accounts: [work], disabledDefaultAccounts: ["claude"], agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null), quotaOf("claude", "work")] });
     const on = (status: SessionStatus) => ({ ...inProject("s", status), account_id: "work", config_dir: "/w" });
     const menu = (status: SessionStatus) => buildStatusItemMenu(t, {
-      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", delegating: new Set(), queuedSwitches: new Set(), byStatus: true,
+      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", delegating: new Set(), queuedSwitches: new Set(), order: DEFAULT_SESSION_ORDER,
       consoleMap: new Map(consoles.map((c) => [c.id, c])), projectMap: new Map(projects.map((p) => [p.id, p])),
     });
     const headers = (status: SessionStatus) => menu(status).submenus.flatMap((submenu) => submenu.items.filter((item) => item.kind === "header").map((item) => (item as { title: string }).title.replace(/[\u2068\u2069]/g, "")));
@@ -422,7 +423,7 @@ describe("buildStatusItemMenu quota submenus", () => {
     const quota = source({ accounts: [work], agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null), quotaOf("claude", "work")] });
     const on = (status: SessionStatus) => ({ ...inProject("s", status), account_id: "work", config_dir: "/w" });
     const menu = (status: SessionStatus) => buildStatusItemMenu(t, {
-      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", delegating: new Set(), queuedSwitches: new Set(), byStatus: true,
+      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", delegating: new Set(), queuedSwitches: new Set(), order: DEFAULT_SESSION_ORDER,
       consoleMap: new Map(consoles.map((c) => [c.id, c])), projectMap: new Map(projects.map((p) => [p.id, p])),
     });
     expect(menu("idle").quota_label).toContain("Work");

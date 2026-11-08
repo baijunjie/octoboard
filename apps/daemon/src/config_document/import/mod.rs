@@ -343,8 +343,6 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_auto_delete_unresumable_archives: state
                 .store
                 .auto_delete_unresumable_archives()?,
-            sidebar_order_by_status: settings.sidebar_order_by_status,
-            current_sidebar_order_by_status: state.store.sidebar_order_by_status()?,
             auto_approve_session_requests: settings.auto_approve_session_requests,
             current_auto_approve_session_requests: state.store.auto_approve_session_requests()?,
             auto_approve_resume_requests: settings.auto_approve_resume_requests,
@@ -767,7 +765,6 @@ pub async fn apply_reporting(
             auto_approve_handoffs: Some(settings.auto_approve_handoffs),
             ask_questions_as_choices: Some(settings.ask_questions_as_choices),
             interface_language: interface_language.clone(),
-            sidebar_order_by_status: Some(settings.sidebar_order_by_status),
             resume_sessions_on_start: settings.resume_sessions_on_start,
             // Written above, before the projects.
             default_clone_dir: None,

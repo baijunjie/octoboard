@@ -1002,7 +1002,7 @@ fn an_answer_to_a_session_request_tells_a_value_left_out_from_a_null_one() {
 }
 
 /// One field is enough: the others stay absent, and a body that names nothing leaves
-/// `auto_select_account`, `sidebar_order_by_status` and `auto_start_quota_windows` absent too.
+/// `auto_select_account` and `auto_start_quota_windows` absent too.
 #[test]
 fn an_update_settings_may_name_only_one_field() {
     let parsed = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
@@ -1014,7 +1014,6 @@ fn an_update_settings_may_name_only_one_field() {
             auto_approve_account_switches,
             auto_approve_handoffs,
             auto_select_account,
-            sidebar_order_by_status,
             auto_start_quota_windows,
             default_clone_dir,
             ..
@@ -1026,7 +1025,6 @@ fn an_update_settings_may_name_only_one_field() {
             auto_approve_account_switches,
             auto_approve_handoffs,
             auto_select_account,
-            sidebar_order_by_status,
             auto_start_quota_windows,
             default_clone_dir,
         ),
@@ -1034,96 +1032,26 @@ fn an_update_settings_may_name_only_one_field() {
     };
     assert_eq!(
         parsed(r#"{"type":"update_settings","auto_select_account":true}"#),
-        (
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(true),
-            None,
-            None,
-            None
-        )
+        (None, None, None, None, None, None, Some(true), None, None)
     );
     assert_eq!(
         parsed(r#"{"type":"update_settings","auto_approve_resume_requests":true}"#),
-        (
-            None,
-            None,
-            None,
-            Some(true),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None
-        )
+        (None, None, None, Some(true), None, None, None, None, None)
     );
     assert_eq!(
         parsed(r#"{"type":"update_settings","auto_approve_account_switches":true}"#),
-        (
-            None,
-            None,
-            None,
-            None,
-            Some(true),
-            None,
-            None,
-            None,
-            None,
-            None
-        )
+        (None, None, None, None, Some(true), None, None, None, None)
     );
     assert_eq!(
         parsed(r#"{"type":"update_settings","auto_approve_handoffs":true}"#),
-        (
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(true),
-            None,
-            None,
-            None,
-            None
-        )
-    );
-    assert_eq!(
-        parsed(r#"{"type":"update_settings","sidebar_order_by_status":false}"#),
-        (
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(false),
-            None,
-            None
-        )
+        (None, None, None, None, None, Some(true), None, None, None)
     );
     assert_eq!(
         parsed(r#"{"type":"update_settings","auto_start_quota_windows":true}"#),
-        (
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(true),
-            None
-        )
+        (None, None, None, None, None, None, None, Some(true), None)
     );
     assert_eq!(
         parsed(r#"{"type":"update_settings"}"#),
-        (None, None, None, None, None, None, None, None, None, None)
+        (None, None, None, None, None, None, None, None, None)
     );
 }

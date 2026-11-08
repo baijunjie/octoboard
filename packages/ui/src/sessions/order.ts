@@ -35,19 +35,45 @@ function rankOf(session: Session, delegating: ReadonlySet<string>, queuedSwitche
   return STATUS_RANK[kind];
 }
 
-/** Pinned first; then by status (`STATUS_RANK`) unless `byStatus` is off (the user's
- * `Settings.sidebar_order_by_status`); then newest first. */
-export function compareSessions(a: Session, b: Session, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus = true): number {
+/** How a list of sessions is ordered, as the user chose: by status (`STATUS_RANK`), or by when they
+ * started alone. Pinned sessions come first either way. */
+export const SESSION_SORTS = ["status", "started"] as const;
+export type SessionSort = (typeof SESSION_SORTS)[number];
+
+/** How the projects with an unarchived session are ordered, as the user chose: by status (the rank of the
+ * most urgent session, then name), by name, or by the most recently started session (`projectRecency`,
+ * then name). */
+export const ACTIVE_PROJECT_SORTS = ["status", "name", "used"] as const;
+export type ActiveProjectSort = (typeof ACTIVE_PROJECT_SORTS)[number];
+
+/** How the projects with no unarchived session are ordered, as the user chose: by name, or by the most
+ * recently used of their archived sessions (`projectRecency`, then name). */
+export const INACTIVE_PROJECT_SORTS = ["name", "used"] as const;
+export type InactiveProjectSort = (typeof INACTIVE_PROJECT_SORTS)[number];
+
+/** The order the user chose for sessions and projects, shared by every console and every view. Projects
+ * split into two segments: those with an unarchived session first, then the rest; pinned projects come
+ * first within each, then the segment's own choice. */
+export interface SessionOrder {
+  sessions: SessionSort;
+  activeProjects: ActiveProjectSort;
+  inactiveProjects: InactiveProjectSort;
+}
+
+export const DEFAULT_SESSION_ORDER: SessionOrder = { sessions: "status", activeProjects: "status", inactiveProjects: "name" };
+
+/** Pinned first; then by status (`STATUS_RANK`) unless `sort` is `started`; then newest first. */
+export function compareSessions(a: Session, b: Session, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, sort: SessionSort = "status"): number {
   return (
     Number(b.pinned) - Number(a.pinned) ||
-    (byStatus ? rankOf(a, delegating, queuedSwitches) - rankOf(b, delegating, queuedSwitches) : 0) ||
+    (sort === "status" ? rankOf(a, delegating, queuedSwitches) - rankOf(b, delegating, queuedSwitches) : 0) ||
     b.started_at - a.started_at
   );
 }
 
-/** `compareSessions` with `byStatus` bound, for `Array.prototype.sort`. */
-function sessionOrder(delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus: boolean): (a: Session, b: Session) => number {
-  return (a, b) => compareSessions(a, b, delegating, queuedSwitches, byStatus);
+/** `compareSessions` with `sort` bound, for `Array.prototype.sort`. */
+function sessionComparator(delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, sort: SessionSort): (a: Session, b: Session) => number {
+  return (a, b) => compareSessions(a, b, delegating, queuedSwitches, sort);
 }
 
 /** The rank of a project with no unarchived session, which ends the list. */
@@ -59,29 +85,57 @@ export function projectRank(sessions: Session[], delegating: ReadonlySet<string>
   return sessions.reduce((rank, session) => Math.min(rank, rankOf(session, delegating, queuedSwitches)), INACTIVE_PROJECT_RANK);
 }
 
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-
-/** Projects with unarchived sessions first; within each group, pinned, then rank (unless
- * `byStatus` is off), then name. */
-export function sortProjects(projects: Project[], sessionsOf: (project: Project) => Session[], delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus = true): Project[] {
-  return sortProjectsByRank(projects, new Map(projects.map((p) => [p.id, projectRank(sessionsOf(p), delegating, queuedSwitches)])), byStatus);
+/** How recently a project was used: when its newest unarchived session started, or, for a project with
+ * none, when its newest archived session ended (started, if it never recorded an end), and -1 when it
+ * has no session at all, so it comes after every project that was used. */
+export function projectRecency(sessions: Session[]): number {
+  const live = sessions.filter((session) => session.status !== "archived");
+  if (live.length > 0) return live.reduce((latest, session) => Math.max(latest, session.started_at), 0);
+  return sessions.reduce((latest, session) => Math.max(latest, session.ended_at ?? session.started_at), -1);
 }
 
-/** `sortProjects` for a caller that already holds each project's `projectRank`, by project id.
- * With `byStatus` off the rank still splits off the inactive projects, which end the list. */
-export function sortProjectsByRank(projects: Project[], rank: ReadonlyMap<string, number>, byStatus = true): Project[] {
+/** What orders a project among its siblings besides its pin and name: its `projectRank` and its
+ * `projectRecency`. */
+export interface ProjectStanding {
+  rank: number;
+  recency: number;
+}
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+/** Projects with unarchived sessions first; within each segment, pinned, then by the segment's choice in
+ * `order`: rank, nothing (name alone) or recency, then name. `sessionsOf` returns every session of a
+ * project, archived ones included, as the inactive segment's recency reads them. */
+export function sortProjects(projects: Project[], sessionsOf: (project: Project) => Session[], delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, order: SessionOrder = DEFAULT_SESSION_ORDER): Project[] {
+  const standing = new Map(
+    projects.map((p) => {
+      const sessions = sessionsOf(p);
+      return [p.id, { rank: projectRank(sessions, delegating, queuedSwitches), recency: projectRecency(sessions) }];
+    }),
+  );
+  return sortProjectsByStanding(projects, standing, order);
+}
+
+/** `sortProjects` for a caller that already holds each project's `ProjectStanding`, by project id.
+ * The rank splits the segments whichever choice `order` makes for each. */
+export function sortProjectsByStanding(projects: Project[], standing: ReadonlyMap<string, ProjectStanding>, order: Pick<SessionOrder, "activeProjects" | "inactiveProjects"> = DEFAULT_SESSION_ORDER): Project[] {
+  const of = (project: Project) => standing.get(project.id)!;
+  const inactive = (project: Project) => of(project).rank === INACTIVE_PROJECT_RANK;
+  const byKey = (a: Project, b: Project) => {
+    // Both are in the same segment here, the rank having split them.
+    const sort = inactive(a) ? order.inactiveProjects : order.activeProjects;
+    if (sort === "status") return of(a).rank - of(b).rank;
+    if (sort === "used") return of(b).recency - of(a).recency;
+    return 0;
+  };
   return [...projects].sort(
-    (a, b) =>
-      Number(rank.get(a.id) === INACTIVE_PROJECT_RANK) - Number(rank.get(b.id) === INACTIVE_PROJECT_RANK) ||
-      Number(b.pinned) - Number(a.pinned) ||
-      (byStatus ? rank.get(a.id)! - rank.get(b.id)! : 0) ||
-      collator.compare(a.name, b.name),
+    (a, b) => Number(inactive(a)) - Number(inactive(b)) || Number(b.pinned) - Number(a.pinned) || byKey(a, b) || collator.compare(a.name, b.name),
   );
 }
 
 /** A project's sessions in sidebar order: the ones not archived, ranked by `compareSessions`. */
-export function liveSessions(sessions: Session[], delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus = true): Session[] {
-  return sessions.filter((s) => s.status !== "archived").sort(sessionOrder(delegating, queuedSwitches, byStatus));
+export function liveSessions(sessions: Session[], delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, sort: SessionSort = "status"): Session[] {
+  return sessions.filter((s) => s.status !== "archived").sort(sessionComparator(delegating, queuedSwitches, sort));
 }
 
 /** Archived sessions, most recently ended first. */
@@ -132,8 +186,8 @@ function nest(ordered: Session[]): NestedSession[] {
 
 /** The sessions that are not archived, in the sidebar's order (`liveSessions`), with the sessions
  * bound to a project session nested under it. */
-export function liveSessionRows(sessions: Session[], delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus = true): NestedSession[] {
-  return nest(liveSessions(sessions, delegating, queuedSwitches, byStatus));
+export function liveSessionRows(sessions: Session[], delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, sort: SessionSort = "status"): NestedSession[] {
+  return nest(liveSessions(sessions, delegating, queuedSwitches, sort));
 }
 
 /** The archived sessions, most recently ended first (`archivedSessions`), with the ones bound to an
@@ -281,7 +335,7 @@ export function boundElsewhere(
   owners: Map<string, Session>,
   delegating: ReadonlySet<string>,
   queuedSwitches: ReadonlySet<string>,
-  byStatus = true,
+  sort: SessionSort = "status",
 ): { count: number; owners: { owner: Session; count: number }[] } | undefined {
   const byId = new Map(sessions.map((s) => [s.id, s]));
   const counts = new Map<string, { owner: Session; count: number }>();
@@ -296,7 +350,7 @@ export function boundElsewhere(
     else counts.set(owner.id, { owner, count: 1 });
   }
   if (count === 0) return undefined;
-  return { count, owners: [...counts.values()].sort((a, b) => compareSessions(a.owner, b.owner, delegating, queuedSwitches, byStatus)) };
+  return { count, owners: [...counts.values()].sort((a, b) => compareSessions(a.owner, b.owner, delegating, queuedSwitches, sort)) };
 }
 
 /** The sessions a console session's focus mode lists, in whatever project and status: those bound
@@ -320,7 +374,7 @@ export function focusGroups(
   consoleSessionId: string,
   delegating: ReadonlySet<string>,
   queuedSwitches: ReadonlySet<string>,
-  byStatus = true,
+  order: SessionOrder = DEFAULT_SESSION_ORDER,
 ): { project: Project; sessions: NestedSession[] }[] {
   const listed = focusListed(sessions, consoleSessionId);
   const sessionsOf = (project: Project) => liveInProject(listed, project);
@@ -329,13 +383,13 @@ export function focusGroups(
     sessionsOf,
     delegating,
     queuedSwitches,
-    byStatus,
-  ).map((project) => ({ project, sessions: liveSessionRows(sessionsOf(project), delegating, queuedSwitches, byStatus) }));
+    order,
+  ).map((project) => ({ project, sessions: liveSessionRows(sessionsOf(project), delegating, queuedSwitches, order.sessions) }));
 }
 
 /** One group of `focusGroups`: the rows of `project` alone, out of every session of the console. */
-export function focusGroupRows(sessions: Session[], project: Project, consoleSessionId: string, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus = true): NestedSession[] {
-  return liveSessionRows(liveInProject(focusListed(sessions, consoleSessionId), project), delegating, queuedSwitches, byStatus);
+export function focusGroupRows(sessions: Session[], project: Project, consoleSessionId: string, delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, sort: SessionSort = "status"): NestedSession[] {
+  return liveSessionRows(liveInProject(focusListed(sessions, consoleSessionId), project), delegating, queuedSwitches, sort);
 }
 
 /** The status of the most urgent session of `sessions` by the sidebar's status rank, independent of
@@ -381,7 +435,7 @@ export function switchStrip(sessions: Session[], consoleId: string, delegating: 
 
 /** The sessions `include` picks, in the order the sidebar tree lists them: console by console, its
  * console sessions first (in the console sessions section's own order), then its projects'
- * sessions in the sidebar's own order; `byStatus` is `Settings.sidebar_order_by_status`. */
+ * sessions in the sidebar's own order, as `order` orders them. */
 export function sessionsInTreeOrder(
   consoles: Console[],
   projects: Project[],
@@ -389,24 +443,24 @@ export function sessionsInTreeOrder(
   include: (session: Session) => boolean,
   delegating: ReadonlySet<string>,
   queuedSwitches: ReadonlySet<string>,
-  byStatus = true,
+  order: SessionOrder = DEFAULT_SESSION_ORDER,
 ): Session[] {
-  const order = sessionOrder(delegating, queuedSwitches, byStatus);
+  const compare = sessionComparator(delegating, queuedSwitches, order.sessions);
   const picked = sessions.filter(include);
   return consoles.flatMap((console) => {
     const mine = picked.filter((s) => s.console_id === console.id);
     return [
-      ...mine.filter((s) => s.kind === "console").sort(order),
+      ...mine.filter((s) => s.kind === "console").sort(compare),
       ...sortProjects(
         projects.filter((p) => p.console_id === console.id),
         (project) => sessions.filter((s) => s.project_id === project.id),
         delegating,
         queuedSwitches,
-        byStatus,
+        order,
       ).flatMap((project) =>
         // Nested as the project's list nests them, so a session bound to a project session follows
         // its owner rather than being ranked against it.
-        nest(mine.filter((s) => s.kind !== "console" && s.project_id === project.id).sort(order)).map((row) => row.session),
+        nest(mine.filter((s) => s.kind !== "console" && s.project_id === project.id).sort(compare)).map((row) => row.session),
       ),
     ];
   });

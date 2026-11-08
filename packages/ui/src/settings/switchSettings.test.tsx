@@ -38,7 +38,6 @@ const switches = [
   { key: "auto_approve_session_requests", label: "Automatically approve session requests", onText: "without asking you first" },
   { key: "auto_select_account", label: "Automatically select an account", onText: "whose weekly limit resets soonest" },
   { key: "auto_switch_on_usage_limit", label: "Automatically switch accounts at the usage limit", onText: "switched to another account with usage left" },
-  { key: "sidebar_order_by_status", label: "Order the sidebar by status", onText: "move as their status changes" },
   { key: "auto_pull_repositories", label: "Automatically pull repositories", help: "About automatic pulling", onText: "A project's branch is pulled" },
   { key: "auto_start_quota_windows", label: "Start usage windows automatically", help: "About starting usage windows automatically", onText: "starts counting once it resets" },
 ];

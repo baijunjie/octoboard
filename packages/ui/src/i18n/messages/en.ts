@@ -2122,7 +2122,6 @@ export const en = {
   "configuration.import.settings.consequence.archiveCleanup": "Archived sessions whose conversations are gone will then be deleted automatically.",
   "configuration.import.settings.consequence.autoSelectAccount": "A new session then uses the account whose weekly limit resets soonest.",
   "configuration.import.settings.consequence.autoSwitchOnUsageLimit": "A session that stops at its account's usage limit is then switched to another account with usage left and carries on.",
-  "configuration.import.settings.consequence.sidebarOrder": "Sessions and projects in the sidebar then move as their status changes.",
   "configuration.import.settings.consequence.autoStartQuotaWindows": "A usage window that has not started counting is then started with one small request, which counts a little toward the account's usage limits.",
   "configuration.import.settings.consequence.autoApproveSession": "A session's request to start a session that reports to you is then approved without asking you first.",
   "configuration.import.settings.consequence.autoApproveResume": "A session's request to reopen or resume a session, or to resume a conversation in a new session, is then approved without asking you first.",
@@ -2319,6 +2318,17 @@ export const en = {
   "settings.shortcuts.key.pageDown": "Page Down",
   "settings.markdownStyle.label": "Markdown style",
   "settings.markdownStyle.description": "How Markdown documents are styled in the file viewer.",
+  "settings.sort.group": "Sorting",
+  "settings.sort.sessions.label": "Sessions",
+  "settings.sort.sessions.description": "How sessions are ordered.",
+  "settings.sort.activeProjects.label": "Active projects",
+  "settings.sort.activeProjects.description": "Projects that have unarchived sessions. They come before inactive projects.",
+  "settings.sort.inactiveProjects.label": "Inactive projects",
+  "settings.sort.inactiveProjects.description": "Projects with no unarchived sessions. They come after active projects.",
+  "settings.sort.option.status": "Status",
+  "settings.sort.option.started": "Recently started",
+  "settings.sort.option.name": "Name",
+  "settings.sort.option.used": "Recently used",
   "settings.language.label": "Language",
   "settings.language.description":
     "The language of the interface. It is picked from the system's languages on first launch.",
@@ -2335,11 +2345,6 @@ export const en = {
     "Once this is on, an archived session is deleted automatically when its agent no longer keeps its conversation. Archived sessions are checked each time the app starts, then about once a day. Pinned and locked sessions are kept.",
   "settings.archiveCleanup.description.on":
     "An archived session is deleted automatically when its agent no longer keeps its conversation. Archived sessions are checked each time the app starts, then about once a day. Pinned and locked sessions are kept.",
-  "settings.sidebarOrder.label": "Order the sidebar by status",
-  "settings.sidebarOrder.description.off":
-    "Once this is on, sessions and projects move as their status changes, so the ones waiting for you come first after the pinned ones. Projects with no unarchived session end the list.",
-  "settings.sidebarOrder.description.on":
-    "Sessions and projects move as their status changes, so the ones waiting for you come first after the pinned ones. Projects with no unarchived session end the list.",
   "settings.agentPermissions.lead": "Choose what sessions may do without asking you first, and how they ask you.",
   "settings.autoApproveSession.label": "Automatically approve session requests",
   "settings.autoApproveSession.approvalDescription.off": "Once this is on, a session can start new sessions without asking you first.",

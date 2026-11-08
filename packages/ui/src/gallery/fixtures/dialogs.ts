@@ -402,7 +402,7 @@ const SESSION_INSTRUCTIONS = [
 const sessionLaunchState = {
   ...dialogState,
   // The open-session buttons share one label; keep the confirmation target's project alone
-  // rather than depending on the first button of the alphabetically sorted sidebar.
+  // rather than depending on the first button of the sidebar.
   projects: new Map([[web.id, projectWith(web, {
     launch: { claude: { model: "opus" }, codex: { model: SAMPLE_CODEX_MODELS[0].id, effort: "xhigh" } },
   })]]),

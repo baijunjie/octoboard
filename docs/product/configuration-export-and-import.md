@@ -179,14 +179,14 @@ declared as carried.
 
 ### Versions
 
-The format marker tells a configuration document from any other JSON. The version is a whole number, **2** today, and
+The format marker tells a configuration document from any other JSON. The version is a whole number, **3** today, and
 is raised only when a change would make a reader written for a released version misread a document — a field dropped,
 or given another meaning. Adding a field is not such a change, and a reader ignores a field it does not know. Version
 changes and upgrade steps are written only between released versions: a change no release has carried is made in place,
 at the current version, and raising the version past a released one adds a step that upgrades a document of that
 version.
 
-An import reads **versions 1 to 2**: version 1 is the one the first beta releases wrote, and is upgraded to the current
+An import reads **versions 1 to 3**: version 1 is the one the first beta releases wrote, and is upgraded to the current
 version as it is read, before anything else looks at it, so the inspection and the import see the same document. It
 refuses a document whose format it does not recognize, and one of any other version, older or newer, before it creates
 anything; the refusal names the versions it reads. Upgrading a version 1 document:
@@ -201,6 +201,10 @@ anything; the refusal names the versions it reads. Upgrading a version 1 documen
 - reads what version 1 never carried — the default clone directory, whether a default account is turned off, and the
   agent account settings of a document without application settings — as not said, so an import leaves the importing
   machine's own as they are.
+
+Upgrading a version 2 document drops its application settings' setting for ordering the sidebar by status, which an
+import no longer reads: the order of sessions and projects is chosen in each client and is in no document (see
+"Choosing the sort" in `docs/product/order-of-projects-and-sessions.md`).
 
 An export always writes an entry for every agent in `accounts`, `launch` and `project_session_launch`. An import reads
 an agent's entry that is left out as unset: a console's account is then the agent's default account, a project's

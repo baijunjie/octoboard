@@ -322,18 +322,18 @@ it("groups the application settings as the Settings dialog does, each group in t
   onTestFinished(() => shortcutOverrides.set({}));
   await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS }) });
   const groups = settingGroupsOf(document.body.querySelector("[role=tabpanel]")!);
-  expect(groups.map((group) => group.title)).toEqual(["General", "App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"]);
-  expect(groups[1].lines).toEqual(["Resume sessions on start", "Close idle terminals when closing the panel"]);
-  expect(groups[2].lines).toEqual(["Default clone directory", "Automatically pull repositories", "Git workflow"]);
-  expect(groups[3].lines).toEqual([
+  expect(groups.map((group) => group.title)).toEqual(["App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"]);
+  expect(groups[0].lines).toEqual(["Resume sessions on start", "Close idle terminals when closing the panel"]);
+  expect(groups[1].lines).toEqual(["Default clone directory", "Automatically pull repositories", "Git workflow"]);
+  expect(groups[2].lines).toEqual([
     "Automatically approve session requests",
     "Automatically approve resume requests",
     "Automatically approve account switches",
     "Automatically approve handoffs",
     "Ask questions as choices",
   ]);
-  expect(groups[4].lines).toEqual(["Changed shortcuts"]);
-  expect(groups[5].lines).toEqual(["Automatically delete archived sessions whose conversation is gone"]);
+  expect(groups[3].lines).toEqual(["Changed shortcuts"]);
+  expect(groups[4].lines).toEqual(["Automatically delete archived sessions whose conversation is gone"]);
 });
 
 it("lists the App behavior card in the order of the section on a desktop app, the settings this client holds among the daemon's", async () => {
@@ -792,7 +792,6 @@ it("notes what applying each application setting would change with a badge, and 
   expect(lines["Automatically pull repositories"]).toEqual({ badge: "Turns on", note: "Your repositories will then be pulled automatically." });
   // Turning a setting off, or leaving it as it is, has no consequence line.
   expect(lines["Automatically delete archived sessions whose conversation is gone"]).toEqual({ badge: "Turns off" });
-  expect(lines["Order the sidebar by status"]).toEqual({ badge: "Turns off" });
   // The switches of the Agent accounts section are in the accounts part, not here.
   expect(lines["Automatically select an account"]).toBeUndefined();
   expect(lines["Start usage windows automatically"]).toBeUndefined();

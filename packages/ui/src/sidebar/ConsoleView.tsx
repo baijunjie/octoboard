@@ -18,10 +18,10 @@ import { useT } from "../i18n/react";
 import { INACTIVE_VEIL_CLASS } from "../components/status/inactiveVeil";
 import { useListMotion } from "../components/motion/useListMotion";
 import type { Console, Project } from "../protocol";
-import { INACTIVE_PROJECT_RANK, liveSessions, projectRank, sortProjectsByRank } from "../sessions/order";
+import { INACTIVE_PROJECT_RANK, liveSessions, type ProjectStanding, projectRank, projectRecency, sortProjectsByStanding } from "../sessions/order";
 import { effectiveTags, matchesFilter } from "../sessions/projectFiltering";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
-import { useArchivedOwnerSessions, useDaemonStore, useDaemonStoreEqual, useProviders, useSessionProjectId } from "../store";
+import { sessionOrderPreference, useArchivedOwnerSessions, useDaemonStore, useDaemonStoreEqual, useProviders, useSessionProjectId } from "../store";
 import { consoleMenu } from "./menus";
 import { liveAnnouncerProps } from "../primitives";
 import { NewSessionButton } from "./NewSessionButton";
@@ -93,8 +93,8 @@ export function ConsoleBody({
 }): React.ReactElement {
   const t = useT();
   const listRef = useListMotion<HTMLDivElement>();
-  const ranks = useProjectRanks(projects);
-  const byStatus = useDaemonStore((s) => s.settings.sidebar_order_by_status);
+  const standings = useProjectStandings(projects);
+  const order = sessionOrderPreference.useValue();
   // Only the project holding the selected session is told which one it is, so a selection moving
   // between two sessions renders those projects alone.
   const selectedProjectId = useSessionProjectId(selectedSessionId);
@@ -104,14 +104,14 @@ export function ConsoleBody({
   // selection, which every change to the filter is applied to.
   const vocabulary = tagVocabulary(projects.map((p) => p.tags));
   const filter = { keyword: stored.keyword, tags: effectiveTags(stored.tags, vocabulary) };
-  const rankOf = new Map(projects.map((p, i) => [p.id, ranks[i]]));
-  const ordered = sortProjectsByRank(
+  const standingOf = new Map(projects.map((p, i) => [p.id, standings[i]]));
+  const ordered = sortProjectsByStanding(
     projects.filter((p) => matchesFilter(p, filter.keyword, filter.tags)),
-    rankOf,
-    byStatus,
+    standingOf,
+    order,
   );
   const foldIds = ordered
-    .filter((p) => foldControl === "collapse" || rankOf.get(p.id) !== INACTIVE_PROJECT_RANK)
+    .filter((p) => foldControl === "collapse" || standingOf.get(p.id)!.rank !== INACTIVE_PROJECT_RANK)
     .map((p) => p.id);
   const noMatch = projects.length > 0 && ordered.length === 0 ? t("sidebar.filter.noMatch") : undefined;
 
@@ -197,7 +197,7 @@ export function ConsoleBody({
               <div
                 key={project.id}
                 data-list-motion={project.id}
-                data-inactive={rankOf.get(project.id) === INACTIVE_PROJECT_RANK || undefined}
+                data-inactive={standingOf.get(project.id)!.rank === INACTIVE_PROJECT_RANK || undefined}
                 // Dimmed by a veil of the sidebar's own colour laid over it, not by `opacity`: WebKit
                 // composites an element that fades in or out (a row's hover controls, its chevron)
                 // inside a translucent ancestor wrongly, painting it as a blank tile. The veil is
@@ -242,9 +242,10 @@ function ConsoleSessionsSection({
   const providers = useProviders();
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   // Only the rows themselves, so a status event that leaves this list as it was renders nothing here.
+  const order = sessionOrderPreference.useValue();
   const live = useDaemonStoreEqual((s) => {
     const index = indexSessions(s.sessions);
-    return liveSessions(sessionsOf(index.byConsole, thisConsole.id).filter((x) => x.kind === "console"), index.delegatingIds, s.queuedAccountSwitches, s.settings.sidebar_order_by_status);
+    return liveSessions(sessionsOf(index.byConsole, thisConsole.id).filter((x) => x.kind === "console"), index.delegatingIds, s.queuedAccountSwitches, order.sessions);
   });
   // With no agent added and installed, starting a console session would only be refused by the
   // daemon the moment it tried — so the action is disabled here instead, and `agents.noneAdded` (an
@@ -281,13 +282,18 @@ function ConsoleSessionsSection({
   );
 }
 
-/** A project's rank (`projectRank`) for each of `projects`, in their order. Read from the store as
- * numbers, so an event that leaves every project's rank as it was does not render the list. */
-function useProjectRanks(projects: Project[]): number[] {
-  return useDaemonStore(
+/** A project's `ProjectStanding` for each of `projects`, in their order. Read from the store as a flat
+ * list of numbers (rank, then recency, for each project), so an event that leaves every project's
+ * standing as it was does not render the list. */
+function useProjectStandings(projects: Project[]): ProjectStanding[] {
+  const flat = useDaemonStore(
     useShallow((s) => {
       const { byProject, delegatingIds } = indexSessions(s.sessions);
-      return projects.map((p) => projectRank(sessionsOf(byProject, p.id), delegatingIds, s.queuedAccountSwitches));
+      return projects.flatMap((p) => {
+        const sessions = sessionsOf(byProject, p.id);
+        return [projectRank(sessions, delegatingIds, s.queuedAccountSwitches), projectRecency(sessions)];
+      });
     }),
   );
+  return projects.map((_, i) => ({ rank: flat[2 * i], recency: flat[2 * i + 1] }));
 }

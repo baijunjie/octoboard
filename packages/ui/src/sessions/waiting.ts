@@ -1,9 +1,9 @@
 import type { Console, Project, Session } from "../protocol";
-import { sessionsInTreeOrder } from "./order";
+import { type SessionOrder, sessionsInTreeOrder } from "./order";
 
 /** The sessions waiting for the user, in the order of `sessionsInTreeOrder`. */
-export function waitingSessionsInTreeOrder(consoles: Console[], projects: Project[], sessions: Session[], delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, byStatus: boolean): Session[] {
-  return sessionsInTreeOrder(consoles, projects, sessions, (s) => s.status === "waiting_user", delegating, queuedSwitches, byStatus);
+export function waitingSessionsInTreeOrder(consoles: Console[], projects: Project[], sessions: Session[], delegating: ReadonlySet<string>, queuedSwitches: ReadonlySet<string>, order: SessionOrder): Session[] {
+  return sessionsInTreeOrder(consoles, projects, sessions, (s) => s.status === "waiting_user", delegating, queuedSwitches, order);
 }
 
 /** How many sessions `waitingSessionsInTreeOrder` lists, counted without ordering them: the waiting

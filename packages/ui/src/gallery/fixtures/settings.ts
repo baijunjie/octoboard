@@ -33,7 +33,6 @@ const browserState: Scenario["state"] = {
   ...state,
   settings: {
     ...DEFAULT_SETTINGS,
-    sidebar_order_by_status: true,
     ask_questions_as_choices: true,
     added_agents: ["claude", "codex"],
     default_clone_dir: "/Users/dev/Projects",
@@ -676,7 +675,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The \"Order the sidebar by status\" switch follows it, on, with the description that says sessions and projects move as their status changes; it is the last row, since the background and terminal-cleanup switches are in App behavior and the archive-cleanup switch is in Cleanup. Choose Phone (390px) to see the controls that stack beneath their labels: the Appearance buttons sit against the end edge, while the Language and Markdown style selects stretch across the row. At Tablet portrait (768px) and narrower, Settings fills the window with horizontal section tabs and controls stacked beneath their labels. Above 768px the section list stays vertical. Widths below 390px use compact spacing; Desktop (1440px) and Tablet landscape (1024px) keep the same desktop layout.",
+    description: "The Language row follows Appearance, then Markdown style starts on Tailwind, and a Sorting group ends the section: three select rows, Sessions (Status), Active projects (Status) and Inactive projects (Name), each with a short description of what it orders; the project rows say which projects they cover and where those sit relative to the other kind. No other rows are listed, since the background and terminal-cleanup switches are in App behavior and the archive-cleanup switch is in Cleanup. Choose Phone (390px) to see the controls that stack beneath their labels: the Appearance buttons sit against the end edge, while the Language, Markdown style and Sorting selects stretch across the row. At Tablet portrait (768px) and narrower, Settings fills the window with horizontal section tabs and controls stacked beneath their labels. Above 768px the section list stays vertical. Widths below 390px use compact spacing; Desktop (1440px) and Tablet landscape (1024px) keep the same desktop layout.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

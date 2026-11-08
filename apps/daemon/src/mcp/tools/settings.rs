@@ -214,7 +214,6 @@ pub(in crate::mcp) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "resume_sessions_on_start": state.store.resume_sessions_on_start()?,
         "auto_select_account": state.store.auto_select_account()?,
         "interface_language": state.store.interface_language()?,
-        "sidebar_order_by_status": state.store.sidebar_order_by_status()?,
         "default_clone_dir": state.store.default_clone_dir()?,
         "git_workflow": state.store.git_workflow_settings()?,
         "provider_settings": shown_provider_settings(state)?,
@@ -265,7 +264,6 @@ pub(in crate::mcp) fn update_settings(
             agent_tags: Default::default(),
             interface_language: raw_text(arguments, "interface_language")?
                 .map(|tag| tag.trim().to_string()),
-            sidebar_order_by_status: optional_bool(arguments, "sidebar_order_by_status")?,
             default_clone_dir: raw_text(arguments, "default_clone_dir")?,
             git_workflow: git_workflow_argument(arguments)?,
         },

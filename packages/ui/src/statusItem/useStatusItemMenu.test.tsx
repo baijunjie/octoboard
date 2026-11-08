@@ -3,10 +3,11 @@ import { act, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { accountOf, consoleOf, sessionOf } from "../fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { AccountQuota, Event, ClientRequestBody } from "../protocol";
 import type { PlatformAdapter, StatusItemCapability } from "../platform";
-import type { State } from "../store";
+import { DEFAULT_SESSION_ORDER } from "../sessions/order";
+import { sessionOrderPreference, type State } from "../store";
 import { BROWSER_HOST } from "../test/hosts";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
@@ -294,4 +295,27 @@ it("keeps the tray update entry in sync even after the update notice is dismisse
   await act(async () => updates!.check("manual"));
   await act(async () => updates!.install());
   expect(setMenu.mock.lastCall![0].updates).toBe("Updates");
+});
+
+it("pushes the menu again when the session order changes, listing the projects' sessions in the new order", async () => {
+  onTestFinished(() => sessionOrderPreference.set(DEFAULT_SESSION_ORDER));
+  const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
+  const statusItem: StatusItemCapability = { setMenu, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  const main = consoleOf("main", "Main");
+  const alpha = projectOf("alpha", main.id, "Alpha");
+  const beta = projectOf("beta", main.id, "Beta");
+  const first = sessionOf("first", main.id, alpha.id, "First", "waiting_user", { started_at: 1 });
+  const second = sessionOf("second", main.id, beta.id, "Second", "waiting_user", { started_at: 2 });
+  mount(statusItem, vi.fn(), {
+    consoles: new Map([[main.id, main]]),
+    projects: new Map([[alpha.id, alpha], [beta.id, beta]]),
+    sessions: new Map([[first.id, first], [second.id, second]]),
+  });
+  await act(async () => {});
+  const listed = () => setMenu.mock.lastCall![0].sections[0]!.items.map((item) => item.session);
+  expect(setMenu).toHaveBeenCalledTimes(1);
+  expect(listed()).toEqual(["first", "second"]);
+  await act(async () => sessionOrderPreference.set({ ...DEFAULT_SESSION_ORDER, activeProjects: "used" }));
+  expect(setMenu).toHaveBeenCalledTimes(2);
+  expect(listed()).toEqual(["second", "first"]);
 });

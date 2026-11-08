@@ -15,7 +15,7 @@ type Document = Map<String, Value>;
 
 /// The steps that bring a document up one version: `STEPS[n - OLDEST_VERSION]` takes a document of
 /// version `n` to `n + 1`.
-const STEPS: [fn(&mut Document); 1] = [from_v1];
+const STEPS: [fn(&mut Document); 2] = [from_v1, from_v2];
 
 /// Upgrades `document`, of `version`, to the current version, which it then names. The caller has
 /// checked that `version` lies between [`OLDEST_VERSION`] and [`CONFIGURATION_VERSION`].
@@ -89,5 +89,15 @@ fn from_v1(document: &mut Document) {
             );
         }
         _ => {}
+    }
+}
+
+/// Version 2 to 3.
+///
+/// - `settings.sidebar_order_by_status` is dropped: the sidebar's sort is a choice a client keeps,
+///   so an import no longer reads it.
+fn from_v2(document: &mut Document) {
+    if let Some(Value::Object(settings)) = document.get_mut("settings") {
+        settings.remove("sidebar_order_by_status");
     }
 }

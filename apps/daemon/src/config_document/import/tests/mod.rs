@@ -126,7 +126,6 @@ fn with_settings(
         "auto_close_idle_shell_terminals": false,
         "auto_pull_repositories": auto_pull,
         "auto_delete_unresumable_archives": auto_delete,
-        "sidebar_order_by_status": true,
         "auto_approve_session_requests": false,
         "auto_approve_resume_requests": false,
         "auto_approve_account_switches": false,

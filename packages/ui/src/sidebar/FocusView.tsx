@@ -26,7 +26,7 @@ import type { Console, Project, Session } from "../protocol";
 import { sessionAccountModelLine, sessionDisplayTitle, statusLabel } from "../sessions/sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useDelegatingIds, useHasBoundSessions, useProjectSessions, useQueuedAccountSwitches, useSessionProjectId } from "../store";
-import { useDaemon, useDaemonStore, useDaemonStoreEqual, useSessionShownStatus } from "../store";
+import { sessionOrderPreference, useDaemon, useDaemonStore, useDaemonStoreEqual, useSessionShownStatus } from "../store";
 import { BindingBadge } from "../components/status/BindingBadge";
 import { CountBadge } from "../components/status/CountBadge";
 import { GitBadge } from "./GitBadge";
@@ -132,14 +132,14 @@ export function ProjectFocusView({
   // `useShallow` is needed.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
   const includeConsoleSessions = projectFocusIncludeConsoleSessions.useValue();
-  const byStatus = useDaemonStore((s) => s.settings.sidebar_order_by_status);
+  const order = sessionOrderPreference.useValue();
   const delegating = useDelegatingIds();
   const queuedSwitches = useQueuedAccountSwitches();
-  const live = liveSessionRows(includeConsoleSessions ? sessions : notUnderConsoleSession(sessions, owners), delegating, queuedSwitches, byStatus);
+  const live = liveSessionRows(includeConsoleSessions ? sessions : notUnderConsoleSession(sessions, owners), delegating, queuedSwitches, order.sessions);
   const byId = new Map(sessions.map((session) => [session.id, session]));
   const consoleOwner = (session: Session) => consoleSessionAbove(session, (id) => byId.get(id) ?? owners.get(id));
   const archived = archivedSessions(sessions);
-  const elsewhere = boundElsewhere(sessions, owners, delegating, queuedSwitches, byStatus);
+  const elsewhere = boundElsewhere(sessions, owners, delegating, queuedSwitches, order.sessions);
   const noAgents = useNoAgentReason();
   const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
   const viewAll = () => handlers.onOpenArchive({ console: project.console_id, project: project.id });
@@ -238,10 +238,10 @@ export function ConsoleSessionFocusView({
   // Only the group holding the selected session is told which one it is, so a selection moving
   // between two sessions renders those groups alone.
   const selectedProjectId = useSessionProjectId(selectedSessionId);
-  const byStatus = useDaemonStore((s) => s.settings.sidebar_order_by_status);
+  const order = sessionOrderPreference.useValue();
   const delegating = useDelegatingIds();
   const queuedSwitches = useQueuedAccountSwitches();
-  const groups = focusGroups(projects, sessions, consoleSession.id, delegating, queuedSwitches, byStatus);
+  const groups = focusGroups(projects, sessions, consoleSession.id, delegating, queuedSwitches, order);
   const liveCount = groups.reduce((sum, group) => sum + group.sessions.length, 0);
   const archived = boundArchivedSessions(sessions, consoleSession.id);
   const newSession = (project: Project): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "bound", to: consoleSession } });
@@ -436,9 +436,10 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
   const { store } = useDaemon();
   // Read as `ProjectFocusView` does, for the Git badge and submenu.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
+  const order = sessionOrderPreference.useValue();
   const boundHere = useDaemonStoreEqual((s) => {
     const index = indexSessions(s.sessions);
-    return focusGroupRows(sessionsOf(index.byConsole, parentConsole.id), project, consoleSessionId, index.delegatingIds, s.queuedAccountSwitches, s.settings.sidebar_order_by_status);
+    return focusGroupRows(sessionsOf(index.byConsole, parentConsole.id), project, consoleSessionId, index.delegatingIds, s.queuedAccountSwitches, order.sessions);
   });
   const sessions = useProjectSessions(project.id);
   const archived = boundArchivedSessions(sessions, consoleSessionId);

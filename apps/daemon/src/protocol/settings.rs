@@ -60,9 +60,6 @@ pub struct Settings {
     /// on. Only that: it does not choose a new session's account (`auto_select_account`) or answer
     /// an agent's request for a switch (`auto_approve_account_switches`).
     pub auto_switch_on_usage_limit: bool,
-    /// Whether the client's sidebar orders sessions and projects by status. On unless the user
-    /// turned it off; the daemon only stores it, the ordering is the client's.
-    pub sidebar_order_by_status: bool,
     /// Whether the daemon starts an account's usage window that has reset but not begun counting,
     /// by sending one minimal request on that account. Off unless the user turned it on.
     pub auto_start_quota_windows: bool,
@@ -133,7 +130,6 @@ impl Default for Settings {
             interface_language: None,
             auto_select_account: false,
             auto_switch_on_usage_limit: false,
-            sidebar_order_by_status: true,
             auto_start_quota_windows: false,
             resume_sessions_on_start: false,
             default_clone_dir: String::new(),

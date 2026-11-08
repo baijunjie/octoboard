@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Project, Session, SessionStatus } from "../protocol";
-import { archiveNeedsConfirmation, archivedDeletionScope, isUnusedSession, topStatus, INACTIVE_PROJECT_RANK, STATUS_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
+import { DEFAULT_SESSION_ORDER, type SessionOrder, archiveNeedsConfirmation, archivedDeletionScope, isUnusedSession, topStatus, INACTIVE_PROJECT_RANK, STATUS_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { delegatingSessionIds, type ShownStatusKind } from "./sessionStatus";
 
@@ -59,7 +59,7 @@ describe("liveSessions", () => {
     expect(ordered.map((s) => s.id)).toEqual(["pinned", "waiting", "new-idle", "old-idle", "working", "interrupted"]);
   });
 
-  it("puts pinned first, then newest first, whatever the status, when the sidebar does not order by status", () => {
+  it("puts pinned first, then newest first, whatever the status, when the sessions are sorted by start", () => {
     const ordered = liveSessions([
       session("old-waiting", "waiting_user", 1),
       session("interrupted", "interrupted", 9),
@@ -67,7 +67,7 @@ describe("liveSessions", () => {
       session("archived", "archived", 10),
       session("pinned-old", "working", 0, true),
       session("pinned-new", "interrupted", 2, true),
-    ], NONE, NONE, false);
+    ], NONE, NONE, "started");
     expect(ordered.map((s) => s.id)).toEqual(["pinned-new", "pinned-old", "interrupted", "working", "old-waiting"]);
   });
 
@@ -317,7 +317,7 @@ describe("sortProjects", () => {
     expect(projectRank([], NONE, NONE)).toBe(INACTIVE_PROJECT_RANK);
   });
 
-  it("keeps active projects first and pinned first within each group, but ranks none by status, when the sidebar does not order by status", () => {
+  it("keeps active projects first and pinned first within each group, but ranks none by status, when the projects are sorted by name", () => {
     const sessions: Record<string, Session[]> = {
       b: [session("b1", "working", 1)],
       c: [session("c1", "waiting_user", 1)],
@@ -329,9 +329,68 @@ describe("sortProjects", () => {
       [project("d", "delta"), project("x", "xray"), project("b", "beta"), project("z", "zulu", true), project("c", "charlie"), project("p", "papa", true), project("a", "alpha")],
       (p) => sessions[p.id] ?? [],
       NONE, NONE,
-      false,
+      { ...DEFAULT_SESSION_ORDER, activeProjects: "name" },
     );
     expect(ordered.map((p) => p.id)).toEqual(["p", "b", "c", "d", "z", "a", "x"]);
+  });
+
+  describe("by recent use", () => {
+    const sessions: Record<string, Session[]> = {
+      old: [session("o1", "waiting_user", 1)],
+      newest: [session("n1", "idle", 9), session("n0", "idle", 2)],
+      mid: [session("m1", "working", 5), session("m-gone", "archived", 50)],
+      tie: [session("t1", "idle", 5)],
+      pinned: [session("p1", "idle", 0)],
+      gone: [session("g1", "archived", 99)],
+    };
+    const order = (projects: Project[]) =>
+      sortProjects(projects, (p) => sessions[p.id] ?? [], NONE, NONE, { ...DEFAULT_SESSION_ORDER, activeProjects: "used" }).map((p) => p.id);
+
+    it("lists the project whose newest unarchived session started last first, ties by name", () => {
+      expect(order([project("old", "old"), project("tie", "alpha"), project("newest", "newest"), project("mid", "mid")])).toEqual(["newest", "tie", "mid", "old"]);
+    });
+
+    it("keeps pinned projects first and projects with no unarchived session last", () => {
+      expect(order([project("gone", "gone"), project("newest", "newest"), project("pinned", "pinned", true), project("old", "old")])).toEqual(["pinned", "newest", "old", "gone"]);
+    });
+  });
+
+  describe("the projects with no unarchived session", () => {
+    const sessions: Record<string, Session[]> = {
+      ended: [{ ...session("e1", "archived", 1), ended_at: 90 }],
+      started: [session("s1", "archived", 50)],
+      both: [{ ...session("b1", "archived", 10), ended_at: 20 }, { ...session("b2", "archived", 30), ended_at: 40 }],
+      live: [session("l1", "idle", 1)],
+      liveOld: [session("l2", "idle", 1), { ...session("l3", "archived", 1), ended_at: 999 }],
+    };
+    const order = (projects: Project[], inactiveProjects: "name" | "used") =>
+      sortProjects(projects, (p) => sessions[p.id] ?? [], NONE, NONE, { ...DEFAULT_SESSION_ORDER, inactiveProjects }).map((p) => p.id);
+    const all = () => [project("none", "alpha"), project("ended", "echo"), project("started", "sierra"), project("both", "bravo"), project("live", "zulu")];
+
+    it("follows name by default, after the projects with an unarchived session", () => {
+      expect(order(all(), "name")).toEqual(["live", "none", "both", "ended", "started"]);
+    });
+
+    it("lists the newest archived session's end (its start when it never ended) first, a project with no session last by name, pinned first", () => {
+      expect(order(all(), "used")).toEqual(["live", "ended", "started", "both", "none"]);
+      expect(order([...all(), project("pinnedNone", "omega", true)], "used")).toEqual(["live", "pinnedNone", "ended", "started", "both", "none"]);
+    });
+
+    it("leaves the archived sessions of a project that has an unarchived one out of its place", () => {
+      expect(order([project("none", "alpha"), project("liveOld", "beta"), project("live", "gamma")], "used")).toEqual(["liveOld", "live", "none"]);
+    });
+
+    it("does not let the segment choices affect each other", () => {
+      const both = (activeProjects: "name" | "used", inactiveProjects: "name" | "used") =>
+        sortProjects(all(), (p) => sessions[p.id] ?? [], NONE, NONE, { ...DEFAULT_SESSION_ORDER, activeProjects, inactiveProjects }).map((p) => p.id);
+      expect(both("used", "name")).toEqual(["live", "none", "both", "ended", "started"]);
+      expect(both("name", "used")).toEqual(["live", "ended", "started", "both", "none"]);
+    });
+  });
+
+  it("ranks by status first, then by name, in the default mode", () => {
+    const sessions: Record<string, Session[]> = { a: [session("a1", "working", 1)], b: [session("b1", "waiting_user", 1)], c: [session("c1", "working", 1)] };
+    expect(sortProjects([project("a", "a"), project("c", "c"), project("b", "b")], (p) => sessions[p.id], NONE, NONE).map((p) => p.id)).toEqual(["b", "a", "c"]);
   });
 });
 
@@ -344,9 +403,11 @@ describe("sessionsInTreeOrder", () => {
       { ...session("a-new", "working", 2), project_id: "a" },
       { ...session("b-waiting", "waiting_user", 3), project_id: "b" },
     ];
-    const ids = (byStatus: boolean) => sessionsInTreeOrder(consoles, projects, sessions, () => true, NONE, NONE, byStatus).map((s) => s.id);
-    expect(ids(true)).toEqual(["b-waiting", "a-old", "a-new"]);
-    expect(ids(false)).toEqual(["a-new", "a-old", "b-waiting"]);
+    const ids = (order: SessionOrder) => sessionsInTreeOrder(consoles, projects, sessions, () => true, NONE, NONE, order).map((s) => s.id);
+    expect(ids(DEFAULT_SESSION_ORDER)).toEqual(["b-waiting", "a-old", "a-new"]);
+    expect(ids({ ...DEFAULT_SESSION_ORDER, sessions: "started", activeProjects: "name" })).toEqual(["a-new", "a-old", "b-waiting"]);
+    // Recently used: the project whose newest session started last comes first.
+    expect(ids({ ...DEFAULT_SESSION_ORDER, sessions: "started", activeProjects: "used" })).toEqual(["b-waiting", "a-new", "a-old"]);
   });
 });
 
@@ -383,13 +444,13 @@ describe("liveSessionRows", () => {
     ]);
   });
 
-  it("ranks each level by pin and start alone when the sidebar does not order by status", () => {
+  it("ranks each level by pin and start alone when the sessions are sorted by start", () => {
     const rows = liveSessionRows([
       session("owner", "waiting_user", 1),
       session("newer", "interrupted", 9),
       session("under-old", "waiting_user", 2, false, "owner"),
       session("under-new", "interrupted", 3, false, "owner"),
-    ], NONE, NONE, false);
+    ], NONE, NONE, "started");
     expect(rows.map((row) => [row.session.id, row.under?.id])).toEqual([
       ["newer", undefined],
       ["owner", undefined],
@@ -441,11 +502,11 @@ describe("boundElsewhere", () => {
     expect(summary && { count: summary.count, owners: summary.owners.map((o) => [o.owner.id, o.count]) }).toEqual(expected);
   });
 
-  it("names the owners newest first, whatever their status, when the sidebar does not order by status", () => {
+  it("names the owners newest first, whatever their status, when the sessions are sorted by start", () => {
     const busy = new Map([{ ...owner("hub-old", 1), status: "waiting_user" as const }, owner("hub-new", 2)].map((o) => [o.id, o]));
     const sessions = [session("a", "idle", 1, false, "hub-old"), session("b", "idle", 2, false, "hub-new")];
     expect(boundElsewhere(sessions, busy, NONE, NONE)?.owners.map((o) => o.owner.id)).toEqual(["hub-old", "hub-new"]);
-    expect(boundElsewhere(sessions, busy, NONE, NONE, false)?.owners.map((o) => o.owner.id)).toEqual(["hub-new", "hub-old"]);
+    expect(boundElsewhere(sessions, busy, NONE, NONE, "started")?.owners.map((o) => o.owner.id)).toEqual(["hub-new", "hub-old"]);
   });
 });
 
@@ -475,7 +536,7 @@ describe("focusGroups", () => {
       [in_("a-mine", "a", "idle", "hub"), in_("b-mine", "b", "working", "hub")],
       "hub",
       NONE, NONE,
-      false,
+      { ...DEFAULT_SESSION_ORDER, sessions: "started", activeProjects: "name" },
     );
     expect(byName.map((g) => g.project.id)).toEqual(["a", "b"]);
   });

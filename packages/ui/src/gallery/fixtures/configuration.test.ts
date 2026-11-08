@@ -75,7 +75,6 @@ it("reports the setting this machine has now as the scenario's own state has it"
     expect(settings.current_auto_close_idle_shell_terminals, id).toBe(machine!.auto_close_idle_shell_terminals);
     expect(settings.current_auto_pull_repositories, id).toBe(machine!.auto_pull_repositories);
     expect(settings.current_auto_delete_unresumable_archives, id).toBe(machine!.auto_delete_unresumable_archives);
-    expect(settings.current_sidebar_order_by_status, id).toBe(machine!.sidebar_order_by_status ?? true);
     expect(settings.current_auto_approve_session_requests, id).toBe(machine!.auto_approve_session_requests ?? false);
     expect(settings.current_auto_approve_resume_requests, id).toBe(machine!.auto_approve_resume_requests ?? false);
     expect(settings.current_auto_approve_account_switches, id).toBe(machine!.auto_approve_account_switches ?? false);

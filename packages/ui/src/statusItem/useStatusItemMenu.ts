@@ -6,7 +6,7 @@ import { useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
 import { indexSessions } from "../sessions/sessionIndex";
-import { useDaemon } from "../store";
+import { sessionOrderPreference, useDaemon } from "../store";
 import { withIcons } from "./statusItemIcons";
 import { buildStatusItemMenu } from "./statusItemMenu";
 import { nextQuotaTick } from "./statusItemQuota";
@@ -82,7 +82,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         projectMap: projects,
         delegating: indexSessions(sessions).delegatingIds,
         queuedSwitches: queuedAccountSwitches,
-        byStatus: settings.sidebar_order_by_status,
+        order: sessionOrderPreference.get(),
         // Countdowns and ages are as of this push, which the clock alone also causes (`nextQuotaTick`).
         quota: { language, now, accounts: settings.accounts, accountOrder: settings.account_order, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, disabledDefaultAccounts: settings.disabled_default_accounts, agentAvailability, accountQuotas, providers },
       });
@@ -108,7 +108,6 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         state.queuedAccountSwitches !== previous.queuedAccountSwitches ||
         state.settings.accounts !== previous.settings.accounts ||
         state.settings.account_order !== previous.settings.account_order ||
-        state.settings.sidebar_order_by_status !== previous.settings.sidebar_order_by_status ||
         state.settings.added_agents !== previous.settings.added_agents ||
         state.settings.default_account_names !== previous.settings.default_account_names ||
         state.settings.disabled_default_accounts !== previous.settings.disabled_default_accounts ||
@@ -118,9 +117,11 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         push();
       }
     });
+    const unsubscribeOrder = sessionOrderPreference.subscribe(push);
     return () => {
       clearTimeout(tickTimer);
       unsubscribe();
+      unsubscribeOrder();
     };
   }, [statusItem, ready, selectedSessionId, currentConsoleId, t, language, appearance, store, pushSerially, updatesLabel]);
 

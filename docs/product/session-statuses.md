@@ -382,7 +382,8 @@ A collapsed project's row and a console session's focus-mode switch-strip chip m
 in the status order (see "The status order" in `docs/product/order-of-projects-and-sessions.md`), the most recently
 started breaking a tie. Archived sessions are left out. A session starting or switching account is ranked with the
 status it will have once that is over, but marked as starting or switching account. The choice does not depend on
-pins, nor on whether the sidebar is ordered by status.
+pins, nor on the sort chosen in Settings (see "Choosing the sort" in
+`docs/product/order-of-projects-and-sessions.md`).
 
 Every status but *archived* has its own glyph there, as "Status glyphs" above describes, so the mark always says exactly
 which status it is; there is a mark whenever any of the sessions is not archived. The accessible name of the row or
@@ -423,10 +424,10 @@ switch-strip chips.
   dot while any is waiting or dormant (see "The icon's look" in `docs/product/menu-bar-icon.md`).
 - The rail carries the same count, as a raised hand and the number, shown only while at least one session is waiting.
   Pressing it selects the next waiting session after the selected one — console by console in the order the consoles
-  were created, its console sessions before its projects' sessions, and both in the sidebar's order (see "Order of
-  projects and sessions" in `docs/product/order-of-projects-and-sessions.md`) — and wraps from the last back to the
-  first; when the selected session is not waiting, it selects the first. The sidebar follows the session it selects (see
-  "Selecting a session" in `docs/product/sidebar.md`).
+  were created, its console sessions before its projects' sessions, and both in the sidebar's order, as the sort chosen
+  in Settings orders them (see "Choosing the sort" in `docs/product/order-of-projects-and-sessions.md`) — and wraps from
+  the last back to the first; when the selected session is not waiting, it selects the first. The sidebar follows the
+  session it selects (see "Selecting a session" in `docs/product/sidebar.md`).
 
 A *dormant* session raises none of this: it notifies nobody and is in neither count; only the menu bar icon's dot lights
 for it (see "Dormant" above).

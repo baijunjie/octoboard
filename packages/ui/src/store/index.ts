@@ -4,6 +4,7 @@ export type { Daemon } from "./connection";
 export { createImportProgressListeners } from "./importProgressListeners";
 export type { ImportProgressEvent } from "./importProgressListeners";
 export { consolePreference, currentConsoleOf, useCurrentConsole } from "./currentConsole";
+export { sessionOrderPreference } from "./sessionOrder";
 export { DaemonHostAnnouncement } from "./daemonHost";
 export { DEFAULT_SETTINGS } from "./defaultSettings";
 export { DaemonProvider, useDaemon, useOptionalDaemon, useDaemonStore, useDaemonStoreEqual, useDaemonStoreOrEmpty, useProviders } from "./react";

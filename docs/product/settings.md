@@ -18,13 +18,12 @@ application; the Windows application and a browser leave it out.
 
 A console session can read and change the default clone directory, the automatic pulling of repositories, the
 automatic deletion of archived sessions whose conversation is gone, resuming sessions on start, closing idle shell
-terminals with their panel, the ordering of the sidebar by status, the application-wide git workflow settings and the
-language the daemon holds for the user (see "The language the daemon
-holds" in `docs/product/language.md`). It can read, but not change, automatic account selection, Claude compatibility,
-the agent tags, the agent accounts (without their directories) and the trusted folders. The switches of Agent behavior,
-the approval modes, and the switches that switch accounts at the usage limit and start usage windows, it can neither
-read nor change (see "Who reads and changes what" and
-"Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`).
+terminals with their panel, the application-wide git workflow settings and the language the daemon holds for the user
+(see "The language the daemon holds" in `docs/product/language.md`). It can read, but not change, automatic account
+selection, Claude compatibility, the agent tags, the agent accounts (without their directories) and the trusted
+folders. The switches of Agent behavior, the approval modes, and the switches that switch accounts at the usage limit
+and start usage windows, it can neither read nor change (see "Who reads and changes what" and "Application settings:
+`get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`).
 
 ## In a narrow window
 
@@ -121,10 +120,10 @@ While Settings is open everything under it stays as it was, the terminal include
 
 ## Group headings
 
-A section whose rows fall into groups — App behavior, Git and Keyboard shortcuts — heads each group with a heading of its own. Once
-the section is scrolled far enough for a group's heading to reach the top of the section's area, the heading stays
-pinned there, opaque, and the group's rows scroll beneath it, until the next group's heading arrives and pushes it out;
-the top fade then begins below the pinned heading (see "The edge that hides content fades" in
+A section whose rows fall into groups — General, App behavior, Git and Keyboard shortcuts — heads each group with a
+heading of its own. Once the section is scrolled far enough for a group's heading to reach the top of the section's
+area, the heading stays pinned there, opaque, and the group's rows scroll beneath it, until the next group's heading
+arrives and pushes it out; the top fade then begins below the pinned heading (see "The edge that hides content fades" in
 `docs/product/scrolling-surfaces.md`).
 
 ## How paths are shown
@@ -149,16 +148,16 @@ there, followed by `\` or `/`.
 
 ## How switches save
 
-A row's switch whose value the daemon holds saves when it is turned, on its own: in General, **Order the sidebar by
-status**; in App behavior, **Resume sessions on start** and **Close idle terminals when closing the panel**; in Git,
-**Automatically pull repositories**, **Squash commits before delivery**, **Rebase before delivery** and **Revert gate**;
-in Agent accounts, **Automatically select an account**, **Automatically switch accounts at the usage limit** and
-**Start usage windows automatically**; the five of Agent behavior; and in Cleanup, **Automatically delete archived
-sessions whose conversation is gone**. The switch always shows the value the daemon has stored, which every
-window shares: it moves when that value changes, not on the press itself. A press made while the save started by the
-previous press is still unanswered is ignored. Nothing marks that wait — the switch does not look unavailable — and it
-keeps showing the stored value meanwhile. A failed save is shown in an error alert saying the setting could not be
-saved, the switch keeping its position (see "The error alert" in `docs/product/error-alerts.md`).
+A row's switch whose value the daemon holds saves when it is turned, on its own: in App behavior, **Resume sessions on
+start** and **Close idle terminals when closing the panel**; in Git, **Automatically pull repositories**, **Squash
+commits before delivery**, **Rebase before delivery** and **Revert gate**; in Agent accounts, **Automatically select an
+account**, **Automatically switch accounts at the usage limit** and **Start usage windows automatically**; the five of
+Agent behavior; and in Cleanup, **Automatically delete archived sessions whose conversation is gone**. The switch always
+shows the value the daemon has stored, which every window shares: it moves when that value changes, not on the press
+itself. A press made while the save started by the previous press is still unanswered is ignored. Nothing marks that
+wait — the switch does not look unavailable — and it keeps showing the stored value meanwhile. A failed save is shown in
+an error alert saying the setting could not be saved, the switch keeping its position (see "The error alert" in
+`docs/product/error-alerts.md`).
 
 Other switches in Settings save by rules of their own: an account's Disable switch (see "Turning an account off" in
 `docs/product/agent-accounts.md`), each agent's Claude compatibility switch, which is unavailable while its save is
@@ -170,8 +169,8 @@ below), and **Launch at login**, which shows and changes the system's own state 
 
 ## General
 
-Small app-wide settings, four rows: **Appearance**, **Language**, **Markdown style** and **Order the sidebar by
-status**.
+Small app-wide settings: three rows, **Appearance**, **Language** and **Markdown style**, then the **Sorting** group
+(see "Group headings" above).
 
 ### Appearance
 
@@ -192,18 +191,13 @@ How a rendered Markdown document in the project pane's file viewer looks, chosen
 names are proper names, the same in every language. What each style looks like, which one is the default and where the
 choice is kept are in `docs/product/markdown-documents.md`.
 
-### Order the sidebar by status
+### Sorting
 
-A switch, **on to begin with**: whether the sidebar ranks
-sessions and projects by their status, so that the ones waiting for the user come first after the pinned ones. While
-the switch is on the row's description says what is happening now: sessions and projects move as their status changes,
-and projects with no unarchived session end the list. While it is off the description says what turning it on will
-do, and that projects with no unarchived session end the list. The daemon stores it as `sidebar_order_by_status` and
-keeps it, so every window shows the same. A console session may read and change it, and a configuration export that
-includes the application settings carries it (see "Application settings: `get_settings` and `update_settings`" in
-`docs/product/agent-settings-tools.md` and "The application settings an export carries" in
-`docs/product/settings-in-a-configuration.md`). The order under either state, and what else follows it, are in
-"Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`.
+How sessions and projects are ordered, as three selects, each taking effect as it is chosen: **Sessions** (Status or
+Recently started), **Active projects**, the projects with at least one unarchived session, which always come before the
+inactive ones (Status, Name or Recently used), and **Inactive projects**, the projects with none, which always come
+after the active ones (Name or Recently used). What each choice does, the defaults, everything that follows the sort and
+where it is kept are in "Choosing the sort" in `docs/product/order-of-projects-and-sessions.md`.
 
 ## App behavior
 

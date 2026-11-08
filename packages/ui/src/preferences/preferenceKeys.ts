@@ -18,6 +18,7 @@ export const PREFERENCE_KEYS = {
   sidebarConsole: "octoboard.sidebarConsole",
   projectFocusIncludeConsoleSessions: "octoboard.projectFocusIncludeConsoleSessions",
   sidebarFocus: "octoboard.sidebarFocus",
+  sessionOrder: "octoboard.sessionOrder",
   projectBrowsers: "octoboard.projectBrowsers",
   diffLayout: "octoboard.diffLayout",
   wordWrap: "octoboard.wordWrap",

@@ -3,31 +3,41 @@
 How the sidebar (see `docs/product/sidebar.md`) orders its projects and sessions, and pinning, which takes part in
 that order.
 
-The order depends on the **Order the sidebar by status** setting (see that section in `docs/product/settings.md`),
-which is on to begin with. While it is on, the order is the one below; how it differs while the setting is off is in
-"Ordering without status" below.
+The order depends on the sort the user chooses in Settings, one choice for sessions and one for each of the two
+segments of projects (see "Choosing the sort" below). The rules below give each choice.
 
 **Projects** are listed:
 
-1. projects with at least one unarchived session first, including interrupted sessions;
-2. within each group, pinned projects first;
-3. then by its most urgent unarchived session's status, in the status order below: a project with a session waiting
-   for the user, then one with a session dormant, paused, done, awaiting instructions, with child sessions working,
-   working in background, working, and last a project whose unarchived sessions are all interrupted;
+1. projects with at least one unarchived session first, including interrupted sessions — the **active** projects —
+   then the **inactive** projects, which have none;
+2. within each segment, pinned projects first;
+3. then by the choice for that segment. For active projects:
+   - **Status**: by its most urgent unarchived session's status, in the status order below: a project with a session
+     waiting for the user, then one with a session dormant, paused, done, awaiting instructions, with child sessions
+     working, working in background, working, and last a project whose unarchived sessions are all interrupted;
+   - **Name**: this rule is skipped;
+   - **Recently used**: by when its most recently started unarchived session started, the most recent first.
+
+   For inactive projects:
+   - **Name**: this rule is skipped;
+   - **Recently used**: by when its most recently ended archived session ended (for a session with no recorded end,
+     when it started), the most recent first; a project with no session at all comes after every project that has one;
 4. within each of those, by name, case-insensitively and in natural order, so that "item 2" comes before "item 10".
 
 Each rule applies only among projects the rules before it leave tied. A project's most urgent unarchived session
-sets its status priority, using the same order as sessions below. A project with an unarchived session comes before
-even a pinned project with none.
+sets its status priority, using the same order as sessions below. An active project comes before even a pinned
+inactive one, whatever the choices.
 
-**Inactive** projects have no unarchived session. They end the list and, pinned ones included, are drawn dimmed as
-one group. Projects with only interrupted sessions remain at full strength. Pointing at any inactive project,
-keyboard focus inside one, or an open menu in one brings the whole inactive group back to full strength while it lasts.
+**Inactive** projects end the list and, pinned ones included, are drawn dimmed as one group. Projects with only
+interrupted sessions remain at full strength. Pointing at any inactive project, keyboard focus inside one, or an open
+menu in one brings the whole inactive group back to full strength while it lasts.
 
 **Sessions** within a project are listed, by the same scheme:
 
 1. pinned sessions first;
-2. then by status, in the status order below;
+2. then by the choice for sessions:
+   - **Status**: by status, in the status order below;
+   - **Recently started**: this rule is skipped;
 3. then the most recently started first.
 
 The console sessions section lists its console sessions by that same session scheme.
@@ -39,9 +49,10 @@ the sessions beside it, not first in the whole project, and a session under an o
 Everything walked in this order follows the nesting the same way, so a session bound to a project session comes after
 its owner wherever both appear.
 
-The order follows status changes as they happen. Row movement follows "Items moving within a collection" in
-`docs/product/collection-motion.md`. The rail's waiting count walks waiting sessions in this same order (see "The raised
-hand" in `docs/product/session-statuses.md`).
+Where Status is chosen, the rows it orders follow status changes as they happen; under any other choice, a session's
+status changing while it stays unarchived moves none of the rows that choice orders. Row movement follows "Items moving
+within a collection" in `docs/product/collection-motion.md`. The rail's waiting count walks waiting sessions in this
+same order (see "The raised hand" in `docs/product/session-statuses.md`).
 
 ## The status order
 
@@ -65,8 +76,8 @@ Archived sessions are not in the lists this order ranks; they are listed separat
 with the status it will have once that is over:
 
 - with *working* when the launch will hand the agent a prompt: a new session opened with a task (a brief, an approved
-  session request's opening prompt, or the brief of a handoff), a relaunch that continues a turn after an account switch or a change of model and effort,
-  and a resume handed an instruction or a notice owed to the session as an owner;
+  session request's opening prompt, or the brief of a handoff), a relaunch that continues a turn after an account switch
+  or a change of model and effort, and a resume handed an instruction or a notice owed to the session as an owner;
 - otherwise with *done* when the session has a conversation;
 - otherwise with *awaiting instructions*.
 
@@ -75,30 +86,38 @@ old process has stopped, so until then such a session sorts by whether it has a 
 launch has finished, a session that was handed a prompt can read as at its prompt before its agent's first report moves
 it on to *working*, and sorts as such.
 
-## Ordering without status
+## Choosing the sort
 
-With **Order the sidebar by status** off, no project and no session is ranked by its status; everything else above
-stands.
+The sort is chosen in the **Sorting** group at the end of Settings' General section (see "Sorting" in
+`docs/product/settings.md`), one select per part:
 
-- **Projects**: rule 3 is skipped, so within each group pinned projects come first, and pinned and unpinned
-  projects are each ordered by name as in rule 4. Projects with at least one unarchived session still come first, and
-  the inactive projects still end the list as one dimmed group; a project still joins that group when its last
-  unarchived session is archived and leaves it when a session in it is opened or resumed.
-- **Sessions**: rule 2 is skipped, so pinned sessions come first, then the most recently started first. That holds at
-  every level — the sessions a project lists at its own level, the sessions under one owner, and the console sessions
-  section — with the same nesting as above.
+| Row | Orders | Choices |
+|---|---|---|
+| **Sessions** | sessions | **Status** (the default), **Recently started** |
+| **Active projects** | projects with at least one unarchived session | **Status** (the default), **Name**, **Recently used** |
+| **Inactive projects** | projects with no unarchived session | **Name** (the default), **Recently used** |
 
-A session's status changing while it stays unarchived then moves no row.
+A choice applies at once, to the rules above. The three choices make **one sort, shared by every console and every
+view**; neither the sidebar nor a focus mode has a sort control of its own. The sort is kept by this client and
+survives reloading; it is not shared with other clients, the daemon does not hold it, and a configuration export does
+not carry it (see "Which settings travel" in `docs/product/settings-in-a-configuration.md`). Another page of the same
+client open at the same time, such as a second browser tab, picks up a change only once reloaded. If client storage is
+unavailable, a choice lasts for the current page load only.
 
-The setting reaches every list that follows this order: both focus modes' lists and project groups, and the chips of a
-project's focus mode for the console sessions above its left-out sessions (see `docs/product/focus-mode.md`); the order
-in which the rail's waiting count walks waiting sessions (see "The raised hand" in `docs/product/session-statuses.md`);
-the menu bar icon's session lists (see "The icon's menu" in `docs/product/menu-bar-icon.md`); and the list of running
-sessions in the confirmation for removing a project (see `docs/product/removing-projects.md`), and the list of running
-sessions in the confirmation for removing an account with its directory (see "The confirmation" in
-`docs/product/removing-accounts.md`). Other lists of sessions
-in confirmations, such as the archive confirmation's list of the sessions under an owner, stay ranked by status whatever
-the setting. The switch strip never ranks by status (see "The switch strip" in `docs/product/focus-mode.md`).
+**What follows the sort**: in the full sidebar, the console sessions section, the project list and each project's
+sessions; in a project's focus mode, its session cards and the chips for the console sessions above its left-out
+sessions; in a console session's focus mode, its project groups and the session cards under them (see
+`docs/product/focus-mode.md`); the order in which the rail's waiting count walks waiting sessions (see "The raised hand"
+in `docs/product/session-statuses.md`); the menu bar icon's session lists (see "The icon's menu" in
+`docs/product/menu-bar-icon.md`); the list of running sessions in the confirmation for removing a project (see
+`docs/product/removing-projects.md`); and the list of running sessions in the confirmation for removing an account with
+its directory (see "The confirmation" in `docs/product/removing-accounts.md`). A console session's focus mode lists only
+projects with an unarchived session under that console session, so its project groups are all active projects.
+
+**What does not follow it**: other lists of sessions in confirmations, such as the archive confirmation's list of the
+sessions under an owner, stay ranked by status. The menu of projects behind a console session's focus-mode header's
+**+** lists them pinned first, then by name. The switch strip never ranks by status (see "The switch strip" in
+`docs/product/focus-mode.md`).
 
 ## Pinning
 

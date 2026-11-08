@@ -22,7 +22,6 @@ export function documentSettings(carried: Partial<DocumentSettings> = {}): Docum
     auto_pull_repositories: false,
     auto_close_idle_shell_terminals: false,
     auto_delete_unresumable_archives: false,
-    sidebar_order_by_status: false,
     auto_approve_session_requests: false,
     auto_approve_resume_requests: false,
     auto_approve_account_switches: false,

@@ -14,7 +14,7 @@ import type { Console, Project } from "../protocol";
 import { archivedSessions, liveSessionRows } from "../sessions/order";
 import { statusLabel } from "../sessions/sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
-import { useDaemonStore, useDaemonStoreEqual, useProjectSessions, useProjectStatus } from "../store";
+import { sessionOrderPreference, useDaemonStore, useDaemonStoreEqual, useProjectSessions, useProjectStatus } from "../store";
 import { GitBadge } from "./GitBadge";
 import { PinButton } from "./MarkButtons";
 import { projectMenu } from "./menus";
@@ -55,9 +55,10 @@ export const ProjectNode = memo(function ProjectNode({
   // session leaves this row, its menu and its rows alone.
   const sessions = useProjectSessions(project.id);
   const rowRef = useRef<HTMLDivElement>(null);
+  const order = sessionOrderPreference.useValue();
   const rows = useDaemonStoreEqual((s) => {
     const index = indexSessions(s.sessions);
-    return liveSessionRows(sessionsOf(index.byProject, project.id), index.delegatingIds, s.queuedAccountSwitches, s.settings.sidebar_order_by_status);
+    return liveSessionRows(sessionsOf(index.byProject, project.id), index.delegatingIds, s.queuedAccountSwitches, order.sessions);
   });
   const lastRootIndex = rows.reduce((last, row, index) => row.under ? last : index, -1);
   const archived = archivedSessions(sessions);

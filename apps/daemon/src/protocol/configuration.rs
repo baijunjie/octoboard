@@ -27,8 +27,8 @@ pub const CONFIGURATION_FORMAT: &str = "octoboard-configuration";
 /// version, and raising it past a released version adds the step that upgrades a document of that
 /// version, so an export made by the release stays importable. Version 1 is what the beta releases
 /// wrote; 2 moved the Agent accounts settings into the accounts region and dropped an account's
-/// sharing flag.
-pub const CONFIGURATION_VERSION: u32 = 2;
+/// sharing flag; 3 dropped the sidebar order setting.
+pub const CONFIGURATION_VERSION: u32 = 3;
 
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -137,7 +137,6 @@ pub struct DocumentSettings {
     pub auto_close_idle_shell_terminals: bool,
     pub auto_pull_repositories: bool,
     pub auto_delete_unresumable_archives: bool,
-    pub sidebar_order_by_status: bool,
     pub auto_approve_session_requests: bool,
     pub auto_approve_resume_requests: bool,
     pub auto_approve_account_switches: bool,
@@ -427,8 +426,6 @@ pub struct InspectedSettings {
     pub current_auto_pull_repositories: bool,
     pub auto_delete_unresumable_archives: bool,
     pub current_auto_delete_unresumable_archives: bool,
-    pub sidebar_order_by_status: bool,
-    pub current_sidebar_order_by_status: bool,
     pub auto_approve_session_requests: bool,
     pub current_auto_approve_session_requests: bool,
     pub auto_approve_resume_requests: bool,

@@ -136,12 +136,12 @@ async fn turning_the_quota_window_setting_on_kicks_held_readings_and_repeating_i
         }],
         unavailable: None,
     };
-    let turn_on = |sidebar_order_by_status: Option<bool>| {
+    let turn_on = |ask_questions_as_choices: Option<bool>| {
         update_settings(
             &state,
             SettingsChanges {
                 auto_start_quota_windows: Some(true),
-                sidebar_order_by_status,
+                ask_questions_as_choices,
                 ..SettingsChanges::default()
             },
         )
@@ -169,9 +169,9 @@ async fn turning_the_quota_window_setting_on_kicks_held_readings_and_repeating_i
     state
         .account_quotas
         .hold_for_test(&unstarted(AgentId::GROK));
-    let ordered = state.store.sidebar_order_by_status().unwrap();
-    turn_on(Some(!ordered));
-    assert_eq!(state.store.sidebar_order_by_status().unwrap(), !ordered);
+    let asking = state.store.ask_questions_as_choices().unwrap();
+    turn_on(Some(!asking));
+    assert_eq!(state.store.ask_questions_as_choices().unwrap(), !asking);
     // The test's runtime has the one thread, so yielding runs whatever `turn_on` spawned up to
     // its first wait, which is where a kick of the reading would already be claimed.
     tokio::task::yield_now().await;

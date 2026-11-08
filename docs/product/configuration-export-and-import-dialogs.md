@@ -252,7 +252,7 @@ Cards grouped as Settings groups the settings, each headed by its section's name
 `docs/product/settings.md`). Within a card the lines stand in the order of that section's rows, and a card with no line
 is not shown:
 
-- **General**: Appearance, Language and Markdown style, then the switch Order the sidebar by status.
+- **General**: Appearance, Language and Markdown style.
 - **App behavior**: the switch Resume sessions on start, then Keep running in the background, Show menu bar icon,
   Prevent sleep and When to prevent sleep, then the switch Close idle terminals when closing the panel.
 - **Git**: the default clone directory, Automatically pull repositories, then one line for the git workflow.

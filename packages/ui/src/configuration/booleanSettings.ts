@@ -90,13 +90,6 @@ const COPY: { [F in BooleanField]: Copy<F> } = {
     description: { on: "settings.autoSwitch.description.on", off: "settings.autoSwitch.description.off" },
     consequence: "configuration.import.settings.consequence.autoSwitchOnUsageLimit",
   },
-  sidebar_order_by_status: {
-    section: "general",
-    order: 1,
-    label: "settings.sidebarOrder.label",
-    description: { on: "settings.sidebarOrder.description.on", off: "settings.sidebarOrder.description.off" },
-    consequence: "configuration.import.settings.consequence.sidebarOrder",
-  },
   auto_start_quota_windows: {
     section: "agentAccounts",
     order: 3,

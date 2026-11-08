@@ -138,7 +138,6 @@ function documentSettings(carried: Partial<DocumentSettings> = {}): DocumentSett
     auto_close_idle_shell_terminals: false,
     auto_pull_repositories: false,
     auto_delete_unresumable_archives: false,
-    sidebar_order_by_status: false,
     auto_approve_session_requests: false,
     auto_approve_resume_requests: false,
     auto_approve_account_switches: false,
@@ -160,7 +159,6 @@ const SETTING_KEYS = [
   "auto_close_idle_shell_terminals",
   "auto_pull_repositories",
   "auto_delete_unresumable_archives",
-  "sidebar_order_by_status",
   "auto_approve_session_requests",
   "auto_approve_resume_requests",
   "auto_approve_account_switches",
@@ -790,10 +788,10 @@ const WITH_ACCOUNTS_SETTING_OFF: Omit<Inspection, "type"> = { ...WITH_SETTING_OF
 const SETTINGS_FAILED_RESULT: Omit<Imported, "type"> = { ...SETTINGS_FAILED_CONSOLES_RESULT, accounts: ACCOUNTS_ONLY_RESULT.accounts };
 
 /** `REVIEW` with one setting the file leaves as this machine has it, so that the review has a line that reads No change
- * beside the ones that change: the sidebar order, which the file also has on. */
+ * beside the ones that change: asking questions as choices, which the file also has on. */
 const SETTINGS_REVIEW: Omit<Inspection, "type"> = {
   ...REVIEW,
-  settings: { ...REVIEW.settings!, sidebar_order_by_status: true },
+  settings: { ...REVIEW.settings!, ask_questions_as_choices: true },
 };
 
 /** The settings only a client holds, as a document saved by a desktop window carries them, each unlike the window the
@@ -813,7 +811,7 @@ const CLIENT_RESULT_FILE = documentWith({ ...SHORTCUTS, ...CLIENT_VALUES, interf
 const SETTINGS_RESULT: Omit<Imported, "type"> = {
   ...MIXED_RESULT,
   consoles: [],
-  settings_applied: { ...MIXED_RESULT.settings_applied!, sidebar_order_by_status: true, interface_language: "en" },
+  settings_applied: { ...MIXED_RESULT.settings_applied!, ask_questions_as_choices: true, interface_language: "en" },
 };
 
 /** `REVIEW` of a file of an earlier version: its accounts region holds the Agent accounts settings alone, with no agent to add
@@ -1062,7 +1060,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of the application settings",
-    description: "Application settings ticked in the What to import group: the Application settings tab appears beside Consoles and projects (with a warning glyph) and is the one open. It holds six cards titled and ordered as the Settings dialog's sections (General, App behavior, Git, Agent behavior, Keyboard shortcuts, Cleanup), with no checkbox of its own. Lines that turn a setting on carry a muted consequence line (the pull line, \"Automatically pull repositories\", in Git, says the repositories will then be pulled automatically), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), and \"Order the sidebar by status\", which the device already has as the file does, reads No change with nothing under it. General opens with the settings only the window itself holds, each \"Set to the file's\" with the file's value and the current one in brackets: Appearance (System, now Light), Language (日本語, now English) and Markdown style (GitHub, now Tailwind); Appearance and Language read No change under a viewing condition that already has the file's value. Its switches follow. App behavior opens with the daemon's Resume sessions on start, turned on, with its muted consequence line, then holds, as this window offers each of them, the settings only the window itself holds, each \"Set to the file's\" with the file's value and the current one in brackets: Keep running in the background when the window is closed (On, now Off), Show menu bar icon (Off, now On), Prevent sleep (On, now Off) and When to prevent sleep (Always, now While sessions work); the terminal-cleanup switch ends the card. Git starts with Default clone directory, which gives the file's directory and this machine's, each in code style, above the checkbox \"Use the file's default clone directory\", checked, its label in normal text; unchecking it turns the badge to the neutral one and the line to \"<this machine's directory> is kept instead of the file's <file's directory>\". Then come the pull line and the Git workflow line, which reads \"Set to the file's\" and lists under the badge only what applying would change, each item as the file's value with what it is now in brackets: four of its five items (where sessions develop, rebase before delivery, delivery, revert gate; \"Squash commits before delivery\" is the same and is left out). Agent behavior holds the four auto-approve switches and Ask questions as choices. Keyboard shortcuts holds a \"Changed shortcuts\" line that says 3 of the file's shortcuts differ from the defaults and that shortcut changes apply only to the current browser, then lists each of the three as its key caps with the current ones in brackets. Cleanup holds the archive-cleanup switch alone.",
+    description: "Application settings ticked in the What to import group: the Application settings tab appears beside Consoles and projects (with a warning glyph) and is the one open. It holds six cards titled and ordered as the Settings dialog's sections (General, App behavior, Git, Agent behavior, Keyboard shortcuts, Cleanup), with no checkbox of its own. Lines that turn a setting on carry a muted consequence line (the pull line, \"Automatically pull repositories\", in Git, says the repositories will then be pulled automatically), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), and \"Ask questions as choices\" (in Agent behavior), which the device already has as the file does, reads No change with nothing under it. General opens with the settings only the window itself holds, each \"Set to the file's\" with the file's value and the current one in brackets: Appearance (System, now Light), Language (日本語, now English) and Markdown style (GitHub, now Tailwind); Appearance and Language read No change under a viewing condition that already has the file's value. App behavior opens with the daemon's Resume sessions on start, turned on, with its muted consequence line, then holds, as this window offers each of them, the settings only the window itself holds, each \"Set to the file's\" with the file's value and the current one in brackets: Keep running in the background when the window is closed (On, now Off), Show menu bar icon (Off, now On), Prevent sleep (On, now Off) and When to prevent sleep (Always, now While sessions work); the terminal-cleanup switch ends the card. Git starts with Default clone directory, which gives the file's directory and this machine's, each in code style, above the checkbox \"Use the file's default clone directory\", checked, its label in normal text; unchecking it turns the badge to the neutral one and the line to \"<this machine's directory> is kept instead of the file's <file's directory>\". Then come the pull line and the Git workflow line, which reads \"Set to the file's\" and lists under the badge only what applying would change, each item as the file's value with what it is now in brackets: four of its five items (where sessions develop, rebase before delivery, delivery, revert gate; \"Squash commits before delivery\" is the same and is left out). Agent behavior holds the four auto-approve switches and Ask questions as choices. Keyboard shortcuts holds a \"Changed shortcuts\" line that says 3 of the file's shortcuts differ from the defaults and that shortcut changes apply only to the current browser, then lists each of the three as its key caps with the current ones in brackets. Cleanup holds the archive-cleanup switch alone.",
     state,
     backgroundRun: true,
     menuBarIcon: true,

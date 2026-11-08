@@ -29,10 +29,10 @@ console session's own card below it (see "A console session's focus mode" below)
 
 **The list's section headings**, in both: **Sessions (n)** stays at the top of the scrolling list while its
 cards move underneath; as **Archived (n)** approaches the top, it pushes the Sessions heading upward out of view
-and takes its place. The headings have an
-opaque background and stay clear of the edge fade, which begins below the heading. Keyboard focus scrolled into
-view stays below both the heading and the fade. The other scrolling rules are in "The edge that hides content
-fades" and "Scrolling a surface from the keyboard" in `docs/product/scrolling-surfaces.md`.
+and takes its place. The headings have an opaque background and stay clear of the edge fade, which begins below the
+heading. Keyboard focus scrolled into view stays below both the heading and the fade. The other scrolling rules are in
+"The edge that hides content fades" and "Scrolling a surface from the keyboard" in
+`docs/product/scrolling-surfaces.md`.
 
 The session lock button on live cards, a console session's own card included, follows
 "Session lock controls" in `docs/product/sidebar-session-rows.md`.
@@ -138,11 +138,12 @@ From the top, below the header:
   project has live sessions under a console session that is not archived: one sentence for the whole project saying how
   many of its sessions are under console sessions, naming none of them, and below it a row of chips, wrapping onto as
   many lines as it needs — one chip per console session they are under, in the order the console sessions section lists
-  them. A chip shows the console session's colour, its title (faded out when too long, the full title then its tooltip)
-  and an inline count badge in the neutral grey tint the neutral badges and chips share, the same on every chip. Both
-  the total and each chip's count include a coordinator **and** the sessions under it, since the coordinator's team is
-  listed with it in that console session's focus mode. Pressing a chip enters that console session's focus mode;
-  assistive technology hears it as entering that focus mode, with the count.
+  them (see "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). A chip shows the
+  console session's colour, its title (faded out when too long, the full title then its tooltip) and an inline count
+  badge in the neutral grey tint the neutral badges and chips share, the same on every chip. Both the total and each
+  chip's count include a coordinator **and** the sessions under it, since the coordinator's team is listed with it in
+  that console session's focus mode. Pressing a chip enters that console session's focus mode; assistive technology
+  hears it as entering that focus mode, with the count.
 - **Archived (n)** counts all of the project's archived sessions, including those under a coordinator that is
   still live. The switch changes only the live list; the archive's count, preview and View all
   scope stay the same.
@@ -172,25 +173,23 @@ empty row instead explains why no agent is available, with the same icon and no 
   each **coordinator** among them carrying the sessions bound to it inset under it — they run in the coordinator's own
   project, so they fall under the same project's name. The count includes them, so it covers sessions this console
   session sees but cannot drive (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`). A
-  session bound to another
-  console session, to a project session that is not under this one, or to none, is not shown, and neither is a project
-  with nothing under this console session. With none, a compact row saying there are no bound sessions takes their
-  place, carrying no action of its own — the header's **+** below is the way to open one. Each project's heading shows
-  its name, then the branch badge (see "The branch badge" in `docs/product/project-git-status.md`), followed by its
-  controls. The project's name keeps its floor of room while the branch name gives way as the heading gets tight.
-  The pin button stays visible while the project is pinned (see "Pinning" in
-  `docs/product/order-of-projects-and-sessions.md`). Its own **+**, which opens a new session in that project, and its
-  action-menu button show only while the heading is hovered, holds keyboard focus or has a menu open; while hidden
-  they take no width. The action menu is the project row's without its Focus mode item
-  — a project has no focus mode to be entered from here — and keeps **Pin** / **Unpin**. That menu's **View archive**
-  covers only the project's share of this console session's archive: the project's archived sessions bound to this
-  console session, or bound to an archived coordinator that is bound to it, previewed as any archive preview is (see
-  "The archive view" in `docs/product/archive-view.md`). The project's sessions bound to another console session or to
-  none, and those of a coordinator that is still live, are not in it; with none in the share, the submenu shows only
-  the disabled item saying there are none. Its **View all**, offered whenever the share is nonempty, opens this console
-  session's archive view — the one **View all** under **Archived (n)** below opens — not the project's. The project's
-  row in the full sidebar keeps the project's whole archive in its menu. The project list's filter is not part of this
-  view.
+  session bound to another console session, to a project session that is not under this one, or to none, is not shown,
+  and neither is a project with nothing under this console session. With none, a compact row saying there are no bound
+  sessions takes their place, carrying no action of its own — the header's **+** below is the way to open one. Each
+  project's heading shows its name, then the branch badge (see "The branch badge" in
+  `docs/product/project-git-status.md`), followed by its controls. The project's name keeps its floor of room while the
+  branch name gives way as the heading gets tight. The pin button stays visible while the project is pinned (see
+  "Pinning" in `docs/product/order-of-projects-and-sessions.md`). Its own **+**, which opens a new session in that
+  project, and its action-menu button show only while the heading is hovered, holds keyboard focus or has a menu open;
+  while hidden they take no width. The action menu is the project row's without its Focus mode item — a project has no
+  focus mode to be entered from here — and keeps **Pin** / **Unpin**. That menu's **View archive** covers only the
+  project's share of this console session's archive: the project's archived sessions bound to this console session, or
+  bound to an archived coordinator that is bound to it, previewed as any archive preview is (see "The archive view" in
+  `docs/product/archive-view.md`). The project's sessions bound to another console session or to none, and those of a
+  coordinator that is still live, are not in it; with none in the share, the submenu shows only the disabled item saying
+  there are none. Its **View all**, offered whenever the share is nonempty, opens this console session's archive view —
+  the one **View all** under **Archived (n)** below opens — not the project's. The project's row in the full sidebar
+  keeps the project's whole archive in its menu. The project list's filter is not part of this view.
 - **New session**: the header's **+** opens a menu of the console's projects, so that a project with nothing bound yet
   can be reached; choosing one opens the new-session dialog for it. The dialog has no "Report to" field, and shows a
   line saying the session reports to this console session, which it will be bound to. With the primary modifier held,
@@ -212,11 +211,10 @@ empty row instead explains why no agent is available, with the same icon and no 
 The switch strip moves between the console's console sessions without leaving focus mode. It is there only in a
 console session's focus mode, and only while the console has at least two console sessions that are not archived.
 
-- **One chip per console session of the console that is not archived**, the one in focus included. The order is
-  fixed: pinned ones first, then by when they were started, oldest first. It never follows their statuses, whether or
-  not the sidebar is ordered by status (see "Order of projects and sessions" in
-  `docs/product/order-of-projects-and-sessions.md`), so a chip stays where it is while what it shows changes; pinning or
-  unpinning one moves its chip.
+- **One chip per console session of the console that is not archived**, the one in focus included. The order is fixed:
+  pinned ones first, then by when they were started, oldest first. It never follows their statuses, whatever sort is
+  chosen (see "Choosing the sort" in `docs/product/order-of-projects-and-sessions.md`), so a chip stays where it is
+  while what it shows changes; pinning or unpinning one moves its chip.
 - **A chip** shows the console session's colour (see "The binding badge" in `docs/product/sidebar-session-rows.md`), its
   title, faded out when too long with the full title then its tooltip, and a **status marker**: the glyph, at the compact
   14 px size, of the top status among that console session and the sessions bound to it that are not archived (see "The

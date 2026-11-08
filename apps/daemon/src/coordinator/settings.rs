@@ -76,7 +76,6 @@ pub struct SettingsChanges {
     pub interface_language: Option<String>,
     pub auto_select_account: Option<bool>,
     pub auto_switch_on_usage_limit: Option<bool>,
-    pub sidebar_order_by_status: Option<bool>,
     pub auto_start_quota_windows: Option<bool>,
     pub resume_sessions_on_start: Option<bool>,
     /// Blank text goes back to the built-in default.
@@ -106,7 +105,6 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         interface_language,
         auto_select_account,
         auto_switch_on_usage_limit,
-        sidebar_order_by_status,
         auto_start_quota_windows,
         resume_sessions_on_start,
         default_clone_dir,
@@ -183,9 +181,6 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         if !value {
             state.quota_recovery.clear();
         }
-    }
-    if let Some(value) = sidebar_order_by_status {
-        changed |= state.store.set_sidebar_order_by_status(value)?;
     }
     if let Some(value) = auto_start_quota_windows {
         let updated = state.store.set_auto_start_quota_windows(value)?;

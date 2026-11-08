@@ -16,7 +16,7 @@ import { type Account, type AccountTrashOutcome } from "../../protocol";
 import { isLive } from "../../sessions/sessionStatus";
 import { compareSessions } from "../../sessions/order";
 import { indexSessions } from "../../sessions/sessionIndex";
-import { useDaemon, useDaemonStoreEqual } from "../../store";
+import { sessionOrderPreference, useDaemon, useDaemonStoreEqual } from "../../store";
 import { ProviderName } from "../../components/text/ProviderName";
 
 /** What removing account `accountId` with its directory moved to the Trash would be let or refused now, asked afresh
@@ -104,12 +104,12 @@ export function RemoveAccountDialog({ account, onRemoved, onCancel }: { account:
   const [trash, setTrash] = useState(false);
   // Read live: a session that starts or ends while the dialog is open joins or leaves the list, and the dialog renders
   // again for no other change among the sessions.
+  const { sessions: sort } = sessionOrderPreference.useValue();
   const running = useDaemonStoreEqual((s) => {
     const { delegatingIds } = indexSessions(s.sessions);
-    const byStatus = s.settings.sidebar_order_by_status;
     return Array.from(s.sessions.values())
       .filter((session) => session.agent === account.agent && isLive(session.status) && (session.account_id === account.id || session.config_dir === account.config_dir))
-      .sort((a, b) => compareSessions(a, b, delegatingIds, s.queuedAccountSwitches, byStatus));
+      .sort((a, b) => compareSessions(a, b, delegatingIds, s.queuedAccountSwitches, sort));
   });
   const inspection = useAccountTrashInspection(account.id, trash);
   const afterErrorAlert = useAfterErrorAlert();

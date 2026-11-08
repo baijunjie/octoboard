@@ -207,7 +207,6 @@ working directory. Neither the avatar itself nor the console's console session i
 | `resume_sessions_on_start` | Whether, when the daemon starts, the interrupted sessions are resumed on their own (see "Resume sessions on start" in `docs/product/settings.md` and "Resuming the interrupted sessions at start" in `docs/product/archiving-and-resuming-sessions.md`). |
 | `auto_select_account` | Whether a new session whose account was not named chooses a usable account automatically, preferring the initial agent's soonest weekly reset and trying another added agent when needed (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/opening-sessions.md`). Read-only. |
 | `interface_language` | The language the daemon holds for the user, as its tag, or `null` while it holds none (see "The language the daemon holds" in `docs/product/language.md`). |
-| `sidebar_order_by_status` | Whether the user's sidebar ranks sessions and projects by status (see "Order the sidebar by status" in `docs/product/settings.md` and "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
 | `git_workflow` | The application-wide git workflow settings, as `development`, `squash_before_delivery`, `rebase_before_delivery`, `delivery` and `revert_gate` (see "The five settings" in `docs/product/git-workflow-settings.md`); `squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
 | `provider_settings` | For each agent whose provider declares settings that sessions may read, by its name (`codex`, `grok`), each such setting by its id with its value in effect, the default included while the user has made no choice: today only `claude_compatibility`, `true` or `false`, whether the agent's sessions load Claude Code's configuration (see "Provider settings" and "Claude compatibility" in `docs/product/per-agent-settings.md`). An agent with no such setting, Claude Code among them, has no entry. Read-only. |
@@ -217,18 +216,18 @@ working directory. Neither the avatar itself nor the console's console session i
 
 `update_settings` takes `auto_close_idle_shell_terminals`, `auto_pull_repositories`,
 `auto_delete_unresumable_archives`, `resume_sessions_on_start`, `interface_language`,
-`sidebar_order_by_status`, `default_clone_dir` and `git_workflow`, under the rules of the same settings in Settings: the
+`default_clone_dir` and `git_workflow`, under the rules of the same settings in Settings: the
 switches take `true` or `false`, a clone directory must be absolute or start with `~/`, and a blank one goes back to the
 built-in default. `interface_language` is a tag of an offered language (see "The offered languages" in
 `docs/product/language.md`), surrounding whitespace ignored; any other text, a blank one included, is refused. It
-changes the language the daemon holds, as a client's report does, and no window's language: each window keeps the one
-it shows. `git_workflow` is an object of any of the five git workflow settings, with the values `update_project`'s takes
+changes the language the daemon holds, as a client's report does, and no window's language: each window keeps the one it
+shows. `git_workflow` is an object of any of the five git workflow settings, with the values `update_project`'s takes
 (`squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while `development` is not `in_place`, and
 keep their values while it is); an item left out, or given as `null`, stays as it is. A refused value leaves the others
 unapplied too. An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
 `auto_approve_handoffs`, `auto_start_quota_windows`, `auto_switch_on_usage_limit`, `ask_questions_as_choices`,
-`auto_select_account`, `provider_settings` or `agent_tags` argument is ignored, whatever its value — the setting
-stays as it is and the rest of the call applies as usual; `get_settings` lists only the last three, read-only. Turning
+`auto_select_account`, `provider_settings` or `agent_tags` argument is ignored, whatever its value — the setting stays
+as it is and the rest of the call applies as usual; `get_settings` lists only the last three, read-only. Turning
 `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the switch on in
 Settings does, which changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on deletes
 nothing at once, and turning it off stops a deletion pass under way, exactly as the switch in Settings does. The call

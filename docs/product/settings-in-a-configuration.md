@@ -10,22 +10,24 @@ whose terms this doc uses; how the export dialog and the import's review and res
 The **application settings** region carries every setting of Settings' **General**, **App behavior**, **Git**, **Agent
 behavior**, **Keyboard shortcuts** and **Cleanup** sections (see `docs/product/settings.md`), except App behavior's
 **Launch at login**, which is the system's own state rather than a setting Octoboard keeps (see
-`docs/product/launch-at-login.md`). The **accounts** region carries every setting of its
-**Agent accounts** section: the accounts themselves (see "The accounts" in
-`docs/product/configuration-export-and-import.md`) and the settings that apply to all of an agent's accounts or to
-every agent (see "The agent account settings an export carries" below). The one setting of those sections left out is
-an account's sharing of the default configuration (see "What is not configuration and never travels" in
-`docs/product/configuration-export-and-import.md`). Nothing of the Trusted folders, Permissions and Notifications
-sections travels, nor does a choice a client keeps elsewhere, such as the update channel (see "The Updates and Update
-channel rows" in `docs/product/in-app-updates.md`) or a project's focus mode (see `docs/product/focus-mode.md`).
+`docs/product/launch-at-login.md`), and General's **Sorting** group, which no document carries: an export leaves it out
+and an import leaves this client's sort as it is (see "Choosing the sort" in
+`docs/product/order-of-projects-and-sessions.md`). The **accounts** region carries every setting of its **Agent
+accounts** section: the accounts themselves (see "The accounts" in `docs/product/configuration-export-and-import.md`)
+and the settings that apply to all of an agent's accounts or to every agent (see "The agent account settings an export
+carries" below). The one setting of those sections left out is an account's sharing of the default configuration (see
+"What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`). Nothing of the
+Trusted folders, Permissions and Notifications sections travels, nor does a choice a client keeps elsewhere, such as the
+update channel (see "The Updates and Update channel rows" in `docs/product/in-app-updates.md`) or a project's focus mode
+(see `docs/product/focus-mode.md`).
 
 ## The application settings an export carries
 
 Each under its own key, grouped here as Settings groups them. The import review notes each switch, and the line for
 turning one on says what then follows, in that setting's own words, as given below. A settings key the importing
-Octoboard does not know, such as `reply_in_interface_language`, is ignored. The settings only a client holds are in a
-document only when a client saved it (see "The settings a client holds" below); every other one is in every document
-that has application settings.
+Octoboard does not know, such as `reply_in_interface_language` or `sidebar_order_by_status`, is ignored. The settings
+only a client holds are in a document only when a client saved it (see "The settings a client holds" below); every other
+one is in every document that has application settings.
 
 **General**
 
@@ -36,8 +38,6 @@ that has application settings.
   holds" in `docs/product/language.md`).
 - **Markdown style**, under `markdown_style`: `tailwind`, `github`, `newsprint` or `latex` (see
   `docs/product/markdown-documents.md`).
-- **Order the sidebar by status** (see that section in `docs/product/settings.md`), under `sidebar_order_by_status`.
-  The review's line for turning it on says that sessions and projects in the sidebar then move as their status changes.
 
 **App behavior**
 

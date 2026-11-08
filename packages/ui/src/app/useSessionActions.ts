@@ -5,7 +5,7 @@ import { indexSessions } from "../sessions/sessionIndex";
 import { holdsAccountSwitch } from "../sessions/sessionStatus";
 import { focusAfterSelect } from "../sidebar/focus";
 import type { ArchiveScope, FocusTarget } from "../sidebar/types";
-import { useDaemon } from "../store";
+import { sessionOrderPreference, useDaemon } from "../store";
 import { nextWaitingSession, waitingSessionsInTreeOrder } from "../sessions/waiting";
 
 /**
@@ -92,7 +92,7 @@ export function useSessionActions({
   const selectNextWaiting = () => {
     const state = store.getState();
     const sessions = Array.from(state.sessions.values());
-    const next = nextWaitingSession(waitingSessionsInTreeOrder(consoleList, projectList, sessions, indexSessions(state.sessions).delegatingIds, state.queuedAccountSwitches, state.settings.sidebar_order_by_status), selectedSessionId);
+    const next = nextWaitingSession(waitingSessionsInTreeOrder(consoleList, projectList, sessions, indexSessions(state.sessions).delegatingIds, state.queuedAccountSwitches, sessionOrderPreference.get()), selectedSessionId);
     if (!next) return;
     selectSession(next);
     // Picked from the rail inside the open drawer, it closes it as a pick in the sidebar does.

@@ -190,7 +190,6 @@ export function exportedDocument(
         auto_close_idle_shell_terminals: state.settings.auto_close_idle_shell_terminals,
         auto_pull_repositories: state.settings.auto_pull_repositories,
         auto_delete_unresumable_archives: state.settings.auto_delete_unresumable_archives,
-        sidebar_order_by_status: state.settings.sidebar_order_by_status,
         auto_approve_session_requests: state.settings.auto_approve_session_requests,
         auto_approve_resume_requests: state.settings.auto_approve_resume_requests,
         auto_approve_account_switches: state.settings.auto_approve_account_switches,
