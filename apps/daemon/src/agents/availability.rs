@@ -90,6 +90,21 @@ pub fn fill_added_agents(state: &AppState) -> Result<()> {
     Ok(())
 }
 
+/// Judges `agent`'s availability again on `shell_env`, taken after something changed what its
+/// binary resolves to (an update of its CLI), and announces the whole list when the entry is not
+/// what it was.
+pub(crate) fn redetermine(state: &AppState, agent: AgentId, shell_env: &HashMap<String, String>) {
+    let Some(entry) = determine(shell_env)
+        .into_iter()
+        .find(|entry| entry.agent == agent)
+    else {
+        return;
+    };
+    if state.agent_availability_of(agent) != entry {
+        state.set_agent_availability(vec![entry]);
+    }
+}
+
 /// Pure over an already-captured shell snapshot, so the three outcomes — available, unavailable,
 /// and each agent's resolved default-account directory — are unit-tested without a real shell or
 /// the developer's own `PATH` and `HOME`.
@@ -365,6 +380,43 @@ mod tests {
         assert_eq!(
             state.store.added_agents().unwrap(),
             Some(vec![AgentId::GROK])
+        );
+    }
+
+    /// A judgement again after an update announces the list only when the agent's entry is not what
+    /// it was, so a client sees nothing of an update that changed nothing about availability.
+    #[test]
+    fn judging_an_agent_again_announces_only_a_change() {
+        let (state, _dir) = crate::test_support::app_state("availability-redetermine");
+        let dir = crate::test_support::ScratchDir::new("availability-redetermine-bin");
+        let found = crate::test_support::fake_agent(&dir, "codex", "");
+        let mut missing = HashMap::new();
+        missing.insert("PATH".to_string(), String::new());
+        missing.insert("HOME".to_string(), dir.to_string_lossy().into_owned());
+        let mut found = found;
+        found.insert("HOME".to_string(), dir.to_string_lossy().into_owned());
+        state.set_agent_availability(determine(&missing));
+        let mut events = state.subscribe();
+
+        redetermine(&state, AgentId::CODEX, &missing);
+        assert!(
+            events.try_recv().is_err(),
+            "nothing changed, so nothing is sent"
+        );
+
+        redetermine(&state, AgentId::CODEX, &found);
+        let Ok(Event::AgentAvailabilityUpdated { agent_availability }) = events.try_recv() else {
+            panic!("the change is announced");
+        };
+        let codex = agent_availability
+            .iter()
+            .find(|entry| entry.agent == AgentId::CODEX)
+            .unwrap();
+        assert_eq!(codex.availability, Availability::Available);
+        assert_eq!(
+            state.agent_availability_of(AgentId::CLAUDE).availability,
+            Availability::Unavailable,
+            "the other agents are as they were"
         );
     }
 }

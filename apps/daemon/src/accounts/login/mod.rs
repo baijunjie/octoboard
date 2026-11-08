@@ -195,14 +195,7 @@ impl AccountLogins {
         // Waited for as a person's launch is: the first login may be the first thing to need it.
         let shell_env = tokio::task::spawn_blocking(login_shell)
             .await?
-            .map_err(|err| {
-                let detail = format!("{err:#}");
-                CodedError::raised(
-                    error_code::SHELL_ENVIRONMENT_TIMEOUT,
-                    format!("The shell environment could not be captured: {detail}"),
-                    &[("detail", &detail)],
-                )
-            })?;
+            .map_err(crate::env_shell::capture_failed)?;
         Self::start_with(
             state,
             start,

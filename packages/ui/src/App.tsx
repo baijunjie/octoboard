@@ -42,6 +42,7 @@ import { RightPane } from "./panels/RightPane";
 import { panelId, panelRegion, shownPanelRegions } from "./panels/stackState";
 import type { PanelKind } from "./layout/panelKind";
 import { LoginPageOpener } from "./settings/accounts/AccountLogin";
+import { AgentCliUpdateAlerts } from "./settings/accounts/AgentCliUpdateAlerts";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { registerSettingsLauncher } from "./settings/settingsLauncher";
 import { registerDialogLauncher } from "./dialogs/dialogLauncher";
@@ -724,6 +725,8 @@ export function App(): React.ReactElement {
       </div>
       {/* A login started in Settings opens its authorization page for as long as the window lives, Settings open or not. */}
       <LoginPageOpener />
+      {/* An update of an agent's CLI asked for in Settings that fails is told whether or not Settings is still open. */}
+      <AgentCliUpdateAlerts />
       <UpdateNotice focusTerminal={focusTerminal} />
       <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
       <div ref={announcementRef}>

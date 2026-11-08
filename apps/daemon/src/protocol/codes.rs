@@ -8,11 +8,12 @@ use crate::providers::ProviderCode;
 /// A code the daemon names a failure or a notice by on the wire. Only this module can make one, so
 /// every code the daemon sends is a `pub const` of one of the code modules below ([`error_code`],
 /// [`models_unavailable_code`], [`quota_unavailable_code`], [`login_failure_code`],
-/// [`notice_code`]): together they are the registry of the codes a client has to word. A UI test
-/// (`packages/ui/src/daemonCodes.test.ts`) reads them from this file and fails for a code the UI
-/// has no words or classification for, so each is a `pub const` of its own, of type `Code`, made
-/// from a string literal, and a code is never made anywhere else in this file. The one exception is
-/// a code only one provider raises, which its descriptor declares ([`Code::of_provider`]).
+/// [`agent_cli_code`], [`notice_code`]): together they are the registry of the codes a client has
+/// to word. A UI test (`packages/ui/src/daemonCodes.test.ts`) reads them from this file and fails
+/// for a code the UI has no words or classification for, so each is a `pub const` of its own, of
+/// type `Code`, made from a string literal, and a code is never made anywhere else in this file.
+/// The one exception is a code only one provider raises, which its descriptor declares
+/// ([`Code::of_provider`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Code(&'static str);
 
@@ -68,7 +69,7 @@ pub mod error_code {
 
     /// A request asked a provider for something it does not offer: `params` names the `agent` (its
     /// wire id, unlike every other code's `agent`, its label) and the `operation`, one of
-    /// `sign_in`, `kick`, `reset_credit` and `config_sharing`.
+    /// `sign_in`, `kick`, `reset_credit`, `config_sharing` and `cli_update`.
     pub const PROVIDER_UNSUPPORTED: Code = Code("provider_unsupported");
     /// A launch was asked for while one was already running or already starting for that session.
     /// The client's own double click is the ordinary cause, so it is shown as nothing at all.
@@ -294,10 +295,12 @@ pub mod error_code {
     /// `agent` and the `account` (by name).
     pub const ACCOUNT_NOT_SIGNED_IN: Code = Code("account_not_signed_in");
     /// A session's resolved agent is not on `Settings.added_agents`, so a new session or a handoff
-    /// to it is refused; never raised while that list is undecided. `params` names `agent`.
+    /// to it is refused, as is an `update_agent_cli` for it; never raised while that list is
+    /// undecided. `params` names `agent`.
     pub const AGENT_NOT_ADDED: Code = Code("agent_not_added");
-    /// An `add_agent` asked for an agent that has been determined not installed (its binary does
-    /// not resolve on the login shell's `PATH`). `params` names `agent`.
+    /// An `add_agent` or an `update_agent_cli` asked for an agent whose binary does not resolve on
+    /// the login shell's `PATH` (for an `add_agent`, one determined not installed). `params` names
+    /// `agent`.
     pub const AGENT_NOT_INSTALLED: Code = Code("agent_not_installed");
     /// An `add_agent` asked for an agent that is already added. `params` names `agent`.
     pub const AGENT_ALREADY_ADDED: Code = Code("agent_already_added");
@@ -339,6 +342,14 @@ pub mod error_code {
     /// A `start_account_login` for an account that is being signed in already. `params` names
     /// `agent`.
     pub const LOGIN_ALREADY_RUNNING: Code = Code("login_already_running");
+    /// An `update_agent_cli` for an agent the daemon knows no command to update: its CLI was
+    /// installed in a way it does not recognise (`install_method` `unknown`), or the tool that
+    /// updates a recognised install (`npm`, `brew`) is not on the shell's `PATH`. Nothing was
+    /// run. `params` names `agent`.
+    pub const AGENT_CLI_UPDATE_UNSUPPORTED: Code = Code("agent_cli_update_unsupported");
+    /// An `update_agent_cli` for an agent whose CLI is being updated already. Nothing was run.
+    /// `params` names `agent`.
+    pub const AGENT_CLI_UPDATE_RUNNING: Code = Code("agent_cli_update_running");
     /// A `cancel_account_login` for an account that is not being signed in. `params` names
     /// `agent`.
     pub const LOGIN_NOT_RUNNING: Code = Code("login_not_running");
@@ -606,6 +617,26 @@ pub mod login_failure_code {
     /// The CLI reported success but the agent still says it is not signed in. `params` names
     /// `agent`.
     pub const NOT_CONFIRMED: Code = Code("login_not_confirmed");
+}
+
+/// Codes carried by an `AgentCliStatus` (`latest_error`) and an `AgentCliUpdate` (`error`);
+/// `PROTOCOL.md` lists each. Shown where the status is, so each needs only a `daemon.<code>` message
+/// in the UI's catalogs, not a remedy.
+pub mod agent_cli_code {
+    use super::Code;
+
+    /// Looking up the latest version failed: the registry or the CLI's own check could not be
+    /// reached, did not answer in time or reported an error. Carried with the English text as the
+    /// status's `latest_detail`.
+    pub const LATEST_FAILED: Code = Code("agent_cli_latest_failed");
+    /// The lookup answered but what it said holds no version that could be read.
+    pub const LATEST_UNREADABLE: Code = Code("agent_cli_latest_unreadable");
+    /// The update command could not be run, ended with a failure or printed an error; the last line
+    /// it printed is the update's `detail`.
+    pub const UPDATE_FAILED: Code = Code("agent_cli_update_failed");
+    /// The update command did not finish in time and was stopped. It may have changed the install
+    /// before that.
+    pub const UPDATE_TIMED_OUT: Code = Code("agent_cli_update_timed_out");
 }
 
 /// The `reason_code` param of a failed press of a trust confirmation, in the `error` and in the

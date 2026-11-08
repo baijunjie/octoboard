@@ -284,6 +284,23 @@ impl AgentProvider for ClaudeProvider {
         Some(&status_line::ClaudeStatusLine)
     }
 
+    /// A native install keeps each release under `versions` (also `claude.exe` itself in
+    /// `.local/bin` on Windows, which is no link); the package is `@anthropic-ai/claude-code` and
+    /// the Homebrew cask `claude-code`. `claude update` updates a native install.
+    fn cli_packaging(&self) -> &'static super::CliPackaging {
+        &super::CliPackaging {
+            native_layouts: &[
+                &[".local", "share", "claude", "versions"],
+                &[".local", "bin", "claude.exe"],
+            ],
+            native_update: &["update"],
+            native_latest: None,
+            npm_package: Some("@anthropic-ai/claude-code"),
+            homebrew_formula: None,
+            homebrew_cask: Some("claude-code"),
+        }
+    }
+
     /// Two layouts, each matched exactly, since a guess that is wrong switches hook mechanisms on
     /// a Claude Code that cannot take them. A native install keeps each release as a file named
     /// for its version in a directory called `versions` (`~/.local/share/claude/versions/2.1.301`,

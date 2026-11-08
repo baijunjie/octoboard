@@ -5,7 +5,7 @@ import { expect, it, vi } from "vitest";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { isolate } from "../../i18n/isolate";
 import { request, settings } from "./agentAccountsSectionTestState";
-import { mount } from "./agentAccountsSectionTestSupport";
+import { mountAgentSettings } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -14,37 +14,36 @@ vi.mock("../useSectionRefocus", async (importOriginal) => (await import("./agent
 vi.mock("../../components/form/OptionSelect", async () => ({ OptionSelect: (await import("./agentAccountsSectionTestState")).OptionSelectStandIn }));
 
 const tagsInput = (container: HTMLElement, name = "Codex") =>
-  [...container.querySelectorAll<HTMLLabelElement>('[role="tabpanel"] label')].find((label) => label.textContent === `Tags for ${isolate(name)}`)?.control as HTMLInputElement;
+  [...container.querySelectorAll<HTMLLabelElement>("label")].find((label) => label.textContent === `Tags for ${isolate(name)}`)?.control as HTMLInputElement;
 const type = (input: HTMLInputElement, text: string) => act(() => {
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, text);
   input.dispatchEvent(new Event("input", { bubbles: true }));
 });
 const enter = (input: HTMLInputElement) => act(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
-const pickedTags = (container: HTMLElement) => [...container.querySelectorAll('[role="tabpanel"] [role="row"]')].map((row) => row.textContent);
+const pickedTags = (container: HTMLElement) => [...container.querySelectorAll('[role="row"]')].map((row) => row.textContent);
 // A tag being removed stays in the box, without its list-motion mark, until its exit animation ends.
-const liveTags = (container: HTMLElement) => [...container.querySelectorAll('[role="tabpanel"] [role="row"][data-list-motion]')].map((row) => row.textContent);
+const liveTags = (container: HTMLElement) => [...container.querySelectorAll('[role="row"][data-list-motion]')].map((row) => row.textContent);
 
-it.each(["Claude Code", "Codex", "Grok Build"] as const)("puts the Tags row first in the %s tab, above the other per-agent rows and the table", (name) => {
-  const { container } = mount(name);
-  const panel = container.querySelector('[role="tabpanel"]')!;
+it.each(["Claude Code", "Codex", "Grok Build"] as const)("puts the Tags row first in the %s settings dialog, above the other per-agent rows, and none in the tab", async (name) => {
+  const { container, section } = await mountAgentSettings(name);
   const input = tagsInput(container, name);
   expect(input).not.toBeNull();
-  expect(panel.textContent).toContain(`Applies to every ${isolate(name)} account`);
+  expect(container.textContent).toContain(`Applies to every ${isolate(name)} account`);
   const following = (other: Element | null) => other === null || (input.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-  expect(following(panel.querySelector("table"))).toBe(true);
-  expect(following(panel.querySelector('[aria-label^="Permission approval"]'))).toBe(true);
-  expect(following(panel.querySelector('input[role="switch"]'))).toBe(true);
+  expect(following(container.querySelector('[aria-label^="Permission approval"]'))).toBe(true);
+  expect(following(container.querySelector('input[role="switch"]'))).toBe(true);
+  expect(section.querySelector('[role="tabpanel"] [aria-label^="Tags for"]')).toBeNull();
+  expect(section.querySelector('[role="tabpanel"] table')).not.toBeNull();
 });
 
-it("shows the stored tags of the agent in view", () => {
+it.each([["Codex", ["review", "tests"]], ["Grok Build", ["research"]]] as const)("shows the stored tags of the agent in view: %s", async (name, tags) => {
   settings.agent_tags = { codex: ["review", "tests"], grok: ["research"] };
-  expect(pickedTags(mount("Codex").container)).toEqual(["review", "tests"]);
-  expect(pickedTags(mount("Grok Build").container)).toEqual(["research"]);
+  expect(pickedTags((await mountAgentSettings(name)).container)).toEqual(tags);
 });
 
 it("saves the whole list of the agent when a tag is typed", async () => {
   settings.agent_tags = { codex: ["review"] };
-  const { container } = mount("Codex");
+  const { container } = await mountAgentSettings("Codex");
   const input = tagsInput(container);
   type(input, " tests ");
   await act(async () => enter(input));
@@ -56,7 +55,7 @@ it("saves the whole list of the agent when a tag is typed", async () => {
 
 it("keeps showing the requested tags when the reply comes before the broadcast, and builds on them", async () => {
   settings.agent_tags = { codex: ["review"] };
-  const { container, setSettings } = mount("Codex");
+  const { container, setSettings } = await mountAgentSettings("Codex");
   const input = tagsInput(container);
   type(input, "tests");
   await act(async () => enter(input));
@@ -75,7 +74,7 @@ it("keeps showing the requested tags when the reply comes before the broadcast, 
 it("takes the spelling of a tag the added agents carry, and none from a removed agent", async () => {
   settings.agent_tags = { claude: ["UI"], grok: ["Research"] };
   settings.added_agents = ["claude", "codex"];
-  const { container, setSettings } = mount("Codex");
+  const { container, setSettings } = await mountAgentSettings("Codex");
   const input = tagsInput(container);
   type(input, "ui");
   await act(async () => enter(input));
@@ -89,7 +88,7 @@ it("takes the spelling of a tag the added agents carry, and none from a removed 
 
 it("reports a failed save and builds the next change on the stored tags once no save is outstanding", async () => {
   settings.agent_tags = { codex: ["review"] };
-  const { container } = mount("Codex");
+  const { container } = await mountAgentSettings("Codex");
   request.mockRejectedValueOnce(new Error("save refused"));
   const input = tagsInput(container);
   type(input, "tests");
@@ -103,7 +102,7 @@ it("reports a failed save and builds the next change on the stored tags once no 
 
 it("shows a concurrent writer's value once its own save has settled, and not the value it asked for", async () => {
   settings.agent_tags = { codex: ["review"] };
-  const { container, setSettings } = mount("Codex");
+  const { container, setSettings } = await mountAgentSettings("Codex");
   const input = tagsInput(container);
   type(input, "tests");
   await act(async () => enter(input));
@@ -121,7 +120,7 @@ it("shows no intermediate list while saves are pending, when a tag is added and 
   settings.agent_tags = { codex: ["review"] };
   const replies: (() => void)[] = [];
   request.mockImplementation(() => new Promise<object>((resolve) => replies.push(() => resolve({}))));
-  const { container, setSettings } = mount("Codex");
+  const { container, setSettings } = await mountAgentSettings("Codex");
   const input = tagsInput(container);
   type(input, "tests");
   enter(input);
@@ -141,7 +140,7 @@ it("shows a concurrent writer's value that arrives before its own reply, and bui
   settings.agent_tags = { codex: ["review"] };
   let reply = () => {};
   request.mockImplementation(() => new Promise<object>((resolve) => { reply = () => resolve({}); }));
-  const { container, setSettings } = mount("Codex");
+  const { container, setSettings } = await mountAgentSettings("Codex");
   const input = tagsInput(container);
   type(input, "tests");
   enter(input);

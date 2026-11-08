@@ -5,6 +5,7 @@
 use serde::Serialize;
 
 use super::accounts::{AccountLogin, AccountSharing, AccountTrashOutcome};
+use super::agent_cli::AgentCliStatus;
 use super::agents::AgentId;
 use super::browse::{
     BranchInfo, BrowseEntry, ChangeEntry, ChangeGroup, CommitChanges, ComparisonEndpoint,
@@ -143,6 +144,10 @@ pub enum Event {
         /// The sharing state of every account the user owns, as `account_sharing` sends it.
         /// Runtime state, not stored.
         account_sharing: Vec<AccountSharing>,
+        /// The installed CLI of every agent checked since the daemon started
+        /// (`check_agent_clis`), the update of one that runs or ran included; empty until the
+        /// first check ends. Runtime state, not stored.
+        agent_cli_statuses: Vec<AgentCliStatus>,
         /// The daemon host's home directory, so a client can show a path under it as `~/...`; it
         /// is the daemon's home, not the browser's, since the two may be on different machines.
         /// Null when the daemon cannot determine one.
@@ -156,9 +161,9 @@ pub enum Event {
         shell_terminals: Vec<ShellTerminal>,
     },
     /// Availability or a default account's resolved directory changed for one or more agents —
-    /// the whole three-entry list, like every other upsert. Broadcast once, when the daemon's
-    /// one-time determination lands; never again afterwards, since nothing re-determines it
-    /// during a run.
+    /// the whole three-entry list, like every other upsert. Broadcast when the daemon's one-time
+    /// determination lands, and again when an update of an agent's CLI has ended and its entry is
+    /// not what it was; nothing else re-determines it during a run.
     AgentAvailabilityUpdated {
         agent_availability: Vec<AgentAvailability>,
     },
@@ -172,6 +177,12 @@ pub enum Event {
     /// here.
     AccountLoginUpdated {
         login: AccountLogin,
+    },
+    /// A check of an agent's installed CLI ended, or an update of it started, moved on or ended:
+    /// the agent's whole status, like every other upsert. Every agent's last one is also in a
+    /// `snapshot`.
+    AgentCliStatusUpdated {
+        status: AgentCliStatus,
     },
     /// What stands in the way of a change of an account's sharing, the change running and the last
     /// one that failed: the account's whole sharing state, sent whenever any of it changes. Every

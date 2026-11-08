@@ -11,6 +11,13 @@ export function trackAccountLogin(store: StoreApi<State>, agent: Agent, account:
   store.setState((state) => reducer(state, { kind: "track_account_login", key: accountKey(agent, account), tracked }));
 }
 
+/** Notes that this window asked for an update of `agent`'s CLI, `from` being the `started_at` of the update its status
+ * held then (null for none), or that it has not any more (`from` undefined): the update ended, or the request was
+ * refused. */
+export function trackAgentCliUpdate(store: StoreApi<State>, agent: Agent, from: number | null | undefined): void {
+  store.setState((state) => reducer(state, { kind: "track_agent_cli_update", agent, from }));
+}
+
 /** Adds `ids` to the sessions account-switch batches have not finished with, or takes them out
  * (`queued` false): only these ids change, so batches that overlap in time never undo each other.
  * Such a session shows as switching its account alongside the ones the daemon says are

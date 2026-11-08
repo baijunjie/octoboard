@@ -18,6 +18,8 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 
+use crate::protocol::{error_code, CodedError};
+
 pub use resolve::{resolve_binary, resolve_program};
 pub use snapshot::is_filtered;
 
@@ -39,4 +41,15 @@ pub fn launch_snapshot() -> Result<HashMap<String, String>> {
 /// see [`cache::Cache::scheduled`].
 pub fn cached_snapshot() -> Result<HashMap<String, String>> {
     CACHE.scheduled(snapshot::take)
+}
+
+/// The refusal for a request that needs the shell environment and could not take it:
+/// `shell_environment_timeout`, the cause in `detail`.
+pub fn capture_failed(err: anyhow::Error) -> anyhow::Error {
+    let detail = format!("{err:#}");
+    CodedError::raised(
+        error_code::SHELL_ENVIRONMENT_TIMEOUT,
+        format!("The shell environment could not be captured: {detail}"),
+        &[("detail", &detail)],
+    )
 }

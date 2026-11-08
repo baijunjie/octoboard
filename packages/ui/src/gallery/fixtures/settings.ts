@@ -2,10 +2,11 @@ import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "../../fixtures/fixtureProviders";
 import { providerLabel } from "../../agents/providers";
 import { describing, type Matcher, type Ui, type Step } from "../../fixtures/interact";
-import { type AccountLogin, type AccountSharing, type Agent, type AgentAvailability } from "../../protocol";
+import { type AccountLogin, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus } from "../../protocol";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
-import { accountOf, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState, WINDOWS_MACHINE } from "../../fixtures/builders";
+import { accountOf, agentCliStatusOf, agentCliUpdateOf, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState, WINDOWS_MACHINE } from "../../fixtures/builders";
+import { defaultAgentCliStatuses } from "../../fixtures/fixtureAgentClis";
 import { browserHost } from "../../platform/host";
 import { MAC_HOST, WINDOWS_HOST } from "../../test/hosts";
 import { noneAddedState } from "./empty";
@@ -180,6 +181,18 @@ const unavailableQuotaState: Scenario["state"] = {
     }),
   ],
 };
+
+/** `state` with every installed agent's CLI current, but for the one `status` is of. */
+const withCliStatus = (state: Scenario["state"], status: AgentCliStatus): Scenario["state"] => ({
+  ...state,
+  agentCliStatuses: new Map(defaultAgentCliStatuses(state!.agentAvailability!)).set(status.agent, status),
+});
+
+/** Claude Code installed with npm at 2.1.319 while 2.1.320 is out: what the Version row offers an Update for. */
+const OUTDATED_CLI = agentCliStatusOf("claude", { install_method: "npm", latest_version: "2.1.320" });
+
+/** What npm prints when an update cannot write to the global prefix, the last line a failed update carries. */
+const CLI_UPDATE_DETAIL = "npm error code EACCES: permission denied, mkdir '/usr/local/lib/node_modules/@anthropic-ai'";
 
 /** A model's display name as long as one can be, long enough to wrap in a narrow window. */
 const LONG_MODEL_NAME = "Claude Opus Extended Context Research Preview";
@@ -384,6 +397,33 @@ const openAccounts: Step[] = [
   (ui) => ui.press(ui.t("settings.section.accounts")),
 ];
 
+/** The ⋮ button at the end of `agent`'s tab on the strip (every tab has its own, so the agent's tab need not be selected).
+ * While an update of the agent's CLI is waiting (`update`) the button's name says so. */
+const pressAgentActions = (agent: Agent, update = false): Step => (ui) => ui.press(ui.t(
+  update ? "settings.accounts.agentActionsUpdate" : "settings.accounts.agentActions",
+  { agent: providerLabel(ui.t, [...FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER], agent) },
+));
+
+/** The Settings item of the ⋮ menu at the end of `agent`'s tab: the agent's own settings in a modal. A menu item, since the
+ * rail has a Settings button of its name. */
+const openAgentSettings = (agent: Agent): Step => async (ui) => {
+  await pressAgentActions(agent)(ui);
+  await ui.pressMenuItem(ui.t("settings.accounts.settingsItem"));
+};
+
+/** The Version item of the same menu: the agent's CLI version and update in a modal. `update` is whether an update of the
+ * CLI is waiting, which changes the button's name. */
+const openAgentVersion = (agent: Agent, update = false): Step => async (ui) => {
+  await pressAgentActions(agent, update)(ui);
+  await ui.pressMenuItem(ui.t("settings.accounts.cli.label"));
+};
+
+/** Settings → Agent accounts with the Agent settings of `agent` in front. */
+const agentSettings = (agent: Agent): Step[] => [...openAccounts, openAgentSettings(agent)];
+
+/** Settings → Agent accounts with the Agent version dialog of `agent` in front. */
+const agentVersion = (agent: Agent, update = false): Step[] => [...openAccounts, openAgentVersion(agent, update)];
+
 /** The `item` (Details or Settings) of the actions menu of the account `name` of `agent` on the tab in view (the
  * default account's name is the language's own); a menu item, since the rail has a Settings button of its name. */
 const openAccountDialog = (item: "settings.accounts.detailsItem" | "settings.accounts.settingsItem", name: string | ((ui: Ui) => string), agent: Agent): Step => async (ui) => {
@@ -415,9 +455,9 @@ const openSharingHelp = (name: string, agent: Agent = "claude"): Step[] => [
  * label that starts another option's label. */
 const approvalOption = (label: string): Matcher => describing(`permission approval option(${label})`, (name) => name.startsWith(label));
 
-/** Claude Code's tab, its permission approval set to Bypass permissions: the confirmation dialog it opens. */
+/** Claude Code's Agent settings, its permission approval set to Bypass permissions: the confirmation dialog it opens. */
 const bypassSteps: Step[] = [
-  ...openAccounts,
+  ...agentSettings("claude"),
   (ui) => ui.press(ui.t("provider.claude.setting.approval_mode.label", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "claude") })),
   (ui) => ui.press(approvalOption(ui.t("provider.claude.setting.approval_mode.choice.bypass"))),
 ];
@@ -880,7 +920,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "Claude Code's tab. Account rows have drag grips in a separate unlabelled first column, including Default; the Account header aligns with the names, and their menus offer Move earlier and Move later. Drag a grip to save a new order, or use the menu actions with a keyboard; Escape cancels a drag. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. Under it, the Tags row comes first: its label, \"Applies to every Claude Code account\" under it and the tag field below, empty here, showing the \"No tags\" placeholder and the suggestions button at its end. Then one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Auto; its menu also offers Manual, Accept edits, Plan and Bypass permissions. Open it to see the native summary under each permission mode and an explanation under Follow account configuration; these notes wrap within the menu while the closed selector shows only its chosen label. Open the separate help to see two spaced paragraphs: the first explains when changes take effect and which computer the permissions apply to; the second explains native configuration and resume rules when no mode is specified, and that choosing a mode takes precedence over a saved mode. There is no Claude compatibility row, which only the other agents' tabs have. Then one table lists the agent's accounts, Work, Default and Client in the saved order, under the headers Account, Usage, Status and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work has reached its limit, so its bar is empty and grey, also where use went past 100%, followed in the same cell by a warning-coloured \"Limit reached\" badge, while its name stays muted with no badge beside it, unlike the rail's usage panel; the default account and Client have neither); a soft success \"Logged in\" badge in the Status cell after it; and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its usage cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once. Choose 560px to see the narrow layout: at 768px and narrower the Permission approval row stays within the section, and the table is wider than the section, so it scrolls sideways, its columns keeping their widths, the later columns cut at the edge and the ⋮ column pinned at the end with a hairline at its start while there is more beside it; the tab strip, the two switches above it and the tab buttons fit the width, and the scroller is a focusable region while it overflows.",
+    description: "Claude Code's tab. Account rows have drag grips in a separate unlabelled first column, including Default; the Account header aligns with the names, and their menus offer Move earlier and Move later. Drag a grip to save a new order, or use the menu actions with a keyboard; Escape cancels a drag. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. The tab holds only the table: the agent's own settings (Tags, Permission approval) are in the dialog behind the ⋮ button's Settings entry, shown by the Agent settings scenarios, and the CLI version in the one behind its Version entry, shown by the CLI version scenarios. Under it, with nothing between, one table lists the agent's accounts, Work, Default and Client in the saved order, under the headers Account, Usage, Status and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work has reached its limit, so its bar is empty and grey, also where use went past 100%, followed in the same cell by a warning-coloured \"Limit reached\" badge, while its name stays muted with no badge beside it, unlike the rail's usage panel; the default account and Client have neither); a soft success \"Logged in\" badge in the Status cell after it; and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its usage cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once. Choose 560px to see the narrow layout: at 768px and narrower the table is wider than the section, so it scrolls sideways, its columns keeping their widths, the later columns cut at the edge and the ⋮ column pinned at the end with a hairline at its start while there is more beside it; the tab strip, the two switches above it and the tab buttons fit the width, and the scroller is a focusable region while it overflows.",
     state: { ...quotaState, settings: { ...quotaState.settings!, account_order: { claude: ["a-work", null, "a-long"], codex: ["a-codex-auto", "a-codex", "a-codex-user", null] } } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1064,7 +1104,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Codex tab",
-    description: "Codex's tab has the same empty Tags row at the top, then its own Permission approval row, \"Applies to every Codex account\", on Approve for me; the menu also offers Ask for approval and Full access, with Custom (config.toml) using each account's configuration for new sessions and retaining saved native permissions for resumed sessions. Open the selector to see the native summary under every option, including Custom; the closed selector keeps only the chosen label. Open the separate help to see two paragraphs with spacing between them: the first explains when changes take effect and which computer the permissions apply to; the second explains Custom for new and resumed sessions and how choosing another mode replaces saved permissions. Right under it comes the Claude compatibility row, with its \"?\" after the name, the same \"Applies to every Codex account\" line and its switch at the end, on (its default while Claude Code is an added agent), before the accounts table. Codex has no model-specific window: each Usage cell is the two-layer bar, the 5h window over the weekly one. Automation has no plan, so no plan badge, and its 5h window, read as spent 16 minutes ago, reset a minute ago: its top layer is full; Production, further down, is nearly spent: both layers are almost empty. Choose Phone (390px) to see the Permission approval select stretch across its row beneath the label, while the Claude compatibility switch stays beside its text.",
+    description: "Codex's tab holds only its accounts table, right under the tab strip: Codex has no model-specific window, so each Usage cell is the two-layer bar, the 5h window over the weekly one. Automation has no plan, so no plan badge, and its 5h window, read as spent 16 minutes ago, reset a minute ago: its top layer is full; Production, further down, is nearly spent: both layers are almost empty. Codex's own settings are in the dialog behind its ⋮ button, shown by \"Settings: accounts, Codex's agent settings\".",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1077,11 +1117,10 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, an agent's tags and the suggestions",
-    description: "Codex's tab with its Tags row at the top, above Permission approval: the label Tags with a help button beside it, \"Applies to every Codex account\" under it and the field below holding the tags review and tests as removable chips ahead of the input, with the suggestions button at its end. The suggestions list is open under the field and offers the tags the other added agents carry (frontend, backend and research), not the two already picked. Pick one or type a new tag and press Enter to save it at once; remove a chip to save the shorter list. The other tabs show the same row with their own tags, or the \"No tags\" placeholder when they have none.",
+    description: "Codex's Agent settings with its Tags row first, above the Permission approval row: the label Tags with a help button beside it, \"Applies to every Codex account\" under it and the field below holding the tags review and tests as removable chips ahead of the input, with the suggestions button at its end. The suggestions list is open under the field and offers the tags the other added agents carry (frontend, backend and research), not the two already picked. Pick one or type a new tag and press Enter to save it at once; remove a chip to save the shorter list. The other agents' settings show the same row with their own tags, or the \"No tags\" placeholder when they have none.",
     state: taggedState,
     steps: [
-      ...openAccounts,
-      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
+      ...agentSettings("codex"),
       (ui) => ui.press(ui.t("dialog.project.tagsSuggestions")),
     ],
   },
@@ -1093,17 +1132,70 @@ export const settingsScenarios: Scenario[] = [
     description: "The help button beside Tags is touched with a finger. Its popover explains that tags describe the tasks an agent is good at, such as code review or UI development, so other sessions can use them when choosing an agent. The explanation stays beside the Tags label above the field; the same help popover presents the other settings' explanations.",
     state: taggedState,
     steps: [
-      ...openAccounts,
-      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
+      ...agentSettings("codex"),
       (ui) => ui.touchPress(ui.t("settings.accounts.tags.helpLabel")),
     ],
+  },
+  {
+    id: "settings-accounts-agent-version",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, Claude Code's agent version",
+    description: "The Version entry of the ⋮ button on Claude Code's tab opens a modal titled \"Agent version\" with a close button in its header and no footer button; the tab behind it holds only the accounts table. The body's first line is Claude Code's icon and its name in bold. Under it the one Version row: its label with a help button (\"About updating\"), \"Version 2.1.319 is installed and up to date.\" with \"Installed with its own installer.\" under it in smaller text, and nothing at its end, since there is nothing to update.",
+    state: quotaState,
+    steps: agentVersion("claude"),
+  },
+  {
+    id: "settings-accounts-cli-checking",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, CLI version still being checked",
+    description: "Claude Code's Agent version dialog, opened from the Version entry of its ⋮ menu, before the daemon has reported any CLI version: under the agent's icon and name the Version row has its label and help button, and says only \"Checking the version…\" in the same size as any description, with no install line and no button at its end.",
+    state: { ...quotaState, agentCliStatuses: new Map() },
+    steps: agentVersion("claude"),
+  },
+  {
+    id: "settings-accounts-cli-update-available",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, a newer CLI version to update to",
+    description: "Claude Code's CLI, installed with npm, has a newer version out. In its Agent version dialog (the Version entry of its ⋮ menu; the dialog has a close button and no footer, and under the agent's icon and name holds only this row) the row says \"Version 2.1.319 is installed. Version 2.1.320 is available.\" with \"Installed with npm.\" under it in smaller text, and a filled primary Update button at its end. Other install methods change only that line (\"Installed with Homebrew.\", \"Installed with its own installer.\").",
+    state: withCliStatus(quotaState, OUTDATED_CLI),
+    steps: agentVersion("claude", true),
+  },
+  {
+    id: "settings-accounts-cli-updating",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, CLI update running",
+    description: "An update of Claude Code's CLI is already running, started here or in another window: the Version row of its Agent version dialog says \"Updating…\" in place of the versions, keeps \"Installed with npm.\" under it, and its Update button is pending (a spinner, not pressable). Running sessions are not touched.",
+    state: withCliStatus(quotaState, { ...OUTDATED_CLI, update: agentCliUpdateOf() }),
+    steps: agentVersion("claude", true),
+  },
+  {
+    id: "settings-accounts-cli-update-tab-mark",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, a CLI update marked on the tab's actions button",
+    description: "Claude Code's CLI has a newer version out, and its ⋮ button, named \"Actions for Claude Code, update available\", is open. A small accent badge sits on the corner of the button, beside the top of its glyph, not covering the three dots (the top right corner, the top left under a right-to-left language), and the button's tooltip reads \"More actions (update available)\"; the menu's Version entry ends in a small accent dot followed by the installed version, 2.1.319, in muted small text (screen readers get \"2.1.319, update available\"). The tab itself has no mark, and the other tabs' buttons, whose CLIs are current, have no badge. The tab's right-click menu has the same entry. An agent that is not installed has no Version entry and shows its not-installed mark on the tab instead.",
+    state: withCliStatus(quotaState, OUTDATED_CLI),
+    steps: [...openAccounts, pressAgentActions("claude", true)],
+  },
+  {
+    id: "settings-accounts-cli-unknown-install",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, CLI installed in a way that cannot be told",
+    description: "Claude Code's CLI lies where no installer of it is recognised, so the Version row of its Agent version dialog says \"Version 2.1.319 is installed.\" with a visible second line in smaller text in the place of the install method, \"Octoboard cannot tell how this was installed. Update it the way you installed it.\", and no Update button. The mouse rests on the help button \"About updating\", whose popover has only the one paragraph: that updating does not stop running sessions, which keep the version they started with while new sessions use the new one.",
+    state: withCliStatus(quotaState, agentCliStatusOf("claude", { install_method: "unknown", latest_version: null })),
+    steps: [...agentVersion("claude"), (ui) => ui.hoverStatusMark(ui.t("settings.accounts.cli.helpLabel"))],
   },
   {
     id: "settings-accounts-grok",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Grok Build tab",
-    description: "Grok Build's tab starts with the empty Tags row, then Permission approval for every Grok Build account, initially following account configuration. Open its selector to see Ask, Auto and Always-approve with short explanations under each option; the closed selector shows only its chosen label. The help button opens two spaced paragraphs explaining when changes apply and which computer permissions apply to, native configuration and resume rules when no mode is specified, and the fallback to Ask when Auto is unavailable. Choosing Always-approve opens its confirmation before saving. The Claude compatibility row follows, with its switch on (its default), and directly under it the table, with its one default account, a single weekly layer in its Usage cell and the columns Account, Usage, Status and Disable. Choose Phone (390px) to check the permission selector and wrapped option descriptions within the narrow layout.",
+    description: "Grok Build's tab holds only its accounts table, right under the tab strip, with its one default account, a single weekly layer in its Usage cell and the columns Account, Usage, Status and Disable. Its settings (Tags, Permission approval with Ask, Auto and Always-approve, Claude compatibility) are in the dialog behind its ⋮ button, laid out as Codex's, and its version in the dialog behind that button's Version entry.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1116,13 +1208,22 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, a provider this build has no presentation for",
-    description: "The daemon serves a fourth provider the UI knows nothing of. Its tab, the last, is named Acme Agent as the daemon calls it, and carries the generic mark in the neutral colour where the others carry their provider marks. Its tab is open: it declares one setting this build has no words for, which has no row, so under the Tags row there is no Permission approval or Claude compatibility row either, only the table of its default account and Studio, whose usage bars are in the neutral foreground, not a provider's blue or orange.",
+    description: "The daemon serves a fourth provider the UI knows nothing of. Its tab, the last, is named Acme Agent as the daemon calls it, and carries the generic mark in the neutral colour where the others carry their provider marks. Its tab is open and holds only the table of its default account and Studio, whose usage bars are in the neutral foreground, not a provider's blue or orange.",
     state: unpresentedState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
       (ui) => ui.press(UNPRESENTED_PROVIDER.label),
     ],
+  },
+  {
+    id: "settings-accounts-agent-settings-without-presentation",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, agent settings of a provider this build has no presentation for",
+    description: "The Agent settings of the fourth provider the UI knows nothing of: the first line of the body is the generic mark in the neutral colour and the name Acme Agent as the daemon calls it. The provider declares one setting this build has no words for, which has no row, so the dialog holds only the Tags row, with no Permission approval or Claude compatibility row.",
+    state: unpresentedState,
+    steps: [...openAccounts, (ui) => ui.press(UNPRESENTED_PROVIDER.label), openAgentSettings(UNPRESENTED_PROVIDER.id)],
   },
   {
     id: "settings-accounts-claude-compatibility-help-codex",
@@ -1132,9 +1233,7 @@ export const settingsScenarios: Scenario[] = [
     description: "The help button beside the Claude compatibility label is touched with a finger. Its popover says what the switch does for this agent and that a change takes effect when a session next starts or resumes; the agent's name, Claude Code, CLAUDE.md and Octoboard are chips, and a chip may wrap across lines. Grok Build's tab words it for its agent in the same popover.",
     state: quotaState,
     steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
+      ...agentSettings("codex"),
       (ui) => ui.touchPress(ui.t("provider.codex.setting.claude_compatibility.helpLabel")),
     ],
   },
@@ -1179,7 +1278,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, agent tab menu open",
-    description: "The menu a right-click on the Codex tab opens (the Menu key or Shift+F10 on a focused tab does the same): Move earlier and Move later, both available for the middle tab, and Remove agent in the danger tone after a separator. The same entries are behind the tab's own ⋮ button, in the scenario after this one.",
+    description: "The menu a right-click on the Codex tab opens (the Menu key or Shift+F10 on a focused tab does the same): Settings first, with the icon the account menus' Settings entry has, then Version, with the installed version, 2.1.319, in muted small text at its end and no dot since Codex is up to date, after a separator Move earlier and Move later, both available for the middle tab, and after another separator Remove agent in the danger tone. The same entries are behind the tab's own ⋮ button, in the scenario after this one.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1192,12 +1291,30 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, tab actions button menu open",
-    description: "The ⋮ button at the end of Grok Build's tab, named \"Actions for Grok Build\", is open: Move earlier, Move later disabled because Grok Build is the last tab, and Remove agent in the danger tone. Every tab has its own button, so no tab needs to be selected first.",
+    description: "The ⋮ button at the end of Grok Build's tab, named \"Actions for Grok Build\", is open: Settings and Version, the latter with the installed version in muted small text at its end, after a separator Move earlier and Move later, disabled because Grok Build is the last tab, and after another separator Remove agent in the danger tone. Every tab has its own button, so no tab needs to be selected first.",
     state: quotaState,
     steps: [
       ...openAccounts,
       (ui) => ui.press(ui.t("settings.accounts.agentActions", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "grok") })),
     ],
+  },
+  {
+    id: "settings-accounts-agent-settings",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, Claude Code's agent settings",
+    description: "The Settings entry of the ⋮ button on Claude Code's tab opens a modal titled \"Agent settings\" with a close button in its header and no footer button; the tab behind it holds only the accounts table. The body's first line is Claude Code's icon and its name in bold. Under it the Tags row comes first: its label with a help button, \"Applies to every Claude Code account\" under it and the tag field below, empty here, showing the \"No tags\" placeholder and the suggestions button at its end. Then one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Auto; its menu also offers Manual, Accept edits, Plan and Bypass permissions. Open it to see the native summary under each permission mode and an explanation under Follow account configuration; these notes wrap within the menu while the closed selector shows only its chosen label. Open the separate help to see two spaced paragraphs: the first explains when changes take effect and which computer the permissions apply to; the second explains native configuration and resume rules when no mode is specified, and that choosing a mode takes precedence over a saved mode. There is no Claude compatibility row, which only the other agents' settings have. Choose Phone (390px) to see the Permission approval select stretch across its row beneath the label.",
+    state: quotaState,
+    steps: agentSettings("claude"),
+  },
+  {
+    id: "settings-accounts-agent-settings-codex",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, Codex's agent settings",
+    description: "Codex's Agent settings, laid out as Claude Code's with one row more. The empty Tags row is first, then its own Permission approval row, \"Applies to every Codex account\", on Approve for me; the menu also offers Ask for approval and Full access, with Custom (config.toml) using each account's configuration for new sessions and retaining saved native permissions for resumed sessions. Open the selector to see the native summary under every option, including Custom; the closed selector keeps only the chosen label. Open the separate help to see two paragraphs with spacing between them: the first explains when changes take effect and which computer the permissions apply to; the second explains Custom for new and resumed sessions and how choosing another mode replaces saved permissions. Last comes the Claude compatibility row, with its \"?\" after the name, the same \"Applies to every Codex account\" line and its switch at the end, on (its default while Claude Code is an added agent). Grok Build's settings have the same four rows with Ask, Auto and Always-approve for the approval choices. Choose Phone (390px) to see the Permission approval select stretch across its row beneath the label, while the Claude compatibility switch stays beside its text.",
+    state: quotaState,
+    steps: agentSettings("codex"),
   },
   {
     id: "settings-accounts-agent-remove",
@@ -1474,7 +1591,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Bypass permissions confirmation",
-    description: "Choosing Bypass permissions in the Permission approval row opens a warning modal instead of saving: a warning icon, the choice as the title question, a body saying tools can change or delete files without a routine permission prompt in the sessions of every Claude Code account (the agent's name as a chip), while explicit permission rules and built-in safeguards still apply, and the danger-coloured button repeating the choice. Cancelling leaves the row on Auto.",
+    description: "Choosing Bypass permissions in the Permission approval row of Claude Code's Agent settings opens a warning modal over them instead of saving: a warning icon, the choice as the title question, a body saying tools can change or delete files without a routine permission prompt in the sessions of every Claude Code account (the agent's name as a chip), while explicit permission rules and built-in safeguards still apply, and the danger-coloured button repeating the choice. Cancelling leaves the row on Auto.",
     state: quotaState,
     steps: bypassSteps,
   },
@@ -1566,12 +1683,11 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Permission approval could not be saved",
-    description: "The error alert is titled \"Could not save the permission approval\" and opens with the sentence \"Octoboard could not read or write its own data.\", then the remedy for the application's data folder (check that it is writable and its disk available, grant access in system privacy settings if needed, then retry; no suggestion to choose another folder); SQLite's text, \"attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY\", is only in the Error details disclosure, closed here. Codex's Permission approval row keeps Custom (config.toml) behind the alert; acknowledging the error leaves that saved selection intact. Bypass permissions refused for the same reason gets the same alert over its confirmation dialog, which stays open; Claude compatibility refused the same way has its own title, \"Could not save Claude compatibility\", and leaves its switch available again.",
+    description: "The error alert is titled \"Could not save the permission approval\" and opens with the sentence \"Octoboard could not read or write its own data.\", then the remedy for the application's data folder (check that it is writable and its disk available, grant access in system privacy settings if needed, then retry; no suggestion to choose another folder); SQLite's text, \"attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY\", is only in the Error details disclosure, closed here. Codex's Permission approval row, in its Agent settings, keeps Custom (config.toml) behind the alert; acknowledging the error leaves that saved selection intact. Bypass permissions refused for the same reason gets the same alert over its confirmation dialog, which stays open; Claude compatibility refused the same way has its own title, \"Could not save Claude compatibility\", and leaves its switch available again.",
     state: approvalState,
     accountApprovalError: { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" },
     steps: [
-      ...openAccounts,
-      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
+      ...agentSettings("codex"),
       (ui) => ui.press(ui.t("provider.codex.setting.approval_reviewer.label", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "codex") })),
       (ui) => ui.press(approvalOption(ui.t("provider.codex.setting.approval_reviewer.choice.auto_review"))),
     ],
@@ -1581,15 +1697,80 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Agent tags could not be saved",
-    description: "A tag was picked from the suggestions on Codex's tab and the save was refused: an error alert titled \"Could not save the tags\" opens with the same sentence and remedy for the application's data folder, and SQLite's text is in the Error details disclosure, closed here. Behind it the Tags row shows the stored tags again, review and tests, without the tag that was picked.",
+    description: "A tag was picked from the suggestions in Codex's Agent settings and the save was refused: an error alert titled \"Could not save the tags\" opens with the same sentence and remedy for the application's data folder, and SQLite's text is in the Error details disclosure, closed here. Behind it the Tags row shows the stored tags again, review and tests, without the tag that was picked.",
     state: taggedState,
     agentTagsError: { code: "store_write_failed", params: { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" }, message: "Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" },
     steps: [
-      ...openAccounts,
-      (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")),
+      ...agentSettings("codex"),
       (ui) => ui.press(ui.t("dialog.project.tagsSuggestions")),
       (ui) => ui.press("frontend"),
     ],
+  },
+  {
+    id: "settings-accounts-cli-latest-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Settings: accounts, the latest CLI version could not be looked up",
+    description: "The lookup of Claude Code's latest version failed, which blocks nothing: in its Agent version dialog the Version row says \"Version 2.1.319 is installed.\" with \"Installed with npm.\" under it and, at its end, a warning mark before a plain secondary Update button (the version being current is not known). No alert is raised. The mouse rests on the mark, so its popover is open: \"The latest version could not be looked up.\" with the network error under it as raw text.",
+    state: withCliStatus(quotaState, agentCliStatusOf("claude", { install_method: "npm", latest_version: null, latest_error: "agent_cli_latest_failed", latest_detail: "getaddrinfo ENOTFOUND registry.npmjs.org" })),
+    steps: [...agentVersion("claude"), (ui) => ui.hoverStatusMark(ui.t("daemon.agent_cli_latest_failed"))],
+  },
+  {
+    id: "settings-accounts-cli-update-timed-out",
+    group: GROUP,
+    category: "exceptional",
+    title: "Settings: accounts, an update that did not finish, found in the row",
+    description: "An earlier update of Claude Code's CLI, run in another window or before its Agent version dialog was opened, was stopped after ten minutes. The row is as it was before the update (\"Version 2.1.319 is installed. Version 2.1.320 is available.\", \"Installed with npm.\", a primary Update button) with a warning mark before the button; no alert is raised. The mouse rests on the mark, so its popover is open and says that updating Claude Code (the name as a chip) did not finish within ten minutes and was stopped, and that the install may be partly updated, without a remedy line. The mark stays until the CLI is current or the next update starts.",
+    state: withCliStatus(quotaState, { ...OUTDATED_CLI, update: agentCliUpdateOf({ state: "failed", started_at: minutesAgo(11), finished_at: minutesAgo(1), error: "agent_cli_update_timed_out" }) }),
+    steps: [...agentVersion("claude", true), (ui) => ui.hoverStatusMark(ui.t("daemon.agent_cli_update_timed_out.summary", { agent: "Claude Code" }))],
+  },
+  {
+    id: "settings-accounts-cli-problems-combined",
+    group: GROUP,
+    category: "exceptional",
+    title: "Settings: accounts, the latest CLI version lookup and the last update both failed",
+    description: "Both things went wrong for Claude Code's CLI, found in the row when its Agent version dialog opened: one warning mark, not two, sits before a plain secondary Update button (the version being current is not known), under \"Version 2.1.319 is installed.\" and \"Installed with npm.\". The mouse rests on the mark, so its one popover is open and lists both reasons, each with its own text under it: that the latest version could not be looked up, with the network error as raw text, and that updating Claude Code (the name as a chip) failed, with the line npm printed, and neither reason has a remedy line. No alert is raised.",
+    state: withCliStatus(quotaState, agentCliStatusOf("claude", {
+      install_method: "npm",
+      latest_version: null,
+      latest_error: "agent_cli_latest_failed",
+      latest_detail: "getaddrinfo ENOTFOUND registry.npmjs.org",
+      update: agentCliUpdateOf({ state: "failed", started_at: minutesAgo(4), finished_at: minutesAgo(3), error: "agent_cli_update_failed", detail: CLI_UPDATE_DETAIL }),
+    })),
+    steps: [
+      ...agentVersion("claude"),
+      (ui) => ui.hoverStatusMark([ui.t("daemon.agent_cli_latest_failed"), ui.t("daemon.agent_cli_update_failed.summary", { agent: "Claude Code" })].join(ui.t("common.sentenceSeparator"))),
+    ],
+  },
+  {
+    id: "settings-accounts-cli-update-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Settings: accounts, CLI update failed",
+    description: "Update was pressed on the Version row of Claude Code's Agent version dialog and the command failed: an error alert titled \"Could not update the agent\" says \"Updating Claude Code failed.\" and, as a line of its own, \"Fix the problem shown in the details, or update it the way you installed it.\", with the line npm printed (a permission error on its global folder) in the Error details disclosure, open here. Behind it the row is as it was, now with a warning mark before its Update button.",
+    state: withCliStatus(quotaState, OUTDATED_CLI),
+    agentCliUpdateFailure: { error: "agent_cli_update_failed", detail: CLI_UPDATE_DETAIL },
+    steps: [...agentVersion("claude", true), (ui) => ui.press(ui.t("settings.accounts.cli.update")), (ui) => ui.press(ui.t("error.diagnostics"))],
+  },
+  {
+    id: "settings-accounts-cli-update-failed-timed-out",
+    group: GROUP,
+    category: "exceptional",
+    title: "Settings: accounts, CLI update did not finish",
+    description: "Update was pressed on the Version row of Claude Code's Agent version dialog and the command was stopped after ten minutes: an error alert titled \"Could not update the agent\" says that updating Claude Code (the name as a chip) did not finish within ten minutes and was stopped and that the install may be partly updated, then, as a line of its own, \"Check the install, then try again.\" It has no Error details, since the command printed nothing to show. Behind it the row is as it was, now with a warning mark before its Update button.",
+    state: withCliStatus(quotaState, OUTDATED_CLI),
+    agentCliUpdateFailure: { error: "agent_cli_update_timed_out", detail: null },
+    steps: [...agentVersion("claude", true), (ui) => ui.press(ui.t("settings.accounts.cli.update")), (ui) => ui.wait(600)],
+  },
+  {
+    id: "settings-accounts-cli-update-refused",
+    group: GROUP,
+    category: "exceptional",
+    title: "Settings: accounts, CLI update refused",
+    description: "Update was pressed on the Version row of Claude Code's Agent version dialog, but the daemon found that the npm that installed it is no longer on its PATH: an error alert titled \"Could not update the agent\" says Octoboard cannot update Claude Code, that either it was not installed in a way that can be recognised or the npm it was installed with is not available, and to update it the way it was installed, with no Error details and no remedy. The row behind it is unchanged and its Update button is available again.",
+    state: withCliStatus(quotaState, OUTDATED_CLI),
+    agentCliUpdateError: { code: "agent_cli_update_unsupported", params: { agent: "Claude Code" }, message: "Claude Code cannot be updated: no command is known to update it" },
+    steps: [...agentVersion("claude", true), (ui) => ui.press(ui.t("settings.accounts.cli.update")), (ui) => ui.wait(600)],
   },
   {
     id: "settings-accounts-sharing-failed",
@@ -1677,7 +1858,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Settings: accounts, Codex not installed",
-    description: "The Codex tab is selected and carries a warning icon after its name; its Permission approval row is there as usual. Neither the default account nor Personal has a plan, a status or a usage reading: their Usage cells are dashes and their Status cells empty.",
+    description: "The Codex tab is selected and carries a warning icon after its name. Neither the default account nor Personal has a plan, a status or a usage reading: their Usage cells are dashes and their Status cells empty.",
     state: unavailableQuotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1700,6 +1881,15 @@ export const settingsScenarios: Scenario[] = [
         ui.t("settings.accounts.notInstalledTip", { agent: providerLabel(ui.t, FIXTURE_PROVIDERS, "codex"), pathVar: "PATH" }),
       ),
     ],
+  },
+  {
+    id: "settings-accounts-agent-more-menu-not-installed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Settings: accounts, actions menu of an agent that is not installed",
+    description: "The ⋮ button at the end of Codex's tab, which carries the not-installed warning mark, is open: Settings, then no Version entry since there is no CLI to read, and after a separator Move earlier, Move later and, after another separator, Remove agent. Its Agent settings dialog is laid out as an installed agent's.",
+    state: unavailableQuotaState,
+    steps: [...openAccounts, pressAgentActions("codex")],
   },
   {
     id: "settings-account-add-directory",

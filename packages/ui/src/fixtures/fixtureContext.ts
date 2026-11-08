@@ -8,6 +8,7 @@ import { type Event, type Launch, type LaunchChange, type PerAgent, type ClientR
 import { createStateStore } from "../store";
 import type { Fixture } from "./fixture";
 import { createGitReplies } from "./fixtureGit";
+import { defaultAgentCliStatuses } from "./fixtureAgentClis";
 import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, availabilityOf } from "./fixtureProviders";
 import type { FixtureError, FixtureFiles } from "./sampleFiles";
 import { SAMPLE_GIT } from "./sampleGit";
@@ -97,7 +98,9 @@ export interface FixtureContext {
 }
 
 export function createFixtureContext(scenario: Fixture): FixtureContext {
-  const store = createStateStore({ providers: FIXTURE_PROVIDERS, agentAvailability: availabilityOf(FIXTURE_PROVIDERS), ...scenario.state });
+  const agentAvailability = scenario.state?.agentAvailability ?? availabilityOf(FIXTURE_PROVIDERS);
+  // Every installed agent checked and current, unless the scenario holds statuses of its own (an empty map: none checked).
+  const store = createStateStore({ providers: FIXTURE_PROVIDERS, agentAvailability, agentCliStatuses: defaultAgentCliStatuses(agentAvailability), ...scenario.state });
   const fail = ({ code, params, message }: FixtureError): never => {
     throw new CodedError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
   };

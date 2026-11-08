@@ -2,7 +2,7 @@
 // `@heroui/styles`, `react-aria-components` and `react-aria` is exported from here, and application code imports them
 // from here only. The conventions are in this directory's README.md.
 export { Alert, AlertContent, AlertDescription, AlertIndicator, type AlertStatus, AlertTitle } from "./Alert";
-export { Badge, BadgeAnchor } from "./Badge";
+export { Badge, BadgeAnchor, BadgedControl } from "./Badge";
 export { useBusy } from "./busy";
 export { BareButton, Button, type ButtonBlur, type ButtonPress, type ButtonProps, buttonClassName } from "./Button";
 export { Card } from "./Card";

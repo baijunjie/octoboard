@@ -2,7 +2,7 @@ import type { ConnectionState } from "../daemon-client";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { accountKey, loginIsActive } from "../accounts/accountRecords";
 import { sameValue } from "../values/sameValue";
-import { type AccountLogin, type AccountQuota, type AccountSharing, type Event, type Project, type ShellTerminal } from "../protocol";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type Event, type Project, type ShellTerminal } from "../protocol";
 import { CODE } from "../errors/codes";
 import type { State, TrustPrompt } from "./state";
 import { sessionRequestOf, withRequest } from "./sessionRequests";
@@ -12,6 +12,7 @@ export type Action =
   | { kind: "event"; event: Event }
   | { kind: "dismiss_trust_prompt"; session: string }
   | { kind: "track_account_login"; key: string; tracked: boolean }
+  | { kind: "track_agent_cli_update"; agent: Agent; from: number | null | undefined }
   | { kind: "dismiss_account_login"; login: AccountLogin }
   | { kind: "queue_account_switches"; ids: readonly string[]; queued: boolean };
 
@@ -26,6 +27,19 @@ function keepSame<T>(previous: Map<string, T>, records: T[], idOf: (record: T) =
       return [id, held !== undefined && sameValue(held, record) ? held : record];
     }),
   );
+}
+
+/** The CLI updates this window asked for (`cliUpdatesStartedHere`) that a snapshot leaves open: one the status shows
+ * running, and one it shows ended as an update other than the one the status held when the request went out (`from`), so
+ * that its failure still reaches the alert. One with no update in the status, or whose update is still that earlier one,
+ * is dropped: the request never reached the daemon, or its answer was lost with the connection. `asked` itself when none
+ * is dropped. */
+function keepCliUpdatesStillOpen(asked: Map<Agent, number | null>, statuses: AgentCliStatus[]): Map<Agent, number | null> {
+  const open = [...asked].filter(([agent, from]) => {
+    const update = statuses.find((status) => status.agent === agent)?.update;
+    return update !== undefined && update !== null && (update.state === "running" || update.started_at !== from);
+  });
+  return open.length === asked.size ? asked : new Map(open);
 }
 
 /** `quotas` with each entry replaced by the one `previous` already holds for its account when that
@@ -100,6 +114,13 @@ export function reducer(state: State, action: Action): State {
       if (held === action.tracked) return state;
       return { ...state, loginsStartedHere: action.tracked ? [...state.loginsStartedHere, action.key] : state.loginsStartedHere.filter((key) => key !== action.key) };
     }
+    case "track_agent_cli_update": {
+      if (state.cliUpdatesStartedHere.get(action.agent) === action.from) return state;
+      const cliUpdatesStartedHere = new Map(state.cliUpdatesStartedHere);
+      if (action.from === undefined) cliUpdatesStartedHere.delete(action.agent);
+      else cliUpdatesStartedHere.set(action.agent, action.from);
+      return { ...state, cliUpdatesStartedHere };
+    }
     case "dismiss_account_login":
       return state.accountLogins.includes(action.login) ? { ...state, accountLogins: state.accountLogins.filter((held) => held !== action.login) } : state;
     case "queue_account_switches": {
@@ -135,6 +156,8 @@ export function reducer(state: State, action: Action): State {
             settings: keepSameFields(state.settings, event.settings),
             providers: sameValue(state.providers, event.providers) ? state.providers : event.providers,
             agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])),
+            agentCliStatuses: keepSame(state.agentCliStatuses, event.agent_cli_statuses, (s) => s.agent),
+            cliUpdatesStartedHere: keepCliUpdatesStillOpen(state.cliUpdatesStartedHere, event.agent_cli_statuses),
             accountQuotas: keepSameQuotas(state.accountQuotas, event.account_quotas),
             accountLogins: event.account_logins,
             loginsStartedHere: state.loginsStartedHere.filter((key) => event.account_logins.some((login) => accountKey(login.agent, login.account) === key)),
@@ -319,6 +342,12 @@ export function reducer(state: State, action: Action): State {
         }
         case "agent_availability_updated":
           return { ...state, agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])) };
+        case "agent_cli_status_updated": {
+          if (sameValue(state.agentCliStatuses.get(event.status.agent), event.status)) return state;
+          const agentCliStatuses = new Map(state.agentCliStatuses);
+          agentCliStatuses.set(event.status.agent, event.status);
+          return { ...state, agentCliStatuses };
+        }
         case "account_quotas_updated":
           return { ...state, accountQuotas: keepSameQuotas(state.accountQuotas, event.account_quotas) };
         case "account_sharing": {

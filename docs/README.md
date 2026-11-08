@@ -82,6 +82,8 @@ Where to start, by question:
   and what a session shows running.
 - [Agent accounts](product/agent-accounts.md) — Settings' Agent accounts section: added agents, the default account,
   owned accounts, the accounts table and the account details and settings dialogs.
+- [Agent CLI versions and updates](product/agent-cli-updates.md) — when an agent CLI's installed and latest versions
+  are checked, how its install method and update command are told, and how an update the user starts runs and ends.
 - [Per-agent settings](product/per-agent-settings.md) — settings that apply to every account of one agent: the settings
   each provider declares (permission approval modes, Claude compatibility) and agent tags.
 - [Removing an account](product/removing-accounts.md) — what removing an account clears, its confirmation, and the option

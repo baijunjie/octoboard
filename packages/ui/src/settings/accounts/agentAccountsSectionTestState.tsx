@@ -7,7 +7,7 @@ import { vi } from "vitest";
 import { DEFAULT_SETTINGS, type Daemon } from "../../store";
 import { accountOf } from "../../fixtures/builders";
 import { testDaemon } from "../../test/testDaemon";
-import type { Account, AccountLogin, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Event, Project, ClientRequestBody, Session, Settings } from "../../protocol";
+import type { Account, AccountLogin, AccountQuota, AccountSharing, Agent, AgentAvailability, AgentCliStatus, Console, Event, Project, ClientRequestBody, Session, Settings } from "../../protocol";
 
 export const request = vi.fn((_body: ClientRequestBody): Promise<object> => Promise.resolve({}));
 export const showNotice = vi.fn();
@@ -16,6 +16,7 @@ export const accountQuotas: AccountQuota[] = [];
 export const accountLogins: AccountLogin[] = [];
 export const accountSharing = new Map<string, AccountSharing>();
 export const availability = new Map<Agent, AgentAvailability>();
+export const cliStatuses = new Map<Agent, AgentCliStatus>();
 export const consoles = new Map<string, Console>();
 export const projects = new Map<string, Project>();
 export const sessions = new Map<string, Session>();
@@ -24,7 +25,7 @@ export const sessions = new Map<string, Session>();
  * the section opens on by changing that state before it mounts, and changes the store itself afterwards. */
 export const startDaemon = (): Daemon =>
   testDaemon({
-    state: structuredClone({ settings, agentAvailability: availability, accountQuotas, accountLogins, accountSharing, consoles, projects, sessions }),
+    state: structuredClone({ settings, agentAvailability: availability, agentCliStatuses: cliStatuses, accountQuotas, accountLogins, accountSharing, consoles, projects, sessions }),
     request: (body) => request(body) as Promise<Event>,
     showNotice,
   });

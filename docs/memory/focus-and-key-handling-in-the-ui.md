@@ -189,7 +189,9 @@ waits out the restore and acts only on focus left on `<body>` (how the other clo
 
 So such a dialog's close handler names the destination itself — the control that opens the dialog, else a control of
 the outer dialog that is always there, such as its section's tab — and focuses it as `handFocusOnceClosed` in
-`packages/ui/src/settings/accounts/AgentAccountsSection.tsx` does:
+`packages/ui/src/settings/accounts/AgentAccountsSection.tsx` does. Pick the first candidate that passes `canTakeFocus`
+(`[...].find(canTakeFocus)`), never a `??` chain: a stored element whose control has unmounted is detached but not
+null, so the fallback never runs.
 
 - Retry every animation frame, up to a cap, until the target can take focus (`canTakeFocus` in
   `packages/ui/src/components/focus/regionFocus.ts`), rather than focus once a frame later. A close that comes from a passive

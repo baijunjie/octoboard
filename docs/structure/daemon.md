@@ -10,7 +10,8 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 
 Stack (`apps/daemon/Cargo.toml`): tokio, axum 0.7 (HTTP and WebSocket), rusqlite with bundled SQLite, `portable-pty` and
 `alacritty_terminal` (PTYs and the parsed screen), `rmcp` (the MCP server), clap (CLI modes), `notify` (repository ref
-watching), serde. The crate is a member of the root Cargo workspace beside the desktop shell's Tauri crate.
+watching), `ureq` (the daemon's only outbound HTTP client, which reads the npm registry in `src/agents/cli/latest.rs`),
+serde. The crate is a member of the root Cargo workspace beside the desktop shell's Tauri crate.
 
 ## Entry points
 
@@ -115,7 +116,15 @@ and records tests replay.
   titles, turns, sharing status, git status, requests, availability, hooks to the automatic account switch, forgetting
   a record), plus `bindings.rs` (the read-only walks over which session is bound to which) and `refusals.rs` (the
   locked and archived refusals every operation on a session shares).
-- `src/agents/` — what the daemon knows about each agent CLI apart from launching it: availability, `models.rs` (the
+- `src/agents/` — what the daemon knows about each agent CLI apart from launching it: availability (`availability.rs`;
+  `redetermine` judges one agent again after an update changed what its binary resolves to), `cli/` (the installed
+  CLI's version, how it was installed, the latest version published, and its update, described in "Agent CLI versions"
+  of `PROTOCOL.md`: `install.rs` tells the install method from the binary's path and builds the update command from the
+  provider's `CliPackaging`, `latest.rs` reads the latest version, with the npm registry lookup behind the `Registry`
+  seam, through the proxy of the user's shell environment, `mod.rs` holds the statuses (`AgentClis`, in
+  `AppState::agent_clis`; runtime state, never stored) and the check orchestration, `update.rs` runs an update with its
+  output in a file under `paths::agent_cli_updates_dir`, so that an update still running when the daemon ends is not
+  broken by it, and words the failure), `models.rs` (the
   `ModelCatalogue` interface a provider lists its models through, with the cache, the command runner and the checks
   around the lists), launch settings, `json_rpc.rs` (reading JSON-RPC replies, shared by Codex's app server and
   Grok's ACP stdio), `detect.rs` (which agent a project is set up for, from the marker files at its top level).
@@ -274,7 +283,8 @@ and records tests replay.
 - `src/adapter/` — the behavior of each provider behind one trait, `AgentProvider` (its descriptor, the launch plan,
   refusing an account that cannot be launched, the installed version, reading the titles it shows, its hook
   interpreter, its record store, its screen reader, its accounts (`accounts()`, `AccountOps`), its model catalogue
-  (`catalogue()`, `ModelCatalogue`), its status line (`status_line()`, `StatusLine`, defined in `mod.rs`) and what it
+  (`catalogue()`, `ModelCatalogue`), how its CLI is installed and updated (`cli_packaging()`, `CliPackaging`, defined in
+  `mod.rs`, read by `agents/cli/`), its status line (`status_line()`, `StatusLine`, defined in `mod.rs`) and what it
   offers a provider made compatible with it (`compatibility_source()`, `CompatibilitySource`, defined in `mod.rs`: the
   MCP servers and the instructions to read the rest of its configuration; `compatibility_source_of` resolves which
   source a provider's switches select)), registered by
@@ -458,7 +468,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Read an agent's record | `src/records/line_file.rs`, the bounded line reader (also what record watches use) |
 | Tell directories apart; move to Trash | `src/hostfs/identity.rs` (device and inode); `hostfs::trash::move_to_trash` under `src/removal_safety/`'s rules; account directories by `hostfs::dir_key` |
 | List every process id | `platform::proc_table::pids::all` (only `platform::proc::crash` keeps its own listing, which must not allocate) |
-| Run a spawned process within bounds | `src/processes/subprocess.rs` (`run_bounded`, `run_exchange`, `Bounds`) |
+| Run a spawned process within bounds | `src/processes/subprocess.rs` (`run_bounded`, `run_exchange`, `Bounds`; `run_to_file` for a command that is to outlive the daemon, its output going to a file rather than a pipe) |
 | Lead a session, signal a process or a group, sweep a session; wait for the host's request to end the daemon, watch the application's process; tell a launch's processes apart (`Containment`) and stop or kill a child (`ChildHandle`) | `platform::proc` |
 | Start a process on a terminal; write the daemon's own paste or key into one | `platform::term` (`spawn`, `Pty::write_input` with `Input`); the lifecycle around it is `terminal::pty::PtyCore` |
 | Run an agent's CLI as an account for a short query | `src/adapter/account_cli.rs`: `query` (admits the run, held to `Bounds::agent_query`), `AdmittedCommand::run`, and `run_query` only where the account's directory is already held (a sign-in); `last_stderr_line` words a failure |
@@ -473,7 +483,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Codex's app-server handshake; reading a JSON-RPC reply | `src/adapter/codex/app_server.rs`; `src/agents/json_rpc.rs` |
 | Codex's thread state database (its location, repointing rows, carrying or forgetting threads) | `src/adapter/codex/threads.rs` (through `ThreadRegistry`, `src/accounts/thread_registry.rs`) |
 | Look up a known record or fail with its `unknown_*` error | `Store::require_project`, `require_console`, `require_account`, `require_session` |
-| Whether an agent is on the added list (every agent is while the list is undecided) | `Store::agent_is_added` (`src/store/agents.rs`) |
+| Whether an agent is on the added list (every agent is while the list is undecided) | `Store::agent_is_added` (`src/store/agents.rs`); refusing a request for an agent that is not: `refuse_unless_agent_added` (opening a session) and `refuse_unless_agent_added_to` (any other purpose), `src/accounts/choice/refusals.rs` |
 | Clean a project's or an agent's tag list before storing it | `normalise_tags` (`src/coordinator/validate.rs`) |
 | Word what became of a delivery | `Delivery::note` (`src/messaging/delivery.rs`) |
 | Word a notice to an owner, or a session's role after its parent changed | `src/messaging/owner_notices.rs` (`tell_owner_*`, `parent_changed_notice`, `new_owner_notice`, `transferred_to_you`, `transferred_to_owner`, `first_report_on_bind`, `role_after_owner_change`, `duties_under_new_parent`) |
@@ -497,7 +507,8 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Store free text trimmed, blank as unset | `text::trimmed_or_none` |
 | Read the clock; format a timestamp | `src/time.rs` (`now_millis`, `now_secs`, the RFC 3339, compact and readable stamps) |
 | Poll a condition, or wait for a session's output to go quiet | `src/session/wait.rs` (`wait_for`, `wait_quiet`) |
-| Resolve the user's shell environment and binaries | `src/env_shell/` (`resolve_binary`) |
+| Resolve the user's shell environment and binaries | `src/env_shell/` (`resolve_binary`; `capture_failed` words the refusal of a request that needed the environment and could not take it) |
+| How a provider's CLI is installed and updated; the installed and latest version of a CLI, and its update | `AgentProvider::cli_packaging` (`CliPackaging`, `src/adapter/mod.rs`), read only by `src/agents/cli/` |
 | Name a failure or notice on the wire | `Code` in `src/protocol/codes.rs`; failure to `error` reply through `src/protocol/errors.rs` |
 
 The wire contract with the UI is held by two checks: `protocol::bindings` (the generated TypeScript must match the Rust

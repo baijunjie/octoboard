@@ -133,14 +133,7 @@ pub(crate) async fn use_reset_credit(
     let named = credit_id.clone();
     let shell_for_reading = shell.clone();
     let outcome = tokio::task::spawn_blocking(move || {
-        let shell_env = shell().map_err(|err| {
-            let detail = format!("{err:#}");
-            CodedError::raised(
-                error_code::SHELL_ENVIRONMENT_TIMEOUT,
-                format!("The shell environment could not be captured: {detail}"),
-                &[("detail", &detail)],
-            )
-        })?;
+        let shell_env = shell().map_err(crate::env_shell::capture_failed)?;
         Ok::<_, anyhow::Error>(credits.consume(
             &shell_env,
             dir.as_deref().map(Path::new),

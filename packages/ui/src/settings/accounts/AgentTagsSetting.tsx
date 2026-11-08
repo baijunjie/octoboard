@@ -13,7 +13,7 @@ import { useDaemon, useDaemonStore, useProviders } from "../../store";
 import { sameValue } from "../../values/sameValue";
 import { SettingRow } from "../SettingRow";
 
-/** An agent's Tags row, at the top of its tab: free-form labels saying what the agent is good for,
+/** An agent's Tags row, the first of its settings dialog: free-form labels saying what the agent is good for,
  * which apply to every account of the agent (see "Agent tags" in
  * `docs/product/per-agent-settings.md`). The tags offered are those the added agents carry (every
  * agent while the list is undecided); there is no registry of them. Saved on every change as the

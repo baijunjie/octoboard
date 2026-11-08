@@ -209,6 +209,20 @@ impl AgentProvider for CodexProvider {
         &records::CodexRecords
     }
 
+    /// The standalone install is what Codex's own installer leaves under `~/.codex/packages`; the
+    /// package is `@openai/codex`, and Homebrew has a formula and a cask, both named `codex`.
+    /// `codex update` updates a standalone install.
+    fn cli_packaging(&self) -> &'static super::CliPackaging {
+        &super::CliPackaging {
+            native_layouts: &[&[".codex", "packages", "standalone"]],
+            native_update: &["update"],
+            native_latest: None,
+            npm_package: Some("@openai/codex"),
+            homebrew_formula: Some("codex"),
+            homebrew_cask: Some("codex"),
+        }
+    }
+
     fn native_binary(&self, binary: &ResolvedBinary) -> anyhow::Result<Option<ResolvedBinary>> {
         native_binary::of(binary)
     }

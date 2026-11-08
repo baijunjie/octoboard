@@ -399,6 +399,16 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::CheckAgentClis { agent } => {
+            crate::agents::cli::check_requested(state, agent);
+            Ok(None)
+        }
+
+        RequestBody::UpdateAgentCli { agent } => {
+            crate::agents::cli::update_requested(state, agent).await?;
+            Ok(None)
+        }
+
         RequestBody::StartAccountLogin { agent, account } => {
             start_account_login(state, agent, account).await?;
             Ok(None)

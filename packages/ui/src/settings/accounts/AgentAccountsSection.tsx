@@ -1,4 +1,4 @@
-import { ArrowUp, ArrowDown, Bot, Info, LogIn, Pencil, Settings, Trash2, UserPlus, type LucideIcon } from "lucide-react";
+import { ArrowUp, ArrowDown, Bot, Info, LogIn, Pencil, Settings2, Trash2, UserPlus, type LucideIcon } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
 
 import { defaultAccountName, isAgentUnavailable } from "../../agents/agents";
@@ -7,7 +7,7 @@ import { ICON_TRIGGER_CLASS } from "../../components/controls/iconTrigger";
 import { takeMenuFocusToRestore } from "../../components/focus/menuFocus";
 import type { ActionMenuEntry } from "../../components/menus/menuEntries";
 import { Button, TabPanel, Tabs } from "../../primitives";
-import { AgentTabList } from "../../components/tabs/AgentTabList";
+import { AgentTabList, tabActionsTrigger } from "../../components/tabs/AgentTabList";
 import { EmptyPanel } from "../../components/panel/EmptyPanel";
 import { TitledControl } from "../../components/hint/TitledControl";
 import { PATH_VAR_PARAMS } from "../../components/text/literalParams";
@@ -27,12 +27,13 @@ import type { ReturnLoginFocus } from "./AccountLoginButton";
 import { AccountLoginDialog } from "./AccountLoginDialog";
 import { AccountsTable, AccountTableRow, rowActionsTrigger } from "./AccountsTable";
 import { AddAgentDialog } from "./AddAgentDialog";
-import { AgentProviderSettings } from "./AgentProviderSettings";
-import { AgentTagsSetting } from "./AgentTagsSetting";
+import { AgentSettingsDialog } from "./AgentSettingsDialog";
+import { AgentVersionDialog } from "./AgentVersionDialog";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { RemoveAccountDialog } from "./RemoveAccountDialog";
-import { AgentTabActions, AgentTabMenu } from "./AgentMenus";
+import { AgentTabActions, AgentTabMenu, type AgentVersionEntry } from "./AgentMenus";
 import { RemoveAgentDialog } from "./RemoveAgentDialog";
+import { hasCliUpdate } from "./cliVersion";
 import { useAgentList } from "./useAgentList";
 import { useAccountOrder } from "./useAccountOrder";
 import { DaemonSwitchSetting } from "../DaemonSwitchSetting";
@@ -58,14 +59,15 @@ const MAX_FRAMES_TO_WAIT_FOR_CLOSE = 30;
  * `MAX_FRAMES_TO_WAIT_FOR_CLOSE`. Coming as the dialog goes, it runs ahead of React Aria's restore, which then finds
  * focus off `<body>` and leaves it; but a dialog that a menu item opened gives focus back where that menu chose a turn
  * after it unmounts, which would undo the move, so the move is made again after that if focus has left the target. The
- * user did not aim focus there, so the destination shows its ring. Returns what drops it while it still waits; the
- * second try after it lands still runs, and does nothing once the target has left the document.
+ * user did not aim focus there, so by default the destination shows its ring; with `ring` false the move is a restore of
+ * what the user opened the dialog from, and the ring follows the input that closed it. Returns what drops it while it
+ * still waits; the second try after it lands still runs, and does nothing once the target has left the document.
  */
-function handFocusOnceClosed(find: () => HTMLElement | null | undefined): () => void {
+function handFocusOnceClosed(find: () => HTMLElement | null | undefined, { ring = true } = {}): () => void {
   return tryEachFrame(() => {
     const target = find();
     if (!canTakeFocus(target)) return false;
-    ringForAutomaticFocus();
+    if (ring) ringForAutomaticFocus();
     target.focus();
     setTimeout(() => {
       if (document.activeElement !== target && canTakeFocus(target)) target.focus();
@@ -87,10 +89,13 @@ function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; 
 }
 
 /** Every added agent's accounts, with one tab for each in the order of the list (the first agent's
- * open). A tab holds the agent's Tags row and the rows of the settings its descriptor declares, which
- * apply to all its accounts, and a table with the agent's accounts in their saved order, each a row
+ * open). A tab holds a table with the agent's accounts in their saved order, each a row
  * (name, plan and email, usage, status, the Disable switch) with an actions menu whose first
- * entries open the account's details and its settings, each in a modal. The section also has the
+ * entries open the account's details and its settings, each in a modal. The agent's own settings, which apply to all
+ * its accounts (Tags and the rows its descriptor declares), are in a modal opened by the Settings entry of the
+ * tab's actions menu, and the version of its CLI, with the update, is in another opened by the Version entry (none for
+ * an agent that is not installed); while an update is available the tab's actions button carries a badge and the
+ * entry says so. The section also has the
  * means to add, edit and remove the accounts the user owns, to rename the default account, and to
  * add, remove and reorder the agents (see `docs/product/agent-accounts.md`, and
  * `docs/product/removing-accounts.md` for removal); a new account starts on the agent of the tab in
@@ -101,7 +106,7 @@ function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; 
  * agent is shown, and the agents cannot be removed or reordered yet. The default account is not a
  * record: it is the state of pinning nothing, so it is shown from the agent's availability and can
  * be renamed but not edited or removed. Opening the section asks the daemon to refresh the quotas
- * that are due, those of every agent and not only of the tab in view. */
+ * that are due, those of every agent and not only of the tab in view, and to check the versions of their CLIs. */
 export function AgentAccountsSection(): React.ReactElement {
   const t = useT();
   const { request, store } = useDaemon();
@@ -115,6 +120,10 @@ export function AgentAccountsSection(): React.ReactElement {
   // The agent whose default account is being renamed.
   const [renamingDefault, setRenamingDefault] = useState<Agent>();
   const [removingAgent, setRemovingAgent] = useState<Agent>();
+  // The agent whose settings or version are in the modal, `view` naming which, and which of its menus opened it: the
+  // tab's actions button or the tab's own context menu. Closing hands focus back to that control, as a menu that a
+  // pointer opened leaves focus elsewhere.
+  const [agentDialog, setAgentDialog] = useState<{ view: "settings" | "version"; agent: Agent; from: "actions" | "tab" }>();
   // The account whose details or settings are in the modal, whichever `view` names; `focusSharing` puts focus on the
   // sharing switch of its settings as they open.
   const [accountDialog, setAccountDialog] = useState<{ view: AccountView; agent: Agent; account: string | null; focusSharing?: boolean; fromRow?: boolean }>();
@@ -128,14 +137,24 @@ export function AgentAccountsSection(): React.ReactElement {
   const [handoff] = useState(() => {
     let cancel: (() => void) | undefined;
     return {
-      start: (find: () => HTMLElement | null | undefined) => {
+      start: (find: () => HTMLElement | null | undefined, options?: { ring?: boolean }) => {
         cancel?.();
-        cancel = handFocusOnceClosed(find);
+        cancel = handFocusOnceClosed(find, options);
       },
       stop: () => cancel?.(),
     };
   });
   useEffect(() => handoff.stop, [handoff]);
+  const closeAgentDialog = (automatic: boolean) => {
+    if (!agentDialog) return;
+    const { agent, from } = agentDialog;
+    setAgentDialog(undefined);
+    // A close the user made restores the control the user opened the dialog from, not a handoff: the ring follows the
+    // input that closed it. One made by a change the user did not make (the agent removed, its CLI gone) hands focus
+    // over, with the ring shown. When the agent has left the list, with its tab and button, a detached control cannot
+    // take it and the section's tab does.
+    handoff.start(() => [from === "actions" ? tabActionsTrigger(document, agent) : tabs[agent], tabs[agent]].find(canTakeFocus) ?? focusSectionTab(), { ring: automatic });
+  };
   // For a dialog the section opens by itself — on Settings' request, or for a login found running as it opens — which
   // has no control to close onto: React Aria gives focus back to what held it as the dialog mounted, and Settings has
   // not focused anything of its own by then (its tabs attach a render later), so focus would end on Settings' own
@@ -164,6 +183,7 @@ export function AgentAccountsSection(): React.ReactElement {
     setRemoving(undefined);
     setRenamingDefault(undefined);
     setRemovingAgent(undefined);
+    setAgentDialog(undefined);
     setAccountDialog(undefined);
   }, [accountsNavigation.dismissForms, accountsNavigation.pending]);
   useEffect(() => {
@@ -219,11 +239,21 @@ export function AgentAccountsSection(): React.ReactElement {
   };
   const pinnedFocus = useStickyHeadingFocus(AGENT_STRIP_HEIGHT);
   const availability = useDaemonStore((s) => s.agentAvailability);
+  const cliStatuses = useDaemonStore((s) => s.agentCliStatuses);
+  // The Version entry of an agent's menus: none for an agent that is not installed.
+  const versionEntry = (agent: Agent): AgentVersionEntry | undefined => isAgentUnavailable(availability, agent) ? undefined : { update: hasCliUpdate(cliStatuses.get(agent)), installed: cliStatuses.get(agent)?.installed_version ?? null };
   useEffect(() => {
     // The quotas already held are shown whether or not this succeeds, and the daemon's own poller
     // keeps them current, so a failed request has nothing to report.
     void request({ type: "refresh_account_quotas" }).catch(() => {});
   }, [request]);
+  // The versions of the installed CLIs, which the daemon checks only when asked: on opening, and again after each fresh
+  // snapshot (a reconnect). The statuses held are shown whether or not this succeeds, and the daemon holds its own
+  // floor between checks.
+  const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
+  useEffect(() => {
+    void request({ type: "check_agent_clis" }).catch(() => {});
+  }, [request, snapshotEpoch]);
 
   const renderAccountDialog = (open: NonNullable<typeof accountDialog>) => {
     const closeAccountDialog = () => {
@@ -284,6 +314,9 @@ export function AgentAccountsSection(): React.ReactElement {
                 agent={agent}
                 index={agents.indexOf(agent)}
                 count={agents.length}
+                version={versionEntry(agent)}
+                onSettings={() => setAgentDialog({ view: "settings", agent, from: "actions" })}
+                onVersion={() => setAgentDialog({ view: "version", agent, from: "actions" })}
                 onMove={(by) => move(agent, by)}
                 onRemove={() => setRemovingAgent(agent)}
               />
@@ -315,6 +348,9 @@ export function AgentAccountsSection(): React.ReactElement {
           target={tabs[agent]}
           index={index}
           count={agents.length}
+          version={versionEntry(agent)}
+          onSettings={() => setAgentDialog({ view: "settings", agent, from: "tab" })}
+          onVersion={() => setAgentDialog({ view: "version", agent, from: "tab" })}
           onMove={(by) => move(agent, by)}
           onRemove={() => setRemovingAgent(agent)}
         />
@@ -322,6 +358,9 @@ export function AgentAccountsSection(): React.ReactElement {
       {editing !== undefined && <AccountDialog account={editing ?? undefined} agent={selected ?? defaultProviderAgent(providers)} onClose={() => setEditing(undefined)} />}
       {renamingDefault && <AccountDialog agent={renamingDefault} renameDefault onClose={() => setRenamingDefault(undefined)} />}
       {accountDialog && renderAccountDialog(accountDialog)}
+      {agentDialog && (agentDialog.view === "settings"
+        ? <AgentSettingsDialog agent={agentDialog.agent} onClose={() => closeAgentDialog(false)} onGone={() => closeAgentDialog(true)} />
+        : <AgentVersionDialog agent={agentDialog.agent} onClose={() => closeAgentDialog(false)} onGone={() => closeAgentDialog(true)} />)}
       {loggingIn && (
         <AccountLoginDialog
           agent={loggingIn.agent}
@@ -359,9 +398,7 @@ export function AgentAccountsSection(): React.ReactElement {
   );
 }
 
-/** One agent's tab panel: its Tags row and the rows of the settings its descriptor declares, each of
- * which applies to every account of the agent, and
- * the table of the agent's accounts in their saved order. */
+/** One agent's tab panel: the table of the agent's accounts in their saved order. */
 function AgentAccountsPanel(props: AgentAccountsPanelProps): React.ReactElement {
   const order = useAccountOrder(props.agent, props.owned);
   return (
@@ -398,7 +435,7 @@ function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, o
     // Whatever the login state, so an account that is logged in can log in again; focus goes back to the menu's button.
     const login = { label: t("settings.accounts.login"), icon: LogIn, disabled: loginIsActive(accountLoginOf(logins, agent, account?.id ?? null)), onClick: () => onLogin(agent, account?.id ?? null, () => handOff(() => rowActionsTrigger(row))) };
     const details = { label: t("settings.accounts.detailsItem"), icon: Info, onClick: () => onOpenAccount("details", account?.id ?? null) };
-    const settings = { label: t("settings.accounts.settingsItem"), icon: Settings, onClick: () => onOpenAccount("settings", account?.id ?? null) };
+    const settings = { label: t("settings.accounts.settingsItem"), icon: Settings2, onClick: () => onOpenAccount("settings", account?.id ?? null) };
     const index = order.ids.indexOf(account?.id ?? null);
     const moves: ActionMenuEntry[] = [
       "separator",
@@ -418,8 +455,6 @@ function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, o
   };
   return (
     <>
-      <AgentTagsSetting agent={agent} />
-      <AgentProviderSettings agent={agent} />
       <AccountsTable agent={agent}>
         {order.rows.map((account) => (
           <AccountTableRow

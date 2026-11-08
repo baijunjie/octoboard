@@ -119,13 +119,23 @@ pub(crate) fn refuse_if_account_not_signed_in(
 /// nothing. Only a session being opened is checked, so a live session of an agent removed since
 /// keeps running, and resuming, restarting or reopening an existing session never comes here.
 pub(crate) fn refuse_unless_agent_added(state: &Arc<AppState>, agent: AgentId) -> Result<()> {
+    refuse_unless_agent_added_to(state, agent, "open a session with it")
+}
+
+/// [`refuse_unless_agent_added`] for a request that is not a session being opened: `purpose` ends
+/// the message, "Add it in Settings → Agent accounts to <purpose>."
+pub(crate) fn refuse_unless_agent_added_to(
+    state: &Arc<AppState>,
+    agent: AgentId,
+    purpose: &str,
+) -> Result<()> {
     if state.store.agent_is_added(agent)? {
         return Ok(());
     }
     Err(CodedError::raised(
         error_code::AGENT_NOT_ADDED,
         format!(
-            "{} is not added. Add it in Settings → Agent accounts to open a session with it.",
+            "{} is not added. Add it in Settings → Agent accounts to {purpose}.",
             agent.label()
         ),
         &[("agent", agent.label())],

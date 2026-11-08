@@ -21,7 +21,7 @@ import type { ActionMenuEntry } from "./menuEntries";
 import { MenuItems } from "./MenuItems";
 import { MenuShortcutScope } from "./menuShortcutScope";
 import { usePointerFocusReturn } from "./usePointerFocusReturn";
-import { Menu, MenuPopover, MenuTrigger, partSelector } from "../../primitives";
+import { BadgedControl, Menu, MenuPopover, MenuTrigger, partSelector } from "../../primitives";
 
 /** The entries of a menu given as a function, read when the menu opens (the popover mounts its content
  * then), so that what they judge against the clock is the time they are looked at. */
@@ -40,6 +40,7 @@ export function ActionMenu({
   triggerRef,
   className = "shrink-0",
   tooltip,
+  badge,
   contextTargetRef,
   contextOnly = false,
   onContextOpen,
@@ -57,6 +58,9 @@ export function ActionMenu({
    * has to name the row it belongs to so each trigger is told apart; off for a trigger whose
    * visible text already says what it does. */
   tooltip?: React.ReactNode;
+  /** A `Badge` for the corner of the trigger, beside the button rather than inside it so that it does not take the
+   * button's pressed scale; what it marks is said by `label` and `tooltip`. */
+  badge?: React.ReactNode;
   /** An element whose right-click (context menu) opens this same menu at the pointer: the row or
    * header the menu belongs to. A menu opened that way is anchored to the pointer, not the trigger.
    * The Menu key or Shift+F10 on the element, or on what has focus inside it, opens it as well,
@@ -256,17 +260,19 @@ export function ActionMenu({
       <Menu open={isOpen} onOpenChange={onOpenChange}>
         {/* `focusOnPress={false}` keeps a press from moving focus off whatever had it (typically
             the terminal); the menu itself takes focus once it opens. */}
-        <TitledControl title={tooltip === false ? undefined : (tooltip ?? t("common.moreActions"))}>
-          <MenuTrigger
-            ref={triggerRef}
-            label={label}
-            hidden={contextOnly}
-            focusOnPress={false}
-            className={contextOnly ? "hidden" : ICON_TRIGGER_CLASS}
-          >
-            {trigger ?? <EllipsisVertical aria-hidden="true" className="size-4" />}
-          </MenuTrigger>
-        </TitledControl>
+        <BadgedControl badge={badge}>
+          <TitledControl title={tooltip === false ? undefined : (tooltip ?? t("common.moreActions"))}>
+            <MenuTrigger
+              ref={triggerRef}
+              label={label}
+              hidden={contextOnly}
+              focusOnPress={false}
+              className={contextOnly ? "hidden" : ICON_TRIGGER_CLASS}
+            >
+              {trigger ?? <EllipsisVertical aria-hidden="true" className="size-4" />}
+            </MenuTrigger>
+          </TitledControl>
+        </BadgedControl>
         {/* Key caps spelled out (Ctrl Shift F, off an Apple keyboard) are wider than macOS's glyphs; a menu that has
             them is that much wider, so the label beside them keeps the room it has next to glyphs. */}
         <MenuPopover className="min-w-48 max-w-72 has-[[data-kbd-spelled]]:max-w-82" at={pointerAt ?? undefined}>

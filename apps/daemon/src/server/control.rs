@@ -329,6 +329,7 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         account_quotas: state.account_quotas.list(),
         account_logins: state.account_logins.running(),
         account_sharing: state.account_sharing_states()?,
+        agent_cli_statuses: state.agent_clis.statuses(),
         home_dir: crate::paths::known_home_dir().map(|home| home.to_string_lossy().into_owned()),
         host: crate::platform::HostFacts::current().into(),
         shell_terminals: state.shell_terminals.list(),

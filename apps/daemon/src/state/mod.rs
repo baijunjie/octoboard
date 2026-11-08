@@ -223,6 +223,9 @@ pub struct AppState {
     pub account_quotas: crate::accounts::quotas::AccountQuotas,
     /// The logins running now, one per account (`crate::accounts::login`). Held in memory only.
     pub account_logins: crate::accounts::login::AccountLogins,
+    /// What was last found out about each agent's installed CLI, and the updates running
+    /// (`crate::agents::cli`). Held in memory only.
+    pub agent_clis: crate::agents::cli::AgentClis,
     /// The accounts a `delete_account` that moves the directory to the Trash is running for, each
     /// with the number of such removals; see [`AppState::begin_account_removal`]. Held in memory
     /// only. A plain mutex, never held across an `.await`.
@@ -375,6 +378,7 @@ impl AppState {
             agent_models: Default::default(),
             account_quotas: Default::default(),
             account_logins: Default::default(),
+            agent_clis: Default::default(),
             accounts_being_removed: Default::default(),
             account_sharing: Default::default(),
             sharing_status: Default::default(),
@@ -447,7 +451,7 @@ impl AppState {
         self.shutting_down.load(Ordering::Acquire)
     }
 
-    fn refuse_while_shutting_down(&self) -> Result<()> {
+    pub(crate) fn refuse_while_shutting_down(&self) -> Result<()> {
         if self.shutting_down.load(Ordering::Acquire) {
             return Err(CodedError::raised(
                 error_code::DAEMON_SHUTTING_DOWN,

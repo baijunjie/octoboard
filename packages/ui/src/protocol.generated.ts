@@ -271,6 +271,66 @@ export type AgentAvailability = {
 };
 
 /**
+ * One agent's installed CLI as the daemon last checked it. Runtime state: never stored.
+ */
+export type AgentCliStatus = {
+  agent: Agent,
+  /**
+   * The version of the CLI that starts a session now, as `major.minor.patch`; null when the
+   * CLI is not installed or its version could not be told.
+   */
+  installed_version: string | null,
+  install_method: CliInstallMethod,
+  /**
+   * The latest version published for this install method, as the source names it; null when
+   * there is no source for it (`install_method` `unknown`) or looking it up failed, in which
+   * case `latest_error` says so.
+   */
+  latest_version: string | null,
+  /**
+   * Why the lookup of `latest_version` failed, one of `agent_cli_code`'s latest codes; null
+   * when it succeeded or none was made.
+   */
+  latest_error: string | null,
+  /**
+   * The English text of the failure behind `latest_error`, when it has one.
+   */
+  latest_detail: string | null,
+  /**
+   * When the check ended, in milliseconds since the epoch.
+   */
+  checked_at: number,
+  /**
+   * The last update of this CLI since the daemon started; null when none ran.
+   */
+  update: AgentCliUpdate | null,
+};
+
+/**
+ * An update of an agent's CLI as the daemon last saw it. Runtime state: never stored.
+ */
+export type AgentCliUpdate = {
+  state: CliUpdateState,
+  /**
+   * When the update started, in milliseconds since the epoch.
+   */
+  started_at: number,
+  /**
+   * When it ended; null while it runs.
+   */
+  finished_at: number | null,
+  /**
+   * Why a `failed` update failed, one of `agent_cli_code`'s update codes; null otherwise.
+   */
+  error: string | null,
+  /**
+   * The last line the update printed on stderr (else on stdout), for a `failed` one. English
+   * text of the tool, trimmed and cut to a bounded length.
+   */
+  detail: string | null,
+};
+
+/**
  * One model an agent offers, as `list_agent_models` reports it.
  */
 export type AgentModel = {
@@ -617,6 +677,16 @@ export type ChangeSide = {
   "state": "out_of_scope",
   repository_path: string,
 };
+
+/**
+ * How an agent's CLI was installed, which decides the command that updates it.
+ */
+export type CliInstallMethod = "native" | "npm" | "homebrew" | "unknown";
+
+/**
+ * Where an update of a CLI is.
+ */
+export type CliUpdateState = "running" | "succeeded" | "failed";
 
 /**
  * One commit a branch made since it forked, as `list_project_commits` lists it: its full id, its
@@ -1223,6 +1293,12 @@ export type Event = {
    */
   account_sharing: Array<AccountSharing>,
   /**
+   * The installed CLI of every agent checked since the daemon started
+   * (`check_agent_clis`), the update of one that runs or ran included; empty until the
+   * first check ends. Runtime state, not stored.
+   */
+  agent_cli_statuses: Array<AgentCliStatus>,
+  /**
    * The daemon host's home directory, so a client can show a path under it as `~/...`; it
    * is the daemon's home, not the browser's, since the two may be on different machines.
    * Null when the daemon cannot determine one.
@@ -1251,6 +1327,10 @@ export type Event = {
 | {
   "type": "account_login_updated",
   login: AccountLogin,
+}
+| {
+  "type": "agent_cli_status_updated",
+  status: AgentCliStatus,
 }
 | {
   "type": "account_sharing"
@@ -3295,6 +3375,14 @@ export type Request = {
   account?: string | null,
 }
   | {
+  "type": "check_agent_clis",
+  agent?: Agent | null,
+}
+  | {
+  "type": "update_agent_cli",
+  agent: Agent,
+}
+  | {
   "type": "refresh_git_status",
   console: string,
 }
@@ -3999,6 +4087,14 @@ export type RequestBody = {
   "type": "cancel_account_login",
   agent: Agent,
   account?: string | null,
+}
+| {
+  "type": "check_agent_clis",
+  agent?: Agent | null,
+}
+| {
+  "type": "update_agent_cli",
+  agent: Agent,
 }
 | {
   "type": "refresh_git_status",

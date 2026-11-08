@@ -153,7 +153,12 @@ their cascade order does not depend on which screen opened first.
   `AppBehaviorSection.tsx` the App behavior section (startup, window, power and terminals groups, each shown only where the
   platform has the capability; `LaunchAtLoginSetting.tsx`, `MenuBarIconSetting.tsx`, `KeepAwakeSetting.tsx` and
   `BackgroundRunSetting.tsx` are its native-backed rows), `CleanupSection.tsx` the Cleanup section;
-  `accounts/` the Agent accounts section, where `AgentProviderSettings.tsx` renders every setting the daemon serves for an agent.
+  `accounts/` the Agent accounts section, where `AgentProviderSettings.tsx` renders every setting the daemon serves for an agent,
+  `AgentMenus.tsx` holds an agent tab's menu and actions button, which open `AgentSettingsDialog.tsx` (the per-agent
+  settings) and `AgentVersionDialog.tsx` (the agent's CLI version, its content `AgentCliVersionSetting.tsx`, with
+  `cliVersion.ts` judging whether an update exists), both on `agentDialogSubject.tsx` (the heading and the closing of
+  a dialog whose agent has gone), and `AgentCliUpdateAlerts.tsx`, mounted in `App.tsx` for the window's life, raises the
+  alert of an update this window started that ended unfinished.
 - `src/dialogs/` — the feature dialogs (console, project, session, request, handoff, account switch, model, trust,
   archive and removal choices), on the `components/dialog/` toolkit. `RequestedDialog.tsx` only routes a requested
   dialog to its component; the archive, removal and restore confirmations are in `confirmations/`. The dialogs' daemon
@@ -307,6 +312,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Load a component lazily, with a way to load it again after a failed import | `retryableLazy` (`src/components/hooks/retryableLazy.ts`), not `React.lazy`, which keeps the rejection |
 | Observe visible Suspense content before a capture | `observeLazyReadiness` and `trackSuspenseFallback` (`src/components/hooks/lazyReadiness.tsx`); the gallery frame enables observation, while production hosts leave it disabled |
 | Poll a daemon answer that is shown or counted (process trees, the global process counts), publishing only a changed one | `usePolled` (`src/components/hooks/usePoll.ts`), under `useProcessTrees` and `useAllProcesses` at the paces in `src/process/processPolling.ts`, rather than a timer of its own |
+| A badge on the corner of a control that comes and goes | `BadgedControl` (`src/primitives/Badge.tsx`), which `ChromeButton`'s `badge` prop and `ActionMenu`'s `badge` prop (`src/components/menus/ActionMenu.tsx`) share |
 | A count in a row, or on a rail control | `CountBadge` (`src/components/status/CountBadge.tsx`), reusing `StatusBadge`, in a row; `RailCountBadge` (`src/shell/RailCountBadge.tsx`) through `ChromeButton`'s `badge` prop on a rail control |
 | A rail entry whose button opens a popover panel | `RailPanelEntry` (`src/shell/RailPanelEntry.tsx`), which wires the popover; the status marks and Details popovers the panel opens are tagged with `PopoverOwnerContext` (`src/components/hint/popoverOwner.ts`) and asked about through `nestedPopovers` (`src/shell/nestedPopover.ts`), and `CloseWhenCovered` (`src/shell/`) closes the panel under another modal |
 | Put a panel of the aside's owner (a project, or a console session) on screen | `showPanel` from `useProjectPanels` (`src/app/`); a jump from the global process list is `useProcessJump` |
@@ -323,6 +329,8 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Platform capabilities (native menu, menu bar icon visibility, keep awake, launch at login, updater, clipboard, directory picker, permissions) | the `PlatformAdapter` through `src/platform/` |
 | Follow the user leaving the window and coming back (whether the window has focus, a change of it, a return to it, a loss of it) | `windowHasFocus`, `subscribeWindowFocus`, `onWindowFocusReturn` and `onWindowFocusLoss` (`src/components/hooks/windowFocus.ts`), which follow the webview's own window `focus` and `blur` and `document.hasFocus()` in the desktop app as in a browser; they arrive only because `src/input/focusGuard.ts` swallows window-targeted focus events solely between a press's mousedown and the tick after the next frame, then replays a swallowed change. Users of the return: `usePoll`, `useMacosPermissions`, `useNotificationPermission`, `LaunchAtLoginSetting`, `ImportConfigurationDialog`; of the loss: `useQuickCreateModifier`, `tabDrag`, `AgentTabList`, `accountDrag`, `useNavigationHistory`; `useWindowAttended` uses the subscription and `windowHasFocus` |
 | A behaviour or a word that differs by operating system | on the client's machine, `PlatformAdapter.host` (`HostFacts`, `src/platform/host.ts`), read with `usePlatform()` or `useHost()`; on the daemon's machine (its paths, its Trash), `snapshot.host` in the store (`useHostPaths()`, the daemon's words in `platformTerms.ts`); never `navigator`, and a pure function takes the host as an argument |
+| The daemon's view of each agent's CLI version and update, and which updates this window started | `agentCliStatuses` and `cliUpdatesStartedHere` of the store state (`src/store/state.ts`; `trackAgentCliUpdate` in `src/store/actions.ts`); the Version dialog and `AgentCliUpdateAlerts` read them |
+| Hand focus back to an agent tab's actions button | `tabActionsTrigger` (`src/components/tabs/AgentTabList.tsx`) |
 | Read the store | the barrel `src/store/index.ts` (`useDaemon`, `useDaemonStore`, `useDaemonStoreEqual`, session hooks); below `src/` the barrel is the only store import allowed |
 | The provider tree around `App` in a new host of the app | `AppRoot` (`src/AppRoot.tsx`), as `main.tsx`, the gallery frame and the website preview use it |
 | Data for the gallery, the website preview and application tests | `src/fixtures/` (builders, `snapshotState`, `createFixtureDaemon`), never gallery scenarios |

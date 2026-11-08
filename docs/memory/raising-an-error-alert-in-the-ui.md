@@ -88,3 +88,18 @@ So reproduce the failure with a real daemon first (`cargo run -p octoboardd` wit
 it keeps its data and its port file under `$HOME/.octoboard`), with the data folder made read-only for denied access, or
 placed on a small volume for a full disk (on macOS, a disk image made and mounted with `hdiutil`). Design the remedy
 from the code, params and `detail` it sends, and give the fixtures exactly those.
+
+## The outcome of a long-running action the user started is raised from window-lifetime code, not from the surface that started it
+
+Applies to an action in `packages/ui` whose request the daemon answers at once while the work goes on (an agent CLI
+update, a sign-in), its end arriving later as a status broadcast, and whose failure, or other outcome, this window
+owes the user because they asked for it. The dialog or row that sent the request may be closed long before then, so an
+effect or a `.then` there never sees the end, and the alert silently never comes. Instead:
+
+- Record in client store state that this window started it, keyed by what tells this run from an earlier one the
+  daemon still reports (the `started_at` the status held when the request went out), and clear it when the request is
+  refused.
+- Raise the outcome from a component `App` mounts for the window's whole life that watches the store
+  (`AgentCliUpdateAlerts`, `LoginPageOpener`), clearing the record as it does.
+- On a fresh `snapshot`, keep a record whose run the snapshot shows running or already ended as a later run, not only
+  running ones: an action that ended while the connection was down still owes its alert.

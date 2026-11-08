@@ -24,3 +24,9 @@ export function Badge({ color, placement, dir, children }: {
 export function BadgeAnchor({ children }: { children: React.ReactNode }): React.ReactElement {
   return <HeroBadge.Anchor>{children}</HeroBadge.Anchor>;
 }
+
+/** `control` with `badge` on its corner, or `control` alone when there is no badge: for a control whose badge comes and
+ * goes, so that it takes no anchor of its own meanwhile. */
+export function BadgedControl({ badge, children }: { badge?: React.ReactNode; children: React.ReactElement }): React.ReactElement {
+  return badge ? <BadgeAnchor>{children}{badge}</BadgeAnchor> : children;
+}

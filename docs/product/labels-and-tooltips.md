@@ -97,7 +97,8 @@ application buttons below. These are:
   actions" in `docs/product/project-pane.md`), and, in Settings' Agent accounts section, an account's and each agent
   tab's (see "The agent strip" in `docs/product/agent-accounts.md`). Its tooltip is a short "More actions", while the
   name announced for it also names what it belongs to ("Actions for session …", "Actions for file …" and the like), so
-  that each ⋮ can be told apart;
+  that each ⋮ can be told apart; an agent tab's tooltip and name add that an update of the agent's CLI is available
+  while one is;
 - the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's Filter
   projects / Clear filter button (see "Filtering the project list" in `docs/product/sidebar.md`) and its button to
   expand projects with unarchived sessions or collapse all projects (see "Expanding and collapsing the listed projects"
@@ -224,6 +225,9 @@ Help tips are used in these places:
   `docs/product/agent-accounts.md`);
 - the name of each agent's **Permission approval** row in Settings' Agent accounts section (see "Approval
   modes" in `docs/product/per-agent-settings.md`);
+- the name of an agent's **Version** row in its Agent version dialog: that updating does not stop running sessions,
+  which keep their version while new sessions use the new one (see "The Version row" in
+  `docs/product/agent-cli-updates.md`);
 - the **Share default configuration** row of an account's settings dialog: what is linked to the default account's
   directory, what is never shared and what happens when sharing is turned off (see "Sharing the default configuration"
   in `docs/product/agent-accounts.md`);

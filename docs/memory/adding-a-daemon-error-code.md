@@ -46,6 +46,11 @@ the same change:
   `recoveryLine: true`, with `daemon.<code>.summary` saying what happened, `daemon.<code>.recovery` that step, and
   `daemon.<code>` both sentences, for text-only consumers. An alert whose body is the daemon's own message then shows
   that step in place of the group's remedy.
+- Where the sentence names something the daemon does not send: a fixed word (Git, `PATH`) goes in the record's
+  `uiParams`; one that varies with where the code is shown (the agent, as for the agent CLI update codes) is put into
+  the params at every place that words the code, both those given to `daemonMessage` and those of the `CodedError`
+  raised. With it missing from the error's params, `hasCodeParams` (`packages/ui/src/errors/errorPresentation.ts`)
+  takes the error as unworded and the alert shows the plain message with no Error details disclosure; no test fails.
 - Where one code covers several situations the user fixes in different ways (a folder gone, a link in the way, a file
   where a folder should be), the daemon sends a fixed-vocabulary `cause` param, and `classifyError` picks the remedy
   from a table keyed by it (`SOURCE_CAUSE_RECOVERY`), each remedy an `ErrorRecovery` of its own. Map it there, never

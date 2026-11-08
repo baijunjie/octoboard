@@ -182,6 +182,23 @@ impl AgentProvider for GrokProvider {
         }
     }
 
+    /// Grok's own installer keeps everything under `~/.grok`; `grok update` updates it, and `grok
+    /// update --check --json` says what the latest version is without changing anything. Grok is
+    /// published through no package manager.
+    fn cli_packaging(&self) -> &'static super::CliPackaging {
+        &super::CliPackaging {
+            native_layouts: &[&[".grok"]],
+            native_update: &["update"],
+            native_latest: Some(super::NativeLatest {
+                args: &["update", "--check", "--json"],
+                version_field: "latestVersion",
+            }),
+            npm_package: None,
+            homebrew_formula: None,
+            homebrew_cask: None,
+        }
+    }
+
     /// Read from the name of the release download the binary is, without spawning a CLI process:
     /// through the launcher link the installer makes on macOS and Linux, or, where the launcher is a
     /// copy (Windows), the versioned download of the same size beside it (see

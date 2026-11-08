@@ -155,6 +155,8 @@ pub enum ProviderOperation {
     ResetCredit,
     /// An account sharing the default account's configuration.
     ConfigSharing,
+    /// Updating the agent's installed CLI.
+    CliUpdate,
 }
 
 impl ProviderOperation {
@@ -165,6 +167,7 @@ impl ProviderOperation {
             ProviderOperation::Kick => "kick",
             ProviderOperation::ResetCredit => "reset_credit",
             ProviderOperation::ConfigSharing => "config_sharing",
+            ProviderOperation::CliUpdate => "cli_update",
         }
     }
 
@@ -174,6 +177,7 @@ impl ProviderOperation {
             ProviderOperation::Kick => "a usage window to start",
             ProviderOperation::ResetCredit => "reset credits",
             ProviderOperation::ConfigSharing => "sharing the default account's configuration",
+            ProviderOperation::CliUpdate => "an update of its CLI",
         }
     }
 }

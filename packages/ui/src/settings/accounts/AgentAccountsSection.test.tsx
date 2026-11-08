@@ -16,7 +16,7 @@ import { TestHost } from "../../test/TestHost";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
 import { account, availability, consoles, projects, request, sectionEntry, sessions, settings, startDaemon } from "./agentAccountsSectionTestState";
-import { animate, buttonNamed, chooseItem, menuItem, mount, openDetailsOf, openSettingsOf, openTabMenu, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
+import { animate, buttonNamed, chooseItem, menuItem, mount, mountAgentSettings, openDetailsOf, openSettingsOf, openTabMenu, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -27,13 +27,13 @@ vi.mock("../../components/form/OptionSelect", async () => ({ OptionSelect: (awai
 /** Waits out React Aria's focus restore after a dialog closes and what runs in the frames after it. */
 const frames = () => act(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0)))));
 
-/** The approval selector of the agent's tab in view. */
+/** The approval selector in the agent's settings dialog. */
 function approvalOf(container: HTMLElement): HTMLSelectElement {
-  return container.querySelector<HTMLSelectElement>('[role="tabpanel"] select')!;
+  return container.querySelector<HTMLSelectElement>("select")!;
 }
 
-it("offers the native Codex presets above the table, using custom configuration by default", () => {
-  const { container } = mount("Codex");
+it("offers the native Codex presets, using custom configuration by default", async () => {
+  const { container } = await mountAgentSettings("Codex");
   const select = approvalOf(container);
   expect(select.value).toBe("inherit");
   expect(select.getAttribute("aria-label")).toBe("Permission approval for \u2068Codex\u2069");
@@ -43,7 +43,7 @@ it("offers the native Codex presets above the table, using custom configuration 
 });
 
 it("separates permission timing from custom permissions that retain saved permissions on resume", async () => {
-  const { container } = mount("Codex");
+  const { container } = await mountAgentSettings("Codex");
   await act(async () => buttonNamed(container, "About permission approval")!.click());
   const help = document.querySelector('[role="dialog"][aria-label="About permission approval"]');
   expect(help).not.toBeNull();
@@ -56,13 +56,14 @@ it("separates permission timing from custom permissions that retain saved permis
   expect(paragraphs[1].textContent).toContain("Select another mode to replace saved permissions");
 });
 
-it("says the permission approval once, as a row above the table with its help, not in a column or the details or settings dialogs", async () => {
-  const { container } = mount("Codex");
-  const panel = container.querySelector('[role="tabpanel"]')!;
+it("says the permission approval once, as a row in the agent's settings dialog with its help, not in the tab, a column or the details or account settings dialogs", async () => {
+  const { container: panel, section: container } = await mountAgentSettings("Codex");
   expect(panel.textContent?.match(/Permission approval/g)).toHaveLength(1);
   expect(panel.textContent).toContain("Applies to every \u2068Codex\u2069 account");
   expect(panel.querySelectorAll('button[aria-label="About permission approval"]')).toHaveLength(1);
-  expect(panel.querySelector("select")!.compareDocumentPosition(panel.querySelector("table")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(container.querySelector('[role="tabpanel"]')!.textContent).not.toContain("Permission approval");
+  await act(async () => buttonNamed(panel, t("common.close"))!.click());
+  await frames();
   const dialog = await openDetailsOf(container, "codex-work");
   expect(dialog.querySelector("select")).toBeNull();
   expect(dialog.textContent).not.toContain("Permission approval");
@@ -73,8 +74,8 @@ it("says the permission approval once, as a row above the table with its help, n
   expect(settingsDialog.textContent).not.toContain("Permission approval");
 });
 
-it("offers Grok's native approval modes, following configuration by default", () => {
-  const { container } = mount("Grok Build");
+it("offers Grok's native approval modes, following configuration by default", async () => {
+  const { container } = await mountAgentSettings("Grok Build");
   const select = approvalOf(container);
   expect(select.value).toBe("inherit");
   expect([...select.options].map((option) => option.value)).toEqual(["inherit", "ask", "auto", "always_approve"]);
@@ -88,15 +89,15 @@ it.each([
   ["inherit", null],
 ] as const)("saves the Grok selector as %s at once", async (value, saved) => {
   settings.provider_settings = { grok: { approval_mode: value === "inherit" ? "ask" : null } };
-  const { container, change } = mount("Grok Build");
+  const { container, change } = await mountAgentSettings("Grok Build");
   change(approvalOf(container), value);
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_provider_setting", agent: "grok", setting: "approval_mode", value: saved });
   await act(async () => {});
 });
 
-it("shows the stored Codex choice", () => {
+it("shows the stored Codex choice", async () => {
   settings.provider_settings = { codex: { approval_reviewer: "user" } };
-  const { container } = mount("Codex");
+  const { container } = await mountAgentSettings("Codex");
   expect(approvalOf(container).value).toBe("user");
 });
 
@@ -106,14 +107,14 @@ it.each([
   ["inherit", null],
 ] as const)("saves the Codex selector as %s at once", async (value, saved) => {
   settings.provider_settings = { codex: { approval_reviewer: value === "inherit" ? "user" : null } };
-  const { container, change } = mount("Codex");
+  const { container, change } = await mountAgentSettings("Codex");
   change(approvalOf(container), value);
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_provider_setting", agent: "codex", setting: "approval_reviewer", value: saved });
   await act(async () => {});
 });
 
 it("keeps the stored value and reports a failed save", async () => {
-  const { container, change } = mount("Codex");
+  const { container, change } = await mountAgentSettings("Codex");
   const select = approvalOf(container);
   request.mockRejectedValueOnce(new Error("save refused"));
   change(select, "auto_review");
@@ -137,7 +138,7 @@ function queuedAlertText(): string {
 const deniedWrite = () => new CodedError("Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY", "store_write_failed", { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" });
 
 it("words a denied save of the permission approval for the application's data folder, not for another folder to choose", async () => {
-  const { container, change } = mount("Codex");
+  const { container, change } = await mountAgentSettings("Codex");
   request.mockRejectedValueOnce(deniedWrite());
   change(approvalOf(container), "auto_review");
   await act(async () => {});
@@ -148,7 +149,7 @@ it("words a denied save of the permission approval for the application's data fo
 });
 
 it("words a denied save of Bypass permissions, made from its confirmation, for the application's data folder too", async () => {
-  const { container, change } = mount("Claude Code");
+  const { container, change } = await mountAgentSettings("Claude Code");
   change(approvalOf(container), "bypass");
   request.mockRejectedValueOnce(deniedWrite());
   act(() => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Bypass permissions")!.click());
@@ -161,7 +162,7 @@ it("words a denied save of Bypass permissions, made from its confirmation, for t
 
 it("keeps the trigger available while saving and prevents another option selection until answered", async () => {
   let finish!: (value: object) => void;
-  const { container, change } = mount("Codex");
+  const { container, change } = await mountAgentSettings("Codex");
   const select = approvalOf(container);
   request.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
   change(select, "auto_review");
@@ -171,15 +172,18 @@ it("keeps the trigger available while saving and prevents another option selecti
   expect([...select.options].every((option) => !option.disabled)).toBe(true);
 });
 
-it("offers Claude Code's native modes, following configuration by default, and shows the stored one", () => {
-  const { container } = mount("Claude Code");
+it("offers Claude Code's native modes, following configuration by default", async () => {
+  const { container } = await mountAgentSettings("Claude Code");
   const select = approvalOf(container);
   expect(select.value).toBe("inherit");
   expect(select.getAttribute("aria-label")).toBe("Permission approval for \u2068Claude Code\u2069");
   expect([...select.options].map((option) => option.value)).toEqual(["inherit", "auto", "manual", "accept_edits", "plan", "bypass"]);
   expect([...select.options].slice(1).map((option) => option.textContent)).toEqual(["Auto", "Manual", "Accept edits", "Plan", "Bypass permissions"]);
+});
+
+it("shows the stored Claude Code choice", async () => {
   settings.provider_settings = { claude: { approval_mode: "manual" } };
-  expect(approvalOf(mount("Claude Code").container).value).toBe("manual");
+  expect(approvalOf((await mountAgentSettings("Claude Code")).container).value).toBe("manual");
 });
 
 it.each([
@@ -190,14 +194,14 @@ it.each([
   ["inherit", null],
 ] as const)("saves the Claude Code selector as %s at once", async (value, saved) => {
   settings.provider_settings = { claude: { approval_mode: value === "inherit" ? "auto" : null } };
-  const { container, change } = mount("Claude Code");
+  const { container, change } = await mountAgentSettings("Claude Code");
   change(approvalOf(container), value);
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: saved });
   await act(async () => {});
 });
 
 it("keeps the confirmation open and the choice unchanged when saving Bypass permissions fails", async () => {
-  const { container, change } = mount("Claude Code");
+  const { container, change } = await mountAgentSettings("Claude Code");
   const select = approvalOf(container);
   change(select, "bypass");
   request.mockRejectedValueOnce(new Error("save refused"));
@@ -212,7 +216,7 @@ it.each([
   ["Codex", "codex", "approval_reviewer", "full_access", "Full access", "Allow full access?", "without sandbox restrictions or permission approval"],
   ["Grok Build", "grok", "approval_mode", "always_approve", "Always-approve", "Always approve tool calls?", "Deny rules and hooks still apply"],
 ] as const)("saves %s unrestricted mode only after confirmation", async (name, agent, setting, value, label, title, consequence) => {
-  const { container, change } = mount(name);
+  const { container, change } = await mountAgentSettings(name);
   const select = approvalOf(container);
   change(select, value);
   expect(request).not.toHaveBeenCalled();
@@ -644,7 +648,21 @@ it("opens an agent tab's menu with the Menu key and Shift+F10 as well as a right
   await act(async () => {
     tab.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true, cancelable: true }));
   });
-  expect([...document.querySelectorAll("[role=menuitem]")].map((entry) => entry.textContent)).toEqual(["Move earlier", "Move later", "Remove agent"]);
+  expect([...document.querySelectorAll("[role=menuitem]")].map((entry) => entry.textContent)).toEqual(["Settings", "Version", "Move earlier", "Move later", "Remove agent"]);
+});
+
+it("opens the agent's settings from the Settings entry of its tab's actions menu, named for the agent", async () => {
+  const { container } = mount();
+  const trigger = container.querySelector<HTMLElement>(`[data-tab-actions] button[aria-label="Actions for ${isolate("Codex")}"]`)!;
+  await act(async () => {
+    trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
+    trigger.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));
+    trigger.click();
+  });
+  await chooseItem("Settings");
+  const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+  expect(dialog.querySelector("h2")?.textContent).toBe("Agent settings");
+  expect(dialog.textContent).toContain("Codex");
 });
 
 it("moves a tab a step with the menu, sending the whole new order, and disables the move past either end", async () => {
@@ -686,7 +704,7 @@ it("offers the same entries in an actions button of each tab, named for its agen
     trigger.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));
     trigger.click();
   });
-  expect([...document.querySelectorAll("[role=menuitem]")].map((entry) => entry.textContent)).toEqual(["Move earlier", "Move later", "Remove agent"]);
+  expect([...document.querySelectorAll("[role=menuitem]")].map((entry) => entry.textContent)).toEqual(["Settings", "Version", "Move earlier", "Move later", "Remove agent"]);
   await chooseItem("Move later");
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "reorder_agents", agents: ["claude", "grok", "codex"] });
 });

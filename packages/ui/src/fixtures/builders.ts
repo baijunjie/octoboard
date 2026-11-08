@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type Console, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
+import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type Console, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
 import { type MessageParams } from "../errors/codedError";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import type { NotificationFixture } from "./fixture";
@@ -71,6 +71,22 @@ export function projectWith(base: Project, extra: ProjectExtra): Project {
  * sets what a scenario shows otherwise. */
 export function accountOf(id: string, agent: Agent, name: string, config_dir: string, extra: Partial<Account> = {}): Account {
   return { id, agent, name, config_dir, share_default_config: false, share_default_config_incomplete: false, disabled: false, ...extra };
+}
+
+/** One agent's CLI as the daemon last checked it: installed through the CLI's own installer at 2.1.319, which is also the
+ * latest version published, so up to date; `extra` sets what a scenario shows otherwise. */
+export function agentCliStatusOf(agent: Agent, extra: Partial<AgentCliStatus> = {}): AgentCliStatus {
+  return { agent, installed_version: "2.1.319", install_method: "native", latest_version: "2.1.319", latest_error: null, latest_detail: null, checked_at: minutesAgo(1), update: null, ...extra };
+}
+
+/** An update of an agent's CLI, running since a minute before the page loaded; `extra` ends it or says why it failed. */
+export function agentCliUpdateOf(extra: Partial<AgentCliUpdate> = {}): AgentCliUpdate {
+  return { state: "running", started_at: minutesAgo(1), finished_at: null, error: null, detail: null, ...extra };
+}
+
+/** The statuses a snapshot holds, keyed by agent as the store keeps them. */
+export function agentCliStatusesOf(statuses: readonly AgentCliStatus[]): Map<Agent, AgentCliStatus> {
+  return new Map<Agent, AgentCliStatus>(statuses.map((status) => [status.agent, status]));
 }
 
 export function consoleOf(id: string, name: string, extra: ConsoleExtra = {}): Console {

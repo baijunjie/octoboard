@@ -9,8 +9,9 @@ the user's `PATH` for its accounts to be usable. Below that paragraph sit **Auto
 added-agent list is still undecided, and while no agent is added. Below the switches sits the agent strip, which ends in
 the **Add agent** and **Add account** buttons, with the selected agent's accounts under it. What an account is and how
 consoles, projects and sessions use one are in "Agent config directories" in `docs/product/consoles.md`; signing an
-account in from this section is in `docs/product/logging-accounts-in.md`, and the settings an agent's tab holds for
-every account of the agent are in `docs/product/per-agent-settings.md`.
+account in from this section is in `docs/product/logging-accounts-in.md`; the settings that apply to every account of
+an agent, opened from the agent's menu, are in `docs/product/per-agent-settings.md`, and the version of the agent's CLI
+and its update in `docs/product/agent-cli-updates.md`.
 
 ## Added agents
 
@@ -54,12 +55,16 @@ accounts scroll beneath it; the top fade then begins below the strip (see "The e
 the agent in view is removed, the first agent's tab is shown.
 
 Each tab carries, at its end, its own small actions button (⋮), named "Actions for" and the agent, which opens the
-agent's menu (see "Reordering and removing an agent" below). It is shown while its tab is wholly in view in the strip,
-and while it holds keyboard focus. After the strip's last tab, at the strip's end, stand two icon-only buttons,
-**Add agent** and **Add account**, each named by its tooltip (see "Adding an agent" and "Adding, editing and removing
-an account" below). While a tab is dragged, and while the tabs move into their new places after a drag or a reorder,
-every tab's actions button fades out, except the one holding keyboard focus, which goes with its tab; they fade back
-in at their new places once the tabs have settled. A press on a tab that does not move the pointer fades nothing.
+agent's menu (see "The agent's menu" below). It is shown while its tab is wholly in view in the strip, and while it
+holds keyboard focus. While an update of the agent's CLI is available (see "When an update is available" in
+`docs/product/agent-cli-updates.md`), the button wears a small accent badge on its top right corner (mirrored under a
+right-to-left language, see "What is mirrored" in `docs/product/right-to-left-layout.md`), its accessible name adds that
+an update is available, and its tooltip, otherwise "More actions", says so too; the tab itself carries no such mark.
+After the strip's last tab, at the strip's end, stand two icon-only buttons, **Add agent** and **Add account**, each
+named by its tooltip (see "Adding an agent" and "Adding, editing and removing an account" below). While a tab is
+dragged, and while the tabs move into their new places after a drag or a reorder, every tab's actions button fades out,
+except the one holding keyboard focus, which goes with its tab; they fade back in at their new places once the tabs have
+settled. A press on a tab that does not move the pointer fades nothing.
 
 An agent that is not added has no tab, installed or not. An added agent that is not available has a warning icon after
 its name in its tab, and each account the user owns of that agent says, under its directory in its account details
@@ -101,16 +106,52 @@ section's tab. A refused
 addition — the agent is not installed, is already added, or which agents are installed is not determined yet — is shown
 in an error alert (see `docs/product/error-alerts.md`).
 
-## Reordering and removing an agent
+## The agent's menu
 
 Each added agent has a menu, opened by a right-click on its tab, by the Menu key or Shift+F10 while its tab has
 keyboard focus, or from the actions button at the end of its tab (see "The agent strip" above), so no tab need be
-selected first. The menu holds:
+selected first. The menu holds, in three groups set apart from one another:
 
-- **Move earlier** and **Move later**, which move the agent one place along the list. Earlier and later are in the
-  reading direction, so they hold under a right-to-left language too. Move earlier is unavailable for the first agent,
-  and Move later for the last;
-- **Remove agent**, set apart from the moves.
+- **Settings**, with the same sliders icon as an account's Settings entry, which opens the agent settings dialog (see
+  "The agent settings dialog" below), and **Version**, which opens the agent version dialog (see "The agent version
+  dialog" below). An agent that is determined not to be installed has no Version entry. The Version entry shows the
+  installed version of the agent's CLI at its end, in small muted text, once it is known, with a small accent dot before
+  it while an update is available, which assistive technology hears as the version followed by "update available";
+- **Move earlier** and **Move later**, which move the agent one place along the list (see "Reordering and removing an
+  agent" below);
+- **Remove agent**.
+
+## The agent settings dialog
+
+**Settings**, in the agent's menu, opens a modal dialog of the settings that apply to every account of the agent. It is
+titled "Agent settings", whichever agent it is opened on; the first line of its body is the agent's icon and name. Then
+come the agent's **Tags** row (see "Agent tags" in `docs/product/per-agent-settings.md`) and a row for each setting its
+provider declares (see "Provider settings" in `docs/product/per-agent-settings.md`) — for all three agents, the
+agent's **Permission approval** row (see "Approval modes" there), then, for Codex and Grok Build, the agent's **Claude
+compatibility** row (see "Claude compatibility" there). It is offered for an agent that is not installed too.
+
+It has no footer: it closes on its close button, on Escape and on a press outside it. It follows the agent's settings as
+they change, from any window, and closes by itself when the agent is removed from the list of added agents.
+
+Closed by the user, it gives keyboard focus back to the control whose menu opened it — the tab's actions button, or the
+tab itself when its context menu was used — its focus ring following the input that closed the dialog. Closed by
+itself, it hands focus to that control, else to the agent's tab, else, when the agent's tab has gone with the agent, to
+the Agent accounts tab in Settings' list of sections, its focus ring showing.
+
+## The agent version dialog
+
+**Version**, in the agent's menu, opens a modal dialog titled "Agent version", whichever agent it is opened on; the
+first line of its body is the agent's icon and name, and under it the agent's **Version** row, its only content (see
+"The Version row" in `docs/product/agent-cli-updates.md`). It closes, and gives keyboard focus back, as the agent
+settings dialog does. It follows the agent's CLI as it changes, an update another window started included, and closes
+by itself when the agent is removed or its CLI is no longer installed. An update started from it goes on, and its
+failure is still told, after the dialog closes (see "How an update ends" in `docs/product/agent-cli-updates.md`).
+
+## Reordering and removing an agent
+
+**Move earlier** and **Move later**, in the agent's menu (see "The agent's menu" above), move the agent one place along
+the list. Earlier and later are in the reading direction, so they hold under a right-to-left language too. Move earlier
+is unavailable for the first agent, and Move later for the last.
 
 A tab can also be **dragged** to a new place with a mouse or a pen, when there is more than one agent: the tab follows
 the pointer, the tabs it passes make room for it, and releasing it drops it there. Escape, or a cancelled pointer,
@@ -182,11 +223,8 @@ are shown" in `docs/product/settings.md`.
 
 ## The accounts table
 
-Each agent's tab panel holds the agent's **Tags** row (see "Agent tags" in `docs/product/per-agent-settings.md`), then
-a row for each setting its provider declares (see "Provider settings" in `docs/product/per-agent-settings.md`) — for
-all three agents, the agent's **Permission approval** row (see "Approval modes" there), then, for Codex and Grok
-Build, the agent's **Claude compatibility** row (see "Claude compatibility" there) — then one table of the agent's
-accounts, named for the agent ("Claude Code accounts"): a row per account, in the saved order (see "Reordering accounts" below). Its columns:
+Each agent's tab panel holds only one table of the agent's accounts — the settings that apply to the whole agent are
+in the agent settings dialog (see "The agent settings dialog" above) — named for the agent ("Claude Code accounts"): a row per account, in the saved order (see "Reordering accounts" below). Its columns:
 
 | Column | What a row shows |
 |---|---|
@@ -273,7 +311,7 @@ Agent accounts tab in Settings' list of sections.
 
 ## The account settings dialog
 
-**Settings**, the second entry of an account's actions menu, with a gear icon, opens a modal dialog of that one
+**Settings**, the second entry of an account's actions menu, with a sliders icon, opens a modal dialog of that one
 account's settings. It is titled "Account settings", whichever account it is opened on. The first line of its body is
 the account's name alone, with the email it is signed in with under it as in the account details dialog (above); its
 plan, login state, directory and usage are left to that dialog. Then come the account's settings, as rows like

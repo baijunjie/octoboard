@@ -19,6 +19,12 @@ import { itemKeySelector, partSelector, Tab, TabList, TabListContainer, useKeybo
 const REVEAL_START_MS = 64;
 const REVEAL_QUIET_MS = 100;
 
+/** The actions button the strip (the `root` it is looked for in) gives `agent`'s tab, for a caller that hands focus to
+ * it. */
+export function tabActionsTrigger(root: ParentNode, agent: Agent): HTMLElement | null {
+  return root.querySelector<HTMLElement>(`[data-tab-actions="${CSS.escape(agent)}"] button:not([hidden])`);
+}
+
 /** The underline strip of agent tabs, one per agent in `agents`, for the `Tabs` it sits in: each tab
  * the agent's icon and name at its content's width, from the strip's start, and the strip scrolls with
  * its edge labels when the tabs do not fit. Its container takes `className` and the other props of
@@ -95,7 +101,7 @@ export function AgentTabList({
   useLayoutEffect(() => {
     const agent = heldFocus.current;
     if (!agent || document.activeElement !== document.body) return;
-    overlay.current?.querySelector<HTMLElement>(`[data-tab-actions="${agent}"] button:not([hidden])`)?.focus();
+    tabActionsTrigger(overlay.current ?? document, agent)?.focus();
   }, [order]);
   return (
     <TabListContainer

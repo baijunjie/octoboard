@@ -81,7 +81,7 @@ export interface CodeRecord extends MessageFacets {
 }
 
 /** The operations `provider_unsupported` is worded under, as its variants. */
-const UNSUPPORTED_OPERATIONS: Record<string, MessageFacets> = { sign_in: {}, kick: {}, reset_credit: {}, config_sharing: {} };
+const UNSUPPORTED_OPERATIONS: Record<string, MessageFacets> = { sign_in: {}, kick: {}, reset_credit: {}, config_sharing: {}, cli_update: {} };
 
 /** The variant of a message about a directory the daemon cannot read or reach, on a host that is not a Mac: the
  * per-volume file access prompts its own wording explains are macOS's, and elsewhere the daemon reads with the
@@ -116,6 +116,17 @@ const CORE_CODES = {
   added_agents_undecided: { origin: "daemon", recovery: "availability" },
   agent_already_added: { origin: "daemon", recovery: "addedAgents" },
   agent_availability_pending: { origin: "daemon", recovery: "availability" },
+  // The latest-version and update codes are carried by an agent CLI's status and shown where it is (`AgentCliVersionSetting`'s
+  // mark); a failed or timed-out update this window asked for is also raised as an error alert (`AgentCliUpdateAlerts`).
+  // Those two have a remedy line of their own (`recoveryLine`), which the mark leaves out, and their sentences name the
+  // agent, which the daemon does not send for them (it sends the code only): the UI supplies `{agent}` wherever it words
+  // them. The two refusals of `update_agent_cli` carry the agent and need no remedy beyond their sentence.
+  agent_cli_latest_failed: { origin: "daemon", detailBlock: true, summaryForDetail: false },
+  agent_cli_latest_unreadable: { origin: "daemon" },
+  agent_cli_update_failed: { origin: "daemon", recovery: "none", detailBlock: true, recoveryLine: true },
+  agent_cli_update_running: { origin: "daemon", recovery: "none" },
+  agent_cli_update_timed_out: { origin: "daemon", recovery: "none", recoveryLine: true },
+  agent_cli_update_unsupported: { origin: "daemon", recovery: "none" },
   agent_not_added: { origin: "daemon", recovery: "agentNotAdded" },
   agent_not_available: { origin: "daemon", recovery: "tool", recoveryLine: true, codeParams: ["pathVar"], uiParams: { pathVar: "PATH" } },
   agent_not_installed: { origin: "daemon", recovery: "tool" },

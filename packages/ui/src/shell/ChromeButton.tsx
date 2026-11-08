@@ -1,7 +1,7 @@
 import React from "react";
 
 import { TitledControl } from "../components/hint/TitledControl";
-import { BadgeAnchor, Button, type ButtonPress } from "../primitives";
+import { BadgedControl, Button, type ButtonPress } from "../primitives";
 
 /** The hover and pressed fills of a control on the window chrome: translucent tints (`styles/surfaces.css`), so
  * they read on the native material as well as on the browser's opaque chrome colour. HeroUI's button
@@ -96,5 +96,5 @@ export function ChromeButton({
       </Button>
     </TitledControl>
   );
-  return badge ? <BadgeAnchor>{control}{badge}</BadgeAnchor> : control;
+  return <BadgedControl badge={badge}>{control}</BadgedControl>;
 }

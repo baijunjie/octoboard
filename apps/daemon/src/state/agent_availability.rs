@@ -30,9 +30,10 @@ impl AppState {
     }
 
     /// Merges the given entries into every agent's availability and broadcasts the whole, ordered,
-    /// three-entry result — never the argument itself, which may name only some agents. Called once
-    /// per daemon start, by `crate::agents::availability::spawn_determine` once its one-time
-    /// snapshot lands — never again afterwards, since nothing here re-determines it during a run.
+    /// three-entry result — never the argument itself, which may name only some agents. Called when
+    /// `crate::agents::availability::spawn_determine`'s one-time snapshot lands, and again for one
+    /// agent when an update of its CLI has ended (`availability::redetermine`), the one thing
+    /// during a run that can change what its binary resolves to.
     pub fn set_agent_availability(&self, agent_availability: Vec<AgentAvailability>) {
         {
             let mut map = self

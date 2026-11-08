@@ -288,7 +288,8 @@ nothing (see the end of this section). Nothing below asks while the window shows
 - **Once the daemon has begun to shut down, nothing new starts.** From then on — a confirmed quit or restart, or a
   termination signal (see "The daemon on its own" below) — no session is launched, resumed, reopened, switched to
   another account or handed off, and nothing else that needs a session to itself (a transfer of its branches, a change
-  of its owner) is begun: each is refused with `daemon_shutting_down`. A launch that was already past that check when
+  of its owner) is begun, and no update of an agent's CLI is started (see "Updating" in
+  `docs/product/agent-cli-updates.md`): each is refused with `daemon_shutting_down`. A launch that was already past that check when
   the shutdown began is ended as soon as its process comes up, leaving the session *interrupted* like the rest. Where a
   window still shows such a refusal, it is an error alert saying that the daemon is shutting down, so nothing can be
   started now, with no remedy and no **Report issue**. An automatic account switch, or its restore of the session, that
@@ -385,7 +386,8 @@ interrupted and resumable.
   application asks for when it starts the daemon; a daemon started on its own has no application to follow (see "The
   daemon on its own" below).
 - Agent processes do not outlive the daemon: it ends them on its way out, including when it is signalled to stop and
-  when it goes down on an internal failure.
+  when it goes down on an internal failure. An update of an agent's CLI is the exception: it runs on to its end (see
+  "Updating" in `docs/product/agent-cli-updates.md`).
 - A normal process exit stops the launch's attributed background processes, subject to the user's keeps and the
   boundaries in "Automatic stopping and its boundaries" in `docs/product/background-processes.md`. On an internal
   failure the daemon also kills every process in each agent's terminal session, helpers in process groups of their
@@ -456,6 +458,7 @@ as under any other.
 | `~/.octoboard/octoboardd.port` | The port the daemon listens on, alone, never the daemon's key, for a developer attaching to a daemon started by hand (see "Starting up"). Only the daemon that holds `daemon.lock` writes it; one that cannot write it logs a warning and starts all the same. Removed when the daemon stops, unless the file names another port by then, but not when the daemon goes down on an internal failure. |
 | `~/.octoboard/logs/daemon.log` | The daemon's log, at the level of information and above, the panics of any of its threads included. Only the daemon that holds `daemon.lock` writes it, so a second daemon refused at start leaves it alone. An entry that would take the file past **5 MiB** first rotates it: `daemon.log` becomes `daemon.log.1`, the one before that `daemon.log.2`, then `daemon.log.3`, and the oldest beyond that is dropped. |
 | `~/.octoboard/logs/desktop.log` | The desktop application's own log: each attempt to start the daemon or start it again and how it went, and the failures the application meets itself, each line with a UTC timestamp. A file larger than **1 MiB** when the application first writes to it in a launch is moved to `desktop.log.1`, replacing the one there. |
+| `~/.octoboard/agent-cli-updates/<agent>.log` | The output of the last update of that agent's CLI, one file per agent named by its id (see "Updating" in `docs/product/agent-cli-updates.md`). Overwritten by each update of the agent, kept across restarts. |
 | `~/.octoboard/process-ledger.json` | The launch identities, attributed processes and user keeps used for background-process cleanup across daemon restarts (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`). It records the boot ID of the system it was written in (on Linux), and records from before the system last started are ignored. An unreadable file is moved aside as `process-ledger.json.unreadable`; processes identified only by their launch tag are kept rather than stopped without knowing the user's choices. A file whose boot ID cannot be compared with the running system's (it records none, written before boot IDs were recorded, on a system that has one, or the daemon cannot read the system's) is treated as unreadable but not moved aside. |
 
 The desktop application keeps the window's size, position and maximized state in

@@ -2,9 +2,9 @@
 
 Settings that apply to every account of one agent, the default account included, rather than to a single account: the
 agent's tags, and the settings each agent's provider declares for itself — how Claude Code, Codex and Grok Build handle
-permission requests, and whether Codex and Grok Build load Claude Code's configuration. Each is set in the agent's tab
-of Settings' **Agent accounts** section, in a row above the agent's accounts table (see "The accounts table" in
-`docs/product/agent-accounts.md`).
+permission requests, and whether Codex and Grok Build load Claude Code's configuration. Each is set in a row of the
+agent's **Agent settings** dialog, opened from the Settings entry of the agent's menu in Settings' **Agent accounts**
+section (see "The agent settings dialog" in `docs/product/agent-accounts.md`).
 
 ## Agent tags
 
@@ -15,8 +15,8 @@ nothing by them. A tag follows the rules of a project's tag (see "Project tags" 
 there is no list of tags to manage, a tag is typed the first time it is used, and each tag is trimmed, an empty one is
 dropped and one matching another of the agent's tags ignoring case is dropped, the first spelling staying.
 
-They are set in the agent's tab, in the **Tags** row, the tab's top row in every agent's tab, above the rows of the
-agent's provider settings (see "Provider settings" below). A "?" help tip beside the row's name explains that tags
+They are set in the **Tags** row, the first row of every agent's settings dialog, above the rows of the agent's
+provider settings (see "Provider settings" below). A "?" help tip beside the row's name explains that tags
 describe the tasks the agent is suited for and give other sessions a reference when choosing an agent. The row keeps
 a line saying that it applies to every account of the agent and, under them across the row's full width, the same
 Tags field as a project's
@@ -73,8 +73,8 @@ Octoboard keeps only the user's explicit choices, in the daemon, so every window
 restart; every window is given the **value in effect** of every setting of every agent: a switch's choice or else its
 default, a choice setting's choice or else none. A stored choice the setting no longer takes is read as no choice.
 
-The agent's tab has one row per setting, in the order the provider declares them, under the Tags row: Claude Code's tab
-shows Permission approval; Codex's and Grok Build's show Permission approval then Claude compatibility. A setting the
+The agent's settings dialog has one row per setting, in the order the provider declares them, under the Tags row:
+Claude Code's shows Permission approval; Codex's and Grok Build's show Permission approval then Claude compatibility. A setting the
 window has no wording for is not shown; a choice the window has no name for is offered by its value in words (a value
 `read_only` as "Read only"). Each row holds the setting's name with a "?" help tip saying what it does, a line saying
 that it applies to every account of the agent, and, at the row's end, a selector for a choice or a switch for a switch,
@@ -105,7 +105,7 @@ window, not by the daemon, so this request saves such a choice at once.
 ## Approval modes
 
 How Claude Code, Codex and Grok Build handle permission requests and access: the **Permission approval** row of each
-agent's tab, a provider setting of the choice kind (see "Provider settings" above).
+agent's settings dialog, a provider setting of the choice kind (see "Provider settings" above).
 
 All three permission menus show a short secondary explanation under every option, including the inheritance option.
 Native summaries retain the original English wording for Codex and Grok Build and the original English and Simplified
@@ -192,9 +192,9 @@ review names the choice beforehand (see "The agent account settings are applied 
 
 Whether an agent other than Claude Code — Codex and Grok Build — has its sessions load Claude Code's configuration as
 well as its own: Claude Code's instructions (`CLAUDE.md` and rules), skills, agents, commands and MCP servers, and
-following Claude Code's hooks and permissions. It is the **Claude compatibility** row of each one's tab, a provider
-setting of the switch kind (see "Provider settings" above): under the Permission approval row and above the accounts
-table for Codex and Grok Build, and never in Claude Code's tab, which has no such setting. The row is there whether
+following Claude Code's hooks and permissions. It is the **Claude compatibility** row of each one's settings dialog, a
+provider setting of the switch kind (see "Provider settings" above): under the Permission approval row for Codex and
+Grok Build, and never in Claude Code's dialog, which has no such setting. The row is there whether
 or not Claude Code is an added agent. Its help tip ("About Claude compatibility") says what the setting does whatever
 the switch's position: when on, the agent's sessions load Claude Code's instructions, skills, agents, commands and MCP
 servers and follow its hooks and permissions; when off, they follow only their own configuration. For Codex it adds

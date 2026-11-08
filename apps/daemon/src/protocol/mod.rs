@@ -4,6 +4,7 @@
 //! named `crate::protocol::X` whichever section declares it.
 
 mod accounts;
+mod agent_cli;
 mod agents;
 mod browse;
 mod codes;
@@ -27,6 +28,7 @@ mod terminal;
 mod version;
 
 pub use accounts::*;
+pub use agent_cli::*;
 pub use agents::*;
 pub use browse::*;
 pub use codes::*;

@@ -165,7 +165,7 @@ Vite's hot update applies module by module, and when one module cannot be Fast R
 can keep running a mix of old and new code with nothing on screen to say so. Before treating something seen in a dev
 window as a defect of the current code, force a full reload (touching `packages/ui/index.html` does it).
 
-## Running dev apps share the machine: confirm which one answers, stop yours by PID, warn before touching `src-tauri`
+## Running dev apps and test runs share the machine: confirm which one answers, stop yours by PID, warn before touching `src-tauri`
 
 Several worktrees are often running at once, each with its own `packages/ui` dev server and `octoboardd`. The dev
 server's port is fixed (5174, `strictPort`), so a second one started in the background fails to bind. The URL then
@@ -178,6 +178,11 @@ of the user's own running app, interrupting their sessions. The same goes for th
 PID to stop is the one listening on its port (`lsof -ti tcp:<port> -sTCP:LISTEN`), not the one recorded when it was
 started: `pnpm exec vite` and `pnpm dev` alike run Vite as a child process, and stopping the `pnpm` PID leaves Vite
 serving on the port.
+
+Test runs are the same: `pkill -f "cargo test -p octoboardd"` ends every other worktree's run too. A cargo run cut off
+by a tool's timeout can leave its processes running and holding the build directory's lock, so the next run sits at
+"Blocking waiting for file lock"; stop that run's processes by PID if they are yours, and otherwise build into a
+`CARGO_TARGET_DIR` of your own under a temporary directory rather than killing them or waiting.
 
 A `pnpm tauri dev` app running from the worktree you edit rebuilds and restarts itself on every change under
 `apps/desktop/src-tauri/`, and the restart interrupts every session in it: the daemon exits with the app and ends the

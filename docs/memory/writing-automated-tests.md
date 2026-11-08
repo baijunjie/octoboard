@@ -62,7 +62,7 @@ under the test runner; it declares no capability, no compatibility, no codes and
 - The gallery's fixture daemon serves only the three shipped providers (`FIXTURE_PROVIDERS`), so gallery scenarios
   never show the test provider.
 
-## Verify behaviour derived from an agent's output by replaying a committed capture
+## Verify behaviour derived from an agent's or another tool's output by replaying a committed capture
 
 Anything the daemon derives from what an agent CLI emits — a hook payload, the transcript it writes,
 the screen it draws — is verified by replaying a real capture through the real function, not by
@@ -77,6 +77,12 @@ CLI version it came from recorded beside it, and replay the production entry con
 the bytes — the offset the real caller would have started from, the truncation a half-finished write
 leaves. Commit the near-miss capture next to the matching one: the shape that must *not* be
 recognised is what makes recognising the other one mean anything.
+
+The same holds for any other tool whose output the daemon reads, a package manager's failure above all: the text
+written from memory is not what the tool prints (npm 10 ends a failure with an advice block and a pointer to its log,
+so "the last line that looks like an error" picks a fragment that says nothing). Produce the failure for real against a
+throwaway target — an install into a `--prefix` under a temporary directory, made read-only for a permission failure —
+and build the fixture from that output, with the tool's version beside it.
 
 Where the code classifies an agent's record line by line — which lines are the person speaking, which
 are the conversation — one session's capture is not enough, and a hand-written fixture is worth

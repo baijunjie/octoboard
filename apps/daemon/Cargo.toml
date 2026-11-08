@@ -53,6 +53,12 @@ trash = "5"
 zstd = { version = "0.13", default-features = false }
 # Watches each repository's refs for a commit made outside the daemon (`crate::project_git::watch`).
 notify = "8.2"
+# Reads the latest published version of an agent CLI from the npm registry (`crate::agents::cli`), the
+# only HTTP the daemon makes. Blocking, with rustls (no OpenSSL), the system's certificate store as
+# its roots (`platform-verifier`; the bundled web roots `rustls` brings along are not used) and
+# SOCKS proxies, which the user's shell may name (`ALL_PROXY=socks5://...`): without
+# `socks-proxy` ureq panics at connect on one.
+ureq = { version = "3", default-features = false, features = ["rustls", "platform-verifier", "socks-proxy"] }
 
 # The platform layer's Unix modules (`src/platform`), the PTY backend of `platform::term` among
 # them.

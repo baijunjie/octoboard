@@ -2,7 +2,7 @@ import { createStore, type StoreApi } from "zustand";
 
 import type { ConnectionState } from "../daemon-client";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
-import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type Console, type GitStatus, type Host, type HostInfo, type Page, type Project, type ProviderInfo, type Session, type Settings, type ShellTerminal } from "../protocol";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus, type Console, type GitStatus, type Host, type HostInfo, type Page, type Project, type ProviderInfo, type Session, type Settings, type ShellTerminal } from "../protocol";
 import type { SessionRequest } from "./sessionRequests";
 
 /** A session waiting at its agent's folder-trust confirmation for the user's say-so. */
@@ -70,6 +70,18 @@ export interface State {
    * `agent_availability_updated` said. Holds every registered agent, in the registry's order, each `not_determined`
    * until the daemon's one-time determination for this run lands; empty until the first snapshot. */
   agentAvailability: Map<Agent, AgentAvailability>;
+  /** What the daemon last found out about each agent's installed CLI (version, install method, latest version, the
+   * update that ran), keyed by agent, as the last `snapshot` or `agent_cli_status_updated` said. Runtime state of the
+   * daemon, empty until a check (`check_agent_clis`) has ended for an agent: an agent with no entry is one not checked
+   * yet. */
+  agentCliStatuses: Map<Agent, AgentCliStatus>;
+  /** The agents whose CLI update this window asked for and has not seen end, each with the `started_at` of the update
+   * the agent's status held when the request went out (null for none): the update this window started is the first
+   * whose `started_at` differs from it. The window that asked raises the error alert for a failure, and its button is
+   * pending until the status holds a newer update. An entry goes when that update has ended or the request was
+   * refused; a snapshot keeps the agents whose update it shows running or ended as a later run than the one recorded.
+   * Client state, which the daemon knows nothing of. */
+  cliUpdatesStartedHere: Map<Agent, number | null>;
   /** The plan quota of every account of every available agent, as the last `snapshot` or
    * `account_quotas_updated` said. Runtime state of the daemon, so it starts empty and is never
    * kept anywhere else; an account with no entry is one the daemon has not reported on (see
@@ -120,6 +132,8 @@ const initialState: State = {
   settings: DEFAULT_SETTINGS,
   providers: [],
   agentAvailability: new Map(),
+  agentCliStatuses: new Map(),
+  cliUpdatesStartedHere: new Map(),
   accountQuotas: [],
   accountLogins: [],
   loginsStartedHere: [],

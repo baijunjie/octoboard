@@ -168,8 +168,8 @@ function SwitchSetting({ agent, descriptor, fallback }: { agent: Agent; descript
   );
 }
 
-/** An agent's provider settings, one row for each the daemon serves for it (`ProviderInfo.settings`), above its accounts
- * table: each applies to every account of the agent (see `docs/product/per-agent-settings.md`).
+/** An agent's provider settings, one row for each the daemon serves for it (`ProviderInfo.settings`), in the agent's
+ * settings dialog: each applies to every account of the agent (see `docs/product/per-agent-settings.md`).
  * A setting the provider's presentation module has no words for is not shown. */
 export function AgentProviderSettings({ agent }: { agent: Agent }): React.ReactElement {
   const provider = servedProvider(useProviders(), agent);

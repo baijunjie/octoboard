@@ -23,6 +23,8 @@ export const REPLY_TYPES = {
   start_account_login: "ack",
   use_reset_credit: "reset_credit_used",
   cancel_account_login: "ack",
+  check_agent_clis: "ack",
+  update_agent_cli: "ack",
   export_configuration: "configuration_exported",
   inspect_configuration: "configuration_inspected",
   import_configuration: "configuration_imported",

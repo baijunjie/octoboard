@@ -409,7 +409,10 @@ The places with a warning mark:
 - Settings' Updates row when the last check for updates did not finish, before **Check for updates** (see "The Updates
   and Update channel rows" in `docs/product/in-app-updates.md`);
 - an account's sharing change that did not finish, after its Share default configuration switch in the account's
-  settings dialog (see "Sharing the default configuration" in `docs/product/agent-accounts.md`).
+  settings dialog (see "Sharing the default configuration" in `docs/product/agent-accounts.md`);
+- an agent's Version row when the latest version of its CLI could not be looked up or its last update failed or did not
+  finish, before **Update** — one mark saying both when both hold (see "The Version row" in
+  `docs/product/agent-cli-updates.md`).
 
 The file viewer's notices about content it still shows are marks of all three tones: failures, warnings — whose amber
 warning says what has to be known before reading the content (a side of a change outside the project) — and notes.

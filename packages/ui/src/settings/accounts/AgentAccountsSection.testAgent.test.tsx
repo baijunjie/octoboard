@@ -3,7 +3,7 @@ import { act } from "react";
 import { expect, it, vi } from "vitest";
 
 import { request, settings } from "./agentAccountsSectionTestState";
-import { mount } from "./agentAccountsSectionTestSupport";
+import { chooseItem, mount, mountAgentSettings, openTabMenu } from "./agentAccountsSectionTestSupport";
 import { TEST_PROVIDERS, UNPRESENTED_PROVIDER } from "../../test/testProviders";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
@@ -13,32 +13,32 @@ vi.mock("../useSectionRefocus", async (importOriginal) => (await import("./agent
 vi.mock("../../components/form/OptionSelect", async () => ({ OptionSelect: (await import("./agentAccountsSectionTestState")).OptionSelectStandIn }));
 
 const tabNames = (container: HTMLElement) => [...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
-const modeControl = (container: HTMLElement) => container.querySelector('[role="tabpanel"] [aria-label^="Mode for"]');
+const modeControl = (container: HTMLElement) => container.querySelector('[aria-label^="Mode for"]');
 
-it("words the test-only provider's setting from its presentation module", () => {
+it("words the test-only provider's setting from its presentation module", async () => {
   settings.added_agents = ["claude", "test_agent"];
-  const { container } = mount("Test Agent");
-  expect(tabNames(container)).toEqual(["Claude Code", "Test Agent"]);
+  const { container, section } = await mountAgentSettings("Test Agent");
+  expect(tabNames(section)).toEqual(["Claude Code", "Test Agent"]);
   expect(modeControl(container)?.getAttribute("aria-label")).toBe("Mode for \u2068Test Agent\u2069");
-  expect(container.querySelector('[role="tabpanel"]')!.textContent).toContain("Test mode");
+  expect(container.textContent).toContain("Test mode");
 });
 
-it("shows a served provider without a presentation module under its served label, with none of its settings", () => {
+it("shows a served provider without a presentation module under its served label, with none of its settings", async () => {
   settings.added_agents = ["claude", "unpresented_agent"];
   const { container, set } = mount();
   set({ providers: [...TEST_PROVIDERS, UNPRESENTED_PROVIDER] });
   expect(tabNames(container)).toEqual(["Claude Code", "Unpresented Agent"]);
-  const tab = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find((el) => el.textContent === "Unpresented Agent")!;
-  expect(tab).toBeDefined();
-  expect(modeControl(container)).toBeNull();
+  await openTabMenu(container, "Unpresented Agent");
+  await chooseItem("Settings");
+  expect(modeControl(document.body.querySelector('[role="dialog"]')!)).toBeNull();
 });
 
-const modeSelect = (container: HTMLElement) => container.querySelector<HTMLSelectElement>('[role="tabpanel"] select[aria-label^="Mode for"]')!;
+const modeSelect = (container: HTMLElement) => container.querySelector<HTMLSelectElement>('select[aria-label^="Mode for"]')!;
 const dialogButton = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')].find((button) => button.textContent === label)!;
 
 it("saves a choice that is not marked for confirmation at once", async () => {
   settings.added_agents = ["claude", "test_agent"];
-  const { container, change } = mount("Test Agent");
+  const { container, change } = await mountAgentSettings("Test Agent");
   change(modeSelect(container), "careful");
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "set_provider_setting", agent: "test_agent", setting: "mode", value: "careful" });
   await act(async () => {});
@@ -46,7 +46,7 @@ it("saves a choice that is not marked for confirmation at once", async () => {
 
 it("asks for confirmation of the choice its descriptor marks, in the words of the provider's module, before saving it", async () => {
   settings.added_agents = ["claude", "test_agent"];
-  const { container, change } = mount("Test Agent");
+  const { container, change } = await mountAgentSettings("Test Agent");
   change(modeSelect(container), "reckless");
   expect(request).not.toHaveBeenCalled();
   expect(document.querySelector('[role="alertdialog"] h2')?.textContent).toBe("Use reckless mode?");

@@ -15,7 +15,8 @@ It is excluded from the production type check and from release verification, and
   `mergeHandlers` joins (a request answered by two modules throws; a `Handler` is typed to reply with the event its
   request is answered with, as `REPLY_TYPES` of `daemon-client.ts` names it, so a wrong reply fails the type check, and
   `neverReplied` is the reply of a request a scenario holds pending): `fixtureSessions.ts` (sessions),
-  `fixtureConsoles.ts`, `fixtureAccounts.ts` (accounts, and the refusals a session gets on one), `fixtureSettings.ts`,
+  `fixtureConsoles.ts`, `fixtureAccounts.ts` (accounts, and the refusals a session gets on one),
+  `fixtureAgentClis.ts` (the agents' CLI versions: the up-to-date statuses a window starts with, and an update), `fixtureSettings.ts`,
   `fixtureProjects.ts` (projects and their shell terminals), `fixtureFiles.ts` (a project's files, folder listings, path
   links) and `fixtureProcesses.ts` (the process ledger). A request no module answers is acknowledged. A new reply goes
   into the module of its domain, not into `fixtureDaemon.ts`. `BROWSE_REQUESTS` is the set of requests that read a

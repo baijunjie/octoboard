@@ -10,6 +10,7 @@ import type { Fixture, NotificationFixture } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { createConfigurationReplies } from "./fixtureConfiguration";
 import { createGitReplies, GIT_REQUESTS } from "./fixtureGit";
+import { createAgentCliReplies } from "./fixtureAgentClis";
 import { createAccountGuards, createAccountReplies } from "./fixtureAccounts";
 import { createConsoleReplies } from "./fixtureConsoles";
 import { createFixtureContext, mergeHandlers, neverReplied } from "./fixtureContext";
@@ -95,6 +96,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     createSessionReplies(context, guards, ledger),
     createConsoleReplies(context),
     createAccountReplies(context),
+    createAgentCliReplies(context),
     createSettingsReplies(context),
     createProjectReplies(context, ledger),
     createFileReplies(context),

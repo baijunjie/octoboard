@@ -30,8 +30,8 @@ const quotaOf = (agent: Account["agent"], account: string | null, patch: Partial
   email: null, ...patch,
 });
 
-it("asks the daemon to refresh the quotas when the section opens", () => {
-  expect(mount().opening).toEqual([[{ type: "refresh_account_quotas" }]]);
+it("asks the daemon to refresh the quotas and to check the CLI versions when the section opens", () => {
+  expect(mount().opening).toEqual([[{ type: "refresh_account_quotas" }], [{ type: "check_agent_clis" }]]);
 });
 
 it("still opens when the refresh request fails", async () => {

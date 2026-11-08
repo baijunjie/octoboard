@@ -914,6 +914,34 @@ pub enum RequestBody {
         #[cfg_attr(test, ts(optional = nullable))]
         account: Option<String>,
     },
+    /// Checks the installed CLI of the agents it selects, in the background: its version, how it
+    /// was installed (which decides what updates it) and the latest version published for that.
+    /// `agent` limits it to one agent, and with none it covers every agent not known to be missing
+    /// (one whose availability is not determined yet included). Answered with `ack` at once; each
+    /// agent's result follows as `agent_cli_status_updated`, and nothing follows for the round
+    /// when the shell environment cannot be taken. An agent already being checked or updated, or
+    /// checked or updated within the last 30 seconds, is left alone. Looking up the latest version is
+    /// best-effort: a failure is carried in the status, not sent as an `error`. See "Agent CLI
+    /// versions" in `PROTOCOL.md`.
+    CheckAgentClis {
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        agent: Option<AgentId>,
+    },
+    /// Updates an agent's installed CLI with the command its install method names (`<cli> update`
+    /// for the CLI's own installer, `npm install -g`, `brew upgrade`), run in the background and
+    /// allowed to take ten minutes. Sessions of the agent that run are left alone: they keep the
+    /// process they have, and sessions started afterwards use the new version. Answered with `ack`
+    /// once the update has started; its progress and outcome follow as `agent_cli_status_updated`
+    /// (`update`). Refused with `agent_not_added` for an agent not on the added list,
+    /// `provider_unsupported` (operation `cli_update`) for a provider that knows no way to update
+    /// its CLI, `agent_not_installed` for a CLI that does not resolve, `shell_environment_timeout`
+    /// for a login shell whose environment could not be captured, `agent_cli_update_unsupported`
+    /// for an install method that is not recognised, and `agent_cli_update_running` while an update
+    /// of the agent runs. The daemon never updates a CLI on its own.
+    UpdateAgentCli {
+        agent: AgentId,
+    },
     /// Checks every project of this console's current git status against its remote, concurrently.
     /// Answered with `ack` at once; the statuses follow as `project_git_status` broadcasts, one per
     /// project as its check finishes. A project already being checked — by an earlier call this

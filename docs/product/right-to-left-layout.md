@@ -50,6 +50,9 @@ product docs name for parts of the window:
 - The rail's waiting count carries its badge at the button's top left rather than its top right, and so does the rail's
   Processes button, so the badge points into the content panel and the overflow pill stays clear of the window's edge,
   the rail being down the window's right edge (see "The rail" in `docs/product/window-layout.md`).
+- The badge an agent tab's actions button wears in Settings' Agent accounts section while an update of the agent's CLI
+  is available sits at the button's top left rather than its top right (see "The agent strip" in
+  `docs/product/agent-accounts.md`).
 - The rail's Account usage indicator fills its capsules from the right (see "The selected session's quota indicator" in
   `docs/product/account-quotas.md`).
 - Icons that point a direction or show a side are mirrored: Back and Forward, the sidebar toggle, whose pane is drawn on

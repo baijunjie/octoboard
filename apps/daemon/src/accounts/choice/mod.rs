@@ -26,7 +26,7 @@ pub(crate) use automatic::{
 pub(crate) use automatic::{preferred_weekly_account, soonest_available_account};
 pub(crate) use refusals::{
     refuse_if_account_not_signed_in, refuse_if_account_quota_exhausted,
-    refuse_if_agent_unavailable, refuse_unless_agent_added,
+    refuse_if_agent_unavailable, refuse_unless_agent_added, refuse_unless_agent_added_to,
 };
 pub(crate) use standing::{
     account_can_open, agent_can_open, agent_is_available, cannot_open, CannotOpen,

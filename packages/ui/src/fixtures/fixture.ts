@@ -253,6 +253,14 @@ export interface Fixture {
   sessionHandoffs?: Record<string, FixtureError | "pending">;
   /** A refusal to save a provider setting (a `set_provider_setting`: an agent's permission approval or its Claude compatibility); successful requests update settings. */
   accountApprovalError?: FixtureError;
+  /** A refusal of `update_agent_cli` for what the window could not have seen coming (`agent_cli_update_unsupported` when the
+   * `npm` or `brew` that installed the CLI is not on the shell's `PATH`, `agent_cli_update_running` for an update another
+   * window started). Left out, an update that the agent's status allows is started. */
+  agentCliUpdateError?: FixtureError;
+  /** How an `update_agent_cli` that was started ends: `failed` with the code the daemon gives (`agent_cli_update_failed`
+   * with the tool's last line as `detail`, `agent_cli_update_timed_out` with none) and the CLI as it was. Left out, the
+   * update succeeds and the CLI is at its latest version. */
+  agentCliUpdateFailure?: { error: "agent_cli_update_failed" | "agent_cli_update_timed_out"; detail: string | null };
   /** A refusal to save an agent's tags, an `update_settings` that carries `agent_tags`; other settings updates and successful tag saves update settings as usual. */
   agentTagsError?: FixtureError;
   /** How a `set_account_sharing` that is not turned away at once ends. An `account_sharing_failed` error is a change that

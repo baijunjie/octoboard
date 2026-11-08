@@ -84,6 +84,13 @@ pub fn handoff_dir() -> PathBuf {
     data_dir().join("handoff")
 }
 
+/// The output of the last update run of each agent's CLI, one file per agent, overwritten by each
+/// run; see `crate::agents::cli`. Kept outside `run_dir`, which is cleared at startup: an update
+/// may still be running when the daemon is replaced, and its log is where to look afterwards.
+pub fn agent_cli_updates_dir() -> PathBuf {
+    data_dir().join("agent-cli-updates")
+}
+
 #[cfg(test)]
 mod tests {
     use super::home_from;

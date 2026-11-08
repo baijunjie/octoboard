@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 
+use crate::platform::fs::create_private;
 use crate::platform::proc::{
     self, bounded_pipe_reader, BoundedChunk, ChildHandle, Polite, ProcessId, Reach, REAP_GRACE,
 };
@@ -166,7 +167,6 @@ fn run_unbounded(
     timeout: Duration,
     input: Option<Vec<u8>>,
 ) -> Result<Output> {
-    static NEVER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     let bounds = Bounds {
         timeout,
         stdout_limit: usize::MAX,
@@ -176,6 +176,9 @@ fn run_unbounded(
     };
     run_bounded_with(command, &bounds, &NEVER, input).map_err(BoundedFailure::into_error)
 }
+
+/// A cancel flag that is never set, for a run nothing cancels.
+static NEVER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// The ceilings [`run_bounded`] and [`run_exchange`] hold a subprocess to, and what a stop of it
 /// reaches.
@@ -258,6 +261,37 @@ struct Spawned {
     stderr: mpsc::Receiver<BoundedChunk>,
 }
 
+/// Starts `command`, whose standard streams the caller has set, leading the process group or the
+/// session `reach` names.
+fn spawn_leader(
+    command: &mut Command,
+    reach: Reach,
+    term_grace: Duration,
+) -> std::result::Result<Leader, anyhow::Error> {
+    reach.lead(command);
+    let label = Path::new(command.get_program())
+        .file_name()
+        .unwrap_or(command.get_program())
+        .to_string_lossy()
+        .into_owned();
+    let mut child = command.spawn().context("spawning the command")?;
+    let handle = match ChildHandle::started(ProcessId(child.id()), reach, None) {
+        Ok(handle) => handle,
+        Err(err) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(err).context("taking on the command");
+        }
+    };
+    Ok(Leader {
+        child,
+        handle,
+        reach,
+        term_grace,
+        label,
+    })
+}
+
 /// Starts `command` leading the process group or the session `bounds.reach` names, with stdout
 /// and stderr piped (and stdin piped or null) and a reader thread on each pipe: stdout stops at
 /// `bounds.stdout_limit`, stderr is kept up to `bounds.stderr_limit` and the rest discarded.
@@ -266,12 +300,6 @@ fn spawn_bounded(
     bounds: &Bounds,
     pipe_stdin: bool,
 ) -> std::result::Result<Spawned, anyhow::Error> {
-    bounds.reach.lead(command);
-    let label = Path::new(command.get_program())
-        .file_name()
-        .unwrap_or(command.get_program())
-        .to_string_lossy()
-        .into_owned();
     command.stdin(if pipe_stdin {
         Stdio::piped()
     } else {
@@ -279,19 +307,11 @@ fn spawn_bounded(
     });
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
-    let mut child = command.spawn().context("spawning the command")?;
-    let handle = match ChildHandle::started(ProcessId(child.id()), bounds.reach, None) {
-        Ok(handle) => handle,
-        Err(err) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(err).context("taking on the command");
-        }
-    };
+    let mut leader = spawn_leader(command, bounds.reach, bounds.term_grace)?;
 
-    let stdin = child.stdin.take();
-    let stdout_pipe = child.stdout.take().expect("stdout was piped");
-    let stderr_pipe = child.stderr.take().expect("stderr was piped");
+    let stdin = leader.child.stdin.take();
+    let stdout_pipe = leader.child.stdout.take().expect("stdout was piped");
+    let stderr_pipe = leader.child.stderr.take().expect("stderr was piped");
     let (stdout_tx, stdout) = mpsc::channel();
     let (stderr_tx, stderr) = mpsc::channel();
     let stdout_limit = bounds.stdout_limit;
@@ -299,13 +319,7 @@ fn spawn_bounded(
     thread::spawn(move || bounded_pipe_reader(stdout_pipe, &stdout_tx, stdout_limit, true));
     thread::spawn(move || bounded_pipe_reader(stderr_pipe, &stderr_tx, stderr_limit, false));
     Ok(Spawned {
-        leader: Leader {
-            child,
-            handle,
-            reach: bounds.reach,
-            term_grace: bounds.term_grace,
-            label,
-        },
+        leader,
         stdin,
         stdout,
         stderr,
@@ -452,6 +466,50 @@ fn run_bounded_with(
             leader.stop(cancel);
             return Err(BoundedFailure::TimedOut(bounds.timeout));
         }
+    }
+}
+
+/// Runs an already-configured `command` to completion with its stdout and stderr written to the
+/// file at `output` (created, or truncated), killing what `reach` names after `term_grace` of
+/// `SIGTERM` if it is still running after `timeout`. For a command that is to outlive the
+/// daemon: with no pipe to the daemon, its output does not stop it when the daemon is gone, and
+/// nothing here cancels it. The file is not bounded in size: it is the output of a package
+/// manager's or an agent's own updater, which prints a few kilobytes, and the next run to the same
+/// path truncates it; a stream that filled the disk within `timeout` is not a case worth a cap.
+pub fn run_to_file(
+    command: &mut Command,
+    output: &Path,
+    timeout: Duration,
+    reach: Reach,
+    term_grace: Duration,
+) -> std::result::Result<ExitStatus, BoundedFailure> {
+    let (stdout, stderr) = create_private(
+        output,
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true),
+    )
+    .and_then(|file| file.try_clone().map(|again| (file, again)))
+    .with_context(|| format!("opening {} for the output", output.display()))
+    .map_err(BoundedFailure::Failed)?;
+    command.stdin(Stdio::null()).stdout(stdout).stderr(stderr);
+    let mut leader = spawn_leader(command, reach, term_grace).map_err(BoundedFailure::Failed)?;
+    let deadline = Instant::now() + timeout;
+    loop {
+        match leader.try_reap() {
+            Ok(Some(status)) => return Ok(status),
+            Ok(None) => {}
+            Err(err) => {
+                leader.stop(&NEVER);
+                return Err(BoundedFailure::Failed(err.into()));
+            }
+        }
+        if Instant::now() >= deadline {
+            leader.stop(&NEVER);
+            return Err(BoundedFailure::TimedOut(timeout));
+        }
+        thread::sleep(BOUNDED_POLL);
     }
 }
 

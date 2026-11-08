@@ -37,7 +37,8 @@ offered through an application store.
   downloads Microsoft's WebView2 bootstrapper and installs the runtime, which needs an internet connection at that
   point; where the runtime is present, nothing is downloaded.
 - **The agents**: Octoboard installs no agent. The user installs the CLIs of the agents they want to use, as on macOS;
-  on Windows, Claude Code and Codex also need Git for Windows.
+  on Windows, Claude Code and Codex also need Git for Windows. Octoboard can update an installed CLI when the user asks
+  (see `docs/product/agent-cli-updates.md`).
 - **Sharing the default configuration** with additional accounts needs Windows' Developer Mode turned on; without it,
   sharing is unavailable and each additional account keeps a configuration of its own (see "The sharing choice" in
   `docs/product/sharing-the-default-configuration.md`).

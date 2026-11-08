@@ -107,11 +107,19 @@ status; a bare count after a row's name (the rail processes panel's rows, a Focu
 which reuses the default small bordered `StatusBadge`: green (`success`) in the processes list and neutral in a Focus
 view chip.
 
-Rail counts, notification dots and console avatar markers use HeroUI `Badge` with its default typography, sizing,
+Rail counts, notification dots, the update badge on an agent tab's actions button and console avatar markers use
+HeroUI `Badge` with its default typography, sizing,
 border and colours, selected through its semantic props. Neither `Badge` nor `BadgeAnchor` has a style override.
 The anchor wraps the complete control, with the decorative badge beside the button so it does not inherit the
 button's pressed scale or descendant icon styles. The badges are inert, so they do not intercept interaction with
-the control underneath. Process counts are green (`success`); waiting counts are orange (`warning`).
+the control underneath. Process counts are green (`success`); waiting counts are orange (`warning`). A control that
+wears a badge only some of the time goes through `BadgedControl` (`packages/ui/src/primitives/Badge.tsx`), which
+`ChromeButton` and `ActionMenu`'s `badge` slot share.
+
+A menu entry that opens a settings dialog takes lucide's `Settings2` icon (the sliders): a console's and a project's
+settings, an account's Settings and an agent's Settings alike, so one icon means "this opens settings" in every menu.
+The gear (`Settings`) stays for the rail's Settings button, which opens the Settings window itself and is no menu
+entry.
 `StatusBadge` takes a semantic colour —
 `default` (neutral), `accent`, `success`, `warning`, `danger` or `help` (the project's purple, for help and hints) — and
 one of two variants:
@@ -782,15 +790,18 @@ A dialog that the Agent accounts section opens by itself as Settings opens (the 
 Settings, a login found running, Add agent) saves its restore target before Settings' tabs exist, so on closing it hands
 focus on itself rather than leave it to React Aria: to the section's tab, or for Add agent to the strip's Add agent
 button, else the empty panel's own. A row's account dialog goes back to the row's actions button, else the section's
-tab. These run ahead of React Aria's restore, wait until the target can take focus (the dialog has gone and nothing
-covers Settings), ring it as focus the user did not aim, and take it back once if a give-back lands after them
-(`handFocusOnceClosed` in `packages/ui/src/settings/accounts/AgentAccountsSection.tsx`). Settings itself, closing with
-no dialog under it, goes to the selected session's terminal, else to the control that opened it while that is still
-there, even one that never took focus (the press it ended on is recorded by `usePressedControl` in
-`packages/ui/src/components/`), else to the window's fallback (`focusAfterModalCloses` in
-`packages/ui/src/components/focus/modalFocus.ts`). Closing over another dialog, focus the restore left on `<body>` goes
-to the control in that dialog that opened Settings, else the control that dialog opens on. A return to the control that
-opened a dialog is a restore, not a handoff: its ring follows the input that closed the dialog.
+tab. An agent's Settings or Version dialog goes back to the control whose menu opened it (the tab's actions button, or
+the tab for its context menu), else the tab, else the section's tab; one that closes itself because its agent left the
+list or its CLI is no longer installed hands focus on with the ring, as a change the user did not make. These run ahead
+of React Aria's restore, wait until the target can take focus (the dialog has gone and nothing covers Settings), ring it
+as focus the user did not aim, and take it back once if a give-back lands after them (`handFocusOnceClosed` in
+`packages/ui/src/settings/accounts/AgentAccountsSection.tsx`). Settings itself, closing with no dialog under it, goes to
+the selected session's terminal, else to the control that opened it while that is still there, even one that never took
+focus (the press it ended on is recorded by `usePressedControl` in `packages/ui/src/components/`), else to the window's
+fallback (`focusAfterModalCloses` in `packages/ui/src/components/focus/modalFocus.ts`). Closing over another dialog,
+focus the restore left on `<body>` goes to the control in that dialog that opened Settings, else the control that dialog
+opens on. A return to the control that opened a dialog is a restore, not a handoff: its ring follows the input that
+closed the dialog.
 
 A dialog opened by a press inside the sidebar's drawer is a third such case: the drawer is not modal and a tap does not
 move focus, so React Aria would restore focus to whatever held it behind the drawer. The window remembers the drawer
@@ -1075,10 +1086,11 @@ matters, a mark at its point otherwise"), never a "?".
 
 The permission-approval explanation in Settings' Agent accounts section is an exception: the explanation of how
 requests are handled, when the choice takes effect and Codex's possible extra token cost sits in a `HelpTip` beside
-the Permission approval label of the agent's own setting row, above its accounts table; the row's visible description
+the Permission approval label of the agent's own setting row, in the agent's settings dialog (the Settings entry of its
+tab's menu); the row's visible description
 says only that the choice applies to every account of the agent.
 
-So is the Claude compatibility row in the same tabs (Codex and Grok Build): what the agent's sessions load and follow
+So is the Claude compatibility row in the same dialog (Codex and Grok Build): what the agent's sessions load and follow
 when it is on or off, how Octoboard brings it about for that agent, and when a change takes effect sit in a `HelpTip`
 beside the row's label; the visible description says only that the switch applies to every account of the agent. That
 line states the scope, not the switch's state, so it stays the same whichever way the switch is set.

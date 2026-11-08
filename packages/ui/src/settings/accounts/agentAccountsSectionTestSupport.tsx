@@ -13,12 +13,14 @@ import type { State } from "../../store";
 import { TestHost } from "../../test/TestHost";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
+import { AgentCliUpdateAlerts } from "./AgentCliUpdateAlerts";
 import {
   account,
   accountLogins,
   accountQuotas,
   accountSharing,
   availability,
+  cliStatuses,
   consoles,
   projects,
   request,
@@ -59,6 +61,7 @@ beforeEach(() => {
   settings.default_account_names = {};
   settings.disabled_default_accounts = [];
   availability.clear();
+  cliStatuses.clear();
 });
 afterEach(() => {
   act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
@@ -111,7 +114,7 @@ export function mount(tab?: string, strict = false) {
   });
   let navigation: React.ContextType<typeof AccountsNavigationContext> = { pending: false, dismissForms: 0, consume: () => {}, consumeAccount: () => {} };
   const render = () => act(() => {
-    const section = <TestHost daemon={daemon}><SettingsFocusContext.Provider value={() => entry}><AccountsNavigationContext.Provider value={navigation}><AgentAccountsSection /></AccountsNavigationContext.Provider></SettingsFocusContext.Provider></TestHost>;
+    const section = <TestHost daemon={daemon}><SettingsFocusContext.Provider value={() => entry}><AccountsNavigationContext.Provider value={navigation}><AgentAccountsSection /><AgentCliUpdateAlerts /></AccountsNavigationContext.Provider></SettingsFocusContext.Provider></TestHost>;
     root.render(strict ? <StrictMode>{section}</StrictMode> : section);
   });
   render();
@@ -132,7 +135,7 @@ export function mount(tab?: string, strict = false) {
     navigation = { ...navigation, account, dismissForms: navigation.dismissForms + 1 };
     render();
   };
-  return { container, selects, change, opening, render, unmount, navigate, showSharingOf, store, set, setSettings, setAccount, setSharing };
+  return { container, entry, selects, change, opening, render, unmount, navigate, showSharingOf, store, set, setSettings, setAccount, setSharing };
 }
 
 export const sharingSwitches = (container: HTMLElement) => [...container.querySelectorAll<HTMLInputElement>('input[role="switch"]')].filter((input) => input.getAttribute("aria-label")?.includes("Share default configuration"));
@@ -203,6 +206,26 @@ const ACCOUNT_OF_TAB: Record<string, string> = { "Claude Code": "claude-work", C
 export async function mountSettings(tab: string, strict = false) {
   const mounted = mount(tab, strict);
   const dialog = await openSettingsOf(mounted.container, ACCOUNT_OF_TAB[tab]!);
+  return { ...mounted, container: dialog, section: mounted.container, dialog };
+}
+
+/** `mount` with the Settings entry of the tab's menu chosen, which opens the agent's `AgentSettingsDialog`, whose rows are
+ * then found in the modal rather than in the tab: `container` is the modal, and `section` the section's own. */
+export async function mountAgentSettings(tab: string, strict = false) {
+  const mounted = mount(tab, strict);
+  await openTabMenu(mounted.container, tab);
+  await chooseItem("Settings");
+  const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
+  return { ...mounted, container: dialog, section: mounted.container, dialog, selects: [...dialog.querySelectorAll("select")] };
+}
+
+/** `mount` with the Version entry of the tab's menu chosen, which opens the agent's `AgentVersionDialog`: `container` is the
+ * modal, and `section` the section's own. */
+export async function mountAgentVersion(tab: string) {
+  const mounted = mount(tab);
+  await openTabMenu(mounted.container, tab);
+  await chooseItem("Version");
+  const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]')!;
   return { ...mounted, container: dialog, section: mounted.container, dialog };
 }
 

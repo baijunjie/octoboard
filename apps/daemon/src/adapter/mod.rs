@@ -379,6 +379,13 @@ pub trait AgentProvider: Send + Sync {
         None
     }
 
+    /// How the provider's CLI is installed and updated, which `crate::agents::cli` reads to tell
+    /// an install's method and to run its update. A provider that does not say gets
+    /// [`CliPackaging::NONE`]: its CLI's install is not recognised and no update of it is offered.
+    fn cli_packaging(&self) -> &'static CliPackaging {
+        &CliPackaging::NONE
+    }
+
     /// The program that starts the provider's CLI in place of the resolved `binary`, when `binary`
     /// is a launcher the CLI should not be started through. `None` starts `binary` itself; an
     /// error is a launcher whose native program cannot be found.
@@ -477,6 +484,57 @@ pub fn compatibility_source_of(
         .find_map(|setting| {
             provider(AgentId::from_wire_name(setting.compatibility_with?)?).compatibility_source()
         })
+}
+
+/// The facts of how a provider's CLI is installed and updated, from which an install's method is
+/// told by where the resolved binary lies and the command that updates it is chosen
+/// (`crate::agents::cli`).
+#[derive(Debug)]
+pub struct CliPackaging {
+    /// Directory names, outermost first, that mark the layout the CLI's own installer leaves, each
+    /// layout a run of consecutive components of the binary's path once its links are followed,
+    /// matched ignoring case (`.local/share/claude/versions`).
+    pub native_layouts: &'static [&'static [&'static str]],
+    /// The arguments that make a CLI of that layout update itself, after its binary; empty where
+    /// it does not.
+    pub native_update: &'static [&'static str],
+    /// How a CLI of that layout reports the latest version itself, when it can.
+    pub native_latest: Option<NativeLatest>,
+    /// The CLI's package on the npm registry, which names what an npm install is updated to and
+    /// what the latest version is read from.
+    pub npm_package: Option<&'static str>,
+    /// The Homebrew formula and the cask that install the CLI, each when one exists.
+    pub homebrew_formula: Option<&'static str>,
+    pub homebrew_cask: Option<&'static str>,
+}
+
+/// A CLI's own check for the latest version: a command whose stdout is a JSON object holding it.
+#[derive(Debug)]
+pub struct NativeLatest {
+    /// The arguments after the CLI's binary; the command only checks and changes nothing.
+    pub args: &'static [&'static str],
+    /// The field of the JSON object that holds the version.
+    pub version_field: &'static str,
+}
+
+impl CliPackaging {
+    /// A provider whose install is not recognised and whose CLI is not updated.
+    pub const NONE: CliPackaging = CliPackaging {
+        native_layouts: &[],
+        native_update: &[],
+        native_latest: None,
+        npm_package: None,
+        homebrew_formula: None,
+        homebrew_cask: None,
+    };
+
+    /// Whether this says nothing about how the CLI is installed.
+    pub fn is_none(&self) -> bool {
+        self.native_layouts.is_empty()
+            && self.npm_package.is_none()
+            && self.homebrew_formula.is_none()
+            && self.homebrew_cask.is_none()
+    }
 }
 
 /// An agent's version as major, minor, patch.
