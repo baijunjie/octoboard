@@ -81,11 +81,12 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   `docs/product/sidebar-session-rows.md`), or none. A chosen console session receives this session's reports, instead of
   the session answering directly to the user. A console with no such console session shows no choice at all, and the
   session is an independent project coordinator. A session still starting is not offered because its launch may yet fail
-  and remove it; `open_session` refuses one named as the owner (`unknown_session`). A binding can change afterwards —
-  the owner hands the session to another, an independent project coordinator sets one as its parent, or the owner or the
-  user releases the session, leaving it independent; see `docs/product/changing-session-owners.md`. A session the
-  console session itself starts is always bound to it, and one a project session starts is bound to that project
-  session; one started on another session's request is bound to nobody; see "Which sessions an owner drives" in
+  and remove it; `open_session` refuses one named as the owner (`unknown_session`), as it does an archived one, which
+  the dialog does not offer either. A binding can change afterwards — the owner hands the session to another, an
+  independent project coordinator sets one as its parent, or the owner or the user releases the session, leaving it
+  independent; see `docs/product/changing-session-owners.md`. A session the console
+  session itself starts is always bound to it, and one a project session starts is bound to that project session; one
+  started on another session's request is bound to nobody; see "Which sessions an owner drives" in
   `docs/product/hub-orchestration.md`. The choice is offered from the project list and the terminal's **New session**
   offer outside focus mode. Opened from a project's focus mode the dialog has no such field and the session is always an
   independent project coordinator; opened from a console session's focus mode it has none either, and shows a line

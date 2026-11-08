@@ -420,6 +420,25 @@ mod tests {
             .expect("insert"));
     }
 
+    /// An owner archived after the caller resolved it, before the insert, is refused like one that
+    /// is gone.
+    #[test]
+    fn a_session_is_not_inserted_under_an_archived_owner() {
+        let path = temp_db("insert-under-archived-owner");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        let mut owner = project_session("owner", None);
+        owner.status = SessionStatus::Archived;
+        store.insert_session(&owner).expect("owner");
+
+        assert!(!store
+            .insert_session_under_owner(&project_session("child", Some("owner")), "owner")
+            .expect("insert"));
+        assert!(store.get_session("child").unwrap().is_none());
+    }
+
     /// Locking is refused only for an archived session, which stays unlocked; a live session is
     /// locked, and an unknown id is not refused.
     #[test]

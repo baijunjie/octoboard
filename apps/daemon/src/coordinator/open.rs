@@ -405,12 +405,16 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         // have been deleted, or have bound itself to a project session or been handed to one, and
         // so can no longer own sessions: a binding that lands in between must not leave a third
         // level. The store checks the owner in the insert itself, and once this row exists the
-        // owner can neither be deleted nor change either way. Nothing has been launched yet.
+        // owner can neither be deleted nor change either way. Nothing has been launched yet. An
+        // owner archived in between is refused too, as `resolve_owner` would have.
         match &session.bound_to {
             Some(owner) => {
                 if !state.store.insert_session_under_owner(&session, owner)? {
                     return Err(match state.store.get_session(owner)? {
                         None => CodedError::unknown_session(owner),
+                        Some(found) if found.status == SessionStatus::Archived => {
+                            CodedError::unknown_session(owner)
+                        }
                         Some(_) => anyhow::anyhow!(
                             "`{owner}` can no longer own sessions: it was bound to a project \
                              session while this one was being opened"

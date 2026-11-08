@@ -157,10 +157,9 @@ export function SessionDialog({
   // that is the choice made, and `pickedOwner` keeps the earlier pick for the way back. Focus is on
   // the Conversation tabs, not in the select, when it goes, so nothing is dropped.
   //
-  // `owner` is only ever one still offered, never the picked id as it stands: `open_session` does
-  // not check the target's status, so sending an archived console session's id would create a live
-  // session bound to an archived one, whose reports would be refused. An archived pick therefore
-  // falls back to none, visibly in the select. `pickedOwner` keeps the stale id, so reopening that
+  // `owner` is only ever one still offered, never the picked id as it stands: the daemon refuses an
+  // archived owner with `unknown_session`, so an archived pick falls back to none, visibly in the
+  // select, rather than a submit that fails with that error. `pickedOwner` keeps the stale id, so reopening that
   // console session while the dialog is still open restores the choice, which is harmless. A fixed
   // owner that is no longer live cannot fall back to anything, so it stops the dialog instead.
   const owners = liveConsoleSessions(sessions, parentConsole.id);

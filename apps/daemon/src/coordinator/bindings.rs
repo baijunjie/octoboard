@@ -23,6 +23,9 @@ use crate::state::AppState;
 /// is where the depth limit is enforced, not only by which tools are offered: a session bound to a
 /// bound coordinator would otherwise make a third level. A session still starting is refused too:
 /// its launch may fail, and a failed launch deletes the session whatever is bound to it.
+/// So is an archived one: reports to it are refused (`SESSION_ARCHIVED`, in `write_or_keep` of
+/// `messaging/delivery.rs`), and a session bound to it outside the archive would break the
+/// invariant that an archived owner has none (`coordinator/lifecycle.rs`).
 pub(super) fn resolve_owner(
     state: &Arc<AppState>,
     console_id: &str,
@@ -41,7 +44,10 @@ pub(super) fn resolve_owner(
         .get_session(&target_id)?
         .filter(|target| {
             target.console_id == console_id
-                && target.status != SessionStatus::Starting
+                && !matches!(
+                    target.status,
+                    SessionStatus::Starting | SessionStatus::Archived
+                )
                 && match target.kind {
                     SessionKind::Console => true,
                     SessionKind::Project => {

@@ -83,17 +83,22 @@ impl Store {
     }
 
     /// Inserts a project session bound to `owner`, only while `owner` can still own sessions — it
-    /// is a coordinator, the condition [`Self::set_binding`] keeps — and says whether it did. The
-    /// check and the insert run under one lock, so a binding that lands between the caller's own
-    /// check and this write either came first, and is seen here, or comes after, and sees the new
-    /// session as a child of `owner` (`set_binding`'s `childless`): orchestration cannot reach a
+    /// is a coordinator, the condition [`Self::set_binding`] keeps, and not archived — and says
+    /// whether it did. The check and the insert run under one lock, so a binding that lands
+    /// between the caller's own check and this write either came first, and is seen here, or comes
+    /// after, and sees the new session as a child of `owner` (`set_binding`'s `childless`):
+    /// orchestration cannot reach a
     /// third level either way. `false` also covers an `owner` that is gone.
     pub fn insert_session_under_owner(&self, session: &Session, owner: &str) -> Result<bool> {
         let conn = self.lock();
         let can_own: bool = conn.query_row(
             "SELECT EXISTS (SELECT 1 FROM sessions AS owner WHERE owner.id = ?1
-                              AND owner.role = ?2)",
-            params![owner, enum_to_text(&Role::Coordinator)],
+                              AND owner.role = ?2 AND owner.status != ?3)",
+            params![
+                owner,
+                enum_to_text(&Role::Coordinator),
+                enum_to_text(&SessionStatus::Archived),
+            ],
             |row| row.get(0),
         )?;
         if !can_own {

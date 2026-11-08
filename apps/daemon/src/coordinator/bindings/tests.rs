@@ -69,9 +69,9 @@ fn a_project_session_binds_to_the_console_session_it_names() {
 }
 
 /// A binding changes afterwards only at the session's or its owner's request, so naming one
-/// that turns out not to exist, to belong to another console, or to be a project session
-/// outside the new session's own project must be refused outright rather than silently dropped
-/// or discovered later.
+/// that turns out not to exist, to belong to another console, to be archived, or to be a project
+/// session outside the new session's own project must be refused outright rather than silently
+/// dropped or discovered later.
 #[test]
 fn binding_to_an_invalid_target_is_refused() {
     let (state, _dir) = crate::test_support::app_state("coordinator-resolve-bound-to-invalid");
@@ -90,6 +90,9 @@ fn binding_to_an_invalid_target_is_refused() {
         .store
         .insert_session(&bare_session("project-session-1", SessionKind::Project))
         .unwrap();
+    let mut archived = bare_session("console-session-archived", SessionKind::Console);
+    archived.status = SessionStatus::Archived;
+    state.store.insert_session(&archived).unwrap();
 
     // (requested target, why it is not a valid binding)
     let cases = [
@@ -102,6 +105,7 @@ fn binding_to_an_invalid_target_is_refused() {
             "project-session-1",
             "a project session when the new session has no project",
         ),
+        ("console-session-archived", "an archived console session"),
     ];
     for (target, why) in cases {
         let err = resolve_bound_to(
