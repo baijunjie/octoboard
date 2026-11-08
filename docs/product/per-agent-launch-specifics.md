@@ -323,7 +323,9 @@ write only to its own home, the working directory and temporary directories, jud
 per-session home's login and session records are links back into the source home, so a sandboxed session could not even
 create its conversation. The alert's remedy is to turn the sandbox off where it is set, or to have whoever manages that
 setting do so; a conversation begun under the sandbox keeps it, so it is to be continued in Grok itself. A profile of
-`off` is no sandbox. Which profile applies is read as Grok layers it:
+`off` is no sandbox. Which profile applies is read as Grok layers it. The system-wide files below are read from
+`/etc/grok` on macOS and Linux only: Grok Build has no system-wide configuration directory on Windows, so neither is read
+there, and a file under `\etc\grok` on the daemon's current drive refuses nothing.
 
 - `[sandbox] profile` in the system-wide `/etc/grok/requirements.toml` is a pin that takes precedence over everything:
   any other profile there refuses, and `off` there allows the launch whatever else is set;

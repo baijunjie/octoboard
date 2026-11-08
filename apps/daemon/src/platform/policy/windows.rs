@@ -21,6 +21,12 @@ pub fn managed_dir(name: &str, _etc_name: &str) -> PathBuf {
     PathBuf::from(program_files).join(name)
 }
 
+/// The system configuration directory of a Unix program, which Windows does not have: a path from
+/// the root would name a folder on the current drive that no program reads.
+pub fn system_config_dir(_name: &str) -> Option<PathBuf> {
+    None
+}
+
 /// The `Settings` value of `HKLM` and `HKCU` `SOFTWARE\Policies\<product>`, as stored: a
 /// `REG_EXPAND_SZ` value is not expanded, as what it holds is a document, not a path.
 pub fn registry_policy(product: &str) -> Policy {

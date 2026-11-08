@@ -129,7 +129,7 @@ fn terminal_titles_lose_the_spinner_the_status_and_groks_own_name() {
 
 /// `plan` against an empty system-wide configuration directory of the fixture's own.
 pub(super) fn plan_isolated(spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
-    plan_under(spec, &spec.scratch.join("etc-grok"))
+    plan_under(spec, Some(&spec.scratch.join("etc-grok")))
 }
 
 /// Stands a fake `~/.grok` up inside the fixture and points the launch environment at it.

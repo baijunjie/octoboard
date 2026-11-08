@@ -23,7 +23,7 @@ pub(super) struct SandboxSetting {
 pub(super) fn require_unsandboxed(
     spec: &LaunchSpec<'_>,
     source_home: &Path,
-    system_dir: &Path,
+    system_dir: Option<&Path>,
 ) -> Result<()> {
     let Some(setting) = sandbox_setting(spec, source_home, system_dir) else {
         return Ok(());
@@ -41,18 +41,18 @@ pub(super) fn require_unsandboxed(
     ))
 }
 
-/// The sandbox profile Grok would apply to this launch, `None` when it would run unsandboxed or
-/// the profile cannot be read reliably. A non-`off` `requirements.toml` pin (the system
-/// directory's; the home's is excluded from the farm) refuses, and an `off` pin stops the search.
-/// On a resume, either the profile saved with the session or `GROK_SANDBOX` in the launch
-/// environment being non-`off` refuses, because Grok restores a saved profile and refuses a resume
-/// whose requested one differs. Otherwise, and for a resume with no saved profile found,
+/// The sandbox profile Grok would apply to this launch, `None` when it would run unsandboxed or the
+/// profile cannot be read reliably. A non-`off` `requirements.toml` pin (the system directory's, on
+/// a host where Grok has one; the home's is excluded from the farm) refuses, and an `off` pin stops
+/// the search. On a resume, either the profile saved with the session or `GROK_SANDBOX` in the
+/// launch environment being non-`off` refuses, because Grok restores a saved profile and refuses a
+/// resume whose requested one differs. Otherwise, and for a resume with no saved profile found,
 /// `GROK_SANDBOX` beats the user's `config.toml`, which beats the system `managed_config.toml`.
 /// `GROK_SANDBOX` is read from the launch environment, not the daemon's own.
 pub(super) fn sandbox_setting(
     spec: &LaunchSpec<'_>,
     source_home: &Path,
-    system_dir: &Path,
+    system_dir: Option<&Path>,
 ) -> Option<SandboxSetting> {
     let on = |source: String, profile: String| {
         (profile != "off").then_some(SandboxSetting { source, profile })
@@ -70,7 +70,9 @@ pub(super) fn sandbox_setting(
             .map(|profile| ("GROK_SANDBOX".to_string(), profile.to_string()))
     };
 
-    if let Some((source, profile)) = from_file(system_dir, "requirements.toml") {
+    let from_system = |name: &str| system_dir.and_then(|dir| from_file(dir, name));
+
+    if let Some((source, profile)) = from_system("requirements.toml") {
         return on(source, profile);
     }
 
@@ -87,13 +89,9 @@ pub(super) fn sandbox_setting(
     if let Some((source, profile)) = from_env() {
         return on(source, profile);
     }
-    [
-        (source_home, grok::GROK_CONFIG_FILE),
-        (system_dir, "managed_config.toml"),
-    ]
-    .into_iter()
-    .find_map(|(dir, name)| from_file(dir, name))
-    .and_then(|(source, profile)| on(source, profile))
+    from_file(source_home, grok::GROK_CONFIG_FILE)
+        .or_else(|| from_system("managed_config.toml"))
+        .and_then(|(source, profile)| on(source, profile))
 }
 
 /// `[sandbox] profile` of a Grok TOML file; `None` when the file is absent, unreadable within its

@@ -61,7 +61,7 @@
 //! layers (see `sandbox_setting`); macOS managed preferences (`ai.x.grok`) are not read, a known
 //! gap that leaves such a launch to fail inside Grok. The home's own `requirements.toml` and
 //! `managed_config.toml` are not read either, because the farm excludes them and Grok never loads
-//! them from it; the system directory's are.
+//! them from it; the system directory's are, on a host where Grok has one.
 //!
 //! A session pins its source home at creation, because the session records a resume looks for
 //! live in that home's `sessions/`; the farm is still what Grok runs against, so nothing changes
@@ -148,10 +148,6 @@ const HOOK_EVENTS: &[&str] = &[
 /// no title after it.
 const WAITING_STATUS: &str = "Waiting for response…";
 
-/// Where Grok reads the fleet-wide `managed_config.toml` and `requirements.toml` from. The ones in
-/// its home are excluded from the farm, so Grok running against it never loads them.
-const SYSTEM_GROK_DIR: &str = "/etc/grok";
-
 pub struct GrokProvider;
 
 impl AgentProvider for GrokProvider {
@@ -231,13 +227,17 @@ impl AgentProvider for GrokProvider {
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan> {
-        plan_under(spec, Path::new(SYSTEM_GROK_DIR))
+        // Grok reads the fleet-wide `managed_config.toml` and `requirements.toml` from `/etc/grok`,
+        // and from no system directory on Windows. The ones in its home are excluded from the
+        // farm, so Grok running against it never loads them.
+        let system_dir = crate::platform::policy::system_config_dir("grok");
+        plan_under(spec, system_dir.as_deref())
     }
 }
 
-/// `plan` with the directory of Grok's system-wide configuration passed in, so a test never
-/// reads the machine's own.
-fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
+/// `plan` with the directory of Grok's system-wide configuration passed in, `None` on a host
+/// where Grok has none, so a test never reads the machine's own.
+fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<LaunchPlan> {
     let pinned = super::pinned_config_dir(spec, AgentId::GROK)?;
     // Unlike Claude Code and Codex, an account Grok has never been run against cannot simply be
     // created on first use: the per-session home only links what already exists in the source,

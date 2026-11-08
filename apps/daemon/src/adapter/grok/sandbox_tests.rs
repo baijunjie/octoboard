@@ -172,7 +172,7 @@ fn the_environment_outranks_the_users_config_and_the_config_outranks_the_managed
     )
     .expect("managed config");
     let check = |fixture: &SpecFixture| {
-        sandbox_setting(&fixture.spec(), &home, &system).map(|found| found.profile)
+        sandbox_setting(&fixture.spec(), &home, Some(&system)).map(|found| found.profile)
     };
     assert_eq!(
         check(&fixture).as_deref(),
@@ -236,7 +236,7 @@ fn a_system_wide_requirements_pin_and_managed_default_are_read() {
     let system = fixture.scratch.join("etc-grok");
     std::fs::create_dir_all(&system).expect("system directory");
     let check = |fixture: &SpecFixture| {
-        sandbox_setting(&fixture.spec(), &home, &system).map(|found| found.profile)
+        sandbox_setting(&fixture.spec(), &home, Some(&system)).map(|found| found.profile)
     };
     assert_eq!(check(&fixture), None);
 
@@ -259,6 +259,33 @@ fn a_system_wide_requirements_pin_and_managed_default_are_read() {
         "[sandbox]\nprofile = \"custom\"\n",
     )
     .expect("requirements");
+    assert_eq!(check(&fixture).as_deref(), Some("custom"));
+}
+
+/// On a host where Grok has no system configuration directory (Windows), the launch goes ahead
+/// on the environment and the user's config alone.
+#[test]
+fn with_no_system_directory_the_environment_and_the_users_config_decide() {
+    let mut fixture = spec_fixture();
+    let home = with_default_home(&mut fixture);
+    let check = |fixture: &SpecFixture| {
+        sandbox_setting(&fixture.spec(), &home, None).map(|found| found.profile)
+    };
+    assert_eq!(check(&fixture), None);
+    assert!(
+        plan_under(&fixture.spec(), None).is_ok(),
+        "the launch goes ahead"
+    );
+
+    std::fs::write(
+        home.join("config.toml"),
+        "[sandbox]\nprofile = \"read-only\"\n",
+    )
+    .expect("config");
+    assert_eq!(check(&fixture).as_deref(), Some("read-only"));
+    fixture
+        .shell_env
+        .insert("GROK_SANDBOX".to_string(), "custom".to_string());
     assert_eq!(check(&fixture).as_deref(), Some("custom"));
 }
 
