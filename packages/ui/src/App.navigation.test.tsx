@@ -144,6 +144,7 @@ it("selects the session chosen in the menu bar icon's menu, in its own console, 
   let choose!: (id: string) => void;
   const statusItem: StatusItemCapability = {
     setMenu: async () => {},
+    setVisible: async () => {},
     onSessionChosen: (handler) => {
       choose = handler;
       return () => {};

@@ -155,8 +155,9 @@ Where to start, by question:
 - [Moving focus between regions](product/moving-focus-between-regions.md) — F6 navigation between the window's
   regions.
 - [Keyboard shortcuts](product/keyboard-shortcuts.md) — the changeable shortcuts, how they are matched and shown.
-- [Settings](product/settings.md) — the Settings dialog and each of its sections: General, Git, Agent accounts, Agent
-  behavior, Trusted folders, Permissions, Notifications, Keyboard shortcuts, Configuration and About.
+- [Settings](product/settings.md) — the Settings dialog and each of its sections: General, App behavior, Git, Agent
+  accounts, Agent behavior, Trusted folders, Permissions, Notifications, Keyboard shortcuts, Cleanup, Configuration and
+  About.
 - [Appearance](product/appearance.md) — light, dark and follow-the-system, and what follows the choice.
 - [Language](product/language.md) — the offered languages, how the choice is made and stored.
 - [Right-to-left layout](product/right-to-left-layout.md) — what is mirrored under a right-to-left language.
@@ -202,9 +203,14 @@ Where to start, by question:
   Windows installer).
 - [Application lifecycle](product/application-lifecycle.md) — startup, daemon connection and its key, restarting a
   daemon that dies, closing, quitting, crashes, logs and owned files.
+- [Launch at login](product/launch-at-login.md) — opening Octoboard when the user logs in: the system entry it reflects,
+  waiting for approval on macOS, and the hidden start at a login launch.
+- [Keeping the computer awake](product/keeping-the-computer-awake.md) — Prevent sleep: Always or while sessions work,
+  which sessions count, and what is held on macOS and Windows.
 - [In-app updates](product/in-app-updates.md) — update channels, where updates come from, checking, notice, download
   and restart.
-- [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon, its dot and menu.
+- [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon, its dot, its red eyes while the computer is kept
+  awake, its menu and hiding it.
 - [Website](product/website.md) — the official site: publishing, pages and languages, the homepage and navigation,
   platform availability, motion and missing pages.
 - [Website search indexing](product/website-search-indexing.md) — the sitemap, robots.txt, canonical and language

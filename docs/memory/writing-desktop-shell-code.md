@@ -57,3 +57,15 @@ of its own, which is not documented, and cuts an item title that does not fit in
 - Anything the shell places against the menu's width is placed against `NSMenu::size().width` clamped to a width
   the data's caps keep the menu under, never the reported width alone: past AppKit's cap it lands beyond the edge
   shown and is clipped.
+
+## Take the object a hand-written `msg_send!` answers with as `Option<Retained<_>>`
+
+Applies to every message send written by hand with `objc2`'s `msg_send!` in `apps/desktop/src-tauri/src/` (the
+generated `objc2-*` bindings already carry each method's nullability). Declaring the answer as a plain `Retained<_>`
+makes `msg_send!` panic when the object answers nil, rather than hand back anything to check, and answers Apple
+documents as possibly nil are often nil in practice: a plain Dock Quit carries no quit reason, so its Apple event has
+no descriptor under that keyword. Inside an AppKit callback the panic does not surface as a crash either: the
+`applicationShouldTerminate:` override in `apps/desktop/src-tauri/src/lifecycle/macos.rs` catches it and answers its
+fallback, so such a quit went straight past the exit confirmation with nothing logged. So declare each object answer
+as `Option<Retained<_>>` and turn nil into the caller's "nothing there" (`apps/desktop/src-tauri/src/apple_event.rs`
+is the shape), keeping a plain `Retained<_>` only where Apple's header marks the method's answer nonnull.

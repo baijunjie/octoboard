@@ -5,18 +5,17 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { LanguageProvider } from "../i18n/react";
 import { runInBackground } from "../lifecycle/runInBackground";
+import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import { useBackgroundRunSync } from "../lifecycle/useBackgroundRunSync";
 import type { PlatformAdapter } from "../platform";
 import { mountHost } from "../test/mountHost";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
-import { GeneralSection } from "./GeneralSection";
+import { AppBehaviorSection } from "./AppBehaviorSection";
 import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// The rows beside it read the theme and the daemon's settings, which this test has no use for.
-vi.mock("./AppearanceSetting", () => ({ AppearanceSetting: () => null }));
-vi.mock("./LanguageSetting", () => ({ LanguageSetting: () => null }));
+// The rows beside it read the daemon's settings, which this test has no use for.
 vi.mock("./DaemonSwitchSetting", () => ({ DaemonSwitchSetting: () => null }));
 
 function Sync() {
@@ -28,7 +27,7 @@ function mount(platform: PlatformAdapter) {
   return mountHost(
     <LanguageProvider>
       <Sync />
-      <GeneralSection />
+      <AppBehaviorSection />
     </LanguageProvider>,
     { platform },
   );
@@ -102,4 +101,18 @@ it("pushes and stores the choice when the switch is toggled", async () => {
   expect(toggle.checked).toBe(true);
   expect(set).toHaveBeenLastCalledWith(true);
   expect(localStorage.getItem(PREFERENCE_KEYS.runInBackground)).toBe("true");
+});
+
+it("names the menu bar icon as the way back only while it is shown", async () => {
+  const container = mount({ kind: "tauri", host: BROWSER_HOST, backgroundRun: { set: async () => {} }, statusItem: { setMenu: async () => {}, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} } });
+  await act(async () => {
+    showMenuBarIcon.set(true);
+  });
+  expect(container.textContent).toContain("brings the window back");
+  await act(async () => {
+    showMenuBarIcon.set(false);
+  });
+  expect(container.textContent).not.toContain("brings the window back");
+  expect(container.textContent).toContain("Open Octoboard again or click one of its notifications");
+  showMenuBarIcon.set(true);
 });

@@ -719,6 +719,9 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         auto_start_quota_windows: Option<bool>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        resume_sessions_on_start: Option<bool>,
         /// A blank value goes back to the built-in default.
         #[cfg_attr(test, ts(optional))]
         default_clone_dir: Option<String>,

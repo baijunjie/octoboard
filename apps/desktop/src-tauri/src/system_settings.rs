@@ -27,6 +27,10 @@ pub fn notifications_pane_url(major_version: isize, bundle_id: Option<&str>) -> 
 pub const SCREEN_RECORDING_PANE_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
 
+/// The pane listing the login items, where an item waiting for approval is allowed.
+pub const LOGIN_ITEMS_PANE_URL: &str =
+    "x-apple.systempreferences:com.apple.LoginItems-Settings.extension";
+
 /// The pane holding the Accessibility grant.
 pub const ACCESSIBILITY_PANE_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";

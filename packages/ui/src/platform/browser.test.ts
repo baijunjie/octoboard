@@ -114,7 +114,7 @@ describe("the host facts", () => {
   ] as const)("take the system and the modifier from the platform %j and claim nothing a shell provides", (platform, os, modifier) => {
     vi.stubGlobal("navigator", { platform });
     const host = browserPlatform().host;
-    expect(host).toMatchObject({ os, modifier, chrome: "none", translucent: false, appMenu: false, statusItem: "none", badge: false, runInBackground: false, permissionsPane: false, notificationSettings: "none", updater: "none" });
+    expect(host).toMatchObject({ os, modifier, chrome: "none", translucent: false, appMenu: false, statusItem: "none", badge: false, runInBackground: false, keepAwake: false, launchAtLogin: false, permissionsPane: false, notificationSettings: "none", updater: "none" });
     expect(host.trafficLightInset).toBeUndefined();
   });
 

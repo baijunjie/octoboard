@@ -7,8 +7,10 @@ whose terms this doc uses; how the export dialog and the import's review and res
 
 ## Which settings travel
 
-The **application settings** region carries every setting of Settings' **General**, **Git**, **Agent behavior** and
-**Keyboard shortcuts** sections (see `docs/product/settings.md`). The **accounts** region carries every setting of its
+The **application settings** region carries every setting of Settings' **General**, **App behavior**, **Git**, **Agent
+behavior**, **Keyboard shortcuts** and **Cleanup** sections (see `docs/product/settings.md`), except App behavior's
+**Launch at login**, which is the system's own state rather than a setting Octoboard keeps (see
+`docs/product/launch-at-login.md`). The **accounts** region carries every setting of its
 **Agent accounts** section: the accounts themselves (see "The accounts" in
 `docs/product/configuration-export-and-import.md`) and the settings that apply to all of an agent's accounts or to
 every agent (see "The agent account settings an export carries" below). The one setting of those sections left out is
@@ -36,13 +38,23 @@ that has application settings.
   `docs/product/markdown-documents.md`).
 - **Order the sidebar by status** (see that section in `docs/product/settings.md`), under `sidebar_order_by_status`.
   The review's line for turning it on says that sessions and projects in the sidebar then move as their status changes.
-- **Automatically delete archived sessions whose conversation is gone** (see "Deleting archived sessions whose
-  conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`.
+
+**App behavior**
+
+- **Resume sessions on start** (see that section in `docs/product/settings.md`), under `resume_sessions_on_start`. The
+  review's line for turning it on says that Octoboard will then resume, each time it starts, the sessions that were
+  running when it last stopped. A document from a build without the setting has no such key, and an import of it
+  leaves this machine's choice as it is.
+- **Keep running in the background**, under `run_in_background`, `true` or `false`, carried only by a client that has
+  the setting — the desktop application (see "Closing the window" in `docs/product/application-lifecycle.md`).
+- **Show menu bar icon**, under `show_menu_bar_icon`, `true` or `false`, carried only by the desktop application (see
+  "Hiding the icon" in `docs/product/menu-bar-icon.md`).
+- **Prevent sleep**, under `keep_awake`, `true` or `false`, and **When to prevent sleep**, under `keep_awake_when`,
+  `always` or `working` (While sessions work), carried together only by the desktop application (see
+  `docs/product/keeping-the-computer-awake.md`).
 - **Close idle terminals when closing the panel** (see that section in `docs/product/settings.md`), under
   `auto_close_idle_shell_terminals`. The review's line for turning it on says that closing the Terminal panel closes
   idle terminals and keeps terminals with running programs.
-- **Keep running in the background**, under `run_in_background`, `true` or `false`, carried only by a client that has
-  the setting — the macOS application (see "Closing the window" in `docs/product/application-lifecycle.md`).
 
 **Git**
 
@@ -86,6 +98,11 @@ that has application settings.
   `docs/product/keyboard-shortcuts.md`. A document without them leaves the importing client's shortcuts as they are
   when its settings are applied; one with `{}` puts them back to their defaults.
 
+**Cleanup**
+
+- **Automatically delete archived sessions whose conversation is gone** (see "Deleting archived sessions whose
+  conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`.
+
 A document whose export did not include the application settings carries none of them, whichever consoles it holds.
 
 ## The agent account settings an export carries
@@ -119,25 +136,27 @@ holds:
 
 ## The settings a client holds
 
-The appearance, the Markdown style, keeping running in the background and the keyboard shortcuts are each client's
-own, kept in that client rather than by the daemon, and the language a client shows is its own too. So the client adds
-them to the document it saves whenever that document carries the application settings — the appearance, the Markdown
-style, the language it shows, its changed shortcuts and, where it has the setting, keeping running in the background —
-and the daemon builds none of them but the language and reads none of them. A document with application settings
+The appearance, the Markdown style, keeping running in the background, showing the menu bar icon, Prevent sleep with
+When to prevent sleep, and the keyboard shortcuts are each client's own, kept in that client rather than by the daemon,
+and the language a client shows is its own too. So the client adds them to the document it saves whenever that document
+carries the application settings — the appearance, the Markdown style, the language it shows, its changed shortcuts
+and, where it has those settings, keeping running in the background, showing the menu bar icon and Prevent sleep with
+When to prevent sleep — and the daemon builds none of them but the language and reads none of them. A document with application settings
 asked of the daemon by any other program therefore has none of them but the daemon's held language.
 
 On import they are applied by the client that runs the import, to itself alone, and only once the daemon reports the
 application settings applied, from what the daemon passes back as applied; when the settings could not be applied,
 neither are these. Other clients — another browser, or the desktop app — keep their own. A value the importing client
-does not know, or a setting its platform does not have (keeping running in the background, in a browser), is ignored
-and leaves the client's own as it is.
+does not know, or a setting its platform does not have (keeping running in the background, showing the menu bar icon
+or Prevent sleep, in a browser), is ignored and leaves the client's own as it is.
 
 ## Application settings are left alone unless they are asked for
 
 A document's application settings are applied **only when the import is explicitly asked to apply them**, and are not
 applied by default, since applying them changes how the daemon's host behaves rather than only adding to what it
 holds: automatically pulling repositories makes the daemon fast-forward the user's own repositories by itself,
-automatically deleting archived sessions makes it delete sessions by itself, the four automatic approvals let agents'
+automatically deleting archived sessions makes it delete sessions by itself, resuming sessions on start makes it
+relaunch agents by itself whenever it starts, the four automatic approvals let agents'
 requests, account switches and handoffs through without asking the user, asking questions as choices changes what
 sessions are told at launch, and the default clone directory decides where later clones go. The inspection says both
 what the document sets and what is set now, so what applying would change can be shown before anything is done.
@@ -151,6 +170,7 @@ made in Settings, and the result of the import reports what was applied. So:
 - an import that turns automatic pulling on runs the same immediate fast-forward pass turning it on by hand does (see
   "Turning the switch on" in `docs/product/project-git-status.md`);
 - one that turns the automatic deletion on deletes nothing until the next scheduled check, as the switch does;
+- one that turns resuming sessions on start on or off resumes nothing at once; it is read when the daemon next starts;
 - one that changes closing idle terminals with the panel closes nothing at once and applies to later panel closes;
 - one that turns an automatic approval on or off changes no request already waiting;
 - one that turns asking questions as choices on or off changes no session already running;

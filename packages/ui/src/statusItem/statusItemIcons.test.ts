@@ -19,7 +19,7 @@ const draft: StatusItemMenuDraft = {
     { kind: "window", name: "5h", detail: "", label: "", fraction: 0.5, agent: "codex" },
     { kind: "window", name: "5h", detail: "", label: "", fraction: 0.5, agent: "grok" },
   ] }],
-  open: "Open", quit: "Quit", attention: false,
+  open: "Open", quit: "Quit", attention: false, keep_awake_label: "Awake",
 };
 
 /** The draft's item at `index` as the shell receives it, less the colours: without its `agent`. */

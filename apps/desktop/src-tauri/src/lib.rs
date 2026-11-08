@@ -7,6 +7,8 @@
 //!
 //! The modules, the IPC surface and where new code goes are in `docs/structure/desktop.md`.
 
+#[cfg(target_os = "macos")]
+mod apple_event;
 mod background;
 mod chrome;
 mod configuration_file;
@@ -14,7 +16,9 @@ mod diagnostics;
 mod directory_picker;
 mod exit;
 mod host_facts;
+mod keep_awake;
 mod languages;
+mod launch_at_login;
 mod lifecycle;
 mod menu;
 mod notification_settings;
@@ -22,7 +26,7 @@ mod page_isolation;
 mod permissions;
 mod recovery;
 mod sidecar;
-// The panes it opens are those of the macOS privacy grants and notifications.
+// The panes it opens are those of the macOS privacy grants, notifications and login items.
 #[cfg(target_os = "macos")]
 mod system_settings;
 mod tray;
@@ -36,7 +40,9 @@ use tauri::{Emitter, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use background::BackgroundState;
 use diagnostics::diagnostic;
-use exit::{confirm_quit, frontend_exit_heartbeat, request_quit, ExitState};
+use exit::{
+    confirm_quit, frontend_exit_heartbeat, request_quit, set_system_quit_without_asking, ExitState,
+};
 use menu::{set_menu_labels, ui_event_for};
 use sidecar::{mark_daemon_stopping, start_daemon, window_params, DaemonState};
 
@@ -71,13 +77,21 @@ pub fn run() {
         .manage(lifecycle::LifecycleState::default())
         .manage(DaemonState::default())
         .manage(tray::TrayState::default())
+        .manage(keep_awake::KeepAwakeState::default())
         .manage(updater::UpdaterState::default())
         .invoke_handler(tauri::generate_handler![
             frontend_exit_heartbeat,
             confirm_quit,
+            set_system_quit_without_asking,
             sidecar::daemon_exit_detail,
             set_menu_labels,
             tray::set_tray_menu,
+            tray::set_tray_icon_visible,
+            keep_awake::set_keep_awake,
+            launch_at_login::launch_at_login_status,
+            launch_at_login::set_launch_at_login,
+            launch_at_login::open_login_items_settings,
+            background::reveal_main_window,
             background::bring_to_front,
             background::set_run_in_background,
             permissions::permissions_status,
@@ -113,6 +127,9 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // On the main thread, inside AppKit's launch, where the event that opened the app is
+            // still the current one.
+            launch_at_login::capture_launch();
             menu::install(app.handle())?;
             tray::create(app.handle())?;
             lifecycle::install(app.handle());
@@ -183,12 +200,14 @@ fn percent_encode_query_value(input: &str) -> String {
 
 /// Upper bound on how long the window stays hidden (see `.visible(false)` below) before this
 /// safety net shows it regardless of what the frontend is doing. The UI reveals the window itself
-/// well inside this, once it has pushed the native theme (`packages/ui/src/main.tsx`, measured at
-/// 140-220 ms after the window is created); this exists only for the paths that never reach that
-/// point at all — the webview failing to load the bundle at all, say — where a window left hidden
-/// forever is strictly worse than one that briefly shows through in the OS's own appearance. Four
-/// seconds is generous next to that measured reveal without being so long that a genuinely stuck
-/// launch reads as a hung application rather than a slow one.
+/// (`background::reveal_main_window`, which keeps it hidden after a launch at login that keeps the
+/// app in the background) well inside this, once it has pushed the native theme
+/// (`packages/ui/src/main.tsx`, measured at 140-220 ms after the window is created); this exists
+/// only for the paths that never reach that point at all — the webview failing to load the bundle
+/// at all, say — where a window left hidden forever is strictly worse than one that briefly shows
+/// through in the OS's own appearance. Four seconds is generous next to that measured reveal
+/// without being so long that a genuinely stuck launch reads as a hung application rather than a
+/// slow one. Not armed after a launch at login.
 const REVEAL_SAFETY_NET: Duration = Duration::from_secs(4);
 
 /// Opens the main window for the daemon as it is when the window is built. On the main thread.
@@ -241,8 +260,9 @@ fn open_main_window(
         // Created hidden so AppKit never paints the window in the OS's own appearance before the
         // webview has painted anything themed — with no window on screen yet, there is nothing
         // for it to paint prematurely. `packages/ui/src/main.tsx` shows it once that has
-        // happened, through the `core:window:allow-show` permission this needs; `REVEAL_SAFETY_NET`
-        // below is the backstop for every path that does not reach that call.
+        // happened, through `background::reveal_main_window`; `REVEAL_SAFETY_NET`
+        // below is the backstop for every path that does not reach that call (not armed after a
+        // launch at login).
         .visible(false);
     let builder = match initial.position {
         Some((x, y)) => builder.position(x, y),
@@ -276,16 +296,22 @@ fn open_main_window(
     // `WebviewWindow::show` dispatches onto the window's own event loop internally, so calling it
     // from this background thread rather than the main one is safe, so a plain `thread::sleep`
     // here needs neither `tauri::async_runtime` nor a direct `tokio` dependency.
-    let safety_net_window = window.clone();
-    let safety_net_app = app.clone();
-    thread::spawn(move || {
-        thread::sleep(REVEAL_SAFETY_NET);
-        // Not for a window the user has closed since it was revealed: it would come back without
-        // the Dock icon.
-        if !background::hidden_by_close(&safety_net_app) {
-            let _ = safety_net_window.show();
-        }
-    });
+    // Not after a launch at login: the UI's reveal can arrive late there (the system is busy
+    // starting), and the net would show the whole window at a launch that may be meant to stay
+    // hidden. Should the UI never load, the menu bar icon, a reopen of the app or a notification
+    // still bring the window back. Peeked at, not taken: the reveal still needs to find it.
+    if !launch_at_login::login_launch_pending() {
+        let safety_net_window = window.clone();
+        let safety_net_app = app.clone();
+        thread::spawn(move || {
+            thread::sleep(REVEAL_SAFETY_NET);
+            // Not for a window the user has closed since it was revealed: it would come back
+            // without the Dock icon.
+            if !background::hidden_by_close(&safety_net_app) {
+                let _ = safety_net_window.show();
+            }
+        });
+    }
 
     Ok(())
 }

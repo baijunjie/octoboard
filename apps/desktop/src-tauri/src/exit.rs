@@ -8,6 +8,8 @@
 //!   icon's Quit (`tray/`), which takes the same path.
 //! - The Dock icon's own Quit plus a system-initiated logout/restart/shutdown
 //!   (`application_should_terminate` in `lifecycle/macos.rs`, installed onto AppKit's own delegate).
+//!   The system's own termination is told apart there and, while the UI has said it needs no
+//!   confirmation (`set_system_quit_without_asking`), is let through without one.
 //! - `RunEvent::ExitRequested` (also handled in `lib.rs`), which in practice only ever serves
 //!   `confirm_quit`'s own self-raised `app.exit(0)` or restart, or a window torn down before the
 //!   frontend got as far as registering with `frontend_exit_heartbeat`.
@@ -88,6 +90,8 @@ const FORCE_QUIT_WINDOW: Duration = Duration::from_secs(2);
 /// - `exit_let_through`: set when an `ExitRequested` was let through (`ExitRoute::Proceed`). Every
 ///   exit a user or the application starts passes there before `RunEvent::Exit`; one that reaches
 ///   `RunEvent::Exit` without it is the system ending the session (`install_on_exit`).
+/// - `system_quit_without_asking`: the UI's word that a termination the system starts needs no
+///   confirmation (`set_system_quit_without_asking`).
 #[derive(Default)]
 pub struct ExitState {
     confirmed: AtomicBool,
@@ -95,6 +99,7 @@ pub struct ExitState {
     last_prevented_at: Mutex<Option<Instant>>,
     installing: AtomicBool,
     exit_let_through: AtomicBool,
+    system_quit_without_asking: AtomicBool,
 }
 
 impl ExitState {
@@ -119,6 +124,27 @@ impl Drop for InstallingGuard<'_> {
     fn drop(&mut self) {
         self.0.end_installing();
     }
+}
+
+/// Tells the shell whether a termination the system starts (macOS: logging out, restarting or
+/// shutting down) is let through without the confirmation, which is the case while the daemon
+/// resumes the sessions the quit leaves interrupted at its next start (the daemon's Resume sessions
+/// on start). The UI sends it once it has the daemon's settings and on every change; until it has,
+/// the shell asks as for any quit. A quit the user starts is never affected.
+#[tauri::command]
+pub fn set_system_quit_without_asking(state: tauri::State<ExitState>, enabled: bool) {
+    state
+        .system_quit_without_asking
+        .store(enabled, Ordering::SeqCst);
+}
+
+/// Whether the system ending the session may quit the application without the confirmation (see
+/// `set_system_quit_without_asking`).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub fn system_quit_without_asking(app: &AppHandle) -> bool {
+    app.state::<ExitState>()
+        .system_quit_without_asking
+        .load(Ordering::SeqCst)
 }
 
 /// Marks this webview as the one handling the exit flow, and doubles as the liveness ping that

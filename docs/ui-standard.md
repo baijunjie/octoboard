@@ -1251,9 +1251,13 @@ cell exposed as a static text of its own. The view takes no role or label and th
 would be exposed twice, or the line would have no title for menu search.
 
 A decoration drawn over the menu bar icon itself, such as the orange dot while a session waits for the user or is
-dormant, is likewise marked non-element, view and cell. The dot is a visual attention cue independent of the session
-list, which includes only Waiting for you, Paused, Done and Awaiting instructions. A dormant session may light the dot while
-no session is listed.
+dormant, or the red eye sockets while the computer is kept awake, is likewise marked non-element, view and cell. The
+dot is a visual attention cue independent of the session list, which includes only Waiting for you, Paused, Done and
+Awaiting instructions. A dormant session may light the dot while no session is listed. What a decoration means that
+the icon's accessible name must carry is said in words there too: while the computer is kept awake, the name has that
+phrase joined to the quota phrase as a list in the UI's language. The red sockets change fill as well as hue (from a
+faint cut to solid), so the state does not rest on colour alone, and no overlay of the icon (the dot, the quota bars)
+may cover them.
 
 ### Where an error is shown
 

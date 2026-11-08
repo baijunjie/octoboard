@@ -39,8 +39,9 @@ export function exportFileName(console?: Pick<Console, "name">): string {
  * saved under, or only that it was downloaded where the platform cannot say more. What is added are the settings this
  * client holds, which the daemon does not know of: a document with the application settings always gets this client's
  * keyboard shortcut changes (an empty set when none is changed), its appearance, Markdown style and, where the platform
- * has it, whether it runs in the background (see `heldClientSettings`), and the language it shows in place of the one
- * the daemon holds. Dismissing the save dialog leaves this one open.
+ * has it, whether it runs in the background, whether it shows its menu bar icon and whether it prevents sleep, and
+ * when (see `heldClientSettings`), and the language it shows in place of the one the daemon holds. Dismissing the
+ * save dialog leaves this one open.
  */
 export function ExportConfigurationDialog({
   console: inHand,
@@ -51,7 +52,7 @@ export function ExportConfigurationDialog({
 }): React.ReactElement {
   const t = useT();
   const { request, showNotice } = useDaemon();
-  const { configurationFile, backgroundRun } = usePlatform();
+  const { configurationFile, backgroundRun, statusItem, keepAwake } = usePlatform();
   const { choice: appearance } = useOctoboardTheme();
   const language = useCurrentLanguage();
   const { busy, run } = useDialogAction(undefined, t("configuration.export.alertTitle"));
@@ -84,7 +85,7 @@ export function ExportConfigurationDialog({
           settings: {
             ...reply.document.settings,
             keyboard_shortcuts: shortcutOverrides.get(),
-            ...heldClientSettings({ appearance, language }, { backgroundRun: backgroundRun !== undefined }),
+            ...heldClientSettings({ appearance, language }, { backgroundRun: backgroundRun !== undefined, menuBarIcon: statusItem !== undefined, keepAwake: keepAwake !== undefined }),
           },
         }
         : reply.document;
@@ -151,9 +152,11 @@ export function ExportConfigurationDialog({
                 id="configuration.export.settings.description"
                 params={{
                   generalSection: <InlineReference>{t("settings.section.general")}</InlineReference>,
+                  appBehaviorSection: <InlineReference>{t("settings.section.appBehavior")}</InlineReference>,
                   gitSection: <InlineReference>{t("settings.section.git")}</InlineReference>,
                   behaviorSection: <InlineReference>{t("settings.section.agentPermissions")}</InlineReference>,
                   shortcutsSection: <InlineReference>{t("settings.section.shortcuts")}</InlineReference>,
+                  cleanupSection: <InlineReference>{t("settings.section.cleanup")}</InlineReference>,
                 }}
               />
             }

@@ -3,6 +3,8 @@ import { setLanguage } from "../i18n/language";
 import { isLanguage, LANGUAGE_NAMES, type Language } from "../i18n/languages";
 import type { ThemeChoice } from "../preferences/theme";
 import { runInBackground } from "../lifecycle/runInBackground";
+import { isKeepAwakeWhen, keepAwake, KEEP_AWAKE_WHEN_LABEL, keepAwakeWhen, type KeepAwakeWhen } from "../lifecycle/keepAwake";
+import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import { MARKDOWN_STYLE_NAMES, MARKDOWN_STYLES, markdownStyle, type MarkdownStyle } from "../viewer/markdown/markdownStyle";
 
 /** The application settings only this client holds or reports, as a configuration document's `settings` carries them:
@@ -13,6 +15,9 @@ export interface ClientSettings {
   appearance?: ThemeChoice;
   markdown_style?: MarkdownStyle;
   run_in_background?: boolean;
+  show_menu_bar_icon?: boolean;
+  keep_awake?: boolean;
+  keep_awake_when?: KeepAwakeWhen;
   interface_language?: Language;
 }
 
@@ -20,6 +25,10 @@ export interface ClientSettings {
 export interface ClientSettingsPlatform {
   /** Whether closing the window can leave the app running in the background (the desktop app). */
   backgroundRun: boolean;
+  /** Whether the app has a menu bar icon (a notification area icon on Windows) to show or hide (the desktop app). */
+  menuBarIcon: boolean;
+  /** Whether the app can hold the computer and its display awake (the desktop app). */
+  keepAwake: boolean;
 }
 
 const APPEARANCES: readonly ThemeChoice[] = ["light", "dark", "system"];
@@ -30,9 +39,10 @@ const APPEARANCE_LABEL: Record<ThemeChoice, PlainMessageKey> = {
   system: "settings.appearance.system",
 };
 
-/** The values this client adds to a document it saves with the application settings: the appearance, the Markdown style,
- * whether it runs in the background (only where the platform has that) and the language it shows, which is the one the
- * user chose and so replaces whatever the daemon held. */
+/** The values this client adds to a document it saves with the application settings: the appearance, the Markdown
+ * style, whether it runs in the background, whether it shows its menu bar icon, whether it keeps the computer awake and
+ * when (each only where the platform has that), and the language it shows, which is the one the user chose and so
+ * replaces whatever the daemon held. */
 export function heldClientSettings(
   current: { appearance: ThemeChoice; language: Language },
   platform: ClientSettingsPlatform,
@@ -41,6 +51,8 @@ export function heldClientSettings(
     appearance: current.appearance,
     markdown_style: markdownStyle.get(),
     ...(platform.backgroundRun && { run_in_background: runInBackground.get() }),
+    ...(platform.menuBarIcon && { show_menu_bar_icon: showMenuBarIcon.get() }),
+    ...(platform.keepAwake && { keep_awake: keepAwake.get(), keep_awake_when: keepAwakeWhen.get() }),
     interface_language: current.language,
   };
 }
@@ -53,11 +65,14 @@ export function documentClientSettings(document: unknown, platform: ClientSettin
 /** The client settings `settings` (a document's, or an import's reply) carries that this client can stand behind. */
 export function clientSettingsOf(settings: unknown, platform: ClientSettingsPlatform): ClientSettings {
   if (typeof settings !== "object" || settings === null) return {};
-  const { appearance, markdown_style, run_in_background, interface_language } = settings as Record<string, unknown>;
+  const { appearance, markdown_style, run_in_background, show_menu_bar_icon, keep_awake, keep_awake_when, interface_language } = settings as Record<string, unknown>;
   return {
     ...(APPEARANCES.includes(appearance as ThemeChoice) && { appearance: appearance as ThemeChoice }),
     ...(MARKDOWN_STYLES.includes(markdown_style as MarkdownStyle) && { markdown_style: markdown_style as MarkdownStyle }),
     ...(platform.backgroundRun && typeof run_in_background === "boolean" && { run_in_background }),
+    ...(platform.menuBarIcon && typeof show_menu_bar_icon === "boolean" && { show_menu_bar_icon }),
+    ...(platform.keepAwake && typeof keep_awake === "boolean" && { keep_awake }),
+    ...(platform.keepAwake && isKeepAwakeWhen(keep_awake_when) && { keep_awake_when }),
     ...(isLanguage(interface_language) && { interface_language }),
   };
 }
@@ -67,6 +82,9 @@ export function applyClientSettings(values: ClientSettings, setAppearance: (choi
   if (values.appearance !== undefined) setAppearance(values.appearance);
   if (values.markdown_style !== undefined) markdownStyle.set(values.markdown_style);
   if (values.run_in_background !== undefined) runInBackground.set(values.run_in_background);
+  if (values.show_menu_bar_icon !== undefined) showMenuBarIcon.set(values.show_menu_bar_icon);
+  if (values.keep_awake !== undefined) keepAwake.set(values.keep_awake);
+  if (values.keep_awake_when !== undefined) keepAwakeWhen.set(values.keep_awake_when);
   if (values.interface_language !== undefined) setLanguage(values.interface_language);
 }
 
@@ -91,11 +109,15 @@ export function clientSettingValues(
 ): ClientSettingValue[] {
   // The language a value is named in, where it is one of its own: the language names are each in their language and
   // the style names in English, as the settings pages mark them.
+  const onOff = (value: boolean) => t(value ? "configuration.import.value.on" : "configuration.import.value.off");
   const words: { [F in keyof ClientSettings]-?: [PlainMessageKey, (value: NonNullable<ClientSettings[F]>) => string, ((value: NonNullable<ClientSettings[F]>) => string)?] } = {
     appearance: ["settings.appearance.label", (value) => t(APPEARANCE_LABEL[value])],
     interface_language: ["settings.language.label", (value) => LANGUAGE_NAMES[value], (value) => value],
     markdown_style: ["settings.markdownStyle.label", (value) => MARKDOWN_STYLE_NAMES[value], () => "en"],
-    run_in_background: ["settings.background.label", (value) => t(value ? "configuration.import.value.on" : "configuration.import.value.off")],
+    run_in_background: ["settings.background.label", onOff],
+    show_menu_bar_icon: ["settings.menuBarIcon.label", onOff],
+    keep_awake: ["settings.keepAwake.label", onOff],
+    keep_awake_when: ["settings.keepAwake.when.label", (value) => t(KEEP_AWAKE_WHEN_LABEL[value])],
   };
   return (Object.keys(words) as (keyof ClientSettings)[]).flatMap((field) => {
     const [label, word, language] = words[field] as [PlainMessageKey, (value: unknown) => string, ((value: unknown) => string)?];

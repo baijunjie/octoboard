@@ -9,7 +9,9 @@ import { press as pressElement } from "../components/alerts/detailsTestSupport";
 import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
+import { keepAwake, keepAwakeWhen } from "../lifecycle/keepAwake";
 import { runInBackground } from "../lifecycle/runInBackground";
+import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import { ConfigurationFileError } from "../platform";
 import type { Event, GitWorkflowSettings, ClientRequestBody } from "../protocol";
 import { bindingFor, shortcutOverrides } from "../shortcuts/store";
@@ -292,7 +294,7 @@ const FOCUS = { code: "KeyK", primary: true, shift: true };
 const echoing = (settings: Record<string, unknown> = {}) => (body: ClientRequestBody): Promise<Event> => {
   if (body.type !== "import_configuration") return reply(body);
   const document = (body.document as { settings?: Record<string, unknown> }).settings ?? {};
-  const passedThrough = Object.fromEntries(["keyboard_shortcuts", "appearance", "markdown_style", "run_in_background", "interface_language"].flatMap((field) => (document[field] === undefined || document[field] === null ? [] : [[field, document[field]]])));
+  const passedThrough = Object.fromEntries(["keyboard_shortcuts", "appearance", "markdown_style", "run_in_background", "show_menu_bar_icon", "keep_awake", "keep_awake_when", "interface_language"].flatMap((field) => (document[field] === undefined || document[field] === null ? [] : [[field, document[field]]])));
   const applied = { ...MIXED_RESULT.settings_applied!, ...passedThrough, ...settings };
   return Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: body.apply_settings ? applied : null });
 };
@@ -318,16 +320,51 @@ it("groups the application settings as the Settings dialog does, each group in t
   onTestFinished(() => shortcutOverrides.set({}));
   await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS }) });
   const groups = settingGroupsOf(document.body.querySelector("[role=tabpanel]")!);
-  expect(groups.map((group) => group.title)).toEqual(["General", "Git", "Agent behavior", "Keyboard shortcuts"]);
-  expect(groups[1].lines).toEqual(["Default clone directory", "Automatically pull repositories", "Git workflow"]);
-  expect(groups[2].lines).toEqual([
+  expect(groups.map((group) => group.title)).toEqual(["General", "App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"]);
+  expect(groups[1].lines).toEqual(["Resume sessions on start", "Close idle terminals when closing the panel"]);
+  expect(groups[2].lines).toEqual(["Default clone directory", "Automatically pull repositories", "Git workflow"]);
+  expect(groups[3].lines).toEqual([
     "Automatically approve session requests",
     "Automatically approve resume requests",
     "Automatically approve account switches",
     "Automatically approve handoffs",
     "Ask questions as choices",
   ]);
-  expect(groups[3].lines).toEqual(["Changed shortcuts"]);
+  expect(groups[4].lines).toEqual(["Changed shortcuts"]);
+  expect(groups[5].lines).toEqual(["Automatically delete archived sessions whose conversation is gone"]);
+});
+
+it("lists the App behavior card in the order of the section on a desktop app, the settings this client holds among the daemon's", async () => {
+  onTestFinished(() => localStorage.clear());
+  mountDialog(
+    (onClose) => <ImportConfigurationDialog onClose={onClose} />,
+    echoing(),
+    {
+      save: vi.fn(),
+      open: vi.fn(async () => ({
+        name: "mine.json",
+        text: JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, run_in_background: true, show_menu_bar_icon: false, keep_awake: true, keep_awake_when: "always" } }),
+      })),
+    },
+    {},
+    {
+      backgroundRun: { set: vi.fn(async () => {}) },
+      statusItem: { setMenu: async () => {}, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} },
+      keepAwake: { set: vi.fn(async () => {}) },
+    },
+  );
+  await press("Choose file");
+  await act(async () => settingsBox().click());
+  await openTab("Application settings");
+  const appBehavior = settingGroupsOf(document.body.querySelector("[role=tabpanel]")!).find((group) => group.title === "App behavior");
+  expect(appBehavior!.lines).toEqual([
+    "Resume sessions on start",
+    "Keep running in the background when the window is closed",
+    "Show notification area icon",
+    "Prevent sleep",
+    "When to prevent sleep",
+    "Close idle terminals when closing the panel",
+  ]);
 });
 
 it("replaces this device's keyboard shortcuts with the document's once the settings are applied, and reports it", async () => {
@@ -400,12 +437,15 @@ it("leaves this device's keyboard shortcuts alone when the document carries none
 
 describe("the settings only this client holds", () => {
   const carrying = (settings: Record<string, unknown>) => JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, ...settings } });
-  const FILE = { appearance: "dark", markdown_style: "github", interface_language: "ja", run_in_background: true };
+  const FILE = { appearance: "dark", markdown_style: "github", interface_language: "ja", run_in_background: true, show_menu_bar_icon: false, keep_awake: true, keep_awake_when: "always" };
   const restoreOnFinish = () =>
     onTestFinished(() => {
       markdownStyle.set("tailwind");
       setLanguage("en");
       runInBackground.set(false);
+      showMenuBarIcon.set(true);
+      keepAwake.set(false);
+      keepAwakeWhen.set("working");
       localStorage.removeItem("heroui-theme");
     });
 
@@ -420,6 +460,7 @@ describe("the settings only this client holds", () => {
     expect(Array.from(document.body.querySelectorAll("[lang]"), (node) => `${node.getAttribute("lang")}:${node.textContent}`)).toEqual(expect.arrayContaining(["ja:日本語", "en:English"]));
     // A browser has no background running.
     expect(lines["Keep running in the background when the window is closed"]).toBeUndefined();
+    expect(Object.keys(lines).filter((label) => /^Show .* icon$/.test(label))).toEqual([]);
   });
 
   it("say they change nothing where they are what this client has, and are not listed where the file has none, or one this client does not know", async () => {
@@ -428,6 +469,7 @@ describe("the settings only this client holds", () => {
     const lines = settingLines();
     expect(lines["Markdown style"]).toEqual({ badge: "No change" });
     for (const unlisted of ["Appearance", "Language", "Keep running in the background when the window is closed"]) expect(lines[unlisted]).toBeUndefined();
+    expect(Object.keys(lines).filter((label) => /^Show .* icon$/.test(label))).toEqual([]);
   });
 
   it("are applied to this client from what the daemon says it applied, and told in the result", async () => {
@@ -446,6 +488,8 @@ describe("the settings only this client holds", () => {
     expect(lines["Appearance"]).toEqual({ badge: "Dark" });
     expect(lines["Markdown style"]).toEqual({ badge: "GitHub" });
     expect(Object.keys(lines)).not.toContain("Keep running in the background when the window is closed");
+    expect(Object.keys(lines).filter((label) => /^Show .* icon$/.test(label))).toEqual([]);
+    expect(showMenuBarIcon.get()).toBe(true);
   });
 
   it("take the background running where the platform has it", async () => {
@@ -466,6 +510,58 @@ describe("the settings only this client holds", () => {
     await openTab("Application settings");
     expect(runInBackground.get()).toBe(true);
     expect(resultSettingLines()["Keep running in the background when the window is closed"]).toEqual({ badge: "On" });
+  });
+
+  it("take the menu bar icon where the platform has one", async () => {
+    restoreOnFinish();
+    const statusItem = { setMenu: async () => {}, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+    mountDialog(
+      (onClose) => <ImportConfigurationDialog onClose={onClose} />,
+      echoing(),
+      { save: vi.fn(), open: vi.fn(async () => ({ name: "mine.json", text: carrying(FILE) })) },
+      {},
+      { statusItem },
+    );
+    await press("Choose file");
+    await act(async () => settingsBox().click());
+    await openTab("Application settings");
+    // The test host is a Windows one, which names the icon as the notification area's.
+    expect(settingLines()["Show notification area icon"]).toEqual({ badge: "Set to the file's", note: "Off (now On)" });
+    await press("Import");
+    act(() => setLanguage("en"));
+    await openTab("Application settings");
+    expect(showMenuBarIcon.get()).toBe(false);
+    expect(resultSettingLines()["Show notification area icon"]).toEqual({ badge: "Off" });
+  });
+
+  it("take Prevent sleep and when where the platform can hold the computer awake", async () => {
+    restoreOnFinish();
+    mountDialog(
+      (onClose) => <ImportConfigurationDialog onClose={onClose} />,
+      echoing(),
+      { save: vi.fn(), open: vi.fn(async () => ({ name: "mine.json", text: carrying(FILE) })) },
+      {},
+      { keepAwake: { set: vi.fn(async () => {}) } },
+    );
+    await press("Choose file");
+    await act(async () => settingsBox().click());
+    await openTab("Application settings");
+    expect(settingLines()["Prevent sleep"]).toEqual({ badge: "Set to the file's", note: "On (now Off)" });
+    expect(settingLines()["When to prevent sleep"]).toEqual({ badge: "Set to the file's", note: "Always (now While sessions work)" });
+    await press("Import");
+    act(() => setLanguage("en"));
+    await openTab("Application settings");
+    expect(keepAwake.get()).toBe(true);
+    expect(keepAwakeWhen.get()).toBe("always");
+    expect(resultSettingLines()["Prevent sleep"]).toEqual({ badge: "On" });
+    expect(resultSettingLines()["When to prevent sleep"]).toEqual({ badge: "Always" });
+  });
+
+  it("leave Prevent sleep out where the platform cannot hold the computer awake", async () => {
+    restoreOnFinish();
+    await reviewingSettings({ text: carrying(FILE) });
+    expect(settingLines()["Prevent sleep"]).toBeUndefined();
+    expect(settingLines()["When to prevent sleep"]).toBeUndefined();
   });
 
   it("are left alone when the settings are not imported", async () => {

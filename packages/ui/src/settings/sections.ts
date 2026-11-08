@@ -1,6 +1,7 @@
 /** The settings dialog's sections, in the order its tabs list them. */
 export const SETTINGS_SECTION_IDS = [
   "general",
+  "app-behavior",
   "git",
   "accounts",
   "agent-permissions",
@@ -8,6 +9,7 @@ export const SETTINGS_SECTION_IDS = [
   "permissions",
   "notifications",
   "shortcuts",
+  "cleanup",
   "configuration",
   "about",
 ] as const;

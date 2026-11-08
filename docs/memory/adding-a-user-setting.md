@@ -14,7 +14,7 @@ Settings before deciding. If you are unsure, ask rather than leave it out.
 Do not take a setting the tools leave out as precedent on its own: settings are not opt-in to the tools, and one is left
 out only because that rule makes it the user's alone.
 
-## A new setting of General, Git, Agent behavior, Keyboard shortcuts or Agent accounts travels in a configuration export
+## A new setting of General, App behavior, Git, Agent behavior, Keyboard shortcuts, Cleanup or Agent accounts travels in a configuration export
 
 Every setting of those Settings sections travels and is applied by an import, except one whose turning on itself
 changes files outside `~/.octoboard/` (today only an account's sharing of the default configuration), which the user
@@ -24,7 +24,7 @@ written `~/`-relative), it lets agents act without asking or spend quota, the ag
 Octoboard act on files outside `~/.octoboard/` later as it runs. If you are unsure whether turning it on itself changes
 outside files, ask. In the same change, by where the setting sits:
 
-- An application setting the daemon holds (General, Git, Agent behavior): a field of `DocumentSettings` in
+- An application setting the daemon holds (General, App behavior, Git, Agent behavior, Cleanup): a field of `DocumentSettings` in
   `apps/daemon/src/protocol/configuration.rs`, filled in `build` in `apps/daemon/src/config_document/export.rs`; its
   document and current values in `InspectedSettings`, filled by the inspection in
   `apps/daemon/src/config_document/import/mod.rs`, and the `coordinator::settings::update_settings` call there that
@@ -33,8 +33,8 @@ outside files, ask. In the same change, by where the setting sits:
   `InspectedAgentSettings`, inspected and applied in `apps/daemon/src/config_document/import/accounts.rs` — never in
   `DocumentSettings`.
 - A setting only the client holds (kept in the client, like the appearance, the Markdown style, running in the
-  background or the shortcuts): an optional field of `DocumentSettings` that the daemon neither builds nor reads and
-  passes back as it came, handled on the client beside the others in
+  background, the menu bar icon, Prevent sleep or the shortcuts): an optional field of `DocumentSettings` that the
+  daemon neither builds nor reads and passes back as it came, handled on the client beside the others in
   `packages/ui/src/configuration/clientSettings.ts`. The client adds it to a document it saves and applies it to
   itself only from the import reply's `settings_applied`, never from the file it read, so it is not applied when the
   daemon failed to apply the settings.

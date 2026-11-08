@@ -199,10 +199,10 @@ pub(super) const UPDATE_CONSOLE: ToolDef = ToolDef {
 pub(super) const GET_SETTINGS: ToolDef = ToolDef {
     name: "get_settings",
     description: "The application-wide settings: `auto_close_idle_shell_terminals`, `auto_pull_repositories`, \
-                  `auto_delete_unresumable_archives`, `auto_select_account`, \
-                  `interface_language` (the user's language, a tag; `null` until a window \
-                  reported one), `sidebar_order_by_status`, `default_clone_dir`, the \
-                  `git_workflow` settings, \
+                  `auto_delete_unresumable_archives`, `resume_sessions_on_start`, \
+                  `auto_select_account`, `interface_language` (the user's language, a tag; \
+                  `null` until a window reported one), `sidebar_order_by_status`, \
+                  `default_clone_dir`, the `git_workflow` settings, \
                   `provider_settings` (the settings the user made for each agent's \
                   provider that you may read, by agent and then setting id, with the value \
                   in effect: a switch is `true` or `false`, a choice is its text or `null`. \
@@ -244,6 +244,12 @@ pub(super) const UPDATE_SETTINGS: ToolDef = ToolDef {
                     "description": "Whether archived sessions whose agent conversation is \
                                     gone are deleted automatically (pinned and locked ones \
                                     are kept).",
+                },
+                "resume_sessions_on_start": {
+                    "type": "boolean",
+                    "description": "Whether, when Octoboard starts, the sessions the previous run \
+                                    left running are resumed automatically (archived ones and \
+                                    ones already interrupted before that run ended are not).",
                 },
                 "interface_language": {
                     "type": "string",

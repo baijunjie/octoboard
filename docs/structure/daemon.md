@@ -72,8 +72,10 @@ and records tests replay.
   process trees a client sees), `messages`, `auto_switch` (moving a session off an account whose usage limit stopped a
   turn; lower layers reach it through `AppState`'s hooks), `validate` for the checks of request text fields), plus
   `console_workdir.rs` (a console's working directory: its instruction file written into it, and its removal),
-  `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`) and `archive_cleanup.rs` (a daemon
-  task).
+  `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`), `archive_cleanup.rs` (a daemon
+  task) and `resume_on_start.rs` (a daemon task: at start, resumes the sessions the previous run left live when the
+  `resume_sessions_on_start` setting is on, through the same path as resuming an interrupted session; the store says which
+  sessions those are, `Store::take_left_live_sessions`).
 - `src/session_request/` — a session asking the user to approve something (`request_session`, `request_resume_session`,
   account switch, handoff): `mod.rs` the wait, `registry.rs` the requests the daemon holds, `request.rs` what a request
   is, `change.rs` the account switch and handoff variant, `carry_out.rs` what an approval does, `outcome.rs` the wording

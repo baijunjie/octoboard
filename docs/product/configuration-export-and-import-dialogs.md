@@ -60,9 +60,9 @@ sentence.
   project paths: they can reveal details such as user and folder names; the thing to do is to share the file only with
   people the user trusts.
 - A group headed **Global settings**, with two checkboxes. **Application settings**, checked by default whichever
-  consoles are chosen, notes that it includes the settings of the **General**, **Git**, **Agent behavior** and
-  **Keyboard shortcuts** sections, naming the four as Settings names them, such as the language and the default clone
-  directory. **Accounts**, unchecked by default, notes that it includes the account names, their configuration
+  consoles are chosen, notes that it includes the settings of the **General**, **App behavior**, **Git**, **Agent
+  behavior**, **Keyboard shortcuts** and **Cleanup** sections, naming the six as Settings names them, such as the
+  language and the default clone directory. **Accounts**, unchecked by default, notes that it includes the account names, their configuration
   directories, their turned-off choices, their order, the added agents and the agent account settings, and that
   neither sharing the default configuration nor login credentials are included, so sharing is to be turned on and the
   accounts logged in again after an import. Neither note changes with the other choices (see "Which settings travel"
@@ -73,8 +73,9 @@ sentence.
 **Export** is unavailable while nothing is chosen — Do not export consoles with both global settings unchecked — and
 nothing says why, since the boxes that left it so are in view. It asks the daemon for the document, adds the settings
 this client holds to it when it carries the application settings — its appearance, Markdown style, keyboard shortcuts,
-the language it shows and, in the macOS application, keeping running in the background (see "The settings a client
-holds" in `docs/product/settings-in-a-configuration.md`) — and opens the save dialog. In the desktop app a
+the language it shows and, in the desktop application, keeping running in the background, showing the menu bar icon,
+and Prevent sleep with When to prevent sleep (see "The settings a client holds" in
+`docs/product/settings-in-a-configuration.md`) — and opens the save dialog. In the desktop app a
 toast names the file it was saved as. A browser files a download itself, under its own name and wherever its settings
 say, and does not report one that was blocked or cancelled, so there the toast says only that the configuration was
 downloaded and names no file. The save dialog is part of the export's request, so until it is answered the export
@@ -247,25 +248,31 @@ They are applied whenever Accounts is imported; the card has no choice of its ow
 ### Application settings in the review
 
 Cards grouped as Settings groups the settings, each headed by its section's name, in the order of Settings' sections:
-**General**, **Git**, **Agent behavior** and **Keyboard shortcuts** (see `docs/product/settings.md`). Within a card the
-lines stand in the order of that section's rows, and a card with no line is not shown:
+**General**, **App behavior**, **Git**, **Agent behavior**, **Keyboard shortcuts** and **Cleanup** (see
+`docs/product/settings.md`). Within a card the lines stand in the order of that section's rows, and a card with no line
+is not shown:
 
-- **General**: Appearance, Language and Markdown style, then the switches Order the sidebar by status, Automatically
-  delete archived sessions whose conversation is gone and Close idle terminals when closing the panel, then Keep running
-  in the background. A setting only a client holds has its line only when the file carries a value this client can
-  use: Keep running in the background has none in a browser.
+- **General**: Appearance, Language and Markdown style, then the switch Order the sidebar by status.
+- **App behavior**: the switch Resume sessions on start, then Keep running in the background, Show menu bar icon,
+  Prevent sleep and When to prevent sleep, then the switch Close idle terminals when closing the panel.
 - **Git**: the default clone directory, Automatically pull repositories, then one line for the git workflow.
 - **Agent behavior**: its five switches.
 - **Keyboard shortcuts**: one line, **Changed shortcuts**.
+- **Cleanup**: the switch Automatically delete archived sessions whose conversation is gone.
+
+A setting only a client holds has its line only when the file carries a value this client can use: Keep running in
+the background, Show menu bar icon, Prevent sleep and When to prevent sleep have none in a browser. A switch the file
+does not carry — Resume sessions on start, in a file from a build without it — has no line.
 
 A **switch**'s line names the setting with a badge for what applying would change from what is set now: **Turns on**,
 with what then follows in that setting's own words (see "The application settings an export carries" in
 `docs/product/settings-in-a-configuration.md`); **Turns off**; or **No change**.
 
-A **setting only a client holds** — Appearance, Language, Markdown style, Keep running in the background — is badged
-**Set to the file's**, with the file's value and, in brackets, the value this client has now, worded as Settings words
-them (a language by its name in its own language, a Markdown style by its name); or **No change** when they are the
-same.
+A **setting only a client holds** — Appearance, Language, Markdown style, Keep running in the background, Show menu bar
+icon, Prevent sleep, When to prevent sleep — is badged **Set to the file's**, with the file's value and, in brackets, the
+value this client has now, worded as Settings words them (a language by its name in its own language, a Markdown style
+by its name, a switch as **On** or **Off**, When to prevent sleep by its choice's name); or **No change** when they are
+the same.
 
 The **default clone directory** has its line when the file carries one that can be used here, or one written on another
 operating system. A directory written on another operating system (see "The default clone directory on import" in

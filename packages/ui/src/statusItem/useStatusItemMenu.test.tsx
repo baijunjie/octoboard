@@ -52,6 +52,7 @@ it("asks the daemon to refresh the quotas that are due each time the menu begins
   const undo = vi.fn();
   const statusItem: StatusItemCapability = {
     setMenu: () => Promise.resolve(),
+    setVisible: async () => {},
     onSessionChosen: () => () => {},
     onOpened(handler) {
       opened = handler;
@@ -68,7 +69,7 @@ it("asks the daemon to refresh the quotas that are due each time the menu begins
 
 it("updates the native icon on session selection, quota changes and cleared selection", async () => {
   const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
-  const statusItem: StatusItemCapability = { setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  const statusItem: StatusItemCapability = { setMenu, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
   const codex = sessionOf("codex", "console", undefined, "Codex", "idle", { agent: "codex" });
   const claude = sessionOf("claude", "console", undefined, "Claude", "idle", { account_id: "work", config_dir: "/work" });
   const reading = (agent: "claude" | "codex", account: string | null, used: number): AccountQuota => ({
@@ -85,10 +86,12 @@ it("updates the native icon on session selection, quota changes and cleared sele
   const last = () => setMenu.mock.lastCall![0];
   await settle();
   expect(last().quota_remaining).toBeUndefined();
+  expect(last().keep_awake_label).toBe("Octoboard is keeping the computer awake");
   select(codex.id);
   await settle();
   expect(last().quota_remaining).toBe(0);
   expect(last().quota_label).toContain("5h 0% remaining");
+  expect(last().keep_awake_label).toBe(`${last().quota_label}, Octoboard is keeping the computer awake`);
   expect(last().quota_weekly_remaining).toBeUndefined();
   act(() => store.setState({
     accountQuotas: [{ ...reading("codex", null, 20), windows: [
@@ -125,7 +128,7 @@ it("updates the native icon on session selection, quota changes and cleared sele
 
 it("shows each submenu's current-console default account and follows console switches and edits", async () => {
   const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
-  const statusItem: StatusItemCapability = { setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  const statusItem: StatusItemCapability = { setMenu, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
   const work = consoleOf("work", "Work", { accounts: { claude: "work-account" } });
   const personal = consoleOf("personal", "Personal");
   const reading = (agent: "claude" | "codex", account: string | null, used: number): AccountQuota => ({
@@ -177,7 +180,7 @@ it("pushes the menu again when a held window's reset time passes, drawing it ful
   const start = Date.UTC(2026, 9, 19, 12);
   vi.setSystemTime(start);
   const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
-  const statusItem: StatusItemCapability = { setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  const statusItem: StatusItemCapability = { setMenu, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
   const session = sessionOf("s", "console", undefined, "S", "idle", { agent: "codex" });
   const reading: AccountQuota = {
     agent: "codex", account: null, fetched_at: start - 30_000, plan: null, unavailable: null,
@@ -203,7 +206,7 @@ it("pushes the menu again at each whole minute of a reading's age, so the age in
   const start = Date.UTC(2026, 9, 19, 12);
   vi.setSystemTime(start);
   const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
-  const statusItem: StatusItemCapability = { setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  const statusItem: StatusItemCapability = { setMenu, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
   const reading: AccountQuota = {
     agent: "codex", account: null, fetched_at: start - 30_000, plan: null, unavailable: null,
     windows: [{ kind: "session", label: null, used_percent: 10, resets_at: null, window_minutes: 300 }], email: null,
@@ -235,7 +238,7 @@ it("draws the pictures in the system's appearance, not the page's theme, and pus
   onTestFinished(() => void delete document.documentElement.dataset.theme);
   withIcons.mockClear();
   const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
-  const statusItem: StatusItemCapability = { setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  const statusItem: StatusItemCapability = { setMenu, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
   mount(statusItem, vi.fn());
   await act(async () => {});
   expect(withIcons.mock.lastCall![1]).toBe("light");
@@ -252,7 +255,7 @@ it("draws the pictures in the system's appearance, not the page's theme, and pus
 
 it("keeps the tray update entry in sync even after the update notice is dismissed", async () => {
   const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
-  const statusItem: StatusItemCapability = { setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  const statusItem: StatusItemCapability = { setMenu, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
   let updates: UpdateStore | undefined;
   let available = true;
   const check = vi.fn(async () => available ? { version: "99.0.0" } : undefined);

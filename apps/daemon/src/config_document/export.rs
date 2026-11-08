@@ -160,6 +160,7 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
             auto_approve_account_switches: store.auto_approve_account_switches()?,
             auto_approve_handoffs: store.auto_approve_handoffs()?,
             ask_questions_as_choices: store.ask_questions_as_choices()?,
+            resume_sessions_on_start: Some(store.resume_sessions_on_start()?),
             git_workflow: store.git_workflow_settings()?,
             default_clone_dir: Some(document_directory(
                 &store.default_clone_dir()?,
@@ -170,6 +171,9 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
             appearance: None,
             markdown_style: None,
             run_in_background: None,
+            show_menu_bar_icon: None,
+            keep_awake: None,
+            keep_awake_when: None,
             keyboard_shortcuts: None,
         })
     } else {
@@ -600,12 +604,16 @@ mod tests {
                 auto_approve_account_switches: false,
                 auto_approve_handoffs: false,
                 ask_questions_as_choices: true,
+                resume_sessions_on_start: Some(false),
                 git_workflow: GitWorkflowSettings::default(),
                 default_clone_dir: Some(clone_dir),
                 interface_language: None,
                 appearance: None,
                 markdown_style: None,
                 run_in_background: None,
+                show_menu_bar_icon: None,
+                keep_awake: None,
+                keep_awake_when: None,
                 keyboard_shortcuts: None,
             })
         );

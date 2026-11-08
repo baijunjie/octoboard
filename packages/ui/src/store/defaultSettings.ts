@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   auto_switch_on_usage_limit: false,
   sidebar_order_by_status: true,
   auto_start_quota_windows: false,
+  resume_sessions_on_start: false,
   default_clone_dir: "",
   accounts: [],
   account_order: {},

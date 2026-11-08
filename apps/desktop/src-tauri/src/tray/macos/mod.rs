@@ -1,4 +1,5 @@
-//! The rich menu bar icon of macOS: the attention dot and the accessible name on the status item,
+//! The rich menu bar icon of macOS: the attention dot, the red eyes and the accessible name on the
+//! status item,
 //! the menu tracking that holds back a menu sent while one is open, and the finishing pass that
 //! gives the menu its template pictures and its custom rows (`lines.rs`, `openers.rs`).
 
@@ -18,14 +19,15 @@ use super::icon;
 
 pub(super) use finish::{finish_when_opened, Unfinished};
 pub(super) use menu_tracking::follow_menu_tracking;
-pub(super) use status_item::{set_icon_label, show_dot};
+pub(super) use status_item::{set_icon_label, set_visible, show_layers};
 
 /// The octopus is a template image, which macOS tints for a light or dark menu bar itself.
 pub(super) const TEMPLATE: bool = true;
 
-/// The octopus, with the quota capsules and the dot's cut-out corner when they apply.
-pub(super) fn picture(attention: bool, quota: Option<icon::Quota>) -> Image<'static> {
-    icon::octopus(attention, quota)
+/// The octopus, with the quota capsules, the dot's cut-out corner and the eyes' cut-outs when they
+/// apply.
+pub(super) fn picture(attention: bool, awake: bool, quota: Option<icon::Quota>) -> Image<'static> {
+    icon::octopus(attention, awake, quota)
 }
 
 /// A line's picture as the UI drew it: AppKit tints a template one for the menu once the menu is

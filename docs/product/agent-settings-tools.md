@@ -63,8 +63,9 @@ that rule. What is the user's alone is never changed through these tools, by any
 Each of those stays the user's own, in the UI. A project's directory, source, host and remote URL are not settings of
 either kind: they are chosen when the project is associated, by the user or by `add_project`, and nobody, the user
 included, can edit them afterwards (see "Editing a project" in `docs/product/projects.md`). Nor do the tools reach what a
-window keeps for itself rather than the daemon, such as the appearance, Markdown style, the window's own language and
-keyboard shortcuts.
+window keeps for itself rather than the daemon, such as the appearance, Markdown style, the window's own language,
+keyboard shortcuts, keeping running in the background, showing the menu bar icon and Prevent sleep, nor what the system
+keeps, such as Launch at login.
 
 The console session's instructions tell it that projects, its console and the application settings belong to the
 user: it changes one only when asked to, says what it changed, and treats accounts and trusted folders as read-only.
@@ -203,6 +204,7 @@ working directory. Neither the avatar itself nor the console's console session i
 | `auto_close_idle_shell_terminals` | Whether explicitly closing a Terminal panel closes its idle terminals (see "Closing the panel" in `docs/product/terminal-panel.md`). |
 | `auto_pull_repositories` | Whether projects behind their upstream are pulled (fast-forwarded) on their own (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). |
 | `auto_delete_unresumable_archives` | Whether archived sessions whose conversation is gone are deleted on their own (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). |
+| `resume_sessions_on_start` | Whether, when the daemon starts, the sessions the previous run left running are resumed on their own (see "Resume sessions on start" in `docs/product/settings.md` and "Resuming the sessions a run left running" in `docs/product/archiving-and-resuming-sessions.md`). |
 | `auto_select_account` | Whether a new session whose account was not named chooses a usable account automatically, preferring the initial agent's soonest weekly reset and trying another added agent when needed (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/opening-sessions.md`). Read-only. |
 | `interface_language` | The language the daemon holds for the user, as its tag, or `null` while it holds none (see "The language the daemon holds" in `docs/product/language.md`). |
 | `sidebar_order_by_status` | Whether the user's sidebar ranks sessions and projects by status (see "Order the sidebar by status" in `docs/product/settings.md` and "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). |
@@ -214,7 +216,7 @@ working directory. Neither the avatar itself nor the console's console session i
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 
 `update_settings` takes `auto_close_idle_shell_terminals`, `auto_pull_repositories`,
-`auto_delete_unresumable_archives`, `interface_language`,
+`auto_delete_unresumable_archives`, `resume_sessions_on_start`, `interface_language`,
 `sidebar_order_by_status`, `default_clone_dir` and `git_workflow`, under the rules of the same settings in Settings: the
 switches take `true` or `false`, a clone directory must be absolute or start with `~/`, and a blank one goes back to the
 built-in default. `interface_language` is a tag of an offered language (see "The offered languages" in
@@ -231,7 +233,8 @@ stays as it is and the rest of the call applies as usual; `get_settings` lists o
 Settings does, which changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on deletes
 nothing at once, and turning it off stops a deletion pass under way, exactly as the switch in Settings does. The call
 answers as `get_settings` does. Changing `auto_close_idle_shell_terminals` closes nothing at once; it applies when
-a user next explicitly closes the Terminal panel.
+a user next explicitly closes the Terminal panel. Changing `resume_sessions_on_start` resumes nothing at once; it is
+read when the daemon next starts.
 
 ## When a change takes effect
 

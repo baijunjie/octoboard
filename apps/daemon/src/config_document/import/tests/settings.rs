@@ -170,12 +170,16 @@ async fn the_documents_settings_are_shown_by_inspecting_and_applied_only_when_as
             auto_approve_account_switches: false,
             auto_approve_handoffs: false,
             ask_questions_as_choices: true,
+            resume_sessions_on_start: None,
             git_workflow: GitWorkflowSettings::default(),
             default_clone_dir: None,
             interface_language: None,
             appearance: None,
             markdown_style: None,
             run_in_background: None,
+            show_menu_bar_icon: None,
+            keep_awake: None,
+            keep_awake_when: None,
             keyboard_shortcuts: None,
         })
     );
@@ -194,6 +198,7 @@ async fn a_full_export_round_trips_both_settings_and_a_console_export_carries_no
         .set_auto_delete_unresumable_archives(false)
         .unwrap();
     source.store.set_sidebar_order_by_status(false).unwrap();
+    source.store.set_resume_sessions_on_start(true).unwrap();
     let hub = crate::test_support::console(&source_dir);
     source.store.insert_console(&hub).unwrap();
     let full = serde_json::to_value(
@@ -246,6 +251,45 @@ async fn a_full_export_round_trips_both_settings_and_a_console_export_carries_no
     assert!(!target.store.auto_delete_unresumable_archives().unwrap());
     assert!(!target.store.sidebar_order_by_status().unwrap());
     assert_eq!(full["settings"]["sidebar_order_by_status"], false);
+    assert!(target.store.resume_sessions_on_start().unwrap());
+    assert_eq!(full["settings"]["resume_sessions_on_start"], true);
+}
+
+/// A document from a build that had no Resume sessions on start setting leaves this machine's
+/// choice alone, and the review reads it as no change.
+#[tokio::test]
+async fn a_document_without_the_resume_setting_leaves_it_as_this_machine_has_it() {
+    let (state, dir) = app_state("import-resume-setting-absent");
+    state.store.set_resume_sessions_on_start(true).unwrap();
+    let hub = crate::test_support::console(&dir);
+    state.store.insert_console(&hub).unwrap();
+    let mut full = serde_json::to_value(
+        crate::config_document::export::build(&state.store, &export::Selection::full(true))
+            .unwrap(),
+    )
+    .unwrap();
+    full["settings"]
+        .as_object_mut()
+        .unwrap()
+        .remove("resume_sessions_on_start");
+
+    let inspected = inspect(&state, &full).await.unwrap().settings.unwrap();
+    assert!(inspected.resume_sessions_on_start);
+    assert!(inspected.current_resume_sessions_on_start);
+    apply(
+        &state,
+        &full,
+        Vec::new(),
+        ApplyOptions {
+            settings: true,
+            accounts: None,
+            consoles: true,
+            clone_dir: true,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(state.store.resume_sessions_on_start().unwrap());
 }
 
 /// The automatic approval of session requests and of resume requests travels in a full export
@@ -927,13 +971,21 @@ async fn the_interface_language_is_carried_and_an_unknown_setting_is_ignored() {
     assert!(target.store.auto_pull_repositories().unwrap());
 }
 
-/// The values only a client holds (appearance, Markdown style, running in the background) are not
-/// built by the daemon and pass through an import's reply as they came.
+/// The values only a client holds (appearance, Markdown style, running in the background, the menu
+/// bar icon, Prevent sleep) are not built by the daemon and pass through an import's reply as they
+/// came.
 #[tokio::test]
 async fn the_clients_own_values_pass_through_an_import_untouched() {
     let (source, _dir) = app_state("import-client-values-source");
     let full = export_everything(&source);
-    for client_held in ["appearance", "markdown_style", "run_in_background"] {
+    for client_held in [
+        "appearance",
+        "markdown_style",
+        "run_in_background",
+        "show_menu_bar_icon",
+        "keep_awake",
+        "keep_awake_when",
+    ] {
         assert!(full["settings"].get(client_held).is_none());
     }
 
@@ -941,6 +993,9 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
     carried["settings"]["appearance"] = json!("dark");
     carried["settings"]["markdown_style"] = json!("github");
     carried["settings"]["run_in_background"] = json!(true);
+    carried["settings"]["show_menu_bar_icon"] = json!(false);
+    carried["settings"]["keep_awake"] = json!(true);
+    carried["settings"]["keep_awake_when"] = json!("always");
     let (target, _target_dir) = app_state("import-client-values-target");
     let imported = apply(
         &target,
@@ -959,6 +1014,9 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
     assert_eq!(echoed.appearance.as_deref(), Some("dark"));
     assert_eq!(echoed.markdown_style.as_deref(), Some("github"));
     assert_eq!(echoed.run_in_background, Some(true));
+    assert_eq!(echoed.show_menu_bar_icon, Some(false));
+    assert_eq!(echoed.keep_awake, Some(true));
+    assert_eq!(echoed.keep_awake_when.as_deref(), Some("always"));
 
     // Absent in the document: absent in the reply, so a client leaves its own alone.
     let imported = apply(
@@ -979,9 +1037,12 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
         (
             echoed.appearance,
             echoed.markdown_style,
-            echoed.run_in_background
+            echoed.run_in_background,
+            echoed.show_menu_bar_icon,
+            echoed.keep_awake,
+            echoed.keep_awake_when
         ),
-        (None, None, None)
+        (None, None, None, None, None, None)
     );
 }
 

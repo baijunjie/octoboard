@@ -1,9 +1,9 @@
-// The page one scenario renders in, loaded in an iframe by the gallery shell (`shell.tsx`). It
-// renders the real `App` under the app's provider tree (`AppRoot`), over a fixture daemon in place
-// of the WebSocket one. It passes `nativeSync={false}` to `AppRoot` and does not reveal the window:
-// the browser platform has no native menu or window. It leaves out `BackgroundRunSync` too: a scenario that offers
-// `backgroundRun` gets one whose `set` does nothing (`galleryPlatform`), so there is no shell to
-// push the choice to. Its stored preferences are set from the URL before the app loads
+// The page one scenario renders in, loaded in an iframe by the gallery shell (`shell.tsx`). It renders the real `App`
+// under the app's provider tree (`AppRoot`), over a fixture daemon in place of the WebSocket one. It passes
+// `nativeSync={false}` to `AppRoot` and does not reveal the window: the browser platform has no native menu or window.
+// It leaves out the syncs to the shell too (`BackgroundRunSync`, the menu bar icon's and keep-awake's): a scenario that
+// offers `backgroundRun`, `menuBarIcon` or `keepAwake` gets a capability whose calls do nothing (`galleryPlatform`), so
+// there is no shell to push the choice to. Its stored preferences are set from the URL before the app loads
 // (`prepareStorage`).
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
@@ -71,26 +71,25 @@ let requestQuit: (() => void) | undefined;
 /** The window's handler of the daemon exiting by itself once the app has registered it, for a scenario that says so. */
 let daemonExited: ((detail: string) => void) | undefined;
 
-/** The browser platform, with what the desktop app alone offers added so it can be driven in the
- * gallery: `windowChrome` while the URL says `chrome=1` (the top bar's drag region, and on a macOS host the
- * window's own Back and Forward keys) and, with the scenario's `desktopApp`, the desktop platform kind (which
- * the app's shortcuts follow: the console-session switch's Ctrl+Tab on any system, Back and Forward on macOS)
- * and native menu bar (which no menu is drawn for, and which a scenario's `host`
- * without one, as the Windows app's has none, leaves out), the macOS privacy grants stubbed
- * from the scenario's `macosPermissions` (its System Settings pane refused when it gives a
- * `macosSettingsOpenError`), there being no other
- * way to look at those rows than to really change a system setting, a link opener that refuses with
- * the error of a scenario's `externalLinkError` (otherwise the browser's own opener stands, which
- * opens a new tab), and `backgroundRun` for a scenario that says so (the Settings switch), the
- * desktop shell's `notifications` for one that says `desktopNotifications` (nothing is
- * shown or opened; the link to the system's pane only where the scenario's `host` has one), the clipboard taken away for a
- * scenario that says so, and the configuration-file capability stubbed from the scenario's
- * `configuration` (absent where it says the platform has none) so that no download or file picker
- * is raised from a capture, and the exit capability for a scenario that says `quitRequested`, whose
- * quit request is raised once its steps have run and whose confirmation ends nothing (or fails with
- * the text of its `exitFailure`), the daemon exiting by itself for a scenario that says
- * `daemonExited`, and the updater for a scenario that has one (`updater`), with that same exit
- * capability, since a restart goes through it. Nothing else native; `chrome=1` alone keeps the browser platform kind. */
+/** The browser platform, with what the desktop app alone offers added so it can be driven in the gallery:
+ * `windowChrome` while the URL says `chrome=1` (the top bar's drag region, and on a macOS host the window's own Back
+ * and Forward keys) and, with the scenario's `desktopApp`, the desktop platform kind (which the app's shortcuts follow:
+ * the console-session switch's Ctrl+Tab on any system, Back and Forward on macOS) and native menu bar (which no menu is
+ * drawn for, and which a scenario's `host` without one, as the Windows app's has none, leaves out), the macOS privacy
+ * grants stubbed from the scenario's `macosPermissions` (its System Settings pane refused when it gives a
+ * `macosSettingsOpenError`), there being no other way to look at those rows than to really change a system setting, a
+ * link opener that refuses with the error of a scenario's `externalLinkError` (otherwise the browser's own opener
+ * stands, which opens a new tab), `backgroundRun`, `menuBarIcon`, `keepAwake` and `launchAtLogin` for a scenario that
+ * says so (the App behavior switches; none of them reaches a shell, and the login entry is a stub that keeps the last
+ * choice, its list of login items refused when the scenario gives a `launchAtLoginOpenError`), the desktop shell's
+ * `notifications` for one that says `desktopNotifications` (nothing is shown or opened; the link to the system's pane
+ * only where the scenario's `host` has one), the clipboard taken away for a scenario that says so, and the
+ * configuration-file capability stubbed from the scenario's `configuration` (absent where it says the platform has
+ * none) so that no download or file picker is raised from a capture, and the exit capability for a `desktopApp` and for
+ * a scenario that says `quitRequested`, whose quit request is raised once its steps have run and whose confirmation
+ * ends nothing (or fails with the text of its `exitFailure`), the daemon exiting by itself for a scenario that says
+ * `daemonExited`, and the updater for a scenario that has one (`updater`), with that same exit capability, since a
+ * restart goes through it. Nothing else native; `chrome=1` alone keeps the browser platform kind. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
   const host = scenario?.host ?? platform.host;
@@ -99,6 +98,8 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const configuration = scenario?.configuration;
   const externalLinkError = scenario?.externalLinkError;
   let clipboardText = typeof scenario?.clipboard === "object" ? scenario.clipboard.text : "";
+  // The system's login entry, which the switch changes and a read finds as it was left.
+  const launchAtLogin = scenario?.launchAtLogin === undefined ? undefined : { status: scenario.launchAtLogin };
   return {
     ...platform,
     kind: scenario?.desktopApp ? "tauri" : platform.kind,
@@ -119,7 +120,7 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
       links: { open: async () => { throw new Error(externalLinkError); } },
     }),
     ...(scenario?.updater && { updater: fixtureUpdater(scenario.updater) }),
-    ...((scenario?.quitRequested || scenario?.updater || scenario?.daemonExited !== undefined || scenario?.exitFailure !== undefined) && {
+    ...((scenario?.desktopApp || scenario?.quitRequested || scenario?.updater || scenario?.daemonExited !== undefined || scenario?.exitFailure !== undefined) && {
       exit: {
         register: ({ onQuitRequested, onDaemonExited }) => {
           requestQuit = onQuitRequested;
@@ -127,12 +128,26 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
           return () => { requestQuit = undefined; daemonExited = undefined; };
         },
         heartbeat: async () => {},
+        setSystemQuitWithoutAsking: async () => {},
         confirmQuit: async () => {
           if (scenario?.exitFailure !== undefined) throw new Error(scenario.exitFailure);
         },
       },
     }),
     ...(scenario?.backgroundRun && { backgroundRun: { set: async () => {} } }),
+    ...(scenario?.menuBarIcon && {
+      statusItem: { setVisible: async () => {}, setMenu: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} },
+    }),
+    ...(scenario?.keepAwake && { keepAwake: { set: async () => {} } }),
+    ...(launchAtLogin && {
+      launchAtLogin: {
+        status: async () => launchAtLogin.status,
+        set: async (enabled: boolean) => (launchAtLogin.status = enabled ? "enabled" : "disabled"),
+        openSystemSettings: async () => {
+          if (scenario?.launchAtLoginOpenError !== undefined) throw new Error(scenario.launchAtLoginOpenError);
+        },
+      },
+    }),
     ...(scenario?.desktopNotifications && {
       notifications: {
         ensurePermission: async () => true,

@@ -1,6 +1,7 @@
 import type { Translate } from "../i18n/catalog";
 import type { StatusItemEntry, StatusItemMenu, StatusItemSection, StatusItemSubmenuDraft } from "../platform";
 import type { Console, Project, Session } from "../protocol";
+import { joinPhrases } from "../i18n/joinPhrases";
 import { remainingPercentAt } from "../accounts/quotaFormat";
 import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
 import { sessionWithLocation, statusLabel } from "../sessions/sessionLabel";
@@ -42,7 +43,8 @@ export interface StatusItemMenuSource {
 
 /** The sessions in summary statuses, in the sidebar's order,
  * each shown status under its own heading, then a quota submenu per available agent. The icon shows its
- * attention dot (`attention`) while any session waits for the user or is dormant. */
+ * attention dot (`attention`) while any session waits for the user or is dormant, and carries the icon's
+ * accessible name for while the shell holds the computer awake (`keep_awake_label`). */
 export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenuDraft {
   const { consoles, projects, sessions, consoleMap, projectMap, quota } = source;
   const statuses = new Map(sessions.map((session) => [session, sessionShownStatusKind(session, source.delegating, source.queuedSwitches)]));
@@ -65,12 +67,15 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
   const selected = sessions.find((session) => session.id === source.selectedSessionId);
   const bar = sessionQuotaBarOf(selected, quota);
   const accountName = quota.accounts.find((account) => account.id === selected?.account_id)?.name;
+  const quotaLabel = selected && bar ? accountQuotaLabel(t, quota.providers, selected.agent, accountName, bar, quota.defaultAccountNames, quota.now) : undefined;
+  const keepAwake = t("statusItem.keepAwake");
   return {
     ...(selected && bar ? {
       quota_remaining: remainingPercentAt(bar.main, quota.now),
       ...(bar.thin ? { quota_weekly_remaining: remainingPercentAt(bar.thin, quota.now) } : {}),
-      quota_label: accountQuotaLabel(t, quota.providers, selected.agent, accountName, bar, quota.defaultAccountNames, quota.now),
+      quota_label: quotaLabel,
     } : {}),
+    keep_awake_label: quotaLabel === undefined ? keepAwake : joinPhrases(quota.language, [quotaLabel, keepAwake]),
     sections: sections.length > 0 ? sections : [{ heading: t("statusItem.noListedSessions"), items: [] }],
     submenus: buildQuotaSubmenus(t, quota, consoleMap.get(source.currentConsoleId ?? ""), accountInUse(selected)),
     open: t("statusItem.open"),

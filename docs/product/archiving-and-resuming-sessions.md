@@ -1,7 +1,8 @@
 # Archiving and resuming sessions
 
 How a session's process is ended by archiving or by an interruption, how a session without a process — interrupted or archived —
-is resumed or reopened, when its conversation can no longer be resumed, and how long archived sessions are kept.
+is resumed or reopened, how the sessions a run left running are resumed when Octoboard next starts, when its
+conversation can no longer be resumed, and how long archived sessions are kept.
 Sessions themselves and locking are in `docs/product/sessions.md`, their statuses in `docs/product/session-statuses.md`;
 deleting sessions for good is in `docs/product/deleting-sessions.md`.
 
@@ -142,6 +143,33 @@ or reopen a project session, by its conversation's session ID, with `request_res
 
 An interrupted session and an archived session are relaunched the same way; the difference is how the session got
 there, where it is listed, and that selecting an archived one does not relaunch it.
+
+### Resuming the sessions a run left running
+
+Every daemon start leaves the sessions of the previous run interrupted (see "Starting up" in
+`docs/product/application-lifecycle.md`). While **Resume sessions on start** is on (see that section in
+`docs/product/settings.md`), the start then resumes, on its own, the sessions that were running when that run ended —
+those with a process at the end, however it ended: a quit, a restart, a termination signal, a crash or the system
+ending the user's session. A session that was archived, or already interrupted before the run ended, is not among
+them. The setting is read once, at the start; turning it on later resumes nothing until the next start. The daemon does
+this whichever client, if any, is connected.
+
+- **Each is relaunched as an interrupted session is resumed** (see above), with no opening prompt: a session whose
+  conversation is proven gone, for instance, is not relaunched and stays interrupted.
+- **At most three resumes run at once**, each starting **400 ms** after the one before it. A session comes after the
+  session it reports to when both are among them, so what it reports reaches a running owner; otherwise they go oldest
+  first.
+- A session the user has resumed or archived in the meantime is left as it is. One found already being started by
+  another resume — its owner's reopening, say — is tried once more after the rest.
+- **Nobody is told**: no alert, notice or toast. A session that could not be resumed stays interrupted, resumable with
+  a click as usual, and the reason is written to the daemon's log.
+- Once the daemon begins to shut down, no further resume starts (see "Quitting" in
+  `docs/product/application-lifecycle.md`).
+
+Which sessions were running is recorded for the one start that follows and cleared there, whether the setting is on or
+not. So a session is resumed at most once for the run that left it running, turning the setting on never brings back
+the sessions of an earlier run, and the sessions a run had not yet got round to resuming when it ended are not resumed
+by the start after it, since they were not running then.
 
 ### When a conversation can no longer be resumed
 

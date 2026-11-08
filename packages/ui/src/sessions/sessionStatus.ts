@@ -14,6 +14,16 @@ export function runsInBackground(session: Pick<Session, "status" | "background_t
   return session.status === "idle" && !!session.background_tasks?.length;
 }
 
+/** The wire statuses of a session at work: starting, working, or dormant, whose background agents may be at work. */
+const WORKING_STATUSES: ReadonlySet<SessionStatus> = new Set(["starting", "working", "dormant"]);
+
+/** Whether `session` is at work: starting, working or dormant, or idle with work left running in the background (a
+ * paused one included). A session waiting for the user is not, which is what separates what holds the computer awake
+ * from what holds a quit up (`quitHolders`). */
+export function sessionIsWorking(session: Session): boolean {
+  return WORKING_STATUSES.has(session.status) || runsInBackground(session);
+}
+
 /** The ids of the sessions with delegated work in progress: those some session in `sessions` that is
  * starting, working, dormant, waiting for the user or idle with work left running in the background
  * (`runsInBackground`) is bound to, directly or through the sessions between (`bound_to`), whatever their own

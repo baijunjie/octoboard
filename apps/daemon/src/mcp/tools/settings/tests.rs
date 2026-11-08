@@ -835,6 +835,18 @@ async fn settings_are_listed_without_directories_and_the_general_switches_are_wr
     .unwrap();
     assert_eq!(ordered["sidebar_order_by_status"], false);
     assert!(!state.store.sidebar_order_by_status().unwrap());
+    // Resuming the sessions a run left running is a setting an agent may read and change.
+    assert_eq!(read["resume_sessions_on_start"], false);
+    let resumed = call(
+        &state,
+        "a",
+        "update_settings",
+        &arguments(json!({ "resume_sessions_on_start": true })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(resumed["resume_sessions_on_start"], true);
+    assert!(state.store.resume_sessions_on_start().unwrap());
     // Each agent's default account, and the one account the state holds.
     assert_eq!(
         read["accounts"].as_array().unwrap().len(),

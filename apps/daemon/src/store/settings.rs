@@ -51,6 +51,7 @@ impl Store {
             auto_switch_on_usage_limit: read_setting(&conn, "auto_switch_on_usage_limit")?,
             sidebar_order_by_status: read_setting(&conn, "sidebar_order_by_status")?,
             auto_start_quota_windows: read_setting(&conn, "auto_start_quota_windows")?,
+            resume_sessions_on_start: read_setting(&conn, "resume_sessions_on_start")?,
             default_clone_dir: clone_dir_or_built_in(read_setting(&conn, "default_clone_dir")?),
             accounts: read_accounts(&conn)?,
             account_order: read_account_order(&conn)?,
@@ -295,6 +296,7 @@ bool_settings! {
     auto_switch_on_usage_limit, set_auto_switch_on_usage_limit;
     sidebar_order_by_status, set_sidebar_order_by_status;
     auto_start_quota_windows, set_auto_start_quota_windows;
+    resume_sessions_on_start, set_resume_sessions_on_start;
 }
 
 impl Store {
@@ -597,6 +599,13 @@ mod tests {
                 read: |settings| settings.auto_start_quota_windows,
                 get: Store::auto_start_quota_windows,
                 set: Store::set_auto_start_quota_windows,
+            },
+            Setting {
+                column: "resume_sessions_on_start",
+                default: false,
+                read: |settings| settings.resume_sessions_on_start,
+                get: Store::resume_sessions_on_start,
+                set: Store::set_resume_sessions_on_start,
             },
         ];
 

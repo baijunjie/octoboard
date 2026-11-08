@@ -1,23 +1,26 @@
 # Menu bar icon
 
 The macOS application puts an icon in the system menu bar: an octopus, which carries an orange dot while a session waits
-for the user or is dormant, with a quota indicator for the selected session when one is available (see "The icon's look" below). It is
-there for as long as the application runs — while the window is shown, while it is closed into the background, and on
-the screen shown when the daemon failed to start — and whatever the user chose about keeping Octoboard running when the
-window is closed (see "Closing the window" in `docs/product/application-lifecycle.md`). The Windows application puts
-the same icon, with the same menu, in the taskbar's notification area, drawn and behaving as the system's notification
-area items do; what differs there is in "The notification-area icon on Windows" below. A browser has no such icon.
+for the user or is dormant, with a quota indicator for the selected session when one is available, and whose eyes turn
+red while Octoboard keeps the computer awake (see "The icon's look" below). It is there for as long as the application
+runs — while the window is shown, while it is closed into the background, and on the screen shown when the daemon failed
+to start — and whatever the user chose about keeping Octoboard running when the window is closed (see "Closing the
+window" in `docs/product/application-lifecycle.md`), unless the user has hidden it (see "Hiding the icon" below). The
+Windows application puts the same icon, with the same menu, in the taskbar's notification area, drawn and behaving as
+the system's notification area items do; what differs there is in "The notification-area icon on Windows" below. A
+browser has no such icon.
 
 ## The icon's look
 
 The icon has two attention states. In both, the octopus is monochrome, and macOS tints it to suit a light or dark menu
-bar:
+bar. Its eyes are two slanted eye sockets inside its head, drawn lighter than the head — partly see-through, in one flat
+tint — and set in solid head all round:
 
 - **The octopus alone**, while no session is waiting for the user or dormant.
-- **The octopus with an orange dot** at its upper-right corner, separated from the octopus by a clear margin,
-  while at least one session is waiting for the user or dormant (see "Dormant" in
+- **The octopus with an orange dot** at its upper-right corner, separated from the octopus by a clear margin of about
+  **0.5 pt**, while at least one session is waiting for the user or dormant (see "Dormant" in
   `docs/product/session-statuses.md`). The dot is drawn in the system orange, which macOS resolves
-  for a light or dark menu bar, rather than in the octopus's tint. The dot is about **6.5 pt** across within the
+  for a light or dark menu bar, rather than in the octopus's tint. The dot is about **5.5 pt** across within the
   18 pt icon. It appears with or without a readable quota.
   It is part of the icon's look and is not presented to assistive technology on
   its own. Sessions across every console count, independently of which statuses the menu lists. A dormant
@@ -29,28 +32,37 @@ keeping the octopus at its original scale; the icon keeps its **18 pt** footprin
 looks:
 
 - **Two layers**, when the account has both a five-hour and an account-wide weekly window: two **outlined capsules**,
-  each with a hollow unfilled portion — about **18 × 3.3 pt** for the five-hour window and, about 0.8 pt beneath it,
-  about **18 × 2.5 pt** for the weekly window. The five-hour capsule, the gap and the weekly capsule stand 4 : 1 : 3,
-  the same proportion as the rail's two layers.
-- **One bar** otherwise: an **outlined capsule** of about **18 × 4.1 pt**, with a hollow unfilled portion; its outline
-  is a fifth of its height, as on the rail's single bar.
+  each with a hollow unfilled portion — **18 × 3.5 pt** for the five-hour window and, **1 pt** beneath it,
+  **18 × 3 pt** for the weekly window. The five-hour capsule, the gap and the weekly capsule stand 7 : 2 : 6, close to
+  the rail's two layers' 4 : 1 : 3.
+- **One bar** otherwise: an **outlined capsule** of **18 × 4 pt**, with a hollow unfilled portion; its outline is
+  **1 pt**, a quarter of its height.
 
-The attention dot stays at the upper right, clear of the bars. Without a readable quota the bars disappear; without
-attention or a quota the original octopus returns.
+**While Octoboard keeps the computer awake** (see `docs/product/keeping-the-computer-awake.md`) the whole of both eye
+sockets turns solid red, in the system red, which macOS resolves for a light or dark menu bar; their shape stays the
+same. It shows only while the computer is actually being kept awake, not merely while Prevent sleep is on, and it goes
+with either attention state and with or without a quota.
+
+The attention dot stays at the upper right, clear of the bars, and neither the dot, the space cleared around it, nor
+the bars ever cover the eyes. Without a readable quota the bars disappear; without attention, a quota or the computer
+kept awake the original octopus returns.
 
 The account, the windows drawn and the hiding rules are the same as "The selected session's quota indicator" in
 `docs/product/account-quotas.md`. On macOS the icon has **no tooltip**. With a quota, its accessible name identifies the
 agent and account and, for each window drawn, the window and its whole remaining percent, in the UI's language; without one it
-names only Octoboard. Selecting another session updates the indicator even if no session data changed, and a session's
-account switch, account edits, availability changes and new readings update it too, as does a window's reset time
+names only Octoboard. While the computer is kept awake, it adds that Octoboard is keeping the computer awake — after the
+quota's words, or in place of Octoboard's name alone. Selecting another session updates the indicator even if no
+session data changed, and a session's account switch, account edits, availability changes and new readings update it too, as does a window's reset time
 passing, after which that window is drawn full (see "How an account's quota is shown" in
 `docs/product/account-quotas.md`). The bars fill from the left in every UI language: the menu bar belongs to the system,
 not to the window, whose layout is what a right-to-left language mirrors (see `docs/product/right-to-left-layout.md`).
 
 The look changes together with the menu: a change that has to wait for an open menu to close (see the end of "The icon's
 menu" below) changes the look and its label only when it reaches the menu, so both reflect the same session snapshot.
-The octopus's dot clearance and the orange dot always appear and go together. Until the window's UI has sent its first menu — and throughout on the screen shown when the daemon failed to start — the icon is
-the octopus alone.
+The octopus's dot clearance and the orange dot always appear and go together. The red eyes are the exception to
+waiting: they come and go as soon as the computer starts or stops being kept awake, even while a menu is open, and the
+accessible name follows them. Until the window's UI has sent its first menu — and throughout on the screen shown when
+the daemon failed to start — the icon is the octopus alone, apart from the red eyes while the computer is kept awake.
 
 ## Clicking the icon
 
@@ -227,17 +239,33 @@ The quit entry behaves like `Cmd+Q`: while a session or a busy shell terminal ho
 confirmation, bringing a window closed into the background back to ask it, and otherwise it quits at once (see
 "Quitting" in `docs/product/application-lifecycle.md`, which says what holds a quit up).
 
+## Hiding the icon
+
+The **Show menu bar icon** switch in Settings' App behavior section — **Show notification area icon** on Windows — is on
+to begin with; turning it off takes the icon out of the menu bar, or out of the notification area, and turning it back
+on puts it back (see "Show menu bar icon" in `docs/product/settings.md`). Nothing else changes while it is hidden: the
+menu and the icon's look keep following the sessions, the quota and the keep-awake hold, so the icon comes back as it
+would have been. On macOS the icon keeps its place among the status items rather than being removed and made again.
+
+Hidden, the icon's menu is not there to bring a window closed into the background back: opening Octoboard again, or one
+of its notifications, still does (see "Closing the window" in `docs/product/application-lifecycle.md`). The choice is
+kept per client, as keeping Octoboard running in the background is (see "Closing the window" in that document), and a
+configuration export that includes the application settings carries it (see "The settings a client holds" in
+`docs/product/settings-in-a-configuration.md`). Each launch shows the icon until the window's UI has loaded and handed the choice over.
+
 ## The notification-area icon on Windows
 
 In the Windows application the icon and its menu hold what the sections above describe, with these differences, which
 follow from the system's own notification-area icons and plain menus:
 
 - **The icon** is Octoboard's application icon in its own colours, not a monochrome octopus tinted for the bar. While
-  a session waits for the user or is dormant it carries the orange dot in its corner, by the same rule as above. No
-  quota bars are drawn on it.
+  a session waits for the user or is dormant it carries the orange dot in its corner, by the same rule as above. While
+  the computer is kept awake, larger bright red eyes are drawn over its own eyes, which are red already, so the change
+  reads by their size and not only by their colour. No quota bars are drawn on it.
 - **The icon's label is its tooltip**: what macOS gives as the icon's accessible name — the selected session's agent,
-  account and remaining percentages, or Octoboard's name alone — shows when the pointer rests on the icon, and is what
-  the notification area reads out as the icon's name.
+  account and remaining percentages, or Octoboard's name alone, with the keep-awake words added while the computer is
+  kept awake — shows when the pointer rests on the icon, and is what the notification area reads out as the icon's
+  name.
 - **A click**, left or right, opens the menu when the button is released. That opening asks the daemon for a fresh
   quota reading, as opening the menu does on macOS.
 - **The menu's lines are the system's plain menu items.** They carry the same text: the group headings, the session

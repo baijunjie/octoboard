@@ -38,9 +38,11 @@ vi.mock("./accounts/AgentAccountsSection", () => ({
   },
 }));
 vi.mock("./GeneralSection", () => ({ GeneralSection: () => <p>General</p> }));
+vi.mock("./AppBehaviorSection", () => ({ AppBehaviorSection: () => <p>App behavior section</p> }));
 vi.mock("./GitSection", () => ({ GitSection: () => <p>Git section</p> }));
 vi.mock("./TrustedFoldersSection", () => ({ TrustedFoldersSection: () => <p>Trusted</p> }));
 vi.mock("./PermissionsSection", () => ({ PermissionsSection: () => <p>Permissions</p> }));
+vi.mock("./CleanupSection", () => ({ CleanupSection: () => <p>Cleanup section</p> }));
 vi.mock("./AgentBehaviorSection", () => ({ AgentBehaviorSection: () => <p>Agent behavior</p> }));
 vi.mock("./NotificationsSection", () => ({ NotificationsSection: () => <p>Notifications</p> }));
 vi.mock("./ConfigurationSection", () => ({ ConfigurationSection: () => <p>Configuration</p> }));
@@ -144,7 +146,7 @@ it("lists the Agent behavior section right after Agent accounts and opens on it"
   expect(selected()?.textContent).toContain("Agent behavior");
   const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
   expect(tabs.indexOf("Agent behavior")).toBe(tabs.indexOf("Agent accounts") + 1);
-  expect(tabs).toEqual(["General", "Git", "Agent accounts", "Agent behavior", "Trusted folders", "Permissions", "Notifications", "Keyboard shortcuts", "Configuration", "About"]);
+  expect(tabs).toEqual(["General", "App behavior", "Git", "Agent accounts", "Agent behavior", "Trusted folders", "Permissions", "Notifications", "Keyboard shortcuts", "Cleanup", "Configuration", "About"]);
 });
 
 it.each([

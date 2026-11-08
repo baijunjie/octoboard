@@ -1,0 +1,8 @@
+# A custom permission for the app's own command that reveals the window; see `exit-lifecycle.toml` for
+# why an app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-reveal-main-window"
+description = "Allows the frontend to reveal the window the shell created hidden, which stays hidden after a launch at login that keeps the app in the background."
+commands.allow = ["reveal_main_window"]

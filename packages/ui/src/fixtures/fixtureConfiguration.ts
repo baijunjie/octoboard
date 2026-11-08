@@ -196,6 +196,7 @@ export function exportedDocument(
         auto_approve_account_switches: state.settings.auto_approve_account_switches,
         auto_approve_handoffs: state.settings.auto_approve_handoffs,
         ask_questions_as_choices: state.settings.ask_questions_as_choices,
+        resume_sessions_on_start: state.settings.resume_sessions_on_start,
         git_workflow: state.settings.git_workflow,
         default_clone_dir: documentDirectory(state.settings.default_clone_dir, state.homeDir),
         ...(state.settings.interface_language !== null && { interface_language: state.settings.interface_language }),
@@ -337,7 +338,7 @@ export function importProgressDisagreement(handled: ImportItem[], progress: Impo
 }
 
 /** The settings only a client holds, which the daemon does not apply but hands back in what it applied. */
-const PASSED_THROUGH = ["keyboard_shortcuts", "appearance", "markdown_style", "run_in_background"] as const;
+const PASSED_THROUGH = ["keyboard_shortcuts", "appearance", "markdown_style", "run_in_background", "show_menu_bar_icon", "keep_awake", "keep_awake_when"] as const;
 
 /** The result with the document's client-held settings (see `PASSED_THROUGH`) echoed in `settings_applied`, as the daemon
  * does when it applied the settings: it does not apply them itself, so it hands them back as they came, for the client to

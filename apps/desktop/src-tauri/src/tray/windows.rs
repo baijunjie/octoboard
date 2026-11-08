@@ -23,9 +23,10 @@ pub(super) type Unfinished = ();
 /// The picture carries its own colours.
 pub(super) const TEMPLATE: bool = false;
 
-/// The app icon, with the dot when attention is up; the quota has no place in it.
-pub(super) fn picture(attention: bool, _quota: Option<icon::Quota>) -> Image<'static> {
-    icon::app_icon(attention)
+/// The app icon, with the dot when attention is up and larger eyes while the computer is kept
+/// awake; the quota has no place in it.
+pub(super) fn picture(attention: bool, awake: bool, _quota: Option<icon::Quota>) -> Image<'static> {
+    icon::app_icon(attention, awake)
 }
 
 /// A line's picture for the menu: a template one, which the UI draws black for its alpha alone, is
@@ -350,8 +351,13 @@ pub(super) fn set_icon_label(tray: &TrayIcon, label: &str) {
     let _ = tray.set_tooltip(Some(native_text(label)));
 }
 
-/// The dot is part of the picture, so it is up whenever the picture says attention.
-pub(super) fn show_dot(_tray: &TrayIcon, _shown: bool) -> bool {
+/// Shows or hides the icon in the notification area, keeping its picture and tooltip.
+pub(super) fn set_visible(tray: &TrayIcon, visible: bool) -> tauri::Result<()> {
+    tray.set_visible(visible)
+}
+
+/// The dot and the eyes are part of the picture, so they are up whenever the picture says so.
+pub(super) fn show_layers(_tray: &TrayIcon, _dot: bool, _eyes: bool) -> bool {
     true
 }
 

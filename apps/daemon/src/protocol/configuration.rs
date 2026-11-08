@@ -143,6 +143,11 @@ pub struct DocumentSettings {
     pub auto_approve_account_switches: bool,
     pub auto_approve_handoffs: bool,
     pub ask_questions_as_choices: bool,
+    /// Whether the daemon resumes the sessions the previous run left live when it starts (see
+    /// `Settings.resume_sessions_on_start`). Absent in a document from a build that had no such
+    /// setting, which an import then leaves as this machine has it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resume_sessions_on_start: Option<bool>,
     /// The application-wide git workflow settings.
     pub git_workflow: GitWorkflowSettings,
     /// The default clone directory as `~/<relative path>` under the exporting machine's home
@@ -172,6 +177,20 @@ pub struct DocumentSettings {
     /// such a client applies it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_in_background: Option<bool>,
+    /// Whether the menu bar icon (the notification area icon on Windows) is shown, carried like
+    /// `run_in_background`: only a client that has the icon (the desktop app) writes it, and only
+    /// such a client applies it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub show_menu_bar_icon: Option<bool>,
+    /// Whether the desktop app holds the computer and its display awake (Prevent sleep), carried
+    /// like `run_in_background`: only a client that can (the desktop app) writes it, and only such
+    /// a client applies it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_awake: Option<bool>,
+    /// When Prevent sleep holds: `always`, or `working` (while a session is working), carried like
+    /// `keep_awake`. A value the importing client does not know is ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_awake_when: Option<String>,
     /// The keyboard shortcuts the exporting client has changed, by command id, which only the
     /// client reads and writes: the client adds them to a full export it saves (an empty object
     /// when it has none changed, which on import means every shortcut at its default) and applies
@@ -420,6 +439,10 @@ pub struct InspectedSettings {
     pub current_auto_approve_handoffs: bool,
     pub ask_questions_as_choices: bool,
     pub current_ask_questions_as_choices: bool,
+    /// The document's value, or this machine's own when the document carries none, so the line
+    /// reads as no change.
+    pub resume_sessions_on_start: bool,
+    pub current_resume_sessions_on_start: bool,
     pub git_workflow: GitWorkflowSettings,
     pub current_git_workflow: GitWorkflowSettings,
     /// The document's default clone directory as it resolves on this machine (`~/` expanded);

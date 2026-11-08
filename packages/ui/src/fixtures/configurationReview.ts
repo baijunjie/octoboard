@@ -65,6 +65,8 @@ export const REVIEW = inspected({
     current_auto_approve_handoffs: false,
     ask_questions_as_choices: false,
     current_ask_questions_as_choices: true,
+    resume_sessions_on_start: true,
+    current_resume_sessions_on_start: false,
     git_workflow: FILE_GIT_WORKFLOW,
     current_git_workflow: DEFAULT_GIT_WORKFLOW,
     default_clone_dir: FILE_CLONE_DIR,
@@ -143,7 +145,7 @@ const LONG_CLONE_DETAIL = [
  * it was imported, a clone that failed with a long reason, a project nothing placed, a console that
  * could not be created with its project not tried, and the account references that fell back. */
 export const MIXED_RESULT = imported({
-  settings_applied: { auto_close_idle_shell_terminals: true, auto_pull_repositories: true, auto_delete_unresumable_archives: false, sidebar_order_by_status: false, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, git_workflow: FILE_GIT_WORKFLOW, default_clone_dir: FILE_CLONE_DIR },
+  settings_applied: { auto_close_idle_shell_terminals: true, auto_pull_repositories: true, auto_delete_unresumable_archives: false, sidebar_order_by_status: false, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, resume_sessions_on_start: true, git_workflow: FILE_GIT_WORKFLOW, default_clone_dir: FILE_CLONE_DIR },
   clone_dir_applied: FILE_CLONE_DIR,
   consoles: [
     {

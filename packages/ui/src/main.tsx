@@ -6,6 +6,7 @@ import { AppRoot } from "./AppRoot";
 import { suppressNativeContextMenu } from "./input/contextMenuGuard";
 import { resolveDaemonAddress, resolveRecovered, resolveStartupError } from "./daemon";
 import { runtimeError } from "./errors/runtimeError";
+import { runInBackground } from "./lifecycle/runInBackground";
 import { selectPlatform } from "./platform";
 import { DaemonFailedScreen, NoAddressMessage, StartupScreen } from "./StartupScreen";
 import { createDaemon } from "./store";
@@ -106,5 +107,5 @@ root.render(
 // `initialNativeThemePush` is still waited on. Revealing before that IPC round trip settles would
 // only move the flash from "before this page painted" to "before the window's appearance matched it".
 void Promise.resolve(initialNativeThemePush).then(() => {
-  if (!resolveRecovered()) return platform.nativeWindow?.reveal().catch(() => {});
+  if (!resolveRecovered()) return platform.nativeWindow?.reveal({ runInBackground: runInBackground.get() }).catch(() => {});
 });

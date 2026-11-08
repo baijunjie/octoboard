@@ -212,7 +212,7 @@ it("numbers each request, so an open dialog can follow a later one", () => {
 
 function mountWithMenu(options: { otherModalOpen?: boolean; ready?: boolean; updater?: UpdaterCapability }) {
   let requestUpdates: () => void = () => {};
-  const statusItem = { setMenu: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {}, onUpdatesRequested: (handler: () => void) => { requestUpdates = handler; return () => {}; } };
+  const statusItem = { setMenu: async () => {}, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {}, onUpdatesRequested: (handler: () => void) => { requestUpdates = handler; return () => {}; } };
   let about: () => void = () => {};
   const menu = { onSettingsRequested: () => () => {}, onAboutRequested: (handler: () => void) => { about = handler; return () => {}; }, setLabels: async () => {} };
   let hook!: ReturnType<typeof useSettingsDialog>;

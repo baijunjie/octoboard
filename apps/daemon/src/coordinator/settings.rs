@@ -78,6 +78,7 @@ pub struct SettingsChanges {
     pub auto_switch_on_usage_limit: Option<bool>,
     pub sidebar_order_by_status: Option<bool>,
     pub auto_start_quota_windows: Option<bool>,
+    pub resume_sessions_on_start: Option<bool>,
     /// Blank text goes back to the built-in default.
     pub default_clone_dir: Option<String>,
     pub git_workflow: GitWorkflowSettingsChanges,
@@ -107,6 +108,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_switch_on_usage_limit,
         sidebar_order_by_status,
         auto_start_quota_windows,
+        resume_sessions_on_start,
         default_clone_dir,
         git_workflow,
         provider_settings,
@@ -189,6 +191,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         let updated = state.store.set_auto_start_quota_windows(value)?;
         quota_windows_turned_on = updated && value;
         changed |= updated;
+    }
+    if let Some(value) = resume_sessions_on_start {
+        changed |= state.store.set_resume_sessions_on_start(value)?;
     }
     if let Some(value) = default_clone_dir {
         changed |= state.store.set_default_clone_dir(value.as_deref())?;

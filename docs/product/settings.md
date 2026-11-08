@@ -11,15 +11,15 @@ accounts table's Disable heading, after the default account's directory in its a
 sharing row of an account's settings dialog (see "Approval modes" in `docs/product/per-agent-settings.md`, "The
 accounts table", "The account details dialog" and "Sharing the default configuration" in
 `docs/product/agent-accounts.md`, and "Explanations in help tips" in `docs/product/labels-and-tooltips.md`). The
-sections, in order, are **General**, **Git**, **Agent accounts**, **Agent behavior**, **Trusted folders**,
-**Permissions**, **Notifications**, **Keyboard shortcuts**, **Configuration** and **About**; the dialog opens on
-General unless it was asked to open on another section. **Permissions** is there only in the macOS application; the
-Windows application and a browser leave it out.
+sections, in order, are **General**, **App behavior**, **Git**, **Agent accounts**, **Agent behavior**, **Trusted
+folders**, **Permissions**, **Notifications**, **Keyboard shortcuts**, **Cleanup**, **Configuration** and **About**; the
+dialog opens on General unless it was asked to open on another section. **Permissions** is there only in the macOS
+application; the Windows application and a browser leave it out.
 
 A console session can read and change the default clone directory, the automatic pulling of repositories, the
-automatic deletion of archived sessions whose conversation is gone, closing idle shell terminals with their panel,
-the ordering of the sidebar by status, the application-wide git workflow settings and the language the daemon holds
-for the user (see "The language the daemon
+automatic deletion of archived sessions whose conversation is gone, resuming sessions on start, closing idle shell
+terminals with their panel, the ordering of the sidebar by status, the application-wide git workflow settings and the
+language the daemon holds for the user (see "The language the daemon
 holds" in `docs/product/language.md`). It can read, but not change, automatic account selection, Claude compatibility,
 the agent tags, the agent accounts (without their directories) and the trusted folders. The switches of Agent behavior,
 the approval modes, and the switches that switch accounts at the usage limit and start usage windows, it can neither
@@ -121,7 +121,7 @@ While Settings is open everything under it stays as it was, the terminal include
 
 ## Group headings
 
-A section whose rows fall into groups — Git and Keyboard shortcuts — heads each group with a heading of its own. Once
+A section whose rows fall into groups — App behavior, Git and Keyboard shortcuts — heads each group with a heading of its own. Once
 the section is scrolled far enough for a group's heading to reach the top of the section's area, the heading stays
 pinned there, opaque, and the group's rows scroll beneath it, until the next group's heading arrives and pushes it out;
 the top fade then begins below the pinned heading (see "The edge that hides content fades" in
@@ -150,11 +150,11 @@ there, followed by `\` or `/`.
 ## How switches save
 
 A row's switch whose value the daemon holds saves when it is turned, on its own: in General, **Order the sidebar by
-status**, **Automatically delete archived sessions whose conversation is gone** and **Close idle terminals when
-closing the panel**; in Git, **Automatically pull repositories**, **Squash commits before delivery**, **Rebase before
-delivery** and **Revert gate**; in Agent accounts,
-**Automatically select an account**, **Automatically switch accounts at the usage limit** and **Start usage windows
-automatically**; and the five of Agent behavior. The switch always shows the value the daemon has stored, which every
+status**; in App behavior, **Resume sessions on start** and **Close idle terminals when closing the panel**; in Git,
+**Automatically pull repositories**, **Squash commits before delivery**, **Rebase before delivery** and **Revert gate**;
+in Agent accounts, **Automatically select an account**, **Automatically switch accounts at the usage limit** and
+**Start usage windows automatically**; the five of Agent behavior; and in Cleanup, **Automatically delete archived
+sessions whose conversation is gone**. The switch always shows the value the daemon has stored, which every
 window shares: it moves when that value changes, not on the press itself. A press made while the save started by the
 previous press is still unanswered is ignored. Nothing marks that wait — the switch does not look unavailable — and it
 keeps showing the stored value meanwhile. A failed save is shown in an error alert saying the setting could not be
@@ -163,16 +163,15 @@ saved, the switch keeping its position (see "The error alert" in `docs/product/e
 Other switches in Settings save by rules of their own: an account's Disable switch (see "Turning an account off" in
 `docs/product/agent-accounts.md`), each agent's Claude compatibility switch, which is unavailable while its save is
 unanswered (see "Provider settings" in `docs/product/per-agent-settings.md`), the sharing switch of an account's
-settings dialog (see "Sharing the default configuration" in `docs/product/agent-accounts.md`), and **Keep running in
-the background**, a choice the client keeps itself rather than the daemon (see "Closing the window" in
-`docs/product/application-lifecycle.md`).
+settings dialog (see "Sharing the default configuration" in `docs/product/agent-accounts.md`), **Keep running in
+the background**, **Show menu bar icon** and **Prevent sleep**, choices the client keeps itself rather than the daemon,
+which take effect as they are turned (see "Keep running in the background", "Show menu bar icon" and "Prevent sleep"
+below), and **Launch at login**, which shows and changes the system's own state (see "Launch at login" below).
 
 ## General
 
-Small app-wide settings: an **Appearance** row, a **Language** row, a **Markdown style** row, an **Order the sidebar
-by status** row, then an **Automatically delete archived sessions whose conversation is gone** row, a **Close idle
-terminals when closing the panel** row, and last, in the desktop application only, a **Keep running in the background**
-row.
+Small app-wide settings, four rows: **Appearance**, **Language**, **Markdown style** and **Order the sidebar by
+status**.
 
 ### Appearance
 
@@ -206,15 +205,95 @@ includes the application settings carries it (see "Application settings: `get_se
 `docs/product/settings-in-a-configuration.md`). The order under either state, and what else follows it, are in
 "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`.
 
-### Automatically delete archived sessions whose conversation is gone
+## App behavior
 
-A switch, **on to begin with**: whether Octoboard deletes on
-its own the archived sessions whose conversation their agent no longer keeps. While the switch is off the row's
-description says what turning it on will do, and while it is on it says what is happening now: such an archived
-session is deleted automatically, Octoboard checks each time it starts and then about once a day, and pinned and locked
-sessions are kept. The value is kept by the daemon, so every window shows the same. What the deletion does, when it
-runs and what turning the switch off or on changes are in "Deleting archived sessions whose conversation is gone" in
-`docs/product/deleting-sessions.md`.
+How the application behaves around its window, in four groups, each under a heading (see "Group headings" above):
+
+- **Startup**: **Launch at login**, in the desktop application where the system offers it (see "Launch at login"
+  below), then **Resume sessions on start**, in every client;
+- **Window**, in the desktop application only: **Keep running in the background**, then **Show menu bar icon**;
+- **Power**, in the desktop application only: **Prevent sleep**, and under it, while it is on, **When to prevent
+  sleep**;
+- **Terminals**: **Close idle terminals when closing the panel**, in every client.
+
+A group with nothing to show in the client is left out, so a browser shows Startup with Resume sessions on start alone,
+and Terminals.
+
+### Launch at login
+
+A switch: whether the system opens Octoboard when the user logs in. **Only the desktop application has this row**, on
+Windows and on macOS 13 and later; on macOS 11 and 12 and in a browser it is absent. The switch shows the system's own
+state rather than a choice Octoboard keeps — off until the system has an entry for Octoboard — and the row appears once
+that state has been read. While it is off the row's description says that, once it is
+on, Octoboard opens when the user logs in; while it is on, that it does; either way it adds that, while Octoboard keeps
+running in the background, it then starts without showing its window. While the system holds the entry for the user's
+approval (macOS), the switch is on, the description says that Octoboard is waiting for the user's approval and to allow
+it in System Settings, and an **Open System Settings** button stands beside the switch; at 768 px and below the two go
+under the text (see "In a narrow window" above). What the system's entry is, how the state is read, the approval,
+failures and what a launch at login does are in `docs/product/launch-at-login.md`. A configuration export never carries
+it.
+
+### Resume sessions on start
+
+A switch, **off to begin with**: whether Octoboard resumes, each time it starts, the sessions that were running when it
+last stopped. While the switch is off the row's description says what turning it on will do, and while it is on it says
+what is happening now. In the macOS application the description of the on state adds that a logout, restart or
+shutdown then quits Octoboard without asking (see "Quitting" in `docs/product/application-lifecycle.md`); other clients
+do not say it. The daemon stores it as `resume_sessions_on_start` and keeps it, so every window shows the same. A
+console session may read and change it, and a configuration export that includes the application settings carries it
+(see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
+application settings an export carries" in `docs/product/settings-in-a-configuration.md`). Turning it on or off resumes
+nothing at once: it is read when the daemon next starts. Which sessions are resumed, and how, is in "Resuming the
+sessions a run left running" in `docs/product/archiving-and-resuming-sessions.md`.
+
+### Keep running in the background
+
+A switch, labelled for what turning it on does: keep Octoboard running in the background when the window is closed. It
+is **off to begin with**, so closing the window quits.
+
+**Only the desktop application has this row**, on macOS and on Windows. A browser has no native window to close into
+the background, so the row is absent there.
+
+The row's description says what the choice means and never mentions quitting, which the label already carries: while
+the switch is off it says what turning it on will do, and while it is on it says what is happening now — closing the
+window leaves the sessions, their agents and their notifications running, and the menu bar icon (the
+notification-area icon on Windows) brings the window back. While the menu bar icon is hidden (see "Show menu bar icon"
+below), it names, in the icon's place, opening Octoboard again or clicking one of its notifications as the way back to
+the window.
+
+What closing the window actually does under either state, and where the choice is kept, are in "Closing the window"
+in `docs/product/application-lifecycle.md`.
+
+### Show menu bar icon
+
+A switch, **on to begin with**: whether the menu bar icon is shown. On Windows its label names the notification-area
+icon instead. **Only the desktop application has this row.** While the switch is on the row's description says that the
+icon's menu lists the sessions waiting for the user, paused, done or awaiting instructions, and opens the window; while
+it is off, that once it is on the icon's menu does so — or, while Octoboard keeps running in the background, that once
+it is on the icon's menu opens the window and that meanwhile opening Octoboard again or clicking one of its
+notifications brings the window back. The choice is kept per client, as Keep running in the background is, and a
+configuration export that includes the application settings carries it (see "The settings a client holds" in
+`docs/product/settings-in-a-configuration.md`). What hiding the icon does is in "Hiding the icon" in
+`docs/product/menu-bar-icon.md`.
+
+### Prevent sleep
+
+A switch, **off to begin with**: whether Octoboard keeps the computer and its display awake. **Only the desktop
+application has this row.** While the switch is off the row's description says that, once it is on, Octoboard keeps the
+computer and its display awake, so the screen does not turn off or lock while the user is idle; while it is on, that it
+does so as chosen below.
+
+While the switch is on, a **When to prevent sleep** row follows it, a drop-down of **Always** and **While sessions
+work**, While sessions work to begin with. Its description follows the choice: for Always, that Octoboard keeps the
+computer awake for as long as it is running; for While sessions work, that it does so while a session is starting or
+working, in the background included, and that once none is the computer can sleep. While the switch is off the row is
+not shown and its value is kept; when the switch is turned off by something else while the row has keyboard focus — an
+import, say — focus moves to the switch.
+
+Both choices are kept per client, as Keep running in the background is, and a configuration export that includes the
+application settings carries them (see "The settings a client holds" in
+`docs/product/settings-in-a-configuration.md`). What is held, and exactly when, is in
+`docs/product/keeping-the-computer-awake.md`.
 
 ### Close idle terminals when closing the panel
 
@@ -227,23 +306,6 @@ The daemon stores it as `auto_close_idle_shell_terminals` and keeps it, so every
 session may read and change it, and a configuration export that includes the application settings carries it (see
 "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
 application settings an export carries" in `docs/product/settings-in-a-configuration.md`).
-
-### Keep running in the background
-
-A switch, the section's last row, labelled for what turning it on does: keep Octoboard running in the background when
-the window is closed. It is **off to begin with**, so closing the window quits.
-
-**Only the desktop application has this row**, on macOS and on Windows. A browser has no native window to close into
-the background, so the row is absent there — the section then ends with Close idle terminals when closing the panel. In
-the desktop application this row sits directly under that switch.
-
-The row's description says what the choice means and never mentions quitting, which the label already carries: while
-the switch is off it says what turning it on will do, and while it is on it says what is happening now — closing the
-window leaves the sessions, their agents and their notifications running, and the menu bar icon (the
-notification-area icon on Windows) brings the window back.
-
-What closing the window actually does under either state, and where the choice is kept, are in "Closing the window"
-in `docs/product/application-lifecycle.md`.
 
 ## Git
 
@@ -501,6 +563,20 @@ with the same buttons as macOS's.
 Every keyboard shortcut of the client, grouped, with a way to change the app's own commands' keys, reset one, or
 restore every default. The changes are this client's own, and a client lists only the commands it has. What the section
 lists and how a shortcut is changed are in `docs/product/keyboard-shortcuts.md`.
+
+## Cleanup
+
+The cleanup Octoboard does on its own, one row: **Automatically delete archived sessions whose conversation is gone**.
+
+### Automatically delete archived sessions whose conversation is gone
+
+A switch, **on to begin with**: whether Octoboard deletes on
+its own the archived sessions whose conversation their agent no longer keeps. While the switch is off the row's
+description says what turning it on will do, and while it is on it says what is happening now: such an archived
+session is deleted automatically, Octoboard checks each time it starts and then about once a day, and pinned and locked
+sessions are kept. The value is kept by the daemon, so every window shows the same. What the deletion does, when it
+runs and what turning the switch off or on changes are in "Deleting archived sessions whose conversation is gone" in
+`docs/product/deleting-sessions.md`.
 
 ## Configuration
 

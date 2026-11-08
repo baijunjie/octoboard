@@ -330,6 +330,7 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
         }
     );
 
+    let resume_sessions_on_start_now = state.store.resume_sessions_on_start()?;
     let settings = match &document.settings {
         Some(settings) => Some(InspectedSettings {
             auto_close_idle_shell_terminals: settings.auto_close_idle_shell_terminals,
@@ -354,6 +355,10 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_auto_approve_handoffs: state.store.auto_approve_handoffs()?,
             ask_questions_as_choices: settings.ask_questions_as_choices,
             current_ask_questions_as_choices: state.store.ask_questions_as_choices()?,
+            resume_sessions_on_start: settings
+                .resume_sessions_on_start
+                .unwrap_or(resume_sessions_on_start_now),
+            current_resume_sessions_on_start: resume_sessions_on_start_now,
             git_workflow: settings.git_workflow,
             current_git_workflow: state.store.git_workflow_settings()?,
             default_clone_dir: usable_clone_dir(settings.default_clone_dir.as_deref()),
@@ -763,6 +768,7 @@ pub async fn apply_reporting(
             ask_questions_as_choices: Some(settings.ask_questions_as_choices),
             interface_language: interface_language.clone(),
             sidebar_order_by_status: Some(settings.sidebar_order_by_status),
+            resume_sessions_on_start: settings.resume_sessions_on_start,
             // Written above, before the projects.
             default_clone_dir: None,
             git_workflow: settings.git_workflow.into(),

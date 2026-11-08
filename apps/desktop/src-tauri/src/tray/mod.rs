@@ -5,17 +5,25 @@
 //! session, which also tells the UI which one. Updates brings it back at Settings’ About section.
 //! Quit goes through the same exit flow as Cmd+Q, so it still asks while a session is running.
 //!
-//! The icon itself has two looks: the octopus, and the octopus with an orange dot in its corner,
-//! which shows while the menu's `attention` flag is set (a session is waiting for the user). Like
-//! the rest of the menu, the UI decides when, and the look changes together with the menu it came
-//! with. A readable selected-account quota adds a capsule over the lower tentacles
-//! (`icon.rs`), with a thinner one beneath for the weekly window when the account has a 5-hour
-//! one too; the UI supplies the remaining percents and the localized label, which is the icon's
-//! accessible name (the icon has no tooltip). The octopus and capsule are always one template
-//! image, so macOS keeps drawing them for the menu bar's light or dark look; a template image
-//! cannot carry a colour, so the dot is a view of its own laid over the button, in place of the
-//! octopus's cut-out corner (`show_dot`). On Windows the icon is the app icon in its own colours,
-//! the dot is part of the picture, a quota is not drawn, and the label is the icon's tooltip.
+//! The icon itself has two attention looks: the octopus, and the octopus with an orange dot in its
+//! corner, which shows while the menu's `attention` flag is set (a session is waiting for the
+//! user). Like the rest of the menu, the UI decides when, and the look changes together with the
+//! menu it came with. Whichever it is, the octopus's eyes turn red while the computer is kept awake
+//! (`keep_awake_changed`): on macOS the eye sockets keep their shape and go from translucent to
+//! solid red, and only on Windows does the picture draw larger eyes, so that reads by shape and not
+//! only by colour. Unlike the rest it follows the hold at once, not the menu, and the menu's
+//! `keep_awake_label` becomes the accessible name. A readable selected-account quota adds a capsule
+//! over the lower tentacles (`icon.rs`), with a thinner one beneath for the weekly window when the
+//! account has a 5-hour one too; the UI supplies the remaining percents and the localized label,
+//! which is the icon's accessible name (the icon has no tooltip). The octopus and capsule are
+//! always one template image, so macOS keeps drawing them for the menu bar's light or dark look; a
+//! template image cannot carry a colour, so the dot and the eyes are views of their own laid over
+//! the button, in place of the octopus's cut-out corner and eyes (`show_layers`). On Windows the
+//! icon is the app icon in its own colours, the dot and the larger eyes are part of the picture, a
+//! quota is not drawn, and the label is the icon's tooltip.
+//!
+//! The user can hide the icon from Settings (`set_tray_icon_visible`). While it is hidden the menu
+//! and the icon's look are still kept up to date, so the icon comes back as it should be.
 //!
 //! Replacing the menu closes it if it is open, so a menu the UI sends while a menu is open is held
 //! back and applied once it closes (`MenuTracking`), which macOS's menu tracking and, on Windows,
@@ -72,10 +80,10 @@ use items::build_menu;
 use menu_tracking::{tracking, MenuTracking};
 use model::TrayMenu;
 use platform::{
-    customize, finish_when_opened, follow_menu_tracking, picture, set_icon_label, Unfinished,
-    TEMPLATE,
+    customize, finish_when_opened, follow_menu_tracking, picture, set_icon_label, set_visible,
+    Unfinished, TEMPLATE,
 };
-use status_item::{show_icon, IconState};
+use status_item::{show_look, IconState, Look};
 
 const TRAY_ID: &str = "main";
 const OPEN_ITEM_ID: &str = "tray-open";
@@ -101,6 +109,8 @@ const MENU_OPENED_EVENT: &str = "tray-menu-opened";
 pub struct TrayState {
     tracking: Mutex<MenuTracking>,
     icon_shown: Mutex<IconState>,
+    /// What the icon is asked to show, from the menu last applied and the keep-awake hold.
+    look: Mutex<Look>,
     /// What `finish_menu` is to do to the menu last set, until the menu first opens. It is replaced
     /// in the same pass as the menu, and taken only for a menu `is_tray_menu` matched, so it never
     /// finishes a menu other than the one it was made for. Nothing off macOS, where no menu is
@@ -113,7 +123,7 @@ pub struct TrayState {
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let tray = customize(
         TrayIconBuilder::with_id(TRAY_ID)
-            .icon(picture(false, None))
+            .icon(picture(false, false, None))
             .icon_as_template(TEMPLATE)
             .menu(&build_menu(app, &TrayMenu::default())?)
             .show_menu_on_left_click(true),
@@ -131,6 +141,18 @@ pub fn set_tray_menu(app: AppHandle, menu: TrayMenu) -> Result<(), String> {
         return Ok(());
     };
     apply(&app, &menu)
+}
+
+/// Shows or hides the icon, which is the UI's Settings switch. The icon starts shown on every
+/// launch and the UI hands its choice over once it has loaded, so a window whose UI never loads
+/// keeps it. Hiding changes nothing else: the menu and the look
+/// the UI last sent are kept and are there again when the icon is shown.
+#[tauri::command]
+pub fn set_tray_icon_visible(app: AppHandle, visible: bool) -> Result<(), String> {
+    let tray = app
+        .tray_by_id(TRAY_ID)
+        .ok_or_else(|| "the menu bar icon does not exist".to_string())?;
+    set_visible(&tray, visible).map_err(|err| err.to_string())
 }
 
 /// Takes the icon out of the notification area now, for a process that is about to end without
@@ -151,15 +173,18 @@ fn apply(app: &AppHandle, menu: &TrayMenu) -> Result<(), String> {
     let built = build_menu(app, menu).map_err(|err| err.to_string())?;
     tray.set_menu(Some(built)).map_err(|err| err.to_string())?;
     finish_when_opened(app, menu);
-    let quota = menu.quota_remaining.map(|remaining| icon::Quota {
-        main: remaining.min(100),
-        thin: menu.quota_weekly_remaining.map(|weekly| weekly.min(100)),
-    });
-    set_icon_label(
-        &tray,
-        quota.and(menu.quota_label.as_deref()).unwrap_or(APP_NAME),
-    );
-    show_icon(app, &tray, menu.attention, quota)
+    show_look(app, &tray, |look| {
+        *look = Look::from_menu(menu, look.awake())
+    })
+}
+
+/// Tells the icon whether the computer is now kept awake (`keep_awake::set_keep_awake`), which it
+/// shows at once, whether or not a menu is open: the hold is not part of the menu's snapshot.
+pub fn keep_awake_changed(app: &AppHandle, held: bool) -> Result<(), String> {
+    let tray = app
+        .tray_by_id(TRAY_ID)
+        .ok_or_else(|| "the menu bar icon does not exist".to_string())?;
+    show_look(app, &tray, |look| look.set_awake(held))
 }
 
 /// Answers a choice in the tray menu; an id that is not one of its items is ignored.

@@ -299,8 +299,8 @@ export const PLATFORM_TERMS: Record<Language, LocaleTerms> = {
     systemSettings: { base: "Sistem Ayarları", acc: "Sistem Ayarları’nı" },
     settings: { base: "Ayarlar", acc: "Ayarlar’ı" },
     windowsSettings: { base: "Windows Ayarları", acc: "Windows Ayarları’nı" },
-    menuBar: "menü çubuğu simgesi",
-    notificationArea: "bildirim alanı simgesi",
+    menuBar: { base: "menü çubuğu simgesi", acc: "menü çubuğu simgesini" },
+    notificationArea: { base: "bildirim alanı simgesi", acc: "bildirim alanı simgesini" },
     developerMode: { base: "Geliştirici Modu", acc: "Geliştirici Modu’nu" },
   },
   vi: {

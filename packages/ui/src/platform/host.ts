@@ -20,6 +20,10 @@ export type HostFacts = {
   badge: boolean;
   /** Closing the window can keep the application running. */
   runInBackground: boolean;
+  /** The application can hold the computer and its display awake. */
+  keepAwake: boolean;
+  /** The system can open the application when the user logs in. */
+  launchAtLogin: boolean;
   /** The privacy grants section, which the system has only on macOS. */
   permissionsPane: boolean;
   notificationSettings: "system-pane" | "none";
@@ -53,6 +57,8 @@ export function browserHost(platform: string = typeof navigator === "undefined" 
     statusItem: "none",
     badge: false,
     runInBackground: false,
+    keepAwake: false,
+    launchAtLogin: false,
     permissionsPane: false,
     notificationSettings: "none",
     updater: "none",
@@ -92,7 +98,7 @@ export function hostFromQuery(search: string): HostFacts | undefined {
   const valid =
     (Object.keys(OPTIONS) as (keyof typeof OPTIONS)[]).every((key) => oneOf(OPTIONS[key], facts[key])) &&
     (Object.keys(TERM_OPTIONS) as (keyof typeof TERM_OPTIONS)[]).every((key) => oneOf(TERM_OPTIONS[key], terms?.[key])) &&
-    ["translucent", "appMenu", "badge", "runInBackground", "permissionsPane"].every((key) => typeof facts[key] === "boolean") &&
+    ["translucent", "appMenu", "badge", "runInBackground", "keepAwake", "launchAtLogin", "permissionsPane"].every((key) => typeof facts[key] === "boolean") &&
     (facts.trafficLightInset === undefined || typeof facts.trafficLightInset === "number");
   return valid ? (facts as unknown as HostFacts) : undefined;
 }

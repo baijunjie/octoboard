@@ -1,4 +1,4 @@
-import { Bell, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
+import { AppWindow, Bell, BrushCleaning, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TitledControl } from "../components/hint/TitledControl";
@@ -13,9 +13,11 @@ import { useT } from "../i18n/react";
 import { useHost } from "../platform/react";
 import { useIsNarrow } from "../components/hooks/breakpoint";
 import { AboutSection } from "./AboutSection";
+import { AppBehaviorSection } from "./AppBehaviorSection";
 import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext";
 import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./accounts/AgentAccountsSection";
 import { AgentBehaviorSection } from "./AgentBehaviorSection";
+import { CleanupSection } from "./CleanupSection";
 import { ConfigurationSection } from "./ConfigurationSection";
 import { GeneralSection } from "./GeneralSection";
 import { GitSection } from "./GitSection";
@@ -37,6 +39,7 @@ interface Section {
 /** What each section of `SETTINGS_SECTION_IDS` shows; a section missing here does not compile. */
 const SECTIONS: Record<SettingsSectionId, Section> = {
   general: { label: "settings.section.general", Icon: Settings2, Content: GeneralSection },
+  "app-behavior": { label: "settings.section.appBehavior", Icon: AppWindow, Content: AppBehaviorSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   git: { label: "settings.section.git", Icon: GitBranch, Content: GitSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   accounts: { label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection, stickyHeadingHeight: AGENT_STRIP_HEIGHT },
   "agent-permissions": { label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentBehaviorSection },
@@ -44,6 +47,7 @@ const SECTIONS: Record<SettingsSectionId, Section> = {
   permissions: { label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
   notifications: { label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
   shortcuts: { label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
+  cleanup: { label: "settings.section.cleanup", Icon: BrushCleaning, Content: CleanupSection },
   configuration: { label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },
   about: { label: "settings.section.about", Icon: Info, Content: AboutSection },
 };

@@ -1026,6 +1026,12 @@ export type DocumentSettings = {
   auto_approve_handoffs: boolean,
   ask_questions_as_choices: boolean,
   /**
+   * Whether the daemon resumes the sessions the previous run left live when it starts (see
+   * `Settings.resume_sessions_on_start`). Absent in a document from a build that had no such
+   * setting, which an import then leaves as this machine has it.
+   */
+  resume_sessions_on_start?: boolean | null,
+  /**
    * The application-wide git workflow settings.
    */
   git_workflow: GitWorkflowSettings,
@@ -1062,6 +1068,23 @@ export type DocumentSettings = {
    * such a client applies it.
    */
   run_in_background?: boolean | null,
+  /**
+   * Whether the menu bar icon (the notification area icon on Windows) is shown, carried like
+   * `run_in_background`: only a client that has the icon (the desktop app) writes it, and only
+   * such a client applies it.
+   */
+  show_menu_bar_icon?: boolean | null,
+  /**
+   * Whether the desktop app holds the computer and its display awake (Prevent sleep), carried
+   * like `run_in_background`: only a client that can (the desktop app) writes it, and only such
+   * a client applies it.
+   */
+  keep_awake?: boolean | null,
+  /**
+   * When Prevent sleep holds: `always`, or `working` (while a session is working), carried like
+   * `keep_awake`. A value the importing client does not know is ignored.
+   */
+  keep_awake_when?: string | null,
   /**
    * The keyboard shortcuts the exporting client has changed, by command id, which only the
    * client reads and writes: the client adds them to a full export it saves (an empty object
@@ -2139,6 +2162,12 @@ export type InspectedSettings = {
   current_auto_approve_handoffs: boolean,
   ask_questions_as_choices: boolean,
   current_ask_questions_as_choices: boolean,
+  /**
+   * The document's value, or this machine's own when the document carries none, so the line
+   * reads as no change.
+   */
+  resume_sessions_on_start: boolean,
+  current_resume_sessions_on_start: boolean,
   git_workflow: GitWorkflowSettings,
   current_git_workflow: GitWorkflowSettings,
   /**
@@ -3164,6 +3193,7 @@ export type Request = {
   auto_switch_on_usage_limit?: boolean,
   sidebar_order_by_status?: boolean,
   auto_start_quota_windows?: boolean,
+  resume_sessions_on_start?: boolean,
   /**
    * A blank value goes back to the built-in default.
    */
@@ -3869,6 +3899,7 @@ export type RequestBody = {
   auto_switch_on_usage_limit?: boolean,
   sidebar_order_by_status?: boolean,
   auto_start_quota_windows?: boolean,
+  resume_sessions_on_start?: boolean,
   /**
    * A blank value goes back to the built-in default.
    */
@@ -4503,6 +4534,11 @@ export type Settings = {
    * by sending one minimal request on that account. Off unless the user turned it on.
    */
   auto_start_quota_windows: boolean,
+  /**
+   * Whether the daemon, once it has started, resumes the sessions the previous run left live
+   * (see `coordinator::resume_on_start`). Off unless the user turned it on; read at each start.
+   */
+  resume_sessions_on_start: boolean,
   /**
    * The directory a `git` association clones into when none is named: the one the user set, or
    * `~/Projects` (expanded) while none is. Always an absolute, lexically normalised path.

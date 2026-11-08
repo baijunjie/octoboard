@@ -129,9 +129,20 @@ describe("withClientValuesEcho", () => {
     expect(withClientValuesEcho(asked({ keyboard_shortcuts: {} }), applied).settings_applied?.keyboard_shortcuts).toEqual({});
   });
 
-  it("hands back the appearance, Markdown style and background running the same way", () => {
-    const echoed = withClientValuesEcho(asked({ appearance: "dark", markdown_style: "github", run_in_background: false, interface_language: "ja" }), applied).settings_applied;
-    expect(echoed).toEqual({ ...documentSettings({ auto_pull_repositories: true }), appearance: "dark", markdown_style: "github", run_in_background: false });
+  it("hands back the appearance, Markdown style, background running, menu bar icon and keep-awake choices the same way", () => {
+    const echoed = withClientValuesEcho(
+      asked({ appearance: "dark", markdown_style: "github", run_in_background: false, show_menu_bar_icon: false, keep_awake: true, keep_awake_when: "always", interface_language: "ja" }),
+      applied,
+    ).settings_applied;
+    expect(echoed).toEqual({
+      ...documentSettings({ auto_pull_repositories: true }),
+      appearance: "dark",
+      markdown_style: "github",
+      run_in_background: false,
+      show_menu_bar_icon: false,
+      keep_awake: true,
+      keep_awake_when: "always",
+    });
   });
 
   it("echoes nothing for a document without them or a result that applied no settings", () => {

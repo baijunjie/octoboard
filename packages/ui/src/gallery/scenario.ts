@@ -1,6 +1,6 @@
 import type { ThirdPartyLicenses } from "../about/thirdPartyLicenses";
 import type { Language } from "../i18n/languages";
-import type { AvailableUpdate, HostFacts, MacosPermissionsStatus, UpdateProgress } from "../platform";
+import type { AvailableUpdate, HostFacts, LaunchAtLoginStatus, MacosPermissionsStatus, UpdateProgress } from "../platform";
 import type { Fixture } from "../fixtures/fixture";
 import type { Step } from "../fixtures/interact";
 import type { Preferences } from "../fixtures/preferences";
@@ -99,8 +99,8 @@ export interface Scenario extends Fixture {
   preferences?: Preferences;
   /** The desktop shell asks the window to quit (Cmd+Q) once the steps have run: with a busy session or shell terminal
    * the confirmation they hold the quit up with is on screen, and with none the quit goes straight to the shell. The
-   * platform has no exit capability otherwise; what the shell does with the quit is nothing (confirming ends nothing)
-   * unless `exitFailure` fails it. */
+   * platform has no exit capability otherwise, except in a `desktopApp`; what the shell does with the quit is nothing
+   * (confirming ends nothing) unless `exitFailure` fails it. */
   quitRequested?: boolean;
   /** The text the desktop shell fails the quit or restart with, so a quit (`quitRequested`) or a restart the steps press
    * ends in the failure alert instead of nothing. The platform has the exit capability, as with `quitRequested`. */
@@ -130,11 +130,25 @@ export interface Scenario extends Fixture {
   /** The platform has what the desktop app's window has, so a view that lists or uses it shows the app's: the
    * window chrome (the `chrome=1` of the frame URL, which a view that exists only in the app cannot leave to
    * the address), the native menu bar and the desktop platform kind, by which the app's shortcuts exist (the
-   * console-session switch on any system, Back and Forward on macOS; `chrome=1` alone does not give those). */
+   * console-session switch on any system, Back and Forward on macOS; `chrome=1` alone does not give those), and the
+   * exit capability the shell always has (a quit confirms nothing and ends nothing; see `quitRequested`). */
   desktopApp?: boolean;
   /** The platform offers the desktop app's run-in-background capability, so the Settings switch for
    * it is shown; the browser platform has none. */
   backgroundRun?: boolean;
+  /** The platform has the desktop app's menu bar icon (the notification area icon on Windows), so the Settings switch
+   * for showing it exists. Nothing is drawn. */
+  menuBarIcon?: boolean;
+  /** The platform can hold the computer awake, as the desktop app can, so the Prevent sleep setting is shown. Nothing
+   * is held. */
+  keepAwake?: boolean;
+  /** The system lets the app register a login entry, as the desktop app's does on macOS 13 and later and on Windows, so
+   * the Launch at login switch is shown, the system's entry standing at this status when the window opens. Changing the
+   * switch succeeds and leaves the entry enabled or disabled as asked. */
+  launchAtLogin?: LaunchAtLoginStatus;
+  /** With `launchAtLogin`, the reason the system gives for not opening its list of login items, which the Open System
+   * Settings button of a login entry that `requiresApproval` goes to; without it the list opens (nothing is shown). */
+  launchAtLoginOpenError?: string;
   /** The platform has the desktop shell's notifications, which it grants without a prompt, so the app keeps no switch of
    * its own. Whether the Settings row also links to the system's notification pane follows `host`
    * (`notificationSettings: "system-pane"`, as the real shell does). Nothing is shown or opened. */

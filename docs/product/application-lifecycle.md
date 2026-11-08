@@ -40,6 +40,9 @@ On every daemon start:
 
 - **Every session a previous run left behind becomes *interrupted*.** No process from that run is adopted as a running
   session, whatever the stored status said. Archived sessions are left as they are.
+- **While Resume sessions on start is on, the sessions that were running when the previous run ended are then
+  resumed**, a few at a time (see "Resuming the sessions a run left running" in
+  `docs/product/archiving-and-resuming-sessions.md`).
 - Per-session scratch space from previous runs is cleared.
 - Saved background-process records are reconciled under "Automatic stopping and its boundaries" in
   `docs/product/background-processes.md`.
@@ -85,7 +88,9 @@ quit or restart raises no alert (see "Quitting" below).
 system's own appearance first. The window therefore appears a fraction of a second later than it otherwise would. Should
 the UI never get that far at all — its bundle failing to load, say — the shell shows the window regardless **4 seconds**
 after creating it, so a failed start never leaves a running application with no window on screen. A window the user has
-by then closed into the background stays closed.
+by then closed into the background stays closed. That fallback is not armed at a launch the system made for **Launch at
+login**, and such a launch starts hidden, as if its window had been closed into the background, while keeping Octoboard
+running in the background is on (see "A launch at login" in `docs/product/launch-at-login.md`).
 
 **Closing the window during a launch quits.** The shell starts every launch with keeping the application running in
 the background off, whatever the user last chose: the choice is kept by the window's UI and handed over once it has
@@ -191,8 +196,8 @@ in a browser quits anything (see "The daemon on its own" below).
 **The window's close button, `Cmd+W` and the Window menu's Close Window item are one gesture**, and so, in the Windows
 application, which has no application menu, are the close button of the system's title bar and `Alt+F4`. They all do
 the same thing, deliberately, and what they do is the user's choice: the **Keep running in the background when the
-window is closed** switch in Settings' General section, which is **off to begin with** (see "Keep running in the background" in
-`docs/product/settings.md`).
+window is closed** switch in Settings' App behavior section, which is **off to begin with** (see "Keep running in the
+background" in `docs/product/settings.md`).
 
 **With the switch off, closing the window quits.** It is an ordinary quit gesture, taking exactly the path `Cmd+Q` takes
 (see "Quitting" below): with a session starting, working, waiting for the user, dormant or working in background, or a
@@ -213,7 +218,9 @@ notification-area icon's on Windows — keeps following the sessions (see `docs/
   to keep running, so closing the window quits at once and asks nothing, whatever the switch says.
 - Hide Octoboard (`Cmd+H`) is not a close: it hides the application as macOS always does, and Octoboard stays in the
   Dock.
-- The menu bar icon is there whatever the switch says (see `docs/product/menu-bar-icon.md`).
+- The menu bar icon is there whatever the switch says, unless the user has hidden it (see "Hiding the icon" in
+  `docs/product/menu-bar-icon.md`); a window closed into the background while it is hidden comes back by the other
+  ways below.
 - Closing the window is never a way to force a quit through: see "Quitting when the window has stopped responding"
   below.
 
@@ -230,8 +237,8 @@ hands the choice over (see "Starting up" above).
 **Bringing a window closed into the background back.** Any of these brings the window back where it was, at the size
 and position it had:
 
-- the menu bar icon's menu: its entry for opening the board or one of its sessions (see "Clicking the icon" and
-  "The icon's menu" in `docs/product/menu-bar-icon.md`);
+- the menu bar icon's menu, while the icon is shown: its entry for opening the board or one of its sessions (see
+  "Clicking the icon" and "The icon's menu" in `docs/product/menu-bar-icon.md`);
 - opening Octoboard again while it runs — on macOS from the Finder, Spotlight or `open`; on Windows any launch of it,
   such as from the Start menu, which starts no second Octoboard but brings the running one's window forward (once its
   window exists: during the first moments of a launch there is none yet to bring);
@@ -252,8 +259,9 @@ termination on macOS — logging out, restarting or shutting down the machine �
 the background is off, closing the window: the close button, `Cmd+W` and the Window menu's Close Window item (see
 "Closing the window" above). The Windows application has no application menu and no `Cmd+Q`: it is quit through the
 notification-area icon's quit entry, or by closing the window while keeping it running in the background is off.
-The one difference is the escape hatch in "Quitting when the window has stopped responding" below, which the close
-gestures have no part in. Nothing below asks while the window shows a daemon of another version (see
+The differences are the escape hatch in "Quitting when the window has stopped responding" below, which the close
+gestures have no part in, and a macOS logout, restart or shutdown while Resume sessions on start is on, which asks
+nothing (see the end of this section). Nothing below asks while the window shows a daemon of another version (see
 "A daemon of another version" above).
 
 - **While any session is *starting*, *working*, *waiting for the user*, *dormant* or *working in background*, quitting
@@ -305,8 +313,16 @@ gestures have no part in. Nothing below asks while the window shows a daemon of 
 - Until the window has loaded far enough to be able to ask, a quit is never held back — a window that never gets as
   far as showing the confirmation can still be quit.
 
-Because on macOS a logout, restart or shutdown is answered exactly like any other quit, **Octoboard can hold up a
-logout, restart or shutdown until the user answers the confirmation dialog.** That is deliberate, not an oversight.
+On macOS, while **Resume sessions on start** is off (see that section in `docs/product/settings.md`), a logout, restart
+or shutdown is answered exactly like any other quit, so **Octoboard can hold up a logout, restart or shutdown until the
+user answers the confirmation dialog.** That is deliberate, not an oversight. While the setting is on, the system's own
+logout, restart or shutdown quits at once and asks nothing, whatever is running, and the window is not brought back for
+it: the sessions it interrupts are resumed when Octoboard next starts (see "Resuming the sessions a run left running" in
+`docs/product/archiving-and-resuming-sessions.md`). Octoboard tells such a quit by the reason the system gives with it;
+a quit request that gives none of those reasons asks as any quit does, and so does every quit the user makes —
+`Cmd+Q`, the menus' Quit, the Dock icon's Quit, closing the window. Until the window's UI has the daemon's settings, a
+logout, restart or shutdown asks as any quit does.
+
 On Windows the system ending the user's session — signing out or shutting down — is not one of these quits: it asks
 nothing and installs no downloaded update, which is offered again after the next start (see "Downloading and
 installing" in `docs/product/in-app-updates.md`). The daemon ends with the system then, without stopping its sessions
@@ -431,7 +447,7 @@ as under any other.
 
 | Path | Contents |
 |---|---|
-| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages every session pushed, each project's trust permission and the trusted folders (see "The trust permission" in `docs/product/folder-trust.md`), and the settings the daemon keeps for every client (see "Git" and "General" in `docs/product/settings.md`). What the daemon does with an existing file when it starts is under "The database's schema version" below. |
+| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages every session pushed, each project's trust permission and the trusted folders (see "The trust permission" in `docs/product/folder-trust.md`), and the settings the daemon keeps for every client (see "How switches save" and "Git" in `docs/product/settings.md`), and which sessions were running when the daemon last stopped, for Resume sessions on start (see "Resuming the sessions a run left running" in `docs/product/archiving-and-resuming-sessions.md`). What the daemon does with an existing file when it starts is under "The database's schema version" below. |
 | `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console sessions run, including the console session instruction file Octoboard writes there, `AGENTS.md`, and `CLAUDE.md`, a link to it, or a file that imports it where the host makes no file links (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared wholesale on daemon start. |
 | `~/.octoboard/output/<session id>` | The saved terminal preview shown for an interrupted session (see "Interrupted and archived sessions" in `docs/product/session-terminal.md` for its capture rules and limits). Written when the process ends, including when the daemon stops it on its way out, but not when the daemon itself goes down on an internal failure. Starting a new process discards it. Removed with the session's record; on daemon start, any left for a session that no longer exists is removed. |
@@ -453,7 +469,7 @@ in "What Octoboard never modifies" in `docs/product/launching-agents.md`.
 
 ### The database's schema version
 
-The database records the version of its schema — this build's is **1** — and a mark in the file's header (its SQLite
+The database records the version of its schema — this build's is **3** — and a mark in the file's header (its SQLite
 application ID, `0x4F435442`, "OCTB") that identifies it as Octoboard's. On every start, before using an existing
 `~/.octoboard/octoboard.db`, the daemon decides what to do with it:
 
@@ -477,8 +493,7 @@ application ID, `0x4F435442`, "OCTB") that identifies it as Octoboard's. On ever
   SQLite database at all is refused and left as it is too, with a reason that names the file.
 - **A database at the version this build reads** is used as it is.
 - **A database at an older version** is backed up, then upgraded in place. Versions change only between releases, so
-  an older version is always one a release wrote. No release has needed this yet: version 1 is the first, so there is
-  nothing older to upgrade from.
+  an older version is always one a release wrote.
   - The backup is a copy beside it, `octoboard.db.pre-v<its version>`, taken after its write-ahead log is written back
     into it. No earlier backup is overwritten: when that name is taken, the copy's name has the Unix time in seconds
     added, `octoboard.db.pre-v<its version>-<time>` (and a counter after it, should that be taken too). When an earlier

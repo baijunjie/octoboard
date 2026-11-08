@@ -24,6 +24,9 @@ export const PREFERENCE_KEYS = {
   markdownView: "octoboard.markdownView",
   markdownStyle: "octoboard.markdownStyle",
   runInBackground: "octoboard.runInBackground",
+  showMenuBarIcon: "octoboard.showMenuBarIcon",
+  keepAwake: "octoboard.keepAwake",
+  keepAwakeWhen: "octoboard.keepAwakeWhen",
   updateChannel: "octoboard.updateChannel",
   keyboardShortcuts: "octoboard.keyboardShortcuts",
 } as const;

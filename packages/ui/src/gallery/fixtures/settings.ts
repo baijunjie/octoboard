@@ -49,6 +49,12 @@ const browserState: Scenario["state"] = {
   ]),
 };
 
+/** The desktop app with "Resume sessions on start" on, so the description it gives the macOS app shows. */
+const resumingState: Scenario["state"] = {
+  ...state,
+  settings: { ...state.settings!, resume_sessions_on_start: true },
+};
+
 /** The list of added agents still undecided: the daemon has not yet determined which agents are installed, so it has
  * no availability to show either. Settings lists every agent, none of them removable or movable. */
 const undecidedState: Scenario["state"] = {
@@ -630,7 +636,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser General settings",
-    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The \"Order the sidebar by status\" switch follows it, on, with the description that says sessions and projects move as their status changes. The archive-cleanup switch follows sidebar status ordering, on, with the description that says what is deleted and when. The terminal-cleanup switch follows it, off by default, with a description explaining that closing the panel closes idle terminals and keeps running commands. Choose Phone (390px) to see the controls that stack beneath their labels: the Appearance buttons sit against the end edge, while the Language and Markdown style selects stretch across the row. At Tablet portrait (768px) and narrower, Settings fills the window with horizontal section tabs and controls stacked beneath their labels. Above 768px the section list stays vertical. Widths below 390px use compact spacing; Desktop (1440px) and Tablet landscape (1024px) keep the same desktop layout.",
+    description: "The Language row follows Appearance, then Markdown style starts on Tailwind. The \"Order the sidebar by status\" switch follows it, on, with the description that says sessions and projects move as their status changes; it is the last row, since the background and terminal-cleanup switches are in App behavior and the archive-cleanup switch is in Cleanup. Choose Phone (390px) to see the controls that stack beneath their labels: the Appearance buttons sit against the end edge, while the Language and Markdown style selects stretch across the row. At Tablet portrait (768px) and narrower, Settings fills the window with horizontal section tabs and controls stacked beneath their labels. Above 768px the section list stays vertical. Widths below 390px use compact spacing; Desktop (1440px) and Tablet landscape (1024px) keep the same desktop layout.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -649,15 +655,49 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
-    id: "settings-general-background-run",
+    id: "settings-app-behavior",
     group: GROUP,
     category: "normal",
-    title: "General, run in the background offered (desktop app)",
-    description: "The desktop app's background row follows the archive-cleanup row and starts off. Switch it on and off to read both descriptions.",
-    state,
-    backgroundRun: true,
+    title: "Browser App behavior settings",
+    description: "The section after General, as a browser shows it: two groups. Startup holds only \"Resume sessions on start\", off, since a browser cannot be launched at login, and Terminals holds only the terminal-cleanup switch, off, whose description says closing the panel closes idle terminals and keeps running commands. Window and Power are not offered. At Tablet portrait (768px) and narrower the section tab is among the horizontal ones, with the controls stacked beneath their labels.",
+    state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.appBehavior")),
+    ],
+  },
+  {
+    id: "settings-app-behavior-desktop",
+    group: GROUP,
+    category: "normal",
+    title: "Desktop App behavior settings",
+    description: "The four groups of the desktop app on macOS, in order. Startup: \"Launch at login\", on, above \"Resume sessions on start\", on, whose description ends with the sentence that a logout, restart or shutdown quits the app without asking (only the macOS app says it). Window: \"Keep running in the background\", on, above \"Show menu bar icon\", on. Power: \"Prevent sleep\", on, so \"When to prevent sleep\" follows it as a select reading \"While sessions work\"; at Phone width (390px) the select stretches beneath its label, and switching Prevent sleep off removes that row with the list motion. Terminals, holding only the terminal-cleanup switch, ends the section, below the fold of a short window, so scroll the dialog to it.",
+    state: resumingState,
+    host: MAC_HOST,
+    desktopApp: true,
+    backgroundRun: true,
+    menuBarIcon: true,
+    keepAwake: true,
+    launchAtLogin: "enabled",
+    preferences: { runInBackground: true, keepAwake: true },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.appBehavior")),
+    ],
+  },
+  {
+    id: "settings-app-behavior-launch-approval",
+    group: GROUP,
+    category: "normal",
+    title: "App behavior, Launch at login awaiting approval",
+    description: "The macOS app has registered its login entry, but the system holds it for approval. Startup: the \"Launch at login\" row reads on, and its description says the app is waiting for approval and to allow it in System Settings, the app and System Settings each as an inline chip. An \"Open System Settings\" secondary button sits before the switch. At Phone width (390px) the button and switch drop beneath the text, at its end edge, instead of sitting beside it; check that nothing overflows. Only Startup and Terminals are shown, since the window offers no Window or Power setting here.",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    launchAtLogin: "requiresApproval",
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.appBehavior")),
     ],
   },
   {
@@ -716,6 +756,23 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
+    id: "settings-app-behavior-launch-approval-open-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "App behavior, login items did not open",
+    description: "After the \"Open System Settings\" button of the awaiting-approval Launch at login row is pressed, the system does not open its list of login items: an error alert titled \"Could not open System Settings\" says System Settings did not open and to open it yourself and choose \"General › Login Items\", each as an inline chip. The row behind it still reads on with the button, the button and switch beneath the text at Phone width (390px).",
+    state,
+    host: MAC_HOST,
+    desktopApp: true,
+    launchAtLogin: "requiresApproval",
+    launchAtLoginOpenError: "the system did not open the Login Items pane",
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.appBehavior")),
+      (ui) => ui.press(ui.t("settings.launchAtLogin.openSettings")),
+    ],
+  },
+  {
     id: "settings-permissions-system-open-failed",
     group: GROUP,
     category: "exceptional",
@@ -745,11 +802,23 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
+    id: "settings-cleanup",
+    group: GROUP,
+    category: "normal",
+    title: "Cleanup",
+    description: "The section after Keyboard shortcuts, directly above Configuration, with a single row and no group heading: \"Automatically delete archived sessions whose conversation is gone\", on, its description saying when archived sessions are checked and that pinned and locked sessions are kept. Switch it off to read the description that starts with \"Once this is on\".",
+    state: browserState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.cleanup")),
+    ],
+  },
+  {
     id: "settings-git",
     group: GROUP,
     category: "normal",
     title: "Settings: git",
-    description: "The section list reads General, Git, Agent accounts, Agent behavior, Trusted folders, Notifications, Keyboard shortcuts, Configuration, About. Git has three headed groups holding seven rows. Repository: Default clone directory (its explanation describes when the chosen directory is used, and the path appears in the input), then Automatically pull repositories, off, whose description starts with \"Once this is on\" and says a project's branch is pulled when it is behind its upstream and can be fast-forwarded, with a small muted \"?\" after the label holding the sentence about the remote being checked. Development: Where sessions develop reads In a worktree of its own, with the explanation for that choice; Squash commits before delivery is off, its explanation saying what turning it on would do; Rebase before delivery is on, with the explanation that says what being on does; Delivery, last, reads Ask each time in a select at the end of its row. Protection: Revert gate is off, with a small muted \"?\" at the end of its label and an explanation starting \"Once this is on, in a project session\". Choose Phone (390px) to see the Default clone directory field with its Browse button, and the selects, stretch across their rows beneath the labels, the Browse button keeping its size.",
+    description: "The section list reads General, App behavior, Git, Agent accounts, Agent behavior, Trusted folders, Notifications, Keyboard shortcuts, Cleanup, Configuration, About. Git has three headed groups holding seven rows. Repository: Default clone directory (its explanation describes when the chosen directory is used, and the path appears in the input), then Automatically pull repositories, off, whose description starts with \"Once this is on\" and says a project's branch is pulled when it is behind its upstream and can be fast-forwarded, with a small muted \"?\" after the label holding the sentence about the remote being checked. Development: Where sessions develop reads In a worktree of its own, with the explanation for that choice; Squash commits before delivery is off, its explanation saying what turning it on would do; Rebase before delivery is on, with the explanation that says what being on does; Delivery, last, reads Ask each time in a select at the end of its row. Protection: Revert gate is off, with a small muted \"?\" at the end of its label and an explanation starting \"Once this is on, in a project session\". Choose Phone (390px) to see the Default clone directory field with its Browse button, and the selects, stretch across their rows beneath the labels, the Browse button keeping its size.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1868,7 +1937,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings on a Windows host: notifications, no Permissions section",
-    description: "The section list reads General, Git, Agent accounts, Agent behavior, Trusted folders, Notifications, Keyboard shortcuts, Configuration, About: Permissions is not listed, which only macOS has. The Notifications row has no switch: its description says Windows manages these notifications and they are turned off or restyled in Settings, with no separate in-app switch, and a secondary Open Settings button sits at the row's end, which opens the Windows Settings notifications page. Look for Windows and Settings as chips, and for the plain name Settings, not System Settings, on the line and the button.",
+    description: "The section list reads General, App behavior, Git, Agent accounts, Agent behavior, Trusted folders, Notifications, Keyboard shortcuts, Cleanup, Configuration, About: Permissions is not listed, which only macOS has. The Notifications row has no switch: its description says Windows manages these notifications and they are turned off or restyled in Settings, with no separate in-app switch, and a secondary Open Settings button sits at the row's end, which opens the Windows Settings notifications page. Look for Windows and Settings as chips, and for the plain name Settings, not System Settings, on the line and the button.",
     state: { ...browserState, ...WINDOWS_MACHINE },
     host: WINDOWS_HOST,
     desktopNotifications: true,

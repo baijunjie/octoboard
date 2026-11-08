@@ -7,6 +7,9 @@ import type {
   ConfigurationFileCapability,
   DirectoryPickerCapability,
   ExitCapability,
+  KeepAwakeCapability,
+  LaunchAtLoginCapability,
+  LaunchAtLoginStatus,
   LinkCapability,
   MacosPermissionsCapability,
   MacosPermissionsStatus,
@@ -46,6 +49,8 @@ export function tauriPlatform(): PlatformAdapter {
     links: tauriLinks(),
     macosPermissions: tauriMacosPermissions(),
     backgroundRun: host.runInBackground ? tauriBackgroundRun() : undefined,
+    keepAwake: host.keepAwake ? tauriKeepAwake() : undefined,
+    launchAtLogin: host.launchAtLogin ? tauriLaunchAtLogin() : undefined,
     updater: host.updater === "none" ? undefined : tauriUpdater(),
   };
 }
@@ -178,6 +183,10 @@ function tauriAppMenu(): AppMenuCapability {
 
 function tauriStatusItem(): StatusItemCapability {
   return {
+    async setVisible(visible) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_tray_icon_visible", { visible });
+    },
     async setMenu(menu) {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("set_tray_menu", { menu });
@@ -237,6 +246,10 @@ function tauriExit(): ExitCapability {
     async heartbeat() {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("frontend_exit_heartbeat");
+    },
+    async setSystemQuitWithoutAsking(enabled) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_system_quit_without_asking", { enabled });
     },
     async confirmQuit({ restart } = {}) {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -383,6 +396,32 @@ function tauriBackgroundRun(): BackgroundRunCapability {
   };
 }
 
+function tauriLaunchAtLogin(): LaunchAtLoginCapability {
+  return {
+    async status() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<LaunchAtLoginStatus>("launch_at_login_status");
+    },
+    async set(enabled) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<LaunchAtLoginStatus>("set_launch_at_login", { enabled });
+    },
+    async openSystemSettings() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("open_login_items_settings");
+    },
+  };
+}
+
+function tauriKeepAwake(): KeepAwakeCapability {
+  return {
+    async set(held) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_keep_awake", { held });
+    },
+  };
+}
+
 /** Through the shell's own commands (`updater/`), which carry a channel's name in and a version, its notes and
  * the download's progress out. The shell rejects with `{ kind, detail? }`. */
 function tauriUpdater(): UpdaterCapability {
@@ -441,9 +480,11 @@ function tauriNativeWindow(): NativeWindowCapability {
       // follow it, rather than freezing at whatever the OS happened to be at the moment of the call.
       await getCurrentWindow().setTheme(theme ?? null);
     },
-    async reveal() {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      await getCurrentWindow().show();
+    async reveal({ runInBackground }) {
+      // The shell's own command rather than the window API: it keeps the window hidden after a launch at login
+      // that runs in the background.
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("reveal_main_window", { runInBackground });
     },
     async bringToFront() {
       // The shell's own command rather than the window API, since a window hidden in the

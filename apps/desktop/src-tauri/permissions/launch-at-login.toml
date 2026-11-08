@@ -1,0 +1,8 @@
+# A custom permission for the app's own launch-at-login commands; see `exit-lifecycle.toml` for why an
+# app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-launch-at-login"
+description = "Allows the frontend to read and change whether the system opens the app when the user logs in, and to open the system's list of login items."
+commands.allow = ["launch_at_login_status", "set_launch_at_login", "open_login_items_settings"]

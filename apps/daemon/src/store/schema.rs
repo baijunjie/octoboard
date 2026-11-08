@@ -17,7 +17,7 @@ use rusqlite::Connection;
 /// [`MIGRATIONS`], and the released version's schema is kept as `schema/v{N}.sql` and listed in the
 /// test-only `PAST_SCHEMAS`, for the test that migrates a database built from each and compares the
 /// result with a fresh one.
-pub(super) const SCHEMA_VERSION: i64 = 2;
+pub(super) const SCHEMA_VERSION: i64 = 3;
 
 /// The `application_id` of an Octoboard database, "OCTB" in ASCII, written into the file's header
 /// when it is created, so that a SQLite file of another program is told apart from one of ours.
@@ -32,6 +32,10 @@ pub(super) const APPLICATION_ID: i64 = 0x4F43_5442;
 pub(super) const MIGRATIONS: &[&str] = &[
     // 1 to 2: the id of the owner a release left with the notice told at the next launch.
     "ALTER TABLE sessions ADD COLUMN owner_notice_former_owner TEXT;",
+    // 2 to 3: the setting that resumes the sessions a run left live, and the mark that says which
+    // sessions those were.
+    "ALTER TABLE settings ADD COLUMN resume_sessions_on_start INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE sessions ADD COLUMN left_live INTEGER NOT NULL DEFAULT 0;",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -223,10 +227,14 @@ CREATE TABLE sessions (
     locked           INTEGER NOT NULL DEFAULT 0,
     started_at       INTEGER NOT NULL,
     ended_at         INTEGER ,
-    owner_notice_former_owner TEXT);
+    owner_notice_former_owner TEXT, left_live INTEGER NOT NULL DEFAULT 0);
 -- `owner_notice_former_owner` is the id of the owner that released the session while it was
 -- not running, named in the notice with the parting note; NULL for none. Written and cleared
--- with `owner_notice_note`. It is the last column, spelled as a migration leaves it.
+-- with `owner_notice_note`.
+-- `left_live` is 1 for a session whose process the daemon ended when it shut down (or that was
+-- still running when a daemon died), so the next daemon start can tell it from a session that
+-- was already interrupted; see `Store::take_left_live_sessions`. Cleared by that start.
+-- Both are the last columns, spelled as a migration leaves them.
 -- The lookups by the columns that other rows and the daemon's queries hold sessions by.
 CREATE INDEX sessions_console_id ON sessions (console_id);
 CREATE INDEX sessions_project_id ON sessions (project_id);
@@ -320,8 +328,9 @@ CREATE TABLE settings (
     squash_before_delivery INTEGER NOT NULL DEFAULT 0,
     rebase_before_delivery INTEGER NOT NULL DEFAULT 1,
     delivery            TEXT NOT NULL DEFAULT 'ask',
-    revert_gate         INTEGER NOT NULL DEFAULT 0
-);
+    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0);
+-- `resume_sessions_on_start` is the last column, spelled as a migration leaves it; see
+-- `Store::resume_sessions_on_start`.
 -- The user's explicit choice for a setting of a provider, as JSON (`true`, `false` or a quoted
 -- choice); a setting with no row follows its default. Rows naming a provider or setting this
 -- build does not declare are kept and ignored. See `Store::provider_settings`.
@@ -772,7 +781,8 @@ mod tests {
 
     /// The schema of every version before the current one, each kept as `schema/v{N}.sql`:
     /// `PAST_SCHEMAS[n - 1]` is version `n`.
-    const PAST_SCHEMAS: [&str; (SCHEMA_VERSION - 1) as usize] = [include_str!("schema/v1.sql")];
+    const PAST_SCHEMAS: [&str; (SCHEMA_VERSION - 1) as usize] =
+        [include_str!("schema/v1.sql"), include_str!("schema/v2.sql")];
 
     /// The files next to `path` that are backups from before a migration.
     fn backups(path: &Path) -> Vec<PathBuf> {
@@ -910,7 +920,7 @@ mod tests {
 
         migrate(&path, 1, MIGRATIONS).expect("migrated");
         let conn = Connection::open(&path).unwrap();
-        assert_eq!(user_version(&conn).unwrap(), 2);
+        assert_eq!(user_version(&conn).unwrap(), SCHEMA_VERSION);
         type Row = (
             String,
             String,

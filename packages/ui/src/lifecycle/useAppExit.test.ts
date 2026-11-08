@@ -64,6 +64,7 @@ describe("restarting", () => {
         return () => {};
       },
       heartbeat: async () => {},
+      setSystemQuitWithoutAsking: async () => {},
       confirmQuit: vi.fn(confirmQuit),
     };
     const requestShutdown = vi.fn(async () => {});
@@ -142,6 +143,7 @@ describe("the daemon exiting by itself", () => {
         return () => {};
       },
       heartbeat: async () => {},
+      setSystemQuitWithoutAsking: async () => {},
       confirmQuit: async () => {},
     };
     const Host = () => {

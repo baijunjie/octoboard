@@ -7,11 +7,13 @@ import { detailsButton, openDetails, press } from "../components/alerts/detailsT
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { ErrorAlerts } from "../shell/ErrorAlerts";
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { messageText } from "../i18n/catalog";
 import { setLanguage } from "../i18n/language";
 import type { Event, ImportedProject } from "../protocol";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import type { Overrides } from "../shortcuts/store";
+import { APP_BEHAVIOR_SWITCHES } from "./booleanSettings";
 import { ImportResult } from "./ImportResult";
 import { documentSettings, openTab, settingGroupsOf, settingLinesAcrossGroups, settingLinesOf } from "./testSupport";
 
@@ -213,18 +215,27 @@ function settingLines(container: Element): ReturnType<typeof settingLinesOf> {
   return settingLinesAcrossGroups(container);
 }
 
+it("gives every switch of the App behavior section a line in its card", () => {
+  const every = Object.fromEntries(APP_BEHAVIOR_SWITCHES.map(({ field }) => [field, true]));
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings(every), settings_error: null, accounts: null }} />);
+  const lines = settingGroupsOf(container).find((group) => group.title === "App behavior")!.lines;
+  expect(lines).toEqual(APP_BEHAVIOR_SWITCHES.map(({ label }) => messageText("en", label)));
+});
+
 it("tells of each application setting that was applied, and lists the values of the git workflow", () => {
   const container = mountHost(null);
   const render = (carried: Partial<ImportedSettings>) =>
     container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings(carried), settings_error: null, accounts: null }} />);
   render({ auto_pull_repositories: true, auto_approve_session_requests: true, auto_approve_handoffs: true, ask_questions_as_choices: false });
   expect(settingGroupsOf(container)).toEqual([
-    { title: "General", lines: ["Order the sidebar by status", "Automatically delete archived sessions whose conversation is gone", "Close idle terminals when closing the panel"] },
+    { title: "General", lines: ["Order the sidebar by status"] },
+    { title: "App behavior", lines: ["Close idle terminals when closing the panel"] },
     { title: "Git", lines: ["Automatically pull repositories", "Git workflow"] },
     {
       title: "Agent behavior",
       lines: ["Automatically approve session requests", "Automatically approve resume requests", "Automatically approve account switches", "Automatically approve handoffs", "Ask questions as choices"],
     },
+    { title: "Cleanup", lines: ["Automatically delete archived sessions whose conversation is gone"] },
   ]);
   expect(settingLines(container)).toEqual({
     "Close idle terminals when closing the panel": { badge: "Off" },
@@ -316,7 +327,7 @@ it("marks a console and a project whose account fell back with a warning mark af
   press(marks[1]);
   expect(document.querySelector("[data-status-mark-popover]")?.textContent).toBe("The Codex account Personal is not set up here, so the default account is used.");
   await openTab("Application settings");
-  expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["General", "Git", "Agent behavior"]);
+  expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["General", "App behavior", "Git", "Agent behavior", "Cleanup"]);
 });
 
 it("writes a failed line's reason under its row, with the raw text behind Details and not in the row", () => {

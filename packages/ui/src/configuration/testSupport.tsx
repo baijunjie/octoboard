@@ -53,7 +53,7 @@ export function mountDialog(
   reply: (body: ClientRequestBody) => Promise<Event>,
   configurationFile: ConfigurationFileCapability,
   state: Partial<State> = {},
-  capabilities: Pick<PlatformAdapter, "backgroundRun"> = {},
+  capabilities: Pick<PlatformAdapter, "backgroundRun" | "statusItem" | "keepAwake"> = {},
   daemonMembers: Partial<Omit<Daemon, "request">> = {},
 ): Mounted {
   const closed = vi.fn();

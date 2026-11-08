@@ -2,11 +2,25 @@ import { describe, expect, it } from "vitest";
 
 import { sessionOf } from "../fixtures/builders";
 import type { Session, SessionStatus } from "../protocol";
-import { delegatingSessionIds, holdsAccountSwitch, sessionShownStatusKind, sessionStatusKind, showsSwitching } from "./sessionStatus";
+import { delegatingSessionIds, holdsAccountSwitch, sessionIsWorking, sessionShownStatusKind, sessionStatusKind, showsSwitching } from "./sessionStatus";
 
 const NONE: ReadonlySet<string> = new Set();
 const kindOf = (status: SessionStatus, extra: Partial<Session> = {}, delegating: ReadonlySet<string> = NONE) =>
   sessionStatusKind(sessionOf("s", "c", "p", "T", status, { has_conversation: false, ...extra }), delegating);
+
+it.each<[string, SessionStatus, object, boolean]>([
+  ["starting", "starting", {}, true],
+  ["working", "working", {}, true],
+  ["dormant", "dormant", {}, true],
+  ["idle with work in the background", "idle", { background_tasks: [{ id: "t" }] }, true],
+  ["paused with work in the background", "idle", { paused: true, background_tasks: [{ id: "t" }] }, true],
+  ["waiting for the user", "waiting_user", {}, false],
+  ["idle with nothing running", "idle", {}, false],
+  ["paused", "idle", { paused: true }, false],
+  ["interrupted", "interrupted", {}, false],
+])("a session %s is at work: %s", (_name, status, extra, working) => {
+  expect(sessionIsWorking(sessionOf("s", "c", "p", "Title", status, extra))).toBe(working);
+});
 
 describe("sessionShownStatusKind", () => {
   it("shows a session switching its account as such over its own status, and leaves its status kind alone", () => {

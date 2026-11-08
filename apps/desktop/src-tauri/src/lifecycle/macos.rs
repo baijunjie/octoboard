@@ -8,9 +8,10 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager, RunEvent, WebviewWindow, Window};
 
+use crate::apple_event::{current_enum_code, Slot};
 use crate::background::{hidden_by_close, hide, show_main_window, BackgroundState};
 use crate::diagnostics::diagnostic;
-use crate::exit::should_let_quit_through;
+use crate::exit::{should_let_quit_through, system_quit_without_asking};
 
 /// How long after a Dock show a Dock hide has to wait. tao drops a Dock hide that comes less than
 /// a second after a Dock show, because macOS gives no signal for the change having finished and
@@ -196,6 +197,33 @@ fn reapply_dock_badge() {
     tile.setBadgeLabel(label.as_deref());
 }
 
+/// `keyAEQuitReason` ('why?'): the attribute of the quit Apple event that says why the application
+/// is asked to quit, when the system asks.
+const KEY_QUIT_REASON: u32 = u32::from_be_bytes(*b"why?");
+
+/// Whether `code`, the enum value of a quit event's reason, is one the system ends a session with:
+/// `kAELogOut`, `kAEReallyLogOut`, `kAEShowRestartDialog`, `kAEShowShutdownDialog`, `kAERestart`
+/// and `kAEShutDown`. A quit of the user's (Cmd+Q, the Dock's Quit) carries none of them.
+fn is_system_end_reason(code: u32) -> bool {
+    [b"logo", b"rlgo", b"rrst", b"rsdn", b"rest", b"shut"]
+        .into_iter()
+        .any(|reason| code == u32::from_be_bytes(*reason))
+}
+
+/// The reason the quit event being handled now carries, `None` for one that carries none (a plain
+/// Dock Quit or an AppleScript quit) or when no event is current. The reason is an attribute of the
+/// event, with the parameter as a fallback for a sender that puts it there.
+fn current_quit_reason() -> Option<u32> {
+    current_enum_code(KEY_QUIT_REASON, Slot::Attribute)
+        .or_else(|| current_enum_code(KEY_QUIT_REASON, Slot::Param))
+}
+
+/// Whether the termination being asked about is the system ending the session: its quit event
+/// names such a reason. One that names none is taken for the user's, so it asks.
+fn system_is_ending() -> bool {
+    current_quit_reason().is_some_and(is_system_end_reason)
+}
+
 /// Holds the `AppHandle` for `application_should_terminate` below to reach — an ObjC method
 /// carries no user data of its own, so this `OnceLock`, set once from `install_..._override`
 /// during `setup`, is the only way that callback can get at `ExitState` and emit into the window.
@@ -206,12 +234,14 @@ static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 /// `terminate:` straight to the process; this selector is AppKit's one hook for answering it, where
 /// Cmd+Q and the app menu's `MenuItem` both reach `on_menu_event` instead.
 ///
-/// One override, one behaviour, for every `terminate:` this selector is asked about — a Dock Quit,
-/// but equally a system-initiated one from a logout, restart, or shutdown, which macOS answers with
-/// this exact same selector and gives this process no way to tell apart from a Dock Quit.
-/// Deliberately not special-cased back out: the accepted cost is that Octoboard can hold up a
-/// logout or restart until the user answers the confirmation dialog, same as it already holds up a
-/// Dock Quit.
+/// One override for every `terminate:` this selector is asked about — a Dock Quit, but equally a
+/// system-initiated one from a logout, restart, or shutdown. Both ask for the confirmation, which
+/// can hold up a logout or restart until the user answers it, except that a system-initiated one
+/// (`system_is_ending`: the quit event's reason) is let through without asking while the UI has
+/// said so (`system_quit_without_asking`): the sessions it leaves interrupted are resumed at the
+/// next start. A quit the user starts is told apart by carrying none of the system's reasons, and
+/// one that carries no reason at all asks. No announcement of the power-off is used instead, as a
+/// logout can be cancelled after it.
 ///
 /// tao 0.35.3's `TaoAppDelegateParent` does not implement this selector (verified against its
 /// source: it registers `applicationDidFinishLaunching:`, `applicationWillTerminate:`, and a
@@ -298,7 +328,9 @@ unsafe extern "C-unwind" fn application_should_terminate(
             // `terminate:` that early.
             return NSApplicationTerminateReply::TerminateNow;
         };
-        if should_let_quit_through(app) {
+        // The system's own termination, when the UI has said it needs no confirmation, is not put
+        // through the exit flow at all: nothing is deferred or recorded for it.
+        if (system_is_ending() && system_quit_without_asking(app)) || should_let_quit_through(app) {
             NSApplicationTerminateReply::TerminateNow
         } else {
             // `should_let_quit_through` has already emitted `exit-requested`; nothing left to do
@@ -307,4 +339,25 @@ unsafe extern "C-unwind" fn application_should_terminate(
         }
     })
     .unwrap_or(NSApplicationTerminateReply::TerminateNow)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_reasons_the_system_ends_a_session_with_are_told_from_the_rest() {
+        for reason in [b"logo", b"rlgo", b"rrst", b"rsdn", b"rest", b"shut"] {
+            assert!(is_system_end_reason(u32::from_be_bytes(*reason)));
+        }
+        // `kAEQuitAll`, `kAEQuitApplication`, and no reason.
+        assert!(!is_system_end_reason(u32::from_be_bytes(*b"quit")));
+        assert!(!is_system_end_reason(u32::from_be_bytes(*b"quia")));
+        assert!(!is_system_end_reason(0));
+    }
+
+    #[test]
+    fn no_current_event_is_no_reason() {
+        assert_eq!(current_quit_reason(), None);
+    }
 }

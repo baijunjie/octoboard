@@ -211,6 +211,7 @@ pub(in crate::mcp) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "auto_close_idle_shell_terminals": state.store.auto_close_idle_shell_terminals()?,
         "auto_pull_repositories": state.store.auto_pull_repositories()?,
         "auto_delete_unresumable_archives": state.store.auto_delete_unresumable_archives()?,
+        "resume_sessions_on_start": state.store.resume_sessions_on_start()?,
         "auto_select_account": state.store.auto_select_account()?,
         "interface_language": state.store.interface_language()?,
         "sidebar_order_by_status": state.store.sidebar_order_by_status()?,
@@ -259,6 +260,7 @@ pub(in crate::mcp) fn update_settings(
             auto_select_account: None,
             auto_switch_on_usage_limit: None,
             auto_start_quota_windows: None,
+            resume_sessions_on_start: optional_bool(arguments, "resume_sessions_on_start")?,
             provider_settings: Default::default(),
             agent_tags: Default::default(),
             interface_language: raw_text(arguments, "interface_language")?

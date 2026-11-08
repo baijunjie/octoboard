@@ -4,6 +4,8 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
+use crate::menu::APP_NAME;
+
 /// The tray menu as the UI words it, already in its language: sections of sessions, each under a
 /// heading, submenus of rows (headers, quota windows, notes) that cannot be chosen, then the Updates,
 /// Open and Quit labels, whether the icon should show its attention dot, and its selected-account quota.
@@ -37,6 +39,10 @@ pub struct TrayMenu {
     /// The UI's localized account, window and remainder for the icon's accessible name.
     #[serde(default)]
     pub(super) quota_label: Option<String>,
+    /// The UI's localized accessible name for the icon while the computer is kept awake: the name
+    /// it would have otherwise, with that said.
+    #[serde(default = "default_keep_awake_label")]
+    pub(super) keep_awake_label: String,
 }
 
 /// A picture: a base64 PNG, and whether it is a template image, drawn in black for its alpha alone
@@ -168,6 +174,11 @@ fn default_updates_label() -> String {
     "Check for updates".to_string()
 }
 
+/// The English name the icon has while the computer is kept awake, until the UI sends its own.
+pub(super) fn default_keep_awake_label() -> String {
+    format!("{APP_NAME} is keeping the computer awake")
+}
+
 impl Default for TrayMenu {
     /// What the menu reads before the UI has handed over its own: no sessions, English labels.
     fn default() -> Self {
@@ -182,6 +193,7 @@ impl Default for TrayMenu {
             quota_remaining: None,
             quota_weekly_remaining: None,
             quota_label: None,
+            keep_awake_label: default_keep_awake_label(),
         }
     }
 }

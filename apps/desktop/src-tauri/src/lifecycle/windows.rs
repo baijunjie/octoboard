@@ -17,8 +17,11 @@ pub struct LifecycleState {}
 /// launch hands the running instance its arguments and ends, and the running instance shows its
 /// window. Without a window yet (the daemon is still starting) there is nothing to show.
 pub fn register_first(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
-    builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-        show_main_window(app);
+    builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        // A login entry that fires while the app already runs is no one asking for the window.
+        if !crate::launch_at_login::has_login_argument(&args) {
+            show_main_window(app);
+        }
     }))
 }
 

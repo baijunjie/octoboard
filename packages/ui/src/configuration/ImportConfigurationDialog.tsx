@@ -8,6 +8,8 @@ import { dialogAround } from "../components/dialog/dialogElement";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { runInBackground } from "../lifecycle/runInBackground";
+import { keepAwake, keepAwakeWhen } from "../lifecycle/keepAwake";
+import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import { usePlatform } from "../platform/react";
 import { useOctoboardTheme } from "../preferences/theme";
 import { markdownStyle } from "../viewer/markdown/markdownStyle";
@@ -104,25 +106,28 @@ function checkedOnOpening(inspection: Inspection): Record<Region, boolean> {
  * reviewed or shown in the result; with none checked there is nothing to import. A directory typed for a project or an
  * account that the daemon would refuse stops the import at the row, bringing its tab forward. A document the daemon
  * refuses leaves the dialog on the first step, with the reason, for another file to be tried. The settings only this
- * client holds (appearance, Markdown style, running in the background, language) and the keyboard shortcuts travel in
- * the application settings: the review says what each would change here, and they are applied here from the daemon's
- * reply, for what it says it applied. The file's default clone directory is applied unless the user keeps this
- * machine's own. The daemon's reply to an import comes only after its last clone, so the dialog cannot be dismissed
- * while one is out. Waiting for the file is not such a time: a browser without the file input's `cancel` event never
- * answers for a dismissed picker, so the dialog is held busy only from the file onwards. The button shows it is
- * waiting and ignores another press meanwhile, but Escape and the close button still work. Where the picker is never
- * reported dismissed, the window regaining focus with no file chosen frees the step to be tried again; a file that
- * arrives from that picker after all is still honoured, until a newer press opens another one.
+ * client holds (appearance, Markdown style, running in the background, the menu bar icon, Prevent sleep and when,
+ * language) and the keyboard shortcuts travel in the application settings: the review says what each would change here,
+ * and they are applied here from the daemon's reply, for what it says it applied. The file's default clone directory is
+ * applied unless the user keeps this machine's own. The daemon's reply to an import comes only after its last clone, so
+ * the dialog cannot be dismissed while one is out. Waiting for the file is not such a time: a browser without the file
+ * input's `cancel` event never answers for a dismissed picker, so the dialog is held busy only from the file onwards.
+ * The button shows it is waiting and ignores another press meanwhile, but Escape and the close button still work. Where
+ * the picker is never reported dismissed, the window regaining focus with no file chosen frees the step to be tried
+ * again; a file that arrives from that picker after all is still honoured, until a newer press opens another one.
  */
 export function ImportConfigurationDialog({ onClose }: { onClose: () => void }): React.ReactElement {
   const t = useT();
   const { request, onImportProgress } = useDaemon();
   const { style } = useHostPaths();
-  const { configurationFile, backgroundRun, host } = usePlatform();
+  const { configurationFile, backgroundRun, statusItem, keepAwake: keepAwakeCapability, host } = usePlatform();
   const { choice: appearance, setChoice: setAppearance } = useOctoboardTheme();
   const language = useCurrentLanguage();
   const markdown = markdownStyle.useValue();
   const inBackground = runInBackground.useValue();
+  const menuBarIconShown = showMenuBarIcon.useValue();
+  const keepingAwake = keepAwake.useValue();
+  const keepAwakeWhenValue = keepAwakeWhen.useValue();
   const { busy, run } = useDialogAction(undefined, t("configuration.import.alertTitle"));
   const { shown, attempt } = useSubmitValidation();
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
@@ -165,12 +170,14 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   }, [waiting]);
   const currentShortcuts = shortcutOverrides.useValue();
   const shortcuts = stage.kind === "review" ? documentShortcuts(stage.document) : undefined;
-  const platformSettings = { backgroundRun: backgroundRun !== undefined };
+  const platformSettings = { backgroundRun: backgroundRun !== undefined, menuBarIcon: statusItem !== undefined, keepAwake: keepAwakeCapability !== undefined };
   const clientSettings = stage.kind === "review"
     ? clientSettingValues(t, documentClientSettings(stage.document, platformSettings), {
       appearance,
       markdown_style: markdown,
       ...(platformSettings.backgroundRun && { run_in_background: inBackground }),
+      ...(platformSettings.menuBarIcon && { show_menu_bar_icon: menuBarIconShown }),
+      ...(platformSettings.keepAwake && { keep_awake: keepingAwake, keep_awake_when: keepAwakeWhenValue }),
       interface_language: language,
     })
     : [];
@@ -288,7 +295,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       // to apply: it does so only for what the daemon says it applied.
       const carried = shortcutsRecord(result.settings_applied?.keyboard_shortcuts);
       const applied = carried && replaceOverrides(carried, host);
-      const clientApplied = clientSettingsOf(result.settings_applied, { backgroundRun: backgroundRun !== undefined });
+      const clientApplied = clientSettingsOf(result.settings_applied, platformSettings);
       applyClientSettings(clientApplied, setAppearance);
       setStage({ kind: "result", result, shortcuts: applied, clientSettings: clientApplied });
     });

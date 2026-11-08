@@ -26,9 +26,11 @@
 //! - [`messages`], [`pages`]: the user's own message into a session; the report panel's page list
 //!   and form submission, withdrawing a new worker's pages and the sweep of stray ones at start-up.
 //! - [`validate`]: the checks of the text fields requests carry.
-//! - [`archive_cleanup`], [`exit_watch`]: not request handlers. `archive_cleanup` is the daemon
-//!   task that deletes archived sessions whose conversation can no longer be resumed; `exit_watch`
-//!   is the exit watcher every launch starts, and the sequence that drops a live session.
+//! - [`archive_cleanup`], [`resume_on_start`], [`exit_watch`]: not request handlers.
+//!   `archive_cleanup` is the daemon task that deletes archived sessions whose conversation can no
+//!   longer be resumed; `resume_on_start` resumes the sessions the previous run left running, when
+//!   the user asked for that; `exit_watch` is the exit watcher every launch starts, and the
+//!   sequence that drops a live session.
 //!
 //! Writing into a running session is `crate::messaging::delivery`'s, the notices an owner is sent
 //! are `crate::messaging::owner_notices`', and the console session's reports, synthesis and
@@ -58,6 +60,7 @@ pub mod processes;
 pub mod projects;
 pub mod restart;
 pub mod resume;
+pub mod resume_on_start;
 pub mod settings;
 #[cfg(test)]
 mod test_support;
@@ -826,6 +829,7 @@ async fn handle_inner(
             auto_switch_on_usage_limit,
             sidebar_order_by_status,
             auto_start_quota_windows,
+            resume_sessions_on_start,
             default_clone_dir,
             git_workflow,
             agent_tags,
@@ -846,6 +850,7 @@ async fn handle_inner(
                     auto_switch_on_usage_limit,
                     sidebar_order_by_status,
                     auto_start_quota_windows,
+                    resume_sessions_on_start,
                     default_clone_dir,
                     git_workflow: git_workflow.unwrap_or_default(),
                     // Only a configuration import chooses provider settings in bulk.

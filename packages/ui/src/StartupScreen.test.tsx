@@ -57,7 +57,7 @@ it.each([
   ["the no-address screen", <StartupScreen message={<NoAddressMessage />} />],
 ])("has no Quit on %s and registers nothing with the shell, which quits natively", (_name, screen) => {
   const register = vi.fn(() => () => {});
-  const exit: ExitCapability = { register, heartbeat: async () => {}, confirmQuit: async () => {} };
+  const exit: ExitCapability = { register, heartbeat: async () => {}, setSystemQuitWithoutAsking: async () => {}, confirmQuit: async () => {} };
   const container = mount(screen, { kind: "tauri", host: BROWSER_HOST, exit });
   expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain(t("common.quit"));
   expect(register).not.toHaveBeenCalled();

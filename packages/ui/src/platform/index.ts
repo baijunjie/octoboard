@@ -66,6 +66,10 @@ export interface PlatformAdapter {
    * shell answers the window's close button and can do either, so the Settings switch for it
    * exists only there. */
   readonly backgroundRun?: BackgroundRunCapability;
+  /** Holding the computer and its display awake against idle sleep, present only where a shell can. */
+  readonly keepAwake?: KeepAwakeCapability;
+  /** Opening the application when the user logs in, present only where the system lets the shell register it. */
+  readonly launchAtLogin?: LaunchAtLoginCapability;
   /** Looking for, downloading and installing a new version of the application: present only where a shell
    * can replace itself, so the update notices and Settings rows exist only there. */
   readonly updater?: UpdaterCapability;
@@ -95,6 +99,11 @@ export interface ExitCapability {
   register(handlers: ExitHandlers): () => void;
   /** Proof this webview is alive and answering; see `useAppExit` for when it is sent. */
   heartbeat(): Promise<void>;
+  /** Tells the shell whether a termination the system starts (logging out, restarting or shutting down the
+   * machine; macOS only, where Windows never asks) quits without the confirmation, which is right while the daemon
+   * brings the interrupted sessions back at its next start. The shell asks as for any quit until told. A quit the user
+   * starts is unaffected. */
+  setSystemQuitWithoutAsking(enabled: boolean): Promise<void>;
   /** Ends the process, or with `restart` relaunches the application in its place (how an installed update
    * takes effect). Only after the daemon has been shut down. */
   confirmQuit(options?: { restart?: boolean }): Promise<void>;
@@ -133,8 +142,10 @@ export interface NativeWindowCapability {
    * `apps/desktop/src-tauri/src/lib.rs`), once this process has pushed the native theme and
    * painted the page — showing it any earlier is exactly the white/dark flash of the OS's own
    * appearance that creating it hidden exists to avoid. Idempotent: showing an already-visible
-   * window, or the shell's own timeout-driven fallback racing this call, is a no-op either way. */
-  reveal(): Promise<void>;
+   * window, or the shell's own timeout-driven fallback racing this call, is a no-op either way.
+   * `runInBackground` is the user's choice to keep the app running in the background: after a launch the system
+   * made at login the shell then leaves the window hidden, as if it had been closed into the background. */
+  reveal(options: { runInBackground: boolean }): Promise<void>;
   /** Activates the app and brings the window to the front, restoring it first if minimized or
    * hidden in the background. */
   bringToFront(): Promise<void>;
@@ -198,6 +209,10 @@ export interface StatusItemMenu {
   quota_weekly_remaining?: number;
   /** Localized account, window and remaining quota for the icon's accessible name. */
   quota_label?: string;
+  /** The icon's whole accessible name while the shell holds the computer awake: `quota_label`, when there is one,
+   * and that the app is keeping the computer awake. The shell, which knows when it holds, uses it in place of the
+   * name. */
+  keep_awake_label: string;
 }
 
 export interface StatusItemIcon {
@@ -275,6 +290,9 @@ export type StatusItemSubmenuDraftItem =
 export type StatusItemSubmenuDraft = Omit<StatusItemSubmenu, "items"> & { items: StatusItemSubmenuDraftItem[] };
 
 export interface StatusItemCapability {
+  /** Shows or hides the icon itself, which is the user's Settings switch. The shell shows it from launch, so the UI
+   * sends its choice at startup; hiding keeps the menu, which is there again when the icon is shown. */
+  setVisible(visible: boolean): Promise<void>;
   /** Replaces the menu bar icon's menu, and with it whether the icon shows its attention dot. */
   setMenu(menu: StatusItemMenu): Promise<void>;
   /** Subscribes to a session being chosen in that menu, returning the function that undoes it. The
@@ -335,6 +353,26 @@ export interface BackgroundRunCapability {
    * confirmation as any quit gesture). The shell starts from `false`, so the UI sends its choice at
    * startup. */
   set(enabled: boolean): Promise<void>;
+}
+
+/** Where the system's login entry for the application stands. */
+export type LaunchAtLoginStatus = "enabled" | "disabled" | "requiresApproval";
+
+export interface LaunchAtLoginCapability {
+  /** The system's own state now, read from it each time: the user can change it in the system's own list. */
+  status(): Promise<LaunchAtLoginStatus>;
+  /** Registers or removes the login entry and resolves with where it stands afterwards (a registration the system
+   * holds for the user's approval is `requiresApproval`); rejects when the system refused. */
+  set(enabled: boolean): Promise<LaunchAtLoginStatus>;
+  /** Opens the system's list of login items, where the user approves a registration that is `requiresApproval`.
+   * Rejects when the system did not open it. */
+  openSystemSettings(): Promise<void>;
+}
+
+export interface KeepAwakeCapability {
+  /** Tells the shell whether to hold the computer and its display awake, so neither goes to sleep when idle (and the
+   * screen does not lock for it). The shell holds nothing at launch, so the UI sends its answer at startup. */
+  set(held: boolean): Promise<void>;
 }
 
 /** The configuration file the user picked. */

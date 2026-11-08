@@ -4,5 +4,5 @@
 
 [[permission]]
 identifier = "allow-tray"
-description = "Allows the frontend to hand over the menu bar icon's menu and to bring a hidden window back to the front."
-commands.allow = ["set_tray_menu", "bring_to_front"]
+description = "Allows the frontend to hand over the menu bar icon's menu, to show or hide the icon and to bring a hidden window back to the front."
+commands.allow = ["set_tray_menu", "set_tray_icon_visible", "bring_to_front"]

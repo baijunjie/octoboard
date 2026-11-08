@@ -7,7 +7,9 @@ import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnounce
 import { consoleOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import { setLanguage } from "../i18n/language";
+import { keepAwake, keepAwakeWhen } from "../lifecycle/keepAwake";
 import { runInBackground } from "../lifecycle/runInBackground";
+import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import type { SavedConfigurationFile } from "../platform";
 import type { ConfigurationDocument, Event, ClientRequestBody } from "../protocol";
 import { shortcutOverrides } from "../shortcuts/store";
@@ -139,11 +141,11 @@ const box = (label: string) =>
   Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((input) => input.labels?.[0]?.textContent === label)!;
 const exportButton = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Export")!;
 
-it("names the four groups of application settings it carries, each as a reference", () => {
+it("names the five groups of application settings it carries, each as a reference", () => {
   mount();
   const hint = document.getElementById(box("Application settings").getAttribute("aria-describedby")!)!;
-  expect(hint.textContent).toBe("Includes the settings of General, Git, Agent behavior and Keyboard shortcuts, such as the language and the default clone directory.");
-  expect(Array.from(hint.querySelectorAll("[data-color]"), (chip) => chip.textContent)).toEqual(["General", "Git", "Agent behavior", "Keyboard shortcuts"]);
+  expect(hint.textContent).toBe("Includes the settings of General, App behavior, Git, Agent behavior, Keyboard shortcuts and Cleanup, such as the language and the default clone directory.");
+  expect(Array.from(hint.querySelectorAll("[data-color]"), (chip) => chip.textContent)).toEqual(["General", "App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"]);
 });
 
 it("exports the global regions on their own, the application settings checked and the accounts not by default", async () => {
@@ -239,6 +241,36 @@ it("adds whether this client runs in the background only where its platform has 
   onTestFinished(() => runInBackground.set(false));
   const { saved } = await savedSettings(undefined, { backgroundRun: { set: vi.fn(async () => {}) } });
   expect(saved.run_in_background).toBe(true);
+});
+
+it("adds no menu bar icon choice where its platform has no icon", async () => {
+  showMenuBarIcon.set(false);
+  onTestFinished(() => showMenuBarIcon.set(true));
+  expect((await savedSettings(undefined)).saved).not.toHaveProperty("show_menu_bar_icon");
+});
+
+it("adds whether this client shows its menu bar icon where its platform has one", async () => {
+  showMenuBarIcon.set(false);
+  onTestFinished(() => showMenuBarIcon.set(true));
+  const statusItem = { setMenu: async () => {}, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
+  expect((await savedSettings(undefined, { statusItem })).saved.show_menu_bar_icon).toBe(false);
+});
+
+it("adds no Prevent sleep choice where its platform cannot hold the computer awake", async () => {
+  const { saved } = await savedSettings(undefined);
+  expect(saved).not.toHaveProperty("keep_awake");
+  expect(saved).not.toHaveProperty("keep_awake_when");
+});
+
+it("adds whether this client prevents sleep, and when, where its platform can", async () => {
+  keepAwake.set(true);
+  keepAwakeWhen.set("always");
+  onTestFinished(() => {
+    keepAwake.set(false);
+    keepAwakeWhen.set("working");
+  });
+  const { saved } = await savedSettings(undefined, { keepAwake: { set: vi.fn(async () => {}) } });
+  expect(saved).toMatchObject({ keep_awake: true, keep_awake_when: "always" });
 });
 
 it("leaves a single console's export as the daemon sent it, whatever this client has changed", async () => {

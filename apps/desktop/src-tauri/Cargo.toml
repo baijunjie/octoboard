@@ -69,10 +69,12 @@ tauri-plugin-single-instance = "2.5"
 # For `notification_settings.rs`, which opens the Settings page of notifications with `ShellExecuteW`, for
 # `chrome/windows.rs`, which measures the system frame with `AdjustWindowRectExForDpi`, and for `tray/windows.rs`,
 # which follows the tray menu's modal loop through a subclass of tray-icon's window and reads the theme its menu
-# is drawn in (the registry, high contrast and its colours) to colour the menu's single-colour pictures. The
+# is drawn in (the registry, high contrast and its colours) to colour the menu's single-colour pictures, for
+# `keep_awake/windows.rs`, which makes the power request that holds the system and the display awake, and for
+# `launch_at_login/windows.rs`, which reads and writes the `Run` key's login entry. The
 # version the lockfile already resolves for other dependencies.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Registry", "Win32_UI_Accessibility", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Power", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_Accessibility", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 # For the request filter `page_isolation/windows.rs` puts on the window's WebView2 and the browser accelerator
 # keys `chrome/windows.rs` turns off on it, and `windows` for the string and interface types their calls take.
 # Pinned to the exact versions `tauri` and `wry` already resolve, so promoting them to direct dependencies does
@@ -88,7 +90,9 @@ windows = { version = "=0.62.2", default-features = false }
 # System Settings deep link `NSWorkspace` opens, and in `tray/macos/` for the notifications that a
 # menu began and ended tracking, the template flag on the tray menu's pictures and the view that draws
 # the menu bar icon's raised hand over its status item's button, and in `tray/macos/lines.rs` for the
-# views of the menu's rows (`NSImageView` for a section heading's picture). Pinned to the exact
+# views of the menu's rows (`NSImageView` for a section heading's picture), and in
+# `apple_event.rs` and `launch_at_login/macos.rs` the message sends to the Apple event and the login
+# item service. Pinned to the exact
 # versions already resolved transitively through `tauri-runtime-wry`, so promoting them to direct
 # dependencies does not shift anything else this crate depends on.
 objc2 = "=0.6.5"
@@ -97,9 +101,11 @@ objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSA
 # `lifecycle/macos.rs` and `tray/macos/` (and the main queue the latter applies a held menu on, and the
 # bytes of the raised hand's picture), the content rule list in `page_isolation/macos.rs`, in
 # `permissions/macos.rs` the Accessibility prompt's options dictionary, in `system_settings.rs` the
-# System Settings URL, and in `notification_settings.rs` the bundle identifier and the OS version that
-# picks the pane's address, pinned like `objc2-app-kit` above.
-objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSAttributedString", "NSBundle", "NSData", "NSDictionary", "NSGeometry", "NSLocale", "NSNotification", "NSOperation", "NSProcessInfo", "NSString", "NSURL", "NSValue"] }
+# System Settings URL, in `notification_settings.rs` the bundle identifier and the OS version that
+# picks the pane's address, in `launch_at_login/macos.rs` the error a login item's registration
+# reports, and in `keep_awake/macos.rs` the strings of the power assertions, pinned like
+# `objc2-app-kit` above.
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "block2", "NSArray", "NSAttributedString", "NSBundle", "NSData", "NSDictionary", "NSError", "NSGeometry", "NSLocale", "NSNotification", "NSOperation", "NSProcessInfo", "NSString", "NSURL", "NSValue"] }
 # For the content rule list `page_isolation/macos.rs` puts on the window's webview, and the block its
 # compile reports back through; `WebviewWindowBuilder::with_webview_configuration` takes this
 # crate's type. Pinned like `objc2-app-kit` above, `block2` to the version already resolved

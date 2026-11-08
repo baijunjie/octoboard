@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
 import { usePlatform } from "../platform/react";
-import type { Session, SessionStatus, ShellTerminal } from "../protocol";
-import { runsInBackground } from "../sessions/sessionStatus";
+import type { Session, ShellTerminal } from "../protocol";
+import { sessionIsWorking } from "../sessions/sessionStatus";
 import { reportDaemonExit, reportExitFailure } from "./exitFailure";
 
 /** How long `doQuit` waits for `shutdown`'s `ack` before giving up on it. The daemon drops the
@@ -14,11 +14,7 @@ import { reportDaemonExit, reportExitFailure } from "./exitFailure";
  * later, or never settle at all, leaving the exit confirmation dialog wedged with no way out. */
 const SHUTDOWN_TIMEOUT_MS = 2000;
 
-/** The wire statuses a quit asks about: a session starting, working, dormant (its background agents are
- * on view, possibly at work), or waiting for the user. */
-const BUSY_STATUSES: ReadonlySet<SessionStatus> = new Set(["starting", "working", "waiting_user", "dormant"]);
-
-/** What holds a quit up: sessions in the middle of something (`BUSY_STATUSES`), and shell terminals
+/** What holds a quit up: sessions in the middle of something (at work, or waiting for the user), and shell terminals
  * running something, which the quit would end. An idle or exited shell does not count. */
 export interface QuitHolders {
   sessions: boolean;
@@ -26,13 +22,13 @@ export interface QuitHolders {
 }
 
 /** What holds a quit up among `sessions` and `terminals`; a quit asks for confirmation when either does. A
- * session idle but running in the background (`runsInBackground`) holds it up too, as the quit would end that
+ * session idle but running in the background holds it up too, as the quit would end that
  * work. One at its prompt with nothing left running is in the middle of nothing that is reported, so it does
  * not, though the quit still ends it and leaves it interrupted and resumable like the rest; one whose child
  * sessions are working holds it up only through those sessions. */
 export function quitHolders(sessions: readonly Session[], terminals: readonly ShellTerminal[] = []): QuitHolders {
   return {
-    sessions: sessions.some((s) => BUSY_STATUSES.has(s.status) || runsInBackground(s)),
+    sessions: sessions.some((s) => sessionIsWorking(s) || s.status === "waiting_user"),
     terminals: terminals.some((terminal) => terminal.state === "running" && terminal.busy),
   };
 }

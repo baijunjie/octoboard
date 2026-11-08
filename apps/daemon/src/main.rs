@@ -131,6 +131,9 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
     );
 
     let store = Store::open(&paths::db_path())?;
+    // Read before the next write moves every status: which sessions the previous run left running
+    // is what Resume sessions on start brings back (see `coordinator::resume_on_start`).
+    let left_live = store.take_left_live_sessions()?;
     // Nothing the previous daemon ran survived it, whatever the stored status said.
     let interrupted = store.mark_live_sessions_interrupted()?;
     if interrupted > 0 {
@@ -207,6 +210,7 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
     records::collector::spawn(&state);
     accounts::quotas::spawn(&state);
     coordinator::archive_cleanup::spawn(&state);
+    coordinator::resume_on_start::spawn(&state, left_live);
     // Likewise off the runtime: it runs `git` in every project's directory, a few at a time.
     project_git::remote::reconcile_remote_urls(&state);
     project_git::watch::start(&state);
