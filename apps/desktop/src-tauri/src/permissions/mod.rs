@@ -60,12 +60,13 @@ pub fn permissions_status() -> Option<PermissionsStatus> {
     platform::permissions_status()
 }
 
-/// Returns whether the permission is granted once the prompt is out of the way. The Screen
-/// Recording arm blocks until the user has answered, which is why this is a plain `fn`: Tauri runs
-/// those on a worker thread, where blocking costs the window nothing. The Accessibility arm returns
-/// at once — its dialog is raised asynchronously (`AXUIElement.h`: "Prompting occurs asynchronously
-/// and does not affect the return value").
-#[tauri::command]
+/// Returns whether the permission is granted as of the call. Neither arm waits for the user's
+/// answer: the Screen Recording request raises the system prompt and returns, still false, and the
+/// Accessibility dialog is raised asynchronously too (`AXUIElement.h`: "Prompting occurs
+/// asynchronously and does not affect the return value"). Async all the same, since Tauri runs a
+/// plain command inline on the main thread, and raising the Screen Recording prompt is not free: the
+/// request took 43 ms when measured from a worker thread.
+#[tauri::command(async)]
 pub fn request_permission(kind: PermissionKind) -> bool {
     platform::request_permission(kind)
 }

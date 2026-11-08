@@ -22,8 +22,8 @@ type PerKind = Partial<Record<MacosPermissionKind, boolean>>;
  *   at System Settings instead of offering the prompt again. Held for as long as the section is
  *   mounted, which the settings tabs end on a switch away: the button comes back, and a press
  *   that macOS answers silently puts the guidance back with it.
- * - `pending`: a `request` is in flight. Only Screen Recording's is ever observably pending —
- *   Accessibility's returns at once, while its dialog is still coming up.
+ * - `pending`: a `request` is in flight. Not observably shown: both requests return at once,
+ *   while the system's prompt is still coming up.
  * - `request`: rejects when the request could not be made, after the read and with `pending` cleared,
  *   for the caller to show. A request macOS answers without granting does not reject; it sets `refused`.
  * - `openSystemSettings`: rejects when the pane did not open, after the read, for the caller to show.
@@ -44,9 +44,9 @@ export function useMacosPermissions(): {
   const [refused, setRefused] = useState<PerKind>({});
   const [pending, setPending] = useState<PerKind>({});
   const mounted = useRef(true);
-  // Reads overlap: pressing Grant starts one when the request resolves and another as the window
-  // regains focus behind the closing prompt. Only the newest may land, or an older answer could
-  // overwrite it.
+  // Reads overlap: pressing Grant starts one right after the request, while the prompt is still up,
+  // and another as the window regains focus once it closes, which can come before the first has
+  // returned. Only the newest may land, or an older answer could overwrite it.
   const reads = useRef(0);
 
   const refresh = useCallback(async () => {

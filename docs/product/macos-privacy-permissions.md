@@ -36,16 +36,17 @@ opens. It is an unexpected failure, not a refusal: its body says the request for
 to grant it by hand in System Settings — choose Privacy & Security, then the permission's pane as named above, adding
 Octoboard with the + button if it is not listed — followed by the request to report an issue, with **Report issue** and
 what the failed request reported under **Error details** (see "Recovery and unexpected errors" in
-`docs/product/error-alerts.md`). The button stops being pending and the row's grants are read again; since no refusal
+`docs/product/error-alerts.md`). The row's grants are read again; since no refusal
 was recorded, the row keeps offering the Grant button rather than the System Settings wording. A request macOS answers,
 granted or not, opens no alert.
 
-**Accessibility is granted in System Settings, not from the prompt.** Its Grant button raises the system's dialog
-asking to let Octoboard control the computer, whose effect is that Octoboard appears in System Settings' own list, so
-the user only flips a switch there instead of adding the application by hand. The request reports back at once, while
-that dialog is still coming up, and normally reports the permission not granted, so the row moves to the System Settings
-wording straight after the press. Screen Recording's Grant button instead waits for the user to answer the prompt, and
-is marked pending until they have.
+**The request does not wait for the user's answer.** For both permissions the request made by the Grant button
+reports back at once, while the system's prompt is still up, and normally reports the permission not granted, so the
+row moves to the System Settings wording straight after the press; the button's pending state is not observably shown.
+Whatever the user then does in the prompt or in System Settings reaches the row through the read made when the window
+regains focus (below). Both permissions are in practice switched on in System Settings. Accessibility's Grant button
+raises the system's dialog asking to let Octoboard control the computer, whose effect is that Octoboard appears in
+System Settings' own list, so the user only flips a switch there instead of adding the application by hand.
 
 **A change made outside Octoboard is picked up when the window comes back.** The grants are read again every time the
 window regains focus, so one granted or revoked in System Settings — the only way Accessibility is ever granted — takes
@@ -53,10 +54,11 @@ effect in this section on the user's return. For assistive technology the sectio
 shown on screen, which says where both permissions stand in one announcement, one message of whole sentences per
 permission naming it and its state; for a permission whose request in this window came back without the grant, that
 message carries the same guidance the row gives on switching it on in System Settings. It speaks about 1.5 seconds
-after the rows appear, when the user switches to this section. After a change it speaks about 1.5 seconds after the user
-is back in the window: the wait counts only time the window is visible and has focus, and starts over each time the user
-comes back. A reading that changes nothing says nothing again, and a state replaced while it waits is never said. The
-rows' own states stay readable where they stand but are not status regions themselves.
+after the rows appear, when the user switches to this section. After a change — one picked up on the user's return, or
+the System Settings wording a Grant press brings while the system's prompt is still up — it speaks about 1.5 seconds
+later: the wait counts only time the window is visible and has focus, and starts over each time the user comes back. A
+reading that changes nothing says nothing again, and a state replaced while it waits is never said. The rows' own
+states stay readable where they stand but are not status regions themselves.
 
 **A Screen Recording grant needs no restart of Octoboard.** Octoboard itself captures nothing; the capture commands
 agents start do, and one started after the grant captures the screen straight away, also in a session opened before the

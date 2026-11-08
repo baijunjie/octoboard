@@ -411,10 +411,10 @@ export interface MacosPermissionsCapability {
   /** The current grants, or `undefined` where the shell is not running on macOS. Only reads, and
    * never shows a system prompt, so it is safe to poll. */
   status(): Promise<MacosPermissionsStatus | undefined>;
-  /** The one call that shows the system prompt, with whether the permission is granted once it is
-   * out of the way. Screen Recording resolves only after the user has answered; Accessibility's
-   * dialog is raised asynchronously and is not granted in place, so it resolves `false` at once,
-   * while that dialog is still coming up. */
+  /** The one call that shows the system prompt, with whether the permission is granted as of the
+   * call. Neither waits for the user's answer: both prompts are raised asynchronously and neither
+   * permission is granted in place, so a first request resolves `false` at once, while the prompt is
+   * still up. */
   request(kind: MacosPermissionKind): Promise<boolean>;
   /** Opens the System Settings pane for `kind`. Rejects when the system did not open it. */
   openSystemSettings(kind: MacosPermissionKind): Promise<void>;

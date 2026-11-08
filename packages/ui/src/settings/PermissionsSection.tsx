@@ -75,8 +75,8 @@ export function PermissionsSection(): React.ReactElement {
   useEffect(() => {
     if (loaded) setSettled(true);
   }, [loaded]);
-  // A button unmounts when its permission is granted, and the Accessibility one the moment its
-  // request resolves; either can be the control the keyboard was on. The deps are the resolved
+  // A button unmounts when its permission is granted, or the moment its request comes back without
+  // the grant; either can be the control the keyboard was on. The deps are the resolved
   // flags rather than the objects holding them: `status` is a fresh object after every read,
   // including the one on each window focus, which would otherwise run this on window focus
   // forever. `pending` is not among them — a pending button stays mounted, which is why it is

@@ -61,7 +61,7 @@ right-to-left language; in the vertical list Up and Down do too. When a control 
 section — a trusted folder's Remove button or an account's actions menu, which goes with its folder or account once
 the removal is confirmed, an agent's tab once the agent's removal is confirmed, the Notifications Enable button once
 the browser has answered, or a Permissions row's button, which goes once
-the permission is granted or its request has been answered — focus goes back to the selected section's tab rather than
+the permission is granted or its request has come back without the grant — focus goes back to the selected section's tab rather than
 leaving the dialog.
 
 ## Opening and closing Settings
