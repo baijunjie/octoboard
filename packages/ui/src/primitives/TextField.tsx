@@ -159,7 +159,7 @@ export function SearchField({ inputRef, placeholder, controls, onSubmit, trailin
     >
       <HeroSearchField.Group>
         <HeroSearchField.SearchIcon />
-        <HeroSearchField.Input ref={inputRef} {...definedProps({ placeholder })} {...openingFocus(autoFocus)} />
+        <HeroSearchField.Input ref={inputRef} className="min-w-0" {...definedProps({ placeholder })} {...openingFocus(autoFocus)} />
         {trailing !== undefined && <OutsideFieldParts>{trailing}</OutsideFieldParts>}
         {clearButton && <FieldClearContext.Provider value={SEARCH_CLEAR}>{clearButton}</FieldClearContext.Provider>}
       </HeroSearchField.Group>

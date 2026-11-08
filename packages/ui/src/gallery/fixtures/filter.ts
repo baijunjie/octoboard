@@ -63,11 +63,12 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project filter",
-    description: "Selected tags have checkmarks and the normal vocabulary fits without scrolling. The popover stays open as conditions are picked: the read-only tags on the heading fade in from the left and out to the right while the others slide, and matching projects enter and exit as the sidebar reorders. After closing it, the heading's Funnel X clears all conditions.",
+    description: "The keyword's clear button fits inside the search field. Selected tags have checkmarks and the normal vocabulary fits without scrolling. The popover stays open as conditions are picked: the read-only tags on the heading fade in from the left and out to the right while the others slide, and matching projects enter and exit as the sidebar reorders. After closing it, the heading's Funnel X clears all conditions.",
     state,
     preferences: { sidebarConsole: console_.id },
     steps: [
       openFilter,
+      (ui) => ui.type("site"),
       (ui) => ui.press("customer-facing"),
       (ui) => ui.press("frontend"),
     ],
