@@ -13,7 +13,7 @@
 
 use std::fs;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, PhysicalRect, WebviewWindow, WindowEvent};
 
 use crate::chrome::SystemFrame;
+use crate::config_dir;
 use crate::diagnostics::diagnostic;
 
 /// The window's size on a first launch, and when the saved frame has nowhere visible to be.
@@ -301,7 +302,7 @@ struct TrackedWindow(Mutex<Tracker>);
 
 /// The saved state, or `None` when there is none or it cannot be read.
 pub fn load(app: &AppHandle) -> Option<SavedState> {
-    match state_path(app) {
+    match config_dir::config_path(app, FILE_NAME) {
         Ok(path) => read_state(&path),
         Err(err) => {
             diagnostic!("cannot locate the saved window state: {err}");
@@ -408,9 +409,9 @@ pub fn save(app: &AppHandle) {
         .lock()
         .unwrap_or_else(|err| err.into_inner())
         .state();
-    let written = state_path(app)
+    let written = config_dir::config_path(app, FILE_NAME)
         .map_err(anyhow::Error::from)
-        .and_then(|path| write_state(&path, &state));
+        .and_then(|path| config_dir::write_json(&path, &state));
     if let Err(err) = written {
         diagnostic!("cannot save the window's state: {err}");
     }
@@ -459,33 +460,12 @@ fn frame_of(window: &WebviewWindow) -> tauri::Result<Rect> {
     })
 }
 
-fn state_path(app: &AppHandle) -> tauri::Result<PathBuf> {
-    Ok(app.path().app_config_dir()?.join(FILE_NAME))
-}
-
-/// Written to a sibling file and renamed over the old one, so a write cut short never leaves a
-/// half-written file behind. The sibling is named after this process, since more than one build of
-/// the application (a development one, an installed one) can share the directory.
-fn write_state(path: &Path, state: &SavedState) -> anyhow::Result<()> {
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir)?;
-    }
-    let mut partial = path.as_os_str().to_owned();
-    partial.push(format!(".{}.partial", std::process::id()));
-    let partial = PathBuf::from(partial);
-    let json = serde_json::to_vec_pretty(state)?;
-    let written = fs::write(&partial, json).and_then(|()| fs::rename(&partial, path));
-    if written.is_err() {
-        let _ = fs::remove_file(&partial);
-    }
-    Ok(written?)
-}
-
 #[cfg(test)]
 mod tests {
     use tauri::{PhysicalPosition, PhysicalSize};
 
     use super::*;
+    use crate::config_dir::test_support::Scratch;
 
     /// A 1512×982-point Retina laptop as the main display, its work area below a 33-point menu bar
     /// and beside nothing else.
@@ -911,35 +891,15 @@ mod tests {
         assert_eq!(tracker.state(), saved(10.0, 100.0, 1200.0, 760.0, false));
     }
 
-    /// A fresh directory of this test's own, removed on drop.
-    struct Scratch(PathBuf);
-
-    impl Scratch {
-        fn new(name: &str) -> Self {
-            let dir = std::env::temp_dir().join(format!(
-                "octoboard-window-state-{}-{name}",
-                std::process::id()
-            ));
-            let _ = fs::remove_dir_all(&dir);
-            Self(dir)
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
-
     #[test]
     fn missing_state_file_reads_as_none() {
-        let scratch = Scratch::new("missing");
+        let scratch = Scratch::new("window-state", "missing");
         assert_eq!(read_state(&scratch.0.join(FILE_NAME)), None);
     }
 
     #[test]
     fn corrupt_state_file_reads_as_none() {
-        let scratch = Scratch::new("corrupt");
+        let scratch = Scratch::new("window-state", "corrupt");
         fs::create_dir_all(&scratch.0).unwrap();
         let path = scratch.0.join(FILE_NAME);
         fs::write(&path, b"{\"frame\": {\"x\": 1").unwrap();
@@ -949,33 +909,16 @@ mod tests {
     }
 
     #[test]
-    fn failed_write_leaves_no_partial_file_behind() {
-        let scratch = Scratch::new("failed-write");
-        // A directory where the file should be: writing the sibling succeeds, renaming a file over
-        // a directory fails.
-        let path = scratch.0.join(FILE_NAME);
-        fs::create_dir_all(&path).unwrap();
-        let state = saved(100.0, 100.0, 1200.0, 760.0, false);
-        assert!(write_state(&path, &state).is_err());
-        let partials: Vec<_> = fs::read_dir(&scratch.0)
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
-            .filter(|name| name.ends_with(".partial"))
-            .collect();
-        assert!(partials.is_empty(), "left behind: {partials:?}");
-    }
-
-    #[test]
     fn state_round_trips_through_a_directory_created_on_write() {
-        let scratch = Scratch::new("round-trip");
+        let scratch = Scratch::new("window-state", "round-trip");
         let path = scratch.0.join("nested").join(FILE_NAME);
         let first = saved(1700.0, 100.0, 1200.0, 760.0, true);
-        write_state(&path, &first).unwrap();
+        config_dir::write_json(&path, &first).unwrap();
         assert_eq!(read_state(&path), Some(first));
 
         // Overwriting goes through the same rename, and leaves nothing else behind.
         let second = saved(-700.0, -1000.0, 1300.0, 800.0, false);
-        write_state(&path, &second).unwrap();
+        config_dir::write_json(&path, &second).unwrap();
         assert_eq!(read_state(&path), Some(second));
         let names: Vec<_> = fs::read_dir(path.parent().unwrap())
             .unwrap()

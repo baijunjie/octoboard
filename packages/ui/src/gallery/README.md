@@ -21,7 +21,9 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
 - `frame.tsx` renders the real `App` under `AppRoot` (`src/AppRoot.tsx`, the provider tree `main.tsx` and the website
   preview share) over a fixture daemon in place of the WebSocket one, and leaves out what only a native shell does. `prepare.ts` sets the app's stored
   preferences from the URL and the scenario before the app's modules load, so nothing the frame imports earlier may read
-  a stored preference at load (the same holds for `fixtures/index.ts` and `updaterFixture.ts`).
+  a stored preference at load (the same holds for `fixtures/index.ts` and `updaterFixture.ts`). The two choices the
+  desktop shell holds (a scenario's `shellSettings`) are not stored: the frame sets them on their preference objects
+  once the app's modules are loaded.
 - A `Scenario` (`scenario.ts`, extending `Fixture` in `packages/ui/src/fixtures/fixture.ts`) is a starting `state`,
   optional staging of the fixture daemon and platform (errors, never-answered requests, an updater, permissions, a
   clipboard, a terminal behaviour, and so on, each documented where it is declared), `steps` that reach component-local

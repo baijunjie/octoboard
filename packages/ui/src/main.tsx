@@ -6,7 +6,7 @@ import { AppRoot } from "./AppRoot";
 import { suppressNativeContextMenu } from "./input/contextMenuGuard";
 import { resolveDaemonAddress, resolveRecovered, resolveStartupError } from "./daemon";
 import { runtimeError } from "./errors/runtimeError";
-import { runInBackground } from "./lifecycle/runInBackground";
+import { connectShellSettings } from "./lifecycle/shellSettings";
 import { selectPlatform } from "./platform";
 import { DaemonFailedScreen, NoAddressMessage, StartupScreen } from "./StartupScreen";
 import { createDaemon } from "./store";
@@ -27,6 +27,12 @@ const root = ReactDOM.createRoot(rootEl);
 
 const platform = selectPlatform();
 suppressNativeContextMenu(platform);
+// The shell holds the run-in-background and menu bar icon choices and starts from its own file; from here a change of
+// either reaches it, and what the page kept before the file existed is handed over once.
+connectShellSettings({
+  runInBackground: platform.backgroundRun && ((enabled) => platform.backgroundRun!.set(enabled)),
+  showMenuBarIcon: platform.statusItem && ((shown) => platform.statusItem!.setVisible(shown)),
+});
 
 // Where the shell puts a translucent material behind a transparent webview (the macOS application,
 // `decorate` in `apps/desktop/src-tauri/src/chrome/macos.rs`), the page leaves the window chrome's
@@ -107,5 +113,5 @@ root.render(
 // `initialNativeThemePush` is still waited on. Revealing before that IPC round trip settles would
 // only move the flash from "before this page painted" to "before the window's appearance matched it".
 void Promise.resolve(initialNativeThemePush).then(() => {
-  if (!resolveRecovered()) return platform.nativeWindow?.reveal({ runInBackground: runInBackground.get() }).catch(() => {});
+  if (!resolveRecovered()) return platform.nativeWindow?.reveal().catch(() => {});
 });

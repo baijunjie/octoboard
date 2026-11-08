@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager};
 
+use crate::app_settings;
 use crate::diagnostics::diagnostic;
 use crate::menu::APP_NAME;
 use crate::sidecar::{
@@ -21,7 +22,7 @@ use crate::sidecar::{
     DaemonState, DAEMON_PARAMS,
 };
 use crate::updater;
-use crate::MAIN_WINDOW_LABEL;
+use crate::{percent_encode_query_value, MAIN_WINDOW_LABEL};
 
 /// How many times the daemon is relaunched within `RESTART_WINDOW` before it is left alone.
 const MAX_RESTARTS: usize = 3;
@@ -109,20 +110,23 @@ fn give_up_if_updated(app: &AppHandle, ended: &str) -> bool {
 
 /// The window's query once it is pointed at a restarted daemon: `daemon_params` in place of what
 /// `current` held of the daemon's (its port and key, or the error a window opened without one got),
-/// the rest of it (the languages and the host facts) kept as it was, and `recovered=1` added so the page knows it was
-/// reloaded rather than opened (`resolveRecovered` in `packages/ui/src/daemon.ts`).
-pub fn rebuild_query(current: Option<&str>, daemon_params: &str) -> String {
+/// `settings` (the percent-encoded `?settings=` value, the shell's settings as they are now) in
+/// place of the one `current` carried, which a change made since would have left stale, the rest of
+/// it (the languages and the host facts) kept as it was, and `recovered=1` added so the page knows
+/// it was reloaded rather than opened (`resolveRecovered` in `packages/ui/src/daemon.ts`).
+pub fn rebuild_query(current: Option<&str>, daemon_params: &str, settings: &str) -> String {
     let kept = current
         .unwrap_or_default()
         .split('&')
         .filter(|pair| !pair.is_empty())
         .filter(|pair| {
             let name = pair.split_once('=').map_or(*pair, |(name, _)| name);
-            !DAEMON_PARAMS.contains(&name) && name != "recovered"
+            !DAEMON_PARAMS.contains(&name) && name != "settings" && name != "recovered"
         });
+    let settings = format!("settings={settings}");
     std::iter::once(daemon_params)
         .chain(kept)
-        .chain(std::iter::once("recovered=1"))
+        .chain([settings.as_str(), "recovered=1"])
         .collect::<Vec<_>>()
         .join("&")
 }
@@ -204,7 +208,8 @@ pub fn point_window_at(app: &AppHandle, address: &DaemonAddress) {
         return;
     };
     let result = window.url().and_then(|mut url| {
-        let query = rebuild_query(url.query(), &daemon_params(address));
+        let settings = percent_encode_query_value(&app_settings::current_json(app));
+        let query = rebuild_query(url.query(), &daemon_params(address), &settings);
         url.set_query(Some(&query));
         window.navigate(url)
     });
@@ -250,25 +255,42 @@ mod tests {
     #[test]
     fn the_query_is_rebuilt_around_the_new_address() {
         assert_eq!(
-            rebuild_query(Some("port=1&key=aa&languages=ja%2Cen"), "port=2&key=bb"),
-            "port=2&key=bb&languages=ja%2Cen&recovered=1"
+            rebuild_query(
+                Some("port=1&key=aa&languages=ja%2Cen"),
+                "port=2&key=bb",
+                "S"
+            ),
+            "port=2&key=bb&languages=ja%2Cen&settings=S&recovered=1"
         );
         // A second recovery replaces the first one's marker rather than adding another.
         assert_eq!(
             rebuild_query(
-                Some("languages=en&port=2&key=bb&recovered=1"),
-                "port=3&key=cc"
+                Some("languages=en&port=2&key=bb&settings=S&recovered=1"),
+                "port=3&key=cc",
+                "S"
             ),
-            "port=3&key=cc&languages=en&recovered=1"
+            "port=3&key=cc&languages=en&settings=S&recovered=1"
         );
         assert_eq!(
-            rebuild_query(None, "port=3&key=cc"),
-            "port=3&key=cc&recovered=1"
+            rebuild_query(None, "port=3&key=cc", "S"),
+            "port=3&key=cc&settings=S&recovered=1"
         );
         // A window opened while there was no daemon carries its error instead of an address.
         assert_eq!(
-            rebuild_query(Some("error=gone&languages=en"), "port=4&key=dd"),
-            "port=4&key=dd&languages=en&recovered=1"
+            rebuild_query(Some("error=gone&languages=en"), "port=4&key=dd", "S"),
+            "port=4&key=dd&languages=en&settings=S&recovered=1"
+        );
+    }
+
+    #[test]
+    fn the_settings_are_the_shells_current_ones_not_the_ones_the_window_opened_with() {
+        assert_eq!(
+            rebuild_query(
+                Some("port=1&key=aa&host=H&settings=OLD&languages=en"),
+                "port=2&key=bb",
+                "NEW"
+            ),
+            "port=2&key=bb&host=H&languages=en&settings=NEW&recovered=1"
         );
     }
 

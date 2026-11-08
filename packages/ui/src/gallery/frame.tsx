@@ -1,10 +1,10 @@
 // The page one scenario renders in, loaded in an iframe by the gallery shell (`shell.tsx`). It renders the real `App`
 // under the app's provider tree (`AppRoot`), over a fixture daemon in place of the WebSocket one. It passes
 // `nativeSync={false}` to `AppRoot` and does not reveal the window: the browser platform has no native menu or window.
-// It leaves out the syncs to the shell too (`BackgroundRunSync`, the menu bar icon's and keep-awake's): a scenario that
-// offers `backgroundRun`, `menuBarIcon` or `keepAwake` gets a capability whose calls do nothing (`galleryPlatform`), so
-// there is no shell to push the choice to. Its stored preferences are set from the URL before the app loads
-// (`prepareStorage`).
+// It leaves out the syncs to the shell too (the keep-awake one, and `connectShellSettings` for the background and menu bar
+// icon choices): a scenario that offers `backgroundRun`, `menuBarIcon` or `keepAwake` gets a capability whose calls do
+// nothing (`galleryPlatform`), so there is no shell to push the choice to. Its stored preferences are set from the URL
+// before the app loads (`prepareStorage`); the choices the shell holds are set on their preference objects (`shellSettings`).
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 
@@ -59,6 +59,8 @@ await import("../input/focusGuard");
 await import("../style.css");
 const { createFixtureDaemon } = await import("../fixtures/fixtureDaemon");
 const { installReportPageFixture } = await import("./reportPageFixture");
+const { runInBackground } = await import("../lifecycle/runInBackground");
+const { showMenuBarIcon } = await import("../lifecycle/showMenuBarIcon");
 
 const { DaemonFailedScreen, NoAddressMessage, StartupScreen } = startup;
 
@@ -182,6 +184,9 @@ function Crash({ stack }: { stack?: string }): never {
   throw error;
 }
 
+// What the shell would hand the window at startup. Nothing is connected to a shell here, so a value set stays in memory.
+if (scenario?.shellSettings?.runInBackground !== undefined) runInBackground.set(scenario.shellSettings.runInBackground);
+if (scenario?.shellSettings?.showMenuBarIcon !== undefined) showMenuBarIcon.set(scenario.shellSettings.showMenuBarIcon);
 // A viewer scenario has one too: the viewer's header copies a path through the daemon's notifications.
 const daemon = scenario && !scenario.startup ? createFixtureDaemon(scenario) : undefined;
 if (daemon && scenario) installReportPageFixture(document, daemon, scenario.id);

@@ -7,7 +7,8 @@ import type { Overrides } from "../shortcuts/store";
 import type { MarkdownStyle } from "../viewer/markdown/markdownStyle";
 
 /** The user preferences a scenario starts from, each persisted in `localStorage` by the module the
- * key names. Anything not listed is unset, so the app's own default applies. */
+ * key names. Anything not listed is unset, so the app's own default applies. The two choices the desktop shell holds
+ * (`ShellSettings`) are not here: the shell keeps them, not `localStorage`. */
 export interface Preferences {
   /** The docked sidebar is shown (default) or hidden by the user. */
   sidebarVisible?: boolean;
@@ -34,10 +35,6 @@ export interface Preferences {
   markdownStyle?: MarkdownStyle;
   /** The layout diffs open in; unified when unset. */
   diffLayout?: "unified" | "split";
-  /** Closing the window keeps the app running in the background; off by default. */
-  runInBackground?: boolean;
-  /** The menu bar icon is shown; on by default. */
-  showMenuBarIcon?: boolean;
   /** The desktop app keeps the computer awake (Prevent sleep); off by default. */
   keepAwake?: boolean;
   /** When Prevent sleep holds; while sessions are working when unset. */

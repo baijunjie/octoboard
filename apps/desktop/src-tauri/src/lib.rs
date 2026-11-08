@@ -1,16 +1,19 @@
 //! The desktop application's Rust-side shell: it launches `octoboardd` as a sidecar, hands the
-//! window the daemon's port and key as `?port=` and `?key=` query parameters (and the host's facts as
-//! `?host=`, see `host_facts`) before the window is created, brings the daemon back when it dies, and
-//! offers the UI the few native capabilities it cannot have itself. No IPC command carries daemon
-//! traffic: the UI talks to the daemon over WebSocket (see "Why the daemon is split out" in
+//! window the daemon's port and key as `?port=` and `?key=` query parameters (and the host's facts
+//! as `?host=`, see `host_facts`, and the settings the shell keeps as `?settings=`, see
+//! `app_settings`) before the window is created, brings the daemon back when it dies, and offers
+//! the UI the few native capabilities it cannot have itself. No IPC command carries daemon traffic:
+//! the UI talks to the daemon over WebSocket (see "Why the daemon is split out" in
 //! `docs/architecture.md`).
 //!
 //! The modules, the IPC surface and where new code goes are in `docs/structure/desktop.md`.
 
+mod app_settings;
 #[cfg(target_os = "macos")]
 mod apple_event;
 mod background;
 mod chrome;
+mod config_dir;
 mod configuration_file;
 mod diagnostics;
 mod directory_picker;
@@ -86,14 +89,13 @@ pub fn run() {
             sidecar::daemon_exit_detail,
             set_menu_labels,
             tray::set_tray_menu,
-            tray::set_tray_icon_visible,
             keep_awake::set_keep_awake,
             launch_at_login::launch_at_login_status,
             launch_at_login::set_launch_at_login,
             launch_at_login::open_login_items_settings,
             background::reveal_main_window,
             background::bring_to_front,
-            background::set_run_in_background,
+            app_settings::set_app_settings,
             permissions::permissions_status,
             permissions::request_permission,
             permissions::open_privacy_settings,
@@ -131,6 +133,8 @@ pub fn run() {
             // still the current one.
             launch_at_login::capture_launch();
             menu::install(app.handle())?;
+            // Before the icon, which is hidden at once when the user turned it off.
+            app_settings::install(app.handle());
             tray::create(app.handle())?;
             lifecycle::install(app.handle());
             // The daemon is started on a thread of its own, with retries that can take most of a
@@ -185,7 +189,7 @@ pub fn run() {
 /// through verbatim, everything else — including UTF-8 continuation bytes, which this encodes one
 /// byte at a time regardless of the character they belong to — becomes `%XX`. `URLSearchParams` on
 /// the receiving side decodes that back to the original string correctly either way.
-fn percent_encode_query_value(input: &str) -> String {
+pub(crate) fn percent_encode_query_value(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for byte in input.bytes() {
         match byte {
@@ -230,12 +234,13 @@ fn open_main_window(
 ) -> tauri::Result<()> {
     let daemon_query = window_params(app);
     let host = percent_encode_query_value(&host_facts::current_json());
+    let settings = percent_encode_query_value(&app_settings::current_json(app));
     let query = match languages::preferred_languages() {
         Some(languages) => format!(
-            "{daemon_query}&host={host}&languages={}",
+            "{daemon_query}&host={host}&settings={settings}&languages={}",
             percent_encode_query_value(&languages)
         ),
-        None => format!("{daemon_query}&host={host}"),
+        None => format!("{daemon_query}&host={host}&settings={settings}"),
     };
     let url = WebviewUrl::App(format!("index.html?{query}").into());
     // Decided before the window exists, from the saved frame and the displays connected now, so the

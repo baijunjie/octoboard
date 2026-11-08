@@ -3,9 +3,7 @@ import React from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { announceHost } from "./i18n/platformTerms";
 import { LanguageProvider } from "./i18n/react";
-import { useBackgroundRunSync } from "./lifecycle/useBackgroundRunSync";
 import { useKeepAwakeSync } from "./lifecycle/useKeepAwakeSync";
-import { useMenuBarIconSync } from "./lifecycle/useMenuBarIconSync";
 import { useNativeMenuLabels } from "./lifecycle/useNativeMenuLabels";
 import { useNativeWindowTheme } from "./lifecycle/useNativeWindowTheme";
 import { useSystemQuitSync } from "./lifecycle/useSystemQuitSync";
@@ -34,17 +32,6 @@ function NativeMenuLabelsSync(): null {
   return null;
 }
 
-// Outside `ErrorBoundary` too, so the choice reaches the shell whichever screen is up.
-function BackgroundRunSync(): null {
-  useBackgroundRunSync();
-  return null;
-}
-
-function MenuBarIconSync(): null {
-  useMenuBarIconSync();
-  return null;
-}
-
 // Under the daemon's provider, which it reads the sessions from, but outside `ErrorBoundary` too.
 function KeepAwakeSync(): null {
   useKeepAwakeSync();
@@ -61,9 +48,9 @@ export interface AppRootProps {
   platform: PlatformAdapter;
   /** `undefined` for a screen that has no daemon to connect to. */
   daemon: Daemon | undefined;
-  /** Whether the window pushes its menu labels, theme, background-run, menu bar icon, keep-awake and system-quit
-   * choices to a native shell. The window's entry does; a page that stands in for one in a browser (the gallery, the
-   * website preview) has no shell to push to. */
+  /** Whether the window pushes its menu labels, theme, keep-awake and system-quit choices to a native shell. The
+   * window's entry does; a page that stands in for one in a browser (the gallery, the website preview) has no shell
+   * to push to. */
   nativeSync: boolean;
   /** Passed to `UpdatesProvider`: `null` leaves out the automatic checks, for a surface that must hold a state of its
    * own (the gallery). */
@@ -99,13 +86,7 @@ export function AppRoot({ platform, daemon, nativeSync, firstCheckDelayMs, insid
   return (
     <PlatformProvider value={platform}>
       <LanguageProvider>
-        {nativeSync && (
-          <>
-            <NativeMenuLabelsSync />
-            <BackgroundRunSync />
-            <MenuBarIconSync />
-          </>
-        )}
+        {nativeSync && <NativeMenuLabelsSync />}
         <UpdatesProvider firstCheckDelayMs={firstCheckDelayMs}>
           {insideUpdates}
           <DaemonProvider value={daemon}>

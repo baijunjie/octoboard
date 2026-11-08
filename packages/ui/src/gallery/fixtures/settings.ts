@@ -781,7 +781,8 @@ export const settingsScenarios: Scenario[] = [
     menuBarIcon: true,
     keepAwake: true,
     launchAtLogin: "enabled",
-    preferences: { runInBackground: true, keepAwake: true },
+    shellSettings: { runInBackground: true },
+    preferences: { keepAwake: true },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.appBehavior")),

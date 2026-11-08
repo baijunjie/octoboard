@@ -1,0 +1,8 @@
+# A custom permission for the app's own settings command; see `exit-lifecycle.toml` for why an
+# app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-set-app-settings"
+description = "Allows the frontend to change the settings the shell itself reads at startup: whether closing the window keeps the app running in the background and whether the menu bar icon is shown."
+commands.allow = ["set_app_settings"]

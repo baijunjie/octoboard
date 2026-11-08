@@ -4,6 +4,7 @@ import type { AvailableUpdate, HostFacts, LaunchAtLoginStatus, MacosPermissionsS
 import type { Fixture } from "../fixtures/fixture";
 import type { Step } from "../fixtures/interact";
 import type { Preferences } from "../fixtures/preferences";
+import type { ShellSettings } from "../lifecycle/shellSettings";
 import type { ViewerSubject } from "../viewer/content";
 import type { GroupTitle } from "./fixtures/groups";
 
@@ -97,6 +98,9 @@ export interface Scenario extends Fixture {
   /** Shows the shared button in its pending state, in every size and variant and as the icon-only avatar field, instead of the application. */
   pendingButtons?: boolean;
   preferences?: Preferences;
+  /** The choices the desktop shell holds (Keep running in the background, Show menu bar icon) as the window starts, as
+   * the shell would hand them over; the app's defaults (off, on) for one left out. The window keeps them in memory only. */
+  shellSettings?: Partial<ShellSettings>;
   /** The desktop shell asks the window to quit (Cmd+Q) once the steps have run: with a busy session or shell terminal
    * the confirmation they hold the quit up with is on screen, and with none the quit goes straight to the shell. The
    * platform has no exit capability otherwise, except in a `desktopApp`; what the shell does with the quit is nothing

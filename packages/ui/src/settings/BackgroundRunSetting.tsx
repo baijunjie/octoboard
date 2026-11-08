@@ -7,7 +7,7 @@ import { usePlatform } from "../platform/react";
 import { SwitchSettingRow } from "./SettingRow";
 
 /** Whether closing the window keeps the app running in the background. Rendered only where the platform has the
- * capability (`AppBehaviorSection`); the choice reaches the shell through `useBackgroundRunSync`. */
+ * capability (`AppBehaviorSection`); the choice reaches the shell through `lifecycle/shellSettings.ts`. */
 export function BackgroundRunSetting(): React.ReactElement {
   const t = useT();
   const enabled = runInBackground.useValue();

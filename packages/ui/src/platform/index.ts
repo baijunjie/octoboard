@@ -141,9 +141,9 @@ export interface NativeWindowCapability {
    * painted the page — showing it any earlier is exactly the white/dark flash of the OS's own
    * appearance that creating it hidden exists to avoid. Idempotent: showing an already-visible
    * window, or the shell's own timeout-driven fallback racing this call, is a no-op either way.
-   * `runInBackground` is the user's choice to keep the app running in the background: after a launch the system
-   * made at login the shell then leaves the window hidden, as if it had been closed into the background. */
-  reveal(options: { runInBackground: boolean }): Promise<void>;
+   * After a launch the system made at login, while the user keeps the app running in the background (which the
+   * shell holds itself), the shell leaves the window hidden, as if it had been closed into the background. */
+  reveal(): Promise<void>;
   /** Activates the app and brings the window to the front, restoring it first if minimized or
    * hidden in the background. */
   bringToFront(): Promise<void>;
@@ -337,8 +337,8 @@ export interface UpdaterCapability {
 export interface BackgroundRunCapability {
   /** Tells the shell what the window's close button does: with `true` it hides the window and the
    * app keeps running behind the menu bar icon, with `false` it quits the app (through the same
-   * confirmation as any quit gesture). The shell starts from `false`, so the UI sends its choice at
-   * startup. */
+   * confirmation as any quit gesture). The shell keeps the choice itself, in its own file, and starts from it, so the
+   * UI sends only a change (`lifecycle/shellSettings.ts`). */
   set(enabled: boolean): Promise<void>;
 }
 

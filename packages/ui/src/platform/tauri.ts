@@ -138,7 +138,7 @@ function tauriStatusItem(): StatusItemCapability {
   return {
     async setVisible(visible) {
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("set_tray_icon_visible", { visible });
+      await invoke("set_app_settings", { settings: { show_menu_bar_icon: visible } });
     },
     async setMenu(menu) {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -344,7 +344,7 @@ function tauriBackgroundRun(): BackgroundRunCapability {
   return {
     async set(enabled) {
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("set_run_in_background", { enabled });
+      await invoke("set_app_settings", { settings: { run_in_background: enabled } });
     },
   };
 }
@@ -433,11 +433,11 @@ function tauriNativeWindow(): NativeWindowCapability {
       // follow it, rather than freezing at whatever the OS happened to be at the moment of the call.
       await getCurrentWindow().setTheme(theme ?? null);
     },
-    async reveal({ runInBackground }) {
+    async reveal() {
       // The shell's own command rather than the window API: it keeps the window hidden after a launch at login
       // that runs in the background.
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("reveal_main_window", { runInBackground });
+      await invoke("reveal_main_window");
     },
     async bringToFront() {
       // The shell's own command rather than the window API, since a window hidden in the

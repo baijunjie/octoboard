@@ -22,8 +22,11 @@
 //! icon is the app icon in its own colours, the dot and the larger eyes are part of the picture, a
 //! quota is not drawn, and the label is the icon's tooltip.
 //!
-//! The user can hide the icon from Settings (`set_tray_icon_visible`). While it is hidden the menu
-//! and the icon's look are still kept up to date, so the icon comes back as it should be.
+//! The user can hide the icon from Settings (`set_icon_visible`, reached through
+//! `set_app_settings`). The choice is kept in `settings.json` (`app_settings`) and read when the
+//! icon is created, which hides it before the first frame is drawn, so a hidden icon never flashes
+//! at launch. While it is hidden the menu and the icon's look are still kept up to date, so the
+//! icon comes back as it should be.
 //!
 //! Replacing the menu closes it if it is open, so a menu the UI sends while a menu is open is held
 //! back and applied once it closes (`MenuTracking`), which macOS's menu tracking and, on Windows,
@@ -55,7 +58,9 @@ use std::sync::Mutex;
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter};
 
+use crate::app_settings;
 use crate::background::show_main_window;
+use crate::diagnostics::diagnostic;
 use crate::exit::request_quit;
 use crate::menu::APP_NAME;
 
@@ -130,6 +135,11 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     )
     .build(app)?;
     set_icon_label(&tray, APP_NAME);
+    if !app_settings::current(app).show_menu_bar_icon {
+        if let Err(err) = set_visible(&tray, false) {
+            diagnostic!("cannot hide the menu bar icon: {err}");
+        }
+    }
     follow_menu_tracking(app);
     Ok(())
 }
@@ -143,12 +153,10 @@ pub fn set_tray_menu(app: AppHandle, menu: TrayMenu) -> Result<(), String> {
     apply(&app, &menu)
 }
 
-/// Shows or hides the icon, which is the UI's Settings switch. The icon starts shown on every
-/// launch and the UI hands its choice over once it has loaded, so a window whose UI never loads
-/// keeps it. Hiding changes nothing else: the menu and the look
-/// the UI last sent are kept and are there again when the icon is shown.
-#[tauri::command]
-pub fn set_tray_icon_visible(app: AppHandle, visible: bool) -> Result<(), String> {
+/// Shows or hides the icon, which is the Settings switch (`create` applies the stored choice at
+/// launch). Hiding changes nothing else: the menu and the look the UI last sent are kept and are
+/// there again when the icon is shown.
+pub fn set_icon_visible(app: &AppHandle, visible: bool) -> Result<(), String> {
     let tray = app
         .tray_by_id(TRAY_ID)
         .ok_or_else(|| "the menu bar icon does not exist".to_string())?;

@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { LanguageProvider } from "../i18n/react";
 import { runInBackground } from "../lifecycle/runInBackground";
 import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
-import { useBackgroundRunSync } from "../lifecycle/useBackgroundRunSync";
+import { connectShellSettings } from "../lifecycle/shellSettings";
 import type { PlatformAdapter } from "../platform";
 import { mountHost } from "../test/mountHost";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
@@ -18,15 +17,9 @@ import { BROWSER_HOST } from "../test/hosts";
 // The rows beside it read the daemon's settings, which this test has no use for.
 vi.mock("./DaemonSwitchSetting", () => ({ DaemonSwitchSetting: () => null }));
 
-function Sync() {
-  useBackgroundRunSync();
-  return null;
-}
-
 function mount(platform: PlatformAdapter) {
   return mountHost(
     <LanguageProvider>
-      <Sync />
       <AppBehaviorSection />
     </LanguageProvider>,
     { platform },
@@ -43,6 +36,7 @@ beforeEach(() => {
 // Leave nothing behind for a later file, should vitest ever run files without isolation: a
 // module-level read there would pick up what the last test stored.
 afterEach(() => {
+  connectShellSettings({});
   localStorage.clear();
 });
 
@@ -51,56 +45,21 @@ it("has no row without the capability", () => {
   expect(container.querySelector("[role=switch], input[type=checkbox]")).toBeNull();
 });
 
-it("tells the shell the default choice at startup", async () => {
+it("pushes the choice to the shell when the switch is toggled", async () => {
   const set = vi.fn(() => Promise.resolve());
-  mount({ kind: "tauri", host: BROWSER_HOST, backgroundRun: { set } });
-  await act(async () => {});
-  expect(set).toHaveBeenCalledExactlyOnceWith(false);
-});
-
-// The preference reads storage as its module loads, so a stored choice is only seen by a fresh load.
-it("tells the shell a stored choice at startup", async () => {
-  localStorage.setItem(PREFERENCE_KEYS.runInBackground, "true");
-  vi.resetModules();
-  onTestFinished(() => {
-    vi.resetModules();
-  });
-  const { useBackgroundRunSync: freshSync } = await import("../lifecycle/useBackgroundRunSync");
-  const { PlatformProvider: FreshProvider } = await import("../platform/react");
-  const set = vi.fn(() => Promise.resolve());
-  const Host = () => {
-    freshSync();
-    return null;
-  };
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  act(() =>
-    root.render(
-      <FreshProvider value={{ kind: "tauri", host: BROWSER_HOST, backgroundRun: { set } }}>
-        <Host />
-      </FreshProvider>,
-    ),
-  );
-  await act(async () => {});
-  expect(set).toHaveBeenCalledExactlyOnceWith(true);
-});
-
-it("pushes and stores the choice when the switch is toggled", async () => {
-  const set = vi.fn(() => Promise.resolve());
+  connectShellSettings({ runInBackground: set });
   const container = mount({ kind: "tauri", host: BROWSER_HOST, backgroundRun: { set } });
   await act(async () => {});
   const toggle = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
   expect(toggle.checked).toBe(false);
+  expect(set).not.toHaveBeenCalled();
   await act(async () => {
     toggle.click();
   });
   expect(toggle.checked).toBe(true);
-  expect(set).toHaveBeenLastCalledWith(true);
-  expect(localStorage.getItem(PREFERENCE_KEYS.runInBackground)).toBe("true");
+  expect(set).toHaveBeenCalledExactlyOnceWith(true);
+  // The shell keeps the choice, so nothing is stored by the page.
+  expect(localStorage.getItem(PREFERENCE_KEYS.runInBackground)).toBeNull();
 });
 
 it("names the menu bar icon as the way back only while it is shown", async () => {

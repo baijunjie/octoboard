@@ -1,10 +1,6 @@
-import { createPersistedPreference } from "../preferences/persistedPreference";
-import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
+import { createShellPreference } from "./shellSettings";
 
 /** Whether the desktop app shows its menu bar icon (the notification area icon on Windows): the Settings switch the
- * desktop app offers. On until the user turns it off; `useMenuBarIconSync` hands the choice to the shell. */
-export const showMenuBarIcon = createPersistedPreference<boolean>(
-  PREFERENCE_KEYS.showMenuBarIcon,
-  (raw) => raw !== "false",
-  (value) => String(value),
-);
+ * desktop app offers. On until the user turns it off. The shell keeps the choice (`shellSettings.ts`) and hides the icon
+ * from launch when it is off. */
+export const showMenuBarIcon = createShellPreference("showMenuBarIcon");

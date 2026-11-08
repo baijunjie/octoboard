@@ -110,7 +110,7 @@ their cascade order does not depend on which screen opened first.
   heading), `focus/`, `announce/`, `panel/`, `host/`, `rows/` (the tree row, its icon and mark buttons, the
   hover-actions class), `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, lazy readiness for capture hosts,
   polling, window focus (`windowFocus.ts`), the latest-request hook,
-  `useLatest` and `useRenderLatest`, `useSerialPush`, `settle`, a `try`/`finally` helper kept outside components because
+  `useLatest` and `useRenderLatest`, `useSerialPush` over `createSerialQueue` (`serialQueue.ts`), `settle`, a `try`/`finally` helper kept outside components because
   the React Compiler skips a function holding one).
 - `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry`
   with its panels in `src/quota/`, and `RailProcessesEntry`, both on the shared popover wiring of `RailPanelEntry`),
@@ -126,7 +126,7 @@ their cascade order does not depend on which screen opened first.
 - `src/shortcuts/` — the central registry of keyboard shortcuts and its persisted overrides.
 - `src/navigation/` — Back and Forward through the locations the content area has shown.
 - `src/lifecycle/` — hooks tying the UI to the platform: exit flow, notifications, native menu, native
-  window theme, run in background, menu bar icon visibility (`useMenuBarIconSync.ts`), keep awake (`keepAwake.ts` decides
+  window theme, the two settings the desktop shell holds in its own file, run in background and menu bar icon visibility (`shellSettings.ts`: the store behind both preferences, started from the window's `settings` query, pushing changes through the platform capabilities, `connectShellSettings` called in `main.tsx`), keep awake (`keepAwake.ts` decides
   whether to hold from the setting and the sessions, `useKeepAwakeSync.ts` hands it to the shell), whether a system-initiated
   quit needs no confirmation (`useSystemQuitSync.ts`), git status schedule, interface language report.
 - `src/statusItem/` — the menu-bar menu: its builder, quota submenus, icons and the hook that pushes it to the platform.
@@ -319,7 +319,8 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A rail entry whose button opens a popover panel | `RailPanelEntry` (`src/shell/RailPanelEntry.tsx`), which wires the popover; the status marks and Details popovers the panel opens are tagged with `PopoverOwnerContext` (`src/components/hint/popoverOwner.ts`) and asked about through `nestedPopovers` (`src/shell/nestedPopover.ts`), and `CloseWhenCovered` (`src/shell/`) closes the panel under another modal |
 | Put a panel of the aside's owner (a project, or a console session) on screen | `showPanel` from `useProjectPanels` (`src/app/`); a jump from the global process list is `useProcessJump` |
 | Send focus into a panel the user opened deliberately | `landInPanel` (`src/panels/panelLanding.ts`), as `useFloatingPanel` and `useProcessJump` do |
-| Queue best-effort pushes to the native shell in order | `useSerialPush` (`src/components/hooks/useSerialPush.ts`) |
+| Queue best-effort pushes to the native shell in order | `useSerialPush` (`src/components/hooks/useSerialPush.ts`) in a component, `createSerialQueue` (`src/components/hooks/serialQueue.ts`) outside one |
+| A setting the desktop shell must know before the page loads | `createShellPreference` (`src/lifecycle/shellSettings.ts`), not a `localStorage` preference |
 | Browse directories in a picker | `useDirectoryBrowse` (`src/components/dialog/DirectoryPicker.tsx`), which routes local desktop browsing through the platform's `directoryPicker` capability and otherwise uses the daemon-backed `DirectoryPicker`; locality comes from `Daemon.isLocal`, derived by `isLocalDaemon` (`src/daemon.ts`) |
 | Delete options of a dialog that deletes sessions | `useSessionDeletionOptions` (`src/dialogs/`) |
 | A provider's name, install page or configuration directory; the file and folder names that detect it | `providerLabel`, `providerShortName`, `providerInstallUrl`, `providerConfigDir`, `detectionMarkers` (`src/agents/providers.ts`) over `useProviders()` |

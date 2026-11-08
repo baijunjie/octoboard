@@ -92,10 +92,11 @@ by then closed into the background stays closed. That fallback is not armed at a
 login**, and such a launch starts hidden, as if its window had been closed into the background, while keeping Octoboard
 running in the background is on (see "A launch at login" in `docs/product/launch-at-login.md`).
 
-**Closing the window during a launch quits.** The shell starts every launch with keeping the application running in
-the background off, whatever the user last chose: the choice is kept by the window's UI and handed over once it has
-loaded (see "Closing the window" below), so a close in the first moments of a launch — and one on the screen shown
-when the daemon failed to start, which never gets a choice to hand over — quits.
+**Closing the window during a launch follows the user's choice.** The application reads whether to keep running in the
+background from its own settings file as it starts, before the window's UI has loaded (see "Where the choice is
+stored" under "Closing the window" below), so a close in the first moments of a launch closes the window into the
+background or quits as the switch says. A close on the screen shown when the daemon failed to start quits, as any close
+does while the daemon is not running.
 
 ## Who can reach the daemon
 
@@ -224,15 +225,16 @@ notification-area icon's on Windows — keeps following the sessions (see `docs/
 - Closing the window is never a way to force a quit through: see "Quitting when the window has stopped responding"
   below.
 
-**Where the choice is stored.** It is kept **per client**, in that client's own browser storage, under the same rules
-as the appearance and language choices (see "Where the choice is stored" in `docs/product/appearance.md`): the daemon
-neither stores it nor carries it, and it is not among the files under `~/.octoboard` (see "Files Octoboard owns"
-below). So it does not travel between a desktop window and a browser tab, or between two machines reaching the same
-daemon, and a client whose storage has been cleared is back to off. A configuration export that includes the
-application settings carries the exporting application's choice, and an import asked to apply them sets it on the
-application that runs the import; a browser, which has no such choice, neither writes nor applies it (see "The
-settings a client holds" in `docs/product/settings-in-a-configuration.md`). Each launch starts from off until the window's UI
-hands the choice over (see "Starting up" above).
+**Where the choice is stored.** The desktop application keeps it itself, in its settings file beside the window's
+state, together with whether the menu bar icon is shown (see "Files Octoboard owns" below, which says what happens when
+the file is missing, unreadable or cannot be written): the daemon neither stores it nor carries it, and it is not among
+the files under `~/.octoboard`. The application reads it as it starts, before the window's UI has loaded, so it holds
+from the first moment of a launch; turning the switch takes effect at once and is written straight away. It does not
+travel between two machines reaching the same daemon, and clearing the window's browser storage leaves it as it is. A
+configuration export that includes the application settings carries the exporting application's choice, and an import
+asked to apply them sets it on the application that runs the import, as turning the switch would; a browser, which has
+no such choice, neither writes nor applies it (see "The settings a client holds" in
+`docs/product/settings-in-a-configuration.md`).
 
 **Bringing a window closed into the background back.** Any of these brings the window back where it was, at the size
 and position it had:
@@ -441,7 +443,8 @@ nothing that the form will need and does not have yet claimed to exist.
 ## Files Octoboard owns
 
 Everything Octoboard writes for itself lives under `~/.octoboard` — on the machine the daemon runs on, which in the
-server form is the server — with one exception, the window's state, described after the table. On Windows the
+server form is the server — with two exceptions, the desktop application's window state and its settings file,
+described after the table. On Windows the
 directory is `%USERPROFILE%\.octoboard`, and the paths below are the same under it, with Windows' separator
 (`%USERPROFILE%\.octoboard\logs\daemon.log`, say). A user name and home path outside ASCII (`C:\Users\测试用户`, say)
 take nothing away: the data directory, its logs, agent launches and the hooks Octoboard gives the agents work under it
@@ -466,6 +469,27 @@ The desktop application keeps the window's size, position and maximized state in
 `%APPDATA%\dev.octoboard.desktop\window-state.json` on Windows (see "The window's size and position across
 launches" in `docs/product/window-size-and-position.md`). It belongs to the application's window rather than to the
 daemon, so it is not under `~/.octoboard`. Deleting it makes the next launch open the window as a first launch does.
+
+Beside it, in the same directory, `settings.json` holds the two choices the desktop application must know before the
+window's UI has loaded: keeping it running in the background when the window is closed, under `run_in_background`,
+`false` to begin with (see "Closing the window" above), and showing the menu bar icon, the notification-area icon on
+Windows, under `show_menu_bar_icon`, `true` to begin with (see "Hiding the icon" in `docs/product/menu-bar-icon.md`).
+The application reads it once as it starts, and writes it whole each time the Settings switch for either changes,
+including when an import applies them.
+
+- **No file**: both choices take their defaults.
+- **A file that cannot be read, or does not hold these settings in this form**: both take their defaults, a line saying
+  so is written to `desktop.log`, and the file is left as it is until the next change of either choice replaces it. A
+  choice missing from an otherwise readable file takes its default, and a key this build does not know is ignored.
+- **A write that fails**: the change still applies for the rest of the run, a line saying so is written to
+  `desktop.log`, and the user is not told; the next launch starts from what the file last held.
+- Deleting the file makes the next launch start from the defaults; clearing the window's browser storage does not touch
+  it.
+- **The first launch of a build that keeps this file, finding none**, takes over the two choices an earlier build kept
+  in the window's browser storage: once the window's UI has loaded it hands them to the application, which applies
+  them and writes them to the file, and then removes them from browser storage. Until then that launch runs on the
+  defaults, so the icon shows even if the user had hidden it. Should the file not be written, the choices stay in
+  browser storage and the next launch takes them over again.
 
 What Octoboard writes inside a project's repository, and what it writes into the user's own agent configuration, is
 in "What Octoboard never modifies" in `docs/product/launching-agents.md`.

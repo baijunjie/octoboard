@@ -33,10 +33,9 @@ the betas Stable announced; that release then replaces them there, and from then
 releases (see "Where updates come from" below). Meanwhile Stable offers the newer betas as Beta does, including to a
 user who chose Stable on a beta build.
 
-The choice is kept **per client**, in the window's own browser storage, as the choice to keep running in the background
-is (see "Closing the window" in `docs/product/application-lifecycle.md`): the daemon neither stores nor carries
-it, and it is not part of a configuration export (see "Which settings travel" in
-`docs/product/settings-in-a-configuration.md`). Switching to either channel saves it, and a saved choice is kept
+The choice is kept **per client**, in the window's own browser storage, as the appearance is (see "Where the choice
+is stored" in `docs/product/appearance.md`): the daemon neither stores nor carries it, and it is not part of a
+configuration export (see "Which settings travel" in `docs/product/settings-in-a-configuration.md`). Switching to either channel saves it, and a saved choice is kept
 whichever build runs: Stable chosen on a beta build stays Stable. Storage that holds no choice, has been cleared, or
 holds anything but Stable or Beta holds no choice, and the build's default applies.
 

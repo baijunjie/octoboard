@@ -102,6 +102,17 @@ it("returns the system directory choice and sends the starting path and localize
   await expect(tauriPlatform().directoryPicker!.pick(options)).resolves.toBeUndefined();
 });
 
+it("changes the settings the shell keeps one at a time, and reveals the window with no argument", async () => {
+  invoke.mockResolvedValue(undefined);
+  const platform = tauriPlatform();
+  await platform.backgroundRun!.set(true);
+  expect(invoke).toHaveBeenLastCalledWith("set_app_settings", { settings: { run_in_background: true } });
+  await platform.statusItem!.setVisible(false);
+  expect(invoke).toHaveBeenLastCalledWith("set_app_settings", { settings: { show_menu_bar_icon: false } });
+  await platform.nativeWindow!.reveal();
+  expect(invoke).toHaveBeenLastCalledWith("reveal_main_window");
+});
+
 it("turns a directory command failure into an Error for the shared error route", async () => {
   invoke.mockRejectedValue({ kind: "io", detail: "Could not open picker" });
   await expect(tauriPlatform().directoryPicker!.pick({ title: "Choose directory", initialPath: "~" })).rejects.toThrow("Could not open picker");
