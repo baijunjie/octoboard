@@ -2424,6 +2424,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "processes.global.projectsWithCount": "المشاريع ({count})",
   "processes.global.consoleSessionsWithCount": "جلسات وحدة التحكم ({count})",
   "processes.global.description": "تُجمع العمليات الجارية في الخلفية حسب جلسة وحدة التحكم والمشروع. اختر عنصرًا لعرض التفاصيل.",
+  "processes.global.openPanelDescription": "تُجمع العمليات الجارية في الخلفية حسب جلسة وحدة التحكم والمشروع. اختر جلسة أو مشروعًا لفتح لوحة العمليات وعرض التفاصيل.",
   "processes.global.refreshFailed": "قد تكون الأعداد المعروضة قديمة.",
   "processes.commandUnknown": "أمر غير معروف",
   "processes.cwdUnknown": "مجلد العمل غير معروف",

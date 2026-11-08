@@ -2596,6 +2596,7 @@ export const th: Translation<"other"> = {
   "processes.global.projectsWithCount": "โปรเจ็กต์ ({count})",
   "processes.global.consoleSessionsWithCount": "เซสชันคอนโซล ({count})",
   "processes.global.description": "แสดงกระบวนการเบื้องหลังที่กำลังทำงานโดยจัดกลุ่มตามเซสชันคอนโซลและโปรเจ็กต์ เลือกรายการเพื่อดูรายละเอียด",
+  "processes.global.openPanelDescription": "แสดงกระบวนการเบื้องหลังที่กำลังทำงานโดยจัดกลุ่มตามเซสชันคอนโซลและโปรเจ็กต์ เลือกเซสชันหรือโปรเจ็กต์เพื่อเปิดแผงกระบวนการและดูรายละเอียด",
   "processes.global.refreshFailed": "จำนวนที่แสดงอาจไม่เป็นปัจจุบัน",
   "processes.commandUnknown": "ไม่ทราบคำสั่ง",
   "processes.cwdUnknown": "ไม่ทราบไดเรกทอรีทำงาน",

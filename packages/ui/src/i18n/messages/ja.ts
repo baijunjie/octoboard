@@ -2597,6 +2597,7 @@ export const ja: Translation<"other"> = {
   "processes.global.projectsWithCount": "プロジェクト（{count}）",
   "processes.global.consoleSessionsWithCount": "コンソールセッション（{count}）",
   "processes.global.description": "実行中のバックグラウンドプロセスをコンソールセッションとプロジェクトごとに表示します。項目を選択すると詳細を確認できます。",
+  "processes.global.openPanelDescription": "実行中のバックグラウンドプロセスをコンソールセッションとプロジェクトごとに表示します。セッションまたはプロジェクトを選択すると、プロセスパネルが開き、詳細を確認できます。",
   "processes.global.refreshFailed": "表示中の数は古い可能性があります。",
   "processes.commandUnknown": "不明なコマンド",
   "processes.cwdUnknown": "作業ディレクトリが不明です",

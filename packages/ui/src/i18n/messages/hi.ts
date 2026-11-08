@@ -2423,6 +2423,7 @@ export const hi: Translation<"one" | "other"> = {
   "processes.global.projectsWithCount": "प्रोजेक्ट ({count})",
   "processes.global.consoleSessionsWithCount": "कंसोल सेशन ({count})",
   "processes.global.description": "चल रहे बैकग्राउंड प्रोसेस कंसोल सेशन और प्रोजेक्ट के अनुसार दिखाए जाते हैं। विवरण देखने के लिए कोई आइटम चुनें।",
+  "processes.global.openPanelDescription": "चल रहे बैकग्राउंड प्रोसेस कंसोल सेशन और प्रोजेक्ट के अनुसार दिखाए जाते हैं। प्रोसेस पैनल खोलकर विवरण देखने के लिए कोई सेशन या प्रोजेक्ट चुनें।",
   "processes.global.refreshFailed": "दिखाई गई गिनती पुरानी हो सकती है।",
   "processes.commandUnknown": "अज्ञात कमांड",
   "processes.cwdUnknown": "वर्किंग डायरेक्टरी अज्ञात है",

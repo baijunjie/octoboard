@@ -2424,6 +2424,7 @@ export const es: Translation<"one" | "many" | "other"> = {
   "processes.global.projectsWithCount": "Proyectos ({count})",
   "processes.global.consoleSessionsWithCount": "Sesiones de consola ({count})",
   "processes.global.description": "Los procesos en segundo plano en ejecución se agrupan por sesión de consola y proyecto. Selecciona un elemento para ver los detalles.",
+  "processes.global.openPanelDescription": "Los procesos en segundo plano en ejecución se agrupan por sesión de consola y proyecto. Selecciona una sesión o un proyecto para abrir el panel de procesos y ver los detalles.",
   "processes.global.refreshFailed": "Los recuentos mostrados pueden estar desactualizados.",
   "processes.commandUnknown": "Comando desconocido",
   "processes.cwdUnknown": "Directorio de trabajo desconocido",

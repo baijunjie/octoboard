@@ -2682,6 +2682,7 @@ export const tr: Translation<"one" | "other"> = {
   "processes.global.projectsWithCount": "Projeler ({count})",
   "processes.global.consoleSessionsWithCount": "Konsol oturumları ({count})",
   "processes.global.description": "Çalışan arka plan işlemleri konsol oturumuna ve projeye göre gruplandırılır. Ayrıntıları görmek için bir öğe seçin.",
+  "processes.global.openPanelDescription": "Çalışan arka plan işlemleri konsol oturumuna ve projeye göre gruplandırılır. İşlem panelini açıp ayrıntıları görmek için bir oturum veya proje seçin.",
   "processes.global.refreshFailed": "Gösterilen sayılar güncel olmayabilir.",
   "processes.commandUnknown": "Bilinmeyen komut",
   "processes.cwdUnknown": "Çalışma dizini bilinmiyor",

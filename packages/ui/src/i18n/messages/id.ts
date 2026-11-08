@@ -2424,6 +2424,7 @@ export const id: Translation<"other"> = {
   "processes.global.projectsWithCount": "Proyek ({count})",
   "processes.global.consoleSessionsWithCount": "Sesi konsol ({count})",
   "processes.global.description": "Proses latar belakang yang berjalan dikelompokkan menurut sesi konsol dan proyek. Pilih item untuk melihat detail.",
+  "processes.global.openPanelDescription": "Proses latar belakang yang berjalan dikelompokkan menurut sesi konsol dan proyek. Pilih sesi atau proyek untuk membuka panel proses dan melihat detailnya.",
   "processes.global.refreshFailed": "Jumlah yang ditampilkan mungkin sudah usang.",
   "processes.commandUnknown": "Perintah tidak dikenal",
   "processes.cwdUnknown": "Direktori kerja tidak diketahui",

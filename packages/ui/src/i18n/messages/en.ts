@@ -2906,6 +2906,7 @@ export const en = {
   "processes.global.projectsWithCount": "Projects ({count})",
   "processes.global.consoleSessionsWithCount": "Console sessions ({count})",
   "processes.global.description": "Running background processes are grouped by console session and project. Select an item to view details.",
+  "processes.global.openPanelDescription": "Running background processes are grouped by console session and project. Select a session or project to open its process panel and view details.",
   "processes.global.refreshFailed": "The counts shown may be out of date.",
   "processes.commandUnknown": "Unknown command",
   "processes.cwdUnknown": "Working directory unknown",

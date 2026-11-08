@@ -2598,6 +2598,7 @@ export const ko: Translation<"other"> = {
   "processes.global.projectsWithCount": "프로젝트 ({count})",
   "processes.global.consoleSessionsWithCount": "콘솔 세션 ({count})",
   "processes.global.description": "실행 중인 백그라운드 프로세스를 콘솔 세션과 프로젝트별로 표시합니다. 항목을 선택하면 세부 정보를 볼 수 있습니다.",
+  "processes.global.openPanelDescription": "실행 중인 백그라운드 프로세스를 콘솔 세션과 프로젝트별로 표시합니다. 세션이나 프로젝트를 선택해 프로세스 패널을 열고 세부 정보를 확인해 주세요.",
   "processes.global.refreshFailed": "표시된 수가 오래된 정보일 수 있습니다.",
   "processes.commandUnknown": "알 수 없는 명령",
   "processes.cwdUnknown": "작업 디렉터리 알 수 없음",

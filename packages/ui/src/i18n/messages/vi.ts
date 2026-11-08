@@ -2423,6 +2423,7 @@ export const vi: Translation<"other"> = {
   "processes.global.projectsWithCount": "Dự án ({count})",
   "processes.global.consoleSessionsWithCount": "Phiên bảng điều khiển ({count})",
   "processes.global.description": "Các tiến trình nền đang chạy được nhóm theo phiên bảng điều khiển và dự án. Chọn một mục để xem chi tiết.",
+  "processes.global.openPanelDescription": "Các tiến trình nền đang chạy được nhóm theo phiên bảng điều khiển và dự án. Chọn một phiên hoặc dự án để mở bảng tiến trình và xem chi tiết.",
   "processes.global.refreshFailed": "Số lượng hiển thị có thể đã cũ.",
   "processes.commandUnknown": "Lệnh không xác định",
   "processes.cwdUnknown": "Chưa rõ thư mục làm việc",

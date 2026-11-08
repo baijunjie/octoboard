@@ -2451,6 +2451,7 @@ export const de: Translation<"one" | "other"> = {
   "processes.global.projectsWithCount": "Projekte ({count})",
   "processes.global.consoleSessionsWithCount": "Konsolensitzungen ({count})",
   "processes.global.description": "Laufende Hintergrundprozesse werden nach Konsolensitzung und Projekt gruppiert. Wähle einen Eintrag aus, um Details anzuzeigen.",
+  "processes.global.openPanelDescription": "Laufende Hintergrundprozesse werden nach Konsolensitzung und Projekt gruppiert. Wähle eine Sitzung oder ein Projekt aus, um den Prozessbereich zu öffnen und Details anzuzeigen.",
   "processes.global.refreshFailed": "Die angezeigten Zahlen sind möglicherweise veraltet.",
   "processes.commandUnknown": "Unbekannter Befehl",
   "processes.cwdUnknown": "Arbeitsverzeichnis unbekannt",

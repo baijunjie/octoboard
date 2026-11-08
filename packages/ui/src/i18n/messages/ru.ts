@@ -2424,6 +2424,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "processes.global.projectsWithCount": "Проекты ({count})",
   "processes.global.consoleSessionsWithCount": "Сеансы консоли ({count})",
   "processes.global.description": "Запущенные фоновые процессы сгруппированы по сеансам консоли и проектам. Выберите элемент, чтобы посмотреть подробности.",
+  "processes.global.openPanelDescription": "Запущенные фоновые процессы сгруппированы по сеансам консоли и проектам. Выберите сеанс или проект, чтобы открыть панель процессов и посмотреть подробности.",
   "processes.global.refreshFailed": "Показанные числа могут быть устаревшими.",
   "processes.commandUnknown": "Неизвестная команда",
   "processes.cwdUnknown": "Рабочий каталог неизвестен",

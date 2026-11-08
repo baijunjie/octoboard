@@ -2424,6 +2424,7 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "processes.global.projectsWithCount": "Projets ({count})",
   "processes.global.consoleSessionsWithCount": "Sessions de console ({count})",
   "processes.global.description": "Les processus en arrière-plan en cours sont regroupés par session de console et projet. Sélectionnez un élément pour afficher les détails.",
+  "processes.global.openPanelDescription": "Les processus en arrière-plan en cours sont regroupés par session de console et projet. Sélectionnez une session ou un projet pour ouvrir le panneau des processus et consulter les détails.",
   "processes.global.refreshFailed": "Les nombres affichés sont peut-être obsolètes.",
   "processes.commandUnknown": "Commande inconnue",
   "processes.cwdUnknown": "Répertoire de travail inconnu",

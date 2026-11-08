@@ -55,7 +55,7 @@ export function ProcessCounts({ rows, error, focusFirst, onPress }: {
     <FadedScroller ref={root} {...{ [PANEL_ATTRIBUTE]: "" }} className="flex max-h-[70vh] flex-col gap-1 p-2">
       <div className="flex flex-col gap-1 px-2 py-1.5">
         <h2 className="text-sm font-semibold">{t("panel.processes.name")}</h2>
-        <p className="text-xs text-app-muted">{t("processes.global.description")}</p>
+        <p className="text-xs text-app-muted">{t("processes.global.openPanelDescription")}</p>
       </div>
       {error !== undefined && (
         <ErrorAlert status="warning" title={t("processes.refreshFailedTitle")} details={errorDetails(error)} announce={hasPainted}>
