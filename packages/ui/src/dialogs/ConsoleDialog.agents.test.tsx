@@ -131,6 +131,7 @@ it("keeps the console dialog open and unsaved while an account is added in the S
   fill("Config directory", "/home/dev/.claude-work");
   await clickButton("Add");
   expect(sent(request)).toEqual([
+    { type: "check_agent_clis" },
     { type: "list_dir", path: "~" },
     { type: "create_account", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" },
   ]);
