@@ -54,9 +54,9 @@ export const SWEEP_SHARED = ["scripts/verify/lock.mjs"];
 // by `protocol.ts`, through which the UI reads it.
 export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protocol/", "packages/ui/src/protocol.ts", "packages/ui/src/protocol.generated.ts"];
 
-// Files a test of another package reads from disk. Found by searching for `include_str!`,
-// `readFileSync(new URL(...))` and relative paths that leave a package root; `scope.test.mjs` fails
-// when a new read of that kind is not named here.
+// Files another package reads: from disk in a test, or through its bundler's imports. Found by searching for
+// `include_str!`, `readFileSync(new URL(...))`, relative imports and relative paths that leave a package root;
+// `scope.test.mjs` fails when a new read of that kind is not named here.
 // A daemon test (`interface_language.rs`) parses the UI's language list.
 export const DAEMON_READS_UI = ["packages/ui/src/i18n/languages.ts"];
 // A UI test (`bundleLocalizations.test.ts`) compares the bundle's languages with the shell's Info.plist template.
@@ -70,6 +70,9 @@ export const UI_READS_ELSEWHERE = ["LICENSE"];
 // UI tests (`daemonCodes.test.ts`, `fixtureProviders.test.ts`) read the provider modules' sources, where each provider
 // declares its codes and facts.
 export const UI_READS_DAEMON = ["apps/daemon/src/providers/"];
+// A UI module (`settings/AboutSection.tsx`) inlines the app icon into the UI bundle, and so into the preview of the app
+// the website ships.
+export const UI_IMPORTS_NATIVE = ["apps/desktop/src-tauri/icons/128x128.png"];
 // A verify test (`rerun.test.mjs`) reads the reporter that shares `REPORT_ENV` with `rerun.mjs`.
 export const VERIFY_READS_UI = ["packages/ui/src/test/failedFilesReporter.ts"];
 
@@ -118,6 +121,7 @@ export const RULES = [
   { match: DESKTOP_READS_NATIVE, consumers: ["verify", "desktop", "native"], why: "desktop script tests read the native permission catalogs, template and the macOS bundle resource mappings" },
   { match: UI_READS_ELSEWHERE, consumers: ["verify", "ui"], why: "a UI test reads it" },
   { match: VERIFY_READS_UI, consumers: ["verify", "ui"], why: "a verify test reads it" },
+  { match: UI_IMPORTS_NATIVE, consumers: ["verify", "ui", "web"], builds: ["ui"], why: "the UI bundle inlines it, and the website's preview of the app is built from that bundle" },
   { match: ["apps/daemon/src/adapter/claude/compatibility.md"], consumers: ["daemon"], why: "compiled into the daemon with `include_str!`" },
 
   // The UI build runs only for changes to what it reads besides `src/`. The gallery and benchmark

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
   ALL_PACKAGES, DAEMON_READS_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, MENU_KEYS_FILE, matchingRules, planScope, RULES, SWEEP_SHARED, UI_READS_DAEMON, UI_READS_ELSEWHERE,
-  UI_READS_NATIVE, VERIFY_READS_UI, WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, WIRE_PROTOCOL,
+  UI_IMPORTS_NATIVE, UI_READS_NATIVE, VERIFY_READS_UI, WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, WIRE_PROTOCOL,
 } from "./scope.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -81,6 +81,7 @@ const CASES = [
   ["LICENSE", ["verify", "ui"]],
   ["apps/web/site.config.ts", ["web"]],
   ["packages/ui/src/test/failedFilesReporter.ts", ["verify", "ui"]],
+  ["apps/desktop/src-tauri/icons/128x128.png", ["verify", "ui", "web", "native"], ["ui"]],
   ["apps/daemon/src/adapter/claude/compatibility.md", ["daemon"]],
   ["packages/ui/vite.config.ts", ["ui"], ["ui"]],
   ["packages/ui/index.html", ["ui"], ["ui"]],
@@ -133,13 +134,15 @@ test("the menu keys select the shell only when the caller reports a change to th
   assert.deepEqual(planScope([MENU_KEYS_FILE], { fullFiles: [MENU_KEYS_FILE] }).packages, ["verify", "ui", "native"]);
 });
 
+// Every relation list, so a new one is added in one place.
+const RELATION_LISTS = [WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI, UI_IMPORTS_NATIVE];
+
 test("every file named in a relation list selects verify, so these tests run when it changes", () => {
-  const lists = [WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI];
-  for (const file of lists.flat()) assert.ok(planScope([file]).packages.includes("verify"), file);
+  for (const file of RELATION_LISTS.flat()) assert.ok(planScope([file]).packages.includes("verify"), file);
 });
 
 test("every path the relations name still exists", () => {
-  for (const file of [MENU_KEYS_FILE, ...[WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI].flat()]) {
+  for (const file of [MENU_KEYS_FILE, ...RELATION_LISTS.flat()]) {
     assert.ok(existsSync(path.join(root, file)), file);
   }
 });
@@ -148,7 +151,8 @@ test("every path the relations name still exists", () => {
 // here instead of going unnoticed. A test that reads a directory (a `new URL("../x/", ...)` with a trailing slash,
 // then `new URL(name, directory)`) reads its files, so a directory counts for a test file only. Rust
 // `include_str!`/`include_bytes!` and `new URL("../../..")` reads in sources and tests are resolved against the reading
-// file and must land in the reader's own package or in a path the table names.
+// file and must land in the reader's own package or in a path the table names. So must a relative `import` of a source
+// or test, an asset with a query (`?inline`, `?raw`) included, since the bundler reads it as surely as a test reads a file.
 test("cross-package file reads are all named by a rule", () => {
   const tracked = execFileSync("git", ["ls-files", "-z", "--", "apps", "packages"], { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean);
   const packageOf = (file) => file.split("/").slice(0, file.startsWith("apps/desktop/") ? 3 : 2).join("/");
@@ -158,10 +162,14 @@ test("cross-package file reads are all named by a rule", () => {
     const text = readFileSync(path.join(root, file), "utf8");
     const patterns = file.endsWith(".rs")
       ? [/include_(?:str|bytes)!\(\s*"([^"]+)"/g]
-      : [/new URL\(\s*[`"']([^`"']*\.\.[^`"']*)[`"']/g];
+      : [/new URL\(\s*[`"']([^`"']*\.\.[^`"']*)[`"']/g, /(?:from|import)\s*\(?\s*["'](\.\.\/[^"'?]*)(?:\?[^"']*)?["']/g];
     for (const pattern of patterns) {
+      const isImport = pattern.source.startsWith("(?:from|import)");
       for (const [, target] of text.matchAll(pattern)) {
-        const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), target.replace(/^\$\{[^}]*\}/, "")));
+        const joined = path.posix.normalize(path.posix.join(path.posix.dirname(file), target.replace(/^\$\{[^}]*\}/, "")));
+        // An import names a module without its extension, or a directory by its index.
+        const candidates = isImport ? ["", ".ts", ".tsx", ".mjs", "/index.ts", "/index.tsx"].map((suffix) => joined + suffix) : [joined];
+        const resolved = candidates.find((candidate) => existsSync(path.join(root, candidate)) && statSync(path.join(root, candidate)).isFile()) ?? joined;
         // Outside tests only files are reads: a directory is an output (the preview build writes into the website).
         const isTest = /\.test\.[a-z]+$/.test(file);
         if (!resolved.startsWith("..") && packageOf(resolved) !== packageOf(file) && existsSync(path.join(root, resolved)) && (statSync(path.join(root, resolved)).isFile() || (isTest && target.endsWith("/")))) reads.push([file, resolved]);
