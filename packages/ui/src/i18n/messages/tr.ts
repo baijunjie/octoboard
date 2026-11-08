@@ -997,7 +997,6 @@ export const tr: Translation<"one" | "other"> = {
   "welcome.toolsHint": "Oturum açmak için en az bir araç yükleyin ve {pathVar} değerinizde bulunduğundan emin olun.",
   "terminal.actions": "Terminal işlemleri",
   "terminal.copy": "Kopyala",
-  "terminal.copySelection": "Seçimi kopyala",
   "terminal.paste": "Yapıştır",
   "terminal.pasteNoClipboard": "Pano kullanılamıyor",
   "terminal.selectAll": "Tümünü seç",

@@ -940,7 +940,6 @@ export const it: Translation<"one" | "many" | "other"> = {
   "welcome.toolsHint": "Per aprire una sessione, installa almeno uno strumento e verifica che sia nel {pathVar}.",
   "terminal.actions": "Azioni del terminale",
   "terminal.copy": "Copia",
-  "terminal.copySelection": "Copia selezione",
   "terminal.paste": "Incolla",
   "terminal.pasteNoClipboard": "Appunti non disponibili",
   "terminal.selectAll": "Seleziona tutto",

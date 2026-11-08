@@ -978,7 +978,6 @@ export const th: Translation<"other"> = {
   "welcome.toolsHint": "หากต้องการเปิดเซสชัน ให้ติดตั้งเครื่องมืออย่างน้อยหนึ่งตัวและตรวจสอบว่าอยู่ใน {pathVar}",
   "terminal.actions": "การทำงานของเทอร์มินัล",
   "terminal.copy": "คัดลอก",
-  "terminal.copySelection": "คัดลอกส่วนที่เลือก",
   "terminal.paste": "วาง",
   "terminal.pasteNoClipboard": "คลิปบอร์ดไม่พร้อมใช้งาน",
   "terminal.selectAll": "เลือกทั้งหมด",

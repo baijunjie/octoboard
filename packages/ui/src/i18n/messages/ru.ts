@@ -940,7 +940,6 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "welcome.toolsHint": "Чтобы открыть сеанс, установите хотя бы один инструмент и убедитесь, что он доступен в вашем {pathVar}.",
   "terminal.actions": "Действия терминала",
   "terminal.copy": "Скопировать",
-  "terminal.copySelection": "Копировать выделенное",
   "terminal.paste": "Вставить",
   "terminal.pasteNoClipboard": "Буфер обмена недоступен",
   "terminal.selectAll": "Выбрать все",

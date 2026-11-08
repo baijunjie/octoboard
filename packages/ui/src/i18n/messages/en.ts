@@ -1148,7 +1148,6 @@ export const en = {
 
   "terminal.actions": "Terminal actions",
   "terminal.copy": "Copy",
-  "terminal.copySelection": "Copy selection",
   "terminal.paste": "Paste",
   "terminal.pasteNoClipboard": "Clipboard unavailable",
   "terminal.selectAll": "Select all",

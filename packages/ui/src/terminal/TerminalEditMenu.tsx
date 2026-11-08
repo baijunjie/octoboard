@@ -65,12 +65,9 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
           ? [{ label: t("viewer.openInFileManager"), icon: FolderOpen, onClick: () => { void controllerRef.current?.revealPathLink(pathLink); } }, "separator" as const]
           : []),
         {
-          label: t("common.copy"), icon: Copy,
-          items: [{
-            label: t("terminal.copySelection"), icon: Copy, disabled: !selection,
-            reason: !selection && mouseReporting ? { state: t(OPTION_FORCES_SELECTION ? "terminal.copyHint.mac" : "terminal.copyHint") } : undefined,
-            onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => raiseError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }), { title: t("common.copyFailedTitle") })); },
-          }],
+          label: t("terminal.copy"), icon: Copy, disabled: !selection,
+          reason: !selection && mouseReporting ? { state: t(OPTION_FORCES_SELECTION ? "terminal.copyHint.mac" : "terminal.copyHint") } : undefined,
+          onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => raiseError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }), { title: t("common.copyFailedTitle") })); },
         },
         {
           label: t("terminal.paste"), icon: ClipboardPaste, disabled: !clipboard?.readText || inputSession !== sessionId,

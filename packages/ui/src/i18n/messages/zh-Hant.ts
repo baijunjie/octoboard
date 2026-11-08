@@ -980,7 +980,6 @@ export const zhHant: Translation<"other"> = {
   "welcome.toolsHint": "安裝至少一種工具並設定到 {pathVar} 中，即可開啟工作階段。",
   "terminal.actions": "終端機操作",
   "terminal.copy": "複製",
-  "terminal.copySelection": "複製所選內容",
   "terminal.paste": "貼上",
   "terminal.pasteNoClipboard": "無法讀取剪貼簿",
   "terminal.selectAll": "全選",

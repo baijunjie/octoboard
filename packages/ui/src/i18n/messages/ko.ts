@@ -980,7 +980,6 @@ export const ko: Translation<"other"> = {
   "welcome.toolsHint": "세션을 열려면 도구를 하나 이상 설치하고 {pathVar}에 있는지 확인해 주세요.",
   "terminal.actions": "터미널 작업",
   "terminal.copy": "복사",
-  "terminal.copySelection": "선택 영역 복사",
   "terminal.paste": "붙여넣기",
   "terminal.pasteNoClipboard": "클립보드를 사용할 수 없습니다",
   "terminal.selectAll": "모두 선택",

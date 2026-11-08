@@ -939,7 +939,6 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "welcome.toolsHint": "Para abrir uma sessão, instale pelo menos uma ferramenta e verifique se ela está no seu {pathVar}.",
   "terminal.actions": "Ações do terminal",
   "terminal.copy": "Copiar",
-  "terminal.copySelection": "Copiar seleção",
   "terminal.paste": "Colar",
   "terminal.pasteNoClipboard": "Área de transferência indisponível",
   "terminal.selectAll": "Selecionar tudo",

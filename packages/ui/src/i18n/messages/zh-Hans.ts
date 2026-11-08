@@ -1022,7 +1022,6 @@ export const zhHans: Translation<"other"> = {
 
   "terminal.actions": "终端操作",
   "terminal.copy": "复制",
-  "terminal.copySelection": "复制所选内容",
   "terminal.paste": "粘贴",
   "terminal.pasteNoClipboard": "无法读取剪贴板",
   "terminal.selectAll": "全选",

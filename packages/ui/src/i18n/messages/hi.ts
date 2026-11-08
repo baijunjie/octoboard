@@ -939,7 +939,6 @@ export const hi: Translation<"one" | "other"> = {
   "welcome.toolsHint": "सेशन खोलने के लिए कम से कम एक टूल इंस्टॉल करें और जाँचें कि वह आपके {pathVar} में है।",
   "terminal.actions": "टर्मिनल की कार्रवाइयाँ",
   "terminal.copy": "कॉपी करें",
-  "terminal.copySelection": "चुना हुआ टेक्स्ट कॉपी करें",
   "terminal.paste": "पेस्ट करें",
   "terminal.pasteNoClipboard": "क्लिपबोर्ड उपलब्ध नहीं",
   "terminal.selectAll": "सभी चुनें",

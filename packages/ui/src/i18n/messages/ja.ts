@@ -979,7 +979,6 @@ export const ja: Translation<"other"> = {
   "welcome.toolsHint": "セッションを開くには、ツールを1つ以上インストールし、{pathVar} から実行できるようにしてください。",
   "terminal.actions": "ターミナルの操作",
   "terminal.copy": "コピー",
-  "terminal.copySelection": "選択範囲をコピー",
   "terminal.paste": "ペースト",
   "terminal.pasteNoClipboard": "クリップボードを使用できません",
   "terminal.selectAll": "すべてを選択",

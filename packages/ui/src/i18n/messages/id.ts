@@ -940,7 +940,6 @@ export const id: Translation<"other"> = {
   "welcome.toolsHint": "Untuk membuka sesi, instal setidaknya satu alat dan pastikan tersedia di {pathVar} Anda.",
   "terminal.actions": "Tindakan terminal",
   "terminal.copy": "Salin",
-  "terminal.copySelection": "Salin pilihan",
   "terminal.paste": "Tempel",
   "terminal.pasteNoClipboard": "Papan klip tidak tersedia",
   "terminal.selectAll": "Pilih semua",

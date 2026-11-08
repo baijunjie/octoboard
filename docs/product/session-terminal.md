@@ -61,9 +61,8 @@ closing it returns keyboard focus to the terminal. There is no separate menu but
   right-click, or a Mac's Control-click — on a file path the terminal shows as a link, and then comes first, set apart
   from the items below by a separator. A menu opened from the keyboard, or with the pointer anywhere else, does not
   have it.
-- **Copy** opens a submenu containing **Copy selection**, which copies the terminal text selected when the menu opened
-  or, with nothing selected in the terminal, the text a program last copied, while that is still on offer (see "Text a
-  program copies" below). Copy selection is disabled with neither; the Copy submenu remains available.
+- **Copy** copies the terminal text selected when the menu opened or, with nothing selected in the terminal, the text a
+  program last copied, while that is still on offer (see "Text a program copies" below). It is disabled with neither.
   When it is disabled while the running program has mouse reporting on, it says under its name how to make a
   selection anyway (see **Selecting with the mouse** below): "Option-drag to select" on macOS, "Shift-drag to select"
   elsewhere. macOS here is what the terminal itself treats as macOS, a browser platform of `Macintosh`, `MacIntel`,
@@ -110,16 +109,16 @@ text goes to the one system clipboard. Only writes are honoured:
 - a request in output written before the session was attached is ignored: the replay that opens each attach (or, when
   there was nothing to replay, the first live output after it), the saved output of a session without a process, and output still
   waiting to be drawn when the screen is reset, as on a switch to another session;
-- where the platform has no clipboard nothing is put on it; the text is still offered to Copy selection in the editing menu, which
+- where the platform has no clipboard nothing is put on it; the text is still offered to Copy in the editing menu, which
   falls back to the browser's selection copy.
 
-A write the clipboard fails shows the same error alert as a failed Copy selection, with its clipboard remedy (see "Recovery and
+A write the clipboard fails shows the same error alert as a failed Copy, with its clipboard remedy (see "Recovery and
 unexpected errors" in `docs/product/error-alerts.md`). A browser's refusal of a copy the user did not just make (no
 recent gesture, or the page not focused) stays silent, so in a browser that refuses every such copy (Safari) a program's
-copy can fail without notice; Copy selection in the editing menu's Copy submenu, a gesture of the user's, then puts it there.
+copy can fail without notice; Copy in the editing menu, a gesture of the user's, then puts it there.
 
 **The menu offers what a program copied.** The text of the latest honoured write stays on offer to the editing menu's
-Copy selection while the terminal has no selection of its own; a selection in the terminal comes first. It is offered until the
+Copy while the terminal has no selection of its own; a selection in the terminal comes first. It is offered until the
 user turns back to the program or the screen moves on: a key typed to the program (`Control-C` included), a paste, a
 press in the terminal other than a right-click or, on macOS, a `Control`-click (a click, a drag, an Option-click), a
 reset of the screen (another session selected, a reconnect) or the terminal closing. Moving the pointer and the

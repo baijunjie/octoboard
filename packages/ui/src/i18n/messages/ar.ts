@@ -940,7 +940,6 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "welcome.toolsHint": "لفتح جلسة، ثبّت أداة واحدة على الأقل وتأكد من توفرها في {pathVar}.",
   "terminal.actions": "إجراءات الوحدة الطرفية",
   "terminal.copy": "نسخ",
-  "terminal.copySelection": "نسخ التحديد",
   "terminal.paste": "لصق",
   "terminal.pasteNoClipboard": "الحافظة غير متاحة",
   "terminal.selectAll": "تحديد الكل",

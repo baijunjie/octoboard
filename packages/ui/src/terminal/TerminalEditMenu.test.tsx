@@ -51,7 +51,6 @@ async function open() {
   expect(event.defaultPrevented).toBe(true);
 }
 async function choose(name: string) {
-  if (name === "Copy selection") await choose("Copy");
   await act(async () => {
     const entry = item(name);
     entry.focus();
@@ -67,10 +66,8 @@ it("opens on the hidden input without a visible trigger or clipboard read", asyn
   await open();
   expect(native).not.toHaveBeenCalled();
   expect(clipboard!.readText).not.toHaveBeenCalled();
-  expect(item("Copy").getAttribute("aria-haspopup")).toBe("menu");
+  expect(item("Copy").getAttribute("aria-disabled")).toBe("true");
   expect(item("Paste").getAttribute("aria-disabled")).not.toBe("true");
-  await choose("Copy");
-  expect(item("Copy selection").getAttribute("aria-disabled")).toBe("true");
 });
 
 it.each([
@@ -81,8 +78,7 @@ it.each([
   controller.mouseReporting = mouseReporting;
   controller.programCopiedText = programCopiedText;
   await open();
-  await choose("Copy");
-  const copy = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent?.startsWith("Copy selection"))!;
+  const copy = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent?.startsWith("Copy"))!;
   expect(/(Option|Shift)-drag to select/.test(copy.textContent ?? "")).toBe(hint);
 });
 
@@ -91,7 +87,7 @@ it("selects terminal output, then copies the selection captured at opening", asy
   await choose("Select all");
   await open();
   controller.selectedText = "changed after menu opened";
-  await choose("Copy selection");
+  await choose("Copy");
   expect(clipboard!.writeText).toHaveBeenCalledWith("all terminal output");
 });
 
@@ -103,7 +99,7 @@ it.each([
   controller.programCopiedText = "program copy";
   await open();
   expect(item("Copy").getAttribute("aria-disabled")).not.toBe("true");
-  await choose("Copy selection");
+  await choose("Copy");
   expect(clipboard!.writeText).toHaveBeenCalledWith(expected);
 });
 
@@ -150,7 +146,7 @@ it("copies the selection through the document without a clipboard, keeping Copy 
   render();
   await open();
   expect(item("Copy").getAttribute("aria-disabled")).not.toBe("true");
-  await choose("Copy selection");
+  await choose("Copy");
   expect(execCommand).toHaveBeenCalledWith("copy");
   expect(copied).toEqual(["selection"]);
   expect(errorAlerts.getSnapshot()).toEqual([]);
@@ -161,7 +157,7 @@ it.each(["Copy", "Paste"])("reports %s failures with localized text", async (act
   clipboard!.writeText = vi.fn(async () => { throw new Error("raw system error"); });
   clipboard!.readText = vi.fn(async () => { throw new Error("raw system error"); });
   await open();
-  await choose(action === "Copy" ? "Copy selection" : action);
+  await choose(action);
   expect(errorAlerts.getSnapshot()).toHaveLength(1);
   expect(errorAlerts.getSnapshot()[0]).toMatchObject({
     message: action === "Copy" ? "Could not copy the selection" : "Could not paste from the clipboard",

@@ -939,7 +939,6 @@ export const vi: Translation<"other"> = {
   "welcome.toolsHint": "Để mở phiên, cài ít nhất một công cụ và đảm bảo công cụ có trong {pathVar}.",
   "terminal.actions": "Thao tác terminal",
   "terminal.copy": "Sao chép",
-  "terminal.copySelection": "Sao chép phần đã chọn",
   "terminal.paste": "Dán",
   "terminal.pasteNoClipboard": "Bảng nhớ tạm không khả dụng",
   "terminal.selectAll": "Chọn tất cả",

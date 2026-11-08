@@ -279,9 +279,9 @@ worktree's name on the Git mode's change list (see "Uncommitted changes" in
   selection put back. A copy that neither way allows changes nothing on the button and raises an error alert saying the
   text could not be copied (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
 
-A row's relative and absolute path choices, a project's name and absolute directory path, and the terminal's selected
-text are grouped in a **Copy** submenu. **Copy session ID** remains a direct item in a session's action menu. These
-actions fall back the same way; path copies, for one, confirm in a toast (see "A row's actions" in
+A row's relative and absolute path choices and a project's name and absolute directory path are grouped in a **Copy**
+submenu. **Copy session ID** in a session's action menu and the terminal's **Copy** remain direct items. These actions
+fall back the same way; path copies, for one, confirm in a toast (see "A row's actions" in
 `docs/product/project-pane.md`).
 
 ## Tooltips on indicators
