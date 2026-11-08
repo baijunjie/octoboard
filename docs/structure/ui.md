@@ -126,7 +126,8 @@ client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/a
 - `src/archive/` — archived sessions over the terminal area, with deletion.
 - `src/terminal/` — the xterm.js terminal: controller and the surface it draws on, pane, reconnect, the reading of its
   output as text, path `links/`, project `shell/` terminals (with their tabs), archived-session `history/`;
-  `xtermInternals.ts` holds the one place that reaches into xterm's private members.
+  xterm's private members are reached from two adapters only: `xtermInternals.ts` (`watchUserInput`, the mark that
+  tells the user's input from xterm's own replies) and `links/terminalLinks.ts` (OSC 8 link data).
 - `src/report/` — a session's report panel and its sandboxed page frame.
 - `src/panels/` — the right pane, a stack of inset panel cards, and the registry of panel kinds.
 - `src/project-browser/` — the Files panel's content: `files/` (tree, listings, search, and the linked-file viewer

@@ -132,7 +132,7 @@ impl TerminalSnapshot {
                 // `kitty_keyboard` stays off: in alacritty_terminal, `push_keyboard_mode` panics
                 // once the stack reaches 4096 entries, which a run of `CSI > 1 u` in agent output
                 // reaches, and the panic would land under the session's output lock. The client,
-                // xterm.js, has no kitty keyboard support to restore the flags into.
+                // xterm.js, is left with `vtExtensions.kittyKeyboard` off, so there are no flags to restore.
                 Config {
                     scrolling_history: SCROLLBACK_LINES,
                     ..Config::default()

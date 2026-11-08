@@ -148,6 +148,17 @@ profile when testing the initial pick. To inspect a profile value, open the sqli
 Keep the `.app` and throwaway directories on the internal disk when the checkout is on a removable volume. An ad-hoc
 build has a fresh code identity each time, so macOS's consent prompt for access to that volume can recur on every run.
 
+## In an isolated verification, check terminal input in a project's shell terminal, and never the renderer there
+
+A packaged verification isolated with fresh agent configuration directories has no logged-in agent account, so no
+agent session can be opened in it (the new-session menu refuses every account as not logged in). Plan for that before
+handing the check to the user: for a check of the terminal's keyboard or input-method handling, add a test project
+inside the throwaway home and open that project's shell terminal (see "Starting a terminal" in
+`docs/product/terminal-panel.md`; a console session has no Terminal panel). That is the same xterm input handling the
+agent terminal runs. It is not the same drawing: shell terminals use xterm's DOM renderer and only the agent terminal
+draws with WebGL, so a WebGL renderer defect (garbled or stale glyphs) neither shows nor can be confirmed fixed in a
+shell terminal; such a check needs an agent terminal.
+
 ## Reload a dev window fully before judging a defect in it
 
 Vite's hot update applies module by module, and when one module cannot be Fast Refreshed the `pnpm tauri dev` window

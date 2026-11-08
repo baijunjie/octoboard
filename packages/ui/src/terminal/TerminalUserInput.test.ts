@@ -138,3 +138,31 @@ describe("macOS editing through the real xterm and controller", () => {
     expect(socket.sent.filter((frame) => ArrayBuffer.isView(frame))).toEqual([]);
   });
 });
+
+type InputCore = KeyboardCore & { _inputEvent: (event: InputEvent) => boolean };
+
+/** Pins xterm's key-down gate on a composed `insertText`, not the real input-method path: a bare
+ * modifier keydown must not arm it, so an IME commit delivered before its own keydown is kept. */
+describe("xterm's composed insertText gate", () => {
+  const commit = () => ({ data: "？", inputType: "insertText", composed: true }) as InputEvent;
+  const keyDownThenCommit = (key: string, keyCode: number, modifiers: KeyboardEventInit) => {
+    const term = new Terminal();
+    onTestFinished(() => term.dispose());
+    const sent: string[] = [];
+    term.onData((data) => sent.push(data));
+    const inputCore = (term as unknown as { _core: InputCore })._core;
+    // The gate is set before the custom handler runs; returning false stops _keyDown ahead of the DOM-only composition helper.
+    inputCore._customKeyEventHandler = () => false;
+    inputCore._keyDown(new KeyboardEvent("keydown", { key, keyCode, cancelable: true, ...modifiers }));
+    inputCore._inputEvent(commit());
+    return sent;
+  };
+
+  it("keeps a full-width mark committed after a Shift-only keydown", () => {
+    expect(keyDownThenCommit("Shift", 16, { shiftKey: true })).toEqual(["？"]);
+  });
+
+  it("still drops the same commit after a character keydown", () => {
+    expect(keyDownThenCommit("a", 65, {})).toEqual([]);
+  });
+});

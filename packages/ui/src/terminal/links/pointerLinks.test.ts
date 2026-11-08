@@ -18,7 +18,11 @@ const ROWS = 5;
 beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(CELL.width * 32);
   vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(CELL.height);
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  // xterm's DOM renderer measures text through a canvas context, which jsdom does not have.
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+    font: "",
+    measureText: () => ({ width: CELL.width }),
+  } as unknown as CanvasRenderingContext2D);
   window.matchMedia = ((query: string) => ({
     matches: false,
     media: query,

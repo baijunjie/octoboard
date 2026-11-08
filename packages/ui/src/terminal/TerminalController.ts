@@ -33,7 +33,7 @@ import {
   type SelectionGuard,
   writeInSlices,
 } from "./terminalOutput";
-import { keepModifiersFromArmingKeyDownSeen, watchUserInput } from "./xtermInternals";
+import { watchUserInput } from "./xtermInternals";
 import { XTERM_THEMES } from "./xtermThemes";
 
 /** How long the terminal's size must hold still before `syncSize` reports it to the daemon. */
@@ -261,14 +261,11 @@ export class TerminalController {
       return true;
     });
 
-    const keepModifiersFromArming = keepModifiersFromArmingKeyDownSeen(this.term);
-
     // `Ctrl+C` is swallowed by WKWebView above xterm.js while every other modifier combination
     // passes through (see "Known pitfalls of the Tauri / Rust approach" in docs/architecture.md) —
     // it is the most-used key in a terminal, so it is intercepted here and its raw byte (ETX, 0x03) is
     // written directly, bypassing xterm's own key-to-data pipeline entirely.
     this.term.attachCustomKeyEventHandler((event) => {
-      keepModifiersFromArming(event);
       const data = this.options.host.os === "macos" ? macEditingSequence(event) : undefined;
       if (data !== undefined) {
         event.preventDefault();

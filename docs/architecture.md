@@ -356,14 +356,18 @@ Each has an established solution unless noted; any outstanding manual verificati
   declared `rust-version` is advisory and often wrong in both directions), and the Tauri crates and their
   `@tauri-apps/*` packages in the UI must move together, since the Tauri CLI refuses to build when the two differ in
   major or minor version.
-- **Full-width punctuation from a CJK input method needs a workaround.** A mark such as `？`, which an input method
-  emits without a candidate window, is swallowed on the first press by unmodified `xterm.js` 6.0.0 in WKWebView. The
-  library arms a "key down seen" flag on every keydown, a bare `Shift` included, and drops the commit while it is set,
-  but WebKit delivers the commit before the mark's own keydown. With the pinned version, the terminal's key handler
-  restores the flag after a modifier-only keydown (`TerminalController`), reaching into a private field that must be
-  rechecked on every `xterm.js` upgrade. Composed CJK text is unaffected. The workaround was confirmed by hand with a
-  real input method on `xterm.js` 5.5.0; on 6.0.0 only the private-field contract has been checked, not the input
-  method.
+- **Full-width punctuation from a CJK input method depends on the pinned `xterm.js`.** A mark such as `？`, which an
+  input method emits without a candidate window, reaches WKWebView's `input` before the mark's own keydown. `xterm.js`
+  drops such a commit while its "key down seen" flag is set, and up to 6.0.0 it armed that flag on every keydown, a
+  bare `Shift` included, so the first press was swallowed. The pinned 6.1 beta leaves the flag alone on a
+  modifier-only keydown, which is what makes the first press work; `TerminalUserInput.test.ts` pins that library
+  behaviour, so an upgrade or downgrade that loses it fails there. The path itself was confirmed by hand with a real
+  Chinese input method on the pinned beta, and each `xterm.js` upgrade needs the same check, since synthetic key events
+  do not go through it: `？`, `！` and `（` on the first press, normal Pinyin composition, no duplicates when typing `，？`
+  quickly, `Ctrl+C` still interrupting, and `？` twice with `Shift` released in between. By the library's source (not
+  observed), a mark pressed while another non-modifier key is still held can still be dropped, since the flag stays
+  armed then by design (relaxing it duplicates input in fast typing). Keep xterm's own composition handling rather
+  than adding a composition handler of our own or synthesizing composition events.
 - **Mouse reports past column 95.** The encoded byte exceeds 127, so `onData` never sees it; only `onBinary` does, as a
   string of raw code units, hence a mask back to bytes rather than a UTF-8 encode. Not yet confirmed by hand: the
   forwarding was read line by line but never exercised with a mouse-aware TUI, and none is reachable from Grok's bash
