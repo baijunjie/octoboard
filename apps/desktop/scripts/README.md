@@ -205,15 +205,23 @@ any machine.
 3. It creates the `updater` release if it is missing (as a prerelease, so it is never the repository's latest), then
    uploads each selected platform's manifests the version goes to with `--clobber`: `beta.json` and `stable.json` for
    macOS, `beta-windows.json` and `stable-windows.json` for Windows, the beta one always and the stable one unless the
-   version has a prerelease suffix. A manifest that already announces a newer version is left alone and reported. A
-   manifest that is not valid is refused, with nothing created yet. Immutable releases must stay off for the
+   version has a prerelease suffix. Until a platform's first stable release, a prerelease goes to its stable manifest
+   too: while that manifest is missing or announces a prerelease, it is written like the beta one, and once it announces
+   a stable version it takes stable versions only again (reported when a prerelease leaves it alone). This is a
+   one-time exception for the first betas, `0.1.0-beta.1` to `0.1.0-beta.3`, which follow Stable by default and read
+   only the stable manifests (see "Update channels" in `docs/product/in-app-updates.md`); it ends with the first stable
+   release newer than what the stable manifest announces, through the usual ordering. A manifest that already
+   announces a newer version is left alone and reported. A manifest that is not valid is refused, with nothing created
+   yet; once a stable manifest has announced a stable version, restore it with the latest stable release rather than
+   deleting it, since a missing stable manifest takes prereleases again. Immutable releases must stay off for the
    repository: the `updater` release is rewritten by every release, and the script refuses when it is immutable (it
    reads the `isImmutable` field, which needs a `gh` recent enough to report it).
 
 A manifest carries only its own platform's entries, so publishing one platform never writes the other's manifests: its
 users are offered nothing for that version until it is published for them.
 
-`--dry-run` prints the plan and the manifests without calling GitHub.
+`--dry-run` prints the plan and the manifests without calling GitHub. As it reads no manifest, a prerelease's plan names
+the stable manifest as written only while it announces no stable version yet.
 
 ## Releasing by tag
 

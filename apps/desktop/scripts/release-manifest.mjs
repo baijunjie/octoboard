@@ -15,7 +15,7 @@ export function assertVersion(version) {
   }
 }
 
-// A version with a prerelease suffix is not offered on the stable channel.
+// Whether a version has a prerelease suffix, which keeps it off the stable channel (but see `stableTakesPrereleases`).
 export function isPrerelease(version) {
   assertVersion(version);
   return version.includes("-");
@@ -63,13 +63,27 @@ const MANIFEST_NAMES = {
   windows: { beta: "beta-windows.json", stable: "stable-windows.json" },
 };
 
-// The manifest files a version is written to for one platform: every release updates the beta channel, so beta
-// users are offered stable releases too, and only a release without a prerelease suffix also updates the stable
-// channel.
-export function manifestFiles(version, platform) {
+// A platform's manifests by channel: the beta one, which every release updates, so beta users are offered stable
+// releases too, and the stable one, which a release without a prerelease suffix updates as well (and a prerelease
+// while `stableTakesPrereleases` holds).
+export function manifestNames(platform) {
   const names = MANIFEST_NAMES[platform];
   if (!names) throw new Error(`"${platform}" is not a release platform.`);
-  return isPrerelease(version) ? [names.beta] : [names.beta, names.stable];
+  return names;
+}
+
+// Every manifest of a platform, the ones a release may be written to: `planManifestWrites` decides which it is.
+export function manifestFiles(platform) {
+  const { beta, stable } = manifestNames(platform);
+  return [beta, stable];
+}
+
+// The one-time exception for the first betas: 0.1.0-beta.1 to 0.1.0-beta.3 follow the Stable channel by default and
+// read only the stable manifests, so until a platform's first stable release a prerelease goes to its stable manifest
+// too. A stable manifest takes prereleases while it is missing or announces a prerelease (`announced`, undefined when
+// there is none); once it announces a stable version, it takes stable versions only again.
+export function stableTakesPrereleases(announced) {
+  return announced === undefined || isPrerelease(announced);
 }
 
 // Orders two semantic versions: negative when `a` comes before `b`, zero when they are the same release, positive
@@ -114,16 +128,19 @@ export function manifestVersion(text) {
   return version;
 }
 
-// Splits the manifests `version` goes into for `platform` by whether writing them would move a channel backwards:
-// `current` maps a manifest's name to the version it announces now (absent when there is none yet). A manifest
-// already announcing a newer version is left alone, so publishing an older release late never downgrades a channel's
-// users.
+// Splits a platform's manifests (`manifestFiles`) into the ones `version` is written to and the ones skipped:
+// `current` maps a manifest's name to the version it announces now (absent when there is none yet). A manifest already
+// announcing a newer version is left alone (`reason: "newer"`), so publishing an older release late never downgrades a
+// channel's users; a prerelease is left out of a stable manifest that announces a stable version (`reason: "stable"`,
+// see `stableTakesPrereleases`).
 export function planManifestWrites(version, platform, current) {
+  const { stable } = manifestNames(platform);
   const write = [];
   const skipped = [];
-  for (const name of manifestFiles(version, platform)) {
+  for (const name of manifestFiles(platform)) {
     const announced = current[name];
-    if (announced !== undefined && compareVersions(announced, version) > 0) skipped.push({ name, announced });
+    if (announced !== undefined && compareVersions(announced, version) > 0) skipped.push({ name, announced, reason: "newer" });
+    else if (name === stable && isPrerelease(version) && !stableTakesPrereleases(announced)) skipped.push({ name, announced, reason: "stable" });
     else write.push(name);
   }
   return { write, skipped };

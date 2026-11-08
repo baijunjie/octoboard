@@ -8,6 +8,7 @@ import {
   compareVersions,
   isPrerelease,
   manifestFiles,
+  manifestNames,
   manifestVersion,
   parsePlatforms,
   planManifestWrites,
@@ -18,6 +19,7 @@ import {
   releaseLayout,
   releaseAssetUrl,
   repositorySlug,
+  stableTakesPrereleases,
   windowsInstallerName,
 } from "./release-manifest.mjs";
 
@@ -34,21 +36,20 @@ test("something that is not a semantic version is refused", () => {
   }
 });
 
-test("every release updates the beta manifest and only a stable one also the stable manifest, per platform", () => {
-  assert.deepEqual(manifestFiles("0.2.0-beta.1", "macos"), ["beta.json"]);
-  assert.deepEqual(manifestFiles("0.2.0", "macos"), ["beta.json", "stable.json"]);
-  assert.deepEqual(manifestFiles("0.2.0-beta.1", "windows"), ["beta-windows.json"]);
-  assert.deepEqual(manifestFiles("0.2.0", "windows"), ["beta-windows.json", "stable-windows.json"]);
-  assert.throws(() => manifestFiles("0.2.0", "linux"), /not a release platform/);
+test("each platform has a beta and a stable manifest", () => {
+  assert.deepEqual(manifestFiles("macos"), ["beta.json", "stable.json"]);
+  assert.deepEqual(manifestFiles("windows"), ["beta-windows.json", "stable-windows.json"]);
+  assert.deepEqual(manifestNames("windows"), { beta: "beta-windows.json", stable: "stable-windows.json" });
+  assert.throws(() => manifestFiles("linux"), /not a release platform/);
 });
 
 test("the original manifest names stay the Mac's, holding the darwin entries, and Windows has names of its own", () => {
   // Released macOS applications read `stable.json` and `beta.json` (`src-tauri/src/updater/macos.rs`), for good.
   const update = { url: "https://example.test/mac.app.tar.gz", signature: "bWFj" };
   const manifest = buildManifest({ version: "1.0.0", notes: "", pubDate: "2026-11-01T00:00:00.000Z", platform: "macos", update });
-  assert.deepEqual(manifestFiles("1.0.0", "macos"), ["beta.json", "stable.json"]);
+  assert.deepEqual(manifestFiles("macos"), ["beta.json", "stable.json"]);
   assert.deepEqual(Object.keys(manifest.platforms), ["darwin-aarch64", "darwin-x86_64"]);
-  for (const name of manifestFiles("1.0.0", "windows")) assert.ok(!["beta.json", "stable.json"].includes(name), name);
+  for (const name of manifestFiles("windows")) assert.ok(!["beta.json", "stable.json"].includes(name), name);
 });
 
 test("a platform selection is parsed in the order of the platforms, and nothing else is accepted", () => {
@@ -198,13 +199,21 @@ test("a manifest already announcing a newer version is not written", () => {
     write: ["beta.json", "stable.json"],
     skipped: [],
   });
-  assert.deepEqual(planManifestWrites("0.2.0-beta.1", "macos", { "beta.json": "0.2.0-beta.2" }), {
+  assert.deepEqual(planManifestWrites("0.2.0-beta.1", "macos", { "beta.json": "0.2.0-beta.2", "stable.json": "0.2.0-beta.2" }), {
     write: [],
-    skipped: [{ name: "beta.json", announced: "0.2.0-beta.2" }],
+    skipped: [
+      { name: "beta.json", announced: "0.2.0-beta.2", reason: "newer" },
+      { name: "stable.json", announced: "0.2.0-beta.2", reason: "newer" },
+    ],
+  });
+  // A newer stable version is skipped as newer, whatever the bridge says.
+  assert.deepEqual(planManifestWrites("0.2.0-beta.1", "windows", { "stable-windows.json": "0.2.0" }), {
+    write: ["beta-windows.json"],
+    skipped: [{ name: "stable-windows.json", announced: "0.2.0", reason: "newer" }],
   });
   assert.deepEqual(planManifestWrites("0.2.0", "macos", { "beta.json": "0.3.0-beta.1", "stable.json": "0.1.5" }), {
     write: ["stable.json"],
-    skipped: [{ name: "beta.json", announced: "0.3.0-beta.1" }],
+    skipped: [{ name: "beta.json", announced: "0.3.0-beta.1", reason: "newer" }],
   });
 });
 
@@ -213,8 +222,60 @@ test("each platform's manifests move on their own: the other platform's versions
   assert.deepEqual(planManifestWrites("0.2.0", "windows", current), { write: ["beta-windows.json", "stable-windows.json"], skipped: [] });
   assert.deepEqual(planManifestWrites("0.2.0", "windows", { ...current, "stable-windows.json": "0.2.1" }), {
     write: ["beta-windows.json"],
-    skipped: [{ name: "stable-windows.json", announced: "0.2.1" }],
+    skipped: [{ name: "stable-windows.json", announced: "0.2.1", reason: "newer" }],
   });
+});
+
+test("until a stable version is out, a prerelease goes to the stable manifest too, and after it no longer", () => {
+  // The first betas follow Stable by default and read only the stable manifests, which hold nothing yet.
+  assert.deepEqual(planManifestWrites("0.1.0-beta.4", "macos", { "beta.json": "0.1.0-beta.3" }), {
+    write: ["beta.json", "stable.json"],
+    skipped: [],
+  });
+  assert.deepEqual(planManifestWrites("0.1.0-beta.5", "windows", { "beta-windows.json": "0.1.0-beta.4", "stable-windows.json": "0.1.0-beta.4" }), {
+    write: ["beta-windows.json", "stable-windows.json"],
+    skipped: [],
+  });
+  // A later run of the same version resumes it.
+  assert.deepEqual(planManifestWrites("0.1.0-beta.4", "macos", { "beta.json": "0.1.0-beta.4", "stable.json": "0.1.0-beta.4" }).write, [
+    "beta.json",
+    "stable.json",
+  ]);
+  // The first stable release replaces the prerelease, the usual ordering putting it after its betas.
+  assert.deepEqual(planManifestWrites("0.1.0", "macos", { "beta.json": "0.1.0-beta.5", "stable.json": "0.1.0-beta.5" }).write, [
+    "beta.json",
+    "stable.json",
+  ]);
+  // From then on the stable manifest takes stable versions only, a prerelease newer than it included.
+  assert.deepEqual(planManifestWrites("0.2.0-beta.1", "macos", { "beta.json": "0.1.0", "stable.json": "0.1.0" }), {
+    write: ["beta.json"],
+    skipped: [{ name: "stable.json", announced: "0.1.0", reason: "stable" }],
+  });
+  assert.deepEqual(planManifestWrites("0.3.0-rc.1", "windows", { "stable-windows.json": "0.2.0+build.7" }), {
+    write: ["beta-windows.json"],
+    skipped: [{ name: "stable-windows.json", announced: "0.2.0+build.7", reason: "stable" }],
+  });
+  // A stable release older than a beta Stable already announces does not replace it: the bridge goes on until a
+  // newer stable release.
+  assert.deepEqual(planManifestWrites("0.1.0", "macos", { "beta.json": "0.2.0-beta.1", "stable.json": "0.2.0-beta.1" }), {
+    write: [],
+    skipped: [
+      { name: "beta.json", announced: "0.2.0-beta.1", reason: "newer" },
+      { name: "stable.json", announced: "0.2.0-beta.1", reason: "newer" },
+    ],
+  });
+  assert.deepEqual(planManifestWrites("0.2.0-beta.2", "macos", { "stable.json": "0.2.0-beta.1" }).write, ["beta.json", "stable.json"]);
+  // Each platform decides by its own stable manifest.
+  assert.deepEqual(planManifestWrites("0.2.0-beta.1", "windows", { "stable.json": "0.1.0", "stable-windows.json": "0.1.0-beta.5" }).write, [
+    "beta-windows.json",
+    "stable-windows.json",
+  ]);
+});
+
+test("a stable manifest takes prereleases while it is missing or announces a prerelease", () => {
+  assert.equal(stableTakesPrereleases(undefined), true);
+  assert.equal(stableTakesPrereleases("0.1.0-beta.3"), true);
+  assert.equal(stableTakesPrereleases("0.1.0"), false);
 });
 
 test("a manifest's version is read, and one without a semantic version is refused", () => {

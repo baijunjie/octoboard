@@ -3,8 +3,10 @@
 // `desktop-v<version>` with each platform's files (macOS: the disk image and the signed update archive; Windows: the
 // installer), each update file with its signature, then writes the manifests the application reads to the `updater`
 // release: per platform, `beta.json` and `stable.json` for macOS and `beta-windows.json` and `stable-windows.json`
-// for Windows, the beta one always and the stable one unless the version has a prerelease suffix. Run `pnpm release`
-// first, with a signed build. Outward-facing, so it is a separate, explicit step: nothing else calls it.
+// for Windows, the beta one always and the stable one unless the version has a prerelease suffix. Until a platform's
+// first stable release, a prerelease goes to its stable manifest too: the first betas follow Stable by default and
+// read only that one (`stableTakesPrereleases` in `release-manifest.mjs`). Run `pnpm release` first, with a signed
+// build. Outward-facing, so it is a separate, explicit step: nothing else calls it.
 //
 //   pnpm --filter @octoboard/desktop publish-release (--notes "text" | --notes-file path)
 //     [--platforms macos|windows|macos,windows] [--windows-dir <dir>] [--dry-run]
@@ -35,6 +37,7 @@ import {
   buildManifest,
   isPrerelease,
   manifestFiles,
+  manifestNames,
   manifestVersion,
   MANIFEST_RELEASE_TAG,
   parsePlatforms,
@@ -150,7 +153,7 @@ for (const platform of platforms) {
     platform,
     update: { url: releaseAssetUrl(appConfig.repositoryUrl, version, update.name), signature: update.signature },
   });
-  publishing[platform].manifests = manifestFiles(version, platform);
+  publishing[platform].manifests = manifestFiles(platform);
 }
 const assetsOf = (platform) => publishing[platform].assets;
 
@@ -158,7 +161,12 @@ console.log(`version ${version} (${prerelease ? "prerelease" : "stable"}), platf
 console.log(`release ${tag(version)} gets ${platforms.flatMap(assetsOf).join(", ")}`);
 for (const platform of platforms) {
   const { manifests, manifest } = publishing[platform];
-  console.log(`${platform} manifests ${manifests.join(", ")} go to the "${MANIFEST_RELEASE_TAG}" release, unless one announces a newer version:`);
+  const { beta, stable } = manifestNames(platform);
+  console.log(
+    prerelease
+      ? `${platform} manifests ${beta}, and ${stable} while that announces no stable version yet, go to the "${MANIFEST_RELEASE_TAG}" release, unless one announces a newer version:`
+      : `${platform} manifests ${manifests.join(", ")} go to the "${MANIFEST_RELEASE_TAG}" release, unless one announces a newer version:`,
+  );
   console.log(JSON.stringify(manifest, null, 2));
 }
 if (dryRun) {
@@ -256,7 +264,7 @@ const current = Object.fromEntries(
     try {
       return [name, content === undefined ? undefined : manifestVersion(content)];
     } catch (error) {
-      throw new Error(`${name} on the "${MANIFEST_RELEASE_TAG}" release is not valid (${error.message}). Fix or delete it, then publish again.`, { cause: error });
+      throw new Error(`${name} on the "${MANIFEST_RELEASE_TAG}" release is not valid (${error.message}). Fix or delete it, then publish again (a stable manifest, once it has announced a stable version, is restored with the latest stable release rather than deleted: missing, it would take prereleases again).`, { cause: error });
     }
   }),
 );
@@ -309,8 +317,12 @@ try {
   const written = [];
   for (const platform of platforms) {
     const { write, skipped } = planManifestWrites(version, platform, current);
-    for (const { name, announced } of skipped) {
-      console.log(`not writing ${name}: it announces ${announced}, which is newer than ${version}.`);
+    for (const { name, announced, reason } of skipped) {
+      console.log(
+        reason === "newer"
+          ? `not writing ${name}: it announces ${announced}, which is newer than ${version}.`
+          : `not writing ${name}: it announces the stable version ${announced}, so it takes no prerelease any more.`,
+      );
     }
     if (write.length === 0) continue;
     const manifestPaths = write.map((name) => {
@@ -325,7 +337,7 @@ try {
   console.log(
     written.length > 0
       ? `published ${tag(version)}; ${written.join(" and ")} now announce it.`
-      : `published ${tag(version)}; no manifest announces it, as every channel has a newer version.`,
+      : `published ${tag(version)}; no manifest announces it, as every manifest it could go to has a newer or a stable version.`,
   );
 } finally {
   rmSync(staging, { recursive: true, force: true });

@@ -61,9 +61,10 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 /// small chunks does not turn into thousands of IPC messages.
 const PROGRESS_STEP_BYTES: u64 = 256 * 1024;
 
-/// The release stream the user follows. Every release updates the beta manifest and only one
-/// without a prerelease suffix also updates the stable one, so a beta user is offered stable
-/// releases too. Each platform has a manifest per channel.
+/// The release stream the user follows. Every release updates the beta manifest and one without
+/// a prerelease suffix also updates the stable one, so a beta user is offered stable releases
+/// too; until a platform's first stable release, prereleases go to the stable one as well (see
+/// "Update channels" in `docs/product/in-app-updates.md`). Each platform has a manifest per channel.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum UpdateChannel {

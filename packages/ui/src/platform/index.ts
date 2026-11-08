@@ -285,7 +285,8 @@ export interface ClipboardCapability {
 }
 
 /** The release stream the user follows: `beta` is offered every release, `stable` only those without a
- * prerelease suffix. */
+ * prerelease suffix (and, until the first stable release, prereleases too: see "Update channels" in
+ * `docs/product/in-app-updates.md`). */
 export type UpdateChannel = "stable" | "beta";
 
 /** A newer version a check found. */

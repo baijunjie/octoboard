@@ -10,7 +10,7 @@ none of this: no checks, no update notice, and no Updates or Update channel rows
 
 There are two channels, chosen in Settings' About section (see "The Updates and Update channel rows" below):
 
-- **Stable** receives only stable releases;
+- **Stable** receives only stable releases (with one exception until the first stable release, below);
 - **Beta** receives every release, stable ones included.
 
 Until the user chooses one, the running build decides: a prerelease build (its version has a prerelease suffix, such as
@@ -25,6 +25,13 @@ A release is stable when its version has no prerelease suffix: `0.2.0` reaches b
 Beta. Only a version newer than the one running is ever offered, so switching from Beta to Stable while running a beta
 newer than the latest stable release offers nothing until a newer stable release is out; it never moves back to an
 older version.
+
+One exception holds until the first stable release: the first betas, `0.1.0-beta.1` to `0.1.0-beta.3`, were built
+before a prerelease build followed Beta by default, so left alone they follow Stable, which had no release. To reach
+them, every prerelease also goes to a platform's Stable channel until that platform has a stable release newer than
+the betas Stable announced; that release then replaces them there, and from then on Stable receives only stable
+releases (see "Where updates come from" below). Meanwhile Stable offers the newer betas as Beta does, including to a
+user who chose Stable on a beta build.
 
 The choice is kept **per client**, in the window's own browser storage, as the choice to keep running in the background
 is (see "Closing the window" in `docs/product/application-lifecycle.md`): the daemon neither stores nor carries
@@ -60,11 +67,14 @@ the update for its platform: the macOS manifests, under both `darwin-aarch64` an
 update archive (a release is one universal build serving both Mac architectures); the Windows manifests, under
 `windows-x86_64`, those of the NSIS installer, which is the Windows update itself. The update's address is its file on
 the versioned release (below), fetched over HTTPS as the manifest is, and its signature is checked against the update
-key built into the application, one key for both platforms (see "Downloading and installing" below). Every release is written to a
-platform's beta manifest, and a release without a prerelease suffix to its stable manifest too, which is what puts
-stable releases on the Beta channel (see "Update channels" above). A manifest never moves backwards: a release of an
-older version published after a newer one leaves a manifest that already announces the newer version as it is, and
-each platform's manifests are judged on their own. The `updater` release is itself marked a prerelease, so it is never
+key built into the application, one key for both platforms (see "Downloading and installing" below). Every release is
+written to a platform's beta manifest, and a release without a prerelease suffix to its stable manifest too, which is
+what puts stable releases on the Beta channel (see "Update channels" above). Until a platform's first stable release, a
+prerelease goes to its stable manifest as well: while that manifest is missing or announces a prerelease, it is written
+like the beta one, and once it announces a stable version it takes stable versions only again — the one-time exception
+for the first betas described in "Update channels". A manifest never moves backwards: a release of an older version
+published after a newer one leaves a manifest that already announces the newer version as it is, and each platform's
+manifests are judged on their own. The `updater` release is itself marked a prerelease, so it is never
 the repository's latest release.
 
 The platforms share one version, and by default a release publishes both together. A version can be published for one
