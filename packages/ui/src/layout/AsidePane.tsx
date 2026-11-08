@@ -95,7 +95,7 @@ export function AsidePane({ layout, children, resizeHandle }: { layout: AsideLay
       // A panel on its way out takes no presses and no focus.
       inert={(floating && !open) || (peek !== undefined && !dock.insetShown)}
       // The pane fades; each card in it moves (at tablet width and below sliding from the end edge, else rising by
-      // 4% of its own height, `style.css`), so the card's frame, background and shadow move with its
+      // 4% of its own height, `paneMotion.css`), so the card's frame, background and shadow move with its
       // content and the percentage is the card's.
       data-card-motion={peek ? motionOf(dock.insetShown, dock.preparingInset) : floating ? motionOf(fade.shown, fade.preparing) : undefined}
       data-escape-scope

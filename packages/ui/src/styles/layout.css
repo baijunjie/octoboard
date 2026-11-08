@@ -1,0 +1,103 @@
+:root {
+  /* Shared icon columns for sidebar rows, cards and headers. */
+  --row-control-size: 24px;
+  --row-leading-icon-size: 16px;
+  --row-control-gap: 4px;
+  --row-leading-icon-gap: var(--row-control-gap);
+  --row-controls-max-width: calc(2 * var(--row-control-size) + 2 * var(--row-control-gap));
+
+  /* The horizontal inset shared by the sidebar and the right pane: a header, a bar, a heading or a
+     row's content starts `--pane-inset` from the pane's edge. A row's hover or selected fill sits
+     `--row-fill-inset` from the edge, so the row pads its content by the difference,
+     `--row-content-inset`. */
+  --pane-inset: 16px;
+  --row-fill-inset: 8px;
+  --row-content-inset: calc(var(--pane-inset) - var(--row-fill-inset));
+
+  --tooltip-delay: 0.5s;
+
+  /* A tooltip is a label: it closes the instant the pointer leaves its trigger, where HeroUI's
+     default (0.5s) lingers and keeps it hoverable. `Tooltip` reads this as its default close
+     delay, so it holds for every tooltip, those added later included. HeroUI reads the token once,
+     at the first tooltip's first render, so a stylesheet loaded any later than this one would
+     silently put the 0.5s back for the whole session. */
+  --tooltip-close-delay: 0s;
+
+  /* The top bar across the whole window (`TitleBar.tsx`). On macOS the shell centres the traffic
+     lights in it (`TRAFFIC_LIGHT_Y` in `apps/desktop/src-tauri/src/chrome/macos.rs`), so the two move
+     together; a fixed pixel size, since the lights' position is fixed too. */
+  --title-bar-height: 40px;
+
+  /* The header of each pane in the content panel (the sidebar's console and focus headers, the
+     archive view's, the session history's, the project pane's, the report panel's): one height
+     for all of them, so their bottom lines run on as one line across the panel. A second tier
+     beside the top bar's 40px.
+     An overlay pane is a card inset by `--peek-gap`, so its headers take the floating value
+     instead, which puts their bottom line at the same height as the docked ones'
+     (`floatingFrame` in `layout/paneOverlay.tsx`). Only the gap comes off: the card's edge is a
+     shadow (`panel-edge`) and takes no space, so a docked pane's header starting at
+     `--top-chrome-height` and the card's starting `--peek-gap` lower differ by the gap alone.
+     The floating value is not a cycle although `floatingFrame` overrides `--pane-header-height`
+     with it: a custom property is substituted where it is declared, so this one is already
+     `calc(48px - 8px)` when it is inherited, and the override cannot reach back into it. Declared
+     on the card too it would be a real cycle, and both properties would be invalid at
+     computed-value time, so the headers fall back to their content height and their bottom line no
+     longer lines up. It therefore belongs on an element that does not itself override
+     `--pane-header-height`. */
+  --pane-header-height: 48px;
+  --pane-header-height-floating: calc(var(--pane-header-height) - var(--peek-gap));
+
+  /* The gap on the terminal side of the right pane (`layout/AsidePane.tsx`), which holds the width
+     grip: the 4px grip, centred in it, has 2px clear on either side. The other
+     sides of the cards keep `--peek-gap`. `PaneResizeHandle` centres the width grip in this gap by
+     calculation, so a change here moves it. */
+  --panel-grip-gap: 8px;
+
+  /* The gap between two stacked cards of the right pane (`panels/PanelStack.tsx`), which holds the
+     height grip: the 4px grip, centred in it, has 3px clear on either side. The grip's hit area
+     (`PanelStack.tsx`) is a fixed 24px band centred on the gap, derived from this value. */
+  --panel-stack-gap: 10px;
+
+  /* The left rail under the top bar (`Rail.tsx`): the window chrome's second half, at the reading
+     direction's start. The content panel starts where it ends, so that is also where the
+     sidebar starts, which is what the docked arithmetic above counts. Pane drawers are inset from
+     that edge. */
+  --rail-width: 48px;
+
+  /* The gap an overlay pane keeps from the window's edges and the top bar, and the sidebar from
+     the rail (`drawerClass` in `layout/paneOverlay.tsx`). `peekGapPx` there reads it back with
+     `parseFloat` and throws when that does not yield a number, so the `px` unit is load-bearing:
+     `0.5rem` would be read as 0.5px. Phone-width cards use the smaller gap in `layout/paneMotion.css`. */
+  --peek-gap: 8px;
+
+  /* How far a panel is shifted towards its edge while it is away, at the tablet boundary and below, where
+     it slides in from that edge instead of rising (`PHONE_SLIDE_AWAY` in `layout/paneOverlay.tsx`;
+     the right pane's floating card in `layout/paneMotion.css`). */
+  --phone-slide: 40px;
+
+  /* Where the content area starts: right below the top bar. Anything that overlays the content
+     area, or runs along an edge that starts there, starts at this offset rather than at the window
+     top, so the bar's controls stay reachable whatever is open. */
+  --top-chrome-height: var(--title-bar-height);
+
+  /* How much of the window's bottom edge the chrome takes: the connection banner's height and the
+     update notice's (0 while a strip is not shown, see `ConnectionBanner.tsx` and `UpdateNotice.tsx`).
+     Anything that overlays the content area, or runs along an edge that ends there, ends this far
+     above the window bottom rather than at it, so the banner's Retry and the notice's buttons stay
+     reachable whatever is open. */
+  --bottom-chrome-height: calc(var(--connection-banner-height, 0px) + var(--update-notice-height, 0px));
+
+  /* Where the connection banner's strip is stacked, and where a dialog's backdrop is stacked under
+     it: the strip has to be above the backdrop, which covers the whole viewport, so the Retry it
+     offers can be pressed while a dialog is open (`shell/ConnectionBanner.tsx`). It is the
+     backdrop that gives way rather than the strip that rises, so the strip stays level with
+     React Aria's own popover-level overlays (menus, selects, tooltips, all at
+     `--z-index-overlay`), which the portal order then draws above it: a popover reaching the
+     window's bottom edge is anchored to the viewport and knows nothing about the chrome, and a
+     strip over its lowest rows would swallow every press landing there. The trade is the other
+     way round: a popover drawn over the strip covers the Retry under it until it is dismissed.
+     Both are built from HeroUI's own level rather than literals, so a bump of theirs cannot
+     invert them. */
+  --z-index-banner: var(--z-index-overlay);
+  --z-index-dialog-backdrop: calc(var(--z-index-overlay) - 1);
+}

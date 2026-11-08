@@ -1,0 +1,9 @@
+/* HeroUI's tooltip breaks anywhere (`break-all`), which cuts a sentence mid-word wherever it wraps
+   at the tooltip's width cap. Breaking at word boundaries and only inside a run that cannot fit on
+   a line by itself (a path, a branch name) keeps the cap holding for every tooltip. CJK text still
+   wraps between characters, which is its word boundary, and right-to-left text wraps as any other.
+   Unlayered, so it wins over HeroUI's layered rule. */
+.tooltip {
+  word-break: normal;
+  overflow-wrap: break-word;
+}

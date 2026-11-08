@@ -1,0 +1,7 @@
+/* Keyboard focus inside one of the sidebar's inactive projects lifts the veil over the whole group (see
+   `ConsoleView`; the pointer and an open menu do it in its classes). Written here because a named custom
+   variant (`ui-keyboard-focus`) cannot be nested inside the arbitrary `:has(...)` selector that reaches the
+   group's other children. */
+.inactive-projects:has(> [data-inactive] [data-focus-visible]) > [data-inactive]::after {
+  background-color: transparent;
+}

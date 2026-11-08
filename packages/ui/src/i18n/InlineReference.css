@@ -1,0 +1,59 @@
+/* A chip is text in its line: it takes the font of the text around it, whatever HeroUI's size preset says, and the
+   sizes differ only in the padding drawn around the text. The block padding paints without moving the line. The
+   inline padding sits on the label and is not cloned onto each wrapped fragment: a cloned end padding can paint
+   past the line it broke on. */
+.inline-reference {
+  --inline-reference-block: 0;
+  --inline-reference-inline: 4px;
+  display: inline;
+  padding-block: var(--inline-reference-block);
+  padding-inline: 0;
+  /* Not the `font` shorthand, which would also reset the italic a caller may ask for. */
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+.inline-reference[data-size="sm"] {
+  --inline-reference-block: 1px;
+  --inline-reference-inline: 6px;
+}
+.inline-reference[data-size="md"] {
+  --inline-reference-block: 2px;
+  --inline-reference-inline: 8px;
+}
+.inline-reference[data-size="lg"] {
+  --inline-reference-block: 3px;
+  --inline-reference-inline: 10px;
+}
+.inline-reference > .chip__label {
+  padding-inline: var(--inline-reference-inline);
+}
+.inline-reference--wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* An inline-block is as tall as its line box, so one that moves to the next line whole would touch the chip on the
+   line below; at 1.2 it is as tall as an inline reference. An unbroken chip stays inside the leading as long as its size
+   fits the line. */
+.inline-reference--unbroken {
+  display: inline-block;
+  max-width: 100%;
+  line-height: 1.2;
+}
+.inline-reference__code {
+  font: inherit;
+  font-family: var(--font-mono);
+}
+/* A chip is drawn from the shared tints (`--tint-*`, also the badge's): its fill and text are `--tint-{colour}-bg`
+   and `--tint-{colour}-fg` for the colour it carries, an alert's included, and it never takes the hairline (the neutral
+   text is HeroUI's `--default-foreground`). HeroUI's soft default is half of `--default` over the surface, hardly off a
+   card in either appearance, which does not read as a tag. Only the colours are set here: the shape is
+   HeroUI's and the size follows the text (above). */
+.inline-reference.chip--soft[data-color="default"] { --chip-bg: var(--tint-default-bg); --chip-fg: var(--default-foreground); }
+.inline-reference.chip--soft[data-color="accent"] { --chip-bg: var(--tint-accent-bg); --chip-fg: var(--tint-accent-fg); }
+.inline-reference.chip--soft[data-color="help"] { --chip-bg: var(--tint-help-bg); --chip-fg: var(--tint-help-fg); }
+.inline-reference.chip--soft[data-color="success"] { --chip-bg: var(--tint-success-bg); --chip-fg: var(--tint-success-fg); }
+.inline-reference.chip--soft[data-color="warning"] { --chip-bg: var(--tint-warning-bg); --chip-fg: var(--tint-warning-fg); }
+.inline-reference.chip--soft[data-color="danger"] { --chip-bg: var(--tint-danger-bg); --chip-fg: var(--tint-danger-fg); }

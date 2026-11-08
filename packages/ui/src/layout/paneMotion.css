@@ -1,0 +1,39 @@
+/* A right-pane card floating over the terminal (`AsidePane.tsx`, `data-card-motion`) rises into
+   place by 4% of its own height as its pane fades in, and sinks back as it fades out: the pane
+   carries the fade, each card the rise, so the card's frame, background and shadow move with its
+   content and the percentage is the card's. */
+[data-card-motion] [data-panel-card] {
+  transition: translate 240ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+[data-card-motion="away"] [data-panel-card],
+[data-card-motion="preparing"] [data-panel-card] {
+  translate: 0 4%;
+}
+
+[data-card-motion="preparing"] [data-panel-card] {
+  transition: none;
+}
+
+/* At the `tablet` breakpoint and below the card slides in from the end edge instead of rising, and out to it. */
+@media (width <= theme(--breakpoint-tablet)) {
+  :root {
+    --peek-gap: 4px;
+  }
+
+  [data-card-motion="away"] [data-panel-card],
+  [data-card-motion="preparing"] [data-panel-card] {
+    translate: var(--phone-slide) 0;
+  }
+
+  :dir(rtl) [data-card-motion="away"] [data-panel-card],
+  :dir(rtl) [data-card-motion="preparing"] [data-panel-card] {
+    translate: calc(-1 * var(--phone-slide)) 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-card-motion] [data-panel-card] {
+    transition: none;
+  }
+}

@@ -223,7 +223,7 @@ describe("a scroll container in the UI package", () => {
 
   it("is reached only through the module, never through the scroll shadow it wraps", () => {
     const problems = sourceFiles()
-      .filter((file) => file !== FADE_MODULE && !SCROLL_SHADOW_WRAPPER.includes(file))
+      .filter((file) => /\.tsx?$/.test(file) && file !== FADE_MODULE && !SCROLL_SHADOW_WRAPPER.includes(file))
       .flatMap((file) =>
         findScrollShadowUse(readFileSync(new URL(file, SRC), "utf8")).map(
           (site) =>

@@ -1,0 +1,52 @@
+/* The find bar's highlights in the file viewer (`src/viewer/find/useFind.ts`): every match, and the current one on
+   top of it. The code the renderer draws is in shadow roots, which take the same rule from the renderer's own
+   stylesheet (`findHighlightCss`), reading these properties through inheritance. A match is a pale fill the
+   code's tokens keep their contrast on (the darkest-on-fill token of the code themes, measured against it, is
+   the light comment grey at 4.6:1 and the dark red at 5.0:1); the current one is a deeper fill with a text colour
+   of its own and an underline, so it stands out by more than a shade and is told from the rest by more than
+   colour. */
+:root {
+  --find-match-bg: #fff5be;
+  --find-current-bg: #ffb347;
+  --find-current-fg: #1f1f1f;
+}
+
+.dark,
+[data-theme="dark"] {
+  --find-match-bg: #4a3d10;
+  --find-current-bg: #d99a2b;
+  --find-current-fg: #111111;
+}
+
+/* While the viewer's find bar is open (`src/viewer/find/useFind.ts`), each searched scroller starts its text below
+   the bar, which floats over the scroller's top trailing corner: the gap scrolls away with the text, so the
+   bar covers the first lines only once the reader has scrolled past them. The gap holds the bar centred, measured
+   from the scroller's top edge: its height (one 38px row) with its top offset (`top-2`) above it and the same
+   below. A scroller's own top padding adds to the room below it.
+   `useFind` reads it to keep a scrolled scroller's text in place as the bar opens and closes, where the
+   browser has no scroll anchoring to do it. */
+[data-find-open] {
+  --find-bar-gap: 3.375rem;
+}
+/* The scroll padding keeps a focused or scrolled-to line below the bar as well, the gap and a little
+   room. It is `!important` because the fade sets its own scroll padding inline on the scroller
+   (`scrollFade.tsx`), which would win over it. */
+[data-find-open] [data-find-region] {
+  scroll-padding-top: calc(var(--find-bar-gap) + 0.5rem) !important;
+}
+[data-find-open] [data-find-region]::before {
+  content: "";
+  display: block;
+  flex-shrink: 0;
+  height: var(--find-bar-gap);
+}
+
+::highlight(octoboard-find) {
+  background-color: var(--find-match-bg);
+}
+
+::highlight(octoboard-find-current) {
+  background-color: var(--find-current-bg);
+  color: var(--find-current-fg);
+  text-decoration: underline;
+}

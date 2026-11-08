@@ -37,7 +37,7 @@ function physicalGrow(element: HTMLElement, orientation: keyof typeof AXES, grow
  * A mouse press that focused the handle would take keystrokes away from the terminal, so mousedown
  * is cancelled; reaching the handle by Tab still focuses it. The drag itself uses pointer capture,
  * so the pointer keeps driving it over a report page's iframe, and while it lasts the root
- * carries `pane-resizing` (`style.css`) so the cursor stays a resize cursor over whatever the
+ * carries `pane-resizing` (`ResizeSeparator.css`) so the cursor stays a resize cursor over whatever the
  * pointer crosses. The value is committed once, when the drag ends.
  *
  * It is hand-built because HeroUI has no splitter: its `Separator` is static, and its `Slider` is a

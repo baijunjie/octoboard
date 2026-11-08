@@ -1,0 +1,40 @@
+/* The top bar's start segment (`TitleBar.tsx`) is as wide as the rail plus the docked sidebar's
+   clip, and `--sidebar-span` is the clip's target width, so the breadcrumb stays over the terminal
+   while the column eases. `min-width` is the buttons' own width: once the clip is narrower than
+   they are, the segment stops there instead of snapping across when the column finishes closing.
+   `min-content` is not put inside `max()`: that declaration is dropped, and the segment then stays
+   at the buttons' width.
+   While the column opens or closes the segment's own `width` eases over the same 200ms as the
+   clip's (`PANE_SPAN_MS` in `layout/paneDockMotion.ts`); a drag of the pane's edge changes it with
+   no transition. A transitioned `width` rather than a registered custom property: WebKit snaps
+   such a property to its end when a stylesheet is rewritten mid-ease. */
+[data-sidebar-dockable="true"] {
+  .title-bar-start {
+    width: calc(var(--rail-width) + var(--sidebar-span, 0px));
+    min-width: min-content;
+  }
+
+  .title-bar-start-easing {
+    transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+/* The end segment likewise spans the aside while it is docked (`--aside-span`), so the breadcrumb ends
+   where the aside begins, below the desktop breakpoint too; a panel floating over the terminal on a
+   phone takes none of it. It does not ease: the aside docks and goes at once. Under right-to-left
+   the aside is at the window's left, where the bar's own padding already covers
+   `--window-controls-inset` of it. */
+.title-bar-end {
+  width: var(--aside-span, 0px);
+  min-width: min-content;
+}
+
+.title-bar-end:dir(rtl) {
+  width: calc(var(--aside-span, 0px) - var(--window-controls-inset, 0px));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-bar-start-easing {
+    transition: none;
+  }
+}

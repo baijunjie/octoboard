@@ -29,7 +29,7 @@ import type { ConsoleSessionColour } from "../protocol";
  * 1.4.11) does not apply. Holding every colour to it would turn yellow olive, pink rose and orange
  * brown in the light appearance, and make the colours alike. The pale entries (yellow, lime, amber
  * on the light sidebar, gray on the dark one) stay visible instead through a hairline ring of the
- * foreground colour round the dot and each swatch (`.session-colour-ring` in `style.css`).
+ * foreground colour round the dot and each swatch (`.session-colour-ring` in `sessionColours.css`).
  *
  * The chroma written below is a cap: `oklchToHex` reduces it to what the sRGB gamut holds at the
  * lightness and hue, so no entry depends on the browser's gamut mapping.
@@ -118,7 +118,7 @@ export function sessionColourHex(colour: ConsoleSessionColour, theme: ColourThem
 }
 
 /** A palette entry's colour in both appearances, as the two custom properties the
- * `.session-colour-dot` rule in `style.css` paints with, the second one in the dark appearance;
+ * `.session-colour-dot` rule in `sessionColours.css` paints with, the second one in the dark appearance;
  * `undefined` for a label outside the palette. */
 export function sessionColourVars(colour: ConsoleSessionColour): React.CSSProperties | undefined {
   const light = sessionColourHex(colour, "light");

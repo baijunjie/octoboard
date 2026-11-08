@@ -8,7 +8,7 @@ import { ROW_ICON_BUTTON_CLASS } from "./RowControls";
  * A two-state view control drawn as one icon button. The icon shows the state the view is in and
  * `label`, which is both the accessible name and the tooltip, says what pressing does: the
  * convention of the pane toggles. Nothing is told by colour, so the caller gives each state its own
- * icon and `.icon-toggle` (`style.css`) keeps the selected state from taking a fill.
+ * icon and `.icon-toggle` (`IconToggle.css`) keeps the selected state from taking a fill.
  */
 export function IconToggle({
   label,

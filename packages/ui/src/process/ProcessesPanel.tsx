@@ -374,7 +374,7 @@ function TreeRow({ tree, acting, offersKeep, onStop, onKeep }: {
     else onKeep();
   };
   // In dark the Stop label is short of 4.5:1 on this card, a shortfall kept by the user's decision (see the
-  // `--panel-row` comment in style.css and docs/ui-standard.md, "Conformance level and exceptions").
+  // `--panel-row` comment in styles/surfaces.css and docs/ui-standard.md, "Conformance level and exceptions").
   return (
     <div className="group flex min-w-0 flex-col gap-1 rounded-lg bg-(--panel-row) px-3 py-2 shadow-(--panel-shadow)">
       <ProcessCommand tree={tree} />

@@ -1,0 +1,17 @@
+/* WebKit insets a focused input's outline by 2px. Keep HeroUI's invalid outline against its
+   focus ring so the two draw as one edge. */
+.input[data-invalid="true"]:is(:focus, [data-focused="true"]) {
+  outline-offset: 0;
+}
+
+/* A field's fill is the ghost button's default hover colour. Blend over that actual fill so the
+   clear action stays visible in either theme, including locally themed dialogs and popovers. */
+[data-field-clear] {
+  --button-bg-hover: color-mix(in oklab, var(--foreground) 16%, transparent);
+  --button-bg-pressed: color-mix(in oklab, var(--foreground) 24%, transparent);
+
+  &:active,
+  &[data-pressed="true"] {
+    --button-bg-hover: var(--button-bg-pressed);
+  }
+}

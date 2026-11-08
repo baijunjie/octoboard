@@ -11,7 +11,7 @@ export const AlertStatusContext = createContext<AlertStatus>("danger");
  * the recovery action solid (`kind="action"`), Details soft (`kind="details"`). A danger Alert uses
  * HeroUI's `danger` and `danger-soft` variants; HeroUI has no warning variant, so a warning Alert's
  * buttons take the same two treatments from `.alert-button--warning` and `.alert-button--warning-soft`
- * in `style.css`. This is the one place the pairing is defined. */
+ * in `AlertButton.css`. This is the one place the pairing is defined. */
 export function AlertButton({ kind, className = "", ...props }: Omit<ButtonProps, "variant"> & { kind: "action" | "details" }): React.ReactElement {
   const status = useContext(AlertStatusContext);
   if (status === "danger") return <Button {...props} className={className} variant={kind === "action" ? "danger" : "danger-soft"} />;

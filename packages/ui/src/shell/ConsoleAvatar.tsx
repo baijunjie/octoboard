@@ -3,7 +3,7 @@ import React from "react";
 
 import type { Console } from "../protocol";
 
-/** The fills a default avatar picks from (`--avatar-*` in `style.css`), each written out in full
+/** The fills a default avatar picks from (`--avatar-*` in `ConsoleAvatar.css`), each written out in full
  * so Tailwind emits it. */
 const FILLS = [
   "bg-(--avatar-olive)",

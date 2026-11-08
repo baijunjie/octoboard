@@ -100,14 +100,14 @@ it("defaults to xs and marks an unbroken chip", () => {
   );
   const chips = Array.from(container.querySelectorAll<HTMLElement>("[data-inline-reference]"));
   expect(chips.map((chip) => chip.dataset.size)).toEqual(["xs", "sm", "xs"]);
-  // style.css tightens the line height of an unbroken chip, so it stays clear of the line below.
+  // InlineReference.css tightens the line height of an unbroken chip, so it stays clear of the line below.
   expect(chips[2].classList).toContain("inline-reference--unbroken");
   expect(chips[1].classList).not.toContain("inline-reference--unbroken");
 });
 
 it("draws each colour's fill and text from the shared tint, the badge's, and never its edge", () => {
-  // jsdom resolves no `var()`, so the rules are read from style.css.
-  const css = readFileSync(resolve(import.meta.dirname, "../../style.css"), "utf8");
+  // jsdom resolves no `var()`, so the rules are read from InlineReference.css.
+  const css = readFileSync(resolve(import.meta.dirname, "../../i18n/InlineReference.css"), "utf8");
   // The neutral chip's text is HeroUI's `--default-foreground`.
   expect(css).toContain('.inline-reference.chip--soft[data-color="default"] { --chip-bg: var(--tint-default-bg); --chip-fg: var(--default-foreground); }');
   for (const tint of ["accent", "help", "success", "warning", "danger"]) {
@@ -117,10 +117,10 @@ it("draws each colour's fill and text from the shared tint, the badge's, and nev
 });
 
 it("styles every size as padding around the font of the surrounding text", () => {
-  // jsdom resolves neither inheritance nor `var()`, so the rules are read from style.css (by directory: under jsdom
+  // jsdom resolves neither inheritance nor `var()`, so the rules are read from InlineReference.css (by directory: under jsdom
   // `import.meta.url` is not a file URL);
   // scripts/gallery-chip-geometry.mjs measures the result in a browser.
-  const css = readFileSync(resolve(import.meta.dirname, "../../style.css"), "utf8");
+  const css = readFileSync(resolve(import.meta.dirname, "../../i18n/InlineReference.css"), "utf8");
   const rule = (selector: string) => css.match(new RegExp(`^${selector.replace(/[.[\]"]/g, "\\$&")} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
   const padding = (selector: string) => ["block", "inline"].map((axis) => rule(selector).match(new RegExp(`--inline-reference-${axis}: (\\S+);`))?.[1]);
   for (const property of ["font-family", "font-size", "font-weight", "line-height"]) expect(rule(".inline-reference")).toContain(`${property}: inherit;`);

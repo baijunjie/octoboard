@@ -1,0 +1,25 @@
+/* An Alert draws two things itself (`ErrorAlert`, which `FailureAlert` is built on). Its background is HeroUI's soft
+   fill for its status. Its shadow is HeroUI's `--surface-shadow` in light, three layers (`0 2px 4px`, `0 1px 2px`,
+   `0 0 1px`, at 4%, 6% and 6%, from HeroUI 3.2.6's `variables.css`), which in grey reads as a rim on a tinted fill;
+   it keeps those offsets, blurs and strengths and takes its colour from the Alert's status instead, defined once
+   here as `--alert-shadow-{status}`. Dark keeps HeroUI's own, no shadow. */
+:root {
+  --alert-shadow-warning: 0 2px 4px 0 color-mix(in oklab, var(--warning) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--warning) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--warning) 6%, transparent);
+  --alert-shadow-danger: 0 2px 4px 0 color-mix(in oklab, var(--danger) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--danger) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--danger) 6%, transparent);
+}
+
+.dark,
+[data-theme="dark"] {
+  --alert-shadow-warning: 0 0 0 0 transparent inset;
+  --alert-shadow-danger: 0 0 0 0 transparent inset;
+}
+
+.alert-fill-warning {
+  background-color: var(--warning-soft);
+  --surface-shadow: var(--alert-shadow-warning);
+}
+
+.alert-fill-danger {
+  background-color: var(--danger-soft);
+  --surface-shadow: var(--alert-shadow-danger);
+}

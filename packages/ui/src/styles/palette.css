@@ -1,0 +1,66 @@
+/* The one colour configuration of a tag: a `StatusBadge` and an `InlineReference` both draw their fill
+   (`--tint-{colour}-bg`) and text (`--tint-{colour}-fg`) from it, and the badge's hairline (`--tint-{colour}-edge`) is
+   the badge's alone. The neutral fill is the foreground at 8% in light and 10% in dark, translucent like the coloured
+   ones, so it deepens on a grey surface (a hovered or selected row) instead of vanishing into it as an opaque
+   grey would; over white it is close to HeroUI's light `--default`; dark takes 10% rather than the 8% that would match
+   its `--default` over a dialog, which would sit barely off `--background`. Its text is HeroUI's
+   `--default-foreground` and its hairline `--app-muted` at 28%. The four HeroUI colours take their soft fill and their
+   soft foreground pulled toward the foreground where it misses 4.5:1 on a surface a tag sits on (the measured minima
+   are in `StatusBadge`'s comment); the help one is the app's purple. */
+:root {
+  --tint-default-bg: color-mix(in oklab, var(--foreground) 8%, transparent);
+  --tint-default-edge: color-mix(in oklab, var(--app-muted) 28%, transparent);
+  --tint-accent-bg: var(--accent-soft);
+  --tint-accent-fg: color-mix(in oklab, var(--accent-soft-foreground) 85%, var(--foreground));
+  --tint-accent-edge: color-mix(in oklab, var(--accent) 35%, transparent);
+  --tint-success-bg: var(--success-soft);
+  --tint-success-fg: color-mix(in oklab, var(--success-soft-foreground) 80%, var(--foreground));
+  --tint-success-edge: color-mix(in oklab, var(--success) 35%, transparent);
+  --tint-warning-bg: var(--warning-soft);
+  --tint-warning-fg: color-mix(in oklab, var(--warning-soft-foreground) 85%, var(--foreground));
+  --tint-warning-edge: color-mix(in oklab, var(--warning) 35%, transparent);
+  --tint-danger-bg: var(--danger-soft);
+  --tint-danger-fg: color-mix(in oklab, var(--danger-soft-foreground) 85%, var(--foreground));
+  --tint-danger-edge: color-mix(in oklab, var(--danger) 35%, transparent);
+  --tint-help-bg: color-mix(in oklab, var(--help) 15%, transparent);
+  --tint-help-fg: color-mix(in oklab, var(--help) 40%, var(--foreground));
+  --tint-help-edge: color-mix(in oklab, var(--help) 35%, transparent);
+}
+
+.dark,
+[data-theme="dark"] {
+  --tint-default-bg: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --tint-success-fg: var(--success-soft-foreground);
+  --tint-warning-fg: var(--warning-soft-foreground);
+  --tint-danger-fg: color-mix(in oklab, var(--danger-soft-foreground) 75%, var(--foreground));
+}
+
+/* Icons and glyphs that carry a meaning (a status glyph, a failure mark, a lock, a Git badge, the import
+   result's marks, the selected branch's ring and the selected card's border) are drawn in HeroUI's
+   `--{colour}-soft-foreground`, the colour it gives an Alert's and a Toast's indicator, through its own
+   `text-`, `border-` and `bg-{colour}-soft-foreground` utilities: this file defines nothing for them. They
+   need 3:1 on every surface they sit on. At the worst of the content surfaces (field, dialog, popover,
+   tooltip, the control fills with their hovers, the sidebar resting, hovered and selected, the panel with
+   its hover and selected fills, `--background`, `--chrome`) they are, in light, 4.36:1 accent, 3.93:1
+   success, 4.10:1 warning and 4.83:1 danger, all on a hovered control fill; in dark 4.32:1, 6.08:1, 7.05:1
+   and 3.78:1, on a floating surface's hovered control fill. Focus mode's switch chip, a tertiary button on
+   the sidebar, takes them lower when hovered or pressed: accent about 4.15:1 and success 3.74:1 in light,
+   success 6.07:1 in dark. The title bar's status glyph and the rail's
+   waiting hand sit on the window material (light #e2e4e5, dark #484a4b), resting, hovered and pressed:
+   accent 4.77 / 4.17 / 3.62 light and 3.61 resting in dark (a dot that is not a button), success 4.30 /
+   3.76 / 3.27 light and 5.08 / 4.06 / 3.34 dark, warning 4.48 / 3.92 / 3.40 light and 5.90 / 4.72 / 3.88
+   dark. A destructive menu item's icon is `text-danger`, HeroUI's colour for that item's label, which falls
+   under 3:1 on a dark floating surface (see the floating-surface rule in `style.css`). The focus ring (`--focus`, which is
+   `--accent`) and the accent fills are HeroUI's too, and are in light 3.68:1 on a dialog, 3.53:1 on the
+   panel, 3.01:1 on a selected panel row and 2.82:1 on a selected sidebar row, 2.90:1 on a control fill and
+   2.64:1 on a hovered one, in dark 4.03:1, 4.48:1, 3.58:1, 3.27:1, 3.26:1 and 2.89:1; the user accepted the
+   shortfalls for one accent colour. */
+
+@theme inline {
+  --color-app-muted: var(--app-muted);
+  --color-chrome-muted: var(--chrome-muted);
+  --color-panel: var(--panel);
+  --color-panel-sidebar: var(--panel-sidebar);
+  --color-panel-hover: var(--panel-hover);
+  --color-panel-selected: var(--panel-selected);
+}

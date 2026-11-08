@@ -14,9 +14,9 @@ const SIZES: Record<StatusBadgeSize, { spacing: string; single: string; wrapRadi
   lg: { spacing: "px-3 py-1 text-sm leading-5", single: "w-7", wrapRadius: "rounded-[14px]" },
 };
 
-/* Fill, text and edge are the shared tints of style.css (`--tint-{colour}-bg`, `-fg` and `-edge`), the same
+/* Fill, text and edge are the shared tints of styles/palette.css (`--tint-{colour}-bg`, `-fg` and `-edge`), the same
    colours an `InlineReference` is drawn from; the edge is the bordered variant's hairline and the chip never takes it.
-   The neutral badge's text is HeroUI's `--default-foreground`, which style.css has no token for.
+   The neutral badge's text is HeroUI's `--default-foreground`, which styles/palette.css has no token for.
    The classes are spelled out, since Tailwind finds them by their text. */
 const COLORS: Record<StatusBadgeColor, { soft: string; ring: string }> = {
   default: { soft: "bg-[var(--tint-default-bg)] text-[var(--default-foreground)]", ring: "ring-[var(--tint-default-edge)]" },
@@ -40,7 +40,7 @@ function colorClasses(color: StatusBadgeColor, variant: StatusBadgeVariant): str
  * Rounded and never shrinking (unless `overflow` says otherwise), so the name beside it is
  * what gives way when the room runs out.
  *
- * `color` is one of the shared tints of style.css (`--tint-{colour}-bg`, `-fg`, `-edge`: neutral, HeroUI's four and
+ * `color` is one of the shared tints of styles/palette.css (`--tint-{colour}-bg`, `-fg`, `-edge`: neutral, HeroUI's four and
  * the app's purple `help`, for help and hints), the colours an `InlineReference` is drawn from too. `variant` is
  * `"soft"` (borderless, for a state) or `"bordered"` (a hairline edge, for a qualifier of the name; the default).
  *

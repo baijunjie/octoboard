@@ -4,7 +4,7 @@ import { TOAST_BREAKPOINT, TOAST_MARGIN, TOAST_WIDTH } from "./toastGeometry";
 import { dialogAround } from "./dialogElement";
 import { partSelector, toastStateAttributes } from "../../primitives";
 
-/** The custom property `style.css` lifts the toast region by, from the window's bottom edge. */
+/** The custom property `primitives/Toast.css` lifts the toast region by, from the window's bottom edge. */
 const PROPERTY = "--dialog-footer-clearance";
 
 const REGION = partSelector.toastRegion;

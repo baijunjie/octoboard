@@ -1,0 +1,11 @@
+/* Paired glyphs in GitBadge's fixed clip make each directional loop continuous. The second
+   glyph takes the first one's place at the boundary; reduced motion leaves one static glyph. */
+@keyframes pull-scroll {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+@keyframes push-scroll {
+  from { transform: translateY(0); }
+  to { transform: translateY(-100%); }
+}

@@ -1,0 +1,8 @@
+/* The sidebar's view changes (`Sidebar.tsx`, played with the Web Animations API so the view is
+   not remounted): the horizontal shift is a variable so a right-to-left layout can reverse it. */
+:root {
+  --view-shift: 24px;
+}
+[dir="rtl"] {
+  --view-shift: -24px;
+}

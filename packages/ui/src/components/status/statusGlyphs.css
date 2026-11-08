@@ -1,0 +1,111 @@
+@keyframes status-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+/* The raised hand's motion, wherever one is drawn (`statusGlyphs.tsx`, and the hands the rail's
+   avatar badge and waiting count draw themselves): it waves now and then (a working session's dot
+   uses Tailwind's own `animate-ping`). Applied through `motion-safe:` only, so both stand still
+   where the system asks for reduced motion. */
+@keyframes status-wave {
+  0%,
+  60%,
+  100% {
+    transform: rotate(0deg);
+  }
+  10%,
+  30% {
+    transform: rotate(16deg);
+  }
+  20%,
+  40% {
+    transform: rotate(-10deg);
+  }
+}
+
+/* The dormant "zz"'s motion (`SleepGlyph` in `statusGlyphs.tsx`): copies of the large Z (9 units, centred at
+   7.5, 16.5) drift along the diagonal from below the bottom left corner to beyond the top right one, shrinking
+   as they rise, from 1.6 times the large Z where one enters to 0.3 where it leaves (a speck by then). Three copies
+   run the same loop a third of a period apart (`-second`, `-third`: the same animation with a negative delay), so
+   a new Z enters at the bottom left as the top one leaves. Full opacity throughout, so the glyph keeps the 3:1
+   contrast a state indicator needs at every frame (docs/ui-standard.md, "Contrast"); a copy is wholly
+   outside the glyph's box at both ends, so its jump back to the start is never seen, and the svg clips it as it
+   crosses the edges (`overflow-hidden`), so nothing leaves the slot.
+
+   The shrink is one even motion with no knee: the scale falls by the same ratio in equal times, 1.6 * (0.3 / 1.6)^t
+   over the loop's fraction t (a ratio of 0.5 per second at the 2.4s period; the Z is 0.8 times the large one as it
+   crosses the middle of the box), and a Z is placed along the diagonal in step with its size (its offset is linear
+   in its scale, so it moves faster while large and slower as it dwindles, as a receding Z would), which keeps the
+   Zs in view at least 1.7 times apart in size, two of them in view nine tenths of the time, and their strokes at
+   least 2 units apart. The curve is written out as a keyframe every 40th of the loop (the generator is the formula
+   above, offset = -16.5 + 26.77 * (1.6 - scale) units along each axis) because a keyframe rule cannot say
+   "exponential", and each leg between two is linear in both scale and offset, so the rate of shrinking wanders by
+   a few percent within a leg and has no step between them. Applied through `motion-safe:` only, so the glyph
+   stands still, as `SLEEP_PATHS` draws it, where the system asks for reduced motion; `sleepGlyph.test.ts` checks
+   these figures against the keyframes.
+
+   A kept shortfall, by the user's decision: each Z's stroke shrinks with it, so on a 1x display a Z in the upper
+   half of its rise (below about 0.8 times the large one) renders under the 3:1 a state indicator needs, fading
+   further as it dwindles to the exit speck; on a 2x display only that speck does. The large Z stays at full
+   contrast. See "Conformance level and exceptions" in docs/ui-standard.md. */
+@keyframes status-scroll {
+  0% { transform: translate(-16.500px, 16.500px) scale(1.6000); }
+  2.5% { transform: translate(-14.745px, 14.745px) scale(1.5344); }
+  5% { transform: translate(-13.061px, 13.061px) scale(1.4715); }
+  7.5% { transform: translate(-11.447px, 11.447px) scale(1.4112); }
+  10% { transform: translate(-9.898px, 9.898px) scale(1.3534); }
+  12.5% { transform: translate(-8.413px, 8.413px) scale(1.2979); }
+  15% { transform: translate(-6.989px, 6.989px) scale(1.2447); }
+  17.5% { transform: translate(-5.624px, 5.624px) scale(1.1937); }
+  20% { transform: translate(-4.314px, 4.314px) scale(1.1448); }
+  22.5% { transform: translate(-3.058px, 3.058px) scale(1.0979); }
+  25% { transform: translate(-1.853px, 1.853px) scale(1.0529); }
+  27.5% { transform: translate(-0.698px, 0.698px) scale(1.0097); }
+  30% { transform: translate(0.410px, -0.410px) scale(0.9683); }
+  32.5% { transform: translate(1.472px, -1.472px) scale(0.9286); }
+  35% { transform: translate(2.491px, -2.491px) scale(0.8906); }
+  37.5% { transform: translate(3.468px, -3.468px) scale(0.8541); }
+  40% { transform: translate(4.405px, -4.405px) scale(0.8191); }
+  42.5% { transform: translate(5.304px, -5.304px) scale(0.7855); }
+  45% { transform: translate(6.165px, -6.165px) scale(0.7533); }
+  47.5% { transform: translate(6.992px, -6.992px) scale(0.7224); }
+  50% { transform: translate(7.785px, -7.785px) scale(0.6928); }
+  52.5% { transform: translate(8.545px, -8.545px) scale(0.6644); }
+  55% { transform: translate(9.274px, -9.274px) scale(0.6372); }
+  57.5% { transform: translate(9.973px, -9.973px) scale(0.6111); }
+  60% { transform: translate(10.643px, -10.643px) scale(0.5860); }
+  62.5% { transform: translate(11.286px, -11.286px) scale(0.5620); }
+  65% { transform: translate(11.903px, -11.903px) scale(0.5390); }
+  67.5% { transform: translate(12.494px, -12.494px) scale(0.5169); }
+  70% { transform: translate(13.061px, -13.061px) scale(0.4957); }
+  72.5% { transform: translate(13.605px, -13.605px) scale(0.4754); }
+  75% { transform: translate(14.127px, -14.127px) scale(0.4559); }
+  77.5% { transform: translate(14.627px, -14.627px) scale(0.4372); }
+  80% { transform: translate(15.107px, -15.107px) scale(0.4193); }
+  82.5% { transform: translate(15.567px, -15.567px) scale(0.4021); }
+  85% { transform: translate(16.008px, -16.008px) scale(0.3856); }
+  87.5% { transform: translate(16.431px, -16.431px) scale(0.3698); }
+  90% { transform: translate(16.837px, -16.837px) scale(0.3547); }
+  92.5% { transform: translate(17.226px, -17.226px) scale(0.3401); }
+  95% { transform: translate(17.599px, -17.599px) scale(0.3262); }
+  97.5% { transform: translate(17.957px, -17.957px) scale(0.3128); }
+  100% { transform: translate(18.300px, -18.300px) scale(0.3000); }
+}
+
+/* Tailwind's ping at a smaller reach: the delegated ring (`statusGlyphs.tsx`) is more than half its 16px
+   slot, so the stock ping's 2x would carry its fading copy past the slot's edge. Whoever applies it sets
+   `--ping-scale` (`delegatedGlyph.ts`) to end the copy at the slot's edge, as the other dots' copies end
+   at theirs; without it the copy grows as the stock ping's. Applied through `motion-safe:` only, like
+   the ping. */
+@keyframes ping-small {
+  75%,
+  100% {
+    transform: scale(var(--ping-scale, 2));
+    opacity: 0;
+  }
+}

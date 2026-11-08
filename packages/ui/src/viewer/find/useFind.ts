@@ -42,7 +42,7 @@ function isFind(event: Pick<KeyboardEvent, "code" | "metaKey" | "ctrlKey" | "alt
   return event.code === "KeyF" && !event.altKey && !event.shiftKey && isPrimaryModifier(event, host);
 }
 
-/** The gap each region leaves for the open bar, in pixels: `--find-bar-gap` (`style.css`), which is
+/** The gap each region leaves for the open bar, in pixels: `--find-bar-gap` (`find.css`), which is
  * the height of its `::before`, read where the content inherits it. */
 function barGapOf(element: Element): number {
   const gap = getComputedStyle(element).getPropertyValue("--find-bar-gap").trim();
@@ -113,7 +113,7 @@ function useDrawnTextVersion(contentRef: React.RefObject<HTMLElement | null>, wa
  * is the one of the search that answers the change, not of the result it replaces. The matches are
  * painted as CSS highlights, which change neither the DOM nor the selection; where the browser has
  * none, the bar still counts and scrolls. While the bar is open each searched scroller leaves a gap
- * at its top for it (`style.css`), and a scroller that is scrolled is moved by that gap as the bar
+ * at its top for it (`find.css`), and a scroller that is scrolled is moved by that gap as the bar
  * opens and closes, so its text does not jump.
  *
  * `waiting` is the content still on its way, which keeps the bar up while nothing is drawn yet; the

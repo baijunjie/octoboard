@@ -80,11 +80,11 @@ the source.
 
 ## Under a local override of a HeroUI token, use the token itself, not its `--color-*` alias or a token derived from it
 
-Several rules in `packages/ui/src/style.css` give a subtree its own value of a HeroUI token: `.control-fills` and
-`.sidebar-fills` the `--default` family, and in dark every floating surface (a dialog, a menu, a popover, a tooltip, a
-toast) its own `--overlay`, `--surface`, `--default`, `--border` and `--separator`. A custom property whose value is a
-`var()` is resolved on the element that declares it and inherited as that result, so inside such a subtree only the
-overridden token itself carries the local value:
+The `.control-fills` and `.sidebar-fills` rules in `packages/ui/src/styles/surfaces.css` give a subtree its own
+`--default` family, and the dark floating-surface rule in `packages/ui/src/style.css` gives each dialog, menu,
+popover, tooltip and toast its own `--overlay`, `--surface`, `--default`, `--border` and `--separator`. A custom property
+whose value is a `var()` is resolved on the element that declares it and inherited as that result, so inside such a
+subtree only the overridden token itself carries the local value:
 
 - HeroUI's theme (`packages/ui/node_modules/@heroui/styles/dist/themes/shared/theme.css`) declares its colours in
   `@theme inline` as `--color-<name>: var(--<name>)`, which Tailwind emits on `:root`. A utility (`bg-overlay`,
@@ -184,7 +184,7 @@ that observation has to be rebuilt as rows come and go. The scroll fade and `Fad
 ## Horizontal padding in the sidebar and the right pane comes from the inset tokens
 
 In the sidebar and the right pane, any horizontal padding or margin that places content relative to the pane's edge
-is written with the tokens in `packages/ui/src/style.css` — `--pane-inset`, `--row-fill-inset`,
+is written with the tokens in `packages/ui/src/styles/layout.css` — `--pane-inset`, `--row-fill-inset`,
 `--row-content-inset` — never with a literal such as `px-2`, `px-3` or `px-4`, so both panes keep one inset. A header,
 a bar, a notice or a heading outside a row takes `px-(--pane-inset)`; a row's hover or selected fill sits
 `--row-fill-inset` from the edge (as `mx-` on the row, or as `px-` on the scroller holding the rows), and the row pads

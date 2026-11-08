@@ -2,7 +2,6 @@ import { createContext, useContext, useLayoutEffect, useRef, useState, type Reac
 
 import { useT } from "../../i18n/react";
 import { CopyButton } from "../controls/CopyButton";
-import { ROW_ICON_BUTTON_CLASS } from "../controls/RowControls";
 import { CODE_SURFACE_CLASS, CodeBlock } from "../text/CodeBlock";
 import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
 import { Surface } from "../../primitives";
@@ -41,8 +40,8 @@ export function DiagnosticBlock({ children, labelledBy }: { children: string; la
       >
         <CodeBlock dir="ltr" wrap={false} flush>{children}</CodeBlock>
       </FadedScroller>
-      <div className="absolute top-1 z-10 rounded-md bg-surface-secondary" style={{ right: `calc(${scrollbarWidth}px + var(--spacing))` }}>
-        <CopyButton text={children} failedText={t("error.copyDetailsFailed")} size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} />
+      <div className="absolute top-[calc(var(--spacing)*3+0.5lh)] z-10 -translate-y-1/2 rounded-md bg-surface-secondary" style={{ right: `calc(${scrollbarWidth}px + var(--spacing))` }}>
+        <CopyButton text={children} failedText={t("error.copyDetailsFailed")} size="xs" variant="tertiary" className="diagnostic-copy-button rounded-md" />
       </div>
     </Surface>
   );

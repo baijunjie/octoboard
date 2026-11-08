@@ -3,7 +3,7 @@ import React from "react";
 import { TitledControl } from "../components/hint/TitledControl";
 import { BadgeAnchor, Button, type ButtonPress } from "../primitives";
 
-/** The hover and pressed fills of a control on the window chrome: translucent tints (`style.css`), so
+/** The hover and pressed fills of a control on the window chrome: translucent tints (`styles/surfaces.css`), so
  * they read on the native material as well as on the browser's opaque chrome colour. HeroUI's button
  * takes its fills from these custom properties. */
 export const CHROME_BUTTON_FILLS = "[--button-bg-hover:var(--chrome-hover)] [--button-bg-pressed:var(--chrome-active)]";

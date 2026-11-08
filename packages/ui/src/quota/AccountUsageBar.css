@@ -1,0 +1,21 @@
+/* The track of the compact `AccountUsageBar`, the same `--default` as the rail's and the details' meters. The table
+   cell draws it bare; a popover, a menu and a select trigger add a hairline edge of the foreground (`--edge`, the bar's
+   `edge` prop), since the track there is hardly off its surface. The edge is an inset shadow on both bars alike: inside
+   the track, so the bars keep their 4:3 heights and end together, and painted under the fill, so it outlines only the
+   empty part (over the fill it would leave a 3px bar a single pixel of its colour). The edge (25% of the foreground
+   over the track) is a hint at a track that is already there, not a control boundary, so it is not held to 3:1. The
+   fills' ratios against the track are under `.quota-meter--provider`. In dark the track is a step lighter than
+   `--default`, which on a select trigger is the trigger's own fill and on a floating surface only a faint step off it:
+   a track that faint is lost on a dark ground, where a light one just as faint still reads. */
+.quota-bar-track {
+  background-color: var(--default);
+}
+
+.quota-bar-track--edge {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 25%, transparent);
+}
+
+.dark .quota-bar-track,
+[data-theme="dark"] .quota-bar-track {
+  background-color: color-mix(in oklab, var(--default) 85%, var(--foreground));
+}

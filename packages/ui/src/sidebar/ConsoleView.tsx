@@ -185,7 +185,7 @@ export function ConsoleBody({
         ) : (
         // The inactive projects (no unarchived session) sit at the end, dimmed as one group; pointing at
         // any of them, keyboard focus or an open menu inside one, brings the whole group back.
-        // Keyboard focus only (`style.css` lifts the group for it, `.inactive-projects`): focus a
+        // Keyboard focus only (`ConsoleView.css` lifts the group for it, `.inactive-projects`): focus a
         // mouse-opened menu hands back to its trigger would otherwise keep the group lit after the
         // pointer has gone. An open menu is matched on `aria-haspopup`, since a project
         // row is itself `aria-expanded` while open.

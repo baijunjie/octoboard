@@ -60,7 +60,7 @@ function statusDrawing(status: ShownStatusKind, small: boolean): React.ReactElem
       return <CirclePause className={`${iconClass} text-success-soft-foreground`} />;
     case "idle":
       // HeroUI's success soft foreground, the colour of every glyph of that meaning (3.93:1 at the worst
-      // of the surfaces it sits on, see `style.css`).
+      // of the surfaces it sits on, see `styles/palette.css`).
       return <MessageCircleMore viewBox={shiftedViewBox(BUBBLE_SHIFT)} className={`${iconClass} text-success-soft-foreground`} />;
     case "done":
       return <CircleCheck className={`${iconClass} text-success-soft-foreground`} />;

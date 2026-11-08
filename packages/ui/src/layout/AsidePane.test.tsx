@@ -78,7 +78,7 @@ it("floats an open panel over the terminal's area in a window too narrow to dock
   expect(pane.className).toContain("pointer-events-none");
   expect(pane.hasAttribute("data-floating-panel")).toBe(true);
   // It starts just below its place and clear, without a transition, and is then let to rise: the
-  // pane fades, its cards rise by 4% of their own height (`style.css`).
+  // pane fades, its cards rise by 4% of their own height (`paneMotion.css`).
   expect(pane.className).toContain("opacity-0");
   expect(pane.classList.contains("transition-none")).toBe(true);
   expect(pane.dataset.cardMotion).toBe("preparing");

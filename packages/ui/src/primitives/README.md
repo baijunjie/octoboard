@@ -37,10 +37,10 @@ draws it (`StaticTag`, `GroupFieldError`), marks and all.
 - **Appearance stays HeroUI's.** Render HeroUI's own component and pick its look through its variants and slots, as
   `docs/ui-standard.md` requires; a wrapper adds no styling the standard does not already approve.
 - **A treatment the standard approves lives in the wrapper.** A fix or approved departure that every instance of the
-  component needs (a WebKit compositing treatment, a size the standard confirms) is applied inside the wrapper, with a
-  comment naming the heading of `docs/ui-standard.md` or the reason it rests on, and is removed from the call sites
-  and the stylesheet. A treatment that only some uses need is a prop of the wrapper, not a class each call site
-  repeats.
+  component needs (a WebKit compositing treatment, a size the standard confirms) is applied by the wrapper, with its
+  CSS in an adjacent stylesheet and a comment naming the heading of `docs/ui-standard.md` or the reason it rests on.
+  It is removed from call sites and the global stylesheet's rule bodies. A treatment that only some uses need is a
+  prop of the wrapper, not a class each call site repeats.
 - **Hooks and utilities.** A `react-aria` hook the application uses is wrapped by a project hook with the project's
   arguments and results (`useKeyboardModality`, `useFocusVisibleProps`, `useObjectRef`, `useTooltipState`). A utility
   that is neither a component nor a hook (`mergeRefs`) is re-exported from the entry point, with its type redefined

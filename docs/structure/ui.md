@@ -40,7 +40,18 @@ and `RequestSender` type a request's result from it, and `looseRequestSender` ad
 `protocol.ts` (the one door to the wire types: it re-exports `protocol.generated.ts`, which the daemon's
 `protocol::bindings` test writes from the Rust types, and adds the unions `ClientRequest` and `ClientRequestBody` a
 client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/app.json`);
-`style.css` (Tailwind theme and the design tokens).
+`style.css` (the shared stylesheet entry: Tailwind configuration, shared utilities and ordered stylesheet imports).
+
+### Stylesheets
+
+`src/styles/` holds cross-component definitions: `layout.css` for shared geometry and spacing tokens,
+`surfaces.css` for window surfaces and control fills, and `palette.css` for semantic colours and shared tints.
+Wrapper styles live beside their wrappers in `src/primitives/`; styles specific to a composite or feature live
+beside their owner elsewhere in `src/`.
+
+`src/style.css` loads those files through ordered CSS imports. The application, gallery and both website-preview
+entries all load that entry before rendering, so component styles are available before a lazy component mounts and
+their cascade order does not depend on which screen opened first.
 
 ### Wrapper layer (bottom)
 
@@ -213,6 +224,10 @@ dependency).
 - A third-party UI component, hook or utility the application needs and `src/primitives/` does not export yet gets its
   wrapper there first, in the same change, and is used from the barrel; application code never imports the libraries
   (see the layer's README).
+- A common correction or approved extension of a wrapped control belongs in that wrapper's adjacent stylesheet in
+  `src/primitives/`. A composite or feature's own layout and visual treatment belongs beside that owner. Shared
+  theme and geometry definitions belong in `src/styles/`; register owned stylesheets in `src/style.css` rather than
+  loading them from component modules.
 - A screen-level concern of `App` is a hook in `app/`; the window chrome is in `shell/`; a new feature is a feature
   directory importing the leaf and pure layers (and other features only where the rules above allow it).
 - Pure rules and wording about sessions, accounts, agents, git or formatting go in the matching pure layer, not in a

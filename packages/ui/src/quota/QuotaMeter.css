@@ -1,0 +1,41 @@
+/* The fill of an account quota bar (`QuotaMeter` and the compact `AccountUsageBar`): one colour per provider, which its
+   presentation module holds (`src/providers/`) and `providerFillVars` hands the bar as `--provider-fill-light` and
+   `--provider-fill-dark`, the way `.session-colour-dot` takes its pair; a provider without a colour sets neither, and its
+   bars take the foreground, as its mark does. Claude's is its provider colour, an orange darkened to keep 3:1 against every track it
+   is drawn on at full opacity, lightened on the dark tracks, though the bar is decorative and not held to it (see
+   docs/ui-standard.md, "A colour mark whose meaning is in words"); Codex's is a blue. Inside `.control-fills`
+   (Settings, the dialogs, the rail panel) `--default` is `--control-fill`, and the compact bar's dark track lightens that
+   a step (see `.quota-bar-track`): the lightest dark track, and the one that sets Claude's dark value. From the module
+   colours, light then dark: the compact bar on `--control-fill` (a table cell, a select trigger; in dark also a popover
+   and a menu, whose `--default` is the floating fill) Claude 3.55 / 3.01, Codex 3.65 / 3.10; the compact bar on HeroUI's
+   own `--default` (a light popover or menu) Claude 3.77, Codex 3.88; the meters, on `--control-fill` itself (the rail
+   panel, the details) Claude 3.55 / 4.52, Codex 3.65 / 4.65. The menu bar icon's menu reads the same colours from the
+   module for its own bars in either appearance. */
+.quota-meter--provider {
+  --meter-fill: var(--provider-fill-light, var(--default-foreground));
+}
+
+.dark .quota-meter--provider,
+[data-theme="dark"] .quota-meter--provider {
+  --meter-fill: var(--provider-fill-dark, var(--default-foreground));
+}
+
+/* An account that is used up draws its bars in a neutral grey instead of the provider's colour, so it recedes beside the
+   accounts that can still be used; its "Limit reached" badge says why, beside the name on the rail
+   (`AccountNameLine`) and after the bar in the accounts table (`AccountUsageCell`). The grey is the muted text's hue,
+   a step fainter than the provider colours on their track. `--meter-used-up-fill` is the one definition of that grey,
+   which the menu bar icon's menu reads back for its own bars. */
+:root,
+.light,
+[data-theme="light"] {
+  --meter-used-up-fill: oklch(0.61 0.0138 285.94);
+}
+
+.dark,
+[data-theme="dark"] {
+  --meter-used-up-fill: oklch(0.56 0.015 286.067);
+}
+
+.quota-meter--used-up {
+  --meter-fill: var(--meter-used-up-fill);
+}

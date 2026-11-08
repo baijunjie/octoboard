@@ -291,7 +291,7 @@ function DialogFrame({
 
   return (
     // The viewer fills narrow screens. Between tablet and desktop it keeps a 16px margin; from desktop up HeroUI supplies
-    // 40px. Its height also leaves room for the bottom banners, matching the container's inset in `style.css`.
+    // 40px. Its height also leaves room for the bottom banners, matching the container's inset in `primitives/Modal.css`.
     <Modal
       alert={alert}
       busy={busy}

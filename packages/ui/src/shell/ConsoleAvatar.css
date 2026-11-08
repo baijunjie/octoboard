@@ -1,0 +1,35 @@
+/* A console's default avatar (`ConsoleAvatar.tsx`): the network glyph in
+   `--avatar-foreground` on one of these, picked from the name. Muted fills on hues spread around
+   the wheel and kept off the status colours' own, so an avatar never reads as a status. In light
+   the glyph is white on a dark fill (between 5.18:1 on teal and 5.91:1 on olive); the fills stand
+   off the light material by 3.41:1 to 4.80:1 and off the current console's tile by at least
+   2.17:1. The dark material is itself light grey, and a dark fill could not stand off it (1.51:1
+   to 1.72:1) or off the current console's tile, so in dark the fills are pale and the glyph is the
+   dark foreground (7.88:1 to 8.59:1). The fills then stand off the material by 3.96:1 to 4.32:1
+   and off the tile by at least 2.15:1, with the same hues apart from each other. */
+:root {
+  --avatar-foreground: var(--white);
+  --avatar-olive: oklch(0.5 0.1 110);
+  --avatar-teal: oklch(0.52 0.1 180);
+  --avatar-azure: oklch(0.52 0.11 230);
+  --avatar-indigo: oklch(0.52 0.13 278);
+  --avatar-plum: oklch(0.52 0.13 325);
+  --avatar-copper: oklch(0.52 0.1 45);
+  --avatar-slate: oklch(0.52 0.03 260);
+}
+
+.dark,
+[data-theme="dark"] {
+  --avatar-foreground: var(--eclipse);
+  --avatar-olive: oklch(0.76 0.1 110);
+  --avatar-teal: oklch(0.76 0.09 180);
+  --avatar-azure: oklch(0.76 0.1 230);
+  --avatar-indigo: oklch(0.76 0.11 278);
+  --avatar-plum: oklch(0.76 0.11 325);
+  --avatar-copper: oklch(0.76 0.1 45);
+  --avatar-slate: oklch(0.76 0.03 260);
+}
+
+@theme inline {
+  --color-avatar-foreground: var(--avatar-foreground);
+}

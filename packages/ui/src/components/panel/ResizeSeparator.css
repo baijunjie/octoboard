@@ -1,0 +1,8 @@
+/* While a pane's or a panel's resize handle is dragged (`ResizeSeparator` sets the cursor,
+   `col-resize` or `row-resize`, in `--pane-resize-cursor`), every element shows the resize cursor and none
+   starts a text selection, whatever the pointer happens to be over. */
+html.pane-resizing,
+html.pane-resizing * {
+  cursor: var(--pane-resize-cursor) !important;
+  user-select: none !important;
+}

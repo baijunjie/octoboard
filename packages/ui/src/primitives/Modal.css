@@ -1,0 +1,24 @@
+/* A dialog's positioning container ends above the bottom chrome rather than at the window bottom, so the connection
+   banner's strip — stacked above a dialog as well as above its backdrop, `--z-index-banner` — never crosses the
+   dialog's own bottom edge, where it would swallow every press that landed there (React Aria ignores a press inside
+   a top layer, so such a press does not even dismiss the dialog). The container keeps its padding and HeroUI's own
+   auto margins still centre the dialog in what is left, so a dialog that fills the window takes the strip out of
+   its height too (`components/dialog/Dialog.tsx`, `settings/SettingsDialog.tsx`) rather than overflowing. Unlayered, so it
+   wins over HeroUI's layered rule. Every modal here scrolls inside its own dialog; the one HeroUI variant this
+   would fight, `--scroll-outside`, grows with its content from a `min-height` instead and is left out. Being
+   unlayered the rule also wins over a utility a caller puts on the container, so the height and the anchoring are
+   not overridable per dialog. */
+.modal__backdrop,
+.alert-dialog__backdrop {
+  z-index: var(--z-index-dialog-backdrop);
+}
+
+.modal__container:not(.modal__container--scroll-outside),
+.alert-dialog__container:not(.alert-dialog__container--scroll-outside) {
+  height: calc(var(--visual-viewport-height) - var(--bottom-chrome-height));
+  /* The backdrop centres its container, which would spend half the height taken off above the
+     dialog and leave the other half of the strip's own height crossing it; anchored to the top
+     instead, the whole of it goes where the strip is. A container at full height fills the
+     backdrop, so this does nothing while the strip is down. */
+  align-self: flex-start;
+}

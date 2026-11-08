@@ -1,0 +1,18 @@
+/* Application literals only: Markdown, highlighted source and foreign code keep their renderer's
+   own palette. A coloured literal is drawn from the shared tints (`--tint-{colour}-bg` and `-fg`, the
+   chip's), which are translucent, so inside an alert of the same colour the literal's fill stacks on the
+   alert's soft fill and reads as a stronger tint of it. */
+.app-code[data-color="accent"] { --app-code-bg: var(--tint-accent-bg); --app-code-fg: var(--tint-accent-fg); }
+.app-code[data-color="help"] { --app-code-bg: var(--tint-help-bg); --app-code-fg: var(--tint-help-fg); }
+.app-code[data-color="success"] { --app-code-bg: var(--tint-success-bg); --app-code-fg: var(--tint-success-fg); }
+.app-code[data-color="warning"] { --app-code-bg: var(--tint-warning-bg); --app-code-fg: var(--tint-warning-fg); }
+.app-code[data-color="danger"] { --app-code-bg: var(--tint-danger-bg); --app-code-fg: var(--tint-danger-fg); }
+.app-code[data-color]:not([data-color="default"]) {
+  background-color: var(--app-code-bg);
+  color: var(--app-code-fg);
+}
+/* An inline literal is as large as the text it stands in, a field's 12px error included; HeroUI's
+   own code style fixes it at 14px. Unlayered, so it wins over HeroUI's components layer. */
+.app-code {
+  font-size: inherit;
+}

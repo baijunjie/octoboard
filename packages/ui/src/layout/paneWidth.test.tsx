@@ -159,7 +159,7 @@ it("keeps a floating width above 720 across docking and viewport changes", () =>
 });
 
 it("keeps the minimum two-column group consistent with the panel spacing tokens", () => {
-  const style = readFileSync(join(import.meta.dirname, "../style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const style = readFileSync(join(import.meta.dirname, "../styles/layout.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const token = (name: string) => Number(new RegExp(`--${name}:\\s*([\\d.]+)px`).exec(style)?.[1]);
   expect(MIN_TWO_COLUMN_ASIDE_WIDTH).toBe(2 * MIN_PANEL_COLUMN_WIDTH + token("panel-stack-gap") + token("panel-grip-gap") + token("peek-gap"));
 });

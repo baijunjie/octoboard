@@ -91,7 +91,7 @@ function scrollbarSizes(element: HTMLElement): { inline: number; block: number }
  * height.
  *
  * It also says whether a vertical fade can scroll sideways, for it to leave the horizontal scrollbar
- * undimmed too (see `[data-scrolls-sideways]` in `style.css`, whose bottom strip is
+ * undimmed too (see `[data-scrolls-sideways]` in `primitives/ScrollShadow.css`, whose bottom strip is
  * `--scroll-shadow-scrollbar-block-size`). Only a vertical fade needs that: the library's horizontal
  * one already reserves the strip along the bottom itself.
  *
@@ -240,7 +240,7 @@ type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size"
  * so a surface that scrolls the other axis too asks for it in `className`. What the fade and a
  * `region` set is applied after the caller's own props, so neither can be written over from a site.
  * While the scroller overflows sideways it carries `data-scrolls-sideways`, which keeps the
- * horizontal scrollbar clear of the mask (`style.css`).
+ * horizontal scrollbar clear of the mask (`primitives/ScrollShadow.css`).
  *
  * A list with sticky headings (the sidebar's, the Settings agent strip, the Settings groups') passes `stickyHeadingHeight`
  * and uses overlays instead: its headings paint at z-3 above the z-2 fades, and the top fade and

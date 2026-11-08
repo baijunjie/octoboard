@@ -53,9 +53,10 @@ function vertices(d: string): Point[] {
   return points;
 }
 
-const KEYFRAMES = readFileSync(new URL("../../style.css", import.meta.url), "utf8");
+const KEYFRAMES = readFileSync(new URL("./statusGlyphs.css", import.meta.url), "utf8");
+const ANIMATIONS = readFileSync(new URL("../../style.css", import.meta.url), "utf8");
 
-/** The poses a keyframe rule gives, by stop (as a fraction of the loop), read from `style.css` so the test and the
+/** The poses a keyframe rule gives, by stop (as a fraction of the loop), read from `statusGlyphs.css` so the test and the
  * animation cannot drift apart. */
 function posesOf(name: string): Array<{ at: number } & Pose> {
   const block = KEYFRAMES.match(new RegExp(`@keyframes ${name} \\{([\\s\\S]*?)\\n\\}`))![1];
@@ -123,7 +124,7 @@ it("shrinks by the same ratio in equal times, with no knee, and keeps each Z's o
 
 /** The fraction of the loop a copy is ahead of the first, read from the theme entry's duration and delay. */
 function phaseOf(name: string): number {
-  const [, duration, delay = "0"] = KEYFRAMES.match(new RegExp(`--animate-${name}: status-scroll ([\\d.]+)s linear (?:(-?[\\d.]+)s )?infinite`))!;
+  const [, duration, delay = "0"] = ANIMATIONS.match(new RegExp(`--animate-${name}: status-scroll ([\\d.]+)s linear (?:(-?[\\d.]+)s )?infinite`))!;
   return (((-Number(delay) / Number(duration)) % 1) + 1) % 1;
 }
 

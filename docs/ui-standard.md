@@ -26,7 +26,7 @@ One such kept shortfall is the Stop button's label on a process card in the dark
 rest and 4.2:1 with Stop hovered); see "Hand-built rows and cards". The card is a hand-built surface, so it is a shortfall
 of application-authored styling that the user chose to keep, not an approved departure from a HeroUI component's look.
 
-Another is the dormant session's rising "zz" (`@keyframes status-scroll` in `packages/ui/src/style.css`). Each Z's
+Another is the dormant session's rising "zz" (`@keyframes status-scroll` in `packages/ui/src/components/status/statusGlyphs.css`). Each Z's
 stroke shrinks with the letter as it rises, so on a 1x display a Z in the upper half of its rise (below about 0.8 times
 the large Z, 3–5px tall at 16px) renders at 2–2.7:1, under the 3:1 a state indicator needs, and it fades below that as
 it dwindles to the exit speck; on a 2x display only that last speck does. The large Z entering at the bottom left is
@@ -46,7 +46,7 @@ surface" describes.
 Every colour that carries a meaning — neutral, accent, success, warning, danger, and the project's purple help colour —
 comes from one definition, used the same way everywhere in the application. HeroUI 3's own semantic tokens are that
 definition wherever HeroUI has one; the project defines a token only for a role HeroUI lacks, once, in
-`packages/ui/src/style.css`, and every component reads it from there. No component hard-codes a semantic colour, keeps
+the shared files in `packages/ui/src/styles/`, and every component reads it from there. No component hard-codes a semantic colour, keeps
 a second recipe for a role that already has a token, or overrides a HeroUI component's semantic colours locally (a
 modal body's text colour, below, is the one exception).
 
@@ -127,7 +127,7 @@ with 12px text and 8px of padding on each side, so metadata such as the session 
 badge is square at each size; a wrapping badge can grow taller to fit its content.
 
 Badge and inline reference serve different purposes but share one colour configuration: a single set of generic tint
-tokens in `packages/ui/src/style.css`, per colour a fill, a text colour (neutral reads HeroUI's `--default-foreground`
+tokens in `packages/ui/src/styles/palette.css`, per colour a fill, a text colour (neutral reads HeroUI's `--default-foreground`
 instead of a token) and an edge, which both components read, so a chip and a badge of the same colour never differ. A
 coloured fill is HeroUI's `--{colour}-soft`, its edge the solid `--{colour}` mixed down (HeroUI has no border token);
 the neutral fill is the foreground at 8% in light and 10% in dark, translucent like the coloured ones, so it is close to
@@ -172,7 +172,7 @@ by the user's decision (see "Do not change how a HeroUI component looks").
 A used-up account in the rail's quota panel, which is not a control, recedes the same way without fading anything: its
 name and its meters' headlines take the secondary text colour (6.0:1 light, 5.7:1 dark on the panel's popover), a
 warning-coloured "Limit reached" badge on its name line says why in words, and its bars are drawn in a neutral grey
-(`.quota-meter--used-up` in `packages/ui/src/style.css`), fainter than the provider colours. Settings' accounts table marks
+(`.quota-meter--used-up` in `packages/ui/src/quota/QuotaMeter.css`), fainter than the provider colours. Settings' accounts table marks
 such an account alike, the name muted and the grey bar followed by the same badge in its Usage cell. The menu bar icon's
 quota submenus draw such an account's bars in the same grey, `--meter-used-up-fill` read back for the menu's appearance,
 while the account's heading says "Limit reached" in words; every other account's bars take their provider's colour from its
@@ -284,6 +284,8 @@ own to name.
 Tests and test support, the gallery, the shared fixtures and the website preview may import the libraries directly
 (setting the input modality in a test, say); the rule is for application source. Lint enforces the import
 rule, with no exceptions in application source (`packages/ui/eslint.layers.mjs`).
+
+For stylesheet ownership and loading order, see `docs/structure/ui.md`, "Stylesheets".
 
 ## Machine and platform perspective in copy
 
@@ -1709,9 +1711,12 @@ summary or label naming them outside that surface; they preserve their text, dir
 remains scrollable and reachable from the keyboard, the focus ring drawn on the surface. Every diagnostic block uses
 `DiagnosticBlock`: no automatic line wrapping, a maximum height of 40% of the viewport, and scrolling on either axis
 when needed. Overflow on either axis makes the block a named, keyboard-reachable region; content that fits adds no
-scrolling tab stop. The vertical edges fade while they hide content. A floating `CopyButton` stays at the surface's
-top-right corner outside the scroller and its fade, without a reserved row or column. Its opaque backing matches the
-diagnostic surface so text cannot show through the control. Extra horizontal scroll room at
+scrolling tab stop. The vertical edges fade while they hide content. A floating, extra-small `tertiary` `CopyButton`
+stays at the surface's top-right corner outside the scroller and its fade, without a reserved row or column. It is
+centred vertically on the first code line, so it is centred in a single-line block, and has no added shadow. As an
+approved local exception, its light-theme fill uses `--surface` at rest and `--background` when hovered or pressed,
+so the button is lighter than the recessed code surface in both appearances. Dark keeps the tertiary fills. Its opaque
+backing matches the diagnostic surface so text cannot show through the control. Extra horizontal scroll room at
 the end lets the first line clear the button; the button stays clear of a vertical scrollbar. It copies the complete
 original text including whitespace and line breaks, and remains available before a daemon connection exists. Keep
 structured error metadata separate from the plain error message, so notifications and unknown-error fallbacks retain
@@ -2055,7 +2060,7 @@ shadow. In dark that leaves a `danger-soft` button's label (the row's Stop) shor
 4.2:1 with Stop hovered (its fill then deepens to 20% of the danger colour from 15%). A card dark enough to reach 4.5:1
 at rest (about `oklch(0.275)`) no longer stands apart from the panel, and HeroUI's own surface is darker than the panel.
 Keeping the raised card is a kept shortfall by the user's decision (see "Conformance level and exceptions"), marked at
-`--panel-row` in `packages/ui/src/style.css` and at the card in `ProcessesPanel.tsx`; the buttons themselves keep
+`--panel-row` in `packages/ui/src/styles/surfaces.css` and at the card in `ProcessesPanel.tsx`; the buttons themselves keep
 HeroUI's look.
 
 ### A colour mark whose meaning is in words
@@ -2065,7 +2070,7 @@ and is not held to the 3:1 bar for a state indicator. A console session's colour
 swatches it is chosen from carry each palette colour as its name suggests (yellow is yellow, not a darkened olive that
 would clear 3:1 against a light surface), since the session's name is always there to tell sessions apart. A pale entry
 still has to be seen: the dot and the swatches carry a faint inset ring of the foreground (`.session-colour-ring` in
-`packages/ui/src/style.css`), since the picker's swatch has no edge of its own. A mark that is the only carrier of a
+`packages/ui/src/sessions/sessionColours.css`), since the picker's swatch has no edge of its own. A mark that is the only carrier of a
 state stays at 3:1.
 
 The swatches sit in a submenu of the session's action menu, so the Colour item is announced as opening a submenu
@@ -2156,7 +2161,7 @@ siblings where the tokens give 3.67:1 and 4.58:1. Take a recorded ratio from the
 In the macOS app the top bar and the rail show a translucent window material whose colour shifts with whatever is behind
 the window (see "The window chrome and the content panel" in `docs/product/window-layout.md`). A glyph or tint added to
 that chrome is measured against the material's measured colours, given in the comment on the window's surfaces in
-`packages/ui/src/style.css`, not only against `--chrome`, which is just the browser's stand-in for the material. The
+`packages/ui/src/styles/surfaces.css`, not only against `--chrome`, which is just the browser's stand-in for the material. The
 dark material is a grey far lighter than dark `--chrome`.
 
 ## Pointer target size
@@ -2167,7 +2172,7 @@ extending HeroUI with `size="xs"`: 24px height, a 24px square for icon-only butt
 Compact actions use that size rather than per-call sizing styles.
 
 Icon buttons in sidebar rows, cards and headers, the right pane and the file viewer share a 24-by-24-pixel target and a
-4-pixel gap, defined by `--row-control-size` and `--row-control-gap` in `packages/ui/src/style.css`. Use the shared
+4-pixel gap, defined by `--row-control-size` and `--row-control-gap` in `packages/ui/src/styles/layout.css`. Use the shared
 `RowIconGroup` for adjacent icons and `RowIconSlot` for a marker's matching horizontal column; the marker keeps its own
 glyph size and does not increase the text line's height. Leading glyphs use the 16-pixel `--row-leading-icon-size`
 column through `RowIconSlot`'s leading placement. In a focus card, the binding dot precedes the title in reading order
@@ -2189,7 +2194,7 @@ marks are drawn well under 24 — the binding badge on a session row, a branch's
 status letter — and the press under them, where there is one, belongs to the row and keeps the row's own target.
 
 A mark whose tap opens a touch popover (`IndicatorTooltip`, `touchPopover` on) is an activation on touch, so it is held
-to it there: `.touch-target` in `style.css` grows its hit area to 24 by 24 on a device that has a coarse pointer
+to it there: `.touch-target` in `packages/ui/src/components/hint/touchTarget.css` grows its hit area to 24 by 24 on a device that has a coarse pointer
 (`any-pointer: coarse`, which a hybrid device's mouse falls under too) with an `::after` that never shrinks a larger
 mark, changes nothing drawn and sits behind the mark's own content so it takes no hover from it. Where two such marks
 sit closer than 24 pixels, their grown areas overlap and the later one wins the overlap. The marks that keep the row's
@@ -2235,7 +2240,7 @@ A status or state that differs in colour also differs in glyph, shape or text.
 **A two-state view control carries its state in its icon.** The shape is one icon button whose icon is the state it is
 in and whose accessible name and tooltip say what pressing will do, so the name alternates with the state (see
 "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`). Nothing distinguishes the pressed button from the
-unpressed one by fill: `.icon-toggle` in `packages/ui/src/style.css` resets HeroUI's selected tokens back to the
+unpressed one by fill: `.icon-toggle` in `packages/ui/src/components/controls/IconToggle.css` resets HeroUI's selected tokens back to the
 resting ones, and `aria-pressed` carries the state for assistive technology. The window chrome's pane toggles (the
 sidebar's among them), the Git mode's two view toggles — the one that shows and hides the change filter field, and
 group by folder — the Files mode's filter toggle and include-ignored toggle, and the viewer's four view controls

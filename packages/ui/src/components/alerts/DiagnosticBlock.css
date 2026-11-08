@@ -1,0 +1,6 @@
+/* The floating copy control sits above the recessed code surface in both themes. */
+.diagnostic-copy-button {
+  --button-bg: light-dark(var(--surface), var(--default));
+  --button-bg-hover: light-dark(var(--background), var(--default-hover));
+  --button-bg-pressed: var(--button-bg-hover);
+}

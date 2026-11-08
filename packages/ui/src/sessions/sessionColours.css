@@ -1,0 +1,19 @@
+/* A console session's colour dot, drawn by `BindingBadge`. The colours are kept in one place,
+   `packages/ui/src/sessions/sessionColours.ts`, which also gives the dot its two custom properties: the
+   entry's colour for each appearance. */
+.session-colour-dot {
+  background-color: var(--session-colour-light);
+}
+
+.dark .session-colour-dot,
+[data-theme="dark"] .session-colour-dot {
+  background-color: var(--session-colour-dark);
+}
+
+/* A hairline ring of the foreground inside the dot and inside each swatch of the colour picker, so
+   a pale colour (yellow on the light sidebar, gray on the dark one) keeps an edge. The picker's
+   swatch has no edge of its own; this one follows the appearance. */
+.session-colour-dot,
+.session-colour-ring {
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 22%, transparent);
+}

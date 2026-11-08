@@ -88,7 +88,7 @@ function TouchPopover({
  * not used: it renders a trigger element of its own.
  *
  * A tooltip is a label, not a surface to interact with: it closes the instant the pointer leaves
- * the trigger (`--tooltip-close-delay: 0s` in `style.css`, where HeroUI's default lingers), and it
+ * the trigger (`--tooltip-close-delay: 0s` in `styles/layout.css`, where HeroUI's default lingers), and it
  * is `pointer-events-none` (which has no token, so every tooltip sets it itself), because
  * react-aria's tooltip otherwise stays open while it is hovered and would swallow clicks aimed at
  * what lies beneath it. Nothing relies on a hoverable tooltip.
@@ -173,7 +173,7 @@ export function ControlHint({
  * off for a mark inside something that handles the same tap (a row, a button, an option), or the
  * popover would open over what the press does; the caller says why where it does. A mark that opens
  * the popover is a touch target, so on a device with a coarse pointer its hit area grows to 24 by
- * 24 pixels (`touch-target` in `style.css`) without changing what is drawn.
+ * 24 pixels (`touch-target` in `touchTarget.css`) without changing what is drawn.
  *
  * One use is not an indicator: focus mode's include-console-sessions switch, a control whose hover
  * is sent to a hidden input, so it takes no tooltip trigger from context and the `control` kind cannot

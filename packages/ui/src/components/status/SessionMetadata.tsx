@@ -14,7 +14,7 @@ export function hasVisibleContext(context: SessionContext | null | undefined): c
   return (context?.tokens ?? 0) > 0;
 }
 
-/** The tone class (`context-tone--*` in style.css) for how full the window is: filling up above
+/** The tone class (`context-tone--*` in SessionMetadata.css) for how full the window is: filling up above
  * half, nearly full above 80%. */
 function contextTone(percent: number): string {
   if (percent > 80) return "context-tone--danger";

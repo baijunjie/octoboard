@@ -1,0 +1,10 @@
+/* A two-state view control (`IconToggle`) tells its states apart by the icon alone, so its selected
+   state is drawn exactly as its unselected one: HeroUI's selected tokens, an accent tint, are set
+   back to the resting ones. Unlayered, so it wins over `.toggle-button`'s own tokens in
+   `@layer components`. */
+.icon-toggle {
+  --toggle-button-bg-selected: var(--toggle-button-bg);
+  --toggle-button-bg-selected-hover: var(--toggle-button-bg-hover);
+  --toggle-button-bg-selected-pressed: var(--toggle-button-bg-pressed);
+  --toggle-button-fg-selected: var(--toggle-button-fg);
+}
