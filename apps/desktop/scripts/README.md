@@ -280,7 +280,11 @@ starting another. After the merge, the version commit stays on main; the same `r
 rerun because the version must increase. Correct the failure, run `pnpm verify --release --fresh --head <release-commit>`
 on clean main, then `pnpm verify --base origin/main --head <release-commit>`. Create the annotated tag only if it is
 absent, and atomically push the checked commit and tag after confirming any existing local tag has the intended commit
-and notes. Do not delete or replace a published tag to retry.
+and notes. Do not delete or replace a published tag to retry. The one exception is a tag no release was created from
+(nothing under its name on the releases page, and the `updater` release's manifests still naming the previous version)
+whose fix changes the code or the workflow files: run the two checks above on the fixed commit on main, re-create the
+annotated tag there from the same message (`git tag -f -a desktop-v<version> <commit> --cleanup=whitespace -F
+<message-file>`, keeping any `Platforms:` line) and push it with `--force`, which starts the workflow again from the tag.
 
 ### Release CI
 
@@ -392,3 +396,11 @@ tag (`gh release delete desktop-v<version>`, without `--cleanup-tag`) and re-run
 build fails, `publish` does not run and nothing is published: fix the cause and re-run the failed jobs, or release the
 passing platform alone by running the workflow by hand for it and the other one later. The script's own messages still
 describe the manual flow.
+
+Every route above assumes the tag's commit still has the workflow files main has. GitHub refused the run's own token
+the release of 0.1.0-beta.3 (`HTTP 403: Resource not accessible by integration` from `gh release create`, a re-run
+alike) when a run by hand, started from main, published a tag whose workflow files main had since changed; others
+report the same refusal of a release or a tag on a commit whose workflow files differ from main's, as it would need the
+`workflows` permission, which the token never holds. So a fix to the workflow files cannot be released from an
+existing tag, by re-running its jobs or by hand: move the tag (above) or release a new version. Whether the refusal
+also reaches an upload to an existing release, as when a platform is added later, has not been seen.

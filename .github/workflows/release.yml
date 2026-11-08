@@ -183,19 +183,6 @@ jobs:
         with:
           profile: windows-release
       - run: pnpm install --frozen-lockfile
-      # Windows' own tar (bsdtar) before Git Bash's GNU tar, which reads no zip and takes the `D:` of a path for a
-      # remote host. `scripts/fetch-conpty.mjs` names it by its full path, but 0.1.0-beta.3's runs the first `tar` on
-      # the PATH, and a manual run builds that tag; once it is published, no tag needs this step. Git Bash puts its own
-      # directories first at every start, so the PATH is set where every later bash step reads it afterwards, in the
-      # file `BASH_ENV` names. Only `tar.exe` is copied: System32 itself first would hide Git's `find` and `sort`. A
-      # local action cannot hold the step, as `uses: ./…` is read from the tag checked out.
-      - name: Put Windows' tar first
-        run: |
-          dir="$(cygpath -u "$RUNNER_TEMP")/windows-tar"
-          mkdir -p "$dir"
-          cp "$(cygpath -S)/tar.exe" "$dir/"
-          printf 'PATH="%s:$PATH"\n' "$dir" > "$dir/env.sh"
-          echo "BASH_ENV=$dir/env.sh" >> "$GITHUB_ENV"
       # `none` and `command` are one build; `command` signs every file the bundler bundles by calling the command
       # line in the variable `WINDOWS_SIGN_COMMAND`. A provider's own credentials are added to this step's `env`
       # when one is chosen.
@@ -249,19 +236,6 @@ jobs:
         with:
           profile: windows-release
       - run: pnpm install --frozen-lockfile
-      # Windows' own tar (bsdtar) before Git Bash's GNU tar, which reads no zip and takes the `D:` of a path for a
-      # remote host. `scripts/fetch-conpty.mjs` names it by its full path, but 0.1.0-beta.3's runs the first `tar` on
-      # the PATH, and a manual run builds that tag; once it is published, no tag needs this step. Git Bash puts its own
-      # directories first at every start, so the PATH is set where every later bash step reads it afterwards, in the
-      # file `BASH_ENV` names. Only `tar.exe` is copied: System32 itself first would hide Git's `find` and `sort`. A
-      # local action cannot hold the step, as `uses: ./…` is read from the tag checked out.
-      - name: Put Windows' tar first
-        run: |
-          dir="$(cygpath -u "$RUNNER_TEMP")/windows-tar"
-          mkdir -p "$dir"
-          cp "$(cygpath -S)/tar.exe" "$dir/"
-          printf 'PATH="%s:$PATH"\n' "$dir" > "$dir/env.sh"
-          echo "BASH_ENV=$dir/env.sh" >> "$GITHUB_ENV"
       - name: Build the executables
         run: pnpm --filter @octoboard/desktop release --stage build --no-sign-update
       - name: Upload the executables
@@ -329,19 +303,6 @@ jobs:
         with:
           profile: windows-release
       - run: pnpm install --frozen-lockfile
-      # Windows' own tar (bsdtar) before Git Bash's GNU tar, which reads no zip and takes the `D:` of a path for a
-      # remote host. `scripts/fetch-conpty.mjs` names it by its full path, but 0.1.0-beta.3's runs the first `tar` on
-      # the PATH, and a manual run builds that tag; once it is published, no tag needs this step. Git Bash puts its own
-      # directories first at every start, so the PATH is set where every later bash step reads it afterwards, in the
-      # file `BASH_ENV` names. Only `tar.exe` is copied: System32 itself first would hide Git's `find` and `sort`. A
-      # local action cannot hold the step, as `uses: ./…` is read from the tag checked out.
-      - name: Put Windows' tar first
-        run: |
-          dir="$(cygpath -u "$RUNNER_TEMP")/windows-tar"
-          mkdir -p "$dir"
-          cp "$(cygpath -S)/tar.exe" "$dir/"
-          printf 'PATH="%s:$PATH"\n' "$dir" > "$dir/env.sh"
-          echo "BASH_ENV=$dir/env.sh" >> "$GITHUB_ENV"
       - name: Build the executables again
         run: pnpm --filter @octoboard/desktop release --stage build --no-sign-update
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -411,19 +372,6 @@ jobs:
           node-version: "24"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Windows' own tar (bsdtar) before Git Bash's GNU tar, which reads no zip and takes the `D:` of a path for a
-      # remote host. `scripts/fetch-conpty.mjs` names it by its full path, but 0.1.0-beta.3's runs the first `tar` on
-      # the PATH, and a manual run builds that tag; once it is published, no tag needs this step. Git Bash puts its own
-      # directories first at every start, so the PATH is set where every later bash step reads it afterwards, in the
-      # file `BASH_ENV` names. Only `tar.exe` is copied: System32 itself first would hide Git's `find` and `sort`. A
-      # local action cannot hold the step, as `uses: ./…` is read from the tag checked out.
-      - name: Put Windows' tar first
-        run: |
-          dir="$(cygpath -u "$RUNNER_TEMP")/windows-tar"
-          mkdir -p "$dir"
-          cp "$(cygpath -S)/tar.exe" "$dir/"
-          printf 'PATH="%s:$PATH"\n' "$dir" > "$dir/env.sh"
-          echo "BASH_ENV=$dir/env.sh" >> "$GITHUB_ENV"
       - name: Fetch the ConPTY files the installer is checked against
         run: node scripts/fetch-conpty.mjs --installer
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

@@ -36,5 +36,5 @@ Applies to a script that extracts an archive with `tar` and can run in a GitHub 
 in Git Bash (`shell: bash`), which puts its own GNU tar first on the PATH at every start: it reads no zip and takes the
 `D:` of an absolute path for a remote host, so a bare `tar` that works on a Windows machine and on macOS fails there.
 `scripts/fetch-conpty.mjs` names `%SystemRoot%\System32\tar.exe` for this reason, as `update-archive.mjs` names
-`/usr/bin/tar` on macOS. Adding a directory with `$GITHUB_PATH` does not get ahead of Git Bash's own; `release.yml`
-sets the PATH through `BASH_ENV` where a tag's code cannot be changed.
+`/usr/bin/tar` on macOS. Adding a directory with `$GITHUB_PATH` does not get ahead of Git Bash's own: Git Bash puts its
+directories first at every start, after the runner has set the PATH.
