@@ -616,6 +616,14 @@ fn transactions_in_repositories_of_alike_paths_do_not_share_state() {
     );
 }
 
+/// A report the stand-in has not finished writing is not read: its line has no newline yet.
+#[test]
+fn a_report_still_being_written_is_not_read() {
+    let fixture = Fixture::new();
+    std::fs::write(&*fixture.reports, "whole\tline\n/repo\t\t--session a --key").unwrap();
+    assert_eq!(fixture.report_lines(), ["whole\tline"]);
+}
+
 /// A long list of updates or pushed refs is spooled to a file of the run's own, not of its
 /// parent's, which a git for Windows gives every hook alike.
 #[test]

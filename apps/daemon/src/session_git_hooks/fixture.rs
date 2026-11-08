@@ -247,15 +247,25 @@ impl Fixture {
         );
     }
 
+    /// The lines of the reports the stand-in has finished writing. One still being written is left
+    /// out: the stand-in's shell writes a long line in pieces, and only the newline it writes last
+    /// says the line is whole. This holds while one stand-in appends a long line at a time, as every
+    /// test here does; two appending long lines at once could interleave their pieces.
+    pub(crate) fn report_lines(&self) -> Vec<String> {
+        let mut text = std::fs::read_to_string(&*self.reports).unwrap_or_default();
+        text.truncate(text.rfind('\n').map_or(0, |end| end + 1));
+        text.lines().map(str::to_owned).collect()
+    }
+
     /// The reports of created branches the stand-in has received once there are `count` of them.
     /// A report of moved refs alone, which every commit of a session's git makes, is left out.
     pub(crate) fn reports(&self, count: usize) -> Vec<(String, RefReport)> {
         let deadline = std::time::Instant::now() + PATIENCE;
         loop {
-            let text = std::fs::read_to_string(&*self.reports).unwrap_or_default();
-            let reports: Vec<(String, RefReport)> = text
-                .lines()
-                .map(parse_report)
+            let reports: Vec<(String, RefReport)> = self
+                .report_lines()
+                .iter()
+                .map(|line| parse_report(line))
                 .filter(|(_, report)| !report.refs.is_empty())
                 .collect();
             if reports.len() >= count {

@@ -25,8 +25,7 @@ fn reread_until(
     let deadline = Instant::now() + PATIENCE;
     let mut published = Vec::new();
     loop {
-        let text = std::fs::read_to_string(&*fixture.reports).unwrap_or_default();
-        for line in text.lines().skip(*posted) {
+        for line in fixture.report_lines().iter().skip(*posted) {
             let (session, report) = parse_report(line);
             assert!(report.moved, "every transaction here moves a ref: {line}");
             let body = serde_json::to_vec(&report).unwrap();
