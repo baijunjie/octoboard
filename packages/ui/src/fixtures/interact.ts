@@ -248,6 +248,9 @@ export interface Ui {
   terminalContextMenu: (text?: string) => Promise<void>;
   /** Focuses the rendered agent terminal without sending input or changing its selection. */
   focusTerminal: () => Promise<void>;
+  /** Waits until the program in the agent terminal has switched mouse reporting on, which lands a moment after its
+   * output is first drawn. Put it before a step that reads the mode once, such as the edit menu opening. */
+  terminalMouseReporting: () => Promise<void>;
   /** Presses the button that submits the open dialog, waiting for it to appear and be enabled: for a
    * dialog whose confirming button is named as a control behind it, which `press` would find first.
    * A disabled button (`isDisabled`, such as Confirm before a `typeToConfirm` word is typed) is
@@ -1220,6 +1223,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
       }, "No rendered terminal to focus");
       input.focus();
       await wait(150);
+    },
+    async terminalMouseReporting() {
+      // xterm marks the element while the program's mouse tracking mode is on, and only then does it keep a plain
+      // drag from selecting text.
+      await waitFor(() => doc.querySelector(`${AGENT_TERMINAL} .xterm.enable-mouse-events`) ?? undefined, "The terminal's program never turned mouse reporting on");
     },
     async terminalContextMenu(text) {
       if (text !== undefined) {

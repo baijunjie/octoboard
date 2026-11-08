@@ -144,7 +144,8 @@ export const connectionScenarios: Scenario[] = [
     terminal: "mouse",
     clipboard: { text: "echo hello" },
     state: connected("open"),
-    steps: [pickSession, (ui) => ui.terminalContextMenu()],
+    // The menu reads the mouse mode when it opens, and the program turns it on after its first output.
+    steps: [pickSession, (ui) => ui.terminalMouseReporting(), (ui) => ui.terminalContextMenu()],
   },
   {
     id: "terminal-edit-menu-selected",
