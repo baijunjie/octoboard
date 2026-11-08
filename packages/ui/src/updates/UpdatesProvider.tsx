@@ -5,7 +5,7 @@ import { ActionableError } from "../errors/actionableError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
-import { updateChannel } from "./updateChannel";
+import { effectiveUpdateChannel, updateChannel } from "./updateChannel";
 import { createUpdateStore, type UpdateFailure, type UpdateState, type UpdateStore } from "./updateStore";
 
 const UpdatesContext = createContext<UpdateStore | undefined>(undefined);
@@ -30,23 +30,34 @@ function reportUpdateFailure({ action, reason, detail }: UpdateFailure): void {
  * Owns the application's update state for the window and runs the automatic checks, where the platform can update
  * itself (`updater`); elsewhere it provides nothing, and the update notice and Settings rows are absent. Mounted once
  * above every screen, the error boundary included, so the checks run whichever screen is up and a crash that is
- * recovered from does not start the state over while an update is installed. A change of channel looks again at once,
- * on the new one (the store drops the result of a check that was asking about the old one). `firstCheckDelayMs` moves
+ * recovered from does not start the state over while an update is installed. The channel is the one the user chose,
+ * else the running build's default (`effectiveUpdateChannel`). A change of channel looks again at once, on the new one
+ * (the store drops the result of a check that was asking about the old one). `firstCheckDelayMs` moves
  * the first automatic check from its default of `FIRST_CHECK_DELAY_MS`; `null` leaves out the automatic checks
  * altogether, for a surface that must hold a state of its own (the gallery).
  */
 export function UpdatesProvider({ children, firstCheckDelayMs }: { children: React.ReactNode; firstCheckDelayMs?: number | null }): React.ReactElement {
   const { updater } = usePlatform();
-  const [store] = useState(() => (updater ? createUpdateStore({ updater, getChannel: updateChannel.get, reportFailure: reportUpdateFailure }) : undefined));
-  const channel = updateChannel.useValue();
+  const [store] = useState(() =>
+    updater
+      ? createUpdateStore({ updater, getChannel: (currentVersion) => effectiveUpdateChannel(updateChannel.get(), currentVersion), reportFailure: reportUpdateFailure })
+      : undefined,
+  );
+  const saved = updateChannel.useValue();
+  const currentVersion = useSyncExternalStore(store?.subscribe ?? NO_UPDATES, () => store?.getState().currentVersion);
+  // Undefined while the channel follows the build and the build is not yet known: learning it settles the default,
+  // which is no change of channel to look again for.
+  const channel = saved === undefined && currentVersion === undefined ? undefined : effectiveUpdateChannel(saved, currentVersion);
   const checkedChannel = useRef(channel);
 
   useEffect(() => store?.start(firstCheckDelayMs), [store, firstCheckDelayMs]);
   useEffect(() => {
-    if (checkedChannel.current === channel) return;
+    if (channel === undefined || checkedChannel.current === channel) return;
+    // The first channel known is no switch, unless the user picked it.
+    const switched = checkedChannel.current !== undefined || saved !== undefined;
     checkedChannel.current = channel;
-    void store?.check("automatic");
-  }, [store, channel]);
+    if (switched) void store?.check("automatic");
+  }, [store, channel, saved]);
 
   return <UpdatesContext.Provider value={store}>{children}</UpdatesContext.Provider>;
 }

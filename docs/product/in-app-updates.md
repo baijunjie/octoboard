@@ -10,8 +10,16 @@ none of this: no checks, no update notice, and no Updates or Update channel rows
 
 There are two channels, chosen in Settings' About section (see "The Updates and Update channel rows" below):
 
-- **Stable**, the default, receives only stable releases;
+- **Stable** receives only stable releases;
 - **Beta** receives every release, stable ones included.
+
+Until the user chooses one, the running build decides: a prerelease build (its version has a prerelease suffix, such as
+`0.1.0-beta.3`) follows **Beta**, so a beta left alone keeps receiving betas, and any other build follows **Stable**.
+The default follows whichever build runs: a beta build that updates to a stable release with nothing chosen follows
+Stable from then on. Until the window has learned the running version (a moment after it opens, before any automatic
+check), it follows Stable; a check that started then and settles once the version is known, on a build whose default
+is Beta, is dropped and Beta is checked in its place, as with a switch of channel below. Learning the version is no
+switch of channel by itself, so it starts no check of its own.
 
 A release is stable when its version has no prerelease suffix: `0.2.0` reaches both channels, `0.2.0-beta.1` only
 Beta. Only a version newer than the one running is ever offered, so switching from Beta to Stable while running a beta
@@ -21,8 +29,9 @@ older version.
 The choice is kept **per client**, in the window's own browser storage, as the choice to keep running in the background
 is (see "Closing the window" in `docs/product/application-lifecycle.md`): the daemon neither stores nor carries
 it, and it is not part of a configuration export (see "Which settings travel" in
-`docs/product/settings-in-a-configuration.md`). A saved choice of either channel is kept; storage that holds no
-choice, has been cleared, or holds anything but Beta reads as Stable.
+`docs/product/settings-in-a-configuration.md`). Switching to either channel saves it, and a saved choice is kept
+whichever build runs: Stable chosen on a beta build stays Stable. Storage that holds no choice, has been cleared, or
+holds anything but Stable or Beta holds no choice, and the build's default applies.
 
 **Switching the channel** withdraws at once an update found on the other channel, with its notice, and checks the new
 channel straight away. An update already downloading is the exception: it is kept and installs as usual. A check still
@@ -270,4 +279,7 @@ alert says. A failed automatic check is announced even after an earlier check wa
 when Settings opened is not announced.
 
 **Update channel** chooses between **Stable** and **Beta**, listed in that order (see "Update channels" above), with a
-line saying that Stable gets only stable releases and Beta every release, stable ones included.
+line saying that Stable gets only stable releases and Beta every release, stable ones included. With nothing chosen it
+shows the channel the running build follows by default (Beta on a prerelease build, Stable otherwise); showing it saves
+nothing, and neither does picking the channel already shown: only switching to the other one saves a choice. So a beta
+user who wants to stay on Beta past a stable release switches to Stable and back.

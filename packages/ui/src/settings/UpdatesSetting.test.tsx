@@ -53,8 +53,8 @@ function mount(platform: PlatformAdapter, { opened = true }: { opened?: boolean 
 
 const FOUND: AvailableUpdate = { version: "0.2.0" };
 
-const updaterOf = (check: UpdaterCapability["check"], install: UpdaterCapability["install"] = async () => {}): UpdaterCapability => ({
-  currentVersion: async () => "0.1.0",
+const updaterOf = (check: UpdaterCapability["check"], install: UpdaterCapability["install"] = async () => {}, version = "0.1.0"): UpdaterCapability => ({
+  currentVersion: async () => version,
   check,
   install,
 });
@@ -226,6 +226,50 @@ it("keeps the channel the user picks and looks again on the new one", async () =
   await act(async () => updateChannel.set("stable"));
   expect(localStorage.getItem(PREFERENCE_KEYS.updateChannel)).toBe("stable");
   expect(container.textContent).toContain("Stable");
+  expect(check).toHaveBeenCalledExactlyOnceWith("stable");
+});
+
+/** The channel the Update channel row shows as chosen. */
+const shownChannel = (container: HTMLElement) => container.querySelector("select")?.value;
+
+it.each([
+  ["0.1.0-beta.3", "beta"],
+  ["0.1.0", "stable"],
+])("shows the default channel of build %s while nothing is chosen, without saving it or looking again", async (version, expected) => {
+  updateChannel.set(undefined);
+  const check = vi.fn(async () => undefined);
+  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(check, undefined, version) });
+  await act(async () => {});
+  expect(shownChannel(container)).toBe(expected);
+  expect(localStorage.getItem(PREFERENCE_KEYS.updateChannel)).toBeNull();
+  expect(check).not.toHaveBeenCalled();
+});
+
+it("looks on a channel picked before the running version is known", async () => {
+  updateChannel.set(undefined);
+  const check = vi.fn(async () => undefined);
+  mount({ kind: "tauri", host: BROWSER_HOST, updater: { currentVersion: () => new Promise<string>(() => {}), check, install: async () => {} } });
+  await act(async () => {});
+  await act(async () => updateChannel.set("beta"));
+  expect(check).toHaveBeenCalledExactlyOnceWith("beta");
+});
+
+it("checks the running build's default channel while nothing is chosen", async () => {
+  updateChannel.set(undefined);
+  const check = vi.fn(async () => undefined);
+  const { store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(check, undefined, "0.1.0-beta.3") });
+  await act(async () => {});
+  await act(async () => store().check("manual"));
+  expect(check).toHaveBeenCalledExactlyOnceWith("beta");
+});
+
+it("keeps Stable chosen on a beta build", async () => {
+  updateChannel.set("stable");
+  const check = vi.fn(async () => undefined);
+  const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(check, undefined, "0.1.0-beta.3") });
+  await act(async () => {});
+  expect(shownChannel(container)).toBe("stable");
+  await act(async () => store().check("manual"));
   expect(check).toHaveBeenCalledExactlyOnceWith("stable");
 });
 

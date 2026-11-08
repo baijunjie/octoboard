@@ -1,16 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UpdaterError, type AvailableUpdate, type UpdateChannel, type UpdaterCapability, type UpdateProgress } from "../platform";
+import { effectiveUpdateChannel } from "./updateChannel";
 import { CHECK_INTERVAL_MS, createUpdateStore, FIRST_CHECK_DELAY_MS, type UpdateFailure } from "./updateStore";
 
 const FOUND: AvailableUpdate = { version: "0.2.0", notes: "Fixes." };
 
 /** An updater whose calls the test settles itself. */
-function fakeUpdater() {
+function fakeUpdater(currentVersion: () => Promise<string> = async () => "0.1.0") {
   const checks: Array<{ channel: UpdateChannel; settle: (result: AvailableUpdate | undefined | Error) => void }> = [];
   const installs: Array<{ progress: (progress: UpdateProgress) => void; settle: (error?: Error) => void }> = [];
   const updater: UpdaterCapability = {
-    currentVersion: async () => "0.1.0",
+    currentVersion,
     check: (channel) =>
       new Promise((resolve, reject) => {
         checks.push({ channel, settle: (result) => (result instanceof Error ? reject(result) : resolve(result)) });
@@ -41,6 +42,28 @@ describe("checking", () => {
     void store.check("manual");
     expect(store.getState().phase).toBe("checking");
     expect(checks.map((check) => check.channel)).toEqual(["stable"]);
+  });
+
+  it("asks for the channel with the running version, once the shell has said it", async () => {
+    const fake = fakeUpdater();
+    const seen: Array<string | undefined> = [];
+    const store = createUpdateStore({ updater: fake.updater, getChannel: (version) => (seen.push(version), "stable"), reportFailure: () => {} });
+    await flush();
+    void store.check("manual");
+    expect(seen[0]).toBe("0.1.0");
+  });
+
+  it("drops a check started before the version was known when the build defaults elsewhere, and checks again there", async () => {
+    let tell!: (version: string) => void;
+    const fake = fakeUpdater(() => new Promise((resolve) => (tell = resolve)));
+    const store = createUpdateStore({ updater: fake.updater, getChannel: (version) => effectiveUpdateChannel(undefined, version), reportFailure: () => {} });
+    void store.check("automatic");
+    tell("0.1.0-beta.3");
+    await flush();
+    fake.checks[0].settle(FOUND);
+    await flush();
+    expect(fake.checks.map((check) => check.channel)).toEqual(["stable", "beta"]);
+    expect(store.getState().update).toBeUndefined();
   });
 
   it("offers the update it found and remembers how the check ended", async () => {

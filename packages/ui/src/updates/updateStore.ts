@@ -77,7 +77,8 @@ export function createUpdateStore({
   now = Date.now,
 }: {
   updater: UpdaterCapability;
-  getChannel: () => UpdateChannel;
+  /** The channel to look on, given the running version (`undefined` until the shell has said). */
+  getChannel: (currentVersion: string | undefined) => UpdateChannel;
   reportFailure: (failure: UpdateFailure) => void;
   now?: () => number;
 }): UpdateStore {
@@ -107,7 +108,7 @@ export function createUpdateStore({
   });
 
   async function check(trigger: "manual" | "automatic"): Promise<void> {
-    const channel = getChannel();
+    const channel = getChannel(state.currentVersion);
     // What another channel offered is no news about this one, and stays withdrawn if the check below fails. A download
     // under way keeps its update, which `install` holds on to and which is gone once it ends.
     if (state.update && state.updateChannel !== channel && state.phase !== "downloading") {
@@ -117,7 +118,7 @@ export function createUpdateStore({
     set({ phase: "checking" });
     try {
       const found = await updater.check(channel);
-      if (getChannel() !== channel) {
+      if (getChannel(state.currentVersion) !== channel) {
         set({ phase: "idle" });
         return check(trigger);
       }
@@ -134,7 +135,7 @@ export function createUpdateStore({
         set({ phase: "idle", update: undefined, updateChannel: undefined, lastCheck: { outcome: "upToDate", at: now() } });
       }
     } catch (error) {
-      if (getChannel() !== channel) {
+      if (getChannel(state.currentVersion) !== channel) {
         set({ phase: "idle" });
         return check(trigger);
       }

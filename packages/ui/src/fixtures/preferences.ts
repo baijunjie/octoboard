@@ -36,7 +36,7 @@ export interface Preferences {
   diffLayout?: "unified" | "split";
   /** Closing the window keeps the app running in the background; off by default. */
   runInBackground?: boolean;
-  /** The release channel the application updates from; stable when unset. */
+  /** The release channel the user chose; unset, the running build's default (Beta on a prerelease, else Stable). */
   updateChannel?: UpdateChannel;
   /** The keyboard shortcuts the user has changed, by command; the others keep their defaults. */
   keyboardShortcuts?: Overrides;

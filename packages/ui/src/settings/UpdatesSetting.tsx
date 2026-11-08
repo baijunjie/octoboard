@@ -13,7 +13,7 @@ import type { HostFacts } from "../platform/host";
 import { releaseUrl } from "../components/text/releaseUrl";
 import { useHost } from "../platform/react";
 import { installedMessageKey } from "../updates/installedMessageKey";
-import { updateChannel } from "../updates/updateChannel";
+import { effectiveUpdateChannel, updateChannel } from "../updates/updateChannel";
 import type { UpdateState } from "../updates/updateStore";
 import { useUpdates } from "../updates/UpdatesProvider";
 import { SettingRow } from "./SettingRow";
@@ -53,7 +53,7 @@ function checkFailed(state: UpdateState): boolean {
 export function UpdatesSetting(): React.ReactElement | null {
   const t = useT();
   const host = useHost();
-  const channel = updateChannel.useValue();
+  const savedChannel = updateChannel.useValue();
   const updates = useUpdates();
   const [engaged, setEngaged] = useState(false);
   // A check pressed here that fails opens the error alert dialog, which owns announcing it: `pressed` is a press
@@ -77,6 +77,8 @@ export function UpdatesSetting(): React.ReactElement | null {
     }
   }
   const status = versionStatus(t, state, host.updater);
+  // With nothing chosen, the channel the running build defaults to; choosing either one saves it.
+  const channel = effectiveUpdateChannel(savedChannel, state.currentVersion);
   const channels: { value: UpdateChannel; label: string }[] = [
     { value: "stable", label: t("settings.updates.channel.stable") },
     { value: "beta", label: t("settings.updates.channel.beta") },
