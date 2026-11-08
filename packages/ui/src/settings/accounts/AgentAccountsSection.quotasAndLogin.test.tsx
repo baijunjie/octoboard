@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import type { Account, AccountQuota, AgentAvailability } from "../../protocol";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { press } from "../../components/hint/tooltipTestSupport";
 import { trackMountRefocus } from "../../components/dialog/dialogTestSupport";
 import { accountQuotas, availability, request } from "./agentAccountsSectionTestState";
@@ -158,20 +159,29 @@ it.each([
   set({ accountLogins: [{ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null }] });
   await settled();
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  // The clock is the test's from the success on: the success is said `AFTER_FOCUS_MOVE_DELAY_MS` after it, which a
+  // slow run would otherwise reach before the check that nothing has been said yet.
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  /** Runs the frames React Aria's restore and the focus handoff take, well short of that delay. */
+  const passFrames = () => act(() => vi.advanceTimersByTimeAsync(100));
   const signedIn = [quotaOf("claude", "claude-work")];
   set({ ...(quotaFirst ? { accountQuotas: signedIn } : {}), accountLogins: [{ agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null }] });
   // While the button is still there, React Aria's restore may put focus back on it before the handoff runs.
   if (!quotaFirst) act(() => login.focus());
-  await frames();
+  await passFrames();
   if (!quotaFirst) {
     set({ accountQuotas: signedIn });
-    await frames();
+    await passFrames();
   }
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(rowLogin(row)).toBeUndefined();
   expect(document.activeElement?.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Actions for claude-work (Claude Code)");
   // The success is said after that focus move, not with it.
-  expect(row.querySelector('[role="status"]')!.textContent).toBe("");
+  const status = row.querySelector('[role="status"]')!;
+  expect(status.textContent).toBe("");
+  await act(() => vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS));
+  expect(status.textContent?.replace(/[\u2068\u2069]/g, "")).toBe("claude-work: logged in.");
 });
 
 it("leaves focus where React Aria puts it back after a login its own button opened by a press that did not focus it", async () => {

@@ -162,11 +162,14 @@ async function openRowMenu(container: ParentNode, id: string): Promise<HTMLEleme
 
 /** Chooses the entry named `entry` from the actions menu of an account's row and returns the modal it opens. */
 async function openAccountDialog(container: ParentNode, id: string, entry: string): Promise<HTMLElement> {
-  // One that is open is closed first: it holds the rest of the window inert.
+  // One that is open is closed first: it holds the rest of the window inert. The section hands focus back to its row a
+  // frame later, and checks it again a turn after that, so the next one opens only once that has run, as it would for
+  // a person. Opened sooner, it holds the window inert under that handoff, which then retries every frame until the
+  // test ends, unlike anything a person could do.
   const open = document.body.querySelector<HTMLElement>('[role="dialog"] button[aria-label="Close"]');
   if (open) {
     await act(async () => open.click());
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0))));
   }
   await openRowMenu(container, id);
   const item = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((candidate) => candidate.textContent === entry)!;
