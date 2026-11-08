@@ -28,7 +28,8 @@ Run these commands from the repository root:
 
 `NUXT_PUBLIC_SITE_ORIGIN` sets the public origin and `NUXT_APP_BASE_URL` the deployment path, at build time; they
 default to the `websiteUrl` of `config/app.json` and `/` (`site.config.ts`). Use the same values for `build` and
-`preview`. Pushes to `main` publish the site through [`.github/workflows/website.yml`](../../.github/workflows/website.yml).
+`preview`. Pushes to `main` that change what the site is generated from publish it through
+[`.github/workflows/website.yml`](../../.github/workflows/website.yml).
 
 ## Read next
 

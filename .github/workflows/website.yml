@@ -1,9 +1,38 @@
 name: Deploy website
 
+# A push to main deploys the site unless everything it changes is known to be outside what generating the site
+# reads: the daemon, the desktop app package (except the app icon the UI's About section inlines, which the site's
+# preview of the app ships), `scripts/` other than `scripts/lib/` (which the UI's Vite configuration imports), the Rust
+# workspace files, documentation, agent files, the other CI definitions and hooks, the brand assets and the license.
+# Markdown changes nothing the site renders. A new input anywhere else therefore deploys rather than being missed.
+# After a change to the repository's Pages settings (the domain or base path), or a failed deployment, start the
+# workflow by hand; it deploys whatever main holds.
 on:
   push:
     branches:
       - main
+    paths:
+      - "**"
+      - "!apps/daemon/**"
+      - "!apps/desktop/**"
+      - "apps/desktop/src-tauri/icons/**"
+      - "!scripts/**"
+      - "scripts/lib/**"
+      - "!Cargo.toml"
+      - "!Cargo.lock"
+      - "!rust-toolchain.toml"
+      - "!rustfmt.toml"
+      - "!.cargo/**"
+      - "!docs/**"
+      - "!.claude/**"
+      - "!.agents/**"
+      - "!.codex/**"
+      - "!.github/**"
+      - ".github/workflows/website.yml"
+      - "!.githooks/**"
+      - "!assets/**"
+      - "!LICENSE"
+      - "!**/*.md"
   workflow_dispatch:
 
 permissions:

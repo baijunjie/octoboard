@@ -10,8 +10,13 @@ product preview in `docs/product/website-product-preview.md`, and its privacy di
 
 ## Publishing
 
-Every push to `main` publishes the static site to GitHub Pages. Pushes to other branches do not. The same
-publication can be started manually, and a manual run publishes the selected revision to that same site.
+A push to `main` publishes the static site to GitHub Pages unless every file it changes is known to be outside what
+generating the site reads: the daemon, the desktop app package (except the app icon, which the site's preview of the
+app ships), `scripts/` other than `scripts/lib/`, the Rust workspace files, documentation and other Markdown, agent
+files, the other CI definitions and hooks, the brand assets and the license. A file outside those lists publishes, so
+an input added outside those areas is never missed. Pushes to other branches publish nothing. The same publication can
+be started manually, and a manual run publishes the selected revision to that same site; start one after changing the
+repository's Pages settings or after a failed publication, which no push then retries by itself.
 
 Publication uses the origin and base path configured for the repository's GitHub Pages site, passed to generation
 as `NUXT_PUBLIC_SITE_ORIGIN` and `NUXT_APP_BASE_URL`. An origin reported as `http` is changed to `https` before
