@@ -152,7 +152,7 @@ a UI that failed, which has no such sentence otherwise, that sentence — that t
 report it at — comes first on the surface, above the stack trace.
 
 Of the four screens only the one for a daemon of another version has a **Quit** button, and only in the desktop
-application: the window still quits through `Cmd+Q`, the application menu's Quit, the menu bar icon's Quit Octoboard
+application: the window still quits through `Cmd+Q`, the application menu's Quit, the menu bar icon's quit entry
 (the notification-area icon's on Windows) and, where closing the window quits, its close button (see "Quitting" in
 `docs/product/application-lifecycle.md`). As
 the screens for a daemon that could not start, for a daemon of another version and for a UI that failed appear,

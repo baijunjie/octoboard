@@ -102,7 +102,7 @@ A check ends in one of three ways:
 
 ## The menu bar update entry
 
-The menu bar icon's menu always includes an update entry immediately above Open Octoboard
+The menu bar icon's menu always includes an update entry immediately above the entry for opening the board
 (see "The icon's menu" in `docs/product/menu-bar-icon.md`). It normally offers to check for updates; while a newer
 version is known it names that version as available, and while it is downloading it identifies the version being
 downloaded. Hiding the update notice does not hide this entry or the available version it names. After installation the entry

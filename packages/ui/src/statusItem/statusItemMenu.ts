@@ -74,7 +74,7 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
     sections: sections.length > 0 ? sections : [{ heading: t("statusItem.noListedSessions"), items: [] }],
     submenus: buildQuotaSubmenus(t, quota, consoleMap.get(source.currentConsoleId ?? ""), accountInUse(selected)),
     open: t("statusItem.open"),
-    quit: t("menu.quit"),
+    quit: t("statusItem.quit"),
     attention: inOrder((status) => status === "waiting_user" || status === "dormant").length > 0,
   };
 }

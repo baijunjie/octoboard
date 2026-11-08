@@ -230,8 +230,8 @@ hands the choice over (see "Starting up" above).
 **Bringing a window closed into the background back.** Any of these brings the window back where it was, at the size
 and position it had:
 
-- the menu bar icon's menu: its Open Octoboard or one of its sessions (see "Clicking the icon" and "The icon's menu"
-  in `docs/product/menu-bar-icon.md`);
+- the menu bar icon's menu: its entry for opening the board or one of its sessions (see "Clicking the icon" and
+  "The icon's menu" in `docs/product/menu-bar-icon.md`);
 - opening Octoboard again while it runs — on macOS from the Finder, Spotlight or `open`; on Windows any launch of it,
   such as from the Start menu, which starts no second Octoboard but brings the running one's window forward (once its
   window exists: during the first moments of a launch there is none yet to bring);
@@ -246,12 +246,12 @@ again.
 
 ## Quitting
 
-Every way of ending the application behaves the same: `Cmd+Q`, the application menu's Quit, the menu bar icon's Quit
-Octoboard (see "Quit Octoboard" in `docs/product/menu-bar-icon.md`), the Dock icon's own Quit, a system-initiated
+Every way of ending the application behaves the same: `Cmd+Q`, the application menu's Quit, the menu bar icon's quit entry
+(see "Quitting completely" in `docs/product/menu-bar-icon.md`), the Dock icon's own Quit, a system-initiated
 termination on macOS — logging out, restarting or shutting down the machine — and, while keeping Octoboard running in
 the background is off, closing the window: the close button, `Cmd+W` and the Window menu's Close Window item (see
 "Closing the window" above). The Windows application has no application menu and no `Cmd+Q`: it is quit through the
-notification-area icon's Quit Octoboard, or by closing the window while keeping it running in the background is off.
+notification-area icon's quit entry, or by closing the window while keeping it running in the background is off.
 The one difference is the escape hatch in "Quitting when the window has stopped responding" below, which the close
 gestures have no part in. Nothing below asks while the window shows a daemon of another version (see
 "A daemon of another version" above).

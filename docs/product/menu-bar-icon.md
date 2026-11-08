@@ -55,7 +55,7 @@ the octopus alone.
 ## Clicking the icon
 
 A click on the icon, left or right, opens the icon's menu, described below. A click does nothing else: the window
-comes back through the menu's **Open Octoboard**, its update entry or one of its sessions.
+comes back through the menu's **Open board**, its update entry or one of its sessions.
 
 On macOS, for about the first 0.6 seconds after the window is closed from native fullscreen, a click on the icon, left
 or right, is lost and opens nothing; macOS swallows it while it leaves fullscreen.
@@ -114,9 +114,8 @@ From top to bottom:
    account the selected session is running on, as that section has it: it stays listed in its place, its header line
    ending in **Disabled**, in secondary text after its reached-limit tag, or after its name and plan when there is
    no tag. An agent that is not added, not available, whose availability is not yet determined, or whose
-   accounts are all turned off, bar that one, has none. The submenus are set off from the sessions and from Open
-   Octoboard by separators. Inside a submenu,
-   nothing can be chosen:
+   accounts are all turned off, bar that one, has none. The submenus are set off from the sessions and from the
+   entry for opening the board by separators. Inside a submenu, nothing can be chosen:
    - each account is a header line, at the small size of a section header and regular weight, with its name and plan
      in the secondary text colour. The agent's default account uses the name the user gave it, else **Default** (see
      "The default account" in `docs/product/agent-accounts.md`), and a plan the agent names follows after a dot
@@ -199,10 +198,13 @@ From top to bottom:
 3. **Check for updates**, which opens Settings on its About section with the update controls and checks when no
    newer version is known. Its label identifies a known newer version, or a download in progress, as described in
    "The menu bar update entry" in `docs/product/in-app-updates.md`.
-4. **Open Octoboard**, which brings a window closed into the background back, as described under "Closing the window"
+4. **Open board**, which brings a window closed into the background back, as described under "Closing the window"
    in `docs/product/application-lifecycle.md`. A window that is shown, or minimized, is brought to the front, restored
    first if it was minimized.
-5. **Quit Octoboard**, after a separator, described below.
+5. **Quit completely**, after a separator, described below.
+
+The open entry names the board rather than repeating the application name; the quit entry makes clear that it ends
+the whole application, including background operation.
 
 The menu follows the sessions and update entry as they change, including while the window is closed into the
 background. It is never replaced while open, though: while any of Octoboard's menus is open — this one or the application menu — changes
@@ -210,18 +212,18 @@ wait, and once no menu is open the icon's menu takes on the latest of them, so a
 until it is dismissed or an item is chosen. The icon's look waits with them (see "The icon's look" above). It is
 worded in the UI's current language (see "What follows the language" in `docs/product/language.md`). Until the
 window's UI has loaded and received the daemon's state — and throughout on the screen shown when the daemon failed to
-start — the menu holds only Check for updates, Open Octoboard and Quit Octoboard, in English, with no quota submenus.
+start — the menu holds only Check for updates, Open board and Quit completely, in English, with no quota submenus.
 
 ### Choosing a session
 
-Choosing a session in the menu brings the window back as Open Octoboard does, then selects that session as if it had
+Choosing a session in the menu brings the window back as Open board does, then selects that session as if it had
 been selected in the sidebar — the sidebar follows it to its console, and an interrupted session is resumed (see
 "Selecting a session" in `docs/product/sidebar.md`) — and puts keyboard focus in its terminal. A session that has gone away since the menu was
 opened only brings the window back.
 
-### Quit Octoboard
+### Quitting completely
 
-Quit Octoboard is a quit like `Cmd+Q`: while a session or a busy shell terminal holds a quit up it asks the same
+The quit entry behaves like `Cmd+Q`: while a session or a busy shell terminal holds a quit up it asks the same
 confirmation, bringing a window closed into the background back to ask it, and otherwise it quits at once (see
 "Quitting" in `docs/product/application-lifecycle.md`, which says what holds a quit up).
 
@@ -239,7 +241,7 @@ follow from the system's own notification-area icons and plain menus:
 - **A click**, left or right, opens the menu when the button is released. That opening asks the daemon for a fresh
   quota reading, as opening the menu does on macOS.
 - **The menu's lines are the system's plain menu items.** They carry the same text: the group headings, the session
-  lines, the quota submenus and Check for updates, Open Octoboard and Quit Octoboard. The headings and every line of a
+  lines, the quota submenus and Check for updates, Open board and Quit completely. The headings and every line of a
   quota submenu cannot be chosen, and are drawn as the system draws an item that cannot be chosen. Each line of a
   quota submenu is the words assistive technology reads for that line on macOS — an account's header with its plan,
   reached-limit words and age ("Default · Max · updated 3 minutes ago"), a window's phrase ("5h 82% remaining · resets

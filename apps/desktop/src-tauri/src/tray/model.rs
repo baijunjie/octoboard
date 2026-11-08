@@ -4,8 +4,6 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
-use crate::menu::APP_NAME;
-
 /// The tray menu as the UI words it, already in its language: sections of sessions, each under a
 /// heading, submenus of rows (headers, quota windows, notes) that cannot be chosen, then the Updates,
 /// Open and Quit labels, whether the icon should show its attention dot, and its selected-account quota.
@@ -177,9 +175,9 @@ impl Default for TrayMenu {
             sections: Vec::new(),
             submenus: Vec::new(),
             icons: HashMap::new(),
-            open: format!("Open {APP_NAME}"),
+            open: "Open board".to_string(),
             updates: default_updates_label(),
-            quit: format!("Quit {APP_NAME}"),
+            quit: "Quit completely".to_string(),
             attention: false,
             quota_remaining: None,
             quota_weekly_remaining: None,
