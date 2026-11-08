@@ -453,6 +453,8 @@ export const claude = {
   },
   colour: { light: "#c2562f", dark: "#ea835d" },
   params: { claude: names["provider.claude.label"], claudeShort: names["provider.claude.shortName"] },
+  connectorPlatform: { name: "claude.ai", settingsUrl: "https://claude.ai/customize/connectors" },
+  mcpSessionSignIn: "/mcp",
   references: {
     trustCaution: { file: ".claude/settings.json" },
     sharingNeverShared: { claudeJson: ".claude.json", plans: "plans/" },

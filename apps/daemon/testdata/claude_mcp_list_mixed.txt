@@ -1,0 +1,6 @@
+Checking MCP server health…
+
+okserver: python3 -I /path/mcp_ok.py - ✔ Connected
+broken: /usr/bin/false  - ✘ Failed to connect — CONNECTION_CLOSED: Connection closed
+needsauth: http://127.0.0.1:47811/mcp (HTTP) - ! Needs authentication
+sse1: http://127.0.0.1:47811/sse (SSE) - ✘ Failed to connect — Protected resource http://127.0.0.1:47811/mcp does not match expected http://127.0.0.1:47811 (or origin)

@@ -16,8 +16,8 @@ use crate::coordinator::test_support::{
 };
 use crate::protocol::DefaultModelSource;
 use crate::protocol::{
-    error_code, AgentId, Availability, CodedError, Event, Launch, LaunchChange, PerAgent, Project,
-    ProjectSource, RequestBody, Session, SessionStatus,
+    error_code, AgentId, Availability, CodedError, Event, Launch, LaunchChange,
+    McpInventoryFailure, PerAgent, Project, ProjectSource, RequestBody, Session, SessionStatus,
 };
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
@@ -266,15 +266,90 @@ async fn using_a_reset_credit_is_refused_for_a_foreign_or_unknown_account() {
         agent: AgentId::CODEX,
         account,
     };
-    let code_of = |refused: anyhow::Error| refused.downcast_ref::<CodedError>().unwrap().code;
 
     // Refused before any shell is asked for; `reset_credit_shell` has none under test either,
     // so a request that got through would fail on that instead of reaching Codex.
     set_availability(&state, AgentId::CODEX, Availability::Available);
     for account in [Some(claude_account), Some("no-such-account".to_string())] {
         let refused = handle(&state, None, use_on(account)).await.unwrap_err();
-        assert_eq!(code_of(refused), error_code::UNKNOWN_ACCOUNT);
+        assert_eq!(code_of(&refused), error_code::UNKNOWN_ACCOUNT);
     }
+}
+
+#[tokio::test]
+async fn reading_an_mcp_inventory_refuses_only_an_unknown_account_and_carries_every_other_failure()
+{
+    let (state, _dir) = crate::test_support::app_state("coordinator-read-mcp-inventory");
+    set_availability(&state, AgentId::CODEX, Availability::Available);
+    let read = |agent, account: Option<&str>| RequestBody::ReadAccountMcpInventory {
+        agent,
+        account: account.map(str::to_string),
+        refresh: false,
+    };
+    let refused = handle(&state, None, read(AgentId::CODEX, Some("no-such-account")))
+        .await
+        .unwrap_err();
+    assert_eq!(code_of(&refused), error_code::UNKNOWN_ACCOUNT);
+
+    // No shell environment exists under test, which is a failure of the reading, not a refusal.
+    let Some(Event::AccountMcpInventoryRead { inventory, .. }) =
+        handle(&state, None, read(AgentId::CODEX, None))
+            .await
+            .unwrap()
+    else {
+        panic!("answered with the inventory");
+    };
+    let unavailable = inventory.unavailable.expect("unavailable");
+    assert_eq!(unavailable.reason, McpInventoryFailure::Failed);
+    assert!(unavailable.detail.unwrap().contains("no shell environment"));
+
+    // An agent with no way of listing answers as unsupported.
+    let Some(Event::AccountMcpInventoryRead { inventory, .. }) =
+        handle(&state, None, read(AgentId::GROK, None))
+            .await
+            .unwrap()
+    else {
+        panic!("answered with the inventory");
+    };
+    assert_eq!(
+        inventory.unavailable.unwrap().reason,
+        McpInventoryFailure::UnsupportedAgent
+    );
+}
+
+#[tokio::test]
+async fn signing_in_to_an_mcp_server_is_refused_for_an_unknown_account_and_an_agent_without_it() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-mcp-sign-in");
+    set_availability(&state, AgentId::CODEX, Availability::Available);
+    let sign_in = |agent, account: Option<&str>| RequestBody::SignInAccountMcpServer {
+        agent,
+        account: account.map(str::to_string),
+        server: "s".to_string(),
+    };
+    let refused = handle(
+        &state,
+        None,
+        sign_in(AgentId::CODEX, Some("no-such-account")),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(code_of(&refused), error_code::UNKNOWN_ACCOUNT);
+    let refused = handle(&state, None, sign_in(AgentId::GROK, None))
+        .await
+        .unwrap_err();
+    assert_eq!(code_of(&refused), error_code::PROVIDER_UNSUPPORTED);
+    // No shell environment exists under test, so nothing is run for an offered agent either.
+    let refused = handle(&state, None, sign_in(AgentId::CODEX, None))
+        .await
+        .unwrap_err();
+    assert_eq!(code_of(&refused), error_code::SHELL_ENVIRONMENT_TIMEOUT);
+    let cancel = RequestBody::CancelAccountMcpSignIn {
+        agent: AgentId::CODEX,
+        account: None,
+        server: "s".to_string(),
+    };
+    let refused = handle(&state, None, cancel).await.unwrap_err();
+    assert_eq!(code_of(&refused), error_code::MCP_SIGN_IN_NOT_RUNNING);
 }
 
 /// A project session that sets no model takes the console's project session one, so an effort

@@ -158,7 +158,8 @@ Some writes into the account's directory cannot be avoided:
 
 A reading's agent, and every other short run of an agent's CLI that Octoboard makes with no terminal — starting a usage
 window (see `docs/product/starting-usage-windows.md`), redeeming a usage limit reset (see
-`docs/product/usage-limit-resets.md`), listing an agent's models (see "The models offered" in
+`docs/product/usage-limit-resets.md`), reading an account's MCP servers and connectors (see
+`docs/product/account-mcp-servers-and-connectors.md`), listing an agent's models (see "The models offered" in
 `docs/product/model-and-reasoning-effort.md`), checking with `claude auth status` whether a Claude Code login succeeded,
 and `codex unarchive` — is stopped the same way when Octoboard ends it: on its timeout, when it writes too much, when it
 fails, when it does not exit after its reply, or when the daemon shuts down.
@@ -168,7 +169,8 @@ fails, when it does not exit after its reply, or when the daemon shuts down.
   in between leaves the temporary file behind.
 - **It is killed if it is still running 6 seconds later**, and its helper processes with it.
 - **During a shutdown the wait is shorter**: once the daemon has begun shutting down, a run it stops for that reason —
-  a reading, a usage window being started or a reset being redeemed — is killed at most **3 seconds** after being asked
+  a reading, a usage window being started, a reset being redeemed or an account's MCP servers and connectors being
+  read — is killed at most **3 seconds** after being asked
   to exit, and one of these that was already being stopped when the shutdown began is killed at most 3 seconds after
   it began. The other runs are not stopped by a shutdown, and keep the full 6 seconds whenever they are stopped.
 

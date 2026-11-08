@@ -278,6 +278,82 @@ fn a_compressed_codex_rollout_is_planned_for_a_switch() {
     assert_eq!(planned.shell_env.unwrap()["CODEX_SQLITE_HOME"], "db");
 }
 
+/// A Codex session switched onto a non-default account is relaunched keeping its MCP OAuth tokens
+/// in that account's own home; one switched onto the default account is not, as its home is the
+/// one Codex itself uses.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_codex_switch_keeps_mcp_tokens_in_a_non_default_accounts_home_only() {
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    for (case, account) in [("account", Some("codex-a")), ("default", None)] {
+        let (state, dir) =
+            console_with_project_and_accounts(&format!("coordinator-switch-codex-store-{case}"));
+        std::fs::create_dir_all(dir.join("no-such-project")).unwrap();
+        let home = dir.join("default-codex");
+        // The session comes from the other side of the switch: the default account's home for a
+        // switch onto an account, the account's for one onto the default account.
+        let source = if account.is_some() {
+            home.clone()
+        } else {
+            dir.join("codex-a")
+        };
+        let id = "019a0000-0000-7000-8000-000000000001";
+        crate::test_support::codex_chain(&source, id, false);
+        std::fs::create_dir_all(dir.join("codex-a")).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        let mut codex = project_session("codex", AgentId::CODEX, SessionStatus::Interrupted);
+        codex.has_conversation = true;
+        codex.agent_session_id = Some(id.to_string());
+        if account.is_none() {
+            codex.account_id = Some("codex-a".to_string());
+            codex.config_dir = Some(source.to_string_lossy().into_owned());
+        }
+        state.store.insert_session(&codex).unwrap();
+        let env = HashMap::from([(
+            "CODEX_HOME".to_string(),
+            home.to_string_lossy().into_owned(),
+        )]);
+        let started = Arc::new(std::sync::Mutex::new(Vec::<StandIn>::new()));
+        let launches = Arc::new(std::sync::Mutex::new(Vec::<Launched>::new()));
+        let requested = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let launch = stand_in_launch(&started, &launches, || {});
+        let seen = requested.clone();
+
+        switch_session_account_with(
+            &state,
+            "codex",
+            Some(account.map(str::to_string)),
+            None,
+            None,
+            LaunchEdit::default(),
+            move || Ok(env),
+            move |request: term::LaunchRequest| {
+                seen.lock().unwrap().push((
+                    request.agent,
+                    request.config_dir.clone(),
+                    crate::adapter::tests::codex_file_credential_overrides(
+                        request.config_dir.as_deref(),
+                        request.resume_agent_session_id.as_deref(),
+                    ),
+                ));
+                launch(request)
+            },
+        )
+        .await
+        .unwrap();
+
+        let expected = account.map(|_| dir.join("codex-a"));
+        let requested = requested.lock().unwrap().clone();
+        assert_eq!(
+            requested,
+            [(AgentId::CODEX, expected, usize::from(account.is_some()))],
+            "{case}"
+        );
+        stop_process(&state, state.live_session("codex").expect("relaunched"))
+            .await
+            .unwrap();
+    }
+}
+
 /// A relaunch that is refused after the conversation was copied and the account recorded puts
 /// the account back, leaves the session interrupted rather than archived, and leaves the
 /// conversation in the account it came from as well as the one it was copied to. The

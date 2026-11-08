@@ -20,6 +20,7 @@ use super::errors::{error_parts, params, Params};
 use super::fields::is_true;
 use super::history::{ConversationLocation, HistoryMessage, SessionRecordPresence};
 use super::host::HostInfo;
+use super::mcp_inventory::{AccountMcpInventory, McpServerAuthOutcome};
 use super::models::{AgentModel, DefaultModelSource, ModelChangeOutcome, ModelsUnavailable};
 use super::path_links::PathLink;
 use super::processes::{ProcessCount, ProcessTree, UnstoppedProcess};
@@ -381,6 +382,17 @@ pub enum Event {
     ResetCreditUsed {
         id: Option<String>,
         outcome: ResetCreditOutcome,
+    },
+    /// The reply to `read_account_mcp_inventory`: what the account's agent reports.
+    AccountMcpInventoryRead {
+        id: Option<String>,
+        inventory: AccountMcpInventory,
+    },
+    /// The reply to `sign_in_account_mcp_server` and `sign_out_account_mcp_server`, sent once the
+    /// agent's CLI has ended.
+    AccountMcpServerAuthEnded {
+        id: Option<String>,
+        outcome: McpServerAuthOutcome,
     },
     /// The reply to `export_configuration`: the configuration document, which a client saves as
     /// the file the user keeps (see "Configuration export" in `apps/daemon/PROTOCOL.md`).

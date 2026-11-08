@@ -373,11 +373,12 @@ fn update_account(
         state.store.update_account(&account)?;
         dir_changed.then_some(account.agent)
     };
-    // A reading belongs to the directory it was taken under, and a login signs in to it; a rename
-    // leaves both valid.
+    // A reading belongs to the directory it was taken under, and a login or an MCP sign-in signs in
+    // to it; a rename leaves all valid.
     if let Some(agent) = repointed {
         state.account_quotas.forget_account(state, id);
         let _ = state.account_logins.cancel(agent, Some(id.to_string()));
+        state.mcp_server_auths.cancel_account(agent, id);
         // What runs under the account's directory is now what runs under the new one.
         state.publish_account_sharing();
     }
@@ -433,6 +434,7 @@ fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
     let _ = state
         .account_logins
         .cancel(account.agent, Some(id.to_string()));
+    state.mcp_server_auths.cancel_account(account.agent, id);
     for console_id in affected_consoles {
         if let Some(console) = state.store.get_console(&console_id)? {
             state.broadcast(Event::ConsoleUpserted { console });

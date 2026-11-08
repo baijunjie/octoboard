@@ -43,6 +43,12 @@ export interface ProviderPresentation<Id extends string = string, Messages exten
   /** The display names of plans whose id would read badly in the generic case (`self_serve_business_prolite`), by the
    * plan id the daemon serves. */
   readonly planNames?: Readonly<Record<string, string>>;
+  /** The platform whose website holds the connectors of the provider's accounts (claude.ai, ChatGPT): its name, a
+   * brand the same in every language, and the address of its connector settings. None for a provider without one. */
+  readonly connectorPlatform?: { readonly name: string; readonly settingsUrl: string };
+  /** The command a session of the provider authorizes a local MCP server that needs sign-in with (`/mcp`), for a
+   * provider whose servers Octoboard cannot sign in itself. */
+  readonly mcpSessionSignIn?: string;
   /** What the UI knows of each error or notice code the provider's descriptor declares (`provider.<id>.<code>`), by
    * code: the same record the core codes have (`CodeRecord` in `errors/codes.ts`, which this layer cannot import: the
    * registry there checks the merged records against it). The code's words are among `messages`, under the code

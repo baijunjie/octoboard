@@ -135,6 +135,19 @@ The launch conditions that are visible:
   own limit on a forwarded call (the 10 minutes in "Waiting for the answer" of `docs/product/session-requests.md`), so
   that a call that waits for the user, such as a session request, can return its result. This is the limit on
   Octoboard's tools alone; no other tool's limit changes.
+- a session of a non-default Codex account keeps the OAuth tokens of its MCP servers in its own Codex home
+  (`-c mcp_oauth_credentials_store="file"`, so they land in `$CODEX_HOME/.credentials.json`), whether it is started,
+  resumed, switched onto the account or handed off to it, and whatever the account's sharing state. Codex's default
+  store on macOS is the keychain, under a key made from the server's name and URL alone, not from `CODEX_HOME`, so
+  without the override every account would sign in to a server as one identity and refresh one token uncoordinated;
+  and the store cannot be set in the account's `config.toml`, which a sharing account has in common with the default
+  account. A session of the default account is passed nothing and keeps Codex's default store, as `codex` run in a
+  terminal does. `codex` run by hand under a non-default account's home does not carry the override and reads the
+  default account's keychain entry instead. A token already in the keychain is not moved: a non-default account signs
+  in to the server again, which it can do from its details dialog. Reading the account's MCP servers carries the same
+  override (see "How a Codex account is read" in `docs/product/account-mcp-servers-and-connectors.md`), and so does
+  signing the account in to or out of a server from Octoboard (see "Signing an account in to and out of an MCP server"
+  in the same doc).
 
 Automatic messages reach Codex through its terminal, like any other agent's: Octoboard uses no stash of Codex's to set
 a draft aside, so they take the guarded terminal delivery in "Messages held until a session can take them" in

@@ -11,11 +11,15 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::login::CodexLogin;
+use super::mcp_auth::CodexMcpAuth;
+use super::mcp_inventory::CodexMcpInventory;
 use super::quota::{kick_command, CodexQuota};
 use super::reset_credit::CodexResetCredits;
 use super::shared_config::ITEMS;
 use super::threads::CodexThreads;
 use crate::accounts::login::flows::LoginFlow;
+use crate::accounts::mcp_inventory::McpInventoryReader;
+use crate::accounts::mcp_sign_in::McpServerAuth;
 use crate::accounts::quotas::email::read_json;
 use crate::accounts::quotas::email::tidy;
 use crate::accounts::quotas::kick::KickCommand;
@@ -41,6 +45,14 @@ impl AccountOps for CodexAccounts {
 
     fn reset_credits(&self) -> Option<&'static dyn ResetCredits> {
         Some(&CodexResetCredits)
+    }
+
+    fn mcp_inventory(&self) -> Option<&'static dyn McpInventoryReader> {
+        Some(&CodexMcpInventory)
+    }
+
+    fn mcp_server_auth(&self) -> Option<&'static dyn McpServerAuth> {
+        Some(&CodexMcpAuth)
     }
 
     fn login(&self) -> Option<&'static dyn LoginFlow> {

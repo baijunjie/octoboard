@@ -12,7 +12,8 @@ use std::time::Duration;
 use serde_json::Value;
 use tokio::sync::Notify;
 
-use crate::accounts::login::flows::{last_line_of, Flow, LoginFlow, Outcome, Process, Progress};
+use crate::accounts::background_cli::Process;
+use crate::accounts::login::flows::{last_line_of, Flow, LoginFlow, Outcome, Progress};
 use crate::adapter::account_cli;
 use crate::platform::fs as platform;
 use crate::platform::shell;
@@ -21,10 +22,10 @@ use crate::platform::shell;
 const URL_POLL: Duration = Duration::from_millis(100);
 
 /// How long `claude auth status` may take.
-const STATUS_TIMEOUT: Duration = Duration::from_secs(15);
+pub(super) const STATUS_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// The most `claude auth status` may print: a short JSON object.
-const STATUS_OUTPUT_LIMIT: usize = 64 * 1024;
+pub(super) const STATUS_OUTPUT_LIMIT: usize = 64 * 1024;
 
 pub(super) struct ClaudeLogin;
 
@@ -116,10 +117,15 @@ async fn claude_signed_in(flow: &Flow) -> bool {
     let Ok(Ok(output)) = output else {
         return false;
     };
-    serde_json::from_slice::<Value>(&output.stdout)
-        .ok()
-        .and_then(|status| status.get("loggedIn").and_then(Value::as_bool))
-        .unwrap_or(false)
+    logged_in(&output.stdout).unwrap_or(false)
+}
+
+/// The `loggedIn` of what `claude auth status` printed; `None` when it printed no such answer.
+pub(super) fn logged_in(stdout: &[u8]) -> Option<bool> {
+    serde_json::from_slice::<Value>(stdout)
+        .ok()?
+        .get("loggedIn")?
+        .as_bool()
 }
 
 #[cfg(test)]

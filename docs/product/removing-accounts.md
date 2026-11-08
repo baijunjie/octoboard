@@ -6,7 +6,9 @@ Removing an account the user owns, with **Remove** in its actions menu in Settin
 Removing an account clears the reference of every console that refers to it, putting each back on the agent's default
 account, and puts every project that refers to it back to inheriting its console's reference (see "The project's
 account, model and reasoning effort" in `docs/product/projects.md`); a project on the agent's default account is left
-as it is. Removing an account ends a login running for it. **The account's config directory and everything in it are
+as it is. Removing an account ends a login running for it, and any sign-in to or sign-out of one of its MCP servers
+(see "Signing an account in to and out of an MCP server" in `docs/product/account-mcp-servers-and-connectors.md`).
+**The account's config directory and everything in it are
 left as they are**, unless the user chooses to move the directory to the Trash as well (see "Moving the account
 directory to the Trash" below).
 
@@ -127,7 +129,10 @@ of the account cannot start**: it is refused with `account_being_removed` (see "
 `docs/product/logging-accounts-in.md`). Once the removal ends, the account is gone, or it is kept and can be logged in
 again. A login that was already running, or started before that point, is ended by the removal and waited for, up to
 five seconds, also when the directory turns out to be missing; one that does not end in that time refuses the move with
-the cause `signing_in`, and so does a login of another account pointed at the same directory.
+the cause `signing_in`, and so does a login of another account pointed at the same directory. A sign-in to or
+sign-out of one of the account's MCP servers is treated the same way: it cannot start (`account_being_removed`), and
+one already running is ended and waited for, up to five seconds, the move refused with the cause `signing_in` when it
+does not end in that time or when such a run of another account pointed at the same directory is going.
 
 Before the move, the removal also holds back the short reads Octoboard runs with the agent's CLI under the directory —
 reading the account's quota (see `docs/product/account-quota-readings.md`), starting its usage windows (see

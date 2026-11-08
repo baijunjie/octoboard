@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useId, useRef, useState } from "react";
 
 import { isAgentUnavailable } from "../../agents/agents";
 import { HelpTip } from "../../components/hint/HelpTip";
@@ -16,31 +16,38 @@ import { useDaemonStore } from "../../store";
 import { ProviderName } from "../../components/text/ProviderName";
 import { AccountHeading, useAccountDialogSubject } from "./accountDialogSubject";
 import { AccountLoginAnnouncer, useSucceededAccountLogin } from "./AccountLogin";
+import { McpInventory, McpInventoryAside } from "./AccountMcpInventory";
+import { useAccountMcpInventory, useReadsMcpInventory } from "./useAccountMcpInventory";
 
-/** A titled part of the dialog, the title standing over what it holds. */
+/** A titled part of the dialog, the title standing over what it holds and naming it. */
 function Part({ title, aside, children }: { title: React.ReactNode; aside?: React.ReactNode; children: React.ReactNode }): React.ReactElement {
+  const headingId = useId();
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
+    <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-1.5">
       <div className="flex items-center gap-1">
-        <h3 className="text-sm font-medium text-foreground">{title}</h3>
+        <h3 id={headingId} className="text-sm font-medium text-foreground">{title}</h3>
         {aside}
       </div>
       {children}
-    </div>
+    </section>
   );
 }
 
 /**
  * One account's details in a modal of its own, opened from its row's actions menu (`account` null for the agent's
- * default account): what the row shows in full and what it leaves out, read-only but for redeeming a reset credit. The
- * title is plain ("Account details"); the body's first line names the account, with its plan and login state after the
- * name, the email under it on a line of its own, and the next says where its configuration lives, the default account's
+ * default account): what the row shows in full and what it leaves out, read-only but for redeeming a reset credit,
+ * rereading its MCP inventory, and signing it in to or out of an MCP server (Sign in, Sign out, Cancel). The title is
+ * plain ("Account details"); the body's first line names the account, with its plan and login state after the name,
+ * the email under it on a line of its own, and the next says where its configuration lives, the default account's
  * explanation after the path. Then the account's quota as the rail's panel draws it (the two-layer 5-hour and weekly
- * meter, each model's window after it) with when it was read, and, for an account holding a reset credit of a provider that offers
- * them, the line that offers to redeem it (`ResetCreditsLine`), whose confirmation opens over this dialog. Besides that
- * button it holds the header's close button, which Escape and a click outside do the same as; the account's switches
- * are in `AccountSettingsDialog`, and logging in is the row's and the menu's. It reads the account from the store as it
- * is now, so a change from another window shows, and closes if the account is removed.
+ * meter, each model's window after it) with when it was read, and, for an account holding a reset credit of a provider
+ * that offers them, the line that offers to redeem it (`ResetCreditsLine`), whose confirmation opens over this dialog.
+ * Last, for a provider that can list them, the account's platform connectors and local MCP servers (`McpInventory`),
+ * read as the dialog opens and again from the section's Refresh, the last reading staying while the next runs, with a
+ * link to the platform's connector settings and, for a server the agent signs in to itself, its Sign in or Sign out.
+ * Besides those controls it holds the header's close button, which Escape and a click outside do the same as; the
+ * account's switches are in `AccountSettingsDialog`, and logging in is the row's and the menu's. It reads the account
+ * from the store as it is now, so a change from another window shows, and closes if the account is removed.
  *
  * Closing the confirmation hands focus back when it fell to the page (the confirmation was opened by a press that took
  * no focus, or the button went with the last credit): to the Redeem reset button while it is there, else to this
@@ -57,6 +64,9 @@ export function AccountDetailsDialog({ agent, account, onClose }: {
   const defaultDir = useDaemonStore((s) => s.agentAvailability.get(agent)?.default_account_dir);
   const unusable = useDaemonStore((s) => isAgentUnavailable(s.agentAvailability, agent));
   const quota = useAccountQuota(agent, account);
+  const readsMcp = useReadsMcpInventory(agent);
+  const mcp = useAccountMcpInventory(agent, account, readsMcp && !gone);
+  const mcpRefresh = useRef<HTMLButtonElement>(null);
   const [resetting, setResetting] = useState(false);
   const redeem = useRef<HTMLDivElement>(null);
   const handBack = useResetFocusReturn(() => void focusOpenDialog(redeem.current?.querySelector("button"), { opening: true }));
@@ -103,6 +113,11 @@ export function AccountDetailsDialog({ agent, account, onClose }: {
               <ResetCreditsLine quota={quota} accountName={name} onUse={() => setResetting(true)} />
             </div>
           </Part>
+          {readsMcp && (
+            <Part title={t("settings.accounts.mcp.title")} aside={<McpInventoryAside state={mcp} refreshButton={mcpRefresh} />}>
+              <McpInventory agent={agent} state={mcp} refreshButton={mcpRefresh} />
+            </Part>
+          )}
         </div>
       </Dialog>
       {resetting && <UseResetCreditDialog agent={agent} account={account} accountName={name} onClose={closeReset} />}

@@ -381,11 +381,14 @@ async fn moved_waiting(state: &Arc<AppState>, id: &str, login_wait: Duration) ->
         || account.config_dir.clone(),
         |directory| directory.to_string_lossy().into_owned(),
     );
-    if !state
-        .account_logins
-        .end(account.agent, id, login_wait)
-        .await
-    {
+    // Both are ended at once, so that the wait is `login_wait` at most, not twice that.
+    let (login_ended, mcp_auths_ended) = tokio::join!(
+        state.account_logins.end(account.agent, id, login_wait),
+        state
+            .mcp_server_auths
+            .end_account(account.agent, id, login_wait),
+    );
+    if !(login_ended && mcp_auths_ended) {
         return Err(trash_failed(
             &shown,
             "its sign-in did not end in time",

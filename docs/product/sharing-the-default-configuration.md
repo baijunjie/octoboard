@@ -63,7 +63,12 @@ A fixed list of entries per agent, directly inside the config directory. There i
 
 Nothing else is shared. In particular:
 
-- **Login credentials** stay the account's own.
+- **Login credentials** stay the account's own. So do a Codex account's MCP server sign-ins: a shared `config.toml`
+  shares a server's definition, while Octoboard has each non-default account's sessions keep the server's OAuth token
+  in the account's own home (see "Codex" in `docs/product/per-agent-launch-specifics.md`), as does a sign-in to the
+  server from Octoboard. Which servers and platform connectors an account has, and their states, can be read per
+  account, and a Codex account signed in to and out of its servers (see
+  `docs/product/account-mcp-servers-and-connectors.md`).
 - **Claude Code's `.claude.json`** is not shared: it holds the account's identity, per-project trust and user-scope MCP
   servers in one file, so a user-scope MCP server is not shared either.
 - **Claude Code's `plans/`** is not shared: through a link, Claude Code asks before writing a plan file in plan mode,
@@ -172,11 +177,13 @@ agent's own such as Claude Code's "Resume this conversation?"; see "What the sta
 `docs/product/session-statuses.md`), *dormant* over a view of their background agents (see "Dormant" in
 `docs/product/session-statuses.md`), holding a message of Octoboard's that is queued, being written, or was left unsent
 in its input box, or being started, resumed, switched, handed off or having their owner changed — and a sign-in of the
-account. While any of these runs, `set_account_sharing` is refused with `account_in_use`, with nothing stopped or
-recorded; the refusal carries how many working sessions there are (`sessions`) and whether a sign-in runs
-(`signing_in`). Octoboard's short agent CLI reads of the account, of its plan quota and of its models, do not refuse a
-change: the change waits for those running to end, and one that starts meanwhile waits for the change. A sign-in that
-starts while a change runs waits for it too. The request is answered once the whole sequence below has ended.
+account: its login, or a sign-in to or sign-out of one of its MCP servers run by Octoboard (see "Signing an account in
+to and out of an MCP server" in `docs/product/account-mcp-servers-and-connectors.md`). While any of these runs,
+`set_account_sharing` is refused with `account_in_use`, with nothing stopped or recorded; the refusal carries how many
+working sessions there are (`sessions`) and whether a sign-in runs (`signing_in`). Octoboard's short agent CLI reads of
+the account, of its plan quota and of its models, do not refuse a change: the change waits for those running to end, and
+one that starts meanwhile waits for the change. A sign-in that starts while a change runs waits for it too. The request
+is answered once the whole sequence below has ended.
 
 **Idle sessions are ended and resumed around the change.** A session that is idle — at its prompt, waiting for the
 user's next message, with nothing on screen only the user can answer and nothing running in the background — does not

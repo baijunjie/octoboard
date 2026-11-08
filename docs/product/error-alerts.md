@@ -250,6 +250,9 @@ The places with a compact alert:
 - a submenu whose items are read as it opens, which is the project menu's Switch branch (see "Switching the local
   branch" in `docs/product/project-git-actions.md`), titled that the items could not be loaded;
 - Settings' Permissions section when the grants could not be read (see "Permissions" in `docs/product/settings.md`);
+- an account's connectors and MCP servers that could not be read, in place of them in the account details dialog's
+  Connectors and MCP section, with **Try again** where reading again can help (see "The Connectors and MCP section" in
+  `docs/product/account-mcp-servers-and-connectors.md`);
 - a configuration import's application settings, or its agent account settings, that could not be applied, in the
   import's result (see "The import result" in `docs/product/configuration-import-progress-and-result.md`);
 - the lookups forms make on their own that stop the form from going on, directly under the field they are about,

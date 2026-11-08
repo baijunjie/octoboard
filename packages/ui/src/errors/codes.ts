@@ -81,7 +81,7 @@ export interface CodeRecord extends MessageFacets {
 }
 
 /** The operations `provider_unsupported` is worded under, as its variants. */
-const UNSUPPORTED_OPERATIONS: Record<string, MessageFacets> = { sign_in: {}, kick: {}, reset_credit: {}, config_sharing: {}, cli_update: {} };
+const UNSUPPORTED_OPERATIONS: Record<string, MessageFacets> = { sign_in: {}, kick: {}, reset_credit: {}, config_sharing: {}, cli_update: {}, mcp_sign_in: {} };
 
 /** The variant of a message about a directory the daemon cannot read or reach, on a host that is not a Mac: the
  * per-volume file access prompts its own wording explains are macOS's, and elsewhere the daemon reads with the
@@ -212,6 +212,8 @@ const CORE_CODES = {
   login_failed: { origin: "daemon", detailBlock: true },
   login_not_confirmed: { origin: "daemon" },
   login_not_running: { origin: "daemon", recovery: "none" },
+  mcp_server_auth_busy: { origin: "daemon", recovery: "none" },
+  mcp_sign_in_not_running: { origin: "daemon", recovery: "none" },
   message_discarded_by_dialog: { origin: "daemon" },
   message_diverted_by_view: { origin: "daemon" },
   message_not_sent: { origin: "daemon", recovery: "unsentMessage", failureNotice: true, alertTitle: true, variantOf: (params) => params.submit_retry === "once" ? "retry" : undefined },

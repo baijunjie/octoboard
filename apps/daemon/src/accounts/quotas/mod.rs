@@ -537,6 +537,12 @@ impl AccountQuotas {
         self.stopping.store(true, Ordering::Relaxed);
     }
 
+    /// The flag [`stop_cli_runs`](Self::stop_cli_runs) sets, for another reading of an agent's CLI
+    /// that a shutdown must stop too.
+    pub(crate) fn stopping_flag(&self) -> Arc<AtomicBool> {
+        self.stopping.clone()
+    }
+
     /// Drops what is held for the account `id`, and any probe or kick running for it along with
     /// its episodes, so that a probe begun under the old directory cannot put its reading back
     /// and a kick is not followed by a reading.

@@ -33,6 +33,18 @@ const APP_SERVER_ARGS: [&str; 1 + CODEX_QUIET_FEATURES.len()] = {
     args
 };
 
+/// How Codex's app server is started to read an account's MCP servers and Apps. It is
+/// [`CODEX_APP_SERVER_ARGS`] without the overrides that switch Apps and plugins off: Apps come
+/// through the `codex_apps` server, and plugins bring Apps and MCP servers of their own, so the
+/// reading would otherwise see neither. The plugin catalogue sync and the hooks stay off.
+pub(crate) const CODEX_INVENTORY_APP_SERVER_ARGS: &[&str] = &[
+    "app-server",
+    "-c",
+    "features.remote_plugin=false",
+    "-c",
+    "features.hooks=false",
+];
+
 /// The `initialize` request that opens a conversation, as id 1: it names the client.
 pub(crate) fn initialize() -> Value {
     json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -67,5 +79,17 @@ mod tests {
     fn the_app_server_starts_with_the_quiet_overrides() {
         assert_eq!(CODEX_APP_SERVER_ARGS[0], "app-server");
         assert_eq!(&CODEX_APP_SERVER_ARGS[1..], CODEX_QUIET_FEATURES);
+    }
+
+    #[test]
+    fn the_inventory_server_is_the_quiet_one_with_apps_and_plugins_left_on() {
+        assert_eq!(CODEX_INVENTORY_APP_SERVER_ARGS[0], "app-server");
+        let kept: Vec<&[&str]> = CODEX_QUIET_FEATURES
+            .chunks(2)
+            .filter(|pair| {
+                !pair[1].starts_with("features.apps=") && !pair[1].starts_with("features.plugins=")
+            })
+            .collect();
+        assert_eq!(kept.concat(), &CODEX_INVENTORY_APP_SERVER_ARGS[1..]);
     }
 }

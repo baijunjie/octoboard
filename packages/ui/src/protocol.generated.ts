@@ -111,6 +111,36 @@ export type AccountLogin = {
 };
 
 /**
+ * How an agent's account stands with the MCP servers and connectors it has, read through the
+ * agent's own CLI at `read_at`. Runtime state of the daemon: never stored.
+ */
+export type AccountMcpInventory = {
+  agent: Agent,
+  /**
+   * The account's id; `None` for the agent's default account.
+   */
+  account: string | null,
+  /**
+   * When the reading was taken, milliseconds since the epoch.
+   */
+  read_at: number,
+  /**
+   * The connectors the agent's platform hosts for the account (Claude's claude.ai connectors,
+   * Codex's Apps). Empty when `unavailable` is set.
+   */
+  connectors: Array<PlatformConnector>,
+  /**
+   * The MCP servers configured for the account, whether by the user or by a plugin. Empty when
+   * `unavailable` is set.
+   */
+  servers: Array<LocalMcpServer>,
+  /**
+   * Why the account could not be read; the two lists are empty then.
+   */
+  unavailable: McpInventoryUnavailable | null,
+};
+
+/**
  * A reference to an account: its name, which is unique within its agent. The agent is the one
  * whose entry holds the reference (`accounts.claude` is a Claude Code account), so it is not
  * repeated here, where a hand-edited document could contradict it. The importing machine rebinds
@@ -606,6 +636,10 @@ export type Capabilities = {
    * Its accounts can share the default account's configuration.
    */
   config_sharing: boolean,
+  /**
+   * Can list an account's MCP servers and platform connectors (`read_account_mcp_inventory`).
+   */
+  mcp_inventory: boolean,
   delivery: DeliveryQuirks,
 };
 
@@ -755,6 +789,8 @@ export type ConfigurationDocument = {
  * How a path is in conflict, as `git status` tells the stages apart.
  */
 export type ConflictKind = "both_modified" | "both_added" | "both_deleted" | "added_by_us" | "added_by_them" | "deleted_by_us" | "deleted_by_them";
+
+export type ConnectorState = "connected" | "not_connected" | "unknown";
 
 export type Console = {
   id: string,
@@ -1527,6 +1563,16 @@ export type Event = {
   outcome: ResetCreditOutcome,
 }
 | {
+  "type": "account_mcp_inventory_read",
+  id: string | null,
+  inventory: AccountMcpInventory,
+}
+| {
+  "type": "account_mcp_server_auth_ended",
+  id: string | null,
+  outcome: McpServerAuthOutcome,
+}
+| {
   "type": "configuration_exported",
   id: string | null,
   document: ConfigurationDocument,
@@ -2295,6 +2341,37 @@ export type LineStats = {
 export type LinkTarget = "file" | "directory" | "other" | "missing" | "outside";
 
 /**
+ * An MCP server configured for the account.
+ */
+export type LocalMcpServer = {
+  name: string,
+  /**
+   * The URL of a remote server; null for a server that is a local command.
+   */
+  origin: string | null,
+  /**
+   * The plugin that brings the server; null for one the user configured.
+   */
+  plugin: string | null,
+  sign_in: McpSignInState,
+  runtime: McpRuntimeState,
+  /**
+   * Why the server failed, when `runtime` is `failed` and the agent says.
+   */
+  runtime_message: string | null,
+  /**
+   * How many tools the server offers, where the agent reports it.
+   */
+  tool_count: number | null,
+  /**
+   * Whether the account signs in to this server with OAuth through the agent's own login
+   * command, which Octoboard can run (`sign_in_account_mcp_server` and
+   * `sign_out_account_mcp_server`).
+   */
+  oauth_sign_in: boolean,
+};
+
+/**
  * Why a login failed.
  */
 export type LoginFailure = {
@@ -2309,6 +2386,34 @@ export type LoginFailure = {
  * Where an account's login is.
  */
 export type LoginStatus = "starting" | "waiting" | "succeeded" | "failed" | "cancelled" | "timed_out";
+
+export type McpInventoryFailure = "not_signed_in" | "cli_missing" | "timed_out" | "unsupported_agent" | "failed";
+
+/**
+ * Why an account's MCP servers and connectors could not be read. The reason is a closed set the
+ * client words itself; `detail` is what the agent or the daemon said, for the cases it helps.
+ */
+export type McpInventoryUnavailable = {
+  reason: McpInventoryFailure,
+  detail: string | null,
+};
+
+export type McpRuntimeState = "running" | "failed" | "unknown";
+
+/**
+ * How a sign-in to or sign-out of an MCP server ended (`account_mcp_server_auth_ended`).
+ */
+export type McpServerAuthOutcome = {
+  status: McpServerAuthStatus,
+  /**
+   * What the agent's CLI said, for `failed`; null otherwise.
+   */
+  detail: string | null,
+};
+
+export type McpServerAuthStatus = "succeeded" | "cancelled" | "timed_out" | "failed";
+
+export type McpSignInState = "signed_in" | "needs_sign_in" | "not_needed" | "unknown";
 
 /**
  * What a `set_session_model` did (`Event::SessionModelSet`).
@@ -2422,6 +2527,22 @@ export type PathLinkView = {
  * one, a key left out is the default value and a key naming no registered provider is ignored.
  */
 export type PerAgent<T> = Record<Agent, T>;
+
+/**
+ * A connector the agent's platform hosts for the account.
+ */
+export type PlatformConnector = {
+  /**
+   * The agent's own identifier for the connector.
+   */
+  id: string,
+  name: string,
+  state: ConnectorState,
+  /**
+   * The plugins that bring the connector (Codex); empty for Claude Code.
+   */
+  plugins: Array<string>,
+};
 
 /**
  * How many trees there are under one project, or for one console session, in the count of
@@ -3366,6 +3487,30 @@ export type Request = {
   account?: string | null,
 }
   | {
+  "type": "read_account_mcp_inventory",
+  agent: Agent,
+  account?: string | null,
+  refresh: boolean,
+}
+  | {
+  "type": "sign_in_account_mcp_server",
+  agent: Agent,
+  account?: string | null,
+  server: string,
+}
+  | {
+  "type": "sign_out_account_mcp_server",
+  agent: Agent,
+  account?: string | null,
+  server: string,
+}
+  | {
+  "type": "cancel_account_mcp_sign_in",
+  agent: Agent,
+  account?: string | null,
+  server: string,
+}
+  | {
   "type": "cancel_account_login",
   agent: Agent,
   account?: string | null,
@@ -4077,6 +4222,30 @@ export type RequestBody = {
   "type": "use_reset_credit",
   agent: Agent,
   account?: string | null,
+}
+| {
+  "type": "read_account_mcp_inventory",
+  agent: Agent,
+  account?: string | null,
+  refresh: boolean,
+}
+| {
+  "type": "sign_in_account_mcp_server",
+  agent: Agent,
+  account?: string | null,
+  server: string,
+}
+| {
+  "type": "sign_out_account_mcp_server",
+  agent: Agent,
+  account?: string | null,
+  server: string,
+}
+| {
+  "type": "cancel_account_mcp_sign_in",
+  agent: Agent,
+  account?: string | null,
+  server: string,
 }
 | {
   "type": "cancel_account_login",

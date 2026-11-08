@@ -419,6 +419,8 @@ pub struct Capabilities {
     pub per_session_trust: bool,
     /// Its accounts can share the default account's configuration.
     pub config_sharing: bool,
+    /// Can list an account's MCP servers and platform connectors (`read_account_mcp_inventory`).
+    pub mcp_inventory: bool,
     pub delivery: DeliveryQuirks,
 }
 

@@ -71,7 +71,8 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 
-use crate::accounts::quotas;
+use crate::accounts::mcp_sign_in::{self, McpAuthAction};
+use crate::accounts::{mcp_inventory, quotas};
 use crate::agents::detect::detect_agent_from_names;
 use crate::agents::launch_settings;
 use crate::config_document::export;
@@ -143,6 +144,24 @@ pub async fn handle_deferred(
     let mut followup = None;
     let reply = handle_inner(state, request_id, body, &mut followup).await?;
     Ok((reply, followup))
+}
+
+/// Signs an account in to or out of an MCP server, as `action` says, and answers how the CLI ended.
+async fn mcp_server_auth(
+    state: &Arc<AppState>,
+    request_id: Option<String>,
+    agent: crate::protocol::AgentId,
+    account: Option<String>,
+    server: String,
+    action: McpAuthAction,
+) -> Result<Option<Event>> {
+    let account = checked_account_reference(state, agent, account)?;
+    let outcome =
+        mcp_sign_in::request(state, agent, account, server, action, mcp_auth_shell()).await?;
+    Ok(Some(Event::AccountMcpServerAuthEnded {
+        id: request_id,
+        outcome,
+    }))
 }
 
 async fn handle_inner(
@@ -429,6 +448,62 @@ async fn handle_inner(
                 id: request_id,
                 outcome,
             }))
+        }
+
+        RequestBody::ReadAccountMcpInventory {
+            agent,
+            account,
+            refresh,
+        } => {
+            let account = checked_account_reference(state, agent, account)?;
+            let inventory =
+                mcp_inventory::read_inventory(state, agent, account, refresh, inventory_shell())
+                    .await?;
+            Ok(Some(Event::AccountMcpInventoryRead {
+                id: request_id,
+                inventory,
+            }))
+        }
+
+        RequestBody::SignInAccountMcpServer {
+            agent,
+            account,
+            server,
+        } => {
+            mcp_server_auth(
+                state,
+                request_id,
+                agent,
+                account,
+                server,
+                McpAuthAction::SignIn,
+            )
+            .await
+        }
+
+        RequestBody::SignOutAccountMcpServer {
+            agent,
+            account,
+            server,
+        } => {
+            mcp_server_auth(
+                state,
+                request_id,
+                agent,
+                account,
+                server,
+                McpAuthAction::SignOut,
+            )
+            .await
+        }
+
+        RequestBody::CancelAccountMcpSignIn {
+            agent,
+            account,
+            server,
+        } => {
+            state.mcp_server_auths.cancel(agent, account, &server)?;
+            Ok(None)
         }
 
         RequestBody::CancelAccountLogin { agent, account } => {
@@ -1115,6 +1190,30 @@ fn reset_credit_shell() -> quotas::ShellSource {
 
 #[cfg(test)]
 fn reset_credit_shell() -> quotas::ShellSource {
+    Arc::new(|| anyhow::bail!("no shell environment under test"))
+}
+
+/// The shell environment a sign-in to or out of an account's MCP server runs the agent's CLI in,
+/// the one a launch has. A test has none: the run would otherwise sign the user's own account in.
+#[cfg(not(test))]
+fn mcp_auth_shell() -> quotas::ShellSource {
+    Arc::new(env_shell::launch_snapshot)
+}
+
+#[cfg(test)]
+fn mcp_auth_shell() -> quotas::ShellSource {
+    Arc::new(|| anyhow::bail!("no shell environment under test"))
+}
+
+/// The shell environment a reading of an account's MCP servers runs the agent's CLI in. A test has
+/// none: the reading would otherwise run the machine's own CLI against the user's own account.
+#[cfg(not(test))]
+fn inventory_shell() -> quotas::ShellSource {
+    Arc::new(env_shell::cached_snapshot)
+}
+
+#[cfg(test)]
+fn inventory_shell() -> quotas::ShellSource {
     Arc::new(|| anyhow::bail!("no shell environment under test"))
 }
 

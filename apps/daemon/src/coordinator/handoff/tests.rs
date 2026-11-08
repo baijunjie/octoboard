@@ -194,6 +194,70 @@ impl Fixture {
     }
 }
 
+/// A session handed to Codex on a non-default account starts keeping its MCP OAuth tokens in that
+/// account's own home; one handed to the default account does not, as its home is the one Codex
+/// itself uses.
+#[tokio::test]
+async fn a_handoff_to_codex_keeps_mcp_tokens_in_a_non_default_accounts_home_only() {
+    for (case, account) in [("account", Some("codex-account")), ("default", None)] {
+        let fixture = Fixture::new(&format!("codex-store-{case}"));
+        let home = fixture.dir.join("codex-account");
+        std::fs::create_dir_all(&home).unwrap();
+        fixture
+            .state
+            .store
+            .insert_account(&Account {
+                id: "codex-account".to_string(),
+                agent: AgentId::CODEX,
+                name: "Work".to_string(),
+                config_dir: home.to_string_lossy().into_owned(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+            })
+            .unwrap();
+        fixture.run(session("original", true, "idle", None, false));
+        let requested = Arc::new(Mutex::new(Vec::new()));
+        let seen = requested.clone();
+        let launch = fixture.launch();
+
+        handoff_session_with(
+            &fixture.state,
+            Handoff {
+                session: "original".to_string(),
+                agent: AgentId::CODEX,
+                account: Some(account.map(str::to_string)),
+                model: None,
+                effort: None,
+                title: None,
+                note: None,
+                asked_by: None,
+                terminal_appearance: None,
+            },
+            move |request: term::LaunchRequest| {
+                seen.lock().unwrap().push((
+                    request.agent,
+                    request.config_dir.clone(),
+                    crate::adapter::tests::codex_file_credential_overrides(
+                        request.config_dir.as_deref(),
+                        request.resume_agent_session_id.as_deref(),
+                    ),
+                ));
+                launch(request)
+            },
+        )
+        .await
+        .unwrap();
+
+        let expected = account.map(|_| home.clone());
+        assert_eq!(
+            *requested.lock().unwrap(),
+            [(AgentId::CODEX, expected, usize::from(account.is_some()))],
+            "{case}"
+        );
+    }
+}
+
 /// A receiver that exits before bootstrap delivery leaves a visible failure, not only a log.
 #[tokio::test]
 async fn a_rejected_first_work_prompt_is_announced_to_the_user() {

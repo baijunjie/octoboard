@@ -2,7 +2,8 @@ import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "../../fixtures/fixtureProviders";
 import { providerLabel } from "../../agents/providers";
 import { describing, type Matcher, type Ui, type Step } from "../../fixtures/interact";
-import { type AccountLogin, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus } from "../../protocol";
+import { type AccountLogin, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus, type LocalMcpServer, type McpInventoryFailure, type PlatformConnector } from "../../protocol";
+import type { AccountMcpAnswer } from "../../fixtures/fixture";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
 import { accountOf, agentCliStatusOf, agentCliUpdateOf, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState, WINDOWS_MACHINE } from "../../fixtures/builders";
@@ -423,6 +424,49 @@ const agentSettings = (agent: Agent): Step[] => [...openAccounts, openAgentSetti
 /** Settings → Agent accounts with the Agent version dialog of `agent` in front. */
 const agentVersion = (agent: Agent, update = false): Step[] => [...openAccounts, openAgentVersion(agent, update)];
 
+/** A URL far wider than the details dialog, for a server whose name is as long. */
+const LONG_SERVER_URL = "https://mcp.analytics.acme-corporation.example.com/v2/workspaces/engineering-platform/projects/internal-platform/servers/warehouse-query-service/sse?region=eu-west-1";
+/** What Claude Code says of a plugin's server that did not start: several lines, shown as it said them. */
+const FAILED_SERVER_MESSAGE = "Failed to connect: spawn npx ENOENT\n    at ChildProcess._handle.onexit (node:internal/child_process:285:19)\n    at onErrorNT (node:internal/child_process:483:16)\nThe server exited before the handshake completed (stderr: /bin/sh: npx: command not found)";
+/** The claude.ai connectors of Work's reading in each state they can be in. */
+const CLAUDE_CONNECTORS: PlatformConnector[] = [
+  { id: "claude_ai_Gmail", name: "Gmail", state: "connected", plugins: [] },
+  { id: "claude_ai_Google_Calendar", name: "Google Calendar", state: "connected", plugins: [] },
+  { id: "claude_ai_Slack", name: "Slack", state: "not_connected", plugins: [] },
+  { id: "claude_ai_Notion", name: "Notion", state: "unknown", plugins: [] },
+];
+/** Its local servers of every kind a person meets, one with a name and a URL far wider than the dialog. */
+const CLAUDE_SERVERS: LocalMcpServer[] = [
+  { name: "linear", origin: "https://mcp.linear.app/sse", plugin: null, sign_in: "needs_sign_in", runtime: "unknown", runtime_message: null, tool_count: null, oauth_sign_in: false },
+  { name: "github", origin: null, plugin: "github", sign_in: "unknown", runtime: "failed", runtime_message: FAILED_SERVER_MESSAGE, tool_count: null, oauth_sign_in: false },
+  { name: "sentry", origin: "https://mcp.sentry.dev/mcp", plugin: null, sign_in: "signed_in", runtime: "running", runtime_message: null, tool_count: null, oauth_sign_in: false },
+  { name: "filesystem", origin: null, plugin: null, sign_in: "not_needed", runtime: "running", runtime_message: null, tool_count: null, oauth_sign_in: false },
+  { name: "internal-analytics-warehouse-query-service-for-the-platform-team", origin: LONG_SERVER_URL, plugin: null, sign_in: "not_needed", runtime: "running", runtime_message: null, tool_count: null, oauth_sign_in: false },
+];
+
+/** The Codex account's connectors, the same in every scenario of its sign-in to a server. */
+const CODEX_CONNECTORS: PlatformConnector[] = [
+  { id: "connector_github", name: "GitHub", state: "connected", plugins: ["github", "pull-request-review"] },
+  { id: "connector_google_drive", name: "Google Drive", state: "connected", plugins: ["google-drive"] },
+  { id: "connector_notion", name: "Notion", state: "not_connected", plugins: ["notion"] },
+];
+/** Personal's local servers: two that Codex signs in to with OAuth through its own login command (figma, which needs it,
+ * and linear, which has it), and two that have none to offer. */
+const CODEX_SERVERS: LocalMcpServer[] = [
+  { name: "openai-docs", origin: "https://developers.openai.com/mcp", plugin: null, sign_in: "not_needed", runtime: "running", runtime_message: null, tool_count: 3, oauth_sign_in: false },
+  { name: "playwright", origin: null, plugin: "browser-testing", sign_in: "not_needed", runtime: "running", runtime_message: null, tool_count: 1, oauth_sign_in: false },
+  { name: "figma", origin: "https://mcp.figma.com/mcp", plugin: null, sign_in: "needs_sign_in", runtime: "unknown", runtime_message: null, tool_count: null, oauth_sign_in: true },
+  { name: "linear", origin: "https://mcp.linear.app/mcp", plugin: null, sign_in: "signed_in", runtime: "running", runtime_message: null, tool_count: 12, oauth_sign_in: true },
+];
+const CODEX_MCP: AccountMcpAnswer = { ageMinutes: 12, connectors: CODEX_CONNECTORS, servers: CODEX_SERVERS };
+/** What Codex prints when the OAuth metadata of a server cannot be found: several lines, shown as they came. */
+const SIGN_IN_FAILED_DETAIL = "Error: Metadata error: OAuth metadata discovery failed for https://mcp.figma.com/mcp\nCaused by: HTTP request failed: error sending request for url (https://mcp.figma.com/.well-known/oauth-authorization-server)\nCaused by: dns error: failed to lookup address information: nodename nor servname provided, or not known";
+/** The Sign in button of the server `server` of Personal's details on the Codex tab. */
+const pressSignIn = (server: string): Step => (ui) => ui.press(ui.t("settings.accounts.mcp.server.signInLabel", { server }));
+
+/** A reading that could not be taken, for `reason`. */
+const mcpUnavailable = (reason: McpInventoryFailure, detail: string | null = null): AccountMcpAnswer => ({ unavailable: { reason, detail } });
+
 /** The `item` (Details or Settings) of the actions menu of the account `name` of `agent` on the tab in view (the
  * default account's name is the language's own); a menu item, since the rail has a Settings button of its name. */
 const openAccountDialog = (item: "settings.accounts.detailsItem" | "settings.accounts.settingsItem", name: string | ((ui: Ui) => string), agent: Agent): Step => async (ui) => {
@@ -438,6 +482,8 @@ const accountDetails = (name: string | ((ui: Ui) => string), agent: Agent = "cla
 
 /** Settings → Agent accounts on Codex's tab with Personal's details in front. */
 const codexDetails: Step[] = [...openAccounts, (ui) => ui.press(providerLabel(ui.t, FIXTURE_PROVIDERS, "codex")), openDetails("Personal", "codex")];
+/** The Refresh button in the Connectors and MCP section of the details dialog. */
+const refreshMcp: Step = (ui) => ui.press(ui.t("settings.accounts.mcp.refresh"));
 const redeemFromDetails: Step = (ui) => ui.press(ui.t("quota.resetCredits.useFor", { account: "Personal" }));
 
 /** Settings → Agent accounts with the settings (the switches) of the account `name` in front. */
@@ -1033,6 +1079,128 @@ export const settingsScenarios: Scenario[] = [
     description: "Personal holds a single credit, which was used: the confirmation has been dismissed with Done and the details dialog is back in front with both meters at 100% remaining and no reset line under them, the \"Redeem reset\" button gone with the credit. Focus is where the details dialog puts it on opening, not on the removed button.",
     state: lastResetCreditState,
     steps: [...codexDetails, redeemFromDetails, (ui) => ui.confirm(), (ui) => ui.wait(700), (ui) => ui.press(ui.t("quota.resetCredits.doneAction"))],
+  },
+  {
+    id: "settings-account-mcp-reading",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, connectors and MCP being read for the first time",
+    description: "Work's details, whose Connectors and MCP section has no answer yet (a Claude Code reading can take over a minute): the heading carries the Refresh button, idle, no \"Updated\" time, and the body is a spinner beside \"Reading connectors and MCP servers…\". The rest of the dialog above it is complete and can be read and closed meanwhile.",
+    state: detailsWorkState,
+    accountMcpInventory: "pending",
+    steps: accountDetails("Work"),
+  },
+  {
+    id: "settings-account-mcp-claude",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, a Claude Code account's connectors and MCP servers",
+    description: "Work's Connectors and MCP section, read 4 minutes ago (the heading shows \"Updated 4 minutes ago\" and the Refresh button). Platform connectors: Gmail and Google Calendar with a green Connected badge, Slack Not connected and Notion State unknown, with \"Manage on claude.ai\" at the end of the group heading and, under the list, the line telling the person to log in to claude.ai with the account this one uses. Local MCP servers: linear, a remote one with its URL, Needs sign-in and the hint to run /mcp in a session of this account; github, brought by the github plugin, with the danger Failed mark (its message is behind it); sentry with its URL, Signed in and Running; filesystem, Running; and a server whose name and URL are far wider than the dialog, both wrapping inside it.",
+    state: detailsWorkState,
+    accountMcpInventory: { ageMinutes: 4, connectors: CLAUDE_CONNECTORS, servers: CLAUDE_SERVERS },
+    steps: accountDetails("Work"),
+  },
+  {
+    id: "settings-account-mcp-server-failed",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, why a local MCP server failed",
+    description: "The danger Failed mark of the github server in Work's Connectors and MCP section is hovered, so its popover is open: titled by what the mark means, it holds what Claude Code said as raw text, on several lines and in the monospace of an error message, with nothing reworded; the popover stays while the pointer is on the mark or the popover, and its text can be selected.",
+    state: detailsWorkState,
+    accountMcpInventory: { ageMinutes: 4, connectors: CLAUDE_CONNECTORS, servers: CLAUDE_SERVERS },
+    steps: [...accountDetails("Work"), (ui) => ui.hoverStatusMark(ui.t("settings.accounts.mcp.server.failedLabel"))],
+  },
+  {
+    id: "settings-account-mcp-codex",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, a Codex account's connectors and MCP servers",
+    description: "Personal's Connectors and MCP section on the Codex tab: the link reads \"Manage on ChatGPT\" and the line under the connectors names ChatGPT. Each connector has a muted line saying which plugins bring it (\"From plugins github and pull-request-review\", the singular for one). A local server shows how many tools it offers (\"3 tools\", \"1 tool\"), and the one that needs sign-in has no hint to run /mcp, as Codex has no such command. The two servers Codex signs in to with OAuth carry a small button at the trailing end of the name row: figma, Needs sign-in, has \"Sign in\", and linear, with its Signed in badge, has \"Sign out\"; the servers without OAuth (openai-docs, playwright) have no button. This is also the end of a successful sign-in: the entry reads Signed in with Sign out.",
+    state: quotaState,
+    accountMcpInventory: CODEX_MCP,
+    steps: codexDetails,
+  },
+  {
+    id: "settings-account-mcp-sign-in-waiting",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, signing in to an MCP server in the browser",
+    description: "Sign in was pressed on figma in Personal's Connectors and MCP section and the browser has not finished: the Sign in button shows its pending state with a Cancel button before it, and a muted line under the entry shows a spinner beside \"Waiting for the sign-in in your browser…\". The entry still reads Needs sign-in, and the other servers keep their own buttons.",
+    state: quotaState,
+    accountMcpInventory: CODEX_MCP,
+    accountMcpServerAuth: new Map([["figma", "pending"]]),
+    steps: [...codexDetails, pressSignIn("figma")],
+  },
+  {
+    id: "settings-account-mcp-refreshing",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, a refresh of connectors and MCP under way",
+    description: "Refresh was pressed in Work's Connectors and MCP section and the new reading has not come: the last reading stays as it was, still \"Updated 4 minutes ago\", with the Refresh button in its pending state (busy, with a spinner), instead of the list being replaced by the reading line.",
+    state: detailsWorkState,
+    accountMcpInventory: [{ ageMinutes: 4, connectors: CLAUDE_CONNECTORS, servers: CLAUDE_SERVERS }, "pending"],
+    steps: [...accountDetails("Work"), refreshMcp],
+  },
+  {
+    id: "settings-account-mcp-empty",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, an account with no connectors or MCP servers",
+    description: "Work's Connectors and MCP section read just now with nothing in either group: under each group heading a compact empty row, \"No platform connectors\" and \"No local MCP servers\", while \"Manage on claude.ai\" and the line about logging in to claude.ai are still there.",
+    state: detailsWorkState,
+    accountMcpInventory: {},
+    steps: accountDetails("Work"),
+  },
+  {
+    id: "settings-account-mcp-unavailable",
+    group: GROUP,
+    category: "exceptional",
+    title: "Account details, connectors and MCP that could not be read, for a reason a retry can change",
+    description: "Work, never logged in, cannot be read: in place of the two groups a danger alert titled \"Account not logged in\" says its connectors and MCP servers can be read once it is logged in, with \"Log in to the account, then try again.\" and a Try again button. The heading has Refresh but no \"Updated\" time. The other reasons that read the same way, each in its own words, are in the other accounts' details (close this one): the default account's, \"Claude Code is not available\" (its command-line tool could not be found or started, with a remedy to install it), and Client's, \"Reading timed out\" (Claude Code did not answer in time, with a remedy about reachable servers).",
+    state: notSignedInState,
+    accountMcpInventory: new Map([["a-work", mcpUnavailable("not_signed_in")], [null, mcpUnavailable("cli_missing")], ["a-long", mcpUnavailable("timed_out")]]),
+    steps: accountDetails("Work"),
+  },
+  {
+    id: "settings-account-mcp-sign-in-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Account details, signing in to an MCP server failed",
+    description: "The sign-in to figma ended with an error from Codex: an alert titled \"Could not sign in to the MCP server\" over the details dialog says the sign-in to figma (the name as a chip) did not finish, with \"Error details\" open and holding Codex's message as raw text on several lines. Under the sentence is the advice \"Make sure the server is reachable, then sign in again.\" Behind it figma reads Needs sign-in with its Sign in button back. A sign-in that timed out (advice: sign in again and finish in the browser before time runs out) and a failed sign-out (advice: make sure the server is reachable, then sign out again) raise the same alert in their own words.",
+    state: quotaState,
+    accountMcpInventory: CODEX_MCP,
+    accountMcpServerAuth: new Map([["figma", { status: "failed", detail: SIGN_IN_FAILED_DETAIL }]]),
+    steps: [...codexDetails, pressSignIn("figma"), (ui) => ui.press(ui.t("error.diagnostics"))],
+  },
+  {
+    id: "settings-account-mcp-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Account details, connectors and MCP that could not be read, with the agent's message",
+    description: "Work's reading failed for a reason the application cannot name: a danger alert titled \"Could not read connectors and MCP servers\" with no summary line, \"Try again in a moment.\" under it, Try again, and its Details button pressed, so a popover shows what Claude Code printed as raw text on several lines, unreworded.",
+    state: detailsWorkState,
+    accountMcpInventory: mcpUnavailable("failed", "error: unknown option '--json'\nUsage: claude mcp list [options]\nTry 'claude mcp list --help' for more information."),
+    steps: [...accountDetails("Work"), (ui) => ui.press(ui.t("error.details"))],
+  },
+  {
+    id: "settings-account-mcp-unsupported",
+    group: GROUP,
+    category: "exceptional",
+    title: "Account details, an agent that cannot list connectors and MCP servers",
+    description: "Work's reading came back unsupported although the agent is meant to offer it: a danger alert titled \"Not supported\" saying Claude Code cannot list its MCP servers or connectors, with no remedy line and no Try again, as no retry can change it.",
+    state: detailsWorkState,
+    accountMcpInventory: mcpUnavailable("unsupported_agent"),
+    steps: accountDetails("Work"),
+  },
+  {
+    id: "settings-account-mcp-refused",
+    group: GROUP,
+    category: "exceptional",
+    title: "Account details, the request to read connectors and MCP refused",
+    description: "The daemon refused the request itself instead of reading: in the section a danger alert titled \"Could not read connectors and MCP servers\" says \"Unknown account Work.\" with the name a chip, then a Try again button, with no remedy line and no Details button, as the refusal has nothing more to say. The heading has Refresh but no \"Updated\" time.",
+    state: detailsWorkState,
+    accountMcpInventory: { code: "unknown_account", params: { account: "a-work" }, message: "Unknown account a-work." },
+    steps: accountDetails("Work"),
   },
   {
     id: "settings-account-settings-default",

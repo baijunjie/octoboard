@@ -13,7 +13,8 @@ use serde_json::{json, Value};
 use tokio::sync::Notify;
 
 use super::app_server::{self, CODEX_APP_SERVER_ARGS};
-use crate::accounts::login::flows::{Flow, LoginFlow, Outcome, Process, Progress};
+use crate::accounts::background_cli::Process;
+use crate::accounts::login::flows::{Flow, LoginFlow, Outcome, Progress};
 use crate::agents::json_rpc;
 use crate::providers::ProviderCode;
 

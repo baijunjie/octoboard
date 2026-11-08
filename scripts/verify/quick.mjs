@@ -80,7 +80,7 @@ export const CRATE_WIDE_TESTS = {
   daemon: [
     { filter: "protocol::", test: "committed_bindings_are_current", why: "the wire-type contract (`protocol/bindings.rs`) covers every type deriving `TS`", covers: [
       "src/protocol/accounts.rs", "src/protocol/agent_cli.rs", "src/protocol/agents.rs", "src/protocol/browse.rs", "src/protocol/configuration.rs", "src/protocol/events.rs",
-      "src/protocol/git_workflow.rs", "src/protocol/history.rs", "src/protocol/host.rs", "src/protocol/models.rs", "src/protocol/path_links.rs", "src/protocol/processes.rs",
+      "src/protocol/git_workflow.rs", "src/protocol/history.rs", "src/protocol/host.rs", "src/protocol/mcp_inventory.rs", "src/protocol/models.rs", "src/protocol/path_links.rs", "src/protocol/processes.rs",
       "src/protocol/providers.rs", "src/protocol/quotas.rs", "src/protocol/records.rs", "src/protocol/requests.rs", "src/protocol/session_branches.rs", "src/protocol/settings.rs",
       "src/protocol/terminal.rs", "src/providers/mod.rs",
     ] },

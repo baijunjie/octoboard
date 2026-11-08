@@ -221,6 +221,12 @@ pub struct AppState {
     pub agent_models: crate::agents::models::ModelCache,
     /// The plan quota last read for each account (`crate::accounts::quotas`). Held in memory only.
     pub account_quotas: crate::accounts::quotas::AccountQuotas,
+    /// The readings of an account's MCP servers and connectors running now, one per account
+    /// (`crate::accounts::mcp_inventory`). Held in memory only.
+    pub mcp_inventories: crate::accounts::mcp_inventory::McpInventoryReadings,
+    /// The sign-ins to and sign-outs of an account's MCP servers running now, one per account and
+    /// server (`crate::accounts::mcp_sign_in`). Held in memory only.
+    pub mcp_server_auths: crate::accounts::mcp_sign_in::McpServerAuths,
     /// The logins running now, one per account (`crate::accounts::login`). Held in memory only.
     pub account_logins: crate::accounts::login::AccountLogins,
     /// What was last found out about each agent's installed CLI, and the updates running
@@ -377,6 +383,8 @@ impl AppState {
             session_requests: Default::default(),
             agent_models: Default::default(),
             account_quotas: Default::default(),
+            mcp_inventories: Default::default(),
+            mcp_server_auths: Default::default(),
             account_logins: Default::default(),
             agent_clis: Default::default(),
             accounts_being_removed: Default::default(),

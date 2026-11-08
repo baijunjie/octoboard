@@ -12,7 +12,7 @@ import { exportedDocument } from "./fixtureConfiguration";
 import { SAMPLE_CLAUDE_MODELS, SAMPLE_CLAUDE_MODELS_PRO } from "./agentModels";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import { FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "./fixtureProviders";
-import type { Fixture } from "./fixture";
+import type { AccountMcpAnswer, Fixture, McpServerAuthAnswer } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./restoreSample";
 import type { FixtureFile } from "./sampleFiles";
@@ -87,6 +87,94 @@ describe("the fixture daemon's conversation lookup", () => {
     await expect(ask({ code: "unknown_project", params: { project: "p" }, message: "unknown project p" })).rejects.toMatchObject({ code: "unknown_project" });
     const settled = vi.fn();
     void ask("pending").then(settled, settled);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(settled).not.toHaveBeenCalled();
+  });
+});
+
+describe("the fixture daemon's MCP inventory", () => {
+  const read = (accountMcpInventory: Fixture["accountMcpInventory"], account: string | null = "a-work") =>
+    createFixtureDaemon({ accountMcpInventory }).request({ type: "read_account_mcp_inventory", agent: "claude", account, refresh: false });
+  const unavailable = { unavailable: { reason: "cli_missing", detail: null } } as const;
+
+  it("answers an empty inventory unless the scenario stages one, and the staged one with both lists filled in", async () => {
+    await expect(read(undefined)).resolves.toMatchObject({ inventory: { account: "a-work", connectors: [], servers: [], unavailable: null } });
+    await expect(read(unavailable)).resolves.toMatchObject({ inventory: { connectors: [], servers: [], ...unavailable } });
+  });
+
+  it("answers each account's reads in order, the last staged answer repeating", async () => {
+    const daemon = createFixtureDaemon({ accountMcpInventory: new Map<string | null, AccountMcpAnswer | readonly AccountMcpAnswer[]>([["a-work", [unavailable, {}]], [null, "pending"]]) });
+    const ask = (account: string | null) => daemon.request({ type: "read_account_mcp_inventory", agent: "claude", account, refresh: true });
+    await expect(ask("a-work")).resolves.toMatchObject({ inventory: { unavailable: unavailable.unavailable } });
+    await expect(ask("a-work")).resolves.toMatchObject({ inventory: { unavailable: null } });
+    await expect(ask("a-work")).resolves.toMatchObject({ inventory: { unavailable: null } });
+    await expect(ask("a-other")).resolves.toMatchObject({ inventory: { servers: [] } });
+    const settled = vi.fn();
+    void ask(null).then(settled, settled);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(settled).not.toHaveBeenCalled();
+  });
+
+  it("refuses with the scenario's error", async () => {
+    await expect(read({ code: "unknown_account", params: { account: "a-work" }, message: "Unknown account a-work." })).rejects.toMatchObject({ code: "unknown_account" });
+  });
+});
+
+describe("the fixture daemon's MCP server sign-in", () => {
+  const server = { name: "jira", origin: null, plugin: null, sign_in: "needs_sign_in", runtime: "unknown", runtime_message: null, tool_count: null, oauth_sign_in: true } as const;
+  const target = { agent: "codex", account: "a-work", server: "jira" } as const;
+  const daemonOf = (accountMcpServerAuth?: Fixture["accountMcpServerAuth"]) => createFixtureDaemon({ accountMcpInventory: { servers: [server] }, accountMcpServerAuth });
+  const signInStateOf = async (daemon: ReturnType<typeof daemonOf>) => {
+    const reply = await daemon.request({ type: "read_account_mcp_inventory", agent: "codex", account: "a-work", refresh: true });
+    return reply.inventory.servers[0].sign_in;
+  };
+
+  it("succeeds at once unless the scenario stages otherwise, and the next reading shows the new state", async () => {
+    const daemon = daemonOf();
+    await expect(daemon.request({ type: "sign_in_account_mcp_server", ...target })).resolves.toMatchObject({ type: "account_mcp_server_auth_ended", outcome: { status: "succeeded", detail: null } });
+    await expect(signInStateOf(daemon)).resolves.toBe("signed_in");
+    await expect(daemon.request({ type: "sign_out_account_mcp_server", ...target })).resolves.toMatchObject({ outcome: { status: "succeeded" } });
+    await expect(signInStateOf(daemon)).resolves.toBe("needs_sign_in");
+  });
+
+  it("answers the staged outcome of the server, leaving the state alone unless it succeeded", async () => {
+    const failed: McpServerAuthAnswer = { status: "failed", detail: "boom" };
+    const daemon = daemonOf(new Map([["jira", failed]]));
+    await expect(daemon.request({ type: "sign_in_account_mcp_server", ...target })).resolves.toMatchObject({ outcome: failed });
+    await expect(signInStateOf(daemon)).resolves.toBe("needs_sign_in");
+    await expect(daemon.request({ type: "sign_in_account_mcp_server", ...target, server: "other" })).resolves.toMatchObject({ outcome: { status: "succeeded" } });
+  });
+
+  it("refuses with the scenario's error", async () => {
+    const daemon = daemonOf({ code: "mcp_server_auth_busy", params: { agent: "codex", server: "jira" }, message: "busy" });
+    await expect(daemon.request({ type: "sign_out_account_mcp_server", ...target })).rejects.toMatchObject({ code: "mcp_server_auth_busy" });
+  });
+
+  it("keeps a pending sign-in running until its cancel ends it as cancelled, and refuses a cancel with nothing to cancel", async () => {
+    const daemon = daemonOf("pending");
+    await expect(daemon.request({ type: "cancel_account_mcp_sign_in", ...target })).rejects.toMatchObject({ code: "mcp_sign_in_not_running" });
+    const settled = vi.fn();
+    const signIn = daemon.request({ type: "sign_in_account_mcp_server", ...target }).then(settled);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(settled).not.toHaveBeenCalled();
+    await expect(daemon.request({ type: "cancel_account_mcp_sign_in", ...target })).resolves.toMatchObject({ type: "ack" });
+    await expect(signIn).resolves.toBeUndefined();
+    expect(settled).toHaveBeenCalledWith(expect.objectContaining({ outcome: { status: "cancelled", detail: null } }));
+    await expect(signInStateOf(daemon)).resolves.toBe("needs_sign_in");
+  });
+
+  it("joins a second sign-in to a pending one, and holds a pending sign-out with nothing to cancel", async () => {
+    const daemon = daemonOf("pending");
+    const first = daemon.request({ type: "sign_in_account_mcp_server", ...target });
+    const second = daemon.request({ type: "sign_in_account_mcp_server", ...target });
+    await expect(daemon.request({ type: "cancel_account_mcp_sign_in", ...target })).resolves.toMatchObject({ type: "ack" });
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ outcome: { status: "cancelled", detail: null } }),
+      expect.objectContaining({ outcome: { status: "cancelled", detail: null } }),
+    ]);
+    const settled = vi.fn();
+    void daemon.request({ type: "sign_out_account_mcp_server", ...target }).then(settled, settled);
+    await expect(daemon.request({ type: "cancel_account_mcp_sign_in", ...target })).rejects.toMatchObject({ code: "mcp_sign_in_not_running" });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(settled).not.toHaveBeenCalled();
   });

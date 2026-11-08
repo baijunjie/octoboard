@@ -353,6 +353,12 @@ pub mod error_code {
     /// A `cancel_account_login` for an account that is not being signed in. `params` names
     /// `agent`.
     pub const LOGIN_NOT_RUNNING: Code = Code("login_not_running");
+    /// A `sign_in_account_mcp_server` while a sign-out of the same server of the account is
+    /// running, or the reverse. Nothing was run. `params` names `agent` and `server`.
+    pub const MCP_SERVER_AUTH_BUSY: Code = Code("mcp_server_auth_busy");
+    /// A `cancel_account_mcp_sign_in` for a server that is not being signed in to for the account.
+    /// `params` names `agent` and `server`.
+    pub const MCP_SIGN_IN_NOT_RUNNING: Code = Code("mcp_sign_in_not_running");
     /// A `set_account_sharing` for the default account, which is the configuration the other
     /// accounts share, or turning sharing on for an account whose directory resolves to the
     /// default account's. `params` names the `account` and its `name` when one was named.

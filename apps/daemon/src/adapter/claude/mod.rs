@@ -46,6 +46,7 @@ mod compatibility;
 mod conversation;
 mod hooks;
 mod login;
+mod mcp_inventory;
 pub(crate) mod models;
 pub(crate) mod quota;
 pub(crate) mod records;

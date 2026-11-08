@@ -3,7 +3,7 @@ import type { Translate } from "../i18n/catalog";
 import type { ReplyOf } from "../requests";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
-import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, ImportFailure, ImportItem, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence, UnstoppedReason } from "../protocol";
+import type { AccountMcpInventory, AccountTrashOutcome, McpServerAuthOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, ImportFailure, ImportItem, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence, UnstoppedReason } from "../protocol";
 import type { MessageParams } from "../errors/codedError";
 import type { PathLinkRefusedCause } from "../errors/causes";
 import type { State } from "../store";
@@ -53,6 +53,18 @@ export interface NoticeNotificationFixture {
 
 /** One answer of `inspect_account_trash`: an outcome, a failure of the request, or `"pending"` for one never answered. */
 export type AccountTrashAnswer = AccountTrashOutcome | FixtureError | "pending";
+
+/** One answer of `read_account_mcp_inventory`: the inventory the daemon read (`ageMinutes` is how long ago, left out for
+ * just now; `unavailable` is a reading that could not be taken, with both lists empty), a failure of the request, or
+ * `"pending"` for one never answered. */
+export type AccountMcpAnswer =
+  | (Partial<Pick<AccountMcpInventory, "connectors" | "servers" | "unavailable">> & { ageMinutes?: number })
+  | FixtureError
+  | "pending";
+
+/** How a sign-in to or sign-out of an MCP server ends: the outcome the CLI came to, a refusal of the request, or `"pending"`
+ * for a run that stays under way, which a sign-in's cancel (`cancel_account_mcp_sign_in`) ends as `cancelled`. */
+export type McpServerAuthAnswer = McpServerAuthOutcome | FixtureError | "pending";
 
 /** The daemon's process ledger as a scenario sets it, for the Processes panel and the archive
  * confirmation's stop options (`fixtureProcesses.ts` answers `list_processes`, `list_all_processes` (the rail's counts
@@ -280,6 +292,16 @@ export interface Fixture {
    * last one for every ask after it (a refusal that the check then finds, a retry that has not answered). Left out, `ok`:
    * the directory may be moved. */
   accountTrashInspection?: AccountTrashAnswer | readonly AccountTrashAnswer[];
+  /** What `read_account_mcp_inventory` answers, for every account or, as a map, per account (the key is the account's id,
+   * `null` for an agent's default account; an account the map does not name gets an empty inventory). A list answers an
+   * account's reads in order (the dialog's opening read first, then each refresh), the last one for every read after it,
+   * so a refresh can answer differently from the first reading, or never. Left out, an empty inventory at once. */
+  accountMcpInventory?: AccountMcpAnswer | readonly AccountMcpAnswer[] | ReadonlyMap<string | null, AccountMcpAnswer | readonly AccountMcpAnswer[]>;
+  /** What `sign_in_account_mcp_server` and `sign_out_account_mcp_server` answer, for every server or, as a map, per
+   * server (the key is the server's name; a server the map does not name succeeds). Left out, both succeed at once and
+   * the server's sign-in state in the inventory the scenario stages turns to `signed_in` (a sign-in) or `needs_sign_in`
+   * (a sign-out), as the rereading shows it; any other answer leaves the state as it was. */
+  accountMcpServerAuth?: McpServerAuthAnswer | ReadonlyMap<string, McpServerAuthAnswer>;
   /** How a login started from Settings ends, a moment after it reaches `waiting` with its page (Grok Build's with its
    * device code); `failed` carries `login_failed`. Left out, a started login stays waiting until it is cancelled. A
    * state shown from the start is set in `state.accountLogins` instead. */

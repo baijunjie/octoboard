@@ -17,7 +17,7 @@ pub(crate) const CONSUME_TIMEOUT: Duration = PROBE_TIMEOUT;
 #[derive(Debug, PartialEq)]
 pub(crate) enum Failure {
     /// The provider's binary does not resolve; carries its name.
-    BinaryNotFound(String),
+    BinaryNotFound(&'static str),
     /// The provider's binary is a launcher it refuses to start its CLI through; carries the
     /// provider's coded error.
     BinaryRefused(crate::protocol::CodedError),

@@ -91,6 +91,21 @@ pub enum Unstartable {
     Refused(CodedError),
 }
 
+impl Unstartable {
+    /// The refusal a request answers with: `binary_not_found` naming the binary, or the provider's
+    /// own coded error.
+    pub(crate) fn into_error(self) -> anyhow::Error {
+        match self {
+            Self::NotFound(binary) => CodedError::raised(
+                crate::protocol::error_code::BINARY_NOT_FOUND,
+                format!("`{binary}` was not found on PATH in the shell environment."),
+                &[("binary", binary)],
+            ),
+            Self::Refused(refusal) => anyhow::Error::new(refusal),
+        }
+    }
+}
+
 /// What starts `agent`'s CLI as resolved on `shell_env`'s `PATH`, as a launch resolves it
 /// (`super::resolve_binary`).
 pub fn resolve_account_binary(

@@ -8,7 +8,8 @@ use std::pin::Pin;
 
 use tokio::sync::Notify;
 
-use crate::accounts::login::flows::{Flow, LoginFlow, Outcome, Process, Progress};
+use crate::accounts::background_cli::Process;
+use crate::accounts::login::flows::{Flow, LoginFlow, Outcome, Progress};
 use crate::providers::grok::GROK_SIGN_IN_FILE;
 
 pub(super) struct GrokLogin;

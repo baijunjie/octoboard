@@ -157,6 +157,8 @@ pub enum ProviderOperation {
     ConfigSharing,
     /// Updating the agent's installed CLI.
     CliUpdate,
+    /// Signing an account in to or out of an MCP server through the agent's own command.
+    McpSignIn,
 }
 
 impl ProviderOperation {
@@ -168,6 +170,7 @@ impl ProviderOperation {
             ProviderOperation::ResetCredit => "reset_credit",
             ProviderOperation::ConfigSharing => "config_sharing",
             ProviderOperation::CliUpdate => "cli_update",
+            ProviderOperation::McpSignIn => "mcp_sign_in",
         }
     }
 
@@ -178,6 +181,7 @@ impl ProviderOperation {
             ProviderOperation::ResetCredit => "reset credits",
             ProviderOperation::ConfigSharing => "sharing the default account's configuration",
             ProviderOperation::CliUpdate => "an update of its CLI",
+            ProviderOperation::McpSignIn => "signing in to an MCP server",
         }
     }
 }
@@ -231,6 +235,7 @@ mod tests {
             (ProviderOperation::Kick, "kick"),
             (ProviderOperation::ResetCredit, "reset_credit"),
             (ProviderOperation::ConfigSharing, "config_sharing"),
+            (ProviderOperation::McpSignIn, "mcp_sign_in"),
         ] {
             let err =
                 CodedError::require_offered::<()>(AgentId::GROK, operation, None).unwrap_err();

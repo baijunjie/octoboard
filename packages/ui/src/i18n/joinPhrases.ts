@@ -17,9 +17,10 @@ function listFormat(language: Language, style: "narrow" | "long" = "narrow"): In
 }
 
 /** Joins values into a list as `language` joins one, each value made into a node by `render` and
- * the joining text left as it is, for a sentence that sets its list items apart (as chips). */
-export function joinNodes<T>(language: Language, values: string[], render: (value: string, key: number) => T): (string | T)[] {
-  return listFormat(language).formatToParts(values).map((part, key) => (part.type === "literal" ? part.value : render(part.value, key)));
+ * the joining text left as it is, for a sentence that sets its list items apart (as chips). `long`
+ * joins them with the language's joining word, as `joinValues` does, for values inside one phrase. */
+export function joinNodes<T>(language: Language, values: string[], render: (value: string, key: number) => T, style: "narrow" | "long" = "narrow"): (string | T)[] {
+  return listFormat(language, style).formatToParts(values).map((part, key) => (part.type === "literal" ? part.value : render(part.value, key)));
 }
 
 /** Joins independent phrases into one sentence, correctly punctuated for `language` —

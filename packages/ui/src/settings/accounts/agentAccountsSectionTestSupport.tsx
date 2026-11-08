@@ -23,6 +23,7 @@ import {
   cliStatuses,
   consoles,
   projects,
+  readMcpInventory,
   request,
   sectionEntry,
   sessions,
@@ -48,6 +49,7 @@ beforeEach(() => {
   HTMLElement.prototype.animate = animate as unknown as typeof HTMLElement.prototype.animate;
   animate.mockClear();
   request.mockReset().mockResolvedValue({});
+  readMcpInventory.mockReset().mockReturnValue(new Promise(() => {}));
   settings.added_agents = ["claude", "codex", "grok"];
   consoles.clear();
   projects.clear();

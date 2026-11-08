@@ -42,6 +42,7 @@ function capabilitiesOf(source: string): ProviderInfo["capabilities"] {
     reset_credits: flag("reset_credits"),
     per_session_trust: flag("per_session_trust"),
     config_sharing: flag("config_sharing"),
+    mcp_inventory: flag("mcp_inventory"),
     delivery: {
       confirms_by_reported_prompt: flag("confirms_by_reported_prompt"),
       holds_report_for_completion_notice: flag("holds_report_for_completion_notice"),

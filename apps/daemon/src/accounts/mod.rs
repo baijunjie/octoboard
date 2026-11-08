@@ -6,9 +6,12 @@
 //! with its turn is `crate::records::switch_continue`'s), with what keeps a provider's thread
 //! registry in step with where its records are (`thread_registry`).
 
+pub(crate) mod background_cli;
 pub(crate) mod choice;
 pub(crate) mod dirs;
 pub(crate) mod login;
+pub(crate) mod mcp_inventory;
+pub(crate) mod mcp_sign_in;
 pub(crate) mod ops;
 pub(crate) mod quotas;
 pub(crate) mod relocate;

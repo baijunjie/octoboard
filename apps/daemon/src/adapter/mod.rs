@@ -696,6 +696,33 @@ pub mod tests {
         }
     }
 
+    /// Whether a Codex launch for the account whose directory is `config_dir` (`None` for the
+    /// default account), resumed when `resume` names a thread, keeps MCP OAuth tokens in the
+    /// account's own home: the overrides `-c mcp_oauth_credentials_store="file"` adds to its plan,
+    /// counted. The default account's home is a scratch one, so no real Codex home is read.
+    pub fn codex_file_credential_overrides(
+        config_dir: Option<&Path>,
+        resume: Option<&str>,
+    ) -> usize {
+        let mut fixture = spec_fixture();
+        let default_home = fixture.scratch.join("default-codex-home");
+        std::fs::create_dir_all(&default_home).expect("default codex home");
+        fixture.shell_env.insert(
+            "CODEX_HOME".to_string(),
+            default_home.to_string_lossy().into_owned(),
+        );
+        fixture.config_dir = config_dir.map(Path::to_path_buf);
+        let mut spec = fixture.spec();
+        spec.resume_agent_session_id = resume;
+        let args = super::provider(crate::protocol::AgentId::CODEX)
+            .plan(&spec)
+            .expect("a plan")
+            .args;
+        args.windows(2)
+            .filter(|pair| pair[0] == "-c" && pair[1] == super::codex::MCP_FILE_CREDENTIALS_STORE)
+            .count()
+    }
+
     pub fn spec_fixture() -> SpecFixture {
         let root = crate::test_support::ScratchDir::new("adapter-test");
         let scratch = root.join("scratch");

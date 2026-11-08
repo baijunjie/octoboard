@@ -89,6 +89,9 @@ Where to start, by question:
 - [Removing an account](product/removing-accounts.md) — what removing an account clears, its confirmation, and the option
   to move the account directory to the Trash.
 - [Logging an account in](product/logging-accounts-in.md) — the login dialog and how each agent signs in.
+- [Account MCP servers and connectors](product/account-mcp-servers-and-connectors.md) — reading an account's platform
+  connectors and local MCP servers, the account details dialog's Connectors and MCP section, and signing a Codex account
+  in to and out of an MCP server.
 - [Sharing the default configuration](product/sharing-the-default-configuration.md) — an account sharing the agent's
   default configuration and how a change is carried out.
 - [Account quotas](product/account-quotas.md) — which accounts have a plan quota, how it is shown, its states, and when

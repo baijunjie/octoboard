@@ -37,7 +37,7 @@ use flows::{Flow, Outcome};
 /// How long a login may wait for the user to authorize before the daemon gives up. Codex's own
 /// browser flow gives up at the same ten minutes (its login server reports it as a timeout); Claude
 /// Code and Grok Build do not time out on their own.
-const LOGIN_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+pub(crate) const LOGIN_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 
 /// Which login: the agent and the account's id, `None` for the default account.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -274,14 +274,7 @@ impl AccountLogins {
             start.resolved_dir.map(PathBuf::from),
             scratch_root.join(format!("login-{}", uuid::Uuid::new_v4())),
         )
-        .map_err(|unstartable| match unstartable {
-            Unstartable::NotFound(binary) => CodedError::raised(
-                error_code::BINARY_NOT_FOUND,
-                format!("`{binary}` was not found on PATH in the shell environment."),
-                &[("binary", binary)],
-            ),
-            Unstartable::Refused(refusal) => anyhow::Error::new(refusal),
-        })?;
+        .map_err(Unstartable::into_error)?;
 
         let login = AccountLogin {
             agent: start.agent,

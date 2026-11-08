@@ -903,6 +903,67 @@ pub enum RequestBody {
         #[cfg_attr(test, ts(optional = nullable))]
         account: Option<String>,
     },
+    /// Reads the MCP servers and platform connectors of an account through the agent's own CLI
+    /// (`codex app-server`, `claude mcp list`). `agent` is the provider, `account` an account id,
+    /// null for the agent's default account. `refresh` asks the agent to refetch what it
+    /// caches (Codex's Apps) instead of reading what it holds. Answered with
+    /// `account_mcp_inventory_read` once the CLI has answered, which can take a minute (a minute
+    /// and a quarter for Claude Code, whose sign-in is checked first): every server is connected
+    /// to. A second request for the same account while one is running joins
+    /// it and gets the same inventory. Nothing the account holds is written. Refused only with
+    /// `unknown_account` for an account that does not exist or is not `agent`'s; every other
+    /// failure (not signed in, CLI missing, timeout, an agent that cannot list) is the
+    /// inventory's `unavailable`. See "Account MCP inventory" in `PROTOCOL.md`.
+    ReadAccountMcpInventory {
+        agent: AgentId,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        account: Option<String>,
+        #[serde(default)]
+        refresh: bool,
+    },
+    /// Signs an account in to a locally configured MCP server that uses OAuth, through the agent's
+    /// own login command (`codex mcp login`), run under the account's home; the agent opens the
+    /// browser itself. `agent` is the provider, `account` an account id, null for the agent's
+    /// default account, `server` the server's name as the inventory lists it
+    /// (`LocalMcpServer.oauth_sign_in` says whether it is offered). Answered with
+    /// `account_mcp_server_auth_ended` once the CLI has ended, which can take up to ten minutes.
+    /// A second request for the same server of the same account while one is running joins it and
+    /// gets the same outcome. The inventory is not read again; the client does that after the
+    /// answer. Refused with `unknown_account`, `provider_unsupported` (operation `mcp_sign_in`),
+    /// `agent_not_available`, `shell_environment_timeout`, `binary_not_found`,
+    /// `account_being_removed` and `mcp_server_auth_busy` while a sign-out of the same server is
+    /// running. See "Account MCP inventory" in `PROTOCOL.md`.
+    SignInAccountMcpServer {
+        agent: AgentId,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        account: Option<String>,
+        server: String,
+    },
+    /// Signs an account out of an MCP server, through the agent's own command
+    /// (`codex mcp logout`); a server with no stored sign-in counts as signed out. Answered with
+    /// `account_mcp_server_auth_ended` once the CLI has ended, within a minute. It cannot be
+    /// cancelled. A second request for the same server joins the first. Refused as
+    /// `sign_in_account_mcp_server` is, with `mcp_server_auth_busy` while a sign-in of the same
+    /// server is running.
+    SignOutAccountMcpServer {
+        agent: AgentId,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        account: Option<String>,
+        server: String,
+    },
+    /// Ends a running `sign_in_account_mcp_server` and its CLI with it. Answered with `ack`; the
+    /// sign-in request is then answered with status `cancelled`. Refused with
+    /// `mcp_sign_in_not_running` when no sign-in of that server runs for the account.
+    CancelAccountMcpSignIn {
+        agent: AgentId,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        account: Option<String>,
+        server: String,
+    },
     /// Ends the login of an account that is being signed in, and its CLI with it. Answered with
     /// `ack`; the `cancelled` update follows. Refused with `login_not_running` when there is none.
     CancelAccountLogin {

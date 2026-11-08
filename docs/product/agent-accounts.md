@@ -283,31 +283,36 @@ and settles which usable account is taken when none ranks (see "Which account a 
 ## The account details dialog
 
 **Details**, the first entry of an account's actions menu, with an info icon, opens a modal dialog of what is known
-about that one account, read-only but for redeeming a usage limit reset. It is titled "Account details", whichever
-account it is opened on. The first line of its body is the account's name, followed by its plan badge, its login state —
-the badge as in the table, or, while that is not known, "Checking…" while the first reading is on its way and "Unknown"
-otherwise — and the "Usage unavailable" mark when its reading failed with nothing read before. Whether the account is
-turned off is not shown here. Under that line, when the account's reading carries one, is the email it is signed in with
-(see "The account's sign-in email" in `docs/product/account-quota-readings.md`), muted, on a line of its own, wrapping within
-the dialog when it is too long for one line. The next line is the account's directory; for the default account a "?"
-help tip follows it (see "The default account" above). For an account the user owns of an agent that is not available, a
-line under the directory says it is not usable until the agent is on `PATH`. Then comes **Usage** — the account's quota
-drawn as in the rail's account quota panel: the five-hour and account-wide weekly windows as one meter, every other
-window, model-specific ones included, as a meter of its own, one to a row. How long ago the windows were read, with the
-out-of-date mark when it applies, ends the heading. It says usage is being read while the first reading is on its way,
-says for an account that is not logged in that it is not logged in yet and to log in to use it, and holds a dash when
-there is no reading to show otherwise. How windows are named and drawn is in "How an account's quota is shown" in
-`docs/product/account-quotas.md`. Under the meters, a Codex account holding a usage limit reset shows how many it holds
-with when the next expires, and a **Redeem reset** button, which opens the confirmation that redeems one over this
-dialog (see "Where resets are shown" in `docs/product/usage-limit-resets.md`).
+about that one account, read-only but for redeeming a usage limit reset, reading its connectors and MCP servers again
+and, for a Codex account, signing it in to and out of its MCP servers that use OAuth. It is titled "Account details",
+whichever account it is opened on. The first line of its body is the account's name, followed by its plan badge, its
+login state — the badge as in the table, or, while that is not known, "Checking…" while the first reading is on its way
+and "Unknown" otherwise — and the "Usage unavailable" mark when its reading failed with nothing read before. Whether the
+account is turned off is not shown here. Under that line, when the account's reading carries one, is the email it is
+signed in with (see "The account's sign-in email" in `docs/product/account-quota-readings.md`), muted, on a line of its
+own, wrapping within the dialog when it is too long for one line. The next line is the account's directory; for the
+default account a "?" help tip follows it (see "The default account" above). For an account the user owns of an agent
+that is not available, a line under the directory says it is not usable until the agent is on `PATH`. Then comes
+**Usage** — the account's quota drawn as in the rail's account quota panel: the five-hour and account-wide weekly
+windows as one meter, every other window, model-specific ones included, as a meter of its own, one to a row. How long
+ago the windows were read, with the out-of-date mark when it applies, ends the heading. It says usage is being read
+while the first reading is on its way, says for an account that is not logged in that it is not logged in yet and to log
+in to use it, and holds a dash when there is no reading to show otherwise. How windows are named and drawn is in "How an
+account's quota is shown" in `docs/product/account-quotas.md`. Under the meters, a Codex account holding a usage limit
+reset shows how many it holds with when the next expires, and a **Redeem reset** button, which opens the confirmation
+that redeems one over this dialog (see "Where resets are shown" in `docs/product/usage-limit-resets.md`). Last, for a
+Claude Code or Codex account, comes **Connectors and MCP**: the account's platform connectors and local MCP servers with
+their states, read as the dialog opens and again from the section's Refresh button, with a link to the platform's
+connector settings and, for a Codex server that uses OAuth, Sign in or Sign out (see "The Connectors and MCP section" in
+`docs/product/account-mcp-servers-and-connectors.md`).
 
-Besides that button, the dialog holds no control but its close button: no switch, which are in the account settings
-dialog (below), and no **Log in** button (see "Where Log in appears" in `docs/product/logging-accounts-in.md`). It has
-no footer: it closes on its close button, on Escape and on a press outside it. It follows the account as it changes,
-from any window, tells assistive technology, naming the account, when a login of the account succeeds while it is open,
-and closes by itself when the account is removed. However it closes, keyboard focus then goes, its focus ring showing,
-back to the account's actions menu button in the table, or, when the account's row has gone with the account, to the
-Agent accounts tab in Settings' list of sections.
+Besides the Redeem reset button and the controls of the Connectors and MCP section, the dialog holds no control but its
+close button: no switch, which are in the account settings dialog (below), and no **Log in** button (see "Where Log in
+appears" in `docs/product/logging-accounts-in.md`). It has no footer: it closes on its close button, on Escape and on a
+press outside it. It follows the account as it changes, from any window, tells assistive technology, naming the account,
+when a login of the account succeeds while it is open, and closes by itself when the account is removed. However it
+closes, keyboard focus then goes, its focus ring showing, back to the account's actions menu button in the table, or,
+when the account's row has gone with the account, to the Agent accounts tab in Settings' list of sections.
 
 ## The account settings dialog
 
@@ -534,7 +539,9 @@ share a name. A name already taken by another account of the same agent, or by t
 shown under, which is the name the user gave it or else its name in the current language — is reported under the name
 field. So is the English word "Default", which is reserved for the default account in every language.
 
-Pointing an account at another directory ends a login running for it, and an account that shares the default
+Pointing an account at another directory ends a login running for it and any sign-in to or sign-out of one of its MCP
+servers (see "Signing an account in to and out of an MCP server" in
+`docs/product/account-mcp-servers-and-connectors.md`), and an account that shares the default
 configuration, or whose last change of it is incomplete, has its sharing undone first (see "Removing or repointing a
 sharing account" in `docs/product/sharing-the-default-configuration.md`).
 

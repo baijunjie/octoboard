@@ -68,6 +68,8 @@ mod config;
 mod conversation;
 mod hooks;
 mod login;
+mod mcp_auth;
+mod mcp_inventory;
 pub(crate) mod models;
 mod native_binary;
 pub(crate) mod quota;
@@ -114,6 +116,18 @@ impl PermissionMode {
         }
     }
 }
+
+/// The override that makes Codex keep MCP OAuth tokens in `$CODEX_HOME/.credentials.json` rather
+/// than its default store, passed on every Codex start Octoboard makes for a non-default account
+/// that could read or write those tokens, and on none for the default account.
+///
+/// On macOS the default store is the keychain, under a key computed from the server's name and URL
+/// alone, not from `CODEX_HOME`, so without it every account would share one token per server —
+/// one identity at the server, with uncoordinated refreshes. It cannot be set in the account's
+/// `config.toml`, which a sharing account has in common with the default account (and which
+/// Octoboard never writes), so it goes per launch. The default account keeps Codex's default store,
+/// matching `codex` run in a terminal.
+pub(crate) const MCP_FILE_CREDENTIALS_STORE: &str = "mcp_oauth_credentials_store=\"file\"";
 
 /// Both phases of Codex's blinking activity title identify a visible user interaction.
 pub(crate) fn action_required_title(title: &str) -> bool {
@@ -362,6 +376,12 @@ impl AgentProvider for CodexProvider {
             "mcp_servers.{key}.tool_timeout_sec={}",
             super::MCP_TOOL_TIMEOUT_SECS
         ));
+        // A non-default account keeps its MCP OAuth tokens in its own home. See
+        // `MCP_FILE_CREDENTIALS_STORE` for why the default account is left alone.
+        if pinned.is_some() {
+            args.push("-c".to_string());
+            args.push(MCP_FILE_CREDENTIALS_STORE.to_string());
+        }
 
         // Read from the launch environment rather than the daemon's: the daemon's own `CODEX_HOME`
         // may belong to an agent session it was started from.

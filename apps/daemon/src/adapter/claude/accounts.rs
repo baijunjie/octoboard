@@ -8,10 +8,12 @@ use std::path::Path;
 use serde_json::Value;
 
 use super::login::ClaudeLogin;
+use super::mcp_inventory::ClaudeMcpInventory;
 use super::quota::{kick_command, ClaudeQuota};
 use super::settings::global_config_file;
 use super::shared_config::{ITEMS, PLUGIN_REGISTRIES};
 use crate::accounts::login::flows::LoginFlow;
+use crate::accounts::mcp_inventory::McpInventoryReader;
 use crate::accounts::quotas::email::read_json;
 use crate::accounts::quotas::email::tidy;
 use crate::accounts::quotas::kick::KickCommand;
@@ -29,6 +31,10 @@ impl AccountOps for ClaudeAccounts {
 
     fn kick_command(&self) -> Option<KickCommand> {
         Some(kick_command())
+    }
+
+    fn mcp_inventory(&self) -> Option<&'static dyn McpInventoryReader> {
+        Some(&ClaudeMcpInventory)
     }
 
     fn login(&self) -> Option<&'static dyn LoginFlow> {

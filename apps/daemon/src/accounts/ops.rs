@@ -1,13 +1,15 @@
 //! What a provider's accounts can be asked beyond launching: their quota, the email they sign in
-//! with, their reset credits, signing in and the configuration they can share with the default
-//! account's. `AgentProvider::accounts` is `None` for a provider
-//! that has no accounts in this sense, and every method here has a default, so a provider
-//! implements only what it has.
+//! with, their reset credits, signing in (to the agent, and to its MCP servers), reading their MCP
+//! servers and connectors, and the configuration they can share with the default account's.
+//! `AgentProvider::accounts` is `None` for a provider that has no accounts in this sense, and every
+//! method here has a default, so a provider implements only what it has.
 
 use std::collections::HashMap;
 use std::path::Path;
 
 use super::login::flows::LoginFlow;
+use super::mcp_inventory::McpInventoryReader;
+use super::mcp_sign_in::McpServerAuth;
 use super::quotas::kick::KickCommand;
 use super::quotas::probe::QuotaProbe;
 use super::quotas::reset_credit::ResetCredits;
@@ -41,6 +43,18 @@ pub(crate) trait AccountOps: Send + Sync {
 
     /// Using a rate limit reset credit, for a provider declaring `Capabilities::reset_credits`.
     fn reset_credits(&self) -> Option<&'static dyn ResetCredits> {
+        None
+    }
+
+    /// Reading the account's MCP servers and platform connectors. `None`: the provider has no
+    /// way of listing them, and a reading is answered as unsupported.
+    fn mcp_inventory(&self) -> Option<&'static dyn McpInventoryReader> {
+        None
+    }
+
+    /// Signing an account in to and out of an MCP server through the agent's own commands. `None`:
+    /// the provider has no such commands, and the requests are refused as unsupported.
+    fn mcp_server_auth(&self) -> Option<&'static dyn McpServerAuth> {
         None
     }
 

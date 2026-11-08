@@ -2,7 +2,7 @@
 // account's name and the use of a Codex reset credit, and the refusals a session gets on an account.
 import { consoleAccount, inheritedAccount } from "../accounts/accountInheritance";
 import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, servedLabel } from "./fixtureProviders";
-import { type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type ClientRequestBody, type SharingCause, type Session } from "../protocol";
+import { type Account, type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type PerAgent, type ResetCreditOutcome, type ProjectAccount, type Console, type Project, type QuotaWindow, type ClientRequestBody, type McpSignInState, type SharingCause, type Session } from "../protocol";
 import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { accountDisabled } from "../accounts/choiceEntries";
@@ -10,6 +10,8 @@ import { isLive } from "../sessions/sessionStatus";
 import { exhaustedQuotaWindow, isNotLoggedIn } from "../accounts/quotaFormat";
 import { applyDaemonEvent } from "../store";
 import type { FixtureError } from "./sampleFiles";
+import { minutesAgo } from "./builders";
+import type { AccountMcpAnswer, McpServerAuthAnswer } from "./fixture";
 import { neverReplied, normalizedPath, type Ack, type FixtureContext, type Handlers } from "./fixtureContext";
 
 /** The readings among `quotas` that the daemon would not hold: those of an account turned off with no session that has a
@@ -198,6 +200,36 @@ export type AccountGuards = ReturnType<typeof createAccountGuards>;
 export function createAccountReplies({ scenario, store, fail }: FixtureContext): Handlers {
   /** The `inspect_account_trash` requests answered so far, which a list of answers is read by. */
   let trashInspections = 0;
+  /** The `read_account_mcp_inventory` requests answered so far for each account, which a list of answers is read by. */
+  const mcpReads = new Map<string | null, number>();
+  /** The sign-in state a succeeded sign-in or sign-out left each server in, by account and server, which the readings
+   * show in place of the staged one. */
+  const mcpSignIns = new Map<string, McpSignInState>();
+  /** The sign-ins staged as pending, by account and server, each with its answer, which a second sign-in to the server
+   * joins, and what ends it as cancelled. A pending sign-out is not held here: it cannot be cancelled. */
+  const pendingMcpSignIns = new Map<string, { answer: Promise<McpServerAuthEnded>; cancel: () => void }>();
+  const mcpAuthKey = (body: { account?: string | null; server: string }) => `${body.account ?? ""}\0${body.server}`;
+  const ended = (outcome: Extract<McpServerAuthAnswer, { status: string }>) => ({ type: "account_mcp_server_auth_ended", id: null, outcome }) as const;
+  type McpServerAuthEnded = ReturnType<typeof ended>;
+  const mcpServerAuth = (body: Extract<ClientRequestBody, { type: "sign_in_account_mcp_server" | "sign_out_account_mcp_server" }>) => {
+    const staged = scenario.accountMcpServerAuth;
+    const answer: McpServerAuthAnswer = (staged instanceof Map ? staged.get(body.server) : staged) ?? { status: "succeeded", detail: null };
+    if (answer === "pending") {
+      if (body.type === "sign_out_account_mcp_server") return new Promise<McpServerAuthEnded>(() => {});
+      const key = mcpAuthKey(body);
+      const held = pendingMcpSignIns.get(key);
+      if (held) return held.answer;
+      let cancel!: () => void;
+      const pending = new Promise<McpServerAuthEnded>((resolve) => {
+        cancel = () => resolve(ended({ status: "cancelled", detail: null }));
+      });
+      pendingMcpSignIns.set(key, { answer: pending, cancel });
+      return pending;
+    }
+    if ("code" in answer) return fail(answer);
+    if (answer.status === "succeeded") mcpSignIns.set(mcpAuthKey(body), body.type === "sign_in_account_mcp_server" ? "signed_in" : "needs_sign_in");
+    return ended(answer);
+  };
 
   const changeAccount = (body: Extract<ClientRequestBody, { type: "create_account" | "update_account" }>): Ack => {
     const current = store.getState();
@@ -385,6 +417,39 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
       }
       reread(outcome);
       return { type: "reset_credit_used", id: null, outcome };
+    },
+    read_account_mcp_inventory: (body) => {
+      const account = body.account ?? null;
+      const staged = scenario.accountMcpInventory;
+      const stagedFor = staged instanceof Map ? staged.get(account) : staged;
+      const reads = mcpReads.get(account) ?? 0;
+      mcpReads.set(account, reads + 1);
+      const answers = (Array.isArray(stagedFor) ? stagedFor : [stagedFor]) as (AccountMcpAnswer | undefined)[];
+      const answer = answers[Math.min(reads, answers.length - 1)] ?? {};
+      if (answer === "pending") return neverReplied();
+      if ("code" in answer) return fail(answer);
+      const { ageMinutes, connectors, servers, unavailable } = answer;
+      return {
+        type: "account_mcp_inventory_read",
+        id: null,
+        inventory: {
+          agent: body.agent,
+          account,
+          read_at: ageMinutes ? minutesAgo(ageMinutes) : Date.now(),
+          connectors: connectors ?? [],
+          servers: (servers ?? []).map((server) => ({ ...server, sign_in: mcpSignIns.get(mcpAuthKey({ account, server: server.name })) ?? server.sign_in })),
+          unavailable: unavailable ?? null,
+        },
+      };
+    },
+    sign_in_account_mcp_server: mcpServerAuth,
+    sign_out_account_mcp_server: mcpServerAuth,
+    cancel_account_mcp_sign_in: (body) => {
+      const held = pendingMcpSignIns.get(mcpAuthKey(body));
+      if (!held) return fail({ code: "mcp_sign_in_not_running", params: { agent: body.agent, server: body.server }, message: `no sign-in to ${body.server} is running` });
+      pendingMcpSignIns.delete(mcpAuthKey(body));
+      held.cancel();
+      return { type: "ack", id: null };
     },
     create_account: changeAccount,
     update_account: changeAccount,

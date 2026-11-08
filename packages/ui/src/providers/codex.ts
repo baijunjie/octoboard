@@ -621,6 +621,8 @@ export const codex = {
   colour: { light: "#2a6df0", dark: "#6ea0ff" },
   params: { codex: names["provider.codex.label"] },
   planNames: { self_serve_business_prolite: "Business Pro Lite" },
+  // Codex's Apps are ChatGPT's, which OpenAI's documentation now manages on its plugins page.
+  connectorPlatform: { name: "ChatGPT", settingsUrl: "https://chatgpt.com/plugins" },
   settingReferences: {
     claude_compatibility: { claudeMd: "CLAUDE.md" },
   },

@@ -46,6 +46,16 @@ export function providerPlanName(id: string, plan: string): string | undefined {
   return names && Object.hasOwn(names, plan) ? names[plan] : undefined;
 }
 
+/** The platform holding the connectors of the provider `id`'s accounts, `undefined` for a provider with none. */
+export function providerConnectorPlatform(id: string): ProviderPresentation["connectorPlatform"] {
+  return providerPresentation(id)?.connectorPlatform;
+}
+
+/** The session command that authorizes a local MCP server of the provider `id`, `undefined` where there is none. */
+export function providerMcpSessionSignIn(id: string): string | undefined {
+  return providerPresentation(id)?.mcpSessionSignIn;
+}
+
 /** The UI's record of every code the providers declare, by code (`provider.<id>.<code>`), for the code registry, which
  * holds them to its `CodeRecord`. */
 export const PROVIDER_CODES = Object.assign({}, ...MODULES.map((module) => module.codes)) as UnionToIntersection<NonNullable<(typeof BUILT_IN)[number]["codes"]>>;

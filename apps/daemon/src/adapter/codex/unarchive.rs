@@ -3,7 +3,8 @@
 use std::path::Path;
 
 use crate::adapter::account_cli::{self, NotRun, QueryFailure};
-use crate::protocol::{error_code, AgentId, Code, CodedError};
+use crate::adapter::Unstartable;
+use crate::protocol::{AgentId, Code, CodedError};
 
 /// How long `codex unarchive` may take; it only moves one file.
 const UNARCHIVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
@@ -38,12 +39,12 @@ pub fn unarchive(
         None,
     )
     .map_err(|failure| match failure {
-        QueryFailure::NotRun(NotRun::BinaryNotFound(binary)) => CodedError::raised(
-            error_code::BINARY_NOT_FOUND,
-            NotRun::BinaryNotFound(binary).detail(),
-            &[("binary", binary)],
-        ),
-        QueryFailure::NotRun(NotRun::BinaryRefused(refusal)) => anyhow::Error::new(refusal),
+        QueryFailure::NotRun(NotRun::BinaryNotFound(binary)) => {
+            Unstartable::NotFound(binary).into_error()
+        }
+        QueryFailure::NotRun(NotRun::BinaryRefused(refusal)) => {
+            Unstartable::Refused(refusal).into_error()
+        }
         QueryFailure::NotRun(refused) => failed(refused.detail()),
         QueryFailure::Bounded(failure) => failed(failure.into_error().to_string()),
     })?;

@@ -289,8 +289,8 @@ impl LoginFailure {
 mod tests {
     use crate::protocol::{
         AccountInUse, AccountLogin, AccountSharing, AccountTrashOutcome, AccountTrashSharing,
-        AgentId, Event, LoginStatus, Request, RequestBody, ResetCreditOutcome, SharingCause,
-        SharingFailure, SharingPhase, SharingProgress,
+        AgentId, Event, LoginStatus, McpServerAuthOutcome, Request, RequestBody,
+        ResetCreditOutcome, SharingCause, SharingFailure, SharingPhase, SharingProgress,
     };
 
     #[test]
@@ -342,6 +342,39 @@ mod tests {
                 serde_json::json!({"status": status})
             );
         }
+    }
+
+    #[test]
+    fn an_mcp_server_sign_in_is_asked_for_by_agent_account_and_server() {
+        for name in [
+            "sign_in_account_mcp_server",
+            "sign_out_account_mcp_server",
+            "cancel_account_mcp_sign_in",
+        ] {
+            let request: Request = serde_json::from_str(&format!(
+                r#"{{"type":"{name}","id":"r","agent":"codex","account":null,"server":"s"}}"#
+            ))
+            .unwrap();
+            assert!(matches!(
+                request.body,
+                RequestBody::SignInAccountMcpServer { account: None, .. }
+                    | RequestBody::SignOutAccountMcpServer { account: None, .. }
+                    | RequestBody::CancelAccountMcpSignIn { account: None, .. }
+            ));
+        }
+        assert!(serde_json::from_str::<Request>(
+            r#"{"type":"sign_in_account_mcp_server","id":"r","agent":"codex"}"#
+        )
+        .is_err());
+        let event = Event::AccountMcpServerAuthEnded {
+            id: Some("r".to_string()),
+            outcome: McpServerAuthOutcome::failed("no".to_string()),
+        };
+        assert_eq!(
+            serde_json::to_value(event).unwrap(),
+            serde_json::json!({"type": "account_mcp_server_auth_ended", "id": "r",
+                "outcome": {"status": "failed", "detail": "no"}})
+        );
     }
 
     #[test]

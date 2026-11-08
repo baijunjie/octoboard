@@ -10,6 +10,9 @@ import { testDaemon } from "../../test/testDaemon";
 import type { Account, AccountLogin, AccountQuota, AccountSharing, Agent, AgentAvailability, AgentCliStatus, Console, Event, Project, ClientRequestBody, Session, Settings } from "../../protocol";
 
 export const request = vi.fn((_body: ClientRequestBody): Promise<object> => Promise.resolve({}));
+/** The answer to an account's MCP inventory reading, kept apart from `request` so that the tests stubbing every other
+ * request need not answer it: by default a reading that never answers, which leaves the details dialog reading. */
+export const readMcpInventory = vi.fn((_body: Extract<ClientRequestBody, { type: "read_account_mcp_inventory" }>): Promise<object> => new Promise(() => {}));
 export const showNotice = vi.fn();
 export const settings: Settings = { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex", "grok"], default_clone_dir: "/home/dev/Projects" };
 export const accountQuotas: AccountQuota[] = [];
@@ -26,7 +29,7 @@ export const sessions = new Map<string, Session>();
 export const startDaemon = (): Daemon =>
   testDaemon({
     state: structuredClone({ settings, agentAvailability: availability, agentCliStatuses: cliStatuses, accountQuotas, accountLogins, accountSharing, consoles, projects, sessions }),
-    request: (body) => request(body) as Promise<Event>,
+    request: (body) => (body.type === "read_account_mcp_inventory" ? readMcpInventory(body) : request(body)) as Promise<Event>,
     showNotice,
   });
 

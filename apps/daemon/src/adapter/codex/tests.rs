@@ -863,3 +863,29 @@ fn codex_never_uses_a_stash() {
         .screen()
         .native_stash(&fixture.spec(), &LaunchPlan::default()));
 }
+
+/// A non-default account keeps its MCP OAuth tokens in its own home, whether its session starts
+/// afresh or resumes; the default account keeps Codex's default store, so it gets no override.
+#[test]
+fn only_a_non_default_account_keeps_mcp_tokens_in_its_own_home() {
+    use crate::adapter::tests::codex_file_credential_overrides;
+    assert_eq!(
+        MCP_FILE_CREDENTIALS_STORE,
+        r#"mcp_oauth_credentials_store="file""#
+    );
+    let root = crate::test_support::ScratchDir::new("codex-mcp-credentials");
+    let account = root.join("codex-work");
+    std::fs::create_dir_all(&account).expect("account home");
+    for resume in [None, Some("thread-id")] {
+        assert_eq!(
+            codex_file_credential_overrides(Some(&account), resume),
+            1,
+            "{resume:?}"
+        );
+        assert_eq!(
+            codex_file_credential_overrides(None, resume),
+            0,
+            "{resume:?}"
+        );
+    }
+}

@@ -132,10 +132,18 @@ and records tests replay.
 ### Agent accounts
 
 - `src/accounts/` — accounts: `ops.rs` (`AccountOps`, what `AgentProvider::accounts` gives: a provider's quota probe,
-  kick, sign-in email, reset credits, sign-in flow, shareable configuration items and plugin registries, thread
-  registry), `quotas/` (plan quota read from the agent's CLI, poller, judgement, kicks, reset credits; `probe.rs`
+  kick, sign-in email, reset credits, sign-in flow, MCP inventory reader, MCP server sign-in, shareable configuration
+  items and plugin registries, thread registry), `background_cli.rs` (an agent CLI run for an account in the
+  background, shared by the login and the MCP server sign-in: the `Process` it runs in, killed with its whole session
+  when ended early, the `Line`s it says, and `SigningIn`, the count under the account's directory that refuses a
+  change of its sharing), `mcp_inventory.rs` (an account's MCP servers and platform connectors read through the
+  agent's CLI: the `McpInventoryReader` interface, and one reading per account at a time with later requests joining
+  it, keyed by the account's directory too; Codex's reader is `adapter/codex/mcp_inventory.rs`, Claude Code's
+  `adapter/claude/mcp_inventory.rs`), `mcp_sign_in.rs` (signing an account in to and out of an MCP server through the
+  agent's own commands: the `McpServerAuth` interface, the runs held in `McpServerAuths`, one per account and server,
+  and `request`, which starts or joins one; Codex's is `adapter/codex/mcp_auth.rs`), `quotas/` (plan quota read from the agent's CLI, poller, judgement, kicks, reset credits; `probe.rs`
   the `QuotaProbe` interface with the conversation it runs, `reset_credit.rs` the `ResetCredits` interface), `login/`
-  (background sign-in; `flows.rs` the `LoginFlow` interface with the process it runs and, for a provider whose sign-in only one login can use, the code a second is refused with), `dirs.rs`, `relocate.rs` (copying a session's record into another account's directory for a
+  (background sign-in; `flows.rs` the `LoginFlow` interface with the `Flow` it drives and, for a provider whose sign-in only one login can use, the code a second is refused with), `dirs.rs`, `relocate.rs` (copying a session's record into another account's directory for a
   switch), `thread_registry.rs` (the `ThreadRegistry` interface of a provider's thread database, shared by the switch's copy
   and the shared configuration, with `RowError`, the failure of one row carrying a cause every provider's registry shares; Codex's is `adapter/codex/threads.rs`),
   `trash.rs`, `choice/` (which agent and account a session opens with: `mod.rs` resolving a session's own, `started.rs`
@@ -301,7 +309,10 @@ and records tests replay.
   (`QuotaProbe`), `login.rs` (`LoginFlow`) and `shared_config.rs` (the items it shares); Codex also has
   `reset_credit.rs` (`ResetCredits`), `threads.rs` (its `ThreadRegistry`), `unarchive.rs` (its unarchiving of a rollout),
   `app_server.rs` (the app-server start and handshake the account-level uses of `codex app-server` share: the quota
-  probe, reset credit and login), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script, and `account_cli.rs` the account
+  probe, reset credit, login and MCP inventory reading, which starts it with `CODEX_INVENTORY_APP_SERVER_ARGS`, Apps
+  and plugins left on), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`); Codex and Claude
+  Code also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server, Claude Code's over
+  `claude auth status` and `claude mcp list`), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script, and `account_cli.rs` the account
   directories, commands and short queries (running an agent CLI as an account) (`codex/claude_mcp.rs` only translates a
   compatibility source's MCP servers into Codex's launch overrides). The instruction file, tool-name prefix, ask-question tool and detection markers are read from the
   descriptors by `session_tools/`, `coordinator/console_workdir.rs` and `agents/detect.rs`.
@@ -476,7 +487,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A provider's fact (names, install page, binary, instruction file, tool-name prefix, detection markers, declared capabilities) | its descriptor: `AgentId::descriptor` and `providers::descriptors` (`src/providers/mod.rs`) |
 | Where an agent keeps its files | the descriptor's `layout` (`AgentLayout`, `src/providers/layout.rs`; each provider's value is its `LAYOUT` in `src/providers/<id>.rs`) |
 | A provider's settings, and the codes only it raises | the descriptor's `settings` and `codes` (`src/providers/mod.rs`); stored by `src/store/provider_settings.rs` |
-| Refuse an operation a provider does not offer (sign-in, kick, reset credits, configuration sharing) | `CodedError::require_offered` (`src/protocol/errors.rs`), giving `provider_unsupported` |
+| Refuse an operation a provider does not offer (sign-in, MCP server sign-in, kick, reset credits, configuration sharing) | `CodedError::require_offered` (`src/protocol/errors.rs`), giving `provider_unsupported` |
 | What a provider offers one made compatible with it (MCP servers, instructions) | `CompatibilitySource` (`src/adapter/mod.rs`), reached through `adapter::compatibility_source_of`; Claude Code's is `src/adapter/claude/compatibility.rs` |
 | A value for every provider (a setting per provider, a model and effort per provider) | `protocol::PerAgent<T>` (`src/protocol/agents.rs`), indexed by `AgentId` and serialised in registry order |
 | A provider's behavior (launch plan, installed version, titles, terminal screens and dialogs, accounts, model catalogue, status line) | `adapter::provider(agent)` giving the `AgentProvider` (`src/adapter/mod.rs`); its accounts through `AccountOps` (`src/accounts/ops.rs`), its models through `ModelCatalogue` (`src/agents/models.rs`) |

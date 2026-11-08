@@ -4,10 +4,11 @@ import { DotStatusBadge } from "../components/status/DotStatusBadge";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { codedMessageNode, CodedFailureBody } from "../components/alerts/errorParts";
 import { StatusMark } from "../components/status/StatusMark";
+import { UpdatedAge } from "../components/text/UpdatedAge";
 import { daemonMessage, NO_RECORDS } from "../errors/daemonMessage";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { QuotaUnavailable } from "../protocol";
-import { formatRelativeTime, isJustNow } from "../format/relativeTime";
+import { formatRelativeTime } from "../format/relativeTime";
 import { useNow } from "../format/useNow";
 import { QuotaMeter, QuotaMeterPair } from "./QuotaMeter";
 import { isNotLoggedIn, loginStateOf, orderedQuotaWindows, planLabel, quotaNaming, twoLayerWindows } from "../accounts/quotaFormat";
@@ -77,14 +78,10 @@ export function QuotaStaleMark({ quota }: { quota: QuotaReading }): React.ReactE
 /** When the reading with windows was taken ("Updated 3 minutes ago"), followed by the out-of-date mark when the latest
  * read failed (`QuotaStaleMark`). Nothing for an account with no windows. */
 export function QuotaUpdated({ quota }: { quota: QuotaReading }): React.ReactElement | null {
-  const t = useT();
-  const language = useCurrentLanguage();
-  const now = useNow();
   if (typeof quota !== "object" || quota.windows.length === 0) return null;
-  const age = formatRelativeTime(language, quota.fetched_at, now);
   return (
     <span className="ms-auto flex shrink-0 items-center gap-1 text-xs font-normal text-app-muted">
-      <span>{isJustNow(quota.fetched_at, now) ? t("quota.updatedNow") : t("quota.updated", { age })}</span>
+      <UpdatedAge at={quota.fetched_at} copy={{ now: "quota.updatedNow", age: "quota.updated" }} />
       <QuotaStaleMark quota={quota} />
     </span>
   );
