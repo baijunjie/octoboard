@@ -1899,13 +1899,18 @@ element, an error from `role="alert"`.
   return, so it is not gone before the user is back to hear it. A success already present when the row mounts is not
   said. The instance is `AccountLoginAnnouncer` with `useClearSucceededLogin` in
   `packages/ui/src/settings/accounts/AccountLogin.tsx`.
+  Where the shell reports the native window's focus (the platform's `windowFocus`), that is the window's focus: the macOS
+  web view fires no `focus` or `blur` as the application is deactivated or reactivated, so anything re-read or resumed
+  on the user's return goes through `onWindowFocusReturn` or `subscribeWindowFocus` in
+  `packages/ui/src/components/hooks/windowFocus.ts`, never the window's own `focus` event.
 - A state whose visible form is durable copy rather than a placeholder — the sentence saying where a macOS permission
   stands, in `packages/ui/src/settings/PermissionsSection.tsx` — stays readable in place, not `aria-hidden`, and is
   announced from a `StatusAnnouncer` the section mounts itself, through `AttendedStatusAnnouncer`, `sr-only`, beside the
   rows. A `role="status"` on the copy itself is not enough: the copy is present at the region's first render, as focus
   moves onto the tab, and that text is not said. So every text, the first included, is written
   `AFTER_FOCUS_MOVE_DELAY_MS` of attended time after it arrives, the wait started over each time the user comes back (a
-  change made in System Settings is picked up on the way back, when VoiceOver is speaking the focused control), and a
+  change made in System Settings is picked up on the way back through `onWindowFocusReturn`, when VoiceOver is speaking
+  the focused control), and a
   text replaced while it waits is never said. Put the subject in the text when several states can change independently,
   as whole sentences per state rather than fragments joined in code: `role="status"` is atomic, so a bare "Granted."
   names nothing. Reading the rows statically meets each state twice, once in place and once in the status; that is

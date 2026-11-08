@@ -3,6 +3,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
+import type { WindowFocusCapability } from "../../platform";
+import { shellWindowFocus } from "./windowFocusTestSupport";
 import { startPolling, usePolled } from "./usePoll";
 
 const POLL_MS = { live: 3000, background: 15000 };
@@ -115,8 +117,9 @@ it("revises the answer at once and asks again", async () => {
   expect(poll.ask).toHaveBeenCalledTimes(2);
 });
 
-/** Starts polling with a `run` the test counts, the caller's own reads given by `own`. */
-function poll(own?: { at: number; busy: boolean }, catchUpAfter?: number) {
+/** Starts polling with a `run` the test counts, the caller's own reads given by `own`, over the shell's window focus
+ * `windowFocus` where there is one. */
+function poll(own?: { at: number; busy: boolean }, catchUpAfter?: number, windowFocus?: WindowFocusCapability) {
   vi.useFakeTimers();
   let runs = 0;
   const stop = startPolling(() => ({
@@ -124,7 +127,7 @@ function poll(own?: { at: number; busy: boolean }, catchUpAfter?: number) {
     run: () => void runs++,
     ...(own && { busy: () => own.busy, lastAt: () => own.at }),
     catchUpAfter,
-  }));
+  }), windowFocus);
   onTestFinished(() => { stop(); vi.useRealTimers(); });
   return { runs: () => runs, advance: (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms))) };
 }
@@ -152,6 +155,20 @@ it("catches up on coming back to the window only once the last read is old enoug
   expect(polled.runs()).toBe(0);
   await polled.advance(1000);
   act(() => void window.dispatchEvent(new Event("focus")));
+  expect(polled.runs()).toBe(1);
+});
+
+it("catches up on coming back to the window as the shell reports it, and not on the document's focus event there", async () => {
+  const { capability, focus } = shellWindowFocus(true);
+  const own = { at: Date.now(), busy: false };
+  const polled = poll(own, 5000, capability);
+  await polled.advance(5000);
+  expect(polled.runs()).toBe(0);
+  act(() => void window.dispatchEvent(new Event("focus")));
+  expect(polled.runs()).toBe(0);
+  focus(false);
+  expect(polled.runs()).toBe(0);
+  focus(true);
   expect(polled.runs()).toBe(1);
 });
 

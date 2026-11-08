@@ -134,6 +134,11 @@ target free to pick either, so stop one before launching the other. During clean
 and remove only its scratch bundle, data, and identifier-specific WebKit/cache/defaults artifacts; real-user Library
 artifacts are outside the throwaway `HOME` and need to be included explicitly.
 
+A flow that picks up a macOS permission granted while the app runs (Screen Recording, Accessibility, notifications) is
+verified only on such a build, after confirming it starts without the grant under test. macOS keys the grant to the
+app's identity, so the installed app, or any build sharing its identifier, usually holds it already at launch: its
+first read says granted, and the path that notices a grant arriving is never exercised, however the check is driven.
+
 To test other system languages, pass them for that launch only:
 `open <scratch-app> --args -AppleLanguages '(zh-Hans-CN, en)'`. This steers only a profile with no
 `octoboard.language` key: the first launch stores its choice and later launches use that value. Use a fresh unique

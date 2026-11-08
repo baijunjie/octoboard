@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { onWindowFocusReturn } from "../components/hooks/windowFocus";
 import type { MacosPermissionKind, MacosPermissionsStatus } from "../platform";
 import { usePlatform } from "../platform/react";
 
@@ -36,7 +37,7 @@ export function useMacosPermissions(): {
   request: (kind: MacosPermissionKind) => Promise<void>;
   openSystemSettings: (kind: MacosPermissionKind) => Promise<void>;
 } {
-  const { macosPermissions } = usePlatform();
+  const { macosPermissions, windowFocus } = usePlatform();
   const [status, setStatus] = useState<MacosPermissionsStatus | undefined>();
   const [loaded, setLoaded] = useState(false);
   const [unreadable, setUnreadable] = useState(false);
@@ -68,13 +69,12 @@ export function useMacosPermissions(): {
   useEffect(() => {
     mounted.current = true;
     void refresh();
-    const onFocus = () => void refresh();
-    window.addEventListener("focus", onFocus);
+    const undoFocus = onWindowFocusReturn(windowFocus, () => void refresh());
     return () => {
       mounted.current = false;
-      window.removeEventListener("focus", onFocus);
+      undoFocus();
     };
-  }, [refresh]);
+  }, [refresh, windowFocus]);
 
   const request = useCallback(
     async (kind: MacosPermissionKind) => {

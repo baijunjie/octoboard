@@ -35,6 +35,8 @@ export interface PlatformAdapter {
    * window's titlebar: it then carries the drag region and keeps `leftInset` clear for the
    * window controls the shell floats over it. */
   readonly windowChrome?: WindowChromeCapability;
+  /** Present only where a shell owns the window. */
+  readonly windowFocus?: WindowFocusCapability;
   /** True only where the shell puts a translucent native material behind a transparent webview, so
    * the UI leaves the window chrome's own background clear and paints the content panel opaquely
    * (`--window-background` in `style.css`). */
@@ -145,6 +147,17 @@ export interface WindowChromeCapability {
    * controls cover right now: none while they are hidden, as in fullscreen. */
   leftInset(): number;
   /** Subscribes to changes of `leftInset`, returning the function that undoes it. */
+  subscribe(callback: () => void): () => void;
+}
+
+/** The native window's focus. On macOS the webview does not fire the window's `focus` and `blur` when the app is
+ * deactivated or reactivated, and `document.hasFocus()` catches up only some time after the window's own change, so
+ * whatever has to follow the user leaving the window and coming back reads it here. */
+export interface WindowFocusCapability {
+  /** Whether the window has focus, as the shell last reported it; `undefined` while nothing is subscribed, and
+   * after subscribing until the shell's first answer is in. */
+  focused(): boolean | undefined;
+  /** Subscribes to changes of `focused`, returning the function that undoes it. */
   subscribe(callback: () => void): () => void;
 }
 

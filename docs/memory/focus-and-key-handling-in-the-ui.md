@@ -204,7 +204,7 @@ since each leaves the restore somewhere else, and the effect-driven close with t
 is what makes React render it in a task of its own (`notifyLater` in
 `packages/ui/src/settings/SettingsDialog.dialogsInFront.test.tsx`).
 
-## "Focus left" is three things: check `document.hasFocus()` before answering a `focusout` with no `relatedTarget`
+## "Focus left" is three things: check the window's focus before answering a `focusout` with no `relatedTarget`
 
 Applies to `packages/ui`, to any rule of the shape "hide this, close this, hand focus on once focus leaves it". A
 `focusout` (React's `onBlur`) carrying no `relatedTarget` has three causes, and only one of them is the user moving
@@ -213,17 +213,22 @@ document then shows as its own active element; or the window itself lost focus, 
 user about to come back to it. A rule that answers all three takes its region off the screen while the user is in
 another application, and moves keyboard focus behind their back with it.
 
-So gate such a rule on `document.hasFocus()`, which is false in the third case alone, and where the iframe has to be
-told apart from `<body>` as well, read `document.activeElement` a task later, once focus has settled — the iframe
-element is what it shows then.
+So gate such a rule on whether the window has focus, which is false in the third case alone, read through
+`windowHasFocus` with the platform's `windowFocus` (`docs/structure/ui.md`, "Shared entry points"), not through
+`document.hasFocus()` itself, which in the macOS app follows the window only some time after it loses focus. Where the
+iframe has to be told apart from `<body>` as well, read `document.activeElement` a task later, once focus has settled —
+the iframe element is what it shows then.
 
 jsdom (30) has no window focus to report: its `hasFocus()` answers whether anything in the document has been focused,
 so it is `false` in a test that never focuses anything and `true` from the first focus on, whatever the test means the
-window to be doing. A test of a rule gated on it therefore sets the answer itself through `windowAttention()` in
-`packages/ui/src/components/announce/windowTestSupport.ts`, which starts the window attended and returns a setter that moves
-`hasFocus()` and dispatches the window's `focus` / `blur` together — not a hand-rolled spy — or a gated rule looks dead
-in a test that focuses nothing. Only such a test of the window-left case catches the ungated rule; no gallery scenario
-leaves the window for another application.
+window to be doing. A test of a rule gated on it therefore sets the answer itself — not through a hand-rolled spy — or
+a gated rule looks dead in a test that focuses nothing. Cover both sources of the answer: the browser's, with
+`windowAttention()` in `packages/ui/src/components/announce/windowTestSupport.ts`, which starts the window attended and
+returns a setter that moves `hasFocus()` and dispatches the window's `focus` / `blur` together; and the shell's, with
+`shellWindowFocus()` in `packages/ui/src/components/hooks/windowFocusTestSupport.ts`, handed to the platform adapter as
+its `windowFocus`, which moves neither, as the macOS app does not. A test with `windowAttention()` alone passes against
+a rule that reads `document.hasFocus()` or the window's events directly. Only such tests of the window-left case catch
+the ungated rule; no gallery scenario leaves the window for another application.
 
 ## Inside a dialog, a focused control that unmounts or turns disabled takes Escape and Tab with it
 

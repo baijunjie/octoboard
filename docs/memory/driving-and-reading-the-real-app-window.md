@@ -26,14 +26,20 @@ and make it `AXMain`; the WebKit accessibility tree appears once the window is s
 with `screencapture -l <CGWindowID>` and the ID taken from `CGWindowListCopyWindowInfo` filtered to the instance's own
 PID.
 
-## Get a diagnosis out of a blank window by rendering it into the DOM
+## Get a diagnosis out of the window by rendering it into the DOM, or log events as image requests
 
-The window's own pixels are the only readable output channel: devtools can only be opened by the keystroke injection
-that needs Accessibility permission, and the native window title is set by the Rust shell and does not follow
-`document.title`. So install a `window.onerror` / `unhandledrejection` handler that writes the error and its stack
+The window has no console to read: devtools can only be opened by the keystroke injection that needs Accessibility
+permission, and the native window title is set by the Rust shell and does not follow `document.title`. So for a blank
+window install a `window.onerror` / `unhandledrejection` handler that writes the error and its stack
 straight into the document body, and read it off a screenshot. The React error boundary does not remove the need for
 this — it catches render-time throws only, while a throw from a library's own scheduled work, or from module-level
 code running before React mounts, still leaves a silent blank window.
+
+For a log of events over time rather than one error — which DOM events a packaged window actually fires, and when —
+have the instrumented build request an HTTP(S) image from a listener on the loopback interface for each event, with
+the event in the query string. The packaged window's native rules block every other `http` / `https` request, so a
+`fetch` or a `sendBeacon` to the listener sends nothing and reads as "no event" (`docs/product/report-panel.md`, "What
+a page may contain, and what it cannot do"); a development build lets `localhost` through and hides this.
 
 ## A scripted GUI probe can only confirm a positive, never a negative
 

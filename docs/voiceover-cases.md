@@ -44,7 +44,10 @@ application, not as written in source:
   marker. These three count as the same; a region under an open modal without a marker is hidden, and a write into it is
   a different item (see KNW-2).
 - **Window attention.** Whether the write is held until the window is attended (visible and focused) or happens whatever
-  the window is doing.
+  the window is doing. In the desktop application the window's focus comes from the shell's native window focus (the
+  platform's `windowFocus`), not from the web view's `focus` and `blur` events, which the macOS web view does not fire
+  as the application is deactivated or reactivated; the attended wait there starts on the native focus event. The
+  recordings of an attended wait made before E12 (E5, E10) were heard on the earlier DOM-based predicate.
 - **Region lifetime.** Whether the region is mounted empty and stays mounted, or is mounted already holding its text,
   and what ends its life (a panel switch, a removed row, a closing dialog).
 - **Change shape.** Text replaced in place, text first set in an empty region, or text read on demand only.
@@ -142,6 +145,7 @@ commands. Native accessibility trees were read separately (VoiceOver off or on) 
 | E9 | Branch `fix/startup-error-details` at `f37fc3d925f35eb78f1048ea4767df369a1f6b1d` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo9-ddnbws96`; WARN-3, WARN-4 and WARN-5, real daemon with isolated HOME/TMPDIR/agent directories, fixture Codex CLI and dated records, throwaway real Git repositories and worktrees; no Safari or gallery. |
 | E10 | Local main `287dec4a61d1cc57f4ad1b3c09c8211210320a11`, source of `docs/voiceover-relisten` | Packaged `Octoboard Verification`, build-time identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo10-20261027-relisten`; SA-D, SA-E and FOCUS-1 on the current accounts table and account details dialog; real daemon with a credential-free Grok CLI fixture. |
 | E11 | An unmerged local wrapper-verification build based on main `9ee45c135` | Packaged `Octoboard Wrapper Verify Fixed`, identifier and scratch signing identifier `dev.octoboard.verify.wrappers.fixed-20261107`; normal production entry, real isolated daemon and credential-free Claude fixture records/processes. FOCUS-5 uses native caption-panel screenshots, not AppleScript speech reads. |
+| E12 | Branch `fix/window-focus-refresh` at `7c717c35d` | Packaged `Octoboard Verification`, build-time identifier `dev.octoboard.verify.fr1108b`; SA-L with a human listener, real daemon and throwaway HOME, no agent CLIs. The branch's later commits `dba8e528d` and `2ff384292` change only tests, comments and polling, not the announcer path. |
 
 
 E4's tree equals main `429be4556`. E1 to E3 and the build commits behind them were unmerged local-only builds, so they
@@ -218,6 +222,14 @@ quota probes locally; it opened no browser and made no authorization or model re
 default account, `VoiceOver fixture`; later runs added `VoiceOver cancel`, `VoiceOver details` and `VoiceOver away`.
 The default's table had two rows including the header, and the later table had five. All temporary accounts, processes,
 app/data directories and identifier-specific storage were removed after recording; the documentation worktree remains.
+
+E12 differs from the common recording procedure: a human listened with VoiceOver on, and no AppleScript polling,
+native samples or caption verification were used, so the phrases are as the listener reported them, not verbatim
+captures. The system was macOS 26.2; the interface languages and the application appearance were not recorded. The
+build was packaged from the branch's commit `7c717c35d` with its own build-time identifier and ran against the real
+daemon with a throwaway HOME and no agent CLIs. The Screen Recording permission was already granted; the Accessibility
+grant was made in System Settings by the listener, and the application was reached again with Command-Tab, with no
+minimizing and no click.
 
 Every `StatusAnnouncer` in the SA cases renders an unnamed `sr-only` `role="status"` with no explicit `aria-live`,
 `aria-atomic` or `aria-relevant` props. For E1 to E5 and E10, the captured effective native mapping is a group with the
@@ -678,8 +690,10 @@ mapping.
   to the announcer as one text), `packages/ui/src/components/announce/AttendedStatusAnnouncer.tsx` (writes each text
   after `AFTER_FOCUS_MOVE_DELAY_MS` of attended time, restarting the wait on each return to the window, and writes
   nothing again while the text has not changed; heard as a local `PermissionsAnnouncer` holding the same code),
-  `packages/ui/src/components/announce/useWindowAttended.ts` and `StatusAnnouncer` with its default 100 ms long elapsed
-  (the wait is the caller's, not `firstWriteDelayMs`). Inside Settings' own dialog; the Permissions tab keeps focus. The
+  `packages/ui/src/components/announce/useWindowAttended.ts` (on the desktop it takes the window's focus from the shell's
+  native window focus, through `packages/ui/src/components/hooks/windowFocus.ts`; E5 was heard on the earlier
+  DOM-based predicate) and `StatusAnnouncer` with its default 100 ms long elapsed (the wait is the caller's, not
+  `firstWriteDelayMs`). Inside Settings' own dialog; the Permissions tab keeps focus. The
   wording heard below predates the current catalog sentences (one message of whole sentences per permission and state,
   such as "Screen Recording is not granted."): the same composition, a name and a state per permission in one text, with
   the timing mechanism unchanged.
@@ -690,14 +704,23 @@ mapping.
   granted. Accessibility Not granted.` followed 1.73 s later; the native status was written 1.50 s after native focus on
   the tab. Returning from a minimized window with the states unchanged produced the window phrase and the tab phrase and
   no repeat of the sentence in 16 s. No permission was granted, refused or changed.
-- **Capture.** Last phrase through AppleScript, 25 ms polling, with native focus, status and window samples about every
-  40 ms; the minimized window was restored with no other application activated.
-- **Environment.** E5.
-- **Date.** 2026-10-20.
+  E12, heard by a listener: with Settings > Permissions open and Screen Recording already granted, Grant on the
+  Accessibility row was pressed, the application was enabled in System Settings > Accessibility, and Command-Tab
+  returned to the still-visible window. VoiceOver first read the focused control, then after a short pause announced the
+  section status, Screen Recording granted and Accessibility granted. Command-Tab away and back with nothing changed read
+  only the focused control; the status was not announced again.
+- **Capture.** E5: last phrase through AppleScript, 25 ms polling, with native focus, status and window samples about
+  every 40 ms; the minimized window was restored with no other application activated. E12: a listener's report, no
+  capture tooling.
+- **Environment.** E5 and E12.
+- **Date.** 2026-10-20 (E5), 2026-11-08 (E12).
 - **Reuse scope.** Covers a section-level `StatusAnnouncer` fed by a caller that waits `AFTER_FOCUS_MOVE_DELAY_MS` of
   attended time, in a section shown by a tab focus move inside an already-open dialog, with the durable copy left
-  readable. Not heard: a change of the states while Settings is open (a grant made in System Settings), a first reading
-  that arrives while the section is already showing, not at the tab focus move, and Settings opened directly onto
+  readable. E12 adds a change of the states made while Settings is open (the Accessibility grant in System Settings),
+  announced after a Command-Tab return with the window still visible, and no repeat on an unchanged return by the same
+  path; the earlier minimize-and-restore return was heard on the DOM-based predicate only. Not heard: a first reading
+  that arrives while the section is already showing, not at the tab focus move, a denied or revoked permission, a
+  return by a route other than Command-Tab and minimize-restore, and Settings opened directly onto
   Permissions, which no production control does today, so it is untested rather than failing. The rows' own copy was not
   tested as a reading path.
 
@@ -1568,7 +1591,7 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `shell/ConnectionBanner.tsx` | outage | SA-B | Heard | Matches in full. |
 | `settings/accounts/AccountLoginDialog.tsx` | login progress | SA-C for the dialog opening; no match for the rest | Heard | After Log in again the announcer remounts with a footer focus move, not a dialog opening, which was not heard. |
 | `settings/accounts/AccountLogin.tsx`, `AccountLoginAnnouncer` | login success | SA-D on the current table and the second mount in `settings/accounts/AccountDetailsDialog.tsx` (E10) | Heard | Current table direct/menu/return paths and the owned-account details path were heard in E10; SA-E heard the table remount. |
-| `settings/PermissionsSection.tsx`, through `AttendedStatusAnnouncer` | permission states | SA-L for the section opening and a return with the states unchanged; no match for a change while Settings is open | Heard | A grant made in System Settings was not heard, and Settings opened directly onto Permissions is unreachable from production controls and untested. |
+| `settings/PermissionsSection.tsx`, through `AttendedStatusAnnouncer` | permission states | SA-L for the section opening, a return with the states unchanged and a grant made in System Settings, returned to by Command-Tab (E12) | Heard | The window's focus comes from the shell's native window focus on the desktop; E12 heard the return on that predicate. A revoked permission is not heard, and Settings opened directly onto Permissions is unreachable from production controls and untested. |
 | `configuration/ImportReview.tsx` | "apply to all" applied | SA-A | Candidate | Mounted empty in the review step, text written after a press while focus rests, inside the modal's own subtree, default delay. Writing the identical sentence again does not rewrite it. |
 | `project-browser/git/ChangeList.tsx` | filter no-match | SA-A for typing; no match for a first render holding the text | Candidate | Typing in the filter writes in place at rest. The text can also be present at the first render (a persisted filter, a branch change that closes a popover and returns focus), a mount SA-H does not clearly cover. |
 | `viewer/ViewerContentView.tsx`, `ViewerContentView` | loading, disconnected | SA-J for navigation loading; SA-C for the dialog opening as a candidate; no match for disconnected | Heard for SA-J, candidate for SA-C | The navigation text is written at once with focus on Next file (SA-J). The region is mounted with the dialog with a 1500 ms first delay as focus moves, the shape of SA-C, but the opening was heard on the login dialog only. The disconnected text was not exercised. |
@@ -1653,7 +1676,7 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   `CopyButton`'s 2000 ms automatic clear (the presses used kept the tooltip open); `ActionMenu`'s load-failed update (an
   error alert masked it); `CodeSurface`'s outcome notes and failure, `UnchangedView`'s other outcomes and
   `ViewerContentView`'s disconnected text (not exercised); `AdvancedSection`'s unavailable text (not separately
-  recorded); `PermissionsSection`'s change while Settings is open (no permission was granted or revoked) and Settings
+  recorded); `PermissionsSection`'s revoked permission and Settings
   opened directly onto Permissions (no production control opens it there, so it is untested); `GitView`'s replacement
   sequences and failure sentences (not exercised); `FilesPanel`'s search loading (not recorded); the account switch
   outcome in `app/useSessionRequests.ts` (the credential-free fixture does not produce conversation records to switch);
@@ -1671,7 +1694,9 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 - A write made while the region is under an open modal outside a marker: heard failing in the login success form
   (KNW-2); no passing case.
 - A window visible but not frontmost, and a minimized window with the application also not frontmost (KNW-4's condition,
-  not rerun on E4): not tested for SA-D or FOCUS-1.
+  not rerun on E4): not tested for SA-D or FOCUS-1. E12 heard a Command-Tab return with the window visible for SA-L
+  only; the login-success announcer (SA-D) over a Command-Tab return was not heard, and SA-D's E10 recordings predate
+  the shell-reported window focus.
 - A transient web-area utterance before the correct button phrase after a cancel (FOCUS-1): still observed on the
   current table and in account details in E10, accepted, not explained. The artificially delayed start/cancel race was
   heard only on the E4 row, not rerun on the current table; the default account's details fallback was not heard.

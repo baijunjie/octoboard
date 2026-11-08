@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { onWindowFocusReturn } from "../components/hooks/windowFocus";
 import type { NotificationPermissionStatus } from "../platform";
 import { usePlatform } from "../platform/react";
 
@@ -18,7 +19,7 @@ export function useNotificationPermission(): {
   status: NotificationPermissionStatus | undefined;
   request: (() => Promise<void>) | undefined;
 } {
-  const { notifications } = usePlatform();
+  const { notifications, windowFocus } = usePlatform();
   const prompt = notifications?.permissionPrompt;
   const [status, setStatus] = useState(() => prompt?.status());
 
@@ -26,12 +27,12 @@ export function useNotificationPermission(): {
     if (!prompt) return;
     const refresh = () => setStatus(prompt.status());
     askedListeners.add(refresh);
-    window.addEventListener("focus", refresh);
+    const undoFocus = onWindowFocusReturn(windowFocus, refresh);
     return () => {
       askedListeners.delete(refresh);
-      window.removeEventListener("focus", refresh);
+      undoFocus();
     };
-  }, [prompt]);
+  }, [prompt, windowFocus]);
 
   return {
     status,

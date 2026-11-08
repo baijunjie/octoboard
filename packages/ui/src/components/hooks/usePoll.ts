@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { errorPresentation, type ErrorPresentation } from "../../errors/errorPresentation";
 import { unexpectedFailureDiagnostic } from "../../errors/errorText";
+import type { WindowFocusCapability } from "../../platform";
+import { useOptionalPlatform } from "../../platform/react";
 import { sameValue } from "../../values/sameValue";
 import { useLatest } from "./useLatest";
+import { onWindowFocusReturn } from "./windowFocus";
 
 /** How a poll is paced. The callbacks are read each time they are needed. */
 export interface Poll {
@@ -28,9 +31,10 @@ const hidden = () => document.hidden || document.visibilityState !== "visible";
 
 /**
  * Polls `poll.run` at its pace until the function this returns is called, never while the document is hidden: a poll
- * that falls due then waits for it to be shown, and is read at once on return (see `catchUpAfter`).
+ * that falls due then waits for it to be shown, and is read at once on return (see `catchUpAfter`). `windowFocus` is
+ * the platform's, which tells a return to the window where the document's own events do not.
  */
-export function startPolling(poll: () => Poll): () => void {
+export function startPolling(poll: () => Poll, windowFocus?: WindowFocusCapability): () => void {
   let stopped = false;
   let halted = false;
   let polling = false;
@@ -85,14 +89,14 @@ export function startPolling(poll: () => Poll): () => void {
   };
 
   document.addEventListener("visibilitychange", catchUp);
-  window.addEventListener("focus", catchUp);
+  const undoFocus = onWindowFocusReturn(windowFocus, catchUp);
   if (last() === -Infinity) read();
   else catchUp();
   return () => {
     stopped = true;
     clearTimeout(timer);
     document.removeEventListener("visibilitychange", catchUp);
-    window.removeEventListener("focus", catchUp);
+    undoFocus();
   };
 }
 
@@ -103,10 +107,11 @@ export function startPolling(poll: () => Poll): () => void {
 export function usePoll({ resetKey, ...poll }: Omit<Poll, "pace"> & { pace: number | undefined; resetKey?: unknown }): void {
   const latest = useLatest(poll);
   const { pace, catchUpAfter } = poll;
+  const windowFocus = useOptionalPlatform()?.windowFocus;
   useEffect(() => {
     if (pace === undefined) return;
-    return startPolling(() => ({ ...latest.current, pace, catchUpAfter }));
-  }, [pace, catchUpAfter, resetKey, latest]);
+    return startPolling(() => ({ ...latest.current, pace, catchUpAfter }), windowFocus);
+  }, [pace, catchUpAfter, resetKey, latest, windowFocus]);
 }
 
 /** Error messages and stacks are not enumerable; compare the data a caller can show explicitly. */
@@ -146,6 +151,7 @@ export function usePolled<T>(
   const latestSame = useLatest(same);
   const { value, error } = state.key === key ? state : {};
   const [round, setRound] = useState(0);
+  const windowFocus = useOptionalPlatform()?.windowFocus;
   useEffect(() => {
     if (answered.current.key !== key) answered.current = { key, value: false };
     if (pace === undefined || key === undefined) return;
@@ -170,12 +176,12 @@ export function usePolled<T>(
       }
       return answered.current.value || !stopsOnFirstFailure;
     };
-    const stop = startPolling(() => ({ pace, run }));
+    const stop = startPolling(() => ({ pace, run }), windowFocus);
     return () => {
       active = false;
       stop();
     };
-  }, [key, ask, round, pace, stopsOnFirstFailure, latest, latestSame]);
+  }, [key, ask, round, pace, stopsOnFirstFailure, latest, latestSame, windowFocus]);
   return {
     value,
     error,

@@ -22,6 +22,22 @@ vi.mock("@tauri-apps/api/event", () => ({
   },
 }));
 
+/** The window's focus as the shell reports it: `windowFocusHandler` is what the adapter listens with, and
+ * `isFocused` answers the shell's first reading. */
+let windowFocusHandler: ((event: { payload: boolean }) => void) | undefined;
+const isFocused = vi.fn<() => Promise<boolean>>();
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    onFocusChanged: async (handler: (event: { payload: boolean }) => void) => {
+      windowFocusHandler = handler;
+      return () => {
+        if (windowFocusHandler === handler) windowFocusHandler = undefined;
+      };
+    },
+    isFocused: () => isFocused(),
+  }),
+}));
+
 const readText = vi.fn();
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: () => readText() }));
 
@@ -34,6 +50,8 @@ beforeEach(() => reportHost(MAC_HOST));
 
 afterEach(() => {
   invoke.mockReset();
+  isFocused.mockReset();
+  windowFocusHandler = undefined;
   listeners.clear();
   window.history.replaceState(null, "", "/");
 });
@@ -230,4 +248,65 @@ it("reads a clipboard without text as empty text, as a native paste does", async
 it("still rejects a clipboard read that failed for another reason", async () => {
   readText.mockRejectedValue("The native clipboard is not accessible due to being held by another party.");
   await expect(tauriPlatform().clipboard!.readText!()).rejects.toBe("The native clipboard is not accessible due to being held by another party.");
+});
+
+describe("the window's focus", () => {
+  /** Lets the adapter's dynamic imports and the shell's answers settle. */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("starts from the shell's answer, follows the window's focus events and stops listening once nothing is subscribed", async () => {
+    isFocused.mockResolvedValue(true);
+    const { windowFocus } = tauriPlatform();
+    const changes = vi.fn();
+    const unsubscribe = windowFocus!.subscribe(changes);
+    expect(windowFocus!.focused()).toBeUndefined();
+    await settle();
+    expect(windowFocus!.focused()).toBe(true);
+    windowFocusHandler!({ payload: false });
+    expect(windowFocus!.focused()).toBe(false);
+    windowFocusHandler!({ payload: true });
+    expect(changes).toHaveBeenCalledTimes(3);
+    unsubscribe();
+    expect(windowFocusHandler).toBeUndefined();
+    expect(windowFocus!.focused()).toBeUndefined();
+  });
+
+  it("drops the shell's answer when a focus event came in while it was on its way", async () => {
+    let answer: (focused: boolean) => void = () => {};
+    isFocused.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    const { windowFocus } = tauriPlatform();
+    windowFocus!.subscribe(() => {});
+    await settle();
+    windowFocusHandler!({ payload: false });
+    answer(true);
+    await settle();
+    expect(windowFocus!.focused()).toBe(false);
+  });
+
+  it("drops the shell's answer once the subscription it was asked for has ended", async () => {
+    isFocused.mockResolvedValue(true);
+    const { windowFocus } = tauriPlatform();
+    windowFocus!.subscribe(() => {})();
+    await settle();
+    expect(windowFocusHandler).toBeUndefined();
+    expect(windowFocus!.focused()).toBeUndefined();
+  });
+
+  it("drops the old answer when the subscription restarts while it is pending, and starts from the new one", async () => {
+    const answers: Array<(focused: boolean) => void> = [];
+    isFocused.mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
+    const { windowFocus } = tauriPlatform();
+    const unsubscribe = windowFocus!.subscribe(() => {});
+    await settle();
+    unsubscribe();
+    windowFocus!.subscribe(() => {});
+    await settle();
+    expect(answers).toHaveLength(2);
+    answers[0]!(true);
+    await settle();
+    expect(windowFocus!.focused()).toBeUndefined();
+    answers[1]!(false);
+    await settle();
+    expect(windowFocus!.focused()).toBe(false);
+  });
 });

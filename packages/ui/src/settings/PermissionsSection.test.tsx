@@ -5,8 +5,9 @@ import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { windowAttention } from "../components/announce/windowTestSupport";
+import { shellWindowFocus } from "../components/hooks/windowFocusTestSupport";
 import { errorAlerts } from "../components/alerts/errorAlerts";
-import type { MacosPermissionsCapability, MacosPermissionsStatus, PlatformAdapter } from "../platform";
+import type { MacosPermissionsCapability, MacosPermissionsStatus, PlatformAdapter, WindowFocusCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import { PermissionsSection } from "./PermissionsSection";
 import { BROWSER_HOST } from "../test/hosts";
@@ -25,7 +26,7 @@ const BOTH_MISSING = { screenRecording: false, accessibility: false } satisfies 
  * sequence the user's trip to System Settings produces. `request` resolves `granted`, `unreadable`
  * makes the read reject, which stands for a shell that cannot be asked, and `absent` leaves out
  * `macosPermissions`, as in a browser. `openFailure` makes `openSystemSettings` reject with it, and
- * `requestFailure` does the same for `request`.
+ * `requestFailure` does the same for `request`. `windowFocus` is the shell's window focus, absent as in a browser.
  */
 async function mount({
   statuses = [undefined],
@@ -34,6 +35,7 @@ async function mount({
   unreadable = false,
   openFailure,
   requestFailure,
+  windowFocus,
 }: {
   statuses?: (MacosPermissionsStatus | undefined)[];
   granted?: boolean;
@@ -41,6 +43,7 @@ async function mount({
   unreadable?: boolean;
   openFailure?: string;
   requestFailure?: string;
+  windowFocus?: WindowFocusCapability;
 }) {
   let read = 0;
   const capability = {
@@ -48,7 +51,7 @@ async function mount({
     request: vi.fn(() => (requestFailure === undefined ? Promise.resolve(granted) : Promise.reject(requestFailure))),
     openSystemSettings: vi.fn(() => (openFailure === undefined ? Promise.resolve() : Promise.reject(openFailure))),
   } satisfies MacosPermissionsCapability;
-  const platform: PlatformAdapter = { kind: "tauri", host: BROWSER_HOST, macosPermissions: absent ? undefined : capability };
+  const platform: PlatformAdapter = { kind: "tauri", host: BROWSER_HOST, macosPermissions: absent ? undefined : capability, windowFocus };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -202,6 +205,21 @@ it.each([
 it("picks up a grant made outside the app when the window comes back", async () => {
   const { buttons, refocus } = await mount({ statuses: [SCREEN_RECORDING_MISSING, BOTH_GRANTED] });
   await refocus();
+  expect(buttons()).toEqual([]);
+});
+
+it("picks up a grant made outside the app when the shell reports the window focused again, and only then", async () => {
+  const { capability: windowFocus, focus } = shellWindowFocus(true);
+  const { buttons, capability, refocus } = await mount({ statuses: [SCREEN_RECORDING_MISSING, BOTH_GRANTED], windowFocus });
+  // The shell's first answer is where the window stands, not a return to it.
+  expect(capability.status).toHaveBeenCalledTimes(1);
+  await refocus();
+  expect(capability.status).toHaveBeenCalledTimes(1);
+  focus(false);
+  expect(capability.status).toHaveBeenCalledTimes(1);
+  focus(true);
+  await act(async () => {});
+  expect(capability.status).toHaveBeenCalledTimes(2);
   expect(buttons()).toEqual([]);
 });
 
