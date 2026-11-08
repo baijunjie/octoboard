@@ -32,8 +32,9 @@ import { CountBadge } from "../components/status/CountBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu } from "./menus";
 import { NewSessionButton } from "./NewSessionButton";
+import { SessionEmptyRow } from "./SessionEmptyRow";
 import { NewSessionMenu } from "./NewSessionMenu";
-import { useNoAgentToStart } from "./useNewSessionMode";
+import { useNoAgentReason } from "./useNewSessionMode";
 import { SessionActions } from "./SessionActions";
 import { archivePreviewSessions, archivedSessions, boundArchivedSessions, boundElsewhere, consoleSessionAbove, focusGroupRows, focusGroups, liveSessionRows, type NestedSession, notUnderConsoleSession, switchStrip, type SwitchStripEntry } from "../sessions/order";
 import { FocusModeContext } from "./focusModeContext";
@@ -139,7 +140,7 @@ export function ProjectFocusView({
   const consoleOwner = (session: Session) => consoleSessionAbove(session, (id) => byId.get(id) ?? owners.get(id));
   const archived = archivedSessions(sessions);
   const elsewhere = boundElsewhere(sessions, owners, delegating, queuedSwitches, byStatus);
-  const noAgentToStart = useNoAgentToStart();
+  const noAgents = useNoAgentReason();
   const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "unbound" } });
   const viewAll = () => handlers.onOpenArchive({ console: project.console_id, project: project.id });
   const headerRef = useRef<HTMLDivElement>(null);
@@ -189,11 +190,10 @@ export function ProjectFocusView({
             {t("sidebar.focus.sessions", { count: live.length })}
           </StickyHeading>
           {live.length === 0 ? (
-            <EmptyPanel
-              compact
-              icon={MessageSquarePlus}
+            <SessionEmptyRow
+              noAgents={noAgents}
               message={t("sidebar.noSessions")}
-              action={noAgentToStart ? undefined : { label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
+              action={{ label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
             />
           ) : (
             // The padding covers the cards' shadow so the opaque sticky headings do not paint over it.

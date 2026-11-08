@@ -1,9 +1,8 @@
-import { ChevronDown, ChevronRight, MessageSquarePlus } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import React, { memo, useRef } from "react";
 
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { TopStatusMarker } from "../components/status/TopStatusMarker";
-import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { RowControls } from "../components/controls/RowControls";
 import { NESTED_RAIL_CLASS, NESTED_ROW_CLASS, NestedBranch, RowLabel, TreeRow } from "../components/rows/TreeRow";
 import { useListMotion } from "../components/motion/useListMotion";
@@ -20,8 +19,9 @@ import { GitBadge } from "./GitBadge";
 import { PinButton } from "./MarkButtons";
 import { projectMenu } from "./menus";
 import { NewSessionButton } from "./NewSessionButton";
+import { SessionEmptyRow } from "./SessionEmptyRow";
 import { SessionRow } from "./SessionRow";
-import { useNoAgentToStart } from "./useNewSessionMode";
+import { useNoAgentReason } from "./useNewSessionMode";
 import type { SidebarHandlers } from "./types";
 
 /** A project and its sessions. Memoised: it renders again only for its own project's change, its
@@ -62,7 +62,7 @@ export const ProjectNode = memo(function ProjectNode({
   const lastRootIndex = rows.reduce((last, row, index) => row.under ? last : index, -1);
   const archived = archivedSessions(sessions);
   const status = useProjectStatus(project.id);
-  const noAgentToStart = useNoAgentToStart();
+  const noAgents = useNoAgentReason();
   const newSession = (): NewSessionRequest => ({ kind: "new-session", console: parentConsole, project, binding: { kind: "choose" } });
   const nameLabel = status
     ? t(project.pinned ? "session.status.namedPinned" : "session.status.named", { name: isolate(project.name), status: statusLabel(t, status) })
@@ -111,11 +111,10 @@ export const ProjectNode = memo(function ProjectNode({
           // a part about to go away (see `foldAll`).
           <div data-sessions data-list-motion="sessions" className={`${NESTED_RAIL_CLASS} mt-0.5`}>
             {rows.length === 0 ? (
-              <EmptyPanel
-                compact
-                icon={MessageSquarePlus}
+              <SessionEmptyRow
+                noAgents={noAgents}
                 message={t("sidebar.noSessions")}
-                action={noAgentToStart ? undefined : { label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
+                action={{ label: t("sidebar.project.openSession"), onPress: () => handlers.onOpenDialog(newSession()) }}
               />
             ) : (
               <div ref={listRef} className="relative flex flex-col gap-0.5">

@@ -79,7 +79,7 @@ function mountSidebar(initial: SidebarTestProps, beside?: React.ReactNode) {
       );
     });
   render(initial);
-  return { container, root, render, daemon };
+  return { container, root, render, daemon, handlers };
 }
 
 it("announces a project filter's empty result once, clears it when matches return, and leaves focus in the field", async () => {
@@ -655,4 +655,32 @@ it("says no agent is installed in the console's sessions with a neutral glyph, n
   expect(row.querySelector("svg")?.classList.contains("lucide-bot-off")).toBe(true);
   expect(row.querySelector("svg.lucide-triangle-alert")).toBeNull();
   expect(row.closest("button")).toBeNull();
+});
+
+
+it.each(["list", "focus"] as const)("%s project emptiness explains unavailable agents and restores creation when one is added", (view) => {
+  const { container, daemon, render, handlers } = mountSidebar({ sessions: [hub1] });
+  if (view === "list") toggleProject(container, web.id);
+  else render({ sessions: [hub1], focus: { project: web } });
+  const rows = () => [...container.querySelectorAll<HTMLElement>('[data-slot="empty-state"]')];
+  const assertBlocked = (message: string, icon: string) => {
+    const blocked = rows().filter((row) => row.textContent?.includes(message));
+    expect(blocked).toHaveLength(view === "list" ? 2 : 1);
+    for (const row of blocked) {
+      expect(row.querySelector(`svg.lucide-${icon}`)).not.toBeNull();
+      expect(row.closest("button")).toBeNull();
+    }
+    expect(container.textContent).not.toContain("No sessions yet");
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="New session"]')?.disabled).toBe(true);
+  };
+  const availability = (available: boolean) => new Map<Agent, AgentAvailability>(TEST_AGENTS.map((agent) => [agent, { agent, availability: available ? "available" : "unavailable", default_account_dir: null }]));
+  act(() => daemon.store.setState({ agentAvailability: availability(false) }));
+  assertBlocked("No agent found on", "bot-off");
+  act(() => daemon.store.setState((state) => ({ agentAvailability: availability(true), settings: { ...state.settings, added_agents: [] } })));
+  assertBlocked("No agent added", "bot");
+  act(() => daemon.store.setState((state) => ({ settings: { ...state.settings, added_agents: [TEST_AGENTS[0]] } })));
+  const row = rows().find((row) => row.textContent?.includes("No sessions yet"));
+  expect(row).toBeDefined();
+  act(() => row!.querySelector<HTMLButtonElement>("button")!.click());
+  expect(handlers.onOpenDialog).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: { kind: view === "list" ? "choose" : "unbound" } });
 });

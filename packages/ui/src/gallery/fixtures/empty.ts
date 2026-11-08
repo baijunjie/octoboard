@@ -70,7 +70,7 @@ export const emptyScenarios: Scenario[] = [
     category: "normal",
     title: "A console, no agent installed",
     description:
-      "Under Console sessions the row says no agent was found on PATH, beside a crossed-out bot glyph rather than a warning, and the console header's \"+\" (New console session) is disabled; the console session left over from before still shows beneath it. Landing page's \"No sessions yet\" row has no action, and the project's \"+\", which a hover over its row reveals, is disabled too. The main area says the same as the row under a crossed-out bot glyph, with the PATH hint beneath and no button. Modifier: Held changes nothing here.",
+      "Under Console sessions the row says no agent was found on PATH, beside a crossed-out bot glyph rather than a warning, and the console header's \"+\" (New console session) is disabled; the console session left over from before still shows beneath it. Landing page's empty row repeats the same message and crossed-out bot glyph with no action, and the project's \"+\", which a hover over its row reveals, is disabled too. The main area says the same as the row under a crossed-out bot glyph, with the PATH hint beneath and no button. Modifier: Held changes nothing here.",
     state: {
       ...snapshotState({
         consoles: [consoleOf("c-1", "Main")],
@@ -87,7 +87,7 @@ export const emptyScenarios: Scenario[] = [
     category: "normal",
     title: "A console, agents installed but none added",
     description:
-      "Under Console sessions the row says \"No agent added\" with nothing about PATH, and the console header's \"+\" (New console session) is disabled; the console session left over from before still shows beneath it. Landing page's \"No sessions yet\" row has no action, and the project's \"+\", which a hover over its row reveals, is disabled too. The row carries a bot glyph. With Landing page selected, the main area has a bot glyph too, says the same and asks for an agent to be added, with an Add agent button beneath that opens Settings → Agent accounts.",
+      "Under Console sessions the row says \"No agent added\" with nothing about PATH, and the console header's \"+\" (New console session) is disabled; the console session left over from before still shows beneath it. Landing page's empty row repeats the same message and bot glyph with no action, and the project's \"+\", which a hover over its row reveals, is disabled too. The row carries a bot glyph. With Landing page selected, the main area has a bot glyph too, says the same and asks for an agent to be added, with an Add agent button beneath that opens Settings → Agent accounts.",
     state: noneAddedState,
     steps: [(ui) => ui.press("Landing page")],
   },

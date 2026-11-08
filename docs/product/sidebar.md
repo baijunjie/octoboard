@@ -57,8 +57,8 @@ section shows an empty row saying so; the whole row is a button that does what t
 With no agent both added and installed, the section instead carries an empty row, and the console header's **+** button
 is disabled, since no session can be opened from the window (see "When no agent can open a session" in
 `docs/product/opening-sessions.md`, which gives the full rule). When an installed agent waits to be added, the row
-carries the bot icon and says that no agent is added; otherwise it carries a warning icon and says that no agent was
-found on the user's `PATH`. It says that much and no more, and offers nothing to press: the terminal's empty panel,
+carries the bot icon and says that no agent is added; otherwise it carries a crossed-out bot icon and says that no agent
+was found on the user's `PATH`. It says that much and no more, and offers nothing to press: the terminal's empty panel,
 where it would otherwise offer a new session, says the rest, with **Add agent** when an agent waits to be added (see "A
 console with nothing in it" in `docs/product/session-terminal.md`); the welcome screen's supported-tool list and hint
 are described in "What the welcome screen shows" in `docs/product/welcome-screen.md`. The row shows whatever the section
@@ -167,9 +167,8 @@ compact row" in `docs/product/empty-states.md`: where there is one thing to do a
 is the button that does it, and the row takes its accessible name and its tooltip from that action.
 
 The rows with nothing to do about them are not buttons and carry no tooltip: the one saying no project matches the
-filter (see "Filtering the project list" above), the one saying no agent is added or none was found on the user's `PATH`
-(see "The console sessions section and the project list" above), and a project's row saying it has no sessions yet while
-no agent is both added and installed (see "When no agent can open a session" in `docs/product/opening-sessions.md`).
+filter (see "Filtering the project list" above), and those explaining why no agent is available in the console sessions
+section or a project's empty session list (see "When no agent can open a session" in `docs/product/opening-sessions.md`).
 Focus mode's empty lists use the same compact rows (see "What both views show" in `docs/product/focus-mode.md`). The
 terminal's empty state is a full panel carrying the next action for the current scope (see "A console with nothing in
 it" in `docs/product/session-terminal.md`).

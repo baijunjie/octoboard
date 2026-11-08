@@ -1,4 +1,4 @@
-import { noAgentState } from "../agents/agents";
+import { noAgentState, type NoAgentReason } from "../agents/agents";
 import type { NewSessionRequest } from "../dialogs/dialogRequest";
 import { quickCreateUnavailable } from "../dialogs/openSessionRequest";
 import { useDaemonStore } from "../store";
@@ -27,5 +27,9 @@ export function useNewSessionMode(target?: () => NewSessionRequest | undefined):
 
 /** Whether no agent is both added and installed, so no session can be started. */
 export function useNoAgentToStart(): boolean {
-  return useDaemonStore((s) => noAgentState(s.agentAvailability, s.settings.added_agents, s.providers) !== undefined);
+  return useNoAgentReason() !== undefined;
+}
+
+export function useNoAgentReason(): NoAgentReason | undefined {
+  return useDaemonStore((s) => noAgentState(s.agentAvailability, s.settings.added_agents, s.providers));
 }

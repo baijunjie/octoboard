@@ -151,7 +151,8 @@ From the top, below the header:
 session is always an independent project coordinator. With the primary modifier held, the header's **+** opens the
 session at once without the dialog, also as an independent project coordinator (see "Opening a session with defaults" in
 `docs/product/opening-sessions.md`). With no agent both added and installed, the header's **+** is disabled and the
-empty row is plain text (see "When no agent can open a session" in `docs/product/opening-sessions.md`).
+empty row instead explains why no agent is available, with the same icon and no action as the console sessions section
+(see "When no agent can open a session" in `docs/product/opening-sessions.md`).
 
 ## A console session's focus mode
 

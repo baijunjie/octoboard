@@ -1,4 +1,4 @@
-import { Bot, BotOff, FolderPlus, ListChevronsDownUp, ListChevronsUpDown, MessageSquarePlus, SearchX } from "lucide-react";
+import { FolderPlus, ListChevronsDownUp, ListChevronsUpDown, SearchX } from "lucide-react";
 import React, { useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 
@@ -8,14 +8,13 @@ import { ActionMenu } from "../components/menus/ActionMenu";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { PANE_HEADER_FRAME_CLASS } from "../components/panel/paneHeaderFrame";
 import { handFocusOff } from "../components/focus/handFocusOff";
-import { PATH_VAR_PARAMS } from "../components/text/literalParams";
 import { RowIconGroup } from "../components/controls/RowControls";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { RowIconButton } from "../components/rows/RowIconButton";
 import { RowLabel } from "../components/rows/TreeRow";
 import { StickyHeading } from "../components/scroll/StickyHeading";
 import { isolate } from "../i18n/isolate";
-import { Message, useT } from "../i18n/react";
+import { useT } from "../i18n/react";
 import { INACTIVE_VEIL_CLASS } from "../components/status/inactiveVeil";
 import { useListMotion } from "../components/motion/useListMotion";
 import type { Console, Project } from "../protocol";
@@ -30,6 +29,7 @@ import { type FilterUpdate, isFiltering, type ProjectFilter, ProjectFilterButton
 import type { ProjectFoldControl } from "./projectFold";
 import { ProjectNode } from "./ProjectNode";
 import { SessionRow } from "./SessionRow";
+import { SessionEmptyRow } from "./SessionEmptyRow";
 import type { SidebarHandlers } from "./types";
 
 /** The header naming the console shown, with the console's own actions beside it. Its name only:
@@ -261,14 +261,9 @@ function ConsoleSessionsSection({
       <StickyHeading variant="list">
         {t("sidebar.consoleSessions.headingWithCount", { count: live.length })}
       </StickyHeading>
-      {/* Not the glyph the rows below carry: this row is the one in the section that offers nothing to
-          press, and the console header's `+` is disabled. The bot says an agent is waiting to be added;
-          the crossed-out bot says none is installed. Both are ordinary absences, so neither is a warning. */}
-      {blocked && <EmptyPanel compact icon={noAgents === "add" ? Bot : BotOff} message={noAgents === "add" ? t("agents.noneAdded") : <Message id="agents.noneFound" params={PATH_VAR_PARAMS} />} />}
-      {live.length === 0 && !blocked && (
-        <EmptyPanel
-          compact
-          icon={MessageSquarePlus}
+      {(blocked || live.length === 0) && (
+        <SessionEmptyRow
+          noAgents={noAgents}
           message={t("sidebar.consoleSessions.empty")}
           action={{ label: t("sidebar.consoleSessions.new"), onPress: openNew }}
         />

@@ -97,7 +97,8 @@ An expanded project lists its sessions that are not archived as session rows, wi
 the middle of each child row and stopping at the last child. With none, it shows an empty row saying there are no
 sessions yet; the whole row is a button that opens the new-session dialog for that project, as the row's **+** button
 does (see "Empty rows" in `docs/product/sidebar.md`). With no agent both added and installed, the row's **+** is
-disabled and the empty row is plain text.
+disabled and the empty row instead explains why no agent is available, with the same icon and no action as the console
+sessions section (see "When no agent can open a session" in `docs/product/opening-sessions.md`).
 
 A session **bound to another of the project's sessions** — one that session started, a coordinator's own sessions
 included (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`) — is listed **under that

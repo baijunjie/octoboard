@@ -647,7 +647,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project with no sessions yet, no agent added",
     state: { ...state, settings: { ...settings, added_agents: [] } },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${freshProject.id}` },
-    description: "The sidebar's compact empty row has no action, the header's \"+\" is disabled, and the main area, under a bot glyph, says no agent is added with an Add agent button instead of offering New session.",
+    description: "The sidebar's compact empty row says \"No agent added\" beside a bot glyph with no action, matching the console's empty row. The header's \"+\" is disabled, and the main area, under a bot glyph, says no agent is added with an Add agent button instead of offering New session.",
   },
   {
     id: "focus-console-session-empty",

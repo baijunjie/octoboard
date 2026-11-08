@@ -161,18 +161,19 @@ conversation to lose, so Claude Code creates the directory itself and Octoboard 
 counts as installed until it has been determined unavailable; see "Which agents the agent pickers list" in
 `docs/product/consoles.md`). Every way into the session dialog is disabled: the console header's **+**, each project
 row's **+**, the **+** of either focus mode's header and of each project in a console session's focus mode; the
-project's empty row saying there are no sessions yet is plain text rather than a button, in the project list and in a
-project's focus mode alike; and no **+** offers to open a session with defaults (see "Opening a session with defaults"
-below). Where the window says why:
+project's empty row has no action, in the project list and in a project's focus mode alike; and no **+** offers to
+open a session with defaults (see "Opening a session with defaults" below). The project's empty row gives the same
+reason and icon as the console sessions section, replacing the offer to create its first session. Where the window
+says why:
 
 - when some supported agent is installed, or not yet determined unavailable, but none of those is added, the terminal's
   empty panel, where it would otherwise offer a new session, says that no agent is added and offers **Add agent** (see
-  "A console with nothing in it" in `docs/product/session-terminal.md`), and the console sessions section, with room for
-  less, says only that no agent is added;
+  "A console with nothing in it" in `docs/product/session-terminal.md`); the console sessions section and a project's
+  empty row, with room for less, say only that no agent is added, beside a bot icon;
 - when every agent has been determined unavailable, the terminal's empty panel, where it would otherwise offer a new
-  session, says that no agent was found and how to make one available, and the console sessions section says only that
-  no agent was found on the user's `PATH` (see "The console sessions section and the project list" in
-  `docs/product/sidebar.md`).
+  session, says that no agent was found and how to make one available; the console sessions section and a project's
+  empty row say only that no agent was found on the user's `PATH`, beside a crossed-out bot icon (see "The console
+  sessions section and the project list" in `docs/product/sidebar.md`).
 
 If this state comes about while the session dialog is open — the last such agent removed or found unavailable meanwhile
 — nothing is opened, and the dialog turns into a failure modal titled that a session cannot be opened, saying that no
