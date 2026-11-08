@@ -4,8 +4,10 @@
 
 use super::{PermissionKind, PermissionsStatus};
 
-/// Nothing to take.
-pub fn capture_launch_state() {}
+/// No probe to answer.
+pub fn answer_probe_if_asked() -> bool {
+    false
+}
 
 pub fn permissions_status() -> Option<PermissionsStatus> {
     None

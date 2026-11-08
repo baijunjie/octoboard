@@ -160,9 +160,9 @@ close.
 So state held inside a panel is worth only "for as long as this section is on screen" — a scroll position, a
 half-typed field, an expanded row. Anything the section must not lose is derived afresh instead, from the shell or
 the daemon, or from state hoisted above the `Tabs`, and never remembered in the panel. Nothing catches the miss: a
-unit test mounts the panel on its own and never switches tabs, and neither does the obvious click-through. The
-Permissions section's "restart for this to take effect" line was first built from React state remembering the
-grant it had watched arrive, and died on the first click to another section.
+unit test mounts the panel on its own and never switches tabs, and neither does the obvious click-through. A notice
+built from React state remembering a change the panel watched happen (a grant arriving, an action finishing) dies on
+the first click to another section.
 
 `shouldForceMount` keeps the unselected panels mounted, but it is not the way to keep a panel's state. Pass it only
 where the hidden panels must go on taking up layout, as the rail's quota panel

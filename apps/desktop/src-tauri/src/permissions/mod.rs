@@ -9,11 +9,13 @@
 //! explanation. A grant made to another app (the Claude desktop app, say) does not carry over: TCC
 //! keys grants on bundle id plus code signature.
 //!
-//! A Screen Recording grant does not reach a process that is already running — macOS hands the
-//! capability out at launch — so the status also carries what this process started with, and the
-//! UI tells the user to restart from the two disagreeing. Reading it per process rather than
-//! remembering a grant as it happens is what makes the notice survive the Settings section being
-//! unmounted and the webview being reloaded.
+//! A Screen Recording grant made while Octoboard runs makes macOS offer to quit the app, and
+//! `CGPreflightScreenCaptureAccess` keeps answering false in a process launched before the grant,
+//! which is why the grant is read from a fresh process (see `macos.rs`). Octoboard itself captures
+//! nothing, though. The agents' processes do, and macOS judges each by its own launch, so a capture
+//! command an agent starts after the grant has it, even in a session opened before it; only a
+//! process already running before the grant that captures by itself might still go without. So the
+//! Settings section asks for no restart.
 //!
 //! `permissions_status` only reads the current grant and never prompts, so the UI refreshes
 //! it freely; `request_permission` is the one place a system prompt can be raised, and
@@ -35,17 +37,13 @@ mod windows;
 #[cfg(not(target_os = "macos"))]
 use windows as platform;
 
-pub use platform::capture_launch_state;
+pub use platform::answer_probe_if_asked;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PermissionsStatus {
     screen_recording: bool,
     accessibility: bool,
-    /// What Screen Recording was when this process started, which is the only grant it can
-    /// actually use: `screen_recording` without this one means the user has granted it but has yet
-    /// to restart.
-    screen_recording_at_launch: bool,
 }
 
 #[derive(Deserialize)]
@@ -55,7 +53,9 @@ pub enum PermissionKind {
     Accessibility,
 }
 
-#[tauri::command]
+/// Async because the Screen Recording reading starts a process and waits for it, which is not to
+/// hold up the thread commands run on otherwise.
+#[tauri::command(async)]
 pub fn permissions_status() -> Option<PermissionsStatus> {
     platform::permissions_status()
 }

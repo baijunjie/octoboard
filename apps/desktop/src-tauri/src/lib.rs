@@ -46,11 +46,14 @@ pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 /// The builder the main window is made with, which the platform modules add to.
 pub(crate) type MainWindowBuilder<'a> = WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle>;
 
+/// Answers a permission probe when this process was started for one (see `permissions`), and says
+/// whether it was, for `main` to exit before anything of the app starts.
+pub fn answer_permission_probe() -> bool {
+    permissions::answer_probe_if_asked()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Before anything the user can act through: see the function's own doc comment.
-    permissions::capture_launch_state();
-
     let app = lifecycle::register_first(tauri::Builder::default())
         .plugin(tauri_plugin_shell::init())
         // Carries no daemon traffic either: the frontend asks for a notification, the plugin

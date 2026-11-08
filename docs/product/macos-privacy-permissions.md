@@ -51,18 +51,17 @@ is marked pending until they have.
 window regains focus, so one granted or revoked in System Settings — the only way Accessibility is ever granted — takes
 effect in this section on the user's return. For assistive technology the section has one status region of its own, not
 shown on screen, which says where both permissions stand in one announcement, one message of whole sentences per
-permission naming it and its state. For Screen Recording granted since this Octoboard started, that message adds the
-row's restart line (below); for a permission whose request in this window came back without the grant, it carries the
-same guidance the row gives on switching it on in System Settings. It speaks about 1.5 seconds after the rows appear,
-when the user switches to this section. After a change it speaks about 1.5 seconds after the user is back in the window:
-the wait counts only time the window is visible and has focus, and starts over each time the user comes back. A reading
-that changes nothing says nothing again, and a state replaced while it waits is never said. The rows' own states stay
-readable where they stand but are not status regions themselves.
+permission naming it and its state; for a permission whose request in this window came back without the grant, that
+message carries the same guidance the row gives on switching it on in System Settings. It speaks about 1.5 seconds
+after the rows appear, when the user switches to this section. After a change it speaks about 1.5 seconds after the user
+is back in the window: the wait counts only time the window is visible and has focus, and starts over each time the user
+comes back. A reading that changes nothing says nothing again, and a state replaced while it waits is never said. The
+rows' own states stay readable where they stand but are not status regions themselves.
 
-**Screen Recording reaches a process only at launch.** A grant made while Octoboard is already running does not reach
-it, so a row that is granted but was not when this Octoboard started adds a line asking the user to restart Octoboard
-for it to take effect. There is no restart button: the user quits Octoboard and opens it again, which goes through the
-ordinary quit (see "Quitting" in `docs/product/application-lifecycle.md`).
+**A Screen Recording grant needs no restart of Octoboard.** Octoboard itself captures nothing; the capture commands
+agents start do, and one started after the grant captures the screen straight away, also in a session opened before the
+grant. After a grant made in System Settings while Octoboard is running, macOS offers to quit and reopen Octoboard; the
+user can put that off, and the section asks for no restart either.
 
 **Nothing about these permissions is stored.** Every row's state comes from macOS alone. macOS cannot tell a permission
 that was never asked for from one the user refused, so a permission that is not granted starts at not granted with the

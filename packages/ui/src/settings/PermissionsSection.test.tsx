@@ -15,11 +15,9 @@ import { BROWSER_HOST } from "../test/hosts";
 
 afterEach(() => act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }));
 
-/** Granted, but only since this process started, so a restart is still owed. */
-const GRANTED_SINCE_LAUNCH = { screenRecording: true, accessibility: true, screenRecordingAtLaunch: false } satisfies MacosPermissionsStatus;
-const GRANTED_AT_LAUNCH = { screenRecording: true, accessibility: true, screenRecordingAtLaunch: true } satisfies MacosPermissionsStatus;
-const SCREEN_RECORDING_MISSING = { screenRecording: false, accessibility: true, screenRecordingAtLaunch: false } satisfies MacosPermissionsStatus;
-const BOTH_MISSING = { screenRecording: false, accessibility: false, screenRecordingAtLaunch: false } satisfies MacosPermissionsStatus;
+const BOTH_GRANTED = { screenRecording: true, accessibility: true } satisfies MacosPermissionsStatus;
+const SCREEN_RECORDING_MISSING = { screenRecording: false, accessibility: true } satisfies MacosPermissionsStatus;
+const BOTH_MISSING = { screenRecording: false, accessibility: false } satisfies MacosPermissionsStatus;
 
 /**
  * Mounts the section over a platform whose shell answers `statuses` one per read, the last of them
@@ -93,7 +91,7 @@ it("says the grants could not be read when the shell refuses the read", async ()
 });
 
 it("offers nothing for a permission that is granted, and shows a success badge at the row's end instead", async () => {
-  const { container, buttons } = await mount({ statuses: [GRANTED_AT_LAUNCH] });
+  const { container, buttons } = await mount({ statuses: [BOTH_GRANTED] });
   expect(buttons()).toEqual([]);
   const badges = Array.from(container.querySelectorAll('[data-color="success"][data-variant="soft"]'));
   expect(badges.map((badge) => badge.textContent)).toEqual(["Granted", "Granted"]);
@@ -202,21 +200,9 @@ it.each([
 // The only way Accessibility is ever granted, and the way Screen Recording is granted whenever the
 // user takes the System Settings route rather than the prompt.
 it("picks up a grant made outside the app when the window comes back", async () => {
-  const { buttons, refocus } = await mount({ statuses: [SCREEN_RECORDING_MISSING, GRANTED_AT_LAUNCH] });
+  const { buttons, refocus } = await mount({ statuses: [SCREEN_RECORDING_MISSING, BOTH_GRANTED] });
   await refocus();
   expect(buttons()).toEqual([]);
-});
-
-// Nothing else tells the user the grant is inert until a relaunch. Both cases read it off the
-// shell's own two readings on the section's very first render, which is also what the section sees
-// every time it is mounted again — the settings tabs unmount it on a switch away, and a notice
-// owed to a grant this section happened to watch arrive would not come back.
-it.each([
-  ["asks for a restart while the grant is newer than the process", GRANTED_SINCE_LAUNCH, true],
-  ["says nothing about restarting for a grant the process started with", GRANTED_AT_LAUNCH, false],
-])("%s", async (_name, status, expected) => {
-  const { container } = await mount({ statuses: [status] });
-  expect(container.textContent?.includes("take effect")).toBe(expected);
 });
 
 it("leads with the reason for granting ahead of time once the permissions can be read", async () => {
@@ -235,8 +221,6 @@ it.each([
 
 /** What the section's status regions say, one entry per region. */
 const statuses = (container: HTMLElement) => [...container.querySelectorAll('[role="status"]')].map((region) => region.textContent);
-const RESTART_ANNOUNCEMENT =
-  "Screen Recording is granted. Restart Octoboard for it to take effect. Accessibility is granted.";
 const elapse = (ms: number) => act(() => vi.advanceTimersByTime(ms));
 
 // The states are in place as the section appears, which is as focus moves onto its tab: said with
@@ -261,7 +245,7 @@ it("says a grant picked up on the way back from System Settings a moment after t
   const attend = windowAttention();
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
-  const { container } = await mount({ statuses: [SCREEN_RECORDING_MISSING, GRANTED_SINCE_LAUNCH] });
+  const { container } = await mount({ statuses: [SCREEN_RECORDING_MISSING, BOTH_GRANTED] });
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
   attend(false);
   attend(true);
@@ -272,7 +256,7 @@ it("says a grant picked up on the way back from System Settings a moment after t
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(statuses(container)).toEqual(["Screen Recording is not granted. Accessibility is granted."]);
   await elapse(1);
-  expect(statuses(container)).toEqual([RESTART_ANNOUNCEMENT]);
+  expect(statuses(container)).toEqual(["Screen Recording is granted. Accessibility is granted."]);
 });
 
 // Each permission has its own sentence per state, so the refused guidance reaches the status region too.
@@ -327,7 +311,7 @@ it("says only the latest of readings that follow one another within the wait, an
   const attend = windowAttention();
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
-  const { container, refocus } = await mount({ statuses: [SCREEN_RECORDING_MISSING, GRANTED_AT_LAUNCH, SCREEN_RECORDING_MISSING, GRANTED_AT_LAUNCH] });
+  const { container, refocus } = await mount({ statuses: [SCREEN_RECORDING_MISSING, BOTH_GRANTED, SCREEN_RECORDING_MISSING, BOTH_GRANTED] });
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
   const region = container.querySelector('[role="status"]')!;
   const writes: string[] = [];

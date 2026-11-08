@@ -366,12 +366,7 @@ export interface LinkCapability {
 
 export type MacosPermissionKind = "screenRecording" | "accessibility";
 
-export type MacosPermissionsStatus = Record<MacosPermissionKind, boolean> & {
-  /** Whether Screen Recording was already granted when this process started, which is the only
-   * grant it can act on: macOS hands the capability out at launch, so `screenRecording` without
-   * this one means the user has granted it and has yet to restart the app. */
-  screenRecordingAtLaunch: boolean;
-};
+export type MacosPermissionsStatus = Record<MacosPermissionKind, boolean>;
 
 export interface MacosPermissionsCapability {
   /** The current grants, or `undefined` where the shell is not running on macOS. Only reads, and

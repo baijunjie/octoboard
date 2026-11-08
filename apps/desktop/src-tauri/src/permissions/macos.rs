@@ -1,6 +1,9 @@
 //! The macOS privacy grants: reading them, prompting for them and opening their panes.
 
-use std::sync::OnceLock;
+use std::io::Read;
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use super::{PermissionKind, PermissionsStatus};
 use crate::system_settings::{
@@ -32,36 +35,69 @@ mod ffi {
     }
 }
 
-static SCREEN_RECORDING_AT_LAUNCH: OnceLock<bool> = OnceLock::new();
+/// The argument that has Octoboard's own executable print its Screen Recording grant and exit. A
+/// contract between versions: the updater replaces the bundle in place before the restart, so a
+/// running version may start the next one's executable with it.
+const SCREEN_RECORDING_PROBE_ARG: &str = "--screen-recording-probe";
 
-fn screen_recording_granted() -> bool {
-    // SAFETY: a plain read of the current grant; unlike the request call it never prompts.
+/// How long a probe may take before its answer is given up on; the first run of a freshly built
+/// executable takes over a second.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Answers `SCREEN_RECORDING_PROBE_ARG` when this process was started with it, which `main` asks
+/// before anything else: it prints `1` or `0` and the process exits without starting the app.
+pub fn answer_probe_if_asked() -> bool {
+    if std::env::args().nth(1).as_deref() != Some(SCREEN_RECORDING_PROBE_ARG) {
+        return false;
+    }
+    print!("{}", u8::from(preflight_in_this_process()));
+    true
+}
+
+fn preflight_in_this_process() -> bool {
+    // SAFETY: a plain read of the grant; unlike the request call it never prompts.
     unsafe { ffi::CGPreflightScreenCaptureAccess() }
 }
 
-/// Only ever observes the snapshot, never seeds it: seeding here would put the invariant below at
-/// the mercy of whoever reads first, and a snapshot taken after the user had already granted would
-/// silently stop the restart notice from ever appearing. A miss means `capture_launch_state` did
-/// not run, which `true` renders harmless — no restart is asked for — rather than inventing one.
-fn screen_recording_at_launch() -> bool {
-    match SCREEN_RECORDING_AT_LAUNCH.get() {
-        Some(&at_launch) => at_launch,
-        None => {
-            debug_assert!(
-                false,
-                "capture_launch_state must run before a status is read"
-            );
-            true
-        }
-    }
+/// Read from a fresh process rather than this one: in an Octoboard launched without the grant,
+/// `CGPreflightScreenCaptureAccess` keeps answering false after the user grants it, while a process
+/// started since — every capture command an agent runs, and this probe — sees the grant at once.
+/// The probe is Octoboard's own executable, so it needs no helper of its own. Should it fail to
+/// start, answer or finish in time, the reading falls back to this process's own.
+fn screen_recording_granted() -> bool {
+    probe_screen_recording().unwrap_or_else(preflight_in_this_process)
 }
 
-/// Takes the one reading of the Screen Recording grant that says what this process can actually
-/// do, before the user can have changed anything. `run` calls it first thing: a grant the user
-/// made in System Settings before Octoboard launched is already in place, while one made after is
-/// inert until it restarts, and only a snapshot from this point tells the two apart.
-pub fn capture_launch_state() {
-    let _ = SCREEN_RECORDING_AT_LAUNCH.set(screen_recording_granted());
+fn probe_screen_recording() -> Option<bool> {
+    let mut probe = Command::new(std::env::current_exe().ok()?)
+        .arg(SCREEN_RECORDING_PROBE_ARG)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let deadline = Instant::now() + PROBE_TIMEOUT;
+    loop {
+        match probe.try_wait() {
+            Ok(Some(status)) if status.success() => {
+                // One byte, so the pipe cannot fill and stall the probe before it exits.
+                let mut answer = Vec::new();
+                probe.stdout.take()?.read_to_end(&mut answer).ok()?;
+                return match answer.as_slice() {
+                    b"1" => Some(true),
+                    b"0" => Some(false),
+                    _ => None,
+                };
+            }
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(10)),
+            Ok(Some(_)) => return None,
+            Ok(None) | Err(_) => {
+                let _ = probe.kill();
+                let _ = probe.wait();
+                return None;
+            }
+        }
+    }
 }
 
 fn accessibility_trusted() -> bool {
@@ -73,7 +109,6 @@ pub fn permissions_status() -> Option<PermissionsStatus> {
     Some(PermissionsStatus {
         screen_recording: screen_recording_granted(),
         accessibility: accessibility_trusted(),
-        screen_recording_at_launch: screen_recording_at_launch(),
     })
 }
 

@@ -29,7 +29,6 @@ const PERMISSIONS = [
     refused: "settings.permissions.screenRecording.refused",
     announced: {
       granted: "settings.permissions.announcement.screenRecording.granted",
-      grantedRestart: "settings.permissions.announcement.screenRecording.grantedRestart",
       notGranted: "settings.permissions.announcement.screenRecording.notGranted",
       refused: "settings.permissions.announcement.screenRecording.refused",
     },
@@ -54,7 +53,6 @@ const PERMISSIONS = [
   refused: PlainMessageKey;
   announced: {
     granted: PlainMessageKey;
-    grantedRestart?: PlainMessageKey;
     notGranted: PlainMessageKey;
     refused: PlainMessageKey;
   };
@@ -140,18 +138,11 @@ export function PermissionsSection(): React.ReactElement {
       // lists Octoboard in System Settings, so that row is expected to stay "not granted" until
       // the user flips the switch there, which the refresh on window focus then picks up.
       const stateKey: PlainMessageKey = refused[permission.kind] ? permission.refused : "settings.permissions.notGranted";
-      // Screen Recording reaches a process only at launch, so a grant made since is inert until
-      // Octoboard restarts. There is deliberately no restart button: a plain `app.restart()` would
-      // cut through the quit flow (daemon shutdown, the quit confirmation) in `exit.rs`. The
-      // condition is the shell's own two readings, not something remembered here, so the notice
-      // survives this section unmounting on a tab switch — which is the normal next thing the
-      // user does.
-      const restart = permission.kind === "screenRecording" && granted && !status.screenRecordingAtLaunch;
       const { announced } = permission;
       const announcedKey: PlainMessageKey = granted
-        ? (restart && "grantedRestart" in announced ? announced.grantedRestart : announced.granted)
+        ? announced.granted
         : refused[permission.kind] ? announced.refused : announced.notGranted;
-      return { ...permission, granted, stateKey, restart, announcedKey };
+      return { ...permission, granted, stateKey, announcedKey };
     })
     : undefined;
   // One whole sentence per permission and state, each naming its permission as a bare "Granted." names
@@ -180,7 +171,7 @@ export function PermissionsSection(): React.ReactElement {
       <>
         <SettingsLead><Message id="settings.permissions.lead" /></SettingsLead>
         <LeadRows>
-          {rows.map(({ kind, label, systemPane, description, granted, stateKey, restart }) => (
+          {rows.map(({ kind, label, systemPane, description, granted, stateKey }) => (
             <SettingRow
               compact
               key={kind}
@@ -195,7 +186,6 @@ export function PermissionsSection(): React.ReactElement {
                       stands; a granted one is the success badge at the row's end instead. Either is
                       announced from the section's status region (`AttendedStatusAnnouncer`). */}
                   {!granted && <span className="block"><Message id={stateKey} /></span>}
-                  {restart && <span className="block"><Message id="settings.permissions.restart" /></span>}
                 </>
               }
             >
