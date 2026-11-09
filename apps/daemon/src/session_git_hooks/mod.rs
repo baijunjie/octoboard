@@ -142,7 +142,8 @@ const STALE_AFTER: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 /// the daemon executable they were made for, so that only the first launch with each pays for the
 /// probes: the directory, or when the attempt failed.
 type Ready = Result<PathBuf, Instant>;
-static READY: Mutex<Option<HashMap<(PathBuf, String, String), Ready>>> = Mutex::new(None);
+type ReadyByLaunch = HashMap<(PathBuf, String, String), Ready>;
+static READY: Mutex<Option<ReadyByLaunch>> = Mutex::new(None);
 
 /// The variables a project session's agent is started with so that its git reports the branches
 /// it creates: the next `GIT_CONFIG_COUNT` slot set to `core.hooksPath` = the dispatchers, and
