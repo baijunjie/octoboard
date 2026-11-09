@@ -144,8 +144,10 @@ after **5 minutes**, or when another launch ends. Only Stop in the Processes pan
 (see "Process information and actions" below).
 
 The daemon, its ancestors and its direct children are protected. Processes in terminal sessions led by those direct
-children are excluded from the background-process lists and Stop and Keep controls. Tool commands that start a
-terminal session of their own remain subject to the attribution rules above.
+children, including a Codex session's private app server and what runs in its session (see "Codex's private app
+server" in `docs/product/per-agent-launch-specifics.md`), are excluded from the background-process lists and Stop and
+Keep controls. Their lifecycle remains managed with the agent session. Tool commands that start a terminal session of
+their own remain subject to the attribution rules above.
 
 The user's shell terminals and the processes in their terminal sessions are excluded from the background-process lists
 and cleanup described here; closing those terminals still follows "Closing a shell terminal" in
@@ -158,7 +160,8 @@ left out: its own internals, the
 MCP servers and other helpers the agent's CLI starts as its children, reach the agent through their chain of parents
 and are listed among that launch's process trees in the Processes panel, where the user can see and stop them like
 any other background process, and keep them unless they are on the agent's own console (see "Processes on the agent's
-own console" below).
+own console" below). The same goes there for what a Codex session's private app server starts, which is in the
+launch's job; the server itself, a direct child of the daemon, is not listed.
 
 **Keeping a tree transfers its management to the user.** No session owns it any more: it leaves its session's list, is
 no longer stopped automatically, and remains kept across daemon restarts. It stays listed in its project's list among

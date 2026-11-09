@@ -244,7 +244,12 @@ and there is nobody to ask to answer the session's prompt first.
 The submission goes to the session that pushed the page, found from the page itself, whichever session the user happens
 to be looking at. It fails, and the failure is shown to the user, when the page is no longer its session's newest, when
 the session's process is not running, or when the session is a worker by then, which has no tool to read
-the submission — the daemon refuses that page as one that does not exist. A failed submission changes nothing. The
+the submission — the daemon refuses that page as one that does not exist. On a Codex session whose messages go into
+Codex's own queue, it also fails when Codex refuses the submission (`message_refused`, see "A message Codex's own queue
+refuses" in `docs/product/message-delivery.md`), or when Codex may have taken it without confirming it
+(`message_acceptance_unconfirmed`, see "A message whose acceptance is uncertain" in
+`docs/product/message-delivery.md`). A failed submission changes nothing, except that one Codex may have taken without
+confirming it may already have reached the session; it is not sent again. The
 message names which session the submission was meant for, so that it cannot be read as being about whichever session the
 user happens to be looking at.
 

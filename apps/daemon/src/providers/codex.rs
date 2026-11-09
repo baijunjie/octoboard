@@ -22,6 +22,13 @@ pub const UNARCHIVE_FAILED: ProviderCode = ProviderCode::error("provider.codex.u
 pub const NATIVE_PROGRAM_MISSING: ProviderCode =
     ProviderCode::error("provider.codex.native_program_missing");
 
+/// Messages for a Codex session whose private app server takes them into Codex's own queue have
+/// waited a while for Codex to take them; the notice names no cause. Once the session's
+/// conversation is known they are not written into the terminal, which may be showing another
+/// task; they go in once Codex takes them, and the notice is withdrawn then, or when the server
+/// ends. No `params`.
+pub const MESSAGES_HELD: ProviderCode = ProviderCode::notice("provider.codex.messages_held");
+
 impl AgentId {
     pub const CODEX: AgentId = AgentId(DESCRIPTOR.id);
 }
@@ -158,7 +165,12 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
             compatibility_with: Some("claude"),
         },
     ],
-    codes: &[LOGIN_BUSY, UNARCHIVE_FAILED, NATIVE_PROGRAM_MISSING],
+    codes: &[
+        LOGIN_BUSY,
+        UNARCHIVE_FAILED,
+        NATIVE_PROGRAM_MISSING,
+        MESSAGES_HELD,
+    ],
 };
 
 #[cfg(test)]
@@ -196,18 +208,24 @@ mod tests {
 
     #[test]
     fn its_codes_are_of_the_kind_they_are_used_with() {
-        use super::super::ProviderCodeKind::Error;
+        use super::super::ProviderCodeKind::{Error, Notice};
         assert_eq!(
             [
                 LOGIN_BUSY.kind,
                 UNARCHIVE_FAILED.kind,
-                NATIVE_PROGRAM_MISSING.kind
+                NATIVE_PROGRAM_MISSING.kind,
+                MESSAGES_HELD.kind
             ],
-            [Error; 3]
+            [Error, Error, Error, Notice]
         );
         assert_eq!(
             DESCRIPTOR.codes,
-            [LOGIN_BUSY, UNARCHIVE_FAILED, NATIVE_PROGRAM_MISSING]
+            [
+                LOGIN_BUSY,
+                UNARCHIVE_FAILED,
+                NATIVE_PROGRAM_MISSING,
+                MESSAGES_HELD
+            ]
         );
     }
 }

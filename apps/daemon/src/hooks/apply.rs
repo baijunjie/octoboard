@@ -292,6 +292,7 @@ fn read_turn_boundary(
         // No report is owed — the user did it and knows — but the turn still has to be closed, or a
         // later clock-attributed end would find it open and invent one.
         state.abandon_turn(session_id);
+        start_own_queue(state, session_id);
         return true;
     }
     match interpreter.turn_end(event, payload) {
@@ -325,6 +326,34 @@ fn read_turn_boundary(
             true
         }
     }
+}
+
+/// Has the session's own server run the messages of Octoboard's that wait in its queue, which
+/// its agent leaves there past a cancelled turn (Codex's), so they run as turns of their own. Off
+/// the hook's response, since it asks the server.
+fn start_own_queue(state: &Arc<AppState>, session_id: &str) {
+    let Some(transport) = state
+        .live_session(session_id)
+        .and_then(|live| live.transport.clone())
+    else {
+        return;
+    };
+    let session_id = session_id.to_string();
+    std::thread::spawn(move || {
+        use crate::session::term::QueueStart;
+        match transport.start_queue() {
+            QueueStart::Nothing => {}
+            QueueStart::Started(started) => {
+                tracing::info!(session = %session_id, started, "started the messages a cancelled turn left queued");
+            }
+            QueueStart::BehindOthers(waiting) => {
+                tracing::info!(session = %session_id, waiting, "left the messages a cancelled turn left queued behind others");
+            }
+            QueueStart::Failed(error) => {
+                tracing::warn!(session = %session_id, %error, "could not start the messages a cancelled turn left queued");
+            }
+        }
+    });
 }
 
 /// Automatic reviews do not establish that a person is being asked to act.

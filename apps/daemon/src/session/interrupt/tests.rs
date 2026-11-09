@@ -69,6 +69,17 @@ impl Fixture {
 /// written into its input, so a test can tell exactly what went in. `trust_watch` leaves its trust
 /// watch looking for the agent's screen, as a freshly launched session's is.
 fn fixture(name: &str, agent: AgentId, status: SessionStatus, trust_watch: bool) -> Fixture {
+    fixture_with(name, agent, status, trust_watch, None)
+}
+
+/// [`fixture`] whose session delivers through `transport`, a server of its agent's own.
+fn fixture_with(
+    name: &str,
+    agent: AgentId,
+    status: SessionStatus,
+    trust_watch: bool,
+    transport: Option<Arc<dyn crate::session::term::MessageTransport>>,
+) -> Fixture {
     let (state, dir) = app_state(&format!("interrupt-{name}"));
     state.store.insert_console(&console(&dir)).unwrap();
     state
@@ -89,6 +100,10 @@ fn fixture(name: &str, agent: AgentId, status: SessionStatus, trust_watch: bool)
         watched_live_session("s", agent, 120, 40, &script, None)
     } else {
         fake_live_session("s", agent, 120, 40, &script)
+    };
+    let live = match transport {
+        Some(transport) => live.with_transport(transport),
+        None => live,
     };
     let deadline = Instant::now() + PATIENCE;
     while !ready.exists() {
@@ -185,6 +200,96 @@ async fn codex_is_sent_one_esc_and_told_of_the_messages_its_cancel_dropped() {
         result.note
     );
     assert_eq!(fixture.keys_after_marker(), ESC);
+}
+
+/// A server of the agent's own standing in for Codex's: it records each start of its queue and
+/// answers it as told.
+struct QueueServer {
+    starts: std::sync::Mutex<usize>,
+    answer: crate::session::term::QueueStart,
+}
+
+impl QueueServer {
+    fn new(answer: crate::session::term::QueueStart) -> Arc<Self> {
+        Arc::new(Self {
+            starts: Default::default(),
+            answer,
+        })
+    }
+}
+
+impl crate::session::term::MessageTransport for QueueServer {
+    fn send(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> std::result::Result<crate::session::term::Sent, crate::platform::term::PartialWrite> {
+        unreachable!("nothing is delivered here")
+    }
+    fn attach(&self, _: crate::session::term::TransportEvents) {}
+    fn start_queue(&self) -> crate::session::term::QueueStart {
+        *self.starts.lock().unwrap() += 1;
+        self.answer.clone()
+    }
+    fn stop(&self) {}
+}
+
+/// Interrupts a Codex session delivering through `server` whose turn had one message written into
+/// its terminal, and gives the note.
+async fn interrupt_with_queue(name: &str, server: Arc<QueueServer>) -> String {
+    let fixture = fixture_with(
+        name,
+        AgentId::CODEX,
+        SessionStatus::Working,
+        false,
+        Some(server),
+    );
+    fixture.live.on_output(running_title(AgentId::CODEX));
+    fixture.state.turn_started("s", None);
+    fixture.state.note_written_mid_turn("s");
+    draw(&fixture.live, "›\n\n  100% context left");
+    let agent = respond(&fixture, vec![(ESC, back_at_prompt(&fixture.state))]);
+    let result = interrupt_session(&fixture.state, "s").await.unwrap();
+    agent.join().unwrap();
+    assert!(result.interrupted, "{result:?}");
+    result.note
+}
+
+/// What waits in Codex's own queue was never part of the cancelled turn, whichever turn queued it:
+/// the queue is started after every interrupt that stopped a turn, once the key is in, and the
+/// note says what came of it. What went into the terminal keeps its warning.
+#[tokio::test]
+async fn codex_starts_its_queue_after_a_cancel_and_says_what_came_of_it() {
+    use crate::session::term::QueueStart;
+    let server = QueueServer::new(QueueStart::Started(2));
+    let note = interrupt_with_queue("codex-queue", server.clone()).await;
+    assert_eq!(*server.starts.lock().unwrap(), 1);
+    assert!(
+        note.contains("2 message(s) Octoboard put into Codex's own queue")
+            && note.contains("now run as turns of their own")
+            && note.contains("about 1 message(s)")
+            && note.contains("Codex steers"),
+        "{note}"
+    );
+
+    let behind = QueueServer::new(QueueStart::BehindOthers(1));
+    let note = interrupt_with_queue("codex-queue-behind", behind).await;
+    assert!(
+        note.contains("behind messages someone else queued") && note.contains("did not start"),
+        "{note}"
+    );
+
+    let failing = QueueServer::new(QueueStart::Failed("refused".to_string()));
+    let note = interrupt_with_queue("codex-queue-refused", failing).await;
+    assert!(
+        note.contains("may still be waiting") && !note.contains("still in Codex's queue"),
+        "{note}"
+    );
+
+    let empty = QueueServer::new(QueueStart::Nothing);
+    let note = interrupt_with_queue("codex-queue-empty", empty.clone()).await;
+    assert_eq!(*empty.starts.lock().unwrap(), 1);
+    assert!(!note.contains("own queue"), "{note}");
 }
 
 /// A provider with no interrupt key known is sent none, and told so.

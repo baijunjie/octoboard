@@ -64,16 +64,42 @@ const INTERRUPT: Interrupt = Interrupt {
     key: InterruptKey::Esc,
     restores_prompt: false,
     written_during_turn,
+    queued_waiting: Some(queued_waiting),
 };
 
-/// A message written into a Codex turn is steered into that turn, which the cancel throws away
-/// with it, unless the turn had acted on it already.
+/// A message written into a Codex turn through its terminal is steered into that turn, which the
+/// cancel throws away with it, unless the turn had acted on it already.
 fn written_during_turn(written: usize) -> String {
     format!(
         " Octoboard wrote about {written} message(s) into the session during that turn. Codex \
          steers such messages into the turn the cancel threw away, so unless the turn had already \
          acted on them they were not acted on: resend whatever still matters."
     )
+}
+
+/// A message Codex's own queue took is no part of the turn a cancel throws away, and Codex leaves
+/// it queued past the cancel; Octoboard starts the queue, which runs one message a turn, unless
+/// something someone else queued is ahead of Octoboard's there.
+fn queued_waiting(started: &crate::session::term::QueueStart) -> Option<String> {
+    use crate::session::term::QueueStart;
+    Some(match started {
+        QueueStart::Nothing => return None,
+        QueueStart::Started(waiting) => format!(
+            " {waiting} message(s) Octoboard put into Codex's own queue were waiting there. They \
+             were not part of the turn the cancel threw away, and now run as turns of their own, \
+             one after another: do not send them again."
+        ),
+        QueueStart::BehindOthers(waiting) => format!(
+            " {waiting} message(s) Octoboard put into Codex's own queue wait there behind messages \
+             someone else queued, so Octoboard did not start them ahead of those; they were not \
+             part of the turn the cancel threw away. Check the session with `get_session` before \
+             sending them again."
+        ),
+        QueueStart::Failed(_) => " Messages Octoboard put into Codex's own queue may still be \
+             waiting there: Octoboard could not tell, nor start them. Check the session with \
+             `get_session` before sending any again."
+            .to_string(),
+    })
 }
 
 /// Codex has no composer border. Its last visible row is a measured status footer, separated

@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use super::outbox::{Drain, FirstTicket, PromptSignal, Ticket};
-use crate::protocol::{notice_code, Event, Notice, SessionStatus};
+use crate::protocol::{notice_code, AgentId, Event, Notice, SessionStatus};
 use crate::session::dialogs::Sighting;
 use crate::session::LiveSession;
 use crate::state::AppState;
@@ -82,6 +82,8 @@ pub enum WriteHold {
     SharingChange,
     /// A message written into it was not sent and is still in its input box.
     UnsentMessage,
+    /// A native submission may have been accepted; it must not be submitted again.
+    SubmissionUncertain,
 }
 
 impl WriteHold {
@@ -95,6 +97,7 @@ impl WriteHold {
             Self::Handoff => "handoff",
             Self::SharingChange => "sharing_change",
             Self::UnsentMessage => "unsent_message",
+            Self::SubmissionUncertain => "submission_uncertain",
         }
     }
 
@@ -205,6 +208,14 @@ fn send_wait(wait: Duration, before: u64) -> Duration {
 }
 
 impl PromptSignal for HookPrompts<'_> {
+    fn mark_submission_uncertain(&self, before: u64) {
+        self.live.mark_submission_uncertain(before);
+    }
+
+    fn submission_uncertain(&self) -> bool {
+        self.live.submission_uncertain()
+    }
+
     fn input_recovery_pending(&self) -> bool {
         self.live.input_recovery_pending().is_some()
     }
@@ -348,6 +359,26 @@ impl AppState {
             .count())
     }
 
+    /// Tells the session of each of its messages the agent's own queue refused that it has not been
+    /// told of yet; whichever caller asks first tells it.
+    pub(crate) fn announce_refusals(&self, id: &str, agent: AgentId) {
+        for (_, reason) in self.outbox.refusals_to_announce(id) {
+            self.broadcast(
+                Notice::new(
+                    notice_code::MESSAGE_REFUSED,
+                    format!(
+                        "{} refused a message {} wrote for this session, so it was not sent: \
+                         {reason}. Later messages are still sent.",
+                        agent.label(),
+                        crate::APP_NAME
+                    ),
+                    &[("agent", agent.label()), ("detail", &reason)],
+                )
+                .about(id),
+            );
+        }
+    }
+
     /// Writes out whatever is queued for this session, and says what became of it.
     ///
     /// **Blocks** on the PTY write and on the wait for an idle Claude Code session to send what was
@@ -424,6 +455,7 @@ impl AppState {
         let still_running = self
             .live_session(id)
             .is_some_and(|current| Arc::ptr_eq(&current, &live));
+        self.announce_refusals(id, live.agent);
         if matches!(outcome, Drain::Unsent(_)) && still_running {
             // The user can inspect a retry that submits the current composer, including any new
             // edits they made. A later message must not repeat the already written payload. A
@@ -508,6 +540,24 @@ impl AppState {
                 }
             }
         }
+        if matches!(outcome, Drain::Uncertain(_)) && still_running {
+            self.broadcast(
+                Notice::new(
+                    notice_code::MESSAGE_ACCEPTANCE_UNCONFIRMED,
+                    format!(
+                        "{} did not confirm that it accepted a message {} wrote into this \
+                         session. The message may already be queued and will not be sent \
+                         again. Later messages are held for at most three seconds or until \
+                         another prompt is sent; check the conversation before deciding whether \
+                         to send it again.",
+                        live.agent.label(),
+                        crate::APP_NAME
+                    ),
+                    &[("agent", live.agent.label())],
+                )
+                .about(id),
+            );
+        }
         // A message `Drain::Fragmented` lost was announced as `typing_blocked`, which says what
         // holds there; this notice's warning that the next message runs together with it does
         // not, and nothing behind it was dropped.
@@ -537,7 +587,10 @@ impl AppState {
             matches!(
                 self.agent_status(&record),
                 SessionStatus::Idle | SessionStatus::Working
-            ) && matches!(self.write_hold(id), None | Some(WriteHold::UnsentMessage))
+            ) && matches!(
+                self.write_hold(id),
+                None | Some(WriteHold::UnsentMessage | WriteHold::SubmissionUncertain)
+            )
         })
     }
 
@@ -545,6 +598,16 @@ impl AppState {
         if self.outbox.len(id) > 0 {
             if let Ok(record) = self.session_record(id) {
                 self.spawn_flush_outbox(id, self.agent_status(&record));
+            }
+        }
+    }
+
+    /// [`Self::retry_pending_outbox`] on the calling thread, for a caller off the runtime that may
+    /// block on the write.
+    pub(crate) fn flush_pending_outbox(&self, id: &str) {
+        if self.outbox.len(id) > 0 {
+            if let Ok(record) = self.session_record(id) {
+                self.flush_outbox(id, self.agent_status(&record));
             }
         }
     }
@@ -672,6 +735,8 @@ impl AppState {
             Some(WriteHold::SharingChange)
         } else if self.outbox.is_held(id) {
             Some(WriteHold::Handoff)
+        } else if live.submission_uncertain() {
+            Some(WriteHold::SubmissionUncertain)
         } else if live.unsent_waiting() {
             Some(WriteHold::UnsentMessage)
         } else {

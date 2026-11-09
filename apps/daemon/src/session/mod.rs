@@ -94,6 +94,7 @@ pub struct LiveSession {
     /// The launch this process is, as its processes are tagged with (`crate::processes::ledger`).
     pub launch_id: String,
     pty: PtyCore,
+    pub(crate) transport: Option<Arc<dyn term::MessageTransport>>,
     pub(crate) checks_composer: bool,
     title: Mutex<TitleObserver>,
     /// Whether the session's terminal is read as a host that renders what the program draws has it
@@ -129,6 +130,10 @@ pub struct LiveSession {
     /// prompt reported after it withdraws that ([`Self::note_prompt_sent`]). Taken before
     /// `unsent_at` where both are.
     unsent_notice: Mutex<Option<u64>>,
+    /// The acknowledgement count and the time at which a message the session's own server may
+    /// have taken was not confirmed taken (`term::UncertainSubmission`). It holds later messages
+    /// for [`crate::messaging::outbox::DRAFT_WAIT`], or until a prompt is reported after it.
+    uncertain_at: Mutex<Option<(u64, Instant)>>,
     /// When the agent stopped on an error. It holds the session's writes for [`AGENT_ERROR_SETTLE`]
     /// after that, or until the next prompt is sent; gone with the process.
     agent_error_at: Mutex<Option<Instant>>,
@@ -180,6 +185,7 @@ pub struct NewSession {
     /// See `LiveSession::launch_id`.
     pub launch_id: String,
     pub spawned: Spawned,
+    pub transport: Option<Arc<dyn term::MessageTransport>>,
     /// Real agents have a composer; stand-in PTYs can explicitly opt out of its screen check.
     pub checks_composer: bool,
     /// Per-session scratch directory (Grok's `GROK_HOME` symlink farm), removed when the session's
@@ -213,6 +219,7 @@ impl LiveSession {
         }
         Self {
             pty,
+            transport: session.transport,
             checks_composer: session.checks_composer,
             id: session.id,
             agent: session.agent,
@@ -231,6 +238,7 @@ impl LiveSession {
             unsent_at: Mutex::new(None),
             unsent_retry_scheduled: AtomicBool::new(false),
             unsent_notice: Mutex::new(None),
+            uncertain_at: Mutex::new(None),
             agent_error_at: Mutex::new(None),
             dialogs: Mutex::new(Sighting::default()),
             screen_watchers: AtomicU32::new(0),
@@ -800,6 +808,57 @@ impl LiveSession {
         });
     }
 
+    /// Holds later messages briefly after one, written when the acknowledgement count stood at
+    /// `before`, may have been taken by the session's own server without that being confirmed;
+    /// nothing is written into its input box. The queue is written out again once the hold has run
+    /// its course, which nothing else watches for promptly.
+    pub fn mark_submission_uncertain(&self, before: u64) {
+        *self
+            .uncertain_at
+            .lock()
+            .expect("uncertain submission lock poisoned") = Some((before, Instant::now()));
+        let observer = self.title.lock().expect("title observer lock poisoned");
+        let (state, runtime) = (observer.state.clone(), observer.runtime.clone());
+        drop(observer);
+        let Some(runtime) = runtime else {
+            return;
+        };
+        let (id, launch) = (self.id.clone(), self.launch_id.clone());
+        runtime.spawn(async move {
+            tokio::time::sleep(crate::messaging::outbox::DRAFT_WAIT).await;
+            if let Some(state) = state.upgrade() {
+                if state
+                    .live_session(&id)
+                    .is_some_and(|live| live.launch_id == launch)
+                {
+                    state.retry_pending_outbox(&id);
+                }
+            }
+        });
+    }
+
+    /// Whether a message marked by [`Self::mark_submission_uncertain`] still holds later ones: for
+    /// [`crate::messaging::outbox::DRAFT_WAIT`] after it, unless a prompt was reported since.
+    pub fn submission_uncertain(&self) -> bool {
+        let mut at = self
+            .uncertain_at
+            .lock()
+            .expect("uncertain submission lock poisoned");
+        match *at {
+            Some((before, started))
+                if self.prompts_sent() <= before
+                    && started.elapsed() < crate::messaging::outbox::DRAFT_WAIT =>
+            {
+                true
+            }
+            Some(_) => {
+                *at = None;
+                false
+            }
+            None => false,
+        }
+    }
+
     /// Asks the agent to exit, escalating to a kill only if it does not, with its screen frozen
     /// first so that what it draws on the way out does not replace it. **Blocks**; see
     /// [`PtyCore::stop`].
@@ -1057,6 +1116,26 @@ mod tests {
             Some("Claude Code")
         );
         assert!(!notice.2.get("detail").expect("a detail").is_empty());
+    }
+
+    #[test]
+    fn uncertain_native_acceptance_cannot_hold_later_messages_forever() {
+        let live = crate::test_support::fake_live_session(
+            "uncertain-bounded",
+            crate::protocol::AgentId::CODEX,
+            120,
+            40,
+            "sleep 30",
+        );
+        live.mark_submission_uncertain(0);
+        assert!(live.submission_uncertain());
+        assert!(!live.unsent_waiting());
+        *live.uncertain_at.lock().unwrap() = Some((
+            0,
+            std::time::Instant::now() - crate::messaging::outbox::DRAFT_WAIT,
+        ));
+        assert!(!live.submission_uncertain());
+        assert_eq!(*live.uncertain_at.lock().unwrap(), None);
     }
 
     #[test]

@@ -72,6 +72,7 @@ const INTERRUPT: Interrupt = Interrupt {
     key: InterruptKey::Esc,
     restores_prompt: true,
     written_during_turn,
+    queued_waiting: None,
 };
 
 fn written_during_turn(written: usize) -> String {

@@ -217,6 +217,8 @@ const CORE_CODES = {
   login_not_running: { origin: "daemon", recovery: "none" },
   mcp_server_auth_busy: { origin: "daemon", recovery: "none" },
   mcp_sign_in_not_running: { origin: "daemon", recovery: "none" },
+  message_acceptance_unconfirmed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
+  message_refused: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, detailBlock: true },
   message_discarded_by_dialog: { origin: "daemon" },
   message_diverted_by_view: { origin: "daemon" },
   message_not_sent: { origin: "daemon", recovery: "unsentMessage", failureNotice: true, alertTitle: true, variantOf: (params) => params.submit_retry === "once" ? "retry" : undefined },

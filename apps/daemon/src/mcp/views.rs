@@ -214,6 +214,13 @@ fn write_hold_explanation(hold: WriteHold) -> &'static str {
              configuration, and is resumed on its conversation afterwards. Messages for it are \
              queued and written into the resumed process."
         }
+        WriteHold::SubmissionUncertain => {
+            "Its agent's own message queue did not confirm taking a message. That message may \
+             already be queued or running and will not be sent again, so do not send it again \
+             without checking the session's history first. Later messages are held for at most \
+             three seconds, or until the agent reports another submitted prompt. Octoboard did not \
+             touch its input box."
+        }
         WriteHold::UnsentMessage => {
             "A message written into it has not been confirmed sent; the user has been told. \
              After a three-second grace period its submit key is retried once, without repeating \

@@ -1168,3 +1168,58 @@ async fn the_exit_after_an_archive_does_not_set_again_a_flag_a_late_end_cleared(
         "the hand still says working, but the turn has ended"
     );
 }
+
+/// A server of the session's own that counts the starts of its queue.
+struct CountingQueue(std::sync::atomic::AtomicUsize);
+
+impl crate::session::term::MessageTransport for CountingQueue {
+    fn send(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> std::result::Result<crate::session::term::Sent, crate::platform::term::PartialWrite> {
+        unreachable!("nothing is delivered here")
+    }
+    fn attach(&self, _: crate::session::term::TransportEvents) {}
+    fn start_queue(&self) -> crate::session::term::QueueStart {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        crate::session::term::QueueStart::Started(1)
+    }
+    fn stop(&self) {}
+}
+
+/// A turn the user cancels in Codex's terminal leaves what Codex's own queue took of Octoboard's
+/// waiting there, so the queue is started for it; a turn that ends normally runs it by itself.
+#[tokio::test]
+async fn a_cancelled_codex_turn_starts_what_octoboard_left_in_its_queue() {
+    let (state, dir) = app_state("hook-cancel-queue");
+    state
+        .store
+        .insert_console(&crate::test_support::console(&dir))
+        .unwrap();
+    state
+        .store
+        .insert_session(&crate::protocol::Session {
+            agent: AgentId::CODEX,
+            ..crate::test_support::console_session("s", SessionStatus::Idle)
+        })
+        .unwrap();
+    let queue = Arc::new(CountingQueue(Default::default()));
+    let live =
+        crate::test_support::idle_stand_in_of("s", AgentId::CODEX).with_transport(queue.clone());
+    state.register_live(live.clone());
+    apply_hook(&state, "s", br#"{"hook_event_name": "UserPromptSubmit"}"#);
+    apply_hook(&state, "s", br#"{"hook_event_name": "Stop"}"#);
+    apply_hook(&state, "s", br#"{"hook_event_name": "UserPromptSubmit"}"#);
+    apply_hook(&state, "s", br#"{"hook_event_name": "Interrupt"}"#);
+    let deadline = std::time::Instant::now() + PATIENCE;
+    while queue.0.load(std::sync::atomic::Ordering::Acquire) == 0 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the queue was not started"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert_eq!(queue.0.load(std::sync::atomic::Ordering::Acquire), 1);
+}

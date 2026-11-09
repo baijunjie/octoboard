@@ -43,11 +43,24 @@ Reporting is refused, or fails without accepting the report, when:
   the report says rather than report again. When the report itself was written only in part while the owner's draft
   was stashed, only the report was dropped, and the reason says so, adding that the owner's input box may hold part of
   it (see "A message only partly written while the draft is stashed" in `docs/product/message-delivery.md`);
+- its owner is a Codex session whose own queue refused the report outright (see "A message Codex's own queue refuses"
+  in `docs/product/message-delivery.md`). The error is `message_refused`, naming the owner and its agent and giving
+  Codex's reason: the report to the owner was refused by its agent's queue, the report was not delivered, the reporting
+  session was left as it was, and it may change the report and report again. Like any report that was not delivered,
+  it does not count as the session having reported for the turn;
 - the session has already been wrapped up — a session archived by its own `done` report cannot
   report a second time;
 - the session is a coordinator with a parent, the report has `status: done` and no open items (whatever owner items it
   has), and a session bound to it is not archived, unless a lock blocks automatic archiving (see "Automatic archiving"
   below). The reason names those sessions. Its other reports go through, and none of them archives it.
+
+If a Codex owner's own queue may have accepted the report but cannot confirm it, reporting returns the error
+`message_acceptance_unconfirmed` and the reporting session is not archived. The error tells the reporting session that
+its report may already have been delivered, that it will not be sent again, that it counts as its report for this
+turn, and not to report again. The report does count as that session having reported for the turn: Octoboard does not
+synthesise a second report when it stops, since that could duplicate one already accepted. It does not resend the
+original report automatically. The delivery hold and recovery rules are in `docs/product/message-delivery.md`'s "A
+message whose acceptance is uncertain" section.
 
 ## The report as the owner reads it
 
@@ -258,7 +271,8 @@ queued is different: it archives the session on acceptance, as above, so if it i
 session is already archived, and only the notice the user gets tells anyone.
 
 The one-time automatic submit-key retry in `docs/product/message-delivery.md`'s "A message written but not sent"
-section does not archive a reporting session later by itself either.
+section does not archive a reporting session later by itself either. A report whose acceptance by a Codex owner's
+own queue is uncertain likewise archives nothing, as described above.
 
 Anything else — open items, `failed`, `needs_decision` — leaves the session running and awaiting
 instructions, for its owner to continue with `instruct_session` or to archive explicitly.

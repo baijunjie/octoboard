@@ -230,7 +230,10 @@ pub(crate) async fn tell_what_a_restart_ended(state: &Arc<AppState>, id: &str, e
     })
     .await;
     if let Err(err) = told.map_err(anyhow::Error::from).and_then(|told| told) {
-        state.clear_turn_credit(id, &opening);
+        // One that may have arrived keeps the credit, or its turn would be reported twice.
+        if !crate::messaging::delivery::acceptance_uncertain(&err) {
+            state.clear_turn_credit(id, &opening);
+        }
         tracing::warn!(session = %id, %err, "telling a session what its restart ended failed");
     }
 }

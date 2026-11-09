@@ -297,6 +297,128 @@ async fn a_rejected_first_work_prompt_is_announced_to_the_user() {
     );
 }
 
+/// Native queues receive one bootstrap after the original is archived and the place has moved.
+#[tokio::test]
+async fn the_first_native_submission_has_the_completed_handoff_context() {
+    struct Capture {
+        state: Arc<AppState>,
+        repo: String,
+        messages: Mutex<Vec<String>>,
+    }
+    impl term::MessageTransport for Capture {
+        fn send(
+            &self,
+            text: &str,
+            _: &str,
+        ) -> std::result::Result<term::Sent, crate::platform::term::PartialWrite> {
+            assert_eq!(
+                self.state.session_record("original").unwrap().status,
+                SessionStatus::Archived
+            );
+            let origins = self.state.store.branch_origins(&self.repo).unwrap();
+            let receiving = &origins
+                .iter()
+                .find(|origin| origin.branch == "one")
+                .unwrap()
+                .responsible_session;
+            let stored = self.state.session_record(receiving).unwrap();
+            assert_eq!(stored.bound_to.as_deref(), Some("hub"));
+            assert_eq!(stored.role, Role::Coordinator);
+            assert_eq!(
+                self.state
+                    .session_record("worker")
+                    .unwrap()
+                    .bound_to
+                    .as_deref(),
+                Some(receiving.as_str())
+            );
+            self.messages.lock().unwrap().push(text.to_string());
+            Ok(term::Sent::Queued)
+        }
+        fn attach(&self, _: term::TransportEvents) {}
+        fn start_queue(&self) -> term::QueueStart {
+            term::QueueStart::Nothing
+        }
+        fn stop(&self) {}
+    }
+    let fixture = Fixture::new("native-first-prompt");
+    fixture.run(session("hub", false, "idle", None, false));
+    fixture.run(session("original", true, "idle", Some("hub"), true));
+    fixture.run(session("worker", true, "idle", Some("original"), false));
+    branch_made_from(
+        &fixture.state,
+        &fixture.repo,
+        "one",
+        "original",
+        Some("main"),
+    );
+    let capture = Arc::new(Capture {
+        state: fixture.state.clone(),
+        repo: repo_key(&repository_of(&fixture.repo).unwrap()),
+        messages: Default::default(),
+    });
+    let (started, launches, transport) = (
+        fixture.started.clone(),
+        fixture.launches.clone(),
+        capture.clone(),
+    );
+    let receiving = fixture
+        .handoff_launching("original", AgentId::CODEX, move |request| {
+            assert!(
+                request.task.is_none(),
+                "the process must start without a working turn"
+            );
+            let live = crate::test_support::tagged_idle_live_session(
+                &request.session_id,
+                request.agent,
+                &request.process_tag,
+            )
+            .with_transport(transport);
+            crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+            let process = (*live).clone();
+            started.lock().unwrap().push(live);
+            launches
+                .lock()
+                .unwrap()
+                .push((request.session_id, request.owner, request.task));
+            Ok(term::Launch {
+                session: process,
+                agent_session_id: None,
+                notice: None,
+            })
+        })
+        .await
+        .unwrap();
+    let observed = capture.clone();
+    assert!(
+        crate::test_support::within(crate::test_support::PATIENCE, move || !observed
+            .messages
+            .lock()
+            .unwrap()
+            .is_empty())
+        .await
+    );
+    let messages = capture.messages.lock().unwrap();
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    let prompt = &messages[0];
+    assert!(
+        prompt.starts_with(crate::messaging::texts::TAKEOVER_OPENING),
+        "{prompt}"
+    );
+    assert!(prompt.contains(&format!("{}.md", receiving.id)), "{prompt}");
+    for expected in [
+        "Read that file first",
+        "original is archived",
+        "Your role is coordinator and your parent session",
+        "`hub`",
+        "`one` (target branch `main`)",
+        "Your child session:",
+        "`worker`",
+    ] {
+        assert!(prompt.contains(expected), "missing {expected}: {prompt}");
+    }
+}
+
 /// A child can report after its parent changes while branch transfer is still blocked. Its real
 /// report must wait behind the completed bootstrap, rather than become the successor's first turn.
 #[tokio::test(flavor = "multi_thread")]

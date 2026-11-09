@@ -131,9 +131,14 @@ pub struct Interrupt {
     /// before the key only then: treating an unread screen as permission to clear could erase a
     /// user's pending edit.
     pub restores_prompt: bool,
-    /// What the caller is told became of the `written` messages Octoboard wrote into the session
-    /// during the turn the key stopped, as a sentence to follow the interrupt's own.
+    /// What the caller is told became of the `written` messages Octoboard wrote into the session's
+    /// terminal during the turn the key stopped, as a sentence to follow the interrupt's own.
     pub written_during_turn: fn(written: usize) -> String,
+    /// For a provider whose own server queues Octoboard's messages
+    /// (`crate::session::term::MessageTransport`): what the caller is told of Octoboard's messages
+    /// that waited in that queue past the cancel, by what starting the queue came to, as a sentence
+    /// to follow the interrupt's own; `None` where there is nothing to say.
+    pub queued_waiting: Option<fn(&crate::session::term::QueueStart) -> Option<String>>,
 }
 
 /// The keys that interrupt a provider's turn.

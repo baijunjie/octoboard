@@ -357,6 +357,12 @@ export const en = {
   "daemon.queued_messages_dropped.summary": "{appName} dropped what it had queued for this session.",
   "daemon.queued_messages_dropped.recovery": "Check the session's input line before sending anything else.",
   "daemon.queued_messages_dropped.details": "The input line may be holding part of a message the application could not finish writing, and the next message written into the session will be run together with it.",
+  "daemon.message_acceptance_unconfirmed.summary": "{agent} did not confirm that it accepted a message {appName} wrote into this session.",
+  "daemon.message_acceptance_unconfirmed.recovery": "Check the conversation before deciding whether to send the message again.",
+  "daemon.message_acceptance_unconfirmed.details": "The message may already be queued, and the application will not send it again. Later messages are held for at most three seconds or until another prompt is sent.",
+  "daemon.message_refused.summary": "{agent} refused a message {appName} wrote for this session, so it was not sent.",
+  "daemon.message_refused.details": "Later messages are still sent.",
+  "daemon.message_refused": "{agent} refused a message {appName} wrote for this session, so it was not sent. Later messages are still sent. Reason: {detail}",
   "daemon.submit_retry_failed.summary":
     "{agent} did not confirm sending a message {appName} wrote into this session, and the application could not press {enter} again.",
   "daemon.submit_retry_failed.recovery":
@@ -733,6 +739,8 @@ export const en = {
     "{appName} dropped messages held back for a session while its account's sharing changed, because the session was not restarted.",
   "daemon.message_not_sent":
     "{agent} did not send a message {appName} wrote into this session, so it is waiting in the session's input box. The application writes nothing more into the session until a prompt is sent.",
+  "daemon.message_acceptance_unconfirmed":
+    "{agent} did not confirm that it accepted a message {appName} wrote into this session. The message may already be queued, and the application will not send it again. Later messages are held for at most three seconds or until another prompt is sent. Check the conversation before deciding whether to send the message again.",
   "daemon.message_not_sent.retry":
     "{agent} has not confirmed sending a message {appName} wrote into this session. The application will try submitting the current input once more, without pasting the message again. Answer any pending dialog first.",
   "daemon.message_discarded_by_dialog":
@@ -761,6 +769,8 @@ export const en = {
   // The plain title of an error alert, naming what failed: the session and any names are in the body.
   "daemon.launch_failed.alertTitle": "Could not start the session",
   "daemon.message_not_sent.alertTitle": "Message not sent",
+  "daemon.message_acceptance_unconfirmed.alertTitle": "Message not confirmed",
+  "daemon.message_refused.alertTitle": "Message refused",
   "daemon.submit_retry_failed.alertTitle": "Submit not confirmed",
   "daemon.draft_save_unconfirmed.alertTitle": "Draft save not confirmed",
   "daemon.draft_restore_unconfirmed.alertTitle": "Draft restore not confirmed",

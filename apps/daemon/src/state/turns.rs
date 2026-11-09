@@ -45,8 +45,8 @@ pub(super) struct TurnState {
     /// The turn was closed off the terminal title, as cancelled, rather than by a hook
     /// (`end_turn_off_title`), so a turn end the agent still reports for it is its real end.
     ended_off_title: bool,
-    /// How many messages Octoboard wrote into the session while this turn ran: for Codex, the ones
-    /// a cancel of the turn leaves unread.
+    /// How many messages Octoboard wrote into the session's terminal while this turn ran: for
+    /// Codex, the ones a cancel of the turn leaves unread.
     written_mid_turn: usize,
     /// How many times a turn of this session has ended, closed or cancelled, or been seen back at
     /// its prompt (`note_turn_end`). Only ever moves on, so a reader that compares it with an

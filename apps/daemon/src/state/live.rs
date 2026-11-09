@@ -102,12 +102,13 @@ impl AppState {
 
     /// Whether `session` is idle: its process is at the prompt, waiting for the user's next
     /// message, with nothing on screen only the user can answer, no message of Octoboard's
-    /// queued, being written or left unsent in its input box, and nothing left running in the
-    /// background.
+    /// queued, being written or left unsent in its input box, none whose acceptance by its agent's
+    /// own queue is still unconfirmed, and nothing left running in the background.
     fn is_idle_with(&self, session: &Session, process: &LiveSession) -> bool {
         session.status == SessionStatus::Idle
             && !process.waits_for_user()
             && !process.unsent_waiting()
+            && !process.submission_uncertain()
             && !self.outbox.is_pending(&session.id)
             && self.background_tasks_of(&session.id).is_empty()
     }
@@ -169,6 +170,40 @@ impl AppState {
             });
         }
         session.observe_titles(self);
+        if let Some(transport) = &session.transport {
+            let (state, id) = (Arc::downgrade(self), session.id.clone());
+            let process = Arc::downgrade(&session);
+            let (held_state, held_id) = (state.clone(), id.clone());
+            let (released_state, released_id) = (state.clone(), id.clone());
+            transport.attach(crate::session::term::TransportEvents {
+                // Off the caller's thread: the write blocks, and this can be called on the runtime.
+                ready: Box::new(move || {
+                    if let Some(state) = state.upgrade() {
+                        let id = id.clone();
+                        std::thread::spawn(move || state.flush_pending_outbox(&id));
+                    }
+                }),
+                // Ended as the agent ending by itself would be: nobody asked for it.
+                server_gone: Box::new(move || {
+                    if let Some(process) = process.upgrade() {
+                        std::thread::spawn(move || process.terminate());
+                    }
+                }),
+                held: Box::new(move |notice| {
+                    if let Some(state) = held_state.upgrade() {
+                        state.broadcast(notice.about(&held_id));
+                    }
+                }),
+                released: Box::new(move |code| {
+                    if let Some(state) = released_state.upgrade() {
+                        state.broadcast(crate::protocol::Event::SessionNoticeWithdrawn {
+                            session: released_id.clone(),
+                            code,
+                        });
+                    }
+                }),
+            });
+        }
     }
 
     /// Drops a session from the live map — but only if it is still *this* session, which is what

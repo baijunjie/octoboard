@@ -342,6 +342,25 @@ fn from_reporters_side(err: anyhow::Error, owner: &Session) -> anyhow::Error {
             ),
             &[("session", owner.id.as_str())],
         ),
+        // Codex's own queue refused the report itself; the user was told as `message_refused`.
+        Some(coded) if coded.code == error_code::MESSAGE_REFUSED => {
+            let reason = coded.params.get("detail").cloned().unwrap_or_default();
+            CodedError::raised(
+                error_code::MESSAGE_REFUSED,
+                format!(
+                    "the report to your owner, the {owner_kind} `{}`, was refused by its {}'s \
+                     queue: {reason}. The report was not delivered and this session was left as \
+                     it was; you may change the report and report again",
+                    owner.id,
+                    owner.agent.label()
+                ),
+                &[
+                    ("session", owner.id.as_str()),
+                    ("agent", owner.agent.label()),
+                    ("detail", &reason),
+                ],
+            )
+        }
         // The owner was archived after it was read.
         Some(coded) if coded.code == error_code::SESSION_ARCHIVED => archived_owner(owner),
         _ => err,
@@ -515,7 +534,9 @@ pub(crate) fn report_failed_turn(state: &Arc<AppState>, session_id: &str, messag
 /// The session is credited with having reported before delivery, even if its owner cannot take the
 /// message yet, so its stop does not also produce a synthesised report. The credit is given after
 /// the session's queued hooks, whose turn start would otherwise reset it, and is taken back
-/// when delivery fails, so the owner gets a synthesised report instead of neither.
+/// when delivery definitely failed, so the owner gets a synthesised report instead of neither.
+/// An uncertain native submission keeps its credit: synthesising another report could duplicate
+/// one the native queue already accepted.
 pub async fn deliver_own_report(
     state: &Arc<AppState>,
     session_id: &str,
@@ -552,7 +573,25 @@ pub async fn deliver_own_report(
         .map_err(anyhow::Error::from)
         .and_then(|delivered| delivered)
     };
-    let (note, archived, delivery) = delivered.inspect_err(|_| state.clear_reported(session_id))?;
+    let (note, archived, delivery) = delivered.map_err(|error| {
+        if !crate::messaging::delivery::acceptance_uncertain(&error) {
+            state.clear_reported(session_id);
+            return error;
+        }
+        // Told to an agent, which would otherwise report again.
+        let params: Vec<(String, String)> = CodedError::of(&error).params.into_iter().collect();
+        let pairs: Vec<(&str, &str)> = params
+            .iter()
+            .map(|(name, value)| (name.as_str(), value.as_str()))
+            .collect();
+        CodedError::raised(
+            error_code::MESSAGE_ACCEPTANCE_UNCONFIRMED,
+            "Your report may already have been delivered: the agent of the session you report to \
+             did not confirm taking it into its queue. It will not be sent again, and it counts as \
+             your report for this turn, so do not report again.",
+            &pairs,
+        )
+    })?;
     branch_cleanup::remove::remove_in_background(state, archived);
     Ok((note, delivery))
 }
@@ -1584,6 +1623,68 @@ mod tests {
 
         assert!(kept_texts(&state).is_empty());
         assert_eq!(state.store.kept_messages("heir").unwrap().len(), 1);
+    }
+
+    /// A report the owner's own queue may have taken keeps the reporter's credit, so no second
+    /// report is synthesised, and the reporter is told not to report again.
+    #[tokio::test]
+    async fn uncertain_native_report_keeps_credit_and_is_not_synthesised_again() {
+        let (state, _dir) = crate::test_support::app_state("reporting-native-uncertain");
+        state.store.insert_console(&console()).unwrap();
+        let hub = Session {
+            id: "hub".into(),
+            kind: SessionKind::Console,
+            bound_to: None,
+            agent: AgentId::CODEX,
+            ..project_session("hub")
+        };
+        state.store.insert_session(&hub).unwrap();
+        let mut worker = project_session("worker");
+        worker.id = "worker".into();
+        worker.bound_to = Some("hub".into());
+        worker.role = Role::Worker;
+        state.store.insert_session(&worker).unwrap();
+        let (transport, server) =
+            crate::adapter::codex::transport::transport_losing_an_add(|text| {
+                assert!(text.contains("summary"), "{text}")
+            });
+        let live = crate::test_support::idle_stand_in_of("hub", AgentId::CODEX)
+            .with_transport(std::sync::Arc::new(transport));
+        state.register_live(live.clone());
+        state.turn_started("worker", Some("work"));
+        let error = deliver_own_report(
+            &state,
+            "worker",
+            "summary".into(),
+            ReportStatus::Done,
+            vec![],
+            vec![],
+            None,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            crate::messaging::delivery::acceptance_uncertain(&error),
+            "{error:#}"
+        );
+        assert!(
+            format!("{error:#}").contains("do not report again"),
+            "{error:#}"
+        );
+        assert_eq!(
+            state.close_turn("worker", false),
+            crate::state::TurnClose::Reported
+        );
+        assert_eq!(
+            state.store.get_session("worker").unwrap().unwrap().status,
+            SessionStatus::Idle
+        );
+        assert_eq!(
+            state.write_hold("hub"),
+            Some(crate::state::WriteHold::SubmissionUncertain)
+        );
+        assert_eq!(state.queued_count("hub"), 0);
+        server.join().unwrap();
     }
 
     /// What a reporter is told became of its report, word for word, archived or not.

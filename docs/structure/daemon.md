@@ -82,8 +82,8 @@ and records tests replay.
   is, `change.rs` the account switch and handoff variant, `carry_out.rs` what an approval does, `outcome.rs` the wording
   of the outcome.
 - `src/messaging/` — every message Octoboard writes into sessions: `delivery.rs` (gates, queueing, what became of each
-  message), `outbox.rs` (the per-session ordered queue), `write_queue.rs` (`AppState`'s queuing, flushing and holds
-  over it), `reporting.rs`, `capacity_retry.rs` (the retries of a Codex turn that stopped at its model's capacity; its
+  message), `outbox.rs` (the per-session ordered queue, which also keeps the tickets a refusal failed), `write_queue.rs` (`AppState`'s queuing, flushing and holds
+  over it, and the notice of a refused message), `reporting.rs`, `capacity_retry.rs` (the retries of a Codex turn that stopped at its model's capacity; its
   waits live in `AppState::capacity_retries`), `sharing.rs`, `naming.rs` (how a message names a session, a place, a
   quoted body),
   `owner_notices.rs` (every notice to an owner), `texts.rs` (fixed texts in Octoboard's own name).
@@ -197,9 +197,17 @@ and records tests replay.
   come off the parsed screen's title changes and a provider's placeholder reads as an empty input box), input and
   message-write gates (the daemon's own writes,
   a message's paste and Enter, the stash, interrupt and trust keys, are `platform::term::Input` values; a client's
-  keystrokes and query replies go in raw), `term/` launch and writing a message into the process through the guarded
-  bracketed-paste write (and `AfterExit`, the work a launch leaves for once its process has exited:
-  `LaunchPlan::after_exit`), `draft.rs`,
+  keystrokes and query replies go in raw), `term/` launch and writing a message into the process (through a
+  `MessageTransport` where the launch started the provider's own server, otherwise the guarded bracketed-paste write
+  (`send_message_with_id` says which way it went, a `Route`); a transport also starts the server's queue and says what
+  came of it (`start_queue` gives a `QueueStart`: nothing waited, how many started, how many wait behind messages someone
+  else queued, or that it could not be told); `PrivateServer`, how a launch starts that server,
+  `LaunchPlan::private_server`, with `StartedServer` and `TransportEvents`, which `register_live` attaches so a transport
+  can retry its queue, hand over the notice that messages are held and the code of that notice once they went in (the
+  state layer only broadcasts them), and end the terminal when the server dies; `UncertainSubmission`, the error of a
+  write whose acceptance is unknown, which holds the session's later messages; `RefusedByAgent`, the error of a message
+  the agent's own queue refused outright, which fails that message to its sender, coded `message_refused`, while the
+  queue behind it goes on, and `HeldByServer`, that of a message the server holds back for now; `AfterExit`, the work a launch leaves for once its process has exited: `LaunchPlan::after_exit`), `draft.rs`,
   `swap.rs`, `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the `TrustCarrier` interface of a provider that records the trust in
   a per-session home; `screen.rs` reads a provider's screen off the recent output, or off the parsed screen where
   `TermFacts::host_renders` says the output is the host's repaint, `TrustState::reads_screen`; there Codex's watch ends
@@ -209,7 +217,8 @@ and records tests replay.
   `wait.rs` (polling a condition, `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`).
   `screen.rs` is the `ScreenReader` trait, how one provider's terminal screens, input box and title read, which
   `AgentProvider::screen` gives (`NoScreen` is the default that recognises nothing; `user_action_title` is the title
-  text a provider shows when only the user can act; `input_placeholder` the hint an empty input box shows); the modules above keep only what is
+  text a provider shows when only the user can act; `input_placeholder` the hint an empty input box shows; `Interrupt` how a provider's turn is interrupted, including the
+  wording of messages left waiting in its own queue past a cancel); the modules above keep only what is
   done with a reading (the dialogs are kept as `DialogPattern` and `DialogKind`), and read it through the session's
   provider.
 - `src/titles/` — the title a session shows, from the agent's records, the terminal title and the first prompt.
@@ -251,7 +260,11 @@ and records tests replay.
   as its settle window; contract tests in `term/contract_tests.rs`; on Windows the pseudoconsole is ConPTY, run on the bundled `conpty.dll` beside the daemon's executable when it loads, which starts `OpenConsole.exe` from the same directory or from a subdirectory named for the machine's native architecture (`x64` or `arm64`, which an x64 daemon emulated on ARM64 reads as `arm64`): the installer ships the x64 `conpty.dll` with an `OpenConsole.exe` in each of the two subdirectories (`scripts/fetch-conpty.mjs --installer`), so the x64 DLL on x64 hardware loads `x64\OpenConsole.exe` and under emulation on ARM64 finds `arm64\OpenConsole.exe`; with no DLL, or one that fails to load, the system's pseudoconsole is used (a failed load is logged as a warning), and a DLL that finds no `OpenConsole.exe` starts the inbox console host, which is logged as a warning); on Windows the output is drained after a close that races the last reader's drop, quit keys of a polite stop wait behind a bracketed paste being written rather than landing inside it, and a failed wait in a transfer is reported as an error; `random/` bytes from the host's random source; `policy/` what an administrator sets for a product: the directory they keep its managed files in (`managed_dir`), a Unix program's system configuration directory under `/etc`, none on Windows (`system_config_dir`), and its
   registry policy (the Windows registry's `Policies` key; elsewhere none), read through
   `registry.rs`, the Windows-only reader of registry string values; `test_helper.rs` the test binary re-run as the
-  helper process both contract suites start; `HostFacts` (os, path style, file links, whether the host can be held awake, and the host's words for its Trash and settings app; the snapshot's `host`) in `mod.rs`.
+  helper process both contract suites start; `ipc/` the private channel a child of the daemon listens on for the daemon's
+  connections alone (`PrivateListen` made before the child starts, which is a Unix socket in a directory only the user can
+  enter, or, on Windows, a loopback port guarded by a token the daemon hands the child; its
+  `Address`, `Socket(path)` or `Loopback { token }`, and `Connection`, which connects to either and reads and writes within
+  timeouts; Codex's session server is the user: `adapter/codex/transport/`); `HostFacts` (os, path style, file links, whether the host can be held awake, and the host's words for its Trash and settings app; the snapshot's `host`) in `mod.rs`.
 
 ### Agent records, hooks, adapters and MCP
 
@@ -278,7 +291,7 @@ and records tests replay.
   conversation and which prompts are the agent's own completion notices or self-sent), what is common to every
   provider's payloads, the per-session ordered queue of events, and applying an event through the session's provider's
   interpreter (`apply.rs`, which also has the provider's record store arm the record watch the interpreter asks
-  for).
+  for, and starts the session's own server queue when a turn is cancelled).
 - `src/keep_awake/` — Prevent sleep: the task `main` starts that holds the host awake (through `platform::sleep`) while
   `Settings.keep_awake` is on and either `keep_awake_when` is `always` or a session is working (the UI's `sessionIsWorking`,
   kept from the session events), releases at once when that turns false, and reports whether it holds
@@ -321,9 +334,20 @@ and records tests replay.
   `models.rs` is a provider's `ModelCatalogue`, and `accounts.rs` its `AccountOps` with the parts `quota.rs`
   (`QuotaProbe`), `login.rs` (`LoginFlow`) and `shared_config.rs` (the items it shares); Codex also has
   `reset_credit.rs` (`ResetCredits`), `threads.rs` (its `ThreadRegistry`), `unarchive.rs` (its unarchiving of a rollout),
-  `app_server.rs` (the app-server start and handshake the account-level uses of `codex app-server` share: the quota
+  `app_server.rs` (the app-server start and handshake every account-level use of `codex app-server` shares: the quota
   probe, reset credit, login and MCP inventory reading, which starts it with `CODEX_INVENTORY_APP_SERVER_ARGS`, Apps
-  and plugins left on), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`); Codex, Claude
+  and plugins left on; a session's private server reuses only its handshake messages, `initialize_params` and
+  `initialized`), `private_server.rs` (the `PrivateServerPlan` a Codex
+  launch of 0.166.0 or later carries as its `PrivateServer`: the server's overrides, the arguments of the terminal that
+  attaches to it with `--remote`, the permission preset a resume applies) and `transport/` (its `CodexTransport`, the
+  session's `MessageTransport`, in `mod.rs`: identifying the session's conversation, delivering a message to Codex's
+  own queue, loading the conversation again when Codex unloaded it, starting the queue after a cancel, and the notice
+  that messages are held, `held_notice`, coded `provider.codex.messages_held`; `rpc.rs` the JSON-RPC stream, the
+  endpoint a client and the terminal connect to, and `Rpc` (its stream is a `platform::ipc::Connection`); `server.rs`
+  starting the server on a `platform::ipc::PrivateListen`, waiting for it to listen and watching it exit; the transport
+  names no OS; `resume.rs` what a
+  remote resume needs of the server, the trust of the generated hooks and the `thread/resume` that applies the
+  permission preset), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`); Codex, Claude
   Code and Grok also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server, Claude Code's over
   `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`, servers only), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script, and `account_cli.rs` the account
   directories, commands and short queries (running an agent CLI as an account), and `files.rs` the bounded reads of the
@@ -495,6 +519,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | List every process id | `platform::proc_table::pids::all` (only `platform::proc::crash` keeps its own listing, which must not allocate) |
 | Run a spawned process within bounds | `src/processes/subprocess.rs` (`run_bounded`, `run_exchange`, `Bounds`; `run_to_file` for a command that is to outlive the daemon, its output going to a file rather than a pipe) |
 | Lead a session, signal a process or a group, sweep a session; wait for the host's request to end the daemon, watch the application's process; tell a launch's processes apart (`Containment`) and stop or kill a child (`ChildHandle`) | `platform::proc` |
+| Listen on a private channel for a child process, and connect to it | `platform::ipc` (`PrivateListen`, `Address`, `Connection`); the caller owns what travels over it (Codex's is `src/adapter/codex/transport/`) |
 | Start a process on a terminal; write the daemon's own paste or key into one | `platform::term` (`spawn`, `Pty::write_input` with `Input`); the lifecycle around it is `terminal::pty::PtyCore` |
 | Run an agent's CLI as an account for a short query | `src/adapter/account_cli.rs`: `query` (admits the run, held to `Bounds::agent_query`), `AdmittedCommand::run`, and `run_query` only where the account's directory is already held (a sign-in); `last_stderr_line` words a failure |
 | An account's directory | `adapter::account_dir` (the pinned directory, else the agent's default; `src/adapter/account_cli.rs`) |
@@ -507,6 +532,8 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A value for every provider (a setting per provider, a model and effort per provider) | `protocol::PerAgent<T>` (`src/protocol/agents.rs`), indexed by `AgentId` and serialised in registry order |
 | A provider's behavior (launch plan, installed version, titles, terminal screens and dialogs, accounts, model catalogue, status line) | `adapter::provider(agent)` giving the `AgentProvider` (`src/adapter/mod.rs`); its accounts through `AccountOps` (`src/accounts/ops.rs`), its models through `ModelCatalogue` (`src/agents/models.rs`) |
 | Codex's app-server handshake; reading a JSON-RPC reply | `src/adapter/codex/app_server.rs`; `src/agents/json_rpc.rs` |
+| Deliver a session's message through a provider's own server instead of its terminal | `MessageTransport` and `PrivateServer` (`src/session/term/mod.rs`); `send_message_with_id` tries the transport first and, while the session's conversation is not yet known, falls back to the terminal write, and returns the `Route` taken; starting its queue gives a `QueueStart`; a message the agent's queue refuses is `RefusedByAgent` and one the server holds is `HeldByServer`; Codex's is `src/adapter/codex/transport/` |
+| Whether a delivery error may still have reached the agent's own queue | `acceptance_uncertain` (`src/messaging/delivery.rs`; the coded error `message_acceptance_unconfirmed`) |
 | Codex's thread state database (its location, repointing rows, carrying or forgetting threads) | `src/adapter/codex/threads.rs` (through `ThreadRegistry`, `src/accounts/thread_registry.rs`) |
 | Look up a known record or fail with its `unknown_*` error | `Store::require_project`, `require_console`, `require_account`, `require_session` |
 | Whether an agent is on the added list (every agent is while the list is undecided) | `Store::agent_is_added` (`src/store/agents.rs`); refusing a request for an agent that is not: `refuse_unless_agent_added` (opening a session) and `refuse_unless_agent_added_to` (any other purpose), `src/accounts/choice/refusals.rs` |

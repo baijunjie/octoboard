@@ -136,7 +136,9 @@ the caller itself, and the two must differ. No approval is asked: the caller own
   for them, the previous one no longer is, and its parent session will send it its instruction about them; its list also gives each
   branch's target branch, where one is recorded (see "Target branches and fork points" in
   `docs/product/revert-gate.md`). A session that is interrupted or archived, or that a message could not be written
-  to, is not told; the `note` names it and asks the caller to tell it once it can take a message.
+  to, is not told; the `note` names it and asks the caller to tell it once it can take a message. A message Codex's
+  own queue may have taken without confirming it counts as told, since it may have arrived (see "A message whose
+  acceptance is uncertain" in `docs/product/message-delivery.md`).
 - **Cleanup follows the new responsible session.** Archiving or deleting a session removes the branches it is
   responsible for (see `docs/product/branch-and-worktree-cleanup.md`), so after the move the branches go with `to` and
   no longer with `from`.

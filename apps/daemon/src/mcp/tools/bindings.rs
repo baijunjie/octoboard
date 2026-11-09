@@ -187,6 +187,13 @@ fn first_report_note(delivered: &Result<(String, Delivery)>, report: &str) -> St
             "your new parent session",
             SentBy::Reader,
         ),
+        // It may already be there, and a second would repeat it.
+        Err(err) if crate::messaging::delivery::acceptance_uncertain(err) => {
+            "Your summary may already have been delivered to your new parent session as your \
+             first report: its agent's queue did not confirm taking it. It will not be sent again, \
+             and it counts as your report for this turn, so do not report it again."
+                .to_string()
+        }
         Err(err) => format!(
             "Your summary could not be delivered to your new parent session ({err:#}), so send it \
              yourself with `{report}`."
@@ -663,6 +670,19 @@ mod tests {
             ),
             "Your summary could not be delivered to your new parent session (the pipe broke), so \
              send it yourself with `mcp__octoboard__report`."
+        );
+        // One that may already be there is not to be sent again.
+        let uncertain = crate::protocol::CodedError::raised(
+            crate::protocol::error_code::MESSAGE_ACCEPTANCE_UNCONFIRMED,
+            "not confirmed",
+            &[("agent", "Codex")],
+        );
+        let note = first_report_note(&Err(uncertain), "mcp__octoboard__report");
+        assert!(
+            note.contains("may already have been delivered")
+                && note.contains("do not report it again")
+                && !note.contains("send it yourself"),
+            "{note}"
         );
     }
 }

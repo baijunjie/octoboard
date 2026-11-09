@@ -319,6 +319,16 @@ impl StandIn {
         self
     }
 
+    pub(crate) fn with_transport(
+        mut self,
+        transport: Arc<dyn crate::session::term::MessageTransport>,
+    ) -> Self {
+        Arc::get_mut(&mut self.0)
+            .expect("configure before registering the stand-in")
+            .transport = Some(transport);
+        self
+    }
+
     pub(crate) fn with_auto_review(mut self) -> Self {
         Arc::get_mut(&mut self.0)
             .expect("configure before registering the stand-in")
@@ -495,6 +505,17 @@ pub(crate) fn tagged_live_session(
     live
 }
 
+/// [`tagged_live_session`] that stays idle, as [`idle_stand_in`] does.
+pub(crate) fn tagged_idle_live_session(
+    id: &str,
+    agent: AgentId,
+    tag: &crate::processes::ledger::ProcessTag,
+) -> StandIn {
+    let live = stand_in_of(id, agent, 80, 24, idle_command(), None, Some(tag));
+    live.trust.end_watch();
+    live
+}
+
 fn stand_in(
     id: &str,
     agent: AgentId,
@@ -551,6 +572,7 @@ fn stand_in_of(
         ),
         spawned,
         checks_composer: false,
+        transport: None,
         scratch_dir: None,
         resolves_approvals_itself: false,
         carried_trust,

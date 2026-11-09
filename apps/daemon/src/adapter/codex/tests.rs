@@ -8,6 +8,119 @@ use crate::adapter::files::SMALL_FILE_LIMIT;
 use crate::adapter::tests::spec_fixture;
 use crate::records::line_file::JSON_FILE_LIMIT;
 
+/// The Codex private server plan a launch plan carries.
+fn private_plan(plan: &LaunchPlan) -> &PrivateServerPlan {
+    plan.private_server
+        .as_ref()
+        .expect("a private server")
+        .as_any()
+        .downcast_ref()
+        .expect("Codex's plan")
+}
+
+#[test]
+fn a_supported_release_runs_a_private_server_with_the_launchs_overrides() {
+    let mut fixture = spec_fixture();
+    fixture.agent_version = Some((0, 166, 0));
+    fixture.model = Some("probe-model".to_string());
+    fixture.effort = Some("high".to_string());
+    let mut spec = fixture.spec();
+    spec.task = Some("first task");
+    let plan = CodexProvider.plan(&spec).unwrap();
+    let private = private_plan(&plan);
+    // The ordinary arguments stay whole, for a launch whose server does not come up.
+    assert_eq!(plan.args.last().map(String::as_str), Some("first task"));
+    assert_eq!(overrides(&private.args), overrides(&plan.args));
+    assert_eq!(&private.tui_args[..2], ["--cd", spec.cwd.to_str().unwrap()]);
+    assert_eq!(private.tui_args[2..], plan.args[..plan.args.len() - 1]);
+    assert_eq!(private.task.as_deref(), Some("first task"));
+    assert_eq!(
+        private.hook_command,
+        crate::platform::shell::script_command(
+            spec.hook_script,
+            crate::platform::shell::hook_dialect()
+        )
+    );
+    spec.resume_agent_session_id = Some("thread-to-resume");
+    let resumed = CodexProvider.plan(&spec).unwrap();
+    let private = private_plan(&resumed);
+    assert_eq!(private.resume_thread.as_deref(), Some("thread-to-resume"));
+    assert_eq!(&private.tui_args[..2], ["resume", "thread-to-resume"]);
+    assert_eq!(
+        &private.tui_args[2..4],
+        ["--cd", spec.cwd.to_str().unwrap()]
+    );
+    assert_eq!(private.task, None);
+    for version in [None, Some((0, 163, 0)), Some((0, 165, 0))] {
+        fixture.agent_version = version;
+        assert!(
+            CodexProvider
+                .plan(&fixture.spec())
+                .unwrap()
+                .private_server
+                .is_none(),
+            "{version:?}"
+        );
+    }
+}
+
+/// The version decides whether a launch runs a private server, and is read without running Codex:
+/// from a standalone release's `codex-package.json`, or the package of a package install.
+#[test]
+fn installs_report_the_version_from_the_package_beside_the_program() {
+    let fixture = crate::test_support::ScratchDir::new("codex-installed-version");
+    std::fs::create_dir_all(fixture.join("release/bin")).unwrap();
+    std::fs::write(fixture.join("release/bin/codex"), "").unwrap();
+    std::fs::write(
+        fixture.join("release/codex-package.json"),
+        r#"{"version":"0.166.0"}"#,
+    )
+    .unwrap();
+    let version =
+        |path: std::path::PathBuf| CodexProvider.installed_version(path.to_str().unwrap());
+    assert_eq!(
+        version(fixture.join("release/bin/codex")),
+        Some((0, 166, 0))
+    );
+    std::fs::create_dir_all(fixture.join("npm/bin")).unwrap();
+    std::fs::write(fixture.join("npm/bin/codex.js"), "").unwrap();
+    std::fs::write(
+        fixture.join("npm/package.json"),
+        r#"{"name":"@openai/codex","version":"0.167.0"}"#,
+    )
+    .unwrap();
+    assert_eq!(version(fixture.join("npm/bin/codex.js")), Some((0, 167, 0)));
+    std::fs::create_dir_all(fixture.join("other/bin")).unwrap();
+    std::fs::write(fixture.join("other/bin/codex"), "").unwrap();
+    std::fs::write(
+        fixture.join("other/package.json"),
+        r#"{"name":"something-else","version":"9.9.9"}"#,
+    )
+    .unwrap();
+    assert_eq!(version(fixture.join("other/bin/codex")), None);
+
+    // A package's native program, with Codex's own metadata beside it and the platform package
+    // above, published under `@openai/codex` with the platform in its version.
+    let native = fixture.join("node_modules/@openai/codex-darwin-arm64");
+    let target = native.join("vendor/aarch64-apple-darwin");
+    std::fs::create_dir_all(target.join("bin")).unwrap();
+    std::fs::write(target.join("bin/codex"), "").unwrap();
+    std::fs::write(
+        native.join("package.json"),
+        r#"{"name":"@openai/codex","version":"0.168.0-darwin-arm64"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        target.join("codex-package.json"),
+        r#"{"version":"0.168.0"}"#,
+    )
+    .unwrap();
+    assert_eq!(version(target.join("bin/codex")), Some((0, 168, 0)));
+    // A broken file on the way is passed over, and the suffixed version still read.
+    std::fs::write(target.join("codex-package.json"), "{ not json").unwrap();
+    assert_eq!(version(target.join("bin/codex")), Some((0, 168, 0)));
+}
+
 #[test]
 fn terminal_titles_keep_only_the_task_between_the_spinner_and_the_project() {
     let names = ["proj".to_owned()];
@@ -522,6 +635,69 @@ enabled = true
     }
 }
 
+/// A remote resume refuses permission overrides on the terminal, so the preset goes to the
+/// server, as its defaults and through `thread/resume`; a fresh terminal keeps them.
+#[test]
+fn remote_resumes_apply_the_permission_preset_through_the_server_only() {
+    let mut fixture = spec_fixture();
+    fixture.agent_version = Some((0, 166, 0));
+    for (mode, profile, policy, reviewer) in [
+        ("user", ":workspace", "on-request", "user"),
+        ("auto_review", ":workspace", "on-request", "auto_review"),
+        ("full_access", ":danger-full-access", "never", "user"),
+    ] {
+        for resume in [None, Some("conversation-1")] {
+            let settings = permission_settings(mode);
+            let mut spec = fixture.spec();
+            spec.settings = &settings;
+            spec.resume_agent_session_id = resume;
+            let plan = CodexProvider.plan(&spec).unwrap();
+            let private = private_plan(&plan);
+            let server_overrides = overrides(&private.args);
+            let client_overrides = overrides(&private.tui_args);
+            let permission = |value: &String| {
+                [
+                    "default_permissions=",
+                    "approval_policy=",
+                    "approvals_reviewer=",
+                ]
+                .iter()
+                .any(|key| value.starts_with(key))
+            };
+            assert_eq!(server_overrides.iter().filter(|v| permission(v)).count(), 3);
+            if resume.is_some() {
+                assert_eq!(
+                    private.resume_permissions,
+                    Some(super::private_server::ResumePermissions {
+                        profile,
+                        approval_policy: policy,
+                        reviewer,
+                    })
+                );
+                assert!(!client_overrides.iter().any(permission));
+                assert_eq!(
+                    client_overrides,
+                    server_overrides
+                        .iter()
+                        .filter(|value| !permission(value))
+                        .cloned()
+                        .collect::<Vec<_>>()
+                );
+            } else {
+                assert_eq!(private.resume_permissions, None);
+                assert_eq!(client_overrides, server_overrides);
+            }
+        }
+    }
+    // Without a preset a resume keeps the thread's saved choice.
+    let mut spec = fixture.spec();
+    spec.resume_agent_session_id = Some("conversation-1");
+    assert_eq!(
+        private_plan(&CodexProvider.plan(&spec).unwrap()).resume_permissions,
+        None
+    );
+}
+
 /// A hand raised for an approval the user is never shown can never be cleared by them, so the
 /// setting has to be read before the promise is made.
 #[test]
@@ -861,10 +1037,11 @@ fn codex_action_markers_are_activity_items_rather_than_task_text() {
     }
 }
 
-/// Codex has no stash the daemon uses.
+/// Codex has no stash the daemon uses, whatever its version.
 #[test]
 fn codex_never_uses_a_stash() {
-    let fixture = spec_fixture();
+    let mut fixture = spec_fixture();
+    fixture.agent_version = Some((99, 0, 0));
     assert!(!CodexProvider
         .screen()
         .native_stash(&fixture.spec(), &LaunchPlan::default()));

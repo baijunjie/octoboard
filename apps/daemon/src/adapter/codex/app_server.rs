@@ -1,7 +1,7 @@
 //! What every conversation Octoboard holds with `codex app-server` shares: how the server is
 //! started for an account outside a session (a quota probe, the use of a reset credit, a sign-in),
 //! the overrides that keep Codex quiet on such a start, and the `initialize` handshake that opens
-//! the conversation.
+//! the conversation, which a session's private app server ([`super::transport`]) opens with too.
 
 use serde_json::{json, Value};
 
@@ -45,10 +45,15 @@ pub(crate) const CODEX_INVENTORY_APP_SERVER_ARGS: &[&str] = &[
     "features.hooks=false",
 ];
 
-/// The `initialize` request that opens a conversation, as id 1: it names the client.
+/// The parameters of the `initialize` request: who the client is. A caller that needs more of the
+/// server adds its own capabilities to them.
+pub(crate) fn initialize_params() -> Value {
+    json!({"clientInfo": {"name": "octoboard", "version": env!("CARGO_PKG_VERSION")}})
+}
+
+/// The `initialize` request that opens a conversation, as id 1.
 pub(crate) fn initialize() -> Value {
-    json!({"jsonrpc": "2.0", "id": 1, "method": "initialize",
-        "params": {"clientInfo": {"name": "octoboard", "version": env!("CARGO_PKG_VERSION")}}})
+    json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": initialize_params()})
 }
 
 /// The `initialized` notification that follows the reply to `initialize`.

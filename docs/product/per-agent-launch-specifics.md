@@ -20,7 +20,7 @@ agent.
 | The agent's time limit on a call to Octoboard's tools | None is set | `-c mcp_servers.octoboard.tool_timeout_sec=660` | `tool_timeout_sec = 660` in that table |
 | The role description | `--append-system-prompt`, added to Claude Code's own system prompt | `-c developer_instructions=…`, a developer message added beside Codex's own prompt, which stays as it is | `--rules`, appended to Grok's system prompt |
 | The model and reasoning effort | `--model`, `--effort` | `-c model=…`, `-c model_reasoning_effort=…` | `--model`, `--reasoning-effort` |
-| An explicit permission choice (see "Approval modes" in `docs/product/per-agent-settings.md`) | `--permission-mode`: `auto` for **Auto**, `default` for **Manual**, `acceptEdits` for **Accept edits**, `plan` for **Plan**, `bypassPermissions` for **Bypass permissions** | `-c default_permissions=…`, `-c approval_policy=…` and `-c approvals_reviewer=…` select a complete preset (see "Codex" below) | `--permission-mode`: `default` for **Ask**, `auto` for **Auto**, `bypassPermissions` for **Always-approve** |
+| An explicit permission choice (see "Approval modes" in `docs/product/per-agent-settings.md`) | `--permission-mode`: `auto` for **Auto**, `default` for **Manual**, `acceptEdits` for **Accept edits**, `plan` for **Plan**, `bypassPermissions` for **Bypass permissions** | `-c default_permissions=…`, `-c approval_policy=…` and `-c approvals_reviewer=…` select a complete preset (see "Codex" below); a resume with Codex's private app server applies it to the conversation through the server instead (see "Codex's private app server" below) | `--permission-mode`: `default` for **Ask**, `auto` for **Auto**, `bypassPermissions` for **Always-approve** |
 | Claude compatibility while on (see "Claude compatibility" in `docs/product/per-agent-settings.md`) | Not applicable | A section appended to the `developer_instructions` text, and Claude Code's MCP servers as `-c mcp_servers.<name>.…` overrides (see "Claude compatibility for Codex" in `docs/product/compatibility-between-agents.md`) | `GROK_CLAUDE_*_ENABLED` in the environment, and, where Claude Code reads another global config file than `$HOME/.claude.json`, Claude Code's MCP servers in the per-session copy of `config.toml` (see "Claude compatibility for Grok Build" in `docs/product/compatibility-between-agents.md`) |
 | Codex compatibility while on (see "Codex compatibility" in `docs/product/per-agent-settings.md`) | Codex's MCP servers in `--mcp-config`, Codex's skills and custom prompts as a plugin passed with `--plugin-dir`, and a section appended to the `--append-system-prompt` text (see "Codex compatibility for Claude Code" in `docs/product/compatibility-between-agents.md`) | Not applicable | Codex's MCP servers and a `[skills] paths` entry in the per-session copy of `config.toml`, and a section appended to the `--rules` text (see "Codex compatibility for Grok Build" in `docs/product/compatibility-between-agents.md`) |
 | Anything else | The status line, and under **Bypass permissions** the acceptance of Claude Code's warning, in the `--settings` JSON | The overrides listed under "Codex" below | `--no-leader` (see "Grok's leader mode" below) |
@@ -83,8 +83,11 @@ are unaffected.
 
 Octoboard does not assign Codex a session id in advance. A resumed session has its conversation's id from the start;
 a new session learns its agent-side id from the first prompt submitted in it, so one opened without a task has none
-until then. Whatever the Codex version, the session runs as one terminal process, `codex` (`codex resume <id>` on a
-resume), whose own command line carries every override Octoboard passes, all of them again on a resume.
+until then; with Codex's private app server an automatic message can be that first prompt, without the user having to
+submit the draft in the composer first. A session of Codex 0.166.0 or later runs with a private app server of its own
+(see "Codex's private app server" below). Any other session, and one whose server could not be started, runs as one
+terminal process, `codex` (`codex resume <id>` on a resume), whose own command line carries every override Octoboard
+passes, all of them again on a resume.
 
 On a Windows daemon host, where the `codex` found on the `PATH` is a package manager's shim, Octoboard runs the native
 Codex program (`codex.exe`) the installed package ships instead of that shim, for the session as for its account's
@@ -128,8 +131,9 @@ The launch conditions that are visible:
   nothing is written into the user's configuration;
 - the review Codex would otherwise raise for Octoboard's injected hooks is bypassed for that launch
   (`--dangerously-bypass-hook-trust`), a resume included, which can produce two warning lines in the session's own
-  output. Nothing is recorded as trusted in the user's files. The bypass covers hook review only; it does not
-  weaken the sandbox or the approval policy.
+  output; a resume with the private app server, where Codex does not honour that bypass, trusts Octoboard's hooks as
+  described in "Codex's private app server" below. Nothing is recorded as trusted in the user's files. The bypass
+  covers hook review only; it does not weaken the sandbox or the approval policy.
 - Octoboard's own tools are pre-approved for the session, so a console session's orchestration calls raise no approval
   dialog. This covers Octoboard's tools alone; every other tool, the sandbox and the approval policy are untouched.
 - Codex's own time limit on a call to Octoboard's tools (300 s by default) is raised to 660 seconds, above Octoboard's
@@ -150,9 +154,10 @@ The launch conditions that are visible:
   signing the account in to or out of a server from Octoboard (see "Signing an account in to and out of an MCP server"
   in the same doc).
 
-Automatic messages reach Codex through its terminal, like any other agent's: Octoboard uses no stash of Codex's to set
-a draft aside, so they take the guarded terminal delivery in "Messages held until a session can take them" in
-`docs/product/message-delivery.md`.
+Automatic messages go into Codex's own queue on a launch with the private app server, leaving the composer untouched
+(see "Messages through Codex's own queue" in `docs/product/message-delivery.md`). On any other launch they reach Codex
+through its terminal, like any other agent's: Octoboard uses no stash of Codex's to set a draft aside, so they take the
+guarded terminal delivery in "Messages held until a session can take them" in `docs/product/message-delivery.md`.
 
 An explicit Codex permission preset chosen in Settings applies on every launch of any of its accounts, a resume
 included. Each is passed as three per-launch configuration overrides:
@@ -172,6 +177,57 @@ For status reporting under Custom, whether Codex reviews approval requests itsel
 Codex home that launch uses: the session's Codex config directory, else a `CODEX_HOME` the user's shell exports, else
 `~/.codex`. A trusted project's own `.codex/config.toml`, which Codex itself layers over that file, is not consulted for
 this status hint. Actual action prompts are observed separately through Codex's terminal activity title.
+
+### Codex's private app server
+
+**Which launches have one.** Every launch of Codex 0.166.0 or later, a resume included. The version is read from the
+install: the `codex-package.json` of a standalone release or the `package.json` of the
+`@openai/codex` package, found in one of the few directories above the program; on a Windows daemon host, where
+neither is found, Codex's own `--version` answer. A version with a suffix after `-` or `+` (a platform package's)
+counts by the release before it, and a metadata file that cannot be read for a version is passed over. An older
+version, and an install whose version cannot be told this way (a Homebrew one carries no such metadata), get the
+ordinary launch: the terminal alone.
+
+**How the session runs.** Octoboard first starts `codex app-server` for the session, then the terminal, which attaches
+to it (`--remote`). Both are given the launch's `-c` overrides (the hooks, Octoboard's MCP server, the role
+description, the model and effort, the permission preset, the title and notice settings listed above), the same
+environment and the same working directory. The terminal is also told the session's working directory (`--cd`), so
+Codex's folder-trust confirmation appears as it does at an ordinary launch, and Octoboard presses it under the user's
+permission as usual (see `docs/product/folder-trust.md`). On a resume:
+
+- the terminal is given none of the permission preset's overrides, since Codex refuses permission overrides when
+  resuming a remote conversation. An explicit preset is applied to the conversation through the server before the
+  terminal attaches, so it takes precedence over the conversation's saved choice as it does at an ordinary resume;
+  under **Custom (config.toml)** the saved choice stays;
+- Codex does not honour the hook-trust bypass, so Octoboard trusts only its own generated hook command, by the
+  fingerprint Codex gives it, through overrides of that server start alone. It records no trust in the user's files
+  and grants none to the user's other hooks. Hook trust does not weaken the sandbox or the approval policy.
+
+**Where the server listens.** On macOS and Linux, a Unix socket in a private directory under `/tmp`, removed with the
+server. On a Windows daemon host, a loopback WebSocket port, which any local process can reach, guarded by a random
+capability token: the server is given only the token's SHA-256, and the terminal reads the token from an environment
+variable of its own, `OCTOBOARD_CODEX_REMOTE_TOKEN`.
+
+**Requests of the server's.** Approvals and the other requests the server sends a client are answered in the terminal
+alone: Octoboard's own connections to the server, which carry its messages, leave them unanswered. A turn that runs on a
+conversation Octoboard had the server load again (see "Messages through Codex's own queue" in
+`docs/product/message-delivery.md`) while the terminal shows another task, and a turn a message started before a
+resumed session's terminal attached, send their approval requests to Octoboard's connection while it is open, which
+never answers them; the request then waits. Codex's agent command center lists that task as "Needs input", and opening
+it shows the approval in the terminal, where it can be answered (measured on Codex 0.166.0).
+
+**Its lifetime.** The server belongs to the running session. When the terminal exits, the server is ended. When the
+server exits by itself, the terminal is ended too, as if the agent had exited by itself rather than been ended by
+Octoboard, since it would otherwise wait for the server to come back for good. The server is in the launch's process
+containment and leads a process session of its own (on a Windows daemon host, a job of its own inside the launch's
+job); what that means for the background-process lists is in "Automatic stopping and its boundaries" in
+`docs/product/background-processes.md`.
+
+**When it cannot be used.** If the server does not start listening within 15 seconds, exits first, or cannot be
+initialised, or, on a resume, the hook trust or the permission preset cannot be applied, the session is launched the
+ordinary way: the terminal alone, with every override on its command line, and its automatic messages take the guarded
+terminal delivery. Nothing queued for the session is lost by it. When a single message cannot go into Codex's queue,
+see "Messages through Codex's own queue" in `docs/product/message-delivery.md`.
 
 ## Grok Build
 

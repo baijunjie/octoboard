@@ -39,6 +39,7 @@ it.each([
   ["trust_not_carried_over", { agent: "Grok Build", path: "/p", reason: "x", reason_code: "store_locked" }, "notice"],
   ["account_sharing_repair_failed", { account: "a1", name: "Work", items: "[]", cause: "permission_denied" }, "error"],
   ["provider.claude.workspace_untrusted", {}, "notice"],
+  ["provider.codex.messages_held", {}, "notice"],
 ])("shows the session notice %s with %j as an %s", (code, params, kind) => {
   expect(noticeKind(code, params)).toBe(kind);
 });

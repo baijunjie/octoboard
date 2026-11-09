@@ -9,8 +9,9 @@ A session that is working or at its prompt (paused, done, awaiting instructions,
 in background) takes a message straight away, unless one of the holds below applies to it, or it is held behind a
 message its agent did not send (see "A message written but not sent" below). A message written mid-turn is taken by
 the agent: Claude Code and Grok Build queue it and run it once the turn ends, though Claude Code can also take it into
-the turn still running, and Codex steers it into the running turn. What becomes of such messages when an owner
-interrupts the turn is in "Messages during an interrupt" in `docs/product/interrupting-turns.md`.
+the turn still running, and Codex steers one written into its terminal into the running turn. Codex's own queue (see
+"Messages through Codex's own queue" below) runs it as a turn of its own after the running one. What becomes of such
+messages when an owner interrupts the turn is in "Messages during an interrupt" in `docs/product/interrupting-turns.md`.
 
 **Draft preservation has a bounded wait.** On supported launches, Octoboard first tries to deliver the automatic
 message separately while preserving the user's draft, without waiting for the user to finish typing:
@@ -21,8 +22,12 @@ message separately while preserving the user's draft, without waiting for the us
   stash a second time. An existing stash of the user's is never overwritten by another stash operation.
   Claude Code additionally requires a verifiable Ctrl-S stash binding in the configuration this launch uses; an
   overridden binding or an unreadable or unrecognised keybindings file disables this path.
-- **Codex:** Octoboard uses no stash of Codex's, whatever its version, so its automatic messages always take the
-  guarded terminal delivery below.
+- **Codex 0.166.0 or later, on a launch with its private app server** (see "Codex's private app server" in
+  `docs/product/per-agent-launch-specifics.md`): automatic messages go into Codex's own queue and leave the composer
+  untouched, so none of the composer checks, the native stash or the three-second grace period below applies to them
+  (see "Messages through Codex's own queue" below).
+- **Any other Codex launch:** Octoboard uses no stash of Codex's, so its automatic messages take the guarded terminal
+  delivery below.
 
 Octoboard reads the composer off the session's screen with faint text left out, so Claude Code's hints in an empty
 box — a fresh session's placeholder, and "Press up to edit queued messages" while a message waits for the turn to
@@ -70,7 +75,10 @@ text, not an unexpected one.
 protection grace period from its first delivery attempt; retries and continued typing do not reset it. The exception is
 a message refused while the session's input is held for draft preservation — a draft being stashed or restored, or a
 partly written message (see "A message only partly written while the draft is stashed" below): its grace period starts
-again from its first attempt after the hold ends. During the grace period, ordinary terminal delivery requires a
+again from its first attempt after the hold ends. So does a message a Codex session's private app server held back
+before the terminal took it (see "Messages through Codex's own queue" below): its grace period starts again from its
+first attempt after the server first held it back. It starts again that way once per message only, so time the server
+holds the message back after that counts toward the grace period. During the grace period, ordinary terminal delivery requires a
 recognised empty composer and confirmation that preceding user edits were submitted. A delayed report for an earlier
 prompt, an automatic message or a background completion does not confirm a newer draft. An unsupported stash, an
 existing stash, an unrecognised composer, unconfirmed edits or an incomplete input sequence can hold delivery
@@ -271,11 +279,14 @@ because its agent reported it is waiting for the user — at a permission prompt
 | `agent_error` | The moment after a Grok Build error (above). |
 | `sharing_change` | It is being restarted for a change of its account's sharing of the default configuration, and is resumed on its conversation afterwards; what is queued for it is written into the resumed process (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`). |
 | `handoff` | It is being handed off to another agent. |
+| `submission_uncertain` | Codex's own queue did not confirm accepting a message; later messages wait up to three seconds or until another submitted prompt, whichever comes first (see "A message whose acceptance is uncertain" below). |
 | `unsent_message` | A message written into it was left unsent (see "A message written but not sent" below). |
 
 An input-box, unconfirmed-edit or draft-preservation hold — a draft being stashed or restored, or a partly written
 message — is not included in `writes_held`. When no other listed hold applies, that field can be `null` while
-`queued_messages` still counts messages waiting for safe draft preservation, confirmed edits or the end of such a hold.
+`queued_messages` still counts messages waiting for safe draft preservation, confirmed edits or the end of such a hold,
+or, on a Codex session whose messages go into Codex's own queue, for Codex to take them (see "Messages through Codex's
+own queue" below).
 
 ## A message only partly written while the draft is stashed
 
@@ -301,6 +312,171 @@ sends the `typing_blocked` notice. Then:
 
 A partial write outside a native stash is not covered by this: it drops the message and its queue (see "Messages
 held until a session can take them" above).
+
+## Messages through Codex's own queue
+
+On a Codex launch with its private app server (see "Codex's private app server" in
+`docs/product/per-agent-launch-specifics.md`), Octoboard submits each message to Codex's own queue for the session's
+conversation instead of typing it into the terminal. The composer is not read or touched: what the user has in it —
+multiline text and long collapsed pastes included — and the cursor stay as they are, and nothing of it is submitted
+with the message, whether the session is idle, mid-turn or past a cancelled turn, and before the user has submitted a
+first prompt too.
+
+**When it runs.** In an idle session the message runs at once, as a turn. Mid-turn, Codex queues it and runs it as a
+turn of its own after the running one, unlike a message written into its terminal, which Codex steers into the running
+turn. A message never overtakes anything queued before it. Codex itself starts an item added to an idle conversation
+only when its queue was empty; one added behind items a cancel left queued waits there (measured on Codex 0.166.0). So
+after adding a message to a queue that holds items ahead of it, Octoboard starts the queue's first item when that item
+is one of its own — Codex then runs the rest in order, one turn each, the new message among them — and starts nothing
+when the first item is someone else's, which leaves the message waiting behind it. Octoboard's own messages keep the
+order they were sent in.
+
+**After a cancelled turn.** Codex leaves what its queue holds there past a cancel, and does not run it by itself. After
+every cancel that stops a turn — an owner's `interrupt_session` (see "Messages during an interrupt" in
+`docs/product/interrupting-turns.md`) or the user's own cancel in the terminal (Esc, which Codex reports with its
+`Interrupt` hook event) — Octoboard looks at the queue of the session's own conversation and, when the first message
+waiting there is one of its own, starts it. Codex runs what follows it in the queue after that turn, as after any turn,
+so they run as turns of their own, one after another. A message whose acceptance was not confirmed (see "A message
+whose acceptance is uncertain" below) counts as one of Octoboard's own there. Octoboard starts nothing when none of its
+own messages wait there, and nothing when a message someone else put into the queue is ahead of its own: it never
+starts a message it did not queue, nor its own ahead of one. The cancel's hook event and an owner's interrupt each
+start the queue. A second start within about 10 seconds of one reads whether the conversation is running a turn: while
+it is, or when that cannot be read, it is the same cancel's second start and starts nothing more; a conversation idle
+again has had a cancel of its own since, and its queue is started as after any cancel. Codex's terminal does not put the user's own mid-turn input
+into this queue (measured on Codex 0.166.0: Enter steers it into the running turn, Tab queues it inside the terminal),
+so in practice only Octoboard's messages are there. The interrupt key of an owner's `interrupt_session` is never
+delayed by any of this: the queue is looked at only once the key is in.
+
+**What still holds it.** The holds in "Messages held until a session can take them" above apply as they do to the
+terminal: such a message waits while the session is being stopped, while its trust confirmation may be up, while it
+shows a screen only the user can answer, and under the other holds listed there. The draft-preservation checks and
+their grace period do not apply, and nor do the checks of "A message written but not sent" below.
+
+**Which conversation it goes to.** Always the session's own, identified once and kept while its process runs: on a
+resume, the resumed conversation; on a new session, the first conversation of the user's that the server reports
+starting. That can come before the user's first submission, so an automatic message can be the session's first prompt.
+Codex's ephemeral conversation for generating a title, its sub-agents' conversations, and further tasks the user opens
+or creates in Codex's agent command center never receive the session's messages: even while the user has switched to
+another task there, they go to the original conversation.
+
+**Before the session's own conversation is known:**
+
+- While the server has loaded no conversation the session could own — its trust confirmation still up, the terminal
+  still starting, or the agent command center open with no task — the message waits in the session's queue, and is
+  tried again every 2 seconds, and as soon as the server reports the session's conversation started.
+- The message goes through the guarded terminal delivery instead, with its draft checks and grace period (restarted
+  once after the server held it back, as "Messages held until a session can take them" above says), when the server cannot be reached, a request to it fails, or
+  the session's conversation cannot be told apart: several conversations the user started are loaded, or
+  conversations are loaded none of which the user started. Each message is judged on its own, so the next one tries
+  the queue again.
+
+**Once the session's own conversation is known**, a message never goes into the terminal, which may be showing another
+task of the agent command center. Codex's server unloads the original conversation a while after the terminal has
+switched to another task (two to three minutes, measured on Codex 0.166.0). A message for a conversation that is not
+loaded has the server load it again (`thread/resume`, naming only the conversation, so its settings stay as they are),
+which also runs what its queue already holds. When that fails, or the server cannot be reached or does not answer,
+the message waits in the session's queue and is tried again every 2 seconds. So does a message the server answers is
+overloaded and to retry later ("Server overloaded; retry later." in Codex 0.166.0): that answer takes nothing in, and
+the message does not fail. The same goes for a message Codex took into its queue but whose start it answered with
+that reply (see "A message whose acceptance is uncertain" below): it waits there and is tried again every 2 seconds;
+tried again, it is started where it waits in Codex's queue rather than added a second time, and once it is no longer
+there, having run meanwhile, it counts as delivered. When Codex otherwise refuses to take the message into its queue,
+the message fails instead of waiting (see "A message Codex's own queue refuses" below).
+
+**A server that has exited** keeps the message queued, whether or not the conversation is known: the session's
+terminal ends with its server (see "Codex's private app server" in `docs/product/per-agent-launch-specifics.md`).
+
+**Messages that wait.** While a message waits for Codex to take it — the session has no conversation yet, its
+conversation could not be loaded again, or the server could not be reached, did not answer or answered that it is
+overloaded, adding the message or starting it — its sender is told it
+was queued, `queued_messages` counts it, and `writes_held` reports nothing for it. Once messages have waited about
+30 seconds, every client is sent the `provider.codex.messages_held` notice about the session, once per wait. The window
+shows it as a toast (see `docs/product/toasts.md`): messages for the session are waiting because Codex is not taking
+them yet, and Octoboard sends them once it does and types nothing into the terminal meanwhile; the toast names no
+cause. When a message goes in, the terminal takes it, or Codex refuses it or does not confirm taking it, the wait ends
+and the notice is withdrawn (`session_notice_withdrawn` with that code), as it is when the session's server stops,
+which it does when the session ends; the window leaves a toast it is showing as it
+is.
+
+## A message whose acceptance is uncertain
+
+Octoboard adds each message to Codex's queue and then, while the message is still queued and the queue's first item is
+one of Octoboard's own, asks Codex to start that first item (see "Messages through Codex's own queue" above). A message
+gone from the queue by then, or waiting behind an item someone else queued, counts as accepted. Codex refuses to start
+an item it has already started or will run after the running turn, so a refused start is judged from Codex's queue, not
+from the refusal's wording: the message gone from the queue, or still in it behind a running turn, counts as accepted; a
+conversation the server has unloaded meanwhile is loaded again, which runs its queue, and judged once more; still in
+it with no turn running, or a queue that cannot be read then, leaves its start unconfirmed — unless Codex refused the
+start as overloaded ("Server overloaded; retry later."), in which case the message is not uncertain but waits in
+Codex's queue to be started again (see "Messages through Codex's own queue" above).
+
+If Codex's own queue may have accepted a message but that cannot be confirmed — the connection to the server lost after
+the request went out, an acknowledgement without the queued message's id, or a start left unconfirmed as above —
+Octoboard never sends that message again automatically, through the queue or the terminal. Nothing is written into
+the composer. Later messages remain queued for three seconds, and are then written, or until the agent reports another
+submitted prompt, whichever comes first; the hold is reported as `submission_uncertain`. The user should check the
+conversation before retrying manually, since the message may already be queued or running. This uncertainty does not
+discard the later messages and is distinct from a partial terminal write, which drops the affected queue as described
+above.
+
+The sender whose own message it was — a client's `send_message` request or report panel form submission
+(`submit_page`) included — is answered with the error `message_acceptance_unconfirmed`, naming its agent
+(`agent`): the agent did not confirm accepting the message, which may already be queued or running and will not be
+sent again, so it is not to be sent again before the conversation is checked. A sender whose message was queued behind
+it is told it was queued. What a reporting session is told is in `docs/product/reporting-to-owners.md`.
+
+A message Octoboard sends on its own account is taken as possibly delivered when it ends this way, not as undelivered:
+
+- a message forwarded during a handoff, or the handoff's first work prompt, raises no `handoff_messages_dropped`
+  notice (see "Messages for the original during a handoff" and "When a handoff fails" in
+  `docs/product/handing-off-sessions.md`);
+- a message whose turn is spared a synthesised report — the outcome message of a session request, the message telling
+  a relaunched session which processes its restart ended, the message of an automatic account switch — still spares
+  that turn, so a report for it is not synthesised twice;
+- a session being told of a change of its owner is not owed the notice again at its next launch (see "A change of
+  owner told at the next launch" in `docs/product/changing-session-owners.md`);
+- a session being told of a branch or process transfer is not named in the transfer's `note` as one the caller is to
+  tell itself (see "Transferring branches between sessions of an owner" in
+  `docs/product/branch-responsible-session.md`);
+- the summary `bind_to_session` delivers as the caller's first report counts as that report, and the caller is told
+  not to report it again (see "Setting a parent for an independent session" in
+  `docs/product/changing-session-owners.md`);
+- an automatic retry of a turn stopped at its model's capacity counts as sent, so the wait for it is not ended with
+  the held report (see "When the selected model is at capacity" in `docs/product/turns-hooks-do-not-report.md`).
+
+Every client is sent the `message_acceptance_unconfirmed` notice about that session, naming its agent (`agent`),
+provided the session's process that was written to is still running. The window shows it as an error alert (see
+`docs/product/error-alerts.md`) titled "Message not confirmed", naming the session and where it is: the agent did not
+confirm accepting a message Octoboard wrote into the session, and the user is to check the conversation before deciding
+whether to send it again. Its details add that the message may already be queued and will not be sent again, and that
+later messages are held for at most three seconds or until another prompt is sent. The alert, and the error a client's
+request is answered with, is a known failure with no remedy beyond its own text, not an unexpected one.
+
+## A message Codex's own queue refuses
+
+Once the session's own conversation is known, Octoboard asks Codex to add each message to that conversation's queue.
+Codex takes a message even for a conversation it has unloaded (measured on Codex 0.166.0), so a refusal of that request
+is about the message itself. Such a message fails:
+
+- It is not sent by any route: not tried again through the queue, and not written into the terminal. Nothing is
+  written into the composer.
+- The messages queued after it go on as usual; nothing behind it is held or dropped.
+- The sender whose own message it was — a client's `send_message` request or report panel form submission
+  (`submit_page`) included — is answered with the error `message_refused`, naming its agent (`agent`) and
+  giving Codex's reason (`detail`): the agent refused the message, so it was not sent. A sender whose message was
+  queued at the time is told it was queued and learns nothing more from its own call; the notice reports the refusal.
+- Every client is sent the `message_refused` notice about that session, with the same `agent` and `detail`. The window
+  shows it as an error alert (see `docs/product/error-alerts.md`) titled "Message refused", naming the session and
+  where it is: the agent refused a message Octoboard wrote for the session, so it was not sent. Its details add that
+  later messages are still sent, followed by Codex's reason, shown as raw text under **Error details** (see "Names and diagnostic details" in `docs/product/error-alerts.md`). The
+  alert, and the error a client's request is answered with, is a known failure with no remedy beyond its own text, not
+  an unexpected one.
+
+A message Octoboard sends on its own account that ends this way is undelivered, as for any other failed write, except
+that a message forwarded during a handoff, or the handoff's first work prompt, raises no `handoff_messages_dropped`
+notice, since the refusal has already been shown as `message_refused` (see "Messages for the original during a
+handoff" and "When a handoff fails" in `docs/product/handing-off-sessions.md`). What a reporting session is told is in
+`docs/product/reporting-to-owners.md`.
 
 ## A message written but not sent
 
@@ -354,7 +530,8 @@ once more only when the first became a line break: the box's rows changed, end i
 message, and the box held still so. A box the Enter did not change is waited on, not pressed into again. If neither
 comes within 15 seconds of an Enter, or the box still holds the message after the second, the message is left unsent,
 but its Enter has had its chance: no further Enter is pressed for it. This applies to every message Octoboard writes
-into such a session, mid-turn or at its prompt.
+into such a session's terminal, mid-turn or at its prompt; a message that goes into Codex's own queue (see "Messages
+through Codex's own queue" above) is not written into the terminal, so none of this applies to it.
 
 **What a message left unsent does:**
 
@@ -418,7 +595,9 @@ every client, gets the `message_not_sent` notice.
 - A message written while the agent is mid-turn. The agent queues it and sends it only when the turn ends, which no
   short wait can see, so a mid-turn message Claude Code holds back is not detected and counts as delivered.
 - Grok Build sessions, and Codex sessions outside a Windows daemon host: a message counts as delivered once it has been
-  written. A Codex message on a Windows daemon host is checked only as "Codex on a Windows daemon host" above says.
+  written. A Codex message written into the terminal on a Windows daemon host is checked only as "Codex on a Windows
+  daemon host" above says. A message Codex's own queue takes counts as delivered once the queue has accepted it, with
+  the acceptance rule in "A message whose acceptance is uncertain" above.
 - A message written through a native stash whose input recovery remains pending: the recovery rules above apply,
   and the message is not reported as an unsent draft or retried.
 - Which prompt was sent. The prompt's text is not matched against the message: a prompt the user sends within those

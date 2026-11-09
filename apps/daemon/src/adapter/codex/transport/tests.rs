@@ -1,0 +1,1388 @@
+use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::AtomicUsize;
+
+use tokio_tungstenite::tungstenite::{self, Message, WebSocket};
+
+use super::server::Listen;
+use super::*;
+use crate::session::term::QueueStart;
+use crate::test_support::PATIENCE;
+
+/// A transport to `endpoint`, with no server process behind it.
+fn fixture_transport(endpoint: Endpoint, listen: Option<Listen>) -> CodexTransport {
+    CodexTransport {
+        server: Arc::new(Mutex::new(None)),
+        endpoint,
+        shared: Arc::new(Shared::default()),
+        operation: Mutex::new(()),
+        _listen: listen,
+    }
+}
+
+/// A transport to a socket the test listens on, with no server process behind it.
+#[cfg(unix)]
+fn socket_transport() -> (CodexTransport, std::os::unix::net::UnixListener) {
+    let listen = Listen::for_host().unwrap();
+    let crate::platform::ipc::Address::Socket(socket) = listen.address() else {
+        unreachable!("a Unix host listens on a socket");
+    };
+    let socket = socket.to_path_buf();
+    let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+    let endpoint = Endpoint::Socket(socket);
+    (fixture_transport(endpoint, Some(listen)), listener)
+}
+
+/// A loopback transport, which every host can run, and the listener behind it.
+fn loopback() -> (CodexTransport, TcpListener, String) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let token = "the-token".to_string();
+    let endpoint = Endpoint::Loopback {
+        port,
+        token: token.clone(),
+    };
+    (fixture_transport(endpoint, None), listener, token)
+}
+
+/// What the fake server answers a request with.
+enum Answer {
+    Result(Value),
+    Error(&'static str),
+    /// Closes the connection without an answer.
+    Close,
+}
+
+fn receive(socket: &mut WebSocket<TcpStream>) -> Option<Value> {
+    let message = socket.read().ok()?;
+    serde_json::from_str(message.to_text().ok()?).ok()
+}
+
+/// The next connection on `listener`; panics, rather than waiting for ever, when none comes
+/// within [`PATIENCE`].
+fn accepted(listener: &TcpListener) -> TcpStream {
+    listener.set_nonblocking(true).unwrap();
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        match listener.accept() {
+            Ok((stream, _)) => {
+                stream.set_nonblocking(false).unwrap();
+                return stream;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                assert!(Instant::now() < deadline, "no connection came");
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) => panic!("accepting a connection failed: {error}"),
+        }
+    }
+}
+
+/// Accepts a connection that presents `token`, and answers its handshake.
+#[allow(
+    clippy::result_large_err,
+    reason = "the handshake callback's error type is tungstenite's"
+)]
+fn initialized(listener: &TcpListener, token: &str) -> WebSocket<TcpStream> {
+    let stream = accepted(listener);
+    stream.set_read_timeout(Some(PATIENCE)).unwrap();
+    let expected = format!("Bearer {token}");
+    let mut socket = tungstenite::accept_hdr(
+        stream,
+        |request: &tungstenite::handshake::server::Request,
+         response: tungstenite::handshake::server::Response| {
+            assert_eq!(
+                request
+                    .headers()
+                    .get("authorization")
+                    .and_then(|value| value.to_str().ok()),
+                Some(expected.as_str())
+            );
+            Ok(response)
+        },
+    )
+    .unwrap();
+    let initialize = receive(&mut socket).unwrap();
+    assert_eq!(initialize["method"], "initialize");
+    assert_eq!(
+        initialize["params"]["capabilities"]["experimentalApi"],
+        true
+    );
+    socket
+        .send(Message::Text(
+            json!({"id":initialize["id"],"result":{}}).to_string(),
+        ))
+        .unwrap();
+    assert_eq!(receive(&mut socket).unwrap()["method"], "initialized");
+    socket
+}
+
+/// Serves one connection on `listener`, answering each request as `answer` says, until the client
+/// goes; gives the requests it got, by method and parameters.
+fn serve(
+    listener: TcpListener,
+    token: String,
+    answer: impl FnMut(&str, &Value) -> Answer + Send + 'static,
+) -> std::thread::JoinHandle<Vec<(String, Value)>> {
+    serve_connections(listener, token, 1, answer)
+}
+
+/// [`serve`] for `connections` connections, one after another.
+fn serve_connections(
+    listener: TcpListener,
+    token: String,
+    connections: usize,
+    mut answer: impl FnMut(&str, &Value) -> Answer + Send + 'static,
+) -> std::thread::JoinHandle<Vec<(String, Value)>> {
+    std::thread::spawn(move || {
+        let mut requests = Vec::new();
+        for _ in 0..connections {
+            serve_one(&listener, &token, &mut answer, &mut requests);
+        }
+        requests
+    })
+}
+
+fn serve_one(
+    listener: &TcpListener,
+    token: &str,
+    answer: &mut impl FnMut(&str, &Value) -> Answer,
+    requests: &mut Vec<(String, Value)>,
+) {
+    {
+        let mut socket = initialized(listener, token);
+        while let Some(request) = receive(&mut socket) {
+            let method = request["method"].as_str().unwrap_or_default().to_string();
+            requests.push((method.clone(), request["params"].clone()));
+            let reply = match answer(&method, &request["params"]) {
+                Answer::Result(result) => json!({"id":request["id"],"result":result}),
+                Answer::Error(message) => {
+                    json!({"id":request["id"],"error":{"code":-32600,"message":message}})
+                }
+                Answer::Close => {
+                    let _ = socket.close(None);
+                    let _ = socket.flush();
+                    break;
+                }
+            };
+            if socket.send(Message::Text(reply.to_string())).is_err() {
+                break;
+            }
+        }
+    }
+}
+
+fn thread(id: &str, ephemeral: bool, source: &str, parent: Option<&str>) -> Value {
+    json!({"id":id,"ephemeral":ephemeral,"threadSource":source,"parentThreadId":parent})
+}
+
+fn methods(requests: &[(String, Value)]) -> Vec<&str> {
+    requests.iter().map(|(method, _)| method.as_str()).collect()
+}
+
+/// A transport whose server takes the identified thread `thread`'s queue request for a message
+/// and then goes without answering it, so whether the message was taken is not known; for a test
+/// of what an uncertain acceptance does further up, `check` sees the message's text.
+pub(crate) fn transport_losing_an_add(
+    check: impl Fn(&str) + Send + 'static,
+) -> (
+    CodexTransport,
+    std::thread::JoinHandle<Vec<(String, Value)>>,
+) {
+    let (transport, listener, token) = loopback();
+    transport.shared.identify("thread");
+    let server = serve(listener, token, move |method, params| match method {
+        "thread/loaded/list" => Answer::Result(json!({"data":["thread"],"nextCursor":null})),
+        "thread/queue/add" => {
+            check(params["input"][0]["text"].as_str().unwrap_or_default());
+            Answer::Close
+        }
+        other => panic!("unexpected request {other}"),
+    });
+    (transport, server)
+}
+
+/// The fake server's answers for a thread `main` that is loaded and idle, whose queue starts a
+/// message added to it itself.
+fn idle_main(method: &str, _: &Value) -> Answer {
+    match method {
+        "thread/loaded/list" => Answer::Result(json!({"data":["main"],"nextCursor":null})),
+        "thread/queue/add" => Answer::Result(json!({"queuedSubmission":{"id":"q1"}})),
+        "thread/queue/start" => Answer::Error("queued submission not found: q1"),
+        "thread/queue/list" => Answer::Result(json!({"data":[],"nextCursor":null})),
+        other => panic!("unexpected request {other}"),
+    }
+}
+
+#[test]
+fn queues_text_for_the_user_thread_and_ignores_the_ephemeral_title_thread() {
+    let (transport, listener, token) = loopback();
+    let server = serve(listener, token, |method, params| match method {
+        "thread/loaded/list" => Answer::Result(json!({"data":["title","main"],"nextCursor":null})),
+        "thread/read" if params["threadId"] == "title" => {
+            Answer::Result(json!({"thread":thread("title", true, "thread_title", None)}))
+        }
+        "thread/read" => Answer::Result(json!({"thread":thread("main", false, "user", None)})),
+        other => idle_main(other, params),
+    });
+    assert_eq!(
+        transport
+            .send("line one\nline two", "launch:ticket-12")
+            .unwrap(),
+        Sent::Queued
+    );
+    drop(transport.endpoint.connect());
+    let requests = server.join().unwrap();
+    let add = requests
+        .iter()
+        .find(|(method, _)| method == "thread/queue/add")
+        .unwrap();
+    assert_eq!(
+        add.1,
+        json!({"threadId":"main","clientUserMessageId":"launch:ticket-12",
+            "input":[{"type":"text","text":"line one\nline two","text_elements":[]}]})
+    );
+    assert_eq!(transport.shared.thread().as_deref(), Some("main"));
+}
+
+/// Whether a start Codex refused leaves the message to run is read off Codex's queue, not the
+/// refusal's words: gone from the queue, or queued behind a running turn, it runs; queued with
+/// nothing running, it may never run, and is uncertain.
+#[test]
+fn a_refused_start_is_judged_by_the_queue_whatever_its_words() {
+    for (queued, active, delivered) in [
+        (false, false, true),
+        (true, true, true),
+        (true, false, false),
+    ] {
+        let (transport, listener, token) = loopback();
+        transport.shared.identify("main");
+        let server = serve(listener, token, move |method, params| match method {
+            "thread/queue/start" => Answer::Error("a wording no release used"),
+            "thread/queue/list" if queued => Answer::Result(
+                json!({"data":[{"id":"q1","clientUserMessageId":"id"}],"nextCursor":null}),
+            ),
+            "thread/read" => Answer::Result(
+                json!({"thread":{"status":{"type": if active { "active" } else { "idle" }}}}),
+            ),
+            other => idle_main(other, params),
+        });
+        let sent = transport.send("hello", "id");
+        drop(transport);
+        server.join().unwrap();
+        if delivered {
+            assert_eq!(sent.unwrap(), Sent::Queued);
+        } else {
+            let error = sent.unwrap_err();
+            assert_eq!(error.written, 1);
+            assert!(error
+                .error
+                .get_ref()
+                .unwrap()
+                .is::<term::UncertainSubmission>());
+        }
+    }
+}
+
+#[test]
+fn the_original_thread_keeps_the_messages_when_another_task_is_open() {
+    let (transport, listener, token) = loopback();
+    transport.shared.identify("main");
+    let server = serve(listener, token, |method, params| match method {
+        // The identified thread is loaded, so nothing else is read.
+        "thread/loaded/list" => Answer::Result(json!({"data":["second","main"],"nextCursor":null})),
+        other => idle_main(other, params),
+    });
+    assert_eq!(transport.send("hello", "id").unwrap(), Sent::Queued);
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert!(!methods(&requests).contains(&"thread/read"));
+}
+
+/// The server unloads the session's conversation a few minutes after the terminal switched to
+/// another task; a message loads it again, keeping its settings, rather than going to the
+/// terminal, and waits where it cannot.
+#[test]
+fn an_unloaded_original_thread_is_loaded_again_or_waited_for() {
+    for loads in [true, false] {
+        let (transport, listener, token) = loopback();
+        transport.shared.identify("main");
+        let server = serve(listener, token, move |method, params| match method {
+            "thread/loaded/list" => Answer::Result(json!({"data":["other"],"nextCursor":null})),
+            "thread/resume" if loads => Answer::Result(json!({"thread":{"id":"main"}})),
+            "thread/resume" => Answer::Error("no rollout found"),
+            other => idle_main(other, params),
+        });
+        let sent = transport.send("hello", "id");
+        drop(transport);
+        let requests = server.join().unwrap();
+        let resume = requests
+            .iter()
+            .find(|(method, _)| method == "thread/resume")
+            .unwrap();
+        assert_eq!(resume.1, json!({"threadId":"main","excludeTurns":true}));
+        if loads {
+            assert_eq!(sent.unwrap(), Sent::Queued);
+        } else {
+            let error = sent.unwrap_err();
+            assert_eq!(
+                (error.written, error.error.kind()),
+                (0, io::ErrorKind::WouldBlock)
+            );
+            assert!(!methods(&requests).contains(&"thread/queue/add"));
+        }
+    }
+}
+
+#[test]
+fn a_conversation_that_cannot_be_told_apart_goes_to_the_terminal() {
+    for (ids, threads) in [
+        (
+            vec!["one", "two", "helper"],
+            vec![
+                thread("one", false, "user", None),
+                thread("two", false, "user", None),
+                thread("helper", false, "user", Some("one")),
+            ],
+        ),
+        (vec!["other"], vec![thread("other", false, "exec", None)]),
+    ] {
+        let (transport, listener, token) = loopback();
+        let server = serve(listener, token, move |method, params| match method {
+            "thread/loaded/list" => Answer::Result(json!({"data":ids,"nextCursor":null})),
+            "thread/read" => Answer::Result(json!({"thread": threads
+                .iter()
+                .find(|thread| thread["id"] == params["threadId"])
+                .unwrap()})),
+            other => panic!("unexpected request {other}"),
+        });
+        assert!(matches!(
+            transport.send("hello", "id").unwrap(),
+            Sent::Declined(_)
+        ));
+        drop(transport.endpoint.connect());
+        server.join().unwrap();
+        assert_eq!(transport.shared.thread(), None);
+    }
+}
+
+#[test]
+fn a_session_with_no_conversation_yet_holds_the_message_and_retries() {
+    let (transport, listener, token) = loopback();
+    let retried = Arc::new(AtomicBool::new(false));
+    let seen = retried.clone();
+    transport.attach(TransportEvents {
+        ready: Box::new(move || seen.store(true, Ordering::Release)),
+        server_gone: Box::new(|| panic!("the server did not go")),
+        held: Box::new(|_| {}),
+        released: Box::new(|_| {}),
+    });
+    let server = serve(listener, token, |method, _| match method {
+        "thread/loaded/list" => Answer::Result(json!({"data":["title"],"nextCursor":null})),
+        "thread/read" => {
+            Answer::Result(json!({"thread":thread("title", true, "thread_title", None)}))
+        }
+        other => panic!("unexpected request {other}"),
+    });
+    let error = transport.send("hello", "id").unwrap_err();
+    assert_eq!(
+        (error.written, error.error.kind()),
+        (0, io::ErrorKind::WouldBlock)
+    );
+    drop(transport.endpoint.connect());
+    server.join().unwrap();
+    let deadline = Instant::now() + PATIENCE;
+    while !retried.load(Ordering::Acquire) {
+        assert!(Instant::now() < deadline, "the queue was never retried");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// Messages that keep waiting for the session's conversation are told of once the wait has
+/// lasted, with a notice that names no cause it cannot know, and the notice is withdrawn once
+/// they go in.
+#[test]
+fn a_long_wait_is_told_once_and_withdrawn_when_the_message_goes_in() {
+    let (mut transport, listener, token) = loopback();
+    Arc::get_mut(&mut transport.shared)
+        .unwrap()
+        .held_notice_after = Duration::from_millis(50);
+    transport.shared.identify("main");
+    let held = Arc::new(Mutex::new(Vec::new()));
+    let released = Arc::new(Mutex::new(Vec::new()));
+    let (on_held, on_released) = (held.clone(), released.clone());
+    transport.attach(TransportEvents {
+        ready: Box::new(|| {}),
+        server_gone: Box::new(|| {}),
+        held: Box::new(move |notice: crate::protocol::Notice| {
+            on_held.lock().unwrap().push(notice.code);
+        }),
+        released: Box::new(move |code| {
+            on_released.lock().unwrap().push(code);
+        }),
+    });
+    // The conversation is not loaded, and loading it fails three times.
+    let failures = Arc::new(AtomicUsize::new(3));
+    let left = failures.clone();
+    let server = serve_connections(listener, token, 4, move |method, params| match method {
+        "thread/loaded/list" if left.load(Ordering::Acquire) > 0 => {
+            Answer::Result(json!({"data":[],"nextCursor":null}))
+        }
+        "thread/resume" => {
+            left.fetch_sub(1, Ordering::AcqRel);
+            Answer::Error("no rollout found")
+        }
+        other => idle_main(other, params),
+    });
+    for _ in 0..3 {
+        let error = transport.send("hello", "id").unwrap_err();
+        assert_eq!(error.error.kind(), io::ErrorKind::WouldBlock);
+        assert!(error.error.get_ref().unwrap().is::<term::HeldByServer>());
+        std::thread::sleep(Duration::from_millis(60));
+    }
+    assert_eq!(*held.lock().unwrap(), [held_code()]);
+    assert!(released.lock().unwrap().is_empty());
+    assert!(held_notice().message.contains("not taking them yet"));
+    assert_eq!(transport.send("hello", "id").unwrap(), Sent::Queued);
+    assert_eq!(*released.lock().unwrap(), [held_code()]);
+    drop(transport);
+    server.join().unwrap();
+}
+
+/// Codex takes a message even for a conversation it unloaded, so a refusal of the queue request
+/// is of the message itself: it fails, by no other route, and nothing waits.
+#[test]
+fn a_refused_queue_request_fails_the_message() {
+    let (transport, listener, token) = loopback();
+    transport.shared.identify("main");
+    let server = serve(listener, token, |method, params| match method {
+        "thread/queue/add" => Answer::Error("input too long"),
+        other => idle_main(other, params),
+    });
+    let error = transport.send("hello", "id").unwrap_err();
+    assert_eq!(error.written, 0);
+    let refusal = error
+        .error
+        .get_ref()
+        .unwrap()
+        .downcast_ref::<term::RefusedByAgent>()
+        .unwrap();
+    assert!(refusal.0.contains("input too long"), "{refusal}");
+    drop(transport);
+    server.join().unwrap();
+}
+
+/// A message is known as Octoboard's in the queue from before its queue request, so one whose
+/// acceptance was lost is still started after a cancel.
+#[test]
+fn a_message_whose_answer_was_lost_is_still_known_as_octoboards() {
+    let (transport, server) = transport_losing_an_add(|_| {});
+    assert!(transport.send("lost", "launch:7").is_err());
+    server.join().unwrap();
+    assert!(transport.shared.was_added("launch:7"));
+}
+
+#[test]
+fn a_lost_answer_to_a_queue_request_is_uncertain() {
+    let (transport, server) = transport_losing_an_add(|text| assert_eq!(text, "accepted or lost"));
+    let error = transport.send("accepted or lost", "same-id").unwrap_err();
+    server.join().unwrap();
+    assert_eq!(error.written, 1);
+    assert!(error
+        .error
+        .get_ref()
+        .unwrap()
+        .is::<term::UncertainSubmission>());
+}
+
+/// Starting the queue starts the first of Octoboard's messages waiting there and says how many of
+/// Octoboard's waited; one behind something queued by someone else is left where it is.
+#[test]
+fn starting_the_queue_starts_octoboards_first_message_unless_another_is_ahead() {
+    for (items, start, status, expected) in [
+        (
+            json!([{"id":"q-1","clientUserMessageId":"mine-1"},
+                {"id":"q-2","clientUserMessageId":"mine-2"}]),
+            Some(Answer::Result(json!({"turn":{}}))),
+            "idle",
+            QueueStart::Started(2),
+        ),
+        (
+            json!([{"id":"q-1","clientUserMessageId":"mine-1"}]),
+            Some(Answer::Error("busy")),
+            "active",
+            QueueStart::Started(1),
+        ),
+        (
+            json!([{"id":"user-item","clientUserMessageId":"typed"},
+                {"id":"q-1","clientUserMessageId":"mine-1"}]),
+            None,
+            "idle",
+            QueueStart::BehindOthers(1),
+        ),
+        (
+            json!([{"id":"user-item","clientUserMessageId":"typed"}]),
+            None,
+            "idle",
+            QueueStart::Nothing,
+        ),
+    ] {
+        let (transport, listener, token) = loopback();
+        transport.shared.identify("main");
+        transport
+            .shared
+            .added
+            .lock()
+            .unwrap()
+            .extend(["mine-1".to_string(), "mine-2".to_string()]);
+        let start = Mutex::new(start);
+        let server = serve(listener, token, move |method, params| match method {
+            "thread/queue/list" => Answer::Result(json!({"data":items,"nextCursor":null})),
+            "thread/queue/start" => {
+                assert_eq!(
+                    params,
+                    &json!({"threadId":"main","queuedSubmissionId":"q-1"})
+                );
+                start.lock().unwrap().take().expect("no start was expected")
+            }
+            "thread/read" => Answer::Result(json!({"thread":{"status":{"type":status}}})),
+            other => panic!("unexpected request {other}"),
+        });
+        let started = transport.start_queue();
+        drop(transport);
+        server.join().unwrap();
+        assert_eq!(started, expected);
+    }
+}
+
+/// The cancel's own hook and an owner's interrupt both start the queue: the second, finding
+/// nothing of Octoboard's left, reports what the first started.
+#[test]
+fn a_second_start_reports_what_the_first_started() {
+    let (transport, listener, token) = loopback();
+    transport.shared.identify("main");
+    transport
+        .shared
+        .added
+        .lock()
+        .unwrap()
+        .insert("mine-1".into());
+    let listed = Arc::new(AtomicUsize::new(0));
+    let count = listed.clone();
+    let server = serve_connections(listener, token, 2, move |method, _| match method {
+        "thread/queue/list" if count.fetch_add(1, Ordering::AcqRel) == 0 => Answer::Result(
+            json!({"data":[{"id":"q-1","clientUserMessageId":"mine-1"}],"nextCursor":null}),
+        ),
+        "thread/queue/list" => Answer::Result(json!({"data":[],"nextCursor":null})),
+        "thread/queue/start" => Answer::Result(json!({"turn":{}})),
+        other => panic!("unexpected request {other}"),
+    });
+    assert_eq!(transport.start_queue(), QueueStart::Started(1));
+    assert_eq!(transport.start_queue(), QueueStart::Started(1));
+    drop(transport);
+    server.join().unwrap();
+    // Nobody listening: the connection is refused at once rather than left to time out.
+    let (transport, listener, _) = loopback();
+    drop(listener);
+    assert_eq!(transport.start_queue(), QueueStart::Nothing);
+    transport.shared.identify("main");
+    assert!(matches!(transport.start_queue(), QueueStart::Failed(_)));
+}
+
+/// With two of Octoboard's messages waiting, the first start starts the first and counts both; a
+/// second start a moment later starts nothing more and still counts both, whatever is left.
+#[test]
+fn a_second_start_neither_starts_again_nor_under_counts() {
+    let (transport, listener, token) = loopback();
+    transport.shared.identify("main");
+    transport
+        .shared
+        .added
+        .lock()
+        .unwrap()
+        .extend(["mine-1".to_string(), "mine-2".to_string()]);
+    let lists = Arc::new(AtomicUsize::new(0));
+    let count = lists.clone();
+    let server = serve_connections(listener, token, 2, move |method, _| match method {
+        "thread/queue/list" if count.fetch_add(1, Ordering::AcqRel) == 0 => {
+            Answer::Result(json!({"data":[{"id":"q-1","clientUserMessageId":"mine-1"},
+                {"id":"q-2","clientUserMessageId":"mine-2"}],"nextCursor":null}))
+        }
+        "thread/queue/list" => Answer::Result(
+            json!({"data":[{"id":"q-2","clientUserMessageId":"mine-2"}],"nextCursor":null}),
+        ),
+        "thread/queue/start" => Answer::Result(json!({"turn":{}})),
+        "thread/read" => Answer::Result(json!({"thread":{"status":{"type":"active"}}})),
+        other => panic!("unexpected request {other}"),
+    });
+    assert_eq!(transport.start_queue(), QueueStart::Started(2));
+    assert_eq!(transport.start_queue(), QueueStart::Started(2));
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert_eq!(
+        methods(&requests)
+            .iter()
+            .filter(|method| **method == "thread/queue/start")
+            .count(),
+        1
+    );
+}
+
+/// A start moments after another, on a thread that is idle again, is for a cancel of its own: what
+/// waits is started as after any cancel, rather than left waiting for good.
+#[test]
+fn a_start_after_another_cancel_starts_what_waits() {
+    let (transport, listener, token) = loopback();
+    transport.shared.identify("main");
+    transport
+        .shared
+        .added
+        .lock()
+        .unwrap()
+        .insert("mine-2".into());
+    *transport.shared.last_start.lock().unwrap() = Some((Instant::now(), 1));
+    let server = serve(listener, token, |method, params| match method {
+        "thread/queue/list" => Answer::Result(
+            json!({"data":[{"id":"q-2","clientUserMessageId":"mine-2"}],"nextCursor":null}),
+        ),
+        "thread/read" => Answer::Result(json!({"thread":{"status":{"type":"idle"}}})),
+        "thread/queue/start" => {
+            assert_eq!(params["queuedSubmissionId"], "q-2");
+            Answer::Result(json!({"turn":{}}))
+        }
+        other => panic!("unexpected request {other}"),
+    });
+    assert_eq!(transport.start_queue(), QueueStart::Started(1));
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert!(methods(&requests).contains(&"thread/queue/start"));
+}
+
+/// A start Codex refuses as overloaded, with the message still queued and nothing running, holds
+/// the message back; written again, it is started where it waits, not added a second time, and
+/// one that has run meanwhile is done with.
+#[test]
+fn an_overloaded_start_holds_the_message_until_it_is_written_again() {
+    for runs_meanwhile in [false, true] {
+        let (transport, listener, token) = loopback();
+        transport.shared.identify("main");
+        let starts = AtomicUsize::new(0);
+        let lists = AtomicUsize::new(0);
+        let server = serve_connections(listener, token, 2, move |method, params| match method {
+            "thread/queue/start" if starts.fetch_add(1, Ordering::AcqRel) == 0 => {
+                Answer::Error("Server overloaded; retry later.")
+            }
+            "thread/queue/start" => Answer::Result(json!({"turn":{}})),
+            // Read twice around the refused start, then once for the message written again.
+            "thread/queue/list" if runs_meanwhile && lists.fetch_add(1, Ordering::AcqRel) >= 2 => {
+                Answer::Result(json!({"data":[],"nextCursor":null}))
+            }
+            "thread/queue/list" => Answer::Result(
+                json!({"data":[{"id":"q1","clientUserMessageId":"id"}],"nextCursor":null}),
+            ),
+            "thread/read" => Answer::Result(json!({"thread":{"status":{"type":"idle"}}})),
+            other => idle_main(other, params),
+        });
+        let error = transport.send("hello", "id").unwrap_err();
+        assert!(error.error.get_ref().unwrap().is::<term::HeldByServer>());
+        assert_eq!(transport.send("hello", "id").unwrap(), Sent::Queued);
+        drop(transport);
+        let requests = server.join().unwrap();
+        let count = |name: &str| methods(&requests).iter().filter(|m| **m == name).count();
+        assert_eq!(count("thread/queue/add"), 1);
+        assert_eq!(
+            count("thread/queue/start"),
+            if runs_meanwhile { 1 } else { 2 }
+        );
+    }
+}
+
+/// A message added behind others never overtakes them: an idle thread leaves an item added behind
+/// others waiting (Codex 0.166.0), so the queue's first item is started where it is Octoboard's,
+/// and nothing is started where someone else's is first. One the thread started itself is left.
+#[test]
+fn a_message_added_behind_others_does_not_overtake_them() {
+    for (queue, starts) in [
+        (
+            json!([{"id":"q-0","clientUserMessageId":"earlier"},
+                {"id":"q1","clientUserMessageId":"id"}]),
+            Some("q-0"),
+        ),
+        (
+            json!([{"id":"user","clientUserMessageId":"typed"},
+                {"id":"q1","clientUserMessageId":"id"}]),
+            None,
+        ),
+        (json!([]), None),
+    ] {
+        let (transport, listener, token) = loopback();
+        transport.shared.identify("main");
+        transport
+            .shared
+            .added
+            .lock()
+            .unwrap()
+            .insert("earlier".into());
+        let queue = Mutex::new(Some(queue));
+        let server = serve(listener, token, move |method, params| match method {
+            "thread/queue/list" => {
+                let items = queue.lock().unwrap().take().unwrap_or(json!([]));
+                Answer::Result(json!({"data":items,"nextCursor":null}))
+            }
+            "thread/queue/start" => {
+                assert_eq!(params["queuedSubmissionId"], starts.unwrap());
+                Answer::Result(json!({"turn":{}}))
+            }
+            other => idle_main(other, params),
+        });
+        assert_eq!(transport.send("hello", "id").unwrap(), Sent::Queued);
+        drop(transport);
+        let requests = server.join().unwrap();
+        assert_eq!(
+            methods(&requests).contains(&"thread/queue/start"),
+            starts.is_some()
+        );
+    }
+}
+
+/// Codex answers a request it has no room for with "Server overloaded; retry later.": the message
+/// waits rather than failing, and is not known as queued.
+#[test]
+fn an_overloaded_server_holds_the_message_back() {
+    let (transport, listener, token) = loopback();
+    transport.shared.identify("main");
+    let server = serve(listener, token, |method, params| match method {
+        "thread/queue/add" => Answer::Error("Server overloaded; retry later."),
+        other => idle_main(other, params),
+    });
+    let error = transport.send("hello", "id").unwrap_err();
+    assert!(error.error.get_ref().unwrap().is::<term::HeldByServer>());
+    assert!(!transport.shared.was_added("id"));
+    drop(transport);
+    server.join().unwrap();
+}
+
+/// `transport` with its wait told of to the session at once; gives how many times the session
+/// was told the wait ended.
+fn telling_of_waits(transport: &mut CodexTransport) -> Arc<AtomicUsize> {
+    Arc::get_mut(&mut transport.shared)
+        .unwrap()
+        .held_notice_after = Duration::ZERO;
+    let released = Arc::new(AtomicUsize::new(0));
+    let on_released = released.clone();
+    transport.attach(TransportEvents {
+        ready: Box::new(|| {}),
+        server_gone: Box::new(|| {}),
+        held: Box::new(|_| {}),
+        released: Box::new(move |_| {
+            on_released.fetch_add(1, Ordering::AcqRel);
+        }),
+    });
+    transport.shared.note_held("waiting");
+    released
+}
+
+/// What the session was told of a wait is withdrawn when the wait ends with an unconfirmed
+/// acceptance.
+#[test]
+fn a_wait_told_of_is_withdrawn_when_the_acceptance_is_unconfirmed() {
+    let (mut transport, server) = transport_losing_an_add(|_| {});
+    let released = telling_of_waits(&mut transport);
+    assert!(transport.send("lost", "id").is_err());
+    assert_eq!(released.load(Ordering::Acquire), 1);
+    drop(transport);
+    server.join().unwrap();
+}
+
+/// What the session was told of a wait is withdrawn when the server is stopped.
+#[test]
+fn a_wait_told_of_is_withdrawn_when_the_server_stops() {
+    let (mut transport, listener, _) = loopback();
+    drop(listener);
+    transport.shared.identify("thread");
+    let released = telling_of_waits(&mut transport);
+    transport.stop();
+    assert_eq!(released.load(Ordering::Acquire), 1);
+}
+
+/// A message refused outright is forgotten as Octoboard's, so nothing of it is looked for in the
+/// queue.
+#[test]
+fn a_refused_message_is_not_known_as_octoboards() {
+    let (transport, listener, token) = loopback();
+    transport.shared.identify("main");
+    let server = serve(listener, token, |method, params| match method {
+        "thread/queue/add" => Answer::Error("input too long"),
+        other => idle_main(other, params),
+    });
+    assert!(transport.send("hello", "id").is_err());
+    assert!(!transport.shared.was_added("id"));
+    drop(transport);
+    server.join().unwrap();
+}
+
+/// A conversation identified by a message ends the thread watch, which closes its connection
+/// without letting the queue be written out again.
+#[test]
+fn the_thread_watch_ends_once_a_message_identified_the_conversation() {
+    let (transport, listener, token) = loopback();
+    let ready = Arc::new(AtomicBool::new(false));
+    let seen = ready.clone();
+    transport.attach(TransportEvents {
+        ready: Box::new(move || seen.store(true, Ordering::Release)),
+        server_gone: Box::new(|| {}),
+        held: Box::new(|_| {}),
+        released: Box::new(|_| {}),
+    });
+    let server = std::thread::spawn(move || {
+        let mut socket = initialized(&listener, &token);
+        // The watch reads nothing more and closes its connection.
+        while receive(&mut socket).is_some() {}
+    });
+    let rpc = transport.endpoint.connect().unwrap();
+    transport.shared.identify("main");
+    watch_for_thread(rpc, transport.shared.clone());
+    server.join().unwrap();
+    assert!(!ready.load(Ordering::Acquire));
+}
+
+/// A start refused because the server unloaded the thread meanwhile loads it again, which runs its
+/// queue, before anything is called uncertain.
+#[test]
+fn a_refused_start_on_an_unloaded_thread_loads_it_again() {
+    let (transport, listener, token) = loopback();
+    transport.shared.identify("main");
+    let loaded = Arc::new(AtomicBool::new(false));
+    let reloaded = loaded.clone();
+    let server = serve(listener, token, move |method, params| match method {
+        "thread/queue/start" => Answer::Error("not loaded"),
+        "thread/queue/list" if reloaded.load(Ordering::Acquire) => {
+            Answer::Result(json!({"data":[],"nextCursor":null}))
+        }
+        "thread/queue/list" => Answer::Result(
+            json!({"data":[{"id":"q1","clientUserMessageId":"id"}],"nextCursor":null}),
+        ),
+        "thread/read" => Answer::Result(json!({"thread":{"status":{"type":"notLoaded"}}})),
+        "thread/resume" => {
+            reloaded.store(true, Ordering::Release);
+            Answer::Result(json!({"thread":{}}))
+        }
+        other => idle_main(other, params),
+    });
+    assert_eq!(transport.send("hello", "id").unwrap(), Sent::Queued);
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert!(methods(&requests).contains(&"thread/resume"));
+}
+
+/// A running server that cannot be reached hands the message to the terminal while the session's
+/// conversation is not known, and holds it once it is; one that has exited holds it, since its
+/// terminal is about to end with it.
+#[cfg(unix)]
+#[test]
+fn an_unreachable_server_holds_the_message_once_the_conversation_is_known() {
+    let (transport, listener) = socket_transport();
+    drop(listener);
+    *transport.server.lock().unwrap() = Some(stand_in_server("exec sleep 30"));
+    assert!(matches!(
+        transport.send("hello", "id").unwrap(),
+        Sent::Declined(_)
+    ));
+    transport.shared.identify("main");
+    let error = transport.send("hello", "id").unwrap_err();
+    assert_eq!(
+        (error.written, error.error.kind()),
+        (0, io::ErrorKind::WouldBlock)
+    );
+    *transport.server.lock().unwrap() = Some(stand_in_server("exit 0"));
+    let deadline = Instant::now() + PATIENCE;
+    while !transport.server_exited() {
+        assert!(Instant::now() < deadline, "the stand-in did not exit");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let error = transport.send("hello", "id").unwrap_err();
+    assert_eq!(
+        (error.written, error.error.kind()),
+        (0, io::ErrorKind::WouldBlock)
+    );
+}
+
+#[test]
+fn the_thread_watch_takes_the_first_user_thread_started() {
+    let (transport, listener, token) = loopback();
+    let ready = Arc::new(AtomicBool::new(false));
+    let seen = ready.clone();
+    transport.attach(TransportEvents {
+        ready: Box::new(move || seen.store(true, Ordering::Release)),
+        server_gone: Box::new(|| {}),
+        held: Box::new(|_| {}),
+        released: Box::new(|_| {}),
+    });
+    let server = std::thread::spawn(move || {
+        let mut socket = initialized(&listener, &token);
+        for started in [
+            thread("title", true, "thread_title", None),
+            thread("helper", false, "user", Some("parent")),
+            thread("main", false, "user", None),
+            thread("second", false, "user", None),
+        ] {
+            socket
+                .send(Message::Text(
+                    json!({"method":"thread/started","params":{"thread":started}}).to_string(),
+                ))
+                .unwrap();
+        }
+        // A request of the server's is left unanswered by the watch.
+        socket
+            .send(Message::Text(
+                json!({"id":7,"method":"item/commandExecution/requestApproval","params":{}})
+                    .to_string(),
+            ))
+            .unwrap();
+        // The watch ends once it has the thread, which closes its connection; it answered
+        // nothing on the way.
+        let mut answered = false;
+        while let Some(message) = receive(&mut socket) {
+            answered |= message.get("id").is_some();
+        }
+        assert!(!answered);
+    });
+    let rpc = transport.endpoint.connect().unwrap();
+    watch_for_thread(rpc, transport.shared.clone());
+    let deadline = Instant::now() + PATIENCE;
+    while !ready.load(Ordering::Acquire) {
+        assert!(Instant::now() < deadline, "no thread was identified");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(transport.shared.thread().as_deref(), Some("main"));
+    server.join().unwrap();
+}
+
+#[test]
+fn events_before_the_session_attaches_are_passed_on_when_it_does() {
+    let (transport, _listener, _) = loopback();
+    transport.shared.ready();
+    transport.shared.server_gone();
+    transport.shared.events.lock().unwrap().held = true;
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let (ready, gone, held) = (calls.clone(), calls.clone(), calls.clone());
+    transport.attach(TransportEvents {
+        ready: Box::new(move || ready.lock().unwrap().push("ready")),
+        server_gone: Box::new(move || gone.lock().unwrap().push("gone")),
+        held: Box::new(move |_| held.lock().unwrap().push("held")),
+        released: Box::new(|_| {}),
+    });
+    assert_eq!(*calls.lock().unwrap(), ["gone", "held", "ready"]);
+}
+
+#[test]
+fn a_resume_applies_the_whole_permission_preset_to_the_thread() {
+    let params = resume::resume_params(
+        "saved-thread",
+        Path::new("/workspace"),
+        super::super::private_server::ResumePermissions {
+            profile: ":workspace",
+            approval_policy: "on-request",
+            reviewer: "auto_review",
+        },
+    );
+    assert_eq!(
+        params,
+        json!({
+            "threadId":"saved-thread", "cwd":"/workspace", "permissions":":workspace",
+            "approvalPolicy":"on-request", "approvalsReviewer":"auto_review"
+        })
+    );
+}
+
+#[test]
+fn resume_fingerprints_only_the_generated_session_flag_hook() {
+    let metadata = json!({"data":[{"hooks":[
+        {"handlerType":"command","source":"sessionFlags","command":"/scratch/hook","key":"/<session-flags>/config.toml:stop:0:0","currentHash":"sha256:own"},
+        {"handlerType":"command","source":"user","command":"/scratch/hook","key":"user-hook","currentHash":"sha256:user"},
+        {"handlerType":"command","source":"sessionFlags","command":"user-custom-command","key":"other-hook","currentHash":"sha256:other"}
+    ]}]});
+    let overrides = resume::own_hook_trust(&metadata, "/scratch/hook").unwrap();
+    assert_eq!(overrides[0], "-c");
+    assert_eq!(
+        overrides[1],
+        "hooks.state={\"/<session-flags>/config.toml:stop:0:0\"={trusted_hash=\"sha256:own\"}}"
+    );
+    let parsed: toml::Table = overrides[1].parse().unwrap();
+    assert_eq!(parsed["hooks"]["state"].as_table().unwrap().len(), 1);
+}
+
+#[test]
+fn a_loopback_server_is_given_only_the_token_hash_and_the_terminal_reads_the_token() {
+    let listen = Listen::loopback().unwrap();
+    let crate::platform::ipc::Address::Loopback { token } = listen.address() else {
+        unreachable!();
+    };
+    let token = token.to_string();
+    assert_eq!(token.len(), 64);
+    let args = listen.server_args();
+    assert_eq!(
+        args[..6],
+        [
+            "app-server",
+            "--listen",
+            "ws://127.0.0.1:0",
+            "--ws-auth",
+            "capability-token",
+            "--ws-token-sha256"
+        ]
+    );
+    use sha2::Digest;
+    assert_eq!(
+        args[6],
+        server::hex(&sha2::Sha256::digest(token.as_bytes()))
+    );
+    assert!(!args.iter().any(|arg| arg.contains(token.as_str())));
+    let endpoint = Endpoint::Loopback {
+        port: 50865,
+        token: token.clone(),
+    };
+    assert_eq!(
+        endpoint.client_args(),
+        [
+            "--remote",
+            "ws://127.0.0.1:50865",
+            "--remote-auth-token-env",
+            rpc::TOKEN_VARIABLE
+        ]
+    );
+    assert_eq!(
+        endpoint.client_env(),
+        [(rpc::TOKEN_VARIABLE.to_string(), token.clone())]
+    );
+}
+
+#[test]
+fn the_port_is_read_from_the_line_the_server_prints_once_it_listens() {
+    use server::listening_port;
+    assert_eq!(
+        listening_port("  listening on: ws://127.0.0.1:50865\n"),
+        Some(50865)
+    );
+    assert_eq!(
+        listening_port("  readyz: http://127.0.0.1:50865/readyz"),
+        None
+    );
+    assert_eq!(listening_port("listening on: ws://127.0.0.1:0"), None);
+    assert_eq!(listening_port("codex app-server (WebSockets)"), None);
+}
+
+/// A line of the server's that is not UTF-8 is read as best it can be, and the lines after it
+/// still arrive: a reader that stopped there would leave the pipe to fill and the server to block.
+#[test]
+fn a_line_that_is_not_utf8_does_not_stop_the_output_reader() {
+    let output: &[u8] = b"codex \xff\xfe app-server\n  listening on: ws://127.0.0.1:4321\n";
+    let lines = server::read_lines_for_test(output);
+    assert_eq!(lines.len(), 2);
+    assert_eq!(server::listening_port(&lines[1]), Some(4321));
+}
+
+/// A server process standing in for Codex's, running `script`.
+#[cfg(unix)]
+fn stand_in_server(script: &str) -> ServerProcess {
+    use crate::platform::proc::{crash, ChildHandle, ProcessId, Reach};
+    let mut command = std::process::Command::new("/bin/sh");
+    command.args(["-c", script]);
+    Reach::Session.lead(&mut command);
+    let child = command.spawn().unwrap();
+    let handle = ChildHandle::started(ProcessId(child.id()), Reach::Session, None).unwrap();
+    let crash_cleanup = crash::register(&handle, true);
+    ServerProcess {
+        child,
+        handle,
+        crash_cleanup,
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn stopping_the_session_reaps_its_server_and_removes_the_socket() {
+    let (transport, listener) = socket_transport();
+    let server = stand_in_server("exec sleep 30");
+    let pid = server.handle.pid();
+    *transport.server.lock().unwrap() = Some(server);
+    transport.stop();
+    assert!(!crate::platform::proc::crash::is_registered(pid));
+    assert!(crate::platform::proc::unreaped_state(pid).is_none());
+    let Endpoint::Socket(socket) = &transport.endpoint else {
+        unreachable!("a Unix host listens on a socket");
+    };
+    let path = socket.parent().unwrap().to_path_buf();
+    drop(transport);
+    assert!(!path.exists());
+    drop(listener);
+}
+
+/// Watches `transport`'s server as a started one is watched, its end reported to `gone`.
+#[cfg(unix)]
+fn watch(transport: &CodexTransport, gone: Arc<AtomicBool>) {
+    let stopping = transport.shared.clone();
+    watch_for_exit(
+        transport.server.clone(),
+        move || stopping.stopping.load(Ordering::Acquire),
+        move || gone.store(true, Ordering::Release),
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_server_that_dies_ends_the_session_and_a_stopped_one_does_not() {
+    let (transport, _listener) = socket_transport();
+    let gone = Arc::new(AtomicBool::new(false));
+    *transport.server.lock().unwrap() = Some(stand_in_server("exit 3"));
+    watch(&transport, gone.clone());
+    let deadline = Instant::now() + PATIENCE;
+    while !gone.load(Ordering::Acquire) {
+        assert!(
+            Instant::now() < deadline,
+            "the server's end was not reported"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    let (transport, _listener) = socket_transport();
+    let gone = Arc::new(AtomicBool::new(false));
+    *transport.server.lock().unwrap() = Some(stand_in_server("exec sleep 30"));
+    watch(&transport, gone.clone());
+    transport.stop();
+    std::thread::sleep(server::EXIT_POLL * 3);
+    assert!(!gone.load(Ordering::Acquire));
+}
+
+/// The fake Codex a start test runs: this test binary, run as [`fake_app_server`].
+#[cfg(unix)]
+mod fake {
+    use super::*;
+    use std::os::unix::net::UnixListener;
+
+    /// The environment variable naming what the fake does.
+    pub(super) const MODE: &str = "OCTOBOARD_FAKE_CODEX_MODE";
+    /// The environment variable naming the file each start of the fake appends a line to: its pid,
+    /// the socket it was told to listen on, and whether it was given hook trust.
+    pub(super) const LOG: &str = "OCTOBOARD_FAKE_CODEX_LOG";
+    /// The hook command the fake reports its session-flag hook as.
+    pub(super) const HOOK: &str = "fake-hook";
+
+    /// The binary that runs the fake.
+    pub(super) fn binary() -> ResolvedBinary {
+        ResolvedBinary {
+            program: std::env::current_exe().expect("the test binary"),
+            leading_args: [
+                "fake-codex",
+                "--exact",
+                "adapter::codex::transport::tests::fake::fake_app_server",
+                "--ignored",
+                "--nocapture",
+                "--quiet",
+                "--test-threads=1",
+                "--",
+            ]
+            .iter()
+            .map(std::ffi::OsString::from)
+            .collect(),
+        }
+    }
+
+    /// One start of the fake, as its log line records it.
+    pub(super) struct Started {
+        pub(super) pid: u32,
+        pub(super) socket: std::path::PathBuf,
+        pub(super) trusted: bool,
+    }
+
+    pub(super) fn starts(log: &Path) -> Vec<Started> {
+        std::fs::read_to_string(log)
+            .unwrap_or_default()
+            .lines()
+            .map(|line| {
+                let mut fields = line.split('\t');
+                Started {
+                    pid: fields.next().unwrap().parse().unwrap(),
+                    socket: fields.next().unwrap().into(),
+                    trusted: fields.next() == Some("trusted"),
+                }
+            })
+            .collect()
+    }
+
+    /// Runs as Codex's app server when [`binary`] starts it; does nothing in an ordinary run.
+    #[test]
+    #[ignore = "run as a process of its own by the tests that start the private server"]
+    fn fake_app_server() {
+        let args: Vec<String> = std::env::args().collect();
+        let Some(at) = args.iter().position(|arg| arg == "--listen") else {
+            return;
+        };
+        let socket = args[at + 1].strip_prefix("unix://").unwrap().to_string();
+        let trusted = args.iter().any(|arg| arg.starts_with("hooks.state="));
+        if let Ok(log) = std::env::var(LOG) {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(log)
+                .unwrap();
+            writeln!(
+                file,
+                "{}\t{socket}\t{}",
+                std::process::id(),
+                if trusted { "trusted" } else { "untrusted" }
+            )
+            .unwrap();
+        }
+        let mode = std::env::var(MODE).unwrap_or_default();
+        match mode.as_str() {
+            "exit" => std::process::exit(2),
+            "silent" => loop {
+                std::thread::sleep(Duration::from_secs(1));
+            },
+            _ => {}
+        }
+        let listener = UnixListener::bind(&socket).unwrap();
+        for stream in listener.incoming() {
+            let Ok(stream) = stream else { continue };
+            let mode = mode.clone();
+            std::thread::spawn(move || {
+                let Ok(mut socket) = tungstenite::accept(stream) else {
+                    return;
+                };
+                while let Ok(message) = socket.read() {
+                    let Ok(request) =
+                        serde_json::from_str::<Value>(message.to_text().unwrap_or(""))
+                    else {
+                        continue;
+                    };
+                    if request.get("id").is_none() {
+                        continue;
+                    }
+                    let result = match request["method"].as_str().unwrap_or_default() {
+                        "hooks/list" => json!({"data":[{"hooks":[{"handlerType":"command",
+                            "source":"sessionFlags","command":HOOK,
+                            "key":"/<session-flags>/config.toml:stop:0:0",
+                            "currentHash":"sha256:fake"}]}]}),
+                        "thread/resume" if mode == "refuse-resume" => {
+                            let _ = socket.send(Message::Text(
+                                json!({"id":request["id"],
+                                    "error":{"code":-32600,"message":"refused"}})
+                                .to_string(),
+                            ));
+                            continue;
+                        }
+                        _ => json!({}),
+                    };
+                    let _ = socket.send(Message::Text(
+                        json!({"id":request["id"],"result":result}).to_string(),
+                    ));
+                }
+            });
+        }
+    }
+}
+
+/// Starts the fake Codex as a session's private server, doing `mode`, for a resume of `thread-1`
+/// with a permission preset; gives the start's outcome and the fake's starts.
+#[cfg(unix)]
+fn start_fake(mode: &str) -> (Result<CodexTransport>, Vec<fake::Started>) {
+    let scratch = crate::test_support::ScratchDir::new("codex-fake-server");
+    let log = scratch.join("starts");
+    let environment: HashMap<String, String> = [
+        (fake::MODE.to_string(), mode.to_string()),
+        (fake::LOG.to_string(), log.to_string_lossy().into_owned()),
+    ]
+    .into_iter()
+    .collect();
+    let plan = PrivateServerPlan {
+        args: vec!["-c".into(), "model=\"m\"".into()],
+        tui_args: Vec::new(),
+        task: None,
+        hook_command: fake::HOOK.into(),
+        resume_thread: Some("thread-1".into()),
+        resume_permissions: Some(super::super::private_server::ResumePermissions {
+            profile: ":workspace",
+            approval_policy: "on-request",
+            reviewer: "user",
+        }),
+    };
+    let containment = Containment::create("test", "codex-fake-server").unwrap();
+    let started =
+        CodexTransport::start(&fake::binary(), &plan, &environment, &scratch, &containment);
+    let starts = fake::starts(&log);
+    (started, starts)
+}
+
+/// Whether the process `pid` is gone: no longer a process of this one's, nor running.
+#[cfg(unix)]
+fn gone(pid: u32) -> bool {
+    !crate::test_support::is_running(pid as i32)
+}
+
+/// A resume starts the server again with trust for the generated hook, on a socket of its own,
+/// and the terminal is given that socket; the first server and its socket are gone.
+#[cfg(unix)]
+#[test]
+fn a_resume_restarts_the_server_with_hook_trust_and_attaches_to_the_new_one() {
+    let (started, starts) = start_fake("serve");
+    let transport = started.unwrap();
+    assert_eq!(starts.len(), 2);
+    assert!(!starts[0].trusted && starts[1].trusted);
+    assert_ne!(starts[0].socket, starts[1].socket);
+    assert!(gone(starts[0].pid));
+    assert!(!starts[0].socket.parent().unwrap().exists());
+    assert_eq!(
+        transport.client_args(),
+        [
+            "--remote".to_string(),
+            format!("unix://{}", starts[1].socket.display())
+        ]
+    );
+    assert_eq!(transport.shared.thread().as_deref(), Some("thread-1"));
+    drop(transport);
+    assert!(gone(starts[1].pid));
+    assert!(!starts[1].socket.parent().unwrap().exists());
+}
+
+/// A preset the server refuses fails the start, which the launch then makes without the server:
+/// the server is ended and its socket removed.
+#[cfg(unix)]
+#[test]
+fn a_refused_permission_preset_fails_the_start_and_leaves_nothing() {
+    let (started, starts) = start_fake("refuse-resume");
+    assert!(started.is_err());
+    assert_eq!(starts.len(), 2);
+    for start in &starts {
+        assert!(gone(start.pid));
+        assert!(!start.socket.parent().unwrap().exists());
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_server_that_exits_or_never_listens_fails_the_start() {
+    let error = start_fake("exit").0.err().unwrap();
+    assert!(
+        format!("{error:#}").contains("exited before becoming ready"),
+        "{error:#}"
+    );
+    // A server that never listens; tried again until the fake had started within the short
+    // timeout, which a loaded machine may not let it do at the first attempt.
+    let deadline = Instant::now() + PATIENCE;
+    let (started, starts) = loop {
+        server::START_TIMEOUT_OVERRIDE.with(|timeout| timeout.set(Some(Duration::from_secs(1))));
+        let (started, starts) = start_fake("silent");
+        server::START_TIMEOUT_OVERRIDE.with(|timeout| timeout.set(None));
+        if !starts.is_empty() || Instant::now() >= deadline {
+            break (started, starts);
+        }
+    };
+    let error = started.err().unwrap();
+    assert!(
+        format!("{error:#}").contains("did not start listening in time"),
+        "{error:#}"
+    );
+    assert!(gone(starts[0].pid));
+    assert!(!starts[0].socket.parent().unwrap().exists());
+}

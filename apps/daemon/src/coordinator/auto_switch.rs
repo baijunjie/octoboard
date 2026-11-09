@@ -1079,13 +1079,14 @@ fn tell_sessions(
     owner_notices::tell_owner_it_was_switched(state, moved, from, to, continued);
 }
 
-/// Writes `text` into the session `id`, queued until it can take it. Whether it was accepted.
+/// Writes `text` into the session `id`, queued until it can take it. Whether it was accepted, or
+/// may have been: one the agent's own queue may have taken counts, since its turn may come.
 fn tell(state: &Arc<AppState>, id: &str, text: &str) -> bool {
     match delivery::write_message(state, id, text, WhenBlocked::Queue) {
         Ok(_) => true,
         Err(err) => {
             tracing::debug!(session = %id, %err, "telling a session of its switch failed");
-            false
+            delivery::acceptance_uncertain(&err)
         }
     }
 }

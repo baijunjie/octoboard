@@ -171,11 +171,31 @@ pub async fn interrupt_session(state: &Arc<AppState>, id: &str) -> Result<Interr
         });
     };
     let written = state.written_mid_turn(id);
+    let transport = live.transport.clone();
     let settle = settle();
     let pressed = {
         let state = state.clone();
         tokio::task::spawn_blocking(move || press(&state, &live, interrupt, settle)).await?
     }?;
+    // What the session's own server took stays queued past a cancel: it is run now, as turns of
+    // its own, rather than reported lost. Asked only once the key is in, which nothing may delay,
+    // and the keys being in, the note is not lost to a failure here.
+    let started = match (&pressed, transport) {
+        (Pressed::Keys { ended: true, .. }, Some(transport)) => {
+            let started = tokio::task::spawn_blocking(move || transport.start_queue())
+                .await
+                .unwrap_or_else(|error| {
+                    crate::session::term::QueueStart::Failed(format!(
+                        "starting the queue failed: {error}"
+                    ))
+                });
+            if let crate::session::term::QueueStart::Failed(error) = &started {
+                tracing::warn!(session = %id, %error, "could not start what the agent's own queue holds after an interrupt");
+            }
+            Some(started)
+        }
+        _ => None,
+    };
     let status = state
         .session_record(id)
         .map(|session| state.agent_status(&session))
@@ -202,7 +222,7 @@ pub async fn interrupt_session(state: &Arc<AppState>, id: &str) -> Result<Interr
             ended: true,
         } => (
             true,
-            interrupted_note(agent, interrupt, written, draft, prompt),
+            interrupted_note(agent, interrupt, written, started, draft, prompt),
         ),
     };
     Ok(Interrupted {
@@ -287,6 +307,7 @@ fn interrupted_note(
     agent: AgentId,
     interrupt: &Interrupt,
     written: usize,
+    started: Option<crate::session::term::QueueStart>,
     draft: Draft,
     prompt: Restored,
 ) -> String {
@@ -298,6 +319,11 @@ fn interrupted_note(
         // Counted by the status read before each write, so a message written just as the turn
         // began or ended can fall on the wrong side; hence "about".
         note.push_str(&(interrupt.written_during_turn)(written));
+    }
+    if let (Some(queued_waiting), Some(started)) = (interrupt.queued_waiting, &started) {
+        if let Some(sentence) = queued_waiting(started) {
+            note.push_str(&sentence);
+        }
     }
     note.push_str(&draft_note(agent, interrupt, draft));
     if prompt == Restored::Left {
@@ -336,7 +362,8 @@ fn judge(state: &Arc<AppState>, session: &Session) -> Result<Option<Arc<LiveSess
         Some(WriteHold::AgentAction) => return Err(waiting(id, false)),
         Some(WriteHold::Handoff | WriteHold::SharingChange) => return Err(busy(id)),
         // A session held only for these is at its prompt or in a turn like any other.
-        Some(WriteHold::AgentError | WriteHold::UnsentMessage) | None => {}
+        Some(WriteHold::AgentError | WriteHold::UnsentMessage | WriteHold::SubmissionUncertain)
+        | None => {}
     }
     // A trust screen a failed press or a cursor key left up keeps its hand raised after the write
     // hold has let go of it.

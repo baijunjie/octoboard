@@ -227,7 +227,11 @@ that turn's end to settle.
 - the session found, when the wait is up, no longer as the failure left it: its process replaced, anything typed or
   written into its terminal, another turn ended, its account, model, effort or conversation changed, or it is *waiting
   for the user* or *dormant* rather than at its prompt;
-- the retry message being refused because the session cannot take a message at that moment.
+- the retry message being refused because the session cannot take a message at that moment, or failing to be
+  written — Codex's own queue refusing it included (see "A message Codex's own queue refuses" in
+  `docs/product/message-delivery.md`). A retry message that Codex's own queue may have taken without confirming it
+  counts as sent and does not end the wait (see "A message whose acceptance is uncertain" in
+  `docs/product/message-delivery.md`).
 
 The owner is then given the failed report it was told would not come, carrying Codex's error text and saying that
 Octoboard's automatic retry did not go ahead and that the user can retry later or switch the session's model manually.

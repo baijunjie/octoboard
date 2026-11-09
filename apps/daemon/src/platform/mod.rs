@@ -8,6 +8,7 @@
 //! use it.
 
 pub(crate) mod fs;
+pub(crate) mod ipc;
 pub(crate) mod names;
 pub(crate) mod open;
 pub(crate) mod policy;

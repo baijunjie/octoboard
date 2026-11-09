@@ -373,10 +373,12 @@ async fn wait_then_retry(state: Arc<AppState>, id: String, pending: Pending) {
         tokio::task::spawn_blocking(move || {
             // Refused rather than queued: a session that cannot take it now is not at the prompt
             // the failure left it at.
-            matches!(
-                delivery::write_message(&state, &id, &text, WhenBlocked::Refuse),
-                Ok(Delivery::Written)
-            )
+            // One the agent's own queue may have taken may have been written: it is not given
+            // up on.
+            match delivery::write_message(&state, &id, &text, WhenBlocked::Refuse) {
+                Ok(delivery) => delivery == Delivery::Written,
+                Err(error) => delivery::acceptance_uncertain(&error),
+            }
         })
         .await
         .unwrap_or(false)

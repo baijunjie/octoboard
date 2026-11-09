@@ -24,7 +24,7 @@ carries:
 | Field | Meaning |
 |---|---|
 | `interrupted` | `true` when the interrupt key was written and the turn ended within the wait (see "After the keys" below); `false` otherwise, including when there was nothing to interrupt. |
-| `status` | The session's status once the interrupt has settled. It can already read *working* again when a message its agent had queued started the next turn at once. |
+| `status` | The session's status once the interrupt has settled. It can already read *working* again when a message its agent had queued, or one Octoboard started from Codex's own queue (see "Messages during an interrupt" below), started the next turn at once. |
 | `note` | Prose saying what the caller is to know (see "What the note says" below). |
 
 Over the control protocol the request is `{"type": "interrupt_session", "id": …, "session": …}` and the reply is
@@ -104,8 +104,9 @@ before its first token" in `docs/product/turns-hooks-do-not-report.md`). Either 
 - the session is at its prompt, its process and conversation intact;
 - the interrupted turn is not reported on: no report is synthesised for the owner for it (see "When a session does not
   report" in `docs/product/reporting-to-owners.md`);
-- messages Octoboard holds for the session are written once the interrupt is done (see "Messages during an interrupt"
-  below).
+- messages Octoboard holds for the session are written once the interrupt is done, and on a Codex session Octoboard's
+  messages waiting in Codex's own queue are started, unless a message someone else queued is ahead of them (see
+  "Messages during an interrupt" below).
 
 ## Messages during an interrupt
 
@@ -115,13 +116,40 @@ agent puts back in its input box, and written right afterwards (see "Messages he
 
 **What becomes of the messages written during the cancelled turn** differs by agent, and the note says it, with about
 how many messages Octoboard wrote into the session while that turn ran (approximate: a message written just as the
-turn began or ended can fall on either side):
+turn began or ended can fall on either side). For Codex, messages waiting in Codex's own queue and messages written
+into its terminal are counted apart, and each kind gets its own sentence, so both can appear in one note:
 
 - **Claude Code** may already have taken some into the turn it cancelled; the rest stay queued in it and run next, as
   a new turn.
 - **Grok Build** keeps them queued and runs them next, as a new turn.
-- **Codex** steers a message written mid-turn into the running turn, which the cancel throws away with it: unless the
-  turn had already acted on them, they were not acted on and are to be sent again.
+- **Codex, messages written into its terminal** — on a launch without its private app server, or on one with it a
+  message that went through the terminal instead of Codex's queue (see "Messages through Codex's own queue" in
+  `docs/product/message-delivery.md`): Codex steers such a message into the running turn, which the cancel throws away
+  with it. Unless the turn had already acted on them, they were not acted on, and the note says to resend whatever
+  still matters.
+- **Codex, messages waiting in Codex's own queue** (see "Messages through Codex's own queue" in
+  `docs/product/message-delivery.md`): such a message was never part of the cancelled turn, and stays queued past the
+  cancel. Once the interrupt has stopped the turn, Octoboard starts the first of its own messages waiting in the queue
+  of the session's own conversation, so they run as turns of their own, one after another — unless a message someone
+  else queued is ahead of them (see "After a cancelled turn" in `docs/product/message-delivery.md`, which applies to a
+  cancel the user makes in the terminal too). Nothing of this delays the key: the queue is looked at only once the key
+  is in. The note says what starting the queue came to:
+  - **started:** how many of Octoboard's messages were waiting in Codex's queue, that they were not part of the
+    cancelled turn and now run as turns of their own, one after another, and not to send them again. When the cancel's
+    own hook event started them first, within about the last 10 seconds, and the conversation is still running a turn
+    (or that cannot be read), the call starts nothing more and the note still counts them, giving the larger of what
+    that start found and what waits in the queue now. A conversation idle again by then has had a cancel of its own
+    since: the call starts the queue as after any cancel, and the note says what that start came to, counting only
+    what it found now;
+  - **behind others:** how many of Octoboard's messages wait in Codex's queue behind messages someone else queued,
+    that Octoboard did not start them ahead of those, and that the session is to be checked with `get_session` before
+    they are sent again;
+  - **unknown:** the queue could not be read or started, so Octoboard's messages may still be waiting there, and the
+    session is to be checked with `get_session` before any is sent again;
+  - nothing of the queue when none of Octoboard's messages were waiting there.
+
+  When the session still reads *working* after the wait (see "After the keys" above), the call starts nothing and its
+  note says nothing of the queue.
 
 ## What the note says
 
@@ -133,7 +161,7 @@ The note is prose for the caller, and says whichever of these apply:
 - which keys went in when not all did, and why the rest did not;
 - that the session still reads *working* after the wait;
 - that the turn was stopped and the session awaits its next instruction by `instruct_session`;
-- what may have become of the messages written during the cancelled turn, with their approximate count (see
-  "Messages during an interrupt" above);
+- what may have become of the messages written during the cancelled turn, with their approximate count, and for those
+  waiting in Codex's own queue, what starting them came to (see "Messages during an interrupt" above);
 - that a draft in Grok Build's composer was cleared, which Grok may let the user undo with ctrl+z;
 - that the input box still holds text after the interrupt, which the user should clear before more is sent.

@@ -1,6 +1,11 @@
-//! Codex adapter. Configuration is injected through repeated per-invocation `-c` overrides on the
-//! terminal's own command line, without changing the user's configuration files. A resume repeats
-//! them, the permission preset included.
+//! Codex adapter. Configuration is injected through repeated per-invocation `-c` overrides,
+//! without changing the user's configuration files. A resume repeats them, the permission preset
+//! included. Releases from 0.166.0 on run the session with a private app server that the terminal
+//! attaches to with `--remote` ([`private_server`]): the server takes the overrides, hooks and model
+//! execution being its, and the terminal takes them as well, rendering and startup notices being
+//! its, except that a remote resume refuses permission overrides, which the server then applies to
+//! the thread before the terminal connects. Older releases, and a launch whose server fails to come
+//! up, run the terminal on its own with every override on its command line.
 //!
 //! `CODEX_HOME` must not be used to *inject* anything: it makes Codex ignore the user's entire
 //! global setup (`~/.codex/AGENTS.md`, model choice, approval policy, skills, plugins), not just add
@@ -58,7 +63,9 @@
 //! review does not rule out manual approvals.
 //!
 //! Codex allocates its own thread ids, so the conversation id arrives through the hooks; thread id
-//! and session id match.
+//! and session id match. A private server reports the thread it starts before the first submission
+//! ([`transport`]), so automatic messages can go into its queue while the user is still composing
+//! the first prompt.
 
 pub(crate) mod accounts;
 mod app_server;
@@ -73,6 +80,7 @@ mod mcp_auth;
 mod mcp_inventory;
 pub(crate) mod models;
 mod native_binary;
+mod private_server;
 pub(crate) mod quota;
 pub(crate) mod records;
 mod reset_credit;
@@ -84,11 +92,12 @@ mod switch_continue;
 #[cfg(test)]
 mod tests;
 pub(crate) mod threads;
+pub(crate) mod transport;
 mod unarchive;
 
 use serde_json::json;
 
-use super::files::canonical_project;
+use super::files::{canonical_project, read_regular_text, SMALL_FILE_LIMIT};
 use super::{AgentProvider, LaunchPlan, LaunchSpec, COMMAND_HOOK_TIMEOUT_SECS};
 use crate::platform::shell::{self, ResolvedBinary};
 use crate::protocol::{error_code, AgentId, CodedError};
@@ -97,6 +106,7 @@ use crate::session::screen::ScreenReader;
 use crate::session_tools;
 use claude_compatibility::reserved_env;
 use config::{model_migrations, project_server_names, read_config, server_names, ConfigFile};
+use private_server::{private_server_supported, PrivateServerPlan, ResumePermissions};
 
 /// The permission preset held under `approval_reviewer`. Unset leaves permission selection to
 /// Codex's native launch or resume behavior.
@@ -108,6 +118,21 @@ enum PermissionMode {
 }
 
 impl PermissionMode {
+    /// The built-in permission profile, approval policy and reviewer the preset selects. Built-in
+    /// profiles keep a preset from inheriting legacy writable roots or network access.
+    fn preset(self) -> ResumePermissions {
+        let (profile, approval_policy, reviewer) = match self {
+            Self::User => (":workspace", "on-request", "user"),
+            Self::AutoReview => (":workspace", "on-request", "auto_review"),
+            Self::FullAccess => (":danger-full-access", "never", "user"),
+        };
+        ResumePermissions {
+            profile,
+            approval_policy,
+            reviewer,
+        }
+    }
+
     fn of(settings: &crate::providers::ProviderSettings) -> Option<Self> {
         match settings.choice("approval_reviewer")? {
             "user" => Some(Self::User),
@@ -244,6 +269,35 @@ impl AgentProvider for CodexProvider {
 
     fn native_binary(&self, binary: &ResolvedBinary) -> anyhow::Result<Option<ResolvedBinary>> {
         native_binary::of(binary)
+    }
+
+    /// Read from the package metadata above the program: `codex-package.json` in a standalone
+    /// release and beside a package's native program, the `package.json` of `@openai/codex` (or of
+    /// a platform package published under its name, whose version carries the platform after a
+    /// `-`) in a package install. A file that cannot be read for a version is passed over.
+    fn installed_version(&self, binary: &str) -> Option<super::AgentVersion> {
+        let binary = crate::hostfs::canonical(binary).ok()?;
+        for directory in binary.ancestors().skip(1).take(4) {
+            for name in ["codex-package.json", "package.json"] {
+                let Ok(text) = read_regular_text(&directory.join(name), SMALL_FILE_LIMIT) else {
+                    continue;
+                };
+                let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+                    continue;
+                };
+                if name == "package.json"
+                    && value.get("name").and_then(|value| value.as_str()) != Some("@openai/codex")
+                {
+                    continue;
+                }
+                let version = value.get("version").and_then(|value| value.as_str());
+                let release = version.and_then(|version| version.split(['-', '+']).next());
+                if let Some(version) = release.and_then(super::parse_version) {
+                    return Some(version);
+                }
+            }
+        }
+        None
     }
 
     /// Codex's title is a list of items joined by ` | `: a spinner, a status such as `[ ! ] Action
@@ -479,32 +533,37 @@ impl AgentProvider for CodexProvider {
             args.push(format!("model_reasoning_effort={}", toml_string(effort)));
         }
 
-        if let Some(mode) = PermissionMode::of(spec.settings) {
-            let (profile, policy, reviewer) = match mode {
-                PermissionMode::User => (":workspace", "on-request", "user"),
-                PermissionMode::AutoReview => (":workspace", "on-request", "auto_review"),
-                PermissionMode::FullAccess => (":danger-full-access", "never", "user"),
-            };
-            // Built-in profiles keep a preset from inheriting legacy writable roots or network
-            // access. Explicit per-launch choices also replace a resumed thread's saved choices.
+        let preset = PermissionMode::of(spec.settings).map(PermissionMode::preset);
+        if let Some(preset) = preset {
+            // Explicit per-launch choices also replace a resumed thread's saved choices.
             for (key, value) in [
-                ("default_permissions", profile),
-                ("approval_policy", policy),
-                ("approvals_reviewer", reviewer),
+                ("default_permissions", preset.profile),
+                ("approval_policy", preset.approval_policy),
+                ("approvals_reviewer", preset.reviewer),
             ] {
                 args.push("-c".to_string());
                 args.push(format!("{key}={}", toml_string(value)));
             }
         }
 
-        if spec.resume_agent_session_id.is_none() {
-            if let Some(task) = spec.task {
-                args.push(task.to_string());
-            }
+        let task = spec.task.filter(|_| spec.resume_agent_session_id.is_none());
+        let private_server = private_server_supported(spec.agent_version).then(|| {
+            Box::new(PrivateServerPlan::new(
+                &args,
+                spec.cwd,
+                task,
+                command.clone(),
+                spec.resume_agent_session_id,
+                preset,
+            )) as Box<dyn crate::session::term::PrivateServer>
+        });
+        if let Some(task) = task {
+            args.push(task.to_string());
         }
 
         Ok(LaunchPlan {
             args,
+            private_server,
             env,
             resolves_approvals_itself: resolves_approvals_itself(spec, &config),
             ..LaunchPlan::default()

@@ -465,7 +465,7 @@ it("resolves only producer-declared record IDs, preserving names that happen to 
 });
 
 it.each([
-  ["provider.codex.login_busy", {}], ["provider.codex.unarchive_failed", { detail: "denied" }],
+  ["provider.codex.login_busy", {}], ["provider.codex.messages_held", {}], ["provider.codex.unarchive_failed", { detail: "denied" }],
   ["provider.codex.native_program_missing", {}],
   ["provider.grok.home_not_initialized", { path: "/tmp/home" }],
   ["agent_not_available", { agent: "Codex" }], ["provider.claude.workspace_untrusted", {}],

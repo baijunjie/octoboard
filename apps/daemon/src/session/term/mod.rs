@@ -4,7 +4,7 @@ mod image_path;
 mod invisible;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -202,9 +202,28 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     }
     process_tag.containment().prepare(&mut environment);
     environment.insert("TERM".to_string(), pty::TERM.to_string());
+    let (args, transport) = match &plan.private_server {
+        Some(server) => match server.start(&binary, &environment, cwd, process_tag.containment()) {
+            Ok(started) => {
+                environment.extend(started.env);
+                (started.args, Some(started.transport))
+            }
+            // The ordinary launch stands on its own: a server that does not come up costs the
+            // session only the delivery that would have gone through it.
+            Err(err) => {
+                tracing::warn!(
+                    session = %session_id,
+                    error = %format!("{err:#}"),
+                    "the agent's own server could not be started; launching its terminal on its own"
+                );
+                (plan.args.clone(), None)
+            }
+        },
+        None => (plan.args.clone(), None),
+    };
     let mut cmd = host_term::Command::new(&binary.program);
     cmd.args(&binary.leading_args);
-    cmd.args(&plan.args);
+    cmd.args(&args);
     cmd.env_clear();
     for (key, value) in &environment {
         cmd.env(key, value);
@@ -229,12 +248,23 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         launch_id: process_tag.launch_id().to_string(),
         spawned,
         checks_composer: true,
+        transport: transport.clone(),
         scratch_dir: Some(scratch),
         resolves_approvals_itself: plan.resolves_approvals_itself,
         carried_trust: plan.carried_trust,
-        before_scratch_removal: plan
-            .after_exit
-            .map(|after_exit| Box::new(move || after_exit.run()) as Box<dyn FnOnce() + Send>),
+        before_scratch_removal: {
+            let after_exit = plan.after_exit;
+            (transport.is_some() || after_exit.is_some()).then(move || {
+                Box::new(move || {
+                    if let Some(transport) = transport {
+                        transport.stop();
+                    }
+                    if let Some(after_exit) = after_exit {
+                        after_exit.run();
+                    }
+                }) as Box<dyn FnOnce() + Send>
+            })
+        },
     }));
     live.enable_native_stash(native_stash);
     if let Some(prompt) = task.as_deref().and_then(launch_prompt) {
@@ -247,6 +277,122 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         agent_session_id,
         notice: plan.notice,
     })
+}
+
+/// A server of the provider's own that a session's automatic messages go through instead of its
+/// terminal.
+pub trait MessageTransport: Send + Sync {
+    /// Delivers `text` as the message `logical_id`. An error whose `written` is 0 took nothing in;
+    /// one carrying [`UncertainSubmission`] may have.
+    fn send(&self, text: &str, logical_id: &str) -> Result<Sent, PartialWrite>;
+    /// Connects the server's events to the running session, once it is registered; an event that
+    /// came before is passed on then.
+    fn attach(&self, events: TransportEvents);
+    /// Has the server run the messages it took that wait in its queue, as it does not by itself
+    /// after a turn the user or an owner cancelled, and says what came of it.
+    fn start_queue(&self) -> QueueStart;
+    /// Ends the server; called after the session's process is reaped.
+    fn stop(&self);
+}
+
+/// What came of a [`MessageTransport::send`] that did not fail.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Sent {
+    /// The server took the message.
+    Queued,
+    /// The server did not take it and nothing of it reached the server, for the reason given; the
+    /// terminal can take it instead.
+    Declined(String),
+}
+
+/// What a session's own server tells the session, through [`MessageTransport::attach`].
+pub struct TransportEvents {
+    /// The server can now take a message it had to hold back, so the session's queue is to be
+    /// written out again.
+    pub ready: Box<dyn Fn() + Send + Sync>,
+    /// The server ended while the session ran: its terminal, which depends on it, is to end too.
+    pub server_gone: Box<dyn Fn() + Send + Sync>,
+    /// Messages have waited long for the server to take them, and the user is to be told this
+    /// notice about the session.
+    pub held: Box<dyn Fn(Notice) + Send + Sync>,
+    /// The server took them after all: the notice of this code that [`Self::held`] gave is
+    /// withdrawn.
+    pub released: Box<dyn Fn(crate::protocol::Code) + Send + Sync>,
+}
+
+/// What came of [`MessageTransport::start_queue`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QueueStart {
+    /// None of the server's messages waited in its queue.
+    Nothing,
+    /// This many of them waited and now run, or ran just before, one turn each.
+    Started(usize),
+    /// This many of them wait behind messages someone else queued, so nothing was started ahead
+    /// of those.
+    BehindOthers(usize),
+    /// Whether any waited, and what became of them, could not be told, for this reason.
+    Failed(String),
+}
+
+/// The agent's own queue refused a message outright, for the reason given: nothing of it was
+/// taken, and it is not sent again by any route.
+#[derive(Debug)]
+pub struct RefusedByAgent(pub String);
+
+impl std::fmt::Display for RefusedByAgent {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for RefusedByAgent {}
+
+/// The session's own server holds a message back for now, for the reason given: nothing of it was
+/// taken, and it is written again later, by the server or, failing it, the terminal.
+#[derive(Debug)]
+pub struct HeldByServer(pub String);
+
+impl std::fmt::Display for HeldByServer {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for HeldByServer {}
+
+/// The way a message went into the session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Route {
+    /// Into the queue of the session's own server, which runs it as a turn of its own.
+    Queued,
+    /// Into its terminal.
+    Terminal,
+}
+
+/// A started [`PrivateServer`]: what the terminal is started with and the transport to the server.
+pub struct StartedServer {
+    /// Replaces `LaunchPlan::args`.
+    pub args: Vec<String>,
+    /// Added to the terminal's environment.
+    pub env: Vec<(String, String)>,
+    pub transport: Arc<dyn MessageTransport>,
+}
+
+/// How a launch starts such a server, when its plan has one.
+pub trait PrivateServer: Send + Sync {
+    /// Starts the server for the session, with the launch's environment and in the launch's
+    /// containment, before its terminal.
+    fn start(
+        &self,
+        binary: &crate::platform::shell::ResolvedBinary,
+        environment: &HashMap<String, String>,
+        cwd: &Path,
+        containment: &crate::platform::proc::Containment,
+    ) -> Result<StartedServer>;
+
+    /// The plan itself, for the tests of the provider that made it.
+    #[cfg(test)]
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// Work a launch leaves for once its process has exited (`LaunchPlan::after_exit`), done before the
@@ -288,19 +434,36 @@ pub const HELD_FRAGMENT: &str = concat!(
      sent now waits until then."
 );
 
-#[cfg(test)]
-pub fn send_message(session: &LiveSession, text: &str) -> Result<(), PartialWrite> {
-    paste_message(session, text, false)
+/// Acceptance could not be established after the queue request was sent. Retrying could duplicate
+/// it.
+#[derive(Debug)]
+pub struct UncertainSubmission(pub String);
+
+impl std::fmt::Display for UncertainSubmission {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
 }
 
-/// Submits a message by checked bracketed paste + Enter.
+impl std::error::Error for UncertainSubmission {}
+
+#[cfg(test)]
+pub fn send_message(session: &LiveSession, text: &str) -> Result<(), PartialWrite> {
+    send_message_with_id(session, text, &Uuid::new_v4().to_string(), false).map(|_| ())
+}
+
+/// Submits a message through the session's own server ([`MessageTransport`]) where it has one, or
+/// by checked bracketed paste + Enter.
 ///
-/// A failure's `written` counts bytes of the **framed** message as the terminal encodes the paste
-/// and its Enter, not of `text`, so zero is
+/// On the terminal path, a failure's `written` counts bytes of the **framed** message as the
+/// terminal encodes the paste and its Enter, not of `text`, so zero is
 /// the one case where nothing of the message reached the session. Any other count may have left an
 /// unterminated paste in the input line, or — for a count short of the paste introducer — a
 /// truncated escape sequence; either way the message may not be written again.
 ///
+/// Where the server may have accepted the message without confirming it, the failure carries
+/// [`UncertainSubmission`] and nothing is written into the terminal, which could deliver it twice.
+/// Where nothing of it reached the server, the terminal path below takes it.
 /// The input write checks for an empty, acknowledged composer or saves and restores the draft
 /// through a supported native stash. Preservation has a bounded grace period; after expiry,
 /// delivery may include unfinished user input and retained keys are released into the current editor.
@@ -308,26 +471,53 @@ pub fn send_message(session: &LiveSession, text: &str) -> Result<(), PartialWrit
 /// because the paste is discarded but the trailing Enter confirms whatever option is highlighted —
 /// at Claude Code's trust dialog that exits the session, and at Grok's approval modal it selects
 /// always-approve. Writing mid-turn is safe and is the better path: the agent takes the message
-/// itself, queuing it until the turn ends or, for Codex, steering it into the running turn.
-pub fn paste_message(
+/// itself, queuing it until the turn ends or, for Codex in its terminal, steering it into the
+/// running turn; Codex's own queue runs it as a turn of its own after the running one.
+pub fn send_message_with_id(
     session: &LiveSession,
     text: &str,
+    logical_id: &str,
     allow_mixed: bool,
-) -> Result<(), PartialWrite> {
+) -> Result<Route, PartialWrite> {
+    if let Some(transport) = &session.transport {
+        if session.is_frozen()
+            || session.trust.holds_writes()
+            || session.look_for_dialog().current.is_some()
+        {
+            return Err(PartialWrite {
+                written: 0,
+                error: std::io::Error::new(
+                    std::io::ErrorKind::WouldBlock,
+                    "the session's terminal is frozen, or shows its trust confirmation or a dialog",
+                ),
+            });
+        }
+        match transport.send(&shaped(text), logical_id)? {
+            Sent::Queued => return Ok(Route::Queued),
+            // Nothing of the message reached the server, so the terminal takes it instead.
+            Sent::Declined(reason) => tracing::warn!(
+                session = %session.id,
+                %reason,
+                "the agent's own server did not take a message; writing it into the terminal"
+            ),
+        }
+    }
     let framed = frame_message(session.agent, text);
     let [Input::Paste(prompt), _] = &framed else {
         unreachable!("a message is framed as a paste");
     };
-    session.write_message_input(&framed, prompt, allow_mixed)
+    session
+        .write_message_input(&framed, prompt, allow_mixed)
+        .map(|()| Route::Terminal)
 }
 
-/// Shapes a message into the inputs `paste_message` writes: a paste of the message, made as
-/// [`shaped`] says and with whatever the receiving agent needs on top, then Enter. Written as one
-/// buffer, which is what makes a multi-line message arrive as a single submitted message with no
-/// delay needed between the paste and the Enter, except where the terminal hands the agent the
-/// paste as keys and the agent would read that Enter as part of it (`crate::session::paste_apart`
-/// writes the Enter apart there). Pulled out as a pure function so the
-/// ordering — both strips before the slash guard, not after — is something a test can pin
+/// Shapes a message into the inputs `send_message_with_id` writes on the terminal path: a paste of
+/// the message, made as [`shaped`] says and with whatever the receiving agent needs on top, then
+/// Enter. Written as one buffer, which is what makes a multi-line message arrive as a single
+/// submitted message with no delay needed between the paste and the Enter, except where the
+/// terminal hands the agent the paste as keys and the agent would read that Enter as part of it
+/// (`crate::session::paste_apart` writes the Enter apart there). Pulled out as a pure function so
+/// the ordering — both strips before the slash guard, not after — is something a test can pin
 /// directly, rather than re-deriving it from a copy of this logic; the send path itself needs a
 /// `LiveSession` and a PTY, which is why it is not tested directly.
 pub(crate) fn frame_message(agent: AgentId, text: &str) -> [Input; 2] {

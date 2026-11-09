@@ -73,8 +73,12 @@ by then: the message is kept for it, see "Reports and notices for an interrupted
 `docs/product/reporting-to-owners.md`), could not be told, with the reason, or was not told because the message was
 written into its input but its agent did not send it to the conversation — it is in the input box, or went to a view of
 the agent's background agents — the user having been told to check the session (see "A message written but not sent" in
-`docs/product/message-delivery.md`). When the new owner could not be told, the note says to tell it of the transfer with
-`inform_session`. Once the binding has changed the transfer stands, whatever became of the messages.
+`docs/product/message-delivery.md`). The session counts as not told, with the reason, when Codex's own queue may have
+taken its message without confirming it: the reason says the message may already be queued or running and will not be
+sent again, so it is not to be sent again before the conversation is checked, and no notice is left owed for its next
+launch (see "A message whose acceptance is uncertain" in `docs/product/message-delivery.md`). When the new owner could
+not be told, the note says to tell it of the transfer with `inform_session`. Once the binding has changed the transfer
+stands, whatever became of the messages.
 
 ## Releasing a session from its owner
 
@@ -143,10 +147,11 @@ it to drive the session is refused as for any session that is not its own.
 The call returns `session`, `role: "coordinator"` and a `note` saying that the session has no parent now, is no longer
 the caller's, is the user's own session, is no longer instructed or driven by the caller and no longer reports to it,
 though `inform_session` can still tell it something, and whether it was told, will be told as soon as it can take a
-message, is not running and will be told when it next starts, or was not told because the message was written into its
+message, is not running and will be told when it next starts, was not told because the message was written into its
 input but its agent did not send it to the conversation, the user having been told to check the session (see "A message
-written but not sent" in `docs/product/message-delivery.md`). Once the binding is cleared the release stands, whatever
-became of the message.
+written but not sent" in `docs/product/message-delivery.md`), or could not be told, with the reason: the case of a
+message Codex's own queue may have taken without confirming it, as for `transfer_session` above. Once the binding is
+cleared the release stands, whatever became of the message.
 
 ## Unbinding a session from the window
 
@@ -225,7 +230,10 @@ report panel were withdrawn with the tools for them; what became of its summary 
   the user has been told to check the owner (see "A message written but not sent" in
   `docs/product/message-delivery.md`);
 - kept for the owner, interrupted by then, and delivered once it is resumed (see "Reports and notices for an interrupted
-  owner" in `docs/product/reporting-to-owners.md`).
+  owner" in `docs/product/reporting-to-owners.md`);
+- possibly delivered already: the owner is a Codex session whose own queue may have taken it without confirming it (see
+  "A message whose acceptance is uncertain" in `docs/product/message-delivery.md`). It will not be sent again, and it
+  counts as the caller's report for this turn, so the caller is told not to report it again.
 
 Every outcome but the first tells the caller not to send it again. Once the caller is bound, the binding stands: a
 summary that could not be delivered is reported in the note, with the reason, and the caller is told to send it with
@@ -258,7 +266,9 @@ the coordinator's tools.
 
 A session whose owner changes — by a release, a `transfer_session`, or a handoff that moves the sessions of the
 original (see "Who is told" in `docs/product/handing-off-sessions.md`) — while it has no process running, or whose
-message about the change could not be written, is **owed a notice** of it. The notice is kept with the session, across
+message about the change could not be written, is **owed a notice** of it. A message Codex's own queue may have taken
+without confirming it leaves no notice owed, since it may have arrived (see "A message whose acceptance is uncertain"
+in `docs/product/message-delivery.md`). The notice is kept with the session, across
 a restart of Octoboard, and is not part of the session record clients read.
 
 It is delivered when the session's process is next started — a resume, a reopen, or any other relaunch, such as one for

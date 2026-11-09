@@ -499,7 +499,10 @@ pub(crate) async fn tell_the_caller(state: &Arc<AppState>, caller_id: &str, mess
     if let Err(err) =
         delivery::write_message_off_runtime(state, caller_id, message, WhenBlocked::Queue).await
     {
-        state.clear_turn_credit(caller_id, OUTCOME_OPENING);
+        // One that may have arrived keeps the credit, or its turn would be reported twice.
+        if !crate::messaging::delivery::acceptance_uncertain(&err) {
+            state.clear_turn_credit(caller_id, OUTCOME_OPENING);
+        }
         tracing::debug!(
             session = %caller_id,
             %err,

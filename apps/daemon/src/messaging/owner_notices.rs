@@ -466,7 +466,8 @@ pub(crate) struct Parting<'a> {
 /// starts. A write that fails, a process that ended meanwhile say, leaves the notice for the next
 /// launch too: it is built then from the binding as it stands, so telling twice does no harm. The
 /// `parting` of a release is kept with the notice that is left owed, as long as the session is
-/// still unbound.
+/// still unbound. One its agent's own queue may have taken without confirming it
+/// ([`delivery::acceptance_uncertain`]) is returned as that error and left owed by nothing.
 pub(crate) async fn tell_now_or_leave(
     state: &Arc<AppState>,
     id: &str,
@@ -479,6 +480,9 @@ pub(crate) async fn tell_now_or_leave(
     }
     match delivery::write_message_off_runtime(state, id, text, WhenBlocked::Queue).await {
         Ok(delivery) => Ok(Some(delivery)),
+        // It may have arrived, so it is not told again at the next launch; the caller says what is
+        // known of it.
+        Err(err) if delivery::acceptance_uncertain(&err) => Err(err),
         Err(err) => {
             tracing::debug!(session = %id, %err, "telling a session of its parent session failed");
             match parting {

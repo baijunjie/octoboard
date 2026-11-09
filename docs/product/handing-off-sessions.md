@@ -369,7 +369,10 @@ moved. The held queue is kept even if the original's process ends meanwhile.
   anything that did not arrive. These messages were never part-written into a terminal, so the notice says nothing of
   an input line. The exception is a forwarded message lost because the receiving session stopped taking input part way
   through a write: that is reported as any such loss is (see `docs/product/message-delivery.md`), not again as
-  `handoff_messages_dropped`.
+  `handoff_messages_dropped`. Nor is a forwarded message that Codex's own queue may have taken without confirming
+  it: it may have arrived, and is reported as `message_acceptance_unconfirmed` (see "A message whose acceptance is
+  uncertain" in `docs/product/message-delivery.md`). Nor is one Codex's own queue refused: that is reported as
+  `message_refused` (see "A message Codex's own queue refuses" in `docs/product/message-delivery.md`).
 - What the user types into the original's terminal meanwhile is held too, but is not part of the queue and is never
   forwarded: it goes into the original if the hold is released with the original still running, and is reported as
   lost terminal input once the original is archived (see "Typing and the mouse" in
@@ -402,7 +405,11 @@ Every refusal comes before anything is written or started. After that:
 - **The first work prompt is immediately refused by message delivery** — every window is sent the
   `handoff_messages_dropped` notice about the receiving session, with the same guidance to check its terminal and
   resend missing content as for undeliverable forwarded messages above. The completed move and archive still count as
-  a successful handoff; they are not undone. A prompt accepted into the queue follows ordinary delivery rules.
+  a successful handoff; they are not undone. A prompt accepted into the queue follows ordinary delivery rules. A prompt
+  that Codex's own queue may have taken without confirming it raises no `handoff_messages_dropped` notice: it may have
+  arrived, and is reported as `message_acceptance_unconfirmed` (see "A message whose acceptance is uncertain" in
+  `docs/product/message-delivery.md`). Nor does a prompt Codex's own queue refused, which is reported as
+  `message_refused` (see "A message Codex's own queue refuses" in `docs/product/message-delivery.md`).
 
 A handoff that succeeds is answered with the receiving session; `handoff_session`'s answer is in "Handing off from an
 owner's tool" above.

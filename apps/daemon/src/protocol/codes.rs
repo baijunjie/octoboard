@@ -277,6 +277,15 @@ pub mod error_code {
     /// stashed: only it was dropped, and the session holds Octoboard's later writes until the user
     /// has sent a prompt after it, so nothing is run together with the fragment.
     pub const QUEUED_MESSAGES_LOST: Code = Code("queued_messages_lost");
+    /// A message for the session went into its agent's own queue, which did not confirm taking it:
+    /// it may already be queued or running, and is not sent again. As the notice of the same code;
+    /// `params` names the `agent`.
+    pub const MESSAGE_ACCEPTANCE_UNCONFIRMED: Code = Code("message_acceptance_unconfirmed");
+    /// A message for the session was refused outright by its agent's own queue, which took
+    /// nothing of it: it is not sent by any route, and the messages queued after it go on. As
+    /// the notice of the same code; `params` names the `agent` and gives the agent's reason as
+    /// `detail`.
+    pub const MESSAGE_REFUSED: Code = Code("message_refused");
     pub const PAGE_NOT_CURRENT: Code = Code("page_not_current");
     pub const BINARY_NOT_FOUND: Code = Code("binary_not_found");
     pub const SHELL_ENVIRONMENT_TIMEOUT: Code = Code("shell_environment_timeout");
@@ -685,6 +694,13 @@ pub mod notice_code {
     /// box; nothing more is written into the session until a prompt is sent. `params` names the
     /// `agent`.
     pub const MESSAGE_NOT_SENT: Code = Code("message_not_sent");
+    /// The session's agent did not confirm accepting a message written into its own queue. The
+    /// message may already be queued, and is not sent again. `params` names the `agent`.
+    pub const MESSAGE_ACCEPTANCE_UNCONFIRMED: Code = Code("message_acceptance_unconfirmed");
+    /// The session's agent refused a message written into its own queue outright: it was not
+    /// sent, and later messages go on. `params` names the `agent` and gives its reason as
+    /// `detail`.
+    pub const MESSAGE_REFUSED: Code = Code("message_refused");
     /// A message written into the session was thrown away by a dialog its agent raised as the
     /// message went in; it is back at the front of the queue and is written again once the dialog
     /// has been answered. `params` names the `agent`.

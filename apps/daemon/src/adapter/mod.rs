@@ -258,6 +258,9 @@ pub fn pinned_config_dir<'a>(spec: &LaunchSpec<'a>, agent: AgentId) -> Result<Op
 #[derive(Default)]
 pub struct LaunchPlan {
     pub args: Vec<String>,
+    /// A server of the provider's own that the session's automatic messages go through, started
+    /// with the launch; the terminal is then started with the arguments it gives.
+    pub private_server: Option<Box<dyn crate::session::term::PrivateServer>>,
     /// Environment entries layered on top of the shell snapshot. The launch sets `TERM` after
     /// these, and in a project session `GIT_CONFIG_*`, `OCTOBOARD_SESSION_ID`,
     /// `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_KEY` too, so an adapter can neither see nor
@@ -852,14 +855,16 @@ pub mod tests {
         assert!(super::provider(test).compatibility_source().is_none());
     }
 
-    /// A provider with only a launch plan launches with nothing of the optional kinds: no carried
-    /// trust, no work after its exit, no notice, no status line and no hook script.
+    /// A provider with only a launch plan launches with nothing of the optional kinds: no private
+    /// server, no carried trust, no work after its exit, no notice, no status line and no hook
+    /// script.
     #[test]
     fn the_test_provider_launches_without_any_optional_part() {
         let fixture = spec_fixture();
         let test = super::provider(crate::protocol::AgentId::TEST);
         let plan = test.plan(&fixture.spec()).expect("a plan");
         assert!(plan.args.is_empty() && plan.env.is_empty());
+        assert!(plan.private_server.is_none());
         assert!(plan.carried_trust.is_none());
         assert!(plan.after_exit.is_none());
         assert!(plan.notice.is_none());

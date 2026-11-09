@@ -63,6 +63,7 @@ const INTERRUPT: Interrupt = Interrupt {
     },
     restores_prompt: true,
     written_during_turn,
+    queued_waiting: None,
 };
 
 /// Grok Build keeps a message written into a turn queued until the turn is over.

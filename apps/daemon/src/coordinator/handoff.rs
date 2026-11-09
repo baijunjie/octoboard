@@ -554,10 +554,13 @@ async fn forward_messages(state: &Arc<AppState>, receiving: &str, texts: Vec<Str
         {
             tracing::warn!(session = %receiving, %err, "forwarding a message queued for the original session failed");
             // The drain that lost it told the user: a lost queue as `queued_messages_dropped`, a
-            // message written in part while the draft was stashed as `typing_blocked`.
-            if err
-                .downcast_ref::<CodedError>()
-                .is_some_and(|coded| coded.code == error_code::QUEUED_MESSAGES_LOST)
+            // message written in part while the draft was stashed as `typing_blocked`, one the
+            // agent's own queue refused as `message_refused`. One that queue may have taken was told
+            // as `message_acceptance_unconfirmed`, and may have arrived.
+            if err.downcast_ref::<CodedError>().is_some_and(|coded| {
+                coded.code == error_code::QUEUED_MESSAGES_LOST
+                    || coded.code == error_code::MESSAGE_REFUSED
+            }) || delivery::acceptance_uncertain(&err)
             {
                 continue;
             }
@@ -586,6 +589,15 @@ async fn start_work(
     let id = first.id().to_string();
     if let Err(err) = delivery::write_first_message_off_runtime(state, first, text).await {
         tracing::warn!(session = %id, %err, "delivering the first handoff work prompt failed");
+        // Possibly delivered, and told as `message_acceptance_unconfirmed`; or refused by the
+        // agent's own queue, and told as `message_refused`.
+        if delivery::acceptance_uncertain(&err)
+            || err
+                .downcast_ref::<CodedError>()
+                .is_some_and(|coded| coded.code == error_code::MESSAGE_REFUSED)
+        {
+            return;
+        }
         state.broadcast(
             Notice::new(
                 notice_code::HANDOFF_MESSAGES_DROPPED,

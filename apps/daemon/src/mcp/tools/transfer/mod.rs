@@ -212,7 +212,10 @@ impl Parties {
                     %err,
                     "telling a session of a {what} transfer failed"
                 );
-                untold.push(current);
+                // One that may have arrived is not told again.
+                if !delivery::acceptance_uncertain(&err) {
+                    untold.push(current);
+                }
             }
         }
         drop(self.hold.take());

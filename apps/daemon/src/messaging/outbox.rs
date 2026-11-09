@@ -1,7 +1,8 @@
 //! The per-session FIFO for automatic messages, with one drainer per session.
 //!
 //! Each ticket keeps its first delivery-attempt time across retries, except one refused while the
-//! session's input is held for a draft or a fragment, whose grace starts again once the hold ends.
+//! session's input is held for a draft or a fragment, whose grace starts again once the hold ends,
+//! and one the session's own server held back, whose grace starts again once, at most.
 //! Draft protection can delay writing only for a bounded grace period; afterwards a write may
 //! include unfinished user input.
 //! Lifecycle holds, trust confirmations and agent dialogs remain separate reasons to wait.
@@ -10,6 +11,10 @@
 //! the queue behind it are reported lost, because another paste would join the unterminated one.
 //! A fragment written while the draft was stashed loses only itself: the session holds whatever
 //! follows until nothing can join the fragment, so the queue behind it waits instead.
+//! An uncertain native submission instead consumes only its own ticket and retains later ones:
+//! there is no terminal fragment, but repeating the request could deliver the message twice.
+//! A message the agent's own queue refuses outright fails alone: it is never written again, by any
+//! route, its refusal is kept for its sender and announced once, and the queue behind it goes on.
 //!
 //! A complete write missing its prompt acknowledgement briefly holds later messages. Its payload
 //! never goes back into the queue; the running session owns the bounded submit-key retry.
@@ -24,7 +29,7 @@ use std::time::{Duration, Instant};
 
 use crate::platform::term::PartialWrite;
 use crate::session::dialogs::Sighting;
-use crate::session::term;
+use crate::session::term::{self, Route};
 use crate::session::LiveSession;
 
 /// How long draft preservation may delay an automatic message before combined delivery is allowed.
@@ -44,6 +49,8 @@ pub enum Drain {
     /// writes until a prompt is sent after it, so nothing written next can run together with the
     /// fragment: the queue behind it stays, and is written in order once the hold ends.
     Fragmented(Ticket),
+    /// The native queue may have accepted this ticket; it is never submitted again.
+    Uncertain(Ticket),
     /// The message with this ticket was written, but the agent did not report sending it. Its text
     /// is not repeated; later messages wait for a prompt acknowledgement or a bounded submit retry.
     Unsent(Ticket),
@@ -82,6 +89,15 @@ pub trait PromptSignal {
     fn mark_not_submitted(&self, before: u64);
     /// Whether a message marked unsent still holds delivery before acknowledgement or submit retry.
     fn unsent_waiting(&self) -> bool;
+    /// Records that a message the agent's own queue may have taken, written when the count stood
+    /// at `before`, was not confirmed taken: later messages wait a little, and it is never written
+    /// again. Nothing for a session without such a queue.
+    fn mark_submission_uncertain(&self, _before: u64) {}
+    /// Whether a message marked by [`Self::mark_submission_uncertain`] still holds later ones; never
+    /// for a session that marks none.
+    fn submission_uncertain(&self) -> bool {
+        false
+    }
     /// Looks at the agent's screen now: whether it shows a dialog only the user can answer, which
     /// a message written into it would answer destructively, and how many times dialogs of each
     /// kind have come up so far, including any that have gone again.
@@ -148,7 +164,27 @@ pub struct Outbox {
     /// session ([`Self::take_written`]), so a daemon that exits before the queue drains, or a
     /// process that ends first, leaves it for the next resume.
     kept: Mutex<Keeps>,
+    /// The messages the agent's own queue refused outright (`term::RefusedByAgent`), by ticket:
+    /// for the sender waiting on one ([`Self::take_refusal`]), and to be announced once
+    /// ([`Self::refusals_to_announce`]).
+    refused: Mutex<HashMap<Ticket, Refusal>>,
+    /// The messages whose draft grace a hold of the session's own server has already started
+    /// again, which it does once a message.
+    grace_restarted: Mutex<HashSet<Ticket>>,
 }
+
+/// A message the agent's own queue refused outright.
+struct Refusal {
+    session: String,
+    reason: String,
+    /// When it was announced, if it has been.
+    announced: Option<Instant>,
+}
+
+/// How long a refusal is kept for its sender once announced, counted while no drain of its session
+/// runs: the sender waiting on it takes it right after the drain that met it, however long that
+/// drain goes on writing, so one left longer had no sender waiting.
+const REFUSAL_KEPT: Duration = Duration::from_secs(60);
 
 /// A session's drain claim, from [`Outbox::claim`].
 struct DrainClaim<'a> {
@@ -163,6 +199,20 @@ impl Drop for DrainClaim<'_> {
             .lock()
             .expect("outbox claim lock poisoned")
             .remove(self.id);
+        // The time a refusal is kept counts from the end of the drain its sender waits on.
+        let now = Instant::now();
+        for refusal in self
+            .outbox
+            .refused
+            .lock()
+            .expect("outbox refused lock poisoned")
+            .values_mut()
+            .filter(|refusal| refusal.session == self.id)
+        {
+            if refusal.announced.is_some() {
+                refusal.announced = Some(now);
+            }
+        }
     }
 }
 
@@ -268,8 +318,48 @@ impl Outbox {
         std::mem::take(&mut self.kept.lock().expect("outbox kept lock poisoned").written)
     }
 
+    /// The refusal of the message `ticket`, for its sender, which takes it.
+    pub fn take_refusal(&self, ticket: Ticket) -> Option<String> {
+        self.refused
+            .lock()
+            .expect("outbox refused lock poisoned")
+            .remove(&ticket)
+            .map(|refusal| refusal.reason)
+    }
+
+    /// The refusals of messages for session `id` not announced yet, by ticket with the agent's
+    /// reason, which are now marked announced; whichever drain asks first announces them, and
+    /// each sender still finds its own ([`Self::take_refusal`]).
+    pub fn refusals_to_announce(&self, id: &str) -> Vec<(Ticket, String)> {
+        let draining = self
+            .draining
+            .lock()
+            .expect("outbox claim lock poisoned")
+            .clone();
+        let mut refused = self.refused.lock().expect("outbox refused lock poisoned");
+        // A refusal of a session still being drained may have its sender waiting on that drain;
+        // its time restarts when the drain ends ([`DrainClaim`]).
+        refused.retain(|_, refusal| {
+            draining.contains(&refusal.session)
+                || refusal
+                    .announced
+                    .is_none_or(|announced| announced.elapsed() < REFUSAL_KEPT)
+        });
+        let mut announce: Vec<(Ticket, String)> = refused
+            .iter_mut()
+            .filter(|(_, refusal)| refusal.session == id && refusal.announced.is_none())
+            .map(|(ticket, refusal)| {
+                refusal.announced = Some(Instant::now());
+                (*ticket, refusal.reason.clone())
+            })
+            .collect();
+        announce.sort_by_key(|(ticket, _)| *ticket);
+        announce
+    }
+
     /// The message with this ticket is in its session, so its row, if it has one, may go.
     fn mark_written(&self, ticket: Ticket) {
+        self.forget_grace(std::iter::once(ticket));
         let mut kept = self.kept.lock().expect("outbox kept lock poisoned");
         if let Some(row) = kept.queued.remove(&ticket) {
             kept.tickets.remove(&row);
@@ -278,12 +368,25 @@ impl Outbox {
     }
 
     /// The messages with these tickets will not be written by this queue, so their rows stay.
-    fn unkeep(&self, tickets: impl Iterator<Item = Ticket>) {
+    fn unkeep(&self, tickets: impl Iterator<Item = Ticket> + Clone) {
+        self.forget_grace(tickets.clone());
         let mut kept = self.kept.lock().expect("outbox kept lock poisoned");
         for ticket in tickets {
             if let Some(row) = kept.queued.remove(&ticket) {
                 kept.tickets.remove(&row);
             }
+        }
+    }
+
+    /// Forgets whether a hold of the server started these messages' grace again, as they leave the
+    /// queue.
+    fn forget_grace(&self, tickets: impl Iterator<Item = Ticket>) {
+        let mut restarted = self
+            .grace_restarted
+            .lock()
+            .expect("outbox grace lock poisoned");
+        for ticket in tickets {
+            restarted.remove(&ticket);
         }
     }
 
@@ -294,7 +397,14 @@ impl Outbox {
     pub fn drain(&self, session: &LiveSession, prompts: &impl PromptSignal) -> Drain {
         self.drain_with(
             &session.id,
-            &mut |_, text, allow_mixed| term::paste_message(session, text, allow_mixed),
+            &mut |ticket, text, allow_mixed| {
+                term::send_message_with_id(
+                    session,
+                    text,
+                    &format!("{}:{ticket}", session.launch_id),
+                    allow_mixed,
+                )
+            },
             prompts,
         )
     }
@@ -304,7 +414,7 @@ impl Outbox {
     fn drain_with(
         &self,
         id: &str,
-        write: &mut impl FnMut(Ticket, &str, bool) -> Result<(), PartialWrite>,
+        write: &mut impl FnMut(Ticket, &str, bool) -> Result<Route, PartialWrite>,
         prompts: &impl PromptSignal,
     ) -> Drain {
         // Re-claimed around each pass. A producer that pushed while the previous pass was between
@@ -332,7 +442,7 @@ impl Outbox {
     fn drain_once(
         &self,
         id: &str,
-        write: &mut impl FnMut(Ticket, &str, bool) -> Result<(), PartialWrite>,
+        write: &mut impl FnMut(Ticket, &str, bool) -> Result<Route, PartialWrite>,
         prompts: &impl PromptSignal,
     ) -> Drain {
         loop {
@@ -340,7 +450,10 @@ impl Outbox {
             if self.is_held(id) || self.is_paused(id) {
                 return Drain::Pending;
             }
-            if prompts.unsent_waiting() || prompts.trust_holds_writes() {
+            if prompts.unsent_waiting()
+                || prompts.submission_uncertain()
+                || prompts.trust_holds_writes()
+            {
                 return Drain::Pending;
             }
             // Asked afresh for every message: once one is sent the agent reads as working, and what
@@ -361,16 +474,21 @@ impl Outbox {
             let before = prompts.sent();
             let mid_turn = prompts.mid_turn();
             let written = write(ticket, &text, protection_started.elapsed() >= DRAFT_WAIT);
-            if mid_turn && written.is_ok() {
+            // A message the agent's own queue took is no part of the running turn: it runs after it.
+            if mid_turn && matches!(written, Ok(Route::Terminal)) {
                 prompts.note_written_mid_turn();
             }
             match written {
-                Ok(()) if prompts.input_recovery_pending() => {
+                // Nothing of it is in the input box, and the queue answered for it.
+                Ok(Route::Queued) => self.mark_written(ticket),
+                Ok(Route::Terminal) if prompts.input_recovery_pending() => {
                     self.mark_written(ticket);
                     return Drain::Pending;
                 }
-                Ok(()) if !checked || prompts.wait_past(before) => self.mark_written(ticket),
-                Ok(()) => {
+                Ok(Route::Terminal) if !checked || prompts.wait_past(before) => {
+                    self.mark_written(ticket)
+                }
+                Ok(Route::Terminal) => {
                     let now = prompts.sighting();
                     if now.discarded_seen > seen.discarded_seen {
                         // Its paste went to a dialog that discarded it, so unlike an unsent
@@ -403,6 +521,42 @@ impl Outbox {
                     prompts.mark_not_submitted(before);
                     return Drain::Unsent(ticket);
                 }
+                // The agent's own queue may have taken it, whatever the count of what went in says,
+                // so it is never put back.
+                Err(partial)
+                    if partial.error.get_ref().is_some_and(|error| {
+                        error.is::<crate::session::term::UncertainSubmission>()
+                    }) =>
+                {
+                    self.mark_written(ticket);
+                    prompts.mark_submission_uncertain(before);
+                    tracing::error!(session = %id, error = %partial.error,
+                        "the native queue did not confirm accepting a message; it will not be resent");
+                    return Drain::Uncertain(ticket);
+                }
+                // The agent's own queue refused it outright: it fails to its sender, is never written
+                // again, and the queue behind it goes on.
+                Err(partial)
+                    if partial
+                        .error
+                        .get_ref()
+                        .is_some_and(|error| error.is::<term::RefusedByAgent>()) =>
+                {
+                    tracing::warn!(session = %id, error = %partial.error, "the agent's own queue refused a message");
+                    self.mark_written(ticket);
+                    self.refused
+                        .lock()
+                        .expect("outbox refused lock poisoned")
+                        .insert(
+                            ticket,
+                            Refusal {
+                                session: id.to_string(),
+                                reason: partial.error.to_string(),
+                                announced: None,
+                            },
+                        );
+                    continue;
+                }
                 // Nothing went in, so the session simply could not take it — most likely a modal its
                 // reported state does not show. Put it back at the front and stop: letting the next
                 // one through would reorder them.
@@ -410,10 +564,23 @@ impl Outbox {
                     if partial.error.kind() != std::io::ErrorKind::WouldBlock {
                         tracing::warn!(session = %id, error = %partial.error, "a queued message could not be written yet");
                     }
-                    // A hold on the input is no wait for a draft, which the message's grace
-                    // measures: spent behind it, the grace would let the message join whatever
-                    // the user has in the box the moment the hold ends.
-                    let protection_started = (!prompts.input_held()).then_some(protection_started);
+                    // A hold on the input, or the agent's own server holding the message back, is
+                    // no wait for a draft, which the message's grace measures: spent behind it, the
+                    // grace would let the message join whatever the user has in the box the moment
+                    // the terminal takes it.
+                    // Started again once a message, so that a session flipping between the two kinds
+                    // of hold cannot keep a message waiting past its grace.
+                    let held_by_server = partial
+                        .error
+                        .get_ref()
+                        .is_some_and(|error| error.is::<term::HeldByServer>())
+                        && self
+                            .grace_restarted
+                            .lock()
+                            .expect("outbox grace lock poisoned")
+                            .insert(ticket);
+                    let protection_started =
+                        (!prompts.input_held() && !held_by_server).then_some(protection_started);
                     self.push_front(id, ticket, text, protection_started);
                     return Drain::Pending;
                 }
@@ -668,6 +835,159 @@ mod tests {
         }
     }
 
+    /// A message the agent's own queue refused outright fails alone: it is not written again, its
+    /// sender can be told why, and the queue behind it goes on.
+    #[test]
+    fn a_refused_message_fails_alone_and_the_queue_goes_on() {
+        let outbox = Outbox::default();
+        let refused = outbox.push("s", "refused");
+        let next = outbox.push("s", "next");
+        let mut attempts = Vec::new();
+        let outcome = outbox.drain_with(
+            "s",
+            &mut |ticket, text, _| {
+                attempts.push(ticket);
+                if text == "refused" {
+                    Err(PartialWrite {
+                        written: 0,
+                        error: std::io::Error::other(crate::session::term::RefusedByAgent(
+                            "input too long".into(),
+                        )),
+                    })
+                } else {
+                    Ok(Route::Queued)
+                }
+            },
+            &MidTurn,
+        );
+        assert_eq!(outcome, Drain::Clear);
+        assert_eq!(attempts, [refused, next]);
+        // Another flush of the session, one that lost the drain claim (a hook's, the server's
+        // readiness), announces it before its sender looks: the sender still finds it, by its
+        // ticket, and so is never told the message was delivered.
+        let announced = outbox.refusals_to_announce("s");
+        assert_eq!(announced.len(), 1);
+        assert_eq!(announced[0].0, refused);
+        assert!(outbox.refusals_to_announce("s").is_empty());
+        assert!(outbox.refusals_to_announce("other").is_empty());
+        assert!(outbox
+            .take_refusal(refused)
+            .is_some_and(|reason| reason.contains("input too long")));
+        assert_eq!(outbox.take_refusal(refused), None);
+        assert_eq!(outbox.take_refusal(next), None);
+    }
+
+    /// An announced refusal is kept for its sender while a drain of its session runs, however
+    /// long that drain goes on, and dropped once it has been left that long with none running.
+    #[test]
+    fn a_refusal_outlasts_the_drain_its_sender_waits_on() {
+        for draining in [true, false] {
+            let outbox = Outbox::default();
+            let long_ago = Instant::now()
+                .checked_sub(REFUSAL_KEPT + Duration::from_secs(1))
+                .unwrap();
+            outbox.refused.lock().unwrap().insert(
+                7,
+                Refusal {
+                    session: "s".into(),
+                    reason: "input too long".into(),
+                    announced: Some(long_ago),
+                },
+            );
+            let claim = draining.then(|| outbox.claim("s").unwrap());
+            drop(claim);
+            assert!(outbox.refusals_to_announce("other").is_empty());
+            assert_eq!(outbox.take_refusal(7).is_some(), draining);
+        }
+    }
+
+    /// What a hold of the server noted of a message's grace goes once the message leaves the
+    /// queue.
+    #[test]
+    fn a_grace_restart_is_forgotten_once_the_message_is_written() {
+        let outbox = Outbox::default();
+        outbox.push("s", "message");
+        let mut held = true;
+        let mut write = |_, _: &str, _| {
+            if std::mem::take(&mut held) {
+                Err(PartialWrite {
+                    written: 0,
+                    error: std::io::Error::new(
+                        std::io::ErrorKind::WouldBlock,
+                        crate::session::term::HeldByServer("not yet".into()),
+                    ),
+                })
+            } else {
+                Ok(Route::Queued)
+            }
+        };
+        assert_eq!(outbox.drain_with("s", &mut write, &MidTurn), Drain::Pending);
+        assert_eq!(outbox.grace_restarted.lock().unwrap().len(), 1);
+        assert_eq!(outbox.drain_with("s", &mut write, &MidTurn), Drain::Clear);
+        assert!(outbox.grace_restarted.lock().unwrap().is_empty());
+    }
+
+    /// A hold of the session's own server starts a message's draft grace again only once, so a
+    /// session flipping between that hold and another cannot keep the message waiting past it.
+    #[test]
+    fn a_hold_of_the_server_starts_the_grace_again_once() {
+        let outbox = Outbox::default();
+        outbox.push("s", "message");
+        let held = || {
+            Err(PartialWrite {
+                written: 0,
+                error: std::io::Error::new(
+                    std::io::ErrorKind::WouldBlock,
+                    crate::session::term::HeldByServer("not yet".into()),
+                ),
+            })
+        };
+        let front = |outbox: &Outbox| outbox.queues.lock().unwrap()["s"].front().unwrap().2;
+        assert_eq!(
+            outbox.drain_with("s", &mut |_, _, _| held(), &MidTurn),
+            Drain::Pending
+        );
+        assert_eq!(front(&outbox), None);
+        // The next attempt starts its grace; a second hold keeps it.
+        assert_eq!(
+            outbox.drain_with("s", &mut |_, _, _| held(), &MidTurn),
+            Drain::Pending
+        );
+        assert!(front(&outbox).is_some());
+    }
+
+    /// A message the agent's own server holds back has not waited for a draft: its grace starts
+    /// afresh, so a terminal that takes it later still waits for the user's draft. Other holds of
+    /// nothing written keep the grace they began.
+    #[test]
+    fn a_message_held_by_the_server_keeps_its_whole_draft_grace() {
+        for (held_by_server, keeps) in [(true, false), (false, true)] {
+            let outbox = Outbox::default();
+            outbox.push("s", "message");
+            let outcome = outbox.drain_with(
+                "s",
+                &mut |_, _, _| {
+                    Err(PartialWrite {
+                        written: 0,
+                        error: if held_by_server {
+                            std::io::Error::new(
+                                std::io::ErrorKind::WouldBlock,
+                                crate::session::term::HeldByServer("not yet".into()),
+                            )
+                        } else {
+                            std::io::Error::new(std::io::ErrorKind::WouldBlock, "composer busy")
+                        },
+                    })
+                },
+                &MidTurn,
+            );
+            assert_eq!(outcome, Drain::Pending);
+            let queues = outbox.queues.lock().unwrap();
+            let (_, _, protection_started) = queues["s"].front().unwrap();
+            assert_eq!(protection_started.is_some(), keeps);
+        }
+    }
+
     /// [`MidTurn`] with the session's input held, as for a draft being stashed or a fragment.
     struct HeldInput;
 
@@ -842,7 +1162,7 @@ mod tests {
                 "s",
                 &mut |ticket, text, _| {
                     written.push((ticket, text.to_string()));
-                    Ok(())
+                    Ok(Route::Terminal)
                 },
                 &MidTurn
             ),
@@ -877,7 +1197,7 @@ mod tests {
                 "s",
                 &mut |_, text, _| {
                     written.push(text.to_string());
-                    Ok(())
+                    Ok(Route::Terminal)
                 },
                 &MidTurn
             ),
@@ -901,7 +1221,7 @@ mod tests {
                 "s",
                 &mut |_, text, _| {
                     written.push(text.to_string());
-                    Ok(())
+                    Ok(Route::Terminal)
                 },
                 &MidTurn,
             )
@@ -935,7 +1255,7 @@ mod tests {
                         // drainer re-reads the queue the message is in it.
                         outbox.push("s", "late arrival");
                     }
-                    Ok(())
+                    Ok(Route::Terminal)
                 },
                 &MidTurn
             ),
@@ -954,7 +1274,7 @@ mod tests {
         assert!(outbox.push_kept("s", "kept", 7).is_none());
         assert_eq!(outbox.len("s"), 1);
         assert_eq!(
-            outbox.drain_with("s", &mut |_, _, _| Ok(()), &MidTurn),
+            outbox.drain_with("s", &mut |_, _, _| Ok(Route::Terminal), &MidTurn),
             Drain::Clear
         );
         assert_eq!(outbox.take_written(), [7]);
@@ -1000,7 +1320,7 @@ mod tests {
                 "s",
                 &mut |_, text, _| {
                     written.push(text.to_string());
-                    Ok(())
+                    Ok(Route::Terminal)
                 },
                 &MidTurn
             ),
@@ -1058,7 +1378,7 @@ mod tests {
                 "s",
                 &mut |_, text, _| {
                     written.push(text.to_string());
-                    Ok(())
+                    Ok(Route::Terminal)
                 },
                 &MidTurn
             ),
@@ -1086,7 +1406,7 @@ mod tests {
                 "s",
                 &mut |_, _, allow_mixed| {
                     mixed = Some(allow_mixed);
-                    Ok(())
+                    Ok(Route::Terminal)
                 },
                 &MidTurn
             ),
@@ -1122,7 +1442,7 @@ mod tests {
         outbox.push("s", "first");
         let _claim = outbox.claim("s").unwrap();
         assert_eq!(
-            outbox.drain_with("s", &mut |_, _, _| Ok(()), &MidTurn),
+            outbox.drain_with("s", &mut |_, _, _| Ok(Route::Terminal), &MidTurn),
             Drain::Pending
         );
         assert_eq!(outbox.len("s"), 1);
@@ -1151,7 +1471,7 @@ mod tests {
             "s",
             &mut |_, text, _| {
                 written.push(text.to_string());
-                Ok(())
+                Ok(Route::Terminal)
             },
             &agent,
         );
@@ -1172,7 +1492,7 @@ mod tests {
         let mut written = Vec::new();
         let mut write = |_: Ticket, text: &str, _: bool| {
             written.push(text.to_string());
-            Ok(())
+            Ok(Route::Terminal)
         };
         assert_eq!(
             outbox.drain_with("s", &mut write, &agent),
@@ -1207,7 +1527,7 @@ mod tests {
                     error: std::io::Error::other(crate::session::NotSubmitted),
                 });
             }
-            Ok(())
+            Ok(Route::Terminal)
         };
         assert_eq!(
             outbox.drain_with("s", &mut write, &agent),
@@ -1236,7 +1556,7 @@ mod tests {
         let mut written = Vec::new();
         let mut write = |_: Ticket, text: &str, _: bool| {
             written.push(text.to_string());
-            Ok(())
+            Ok(Route::Terminal)
         };
         assert_eq!(outbox.drain_with("s", &mut write, &agent), Drain::Pending);
         assert_eq!(outbox.len("s"), 1);
@@ -1256,7 +1576,7 @@ mod tests {
         let mut written = Vec::new();
         let mut write = |_: Ticket, text: &str, _: bool| {
             written.push(text.to_string());
-            Ok(())
+            Ok(Route::Terminal)
         };
         assert_eq!(outbox.drain_with("s", &mut write, &agent), Drain::Pending);
         assert_eq!(outbox.len("s"), 1);
@@ -1279,7 +1599,7 @@ mod tests {
         let mut written = Vec::new();
         let mut write = |_: Ticket, text: &str, _: bool| {
             written.push(text.to_string());
-            Ok(())
+            Ok(Route::Terminal)
         };
         assert_eq!(
             outbox.drain_with("s", &mut write, &agent),
@@ -1309,7 +1629,7 @@ mod tests {
         let mut written = Vec::new();
         let mut write = |_: Ticket, text: &str, _: bool| {
             written.push(text.to_string());
-            Ok(())
+            Ok(Route::Terminal)
         };
         assert_eq!(
             outbox.drain_with("s", &mut write, &agent),
@@ -1335,7 +1655,7 @@ mod tests {
             .dialog_on_wait
             .set(Some((dialog(WrittenMessage::Draft), false)));
         assert_eq!(
-            outbox.drain_with("s", &mut |_, _, _| Ok(()), &agent),
+            outbox.drain_with("s", &mut |_, _, _| Ok(Route::Terminal), &agent),
             Drain::Unsent(first)
         );
         assert_eq!(outbox.len("s"), 0);
@@ -1353,7 +1673,7 @@ mod tests {
                 "s",
                 &mut |_, text, _| {
                     written.push(text.to_string());
-                    Ok(())
+                    Ok(Route::Terminal)
                 },
                 &agent
             ),
@@ -1363,6 +1683,110 @@ mod tests {
         assert_eq!(outbox.len("s"), 1);
         assert!(!agent.unsent_waiting());
         assert_eq!(agent.waits.get(), 0);
+    }
+
+    /// An agent whose own queue left a message's acceptance unconfirmed: it holds later messages
+    /// for [`DRAFT_WAIT`] after the mark, or until a prompt is reported, as a session does.
+    #[derive(Default)]
+    struct UncertainQueue {
+        sent: Cell<u64>,
+        mark: Cell<Option<(u64, Instant)>>,
+        marked_unsent: Cell<bool>,
+    }
+
+    impl PromptSignal for UncertainQueue {
+        fn sent(&self) -> u64 {
+            self.sent.get()
+        }
+        fn expects_send(&self) -> bool {
+            false
+        }
+        fn wait_past(&self, _before: u64) -> bool {
+            unreachable!("nothing is waited on")
+        }
+        fn mark_unsent(&self, _before: u64) {
+            self.marked_unsent.set(true);
+        }
+        fn mark_not_submitted(&self, _before: u64) {
+            self.marked_unsent.set(true);
+        }
+        fn unsent_waiting(&self) -> bool {
+            false
+        }
+        fn mark_submission_uncertain(&self, before: u64) {
+            self.mark.set(Some((before, Instant::now())));
+        }
+        fn submission_uncertain(&self) -> bool {
+            self.mark
+                .get()
+                .is_some_and(|(before, at)| self.sent.get() <= before && at.elapsed() < DRAFT_WAIT)
+        }
+        fn sighting(&self) -> Sighting {
+            Sighting::default()
+        }
+        fn watch_screen(&self, _on: bool) {}
+        fn trust_holds_writes(&self) -> bool {
+            false
+        }
+    }
+
+    fn uncertain(written: usize) -> PartialWrite {
+        PartialWrite {
+            written,
+            error: std::io::Error::other(crate::session::term::UncertainSubmission(
+                "connection closed after add".into(),
+            )),
+        }
+    }
+
+    /// A message whose acceptance is uncertain is never written again, by the queue or the
+    /// terminal (no unsent mark, which would retry its submit key), even where its error says
+    /// nothing went in; later messages wait until a prompt is reported or the hold runs out.
+    #[test]
+    fn uncertain_native_acceptance_preserves_later_messages_without_resending() {
+        for written in [1, 0] {
+            for released_by_prompt in [true, false] {
+                let outbox = Outbox::default();
+                let first = outbox.push("s", "first");
+                outbox.push("s", "second");
+                let agent = UncertainQueue::default();
+                let mut attempts = Vec::new();
+                let outcome = outbox.drain_with(
+                    "s",
+                    &mut |ticket, text, _| {
+                        attempts.push((ticket, text.to_string()));
+                        Err(uncertain(written))
+                    },
+                    &agent,
+                );
+                assert_eq!(outcome, Drain::Uncertain(first));
+                assert_eq!(attempts, [(first, "first".to_string())]);
+                assert_eq!(outbox.len("s"), 1);
+                assert!(!agent.marked_unsent.get());
+                assert_eq!(
+                    outbox.drain_with("s", &mut |_, _, _| panic!("held"), &agent),
+                    Drain::Pending
+                );
+                if released_by_prompt {
+                    agent.sent.set(agent.sent.get() + 1);
+                } else {
+                    let (before, _) = agent.mark.get().unwrap();
+                    agent.mark.set(Some((before, Instant::now() - DRAFT_WAIT)));
+                }
+                assert_eq!(
+                    outbox.drain_with(
+                        "s",
+                        &mut |ticket, text, _| {
+                            attempts.push((ticket, text.to_string()));
+                            Ok(Route::Queued)
+                        },
+                        &agent
+                    ),
+                    Drain::Clear
+                );
+                assert_eq!(attempts[1].1, "second");
+            }
+        }
     }
 
     #[test]

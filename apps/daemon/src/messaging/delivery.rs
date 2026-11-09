@@ -15,7 +15,7 @@ use crate::messaging::texts::{
     idle_notice_session, is_idle_notice, is_waiting_notice, waiting_notice_session,
 };
 use crate::messaging::write_queue::FirstMessage;
-use crate::protocol::{error_code, CodedError, Session, SessionStatus};
+use crate::protocol::{error_code, AgentId, CodedError, Session, SessionStatus};
 use crate::session::term;
 use crate::session_tools::catalogue;
 use crate::state::AppState;
@@ -237,7 +237,26 @@ fn write_message_inner(
         }
         None => state.queue_message(id, text),
     };
-    delivery_of(state.flush_outbox(id, agent_status), ticket)
+    let drain = state.flush_outbox(id, agent_status);
+    // Told first, as the flush may have stopped before it told the session; then taken by ticket,
+    // whichever drain met it: one running on another thread may have.
+    state.announce_refusals(id, session.agent);
+    if let Some(reason) = state.outbox.take_refusal(ticket) {
+        return Err(refused_error(session.agent, &reason));
+    }
+    delivery_of(drain, ticket, session.agent)
+}
+
+/// The error a sender gets for a message its session's agent refused outright, for `reason`.
+fn refused_error(agent: AgentId, reason: &str) -> anyhow::Error {
+    CodedError::raised(
+        error_code::MESSAGE_REFUSED,
+        format!(
+            "{} refused the message, so it was not sent: {reason}",
+            agent.label()
+        ),
+        &[("agent", agent.label()), ("detail", reason)],
+    )
 }
 
 /// Delivers a first message through the same checks as every automatic message, preserving the
@@ -255,8 +274,17 @@ pub(crate) async fn write_first_message_off_runtime(
     .await?
 }
 
-/// What a drain's outcome means for the message with `ticket`, queued before the drain began.
-fn delivery_of(drain: Drain, ticket: Ticket) -> Result<Delivery> {
+/// Whether `error` says a message may have been taken by its agent's own queue without that being
+/// confirmed: possibly delivered, so neither to be sent again nor taken as undelivered.
+pub(crate) fn acceptance_uncertain(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<CodedError>()
+        .is_some_and(|error| error.code == error_code::MESSAGE_ACCEPTANCE_UNCONFIRMED)
+}
+
+/// What a drain's outcome means for the message with `ticket`, queued before the drain began, in a
+/// session of `agent`.
+fn delivery_of(drain: Drain, ticket: Ticket, agent: AgentId) -> Result<Delivery> {
     match drain {
         Drain::Clear => Ok(Delivery::Written),
         Drain::Pending => Ok(Delivery::Queued),
@@ -275,6 +303,18 @@ fn delivery_of(drain: Drain, ticket: Ticket) -> Result<Delivery> {
         Drain::Diverted(diverted) if diverted == ticket => Ok(Delivery::Unsent),
         Drain::Diverted(diverted) if diverted < ticket => Ok(Delivery::Queued),
         Drain::Diverted(_) => Ok(Delivery::Written),
+        Drain::Uncertain(uncertain) if uncertain < ticket => Ok(Delivery::Queued),
+        Drain::Uncertain(uncertain) if uncertain > ticket => Ok(Delivery::Written),
+        Drain::Uncertain(_) => Err(CodedError::raised(
+            error_code::MESSAGE_ACCEPTANCE_UNCONFIRMED,
+            format!(
+                "{} did not confirm that it accepted the message. It may already be queued or \
+                 running, and it will not be sent again: do not send it again before checking \
+                 the conversation.",
+                agent.label()
+            ),
+            &[("agent", agent.label())],
+        )),
         Drain::Lost => Err(CodedError::raised(
             error_code::QUEUED_MESSAGES_LOST,
             lost_message(),
@@ -547,17 +587,49 @@ mod tests {
     #[test]
     fn a_held_fragment_is_lost_only_to_its_own_sender() {
         assert_eq!(
-            delivery_of(Drain::Fragmented(5), 6).unwrap(),
+            delivery_of(Drain::Fragmented(5), 6, AgentId::CODEX).unwrap(),
             Delivery::Queued
         );
         assert_eq!(
-            delivery_of(Drain::Fragmented(5), 4).unwrap(),
+            delivery_of(Drain::Fragmented(5), 4, AgentId::CODEX).unwrap(),
             Delivery::Written
         );
-        let lost = delivery_of(Drain::Fragmented(5), 5).unwrap_err();
+        let lost = delivery_of(Drain::Fragmented(5), 5, AgentId::CODEX).unwrap_err();
         assert!(lost
             .downcast_ref::<CodedError>()
             .is_some_and(is_held_fragment));
+    }
+
+    /// A message the agent's own queue may have taken is a coded error naming the agent, which
+    /// callers tell from an undelivered one; one queued behind it waits, one before it went in.
+    #[test]
+    fn an_uncertain_acceptance_is_coded_and_told_apart() {
+        assert_eq!(
+            delivery_of(Drain::Uncertain(5), 6, AgentId::CODEX).unwrap(),
+            Delivery::Queued
+        );
+        assert_eq!(
+            delivery_of(Drain::Uncertain(5), 4, AgentId::CODEX).unwrap(),
+            Delivery::Written
+        );
+        let uncertain = delivery_of(Drain::Uncertain(5), 5, AgentId::CODEX).unwrap_err();
+        assert!(acceptance_uncertain(&uncertain));
+        let coded = uncertain.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::MESSAGE_ACCEPTANCE_UNCONFIRMED);
+        assert_eq!(coded.params["agent"], "Codex");
+        let lost = delivery_of(Drain::Lost, 5, AgentId::CODEX).unwrap_err();
+        assert!(!acceptance_uncertain(&lost));
+    }
+
+    /// A message its agent refused outright is a coded error carrying the agent's reason.
+    #[test]
+    fn a_refused_message_is_a_coded_error_with_the_reason() {
+        let error = refused_error(AgentId::CODEX, "input too long");
+        let coded = error.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::MESSAGE_REFUSED);
+        assert_eq!(coded.params["agent"], "Codex");
+        assert_eq!(coded.params["detail"], "input too long");
+        assert!(!acceptance_uncertain(&error));
     }
 
     /// A message that would be an empty prompt once stripped is refused, not written.

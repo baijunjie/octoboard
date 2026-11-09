@@ -1229,22 +1229,35 @@ link's path ("Codex's state database through a link" under "Sharing a session di
 
 ### Codex's app server on Windows
 
-Octoboard does not use Codex's `app-server --listen` mode, and the following was measured on 0.163.0 and 0.166.0 for the
-day it does:
+A Codex session's private app server (see "Codex has a separate message queue" below) listens on a loopback WebSocket
+on Windows. Measured on 0.163.0 and 0.166.0:
 
 - `--listen ws://127.0.0.1:0` works, and the port the system chose is printed only on **stderr** (`listening on:
-  ws://127.0.0.1:<port>`).
+  ws://127.0.0.1:<port>`, among a few other lines); 0.166.0 prints it the same way on macOS.
 - `--ws-auth capability-token --ws-token-file <file>` rejects a WebSocket with no token or a wrong one (the TUI shows
   `HTTP error: 401 Unauthorized`); the TUI passes it with `--remote-auth-token-env <VAR>` and a client sends
-  `Authorization: Bearer <token>`; `/readyz` stays open.
+  `Authorization: Bearer <token>`; `/readyz` stays open. `--ws-token-sha256 <hex>` in place of the file takes the
+  lowercase hexadecimal SHA-256 of the token's UTF-8 bytes, so no token is written to disk (checked on macOS with
+  0.166.0: the right bearer token upgraded, a wrong or missing one got 401). Any local process can reach the port; the
+  token is the only guard, and the TUI takes it only from its environment.
 - `--listen unix://<path>` works on Windows, if the socket's directory is private to the user: with the inherited ACL,
   or an owner-only ACL whose owner was the Administrators group, Codex refused with "socket directory is not private to
   the current user"; with inheritance removed, only the user granted, and the user as the directory's owner, it
   listened. A bare `--listen unix://` uses `%USERPROFILE%\.codex\app-server-control\app-server-control.sock`.
+  Neither the standard library nor tokio connects to a Unix socket on Windows, so a client there would need a crate of
+  its own or `codex app-server proxy --sock <path>`.
 - A remote TUI asks "Trust this folder?" even with a `projects.<dir>.trust_level="trusted"` override on both sides
   (0.163.0), and on 0.166.0 it lands in an "Agent command center" while `thread/loaded/list` stays empty during the
   trust screen. The hook trust review works as elsewhere; the key of a `-c` hook reads
-  `C:\<session-flags>\config.toml:<event>:0:0`.
+  `C:\<session-flags>\config.toml:<event>:0:0`, and a resumed thread's hook payload carries a `transcript_path` with
+  a `\\?\C:\...` prefix (a fresh one does not). Hooks run through `powershell -NoProfile -ExecutionPolicy Bypass
+  -File ...` work.
+- The two processes do not end each other (0.166.0). A TUI that exits leaves the server, and the thread, running. A
+  server that dies leaves the TUI retrying `Reconnecting to server… (52s)` for good; a server started again on the same
+  address is reconnected to, with the draft kept. Killing only the server's process left a command the model was
+  running (`PING.EXE`) alive.
+- Not measured on Windows: a non-elevated (medium integrity) run, a long collapsed paste, x64, and Octoboard's own
+  generated hook scripts, MCP server, developer instructions and reviewer overrides.
 
 ## Moving a conversation to another config directory
 
@@ -2615,17 +2628,33 @@ explicit remote is selected. The command can enqueue without an idle embedded
 TUI waking up; an interrupted thread can also retain queued messages without starting them. Neither successful
 queueing nor a missing immediate turn justifies sending the message again.
 
-A private app-server supports the launch overrides and independent delivery together. Start the same binary as
-`codex -c <overrides> app-server --listen unix://<private-socket>`, then its TUI with
-`codex --remote unix://<private-socket>` and the original launch flags and `-c` overrides. The Unix socket carries WebSocket frames
-with handshake URI `ws://localhost/rpc`. An explicit `--remote` takes precedence over the `-c` rule, so the same
-launch overrides can be supplied to both processes. The TUI needs its own copy for local settings: with an account
-setting `tui.terminal_title=[]`, a server-only title override produced no OSC 0 titles, while copying the overrides
-to the explicitly remote TUI restored them and retained working, idle, cancelled-turn, hook, and draft behavior.
-Initialize with `capabilities.experimentalApi: true`, then send the `initialized` notification. Before any user submission, `thread/loaded/list` returns the new TUI's thread ID even
-though `thread/list` is still empty. A private server with exactly one loaded thread avoids guessing from a shared
-history or working directory. Creating a thread through `thread/start` and then resuming it instead raised a hook
-review modal despite the TUI's bypass flag; that bootstrap path does not preserve the ordinary fresh-launch flow.
+A private app server supports the launch overrides and independent delivery together; Octoboard runs one for each Codex
+0.166.0 or later session. Start the same binary as `codex -c <overrides> app-server --listen unix://<private-socket>`,
+then its TUI with `codex --remote unix://<private-socket>` and the original launch flags and `-c` overrides. The Unix
+socket carries WebSocket frames with handshake URI `ws://localhost/rpc`. An explicit `--remote` takes precedence over
+the `-c` rule, so the same launch overrides can be supplied to both processes. The TUI needs its own copy for local
+settings: with an account setting `tui.terminal_title=[]`, a server-only title override produced no OSC 0 titles, while
+copying the overrides to the explicitly remote TUI restored them and retained working, idle, cancelled-turn, hook, and
+draft behavior. Initialize with `capabilities.experimentalApi: true`, then send the `initialized` notification. Before
+any user submission, `thread/loaded/list` returns the new TUI's thread ID even though `thread/list` is still empty.
+Creating a thread through `thread/start` and then resuming it instead raised a hook review modal despite the TUI's
+bypass flag; that bootstrap path does not preserve the ordinary fresh-launch flow.
+
+On 0.166.0 a private server's loaded threads are not the TUI's alone. After the first turn the server loads an
+ephemeral title thread (`threadSource: "thread_title"`, `ephemeral: true`, `path: null`) for about 60 seconds, until
+`thread/closed`; the agent command center (Left arrow on an empty composer, or Esc or option 2 on the trust screen) can
+start further tasks (`n`); and sub-agent threads carry a `parentThreadId`. The TUI's own thread is told by the
+`thread/started` notification the server pushes to every client connected before the TUI starts, whose `thread` has
+`threadSource: "user"` and `ephemeral: false`; `thread/read` reports the same fields for a loaded thread. The
+`SessionStart` hook fires only with the first turn, so it cannot identify the thread before the first prompt.
+
+Keep `--cd <dir>` on the remote TUI (0.166.0): without it the TUI takes the server process's working directory and
+shows no folder-trust screen at all, while with it an untrusted folder shows "Folder access / Trust this folder? … 1.
+Trust and continue / 2. Back to Agent Command Center", even outside a git repository, and `thread/loaded/list` stays
+`[]` until it is answered. A server-side `-c 'projects={"<dir>"={trust_level="trusted"}}'` skips the screen but
+replaces the whole `projects` table, hiding the user's other trust entries. On macOS the socket path given to
+`--listen unix://` becomes a symbolic link to `/private/tmp/codex-daemon-<uid>/<sha256>`, with a `.lock` file; both go
+when the server exits, and the path exists once the server listens.
 
 Persistent remote resumes ignore hook-trust bypass too. `hooks/list` exposes each hook's native key, source, command,
 and current hash. A resume can trust a single generated hook command with invocation-local `hooks.state`
@@ -2635,21 +2664,64 @@ through `-c` was split incorrectly at the native key's `.toml`; the complete tab
 existing-thread resume using this method confirmed no extra review for the injected hooks, independent message
 delivery, and draft and cursor preservation. No user's trust file was changed.
 
-Codex 0.163.0 rejects explicit permission overrides, including `approvals_reviewer`, in a remote TUI resume. The
-private server can receive that configuration, but a saved thread reviewer takes precedence over its CLI default.
+Codex 0.163.0 rejects explicit permission overrides, including `approvals_reviewer`, in a remote TUI resume, and
+0.166.0 rejects every one of them: `default_permissions`, `approval_policy`, `approvals_reviewer` and `sandbox_mode`
+each end it with "Error: Permission overrides are not supported when resuming a remote task." The private server can
+receive that configuration, but a saved thread reviewer takes precedence over its CLI default.
 Source inspection of that release confirms that an explicit `thread/resume` with `approvalsReviewer` checkpoints and
 flushes the effective settings before replying, even without a turn. A reviewer applied through that request
 before the TUI connects without its reviewer override survives; a subsequent TUI reload restores the checkpointed
-choice.
+choice. On 0.166.0 `thread/resume` takes the whole preset, `permissions` (a built-in profile such as `:workspace`),
+`approvalPolicy` and `approvalsReviewer`; an isolated resume through Octoboard's launch path with the `auto_review`
+preset left the TUI running and recorded `auto_review` in the thread.
 
 `thread/queue/add` accepts `threadId`, text `input`, and a stable `clientUserMessageId`. Its response includes
 `queuedSubmission.id`, passed with `threadId` to `thread/queue/start`. In idle sessions the add can start the item
-before start arrives; a subsequent “queued submission not found” is not grounds to enqueue again. During a turn,
-start reports an active or pending turn and the queue consumes the item afterwards. After cancellation, explicit
-start wakes the interrupted thread too. Isolated tests using the actual hook, MCP, and developer-instruction
-injection confirmed their execution, separate inference messages, and preservation of multiline and 6,018-character
-collapsed drafts and cursor positions, including a fresh TUI with no prior user submission. No composer keystrokes
-are needed for this delivery path.
+before start arrives; a subsequent “queued submission not found” is not grounds to enqueue again. During a turn, start
+reports an active or pending turn and the queue consumes the item afterwards. After cancellation, explicit start wakes
+the interrupted thread too. Isolated tests using the actual hook, MCP, and developer-instruction injection confirmed
+their execution, separate inference messages, and preservation of multiline and 6,018-character collapsed drafts and
+cursor positions, including a fresh TUI with no prior user submission. No composer keystrokes are needed for this
+delivery path. The same held on 0.166.0, on macOS and Windows: idle, mid-turn and post-cancel delivery, a fresh TUI, a
+resumed one, multiline drafts and (macOS) a `[Pasted Content 6599 chars]` collapsed paste submitted intact later. Each
+queued message fires the `UserPromptSubmit` and `Stop` hooks. Esc still interrupts a remote TUI; Ctrl-C on an empty
+composer quits it at once ("Disconnected from this task. Any running work continues."). An item queued during a turn the
+user cancels with Esc stays queued (it had not run six seconds later), and `thread/queue/start` with the `threadId`
+alone, no `queuedSubmissionId`, ran it as a turn of its own, the draft left in the composer (macOS, through Octoboard's
+launch path). Not measured: approval prompts and MCP tool calls of a real model during queue delivery, and 0.167.0.
+
+More of Codex 0.166.0's queue and threads, measured on macOS against a private server and its remote TUI with a stub
+model endpoint, in a scratch home:
+
+- `thread/queue/start` on an empty queue is refused with -32600 "queue is empty", while the thread is idle and while a
+  turn runs alike; with an item waiting behind a running turn it is refused with "thread already has an active or
+  pending turn". `thread/queue/list {threadId}` lists the waiting items, each with its `id`, `input` and
+  `clientUserMessageId`; a started item leaves the list.
+- A thread the TUI switches away from in the agent command center (a new task with `n`) stays loaded for two to three
+  minutes and is then unloaded (gone from `thread/loaded/list`). `thread/queue/add` to an unloaded thread is accepted and
+  the item kept, but it does not run. `thread/resume {threadId, excludeTurns: true}` from another connection loads the
+  thread again and runs what its queue holds, in order, while the TUI keeps showing the other task with its draft; a
+  message queued to the original while it was still loaded ran there too, in the background.
+- An approval request (`item/commandExecution/requestApproval`, from a command run with `sandbox_permissions:
+  "require_escalated"`) of a turn started through `thread/queue/add` reached neither the connection that queued the
+  message, kept open, nor another client connected before the TUI: only the TUI showed it. Those connections saw only
+  `thread/status/changed` with `activeFlags: ["waitingOnApproval"]`.
+- `-c 'hooks.state={…}'` naming only the generated session-flag hook does not replace the user's own trust: a user
+  hook trusted in `config.toml`'s `[hooks.state]` stayed `trustStatus: "trusted"` beside it.
+- A connection that loads a thread with `thread/resume` is subscribed to it. With the TUI showing another task, the
+  approval request of a turn on that thread (queued through the same connection) went to that connection alone, and the
+  thread stayed `waitingOnApproval` after it closed; the agent command center listed the task as "Needs input", and
+  opening it showed the approval in the TUI, where it could be answered. A message queued and its approval raised before
+  a resumed TUI attached was likewise shown, and answered, in the TUI once it attached.
+- The TUI does not put the user's own input typed during a turn into `thread/queue`: Enter steered it into the running
+  turn (the model request restarted with it), and Tab queued it in the TUI itself, which ran it after the turn;
+  `thread/queue/list` stayed empty meanwhile, and an item queued through `thread/queue/add` ran after both.
+- `thread/queue/add` on an idle thread starts the item itself only when the queue was empty. After an Esc left items
+  queued, an item added to the idle thread was only appended, and nothing ran; `thread/queue/start` with the first item's
+  `queuedSubmissionId` then ran all three in order, one turn each.
+- The app server's program carries the reply "Server overloaded; retry later." for a request it has no room for (found
+  in the 0.166.0 binary's strings, beside its request intake; the JSON-RPC code was not observed, and is taken to be
+  -32001). Octoboard treats it as a wait, not as a refusal of the message.
 
 The terminal paste sequence all three agents accept is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`;
 multi-line text arrives as one message with no delay between paste and Enter. Every agent queues a message written

@@ -59,6 +59,10 @@ notify = "8.2"
 # SOCKS proxies, which the user's shell may name (`ALL_PROXY=socks5://...`): without
 # `socks-proxy` ureq panics at connect on one.
 ureq = { version = "3", default-features = false, features = ["rustls", "platform-verifier", "socks-proxy"] }
+# The client side of a Codex session's private app server, and of the tests that drive the control
+# socket end to end; the version axum's own server side already resolves, with only the client
+# handshake added.
+tokio-tungstenite = { version = "=0.24.0", default-features = false, features = ["connect"] }
 
 # The platform layer's Unix modules (`src/platform`), the PTY backend of `platform::term` among
 # them.
@@ -103,9 +107,6 @@ windows-sys = { version = "0.61", features = [
 [dev-dependencies]
 # Paused time for tests that would otherwise wait out a real timeout.
 tokio = { version = "1", features = ["full", "test-util"] }
-# A WebSocket client for tests that drive the control socket end to end; the version axum's own
-# server side already resolves, with only the client handshake added.
-tokio-tungstenite = { version = "=0.24.0", default-features = false, features = ["connect"] }
 
 # Renders the wire types as TypeScript for the contract test (`protocol::bindings`); test builds
 # only, so the release binary carries nothing of it.
