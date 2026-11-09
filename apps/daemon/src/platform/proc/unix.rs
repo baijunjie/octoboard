@@ -331,8 +331,14 @@ pub(crate) fn unreaped_state(pid: ProcessId) -> Option<Unreaped> {
         if libc::waitid(libc::P_PID, pid.0 as libc::id_t, &mut info, flags) != 0 {
             return None;
         }
-        // With `WNOHANG`, a child that has not exited leaves `si_pid` as it was: 0.
-        if info.si_pid() == 0 {
+        // macOS can report a stop even with only WEXITED requested. A stopped child still owns
+        // its live processes, so only an explicit exit permits their cleanup.
+        if info.si_pid() == 0
+            || !matches!(
+                info.si_code,
+                libc::CLD_EXITED | libc::CLD_KILLED | libc::CLD_DUMPED
+            )
+        {
             return Some(Unreaped::Running);
         }
         let success = info.si_code == libc::CLD_EXITED && info.si_status() == 0;

@@ -266,7 +266,7 @@ mod tests {
     mod process {
         use super::super::*;
         use crate::test_support::{
-            assert_stops_running, is_running, wait_for_pid, ScratchDir, PATIENCE,
+            assert_stops_running, is_running, wait_for_pid, within, ScratchDir, PATIENCE,
         };
 
         const PREFIX: &str = "listening on: ws://127.0.0.1:";
@@ -275,6 +275,60 @@ mod tests {
             let mut command = Command::new("/bin/sh");
             command.args(["-c", script]);
             command
+        }
+
+        /// Observes a stop without consuming it, so the exit probe also sees any stop event the
+        /// host reports when only exits were requested.
+        fn child_is_stopped(pid: ProcessId) -> bool {
+            // SAFETY: the zeroed buffer is valid for waitid, the pid names this test's child,
+            // and WNOHANG | WNOWAIT neither blocks nor reaps it.
+            unsafe {
+                let mut info: libc::siginfo_t = std::mem::zeroed();
+                libc::waitid(
+                    libc::P_PID,
+                    pid.0 as libc::id_t,
+                    &mut info,
+                    libc::WSTOPPED | libc::WNOHANG | libc::WNOWAIT,
+                ) == 0
+                    && info.si_pid() == pid.0 as libc::pid_t
+                    && info.si_code == libc::CLD_STOPPED
+            }
+        }
+
+        /// A stopped server is still alive and must not trigger the cleanup reserved for an
+        /// exited companion. Continuing it lets its actual successful exit be observed unreaped.
+        #[tokio::test]
+        async fn a_stopped_server_is_running_until_it_continues_and_exits() {
+            use crate::platform::proc::{unreaped_state, Unreaped};
+
+            let mut server =
+                ServerChild::start(sh("kill -STOP $$; exit 0"), false, None, "stopped server")
+                    .expect("the server starts");
+            let pid = server.pid();
+            assert!(
+                within(PATIENCE, move || child_is_stopped(pid)).await,
+                "the child never reached its stopped state"
+            );
+            assert_eq!(unreaped_state(pid), Some(Unreaped::Running));
+            assert!(!server.exited(), "a stop must not permit companion cleanup");
+            assert!(is_running(pid.0 as i32));
+
+            // SAFETY: only the stopped child this test started receives SIGCONT, and it is
+            // held unreaped by ServerChild throughout the observation.
+            assert_eq!(
+                unsafe { libc::kill(pid.0 as libc::pid_t, libc::SIGCONT) },
+                0
+            );
+            assert!(
+                within(PATIENCE, move || {
+                    unreaped_state(pid) == Some(Unreaped::Exited { success: true })
+                })
+                .await,
+                "the child never reported its successful exit"
+            );
+            assert!(server.exited());
+            server.end(Duration::ZERO);
+            assert!(!is_running(pid.0 as i32), "the exited child was not reaped");
         }
 
         #[test]
