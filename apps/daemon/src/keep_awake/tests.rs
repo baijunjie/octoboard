@@ -6,7 +6,7 @@ use tokio::sync::broadcast::Receiver;
 use super::*;
 use crate::coordinator::settings::{update_settings, SettingsChanges};
 use crate::protocol::BackgroundTask;
-use crate::test_support::{app_state, project_session, PATIENCE};
+use crate::test_support::{app_state, project_session, runtime_settled, PATIENCE};
 
 /// The holds a test's stand-in has asked for and the ones still standing; the stand-in refuses
 /// while `refusing` is set.
@@ -87,12 +87,6 @@ async fn until(condition: impl Fn() -> bool) {
     .expect("the condition came true");
 }
 
-/// Gives the task time to see everything sent so far, for a check that it did nothing, which has
-/// no event to wait for.
-async fn settled() {
-    tokio::time::sleep(Duration::from_millis(200)).await;
-}
-
 fn working_session(id: &str, status: SessionStatus) -> Session {
     project_session(id, crate::protocol::AgentId::CLAUDE, status)
 }
@@ -137,7 +131,7 @@ async fn nothing_is_held_while_the_setting_is_off() {
     let (state, _dir) = app_state("keep-awake-off");
     let (holds, _events) = start(&state, false);
     set(&state, false, KeepAwakeWhen::Always);
-    settled().await;
+    runtime_settled().await;
     assert_eq!(holds.taken.load(Ordering::SeqCst), 0);
     assert!(!state.keep_awake_held());
 }
@@ -170,7 +164,7 @@ async fn working_holds_only_while_a_session_works() {
     let (state, _dir) = app_state("keep-awake-working");
     let (holds, mut events) = start(&state, false);
     set(&state, true, KeepAwakeWhen::Working);
-    settled().await;
+    runtime_settled().await;
     assert_eq!(
         holds.taken.load(Ordering::SeqCst),
         0,
@@ -234,7 +228,7 @@ async fn a_host_that_cannot_hold_is_never_asked() {
     let (state, _dir) = app_state("keep-awake-unavailable");
     let (holds, _events) = start_on(&state, false, false);
     set(&state, true, KeepAwakeWhen::Always);
-    settled().await;
+    runtime_settled().await;
     assert_eq!(holds.taken.load(Ordering::SeqCst), 0);
     assert!(!state.keep_awake_held());
 }
@@ -253,12 +247,12 @@ async fn a_refused_hold_is_reported_not_held_and_is_not_asked_for_again_meanwhil
         session: "s".to_string(),
     });
     set(&state, true, KeepAwakeWhen::Always);
-    settled().await;
+    runtime_settled().await;
     assert_eq!(holds.taken.load(Ordering::SeqCst), 1);
 
     // Once the answer has gone false and true again, it does, and this time the host allows it.
     set(&state, false, KeepAwakeWhen::Always);
-    settled().await;
+    runtime_settled().await;
     holds.refusing.store(false, Ordering::SeqCst);
     set(&state, true, KeepAwakeWhen::Always);
     assert!(next_held(&mut events).await);

@@ -13,6 +13,10 @@
 //! - [`processes`]: the waits on a fixture process a test spawned (the pid it recorded, running a
 //!   scenario again when it was killed before recording one, and its being gone) and the wait for
 //!   a condition that runs off the async runtime.
+//! - [`clock`]: the wait for every task on the runtime to be idle through tokio's paused clock,
+//!   `runtime_settled` and `runtime_advanced`, which pause a real-clock test's clock for the wait, the
+//!   latter moving it on by a given duration, and `next_millisecond`, which waits for the wall-clock
+//!   millisecond to change.
 //! - `fixture` (Windows): the processes a test starts where a Unix test has perl start them.
 //! - [`git`]: the environment a test's `git` runs in together with the repositories it builds
 //!   with it, the state a read must leave untouched and the stale stat that makes a read want to
@@ -27,6 +31,7 @@ use std::time::Duration;
 
 pub(crate) mod app;
 pub(crate) mod background;
+pub(crate) mod clock;
 #[cfg(windows)]
 pub(crate) mod fixture;
 pub(crate) mod git;
@@ -39,6 +44,7 @@ pub(crate) mod stand_in;
 
 pub(crate) use app::*;
 pub(crate) use background::Background;
+pub(crate) use clock::*;
 pub(crate) use git::*;
 pub(crate) use processes::*;
 pub(crate) use scratch::*;

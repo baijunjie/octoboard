@@ -34,7 +34,7 @@ fn reread_until(
                 TEST_KEY,
                 &format!("/git-ref/{session}"),
                 &body,
-                Duration::from_secs(5),
+                PATIENCE,
             )
             .unwrap();
             *posted += 1;

@@ -170,7 +170,11 @@ mod tests {
     use std::time::Duration;
 
     use crate::protocol::error_code;
-    use crate::test_support::{app_state, code_of, PATIENCE};
+    use crate::test_support::{app_state, code_of, tasks_idle, PATIENCE};
+
+    /// How long a test's planned stop waits for what was admitted. Its length does not matter: on
+    /// the paused clock it runs out only once every task is idle.
+    const WAIT: Duration = Duration::from_secs(1);
 
     /// Once raised, the barrier admits nothing more, an operation already admitted asking again
     /// included, while a step it only counts still goes.
@@ -189,35 +193,37 @@ mod tests {
 
     /// The planned stop waits for what was admitted before the barrier went up, and goes on as
     /// soon as the last admission is released.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn raising_the_barrier_waits_for_what_was_admitted() {
         let (state, _dir) = app_state("barrier-waits");
         let admitted = state.admit_change().unwrap();
         let tracked = state.track_change();
-        let releasing = tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            drop(tracked);
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            drop(admitted);
-        });
-        let started = std::time::Instant::now();
-        assert!(state.raise_handover_barrier(PATIENCE).await);
-        assert!(started.elapsed() >= Duration::from_millis(200));
-        releasing.await.unwrap();
+        let raising = {
+            let state = state.clone();
+            tokio::spawn(async move { state.raise_handover_barrier(PATIENCE).await })
+        };
+        // On the paused clock the wait is still under way once every task is idle, short of
+        // running out.
+        tasks_idle().await;
+        assert!(!raising.is_finished(), "the stop did not wait for both");
+        drop(tracked);
+        tasks_idle().await;
+        assert!(
+            !raising.is_finished(),
+            "the stop did not wait for the admission"
+        );
+        drop(admitted);
+        assert!(raising.await.unwrap());
     }
 
     /// An operation the wait gave up on is told so before an act that cannot be undone; one the
     /// barrier still waits for is not.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn an_admission_outlasting_the_wait_is_no_longer_covered() {
         let (state, _dir) = app_state("barrier-gives-up");
         let admitted = state.admit_change().unwrap();
         assert!(admitted.still_covered().is_ok());
-        assert!(
-            !state
-                .raise_handover_barrier(Duration::from_millis(50))
-                .await
-        );
+        assert!(!state.raise_handover_barrier(WAIT).await);
         let err = admitted.still_covered().expect_err("no longer covered");
         assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN);
     }
@@ -225,19 +231,16 @@ mod tests {
     /// A step that must not begin once the stop has stopped waiting, such as starting a process
     /// under a claim taken before the barrier went up, is counted while the stop waits, and
     /// refused once it no longer does.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_step_that_begins_after_the_wait_ran_out_is_refused() {
         let (state, _dir) = app_state("barrier-step-after-wait");
         let admitted = state.admit_change().unwrap();
         let waiting = {
             let state = state.clone();
-            tokio::spawn(async move {
-                state
-                    .raise_handover_barrier(Duration::from_millis(300))
-                    .await
-            })
+            tokio::spawn(async move { state.raise_handover_barrier(WAIT).await })
         };
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        // On the paused clock the wait is under way once every task is idle, short of running out.
+        tasks_idle().await;
         assert!(state.handover_barrier_raised());
         let counted = state
             .track_change_unless_passed()
@@ -257,21 +260,17 @@ mod tests {
     /// An operation admitted before the barrier goes up can claim the session again to finish what
     /// it began, while the same claim is refused to everything else, and to the operation itself
     /// once the planned stop has stopped waiting for it.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn an_admitted_operation_can_claim_a_session_again_to_finish() {
         let (state, _dir) = app_state("barrier-admitted-claim");
         let admitted = state.admit_change().unwrap();
         let raising = tokio::spawn({
             let state = state.clone();
-            async move {
-                state
-                    .raise_handover_barrier(Duration::from_millis(300))
-                    .await
-            }
+            async move { state.raise_handover_barrier(WAIT).await }
         });
-        while !state.handover_barrier_raised() {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        // On the paused clock the wait is under way once every task is idle, short of running out.
+        tasks_idle().await;
+        assert!(state.handover_barrier_raised());
         let err = state
             .begin_account_switch("s", true)
             .err()

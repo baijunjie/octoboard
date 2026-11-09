@@ -360,15 +360,16 @@ mod tests {
         state.hook_queues.push("s", stop);
 
         let draining = state.clone();
+        // A `biased` `join!` polls the stop first, so the queue is drained once the stop has begun
+        // and waits on it.
         let drain = async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
             tokio::task::spawn_blocking(move || {
                 crate::hooks::apply::drain_hook_queue(&draining, "s")
             })
             .await
             .unwrap();
         };
-        tokio::join!(state.stop_all_sessions(), drain);
+        tokio::join!(biased; state.stop_all_sessions(), drain);
 
         assert_eq!(
             state.session_record("s").unwrap().status,

@@ -695,7 +695,7 @@ mod tests {
     }
 
     fn wait_until(mut condition: impl FnMut() -> bool) {
-        let deadline = Instant::now() + Duration::from_secs(2);
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
         while !condition() {
             assert!(
                 Instant::now() < deadline,

@@ -478,7 +478,6 @@ fn poll_once(fd: RawFd, events: libc::c_short, timeout_ms: i32) -> io::Result<()
 mod tests {
     use std::io::{self, Read};
     use std::os::unix::io::{FromRawFd, RawFd};
-    use std::time::{Duration, Instant};
 
     use portable_pty::native_pty_system;
 
@@ -496,12 +495,23 @@ mod tests {
         let (read_fd, write_fd) = (fds[0], fds[1]);
         set_nonblocking(write_fd).expect("non-blocking mode");
 
-        // 256 KiB against a pipe buffer of a few tens of KiB, with the reader held off at first, so
-        // the write is guaranteed to hit `EAGAIN` and have to resume.
+        // 256 KiB against a pipe buffer of a few tens of KiB, with the reader held off until the
+        // pipe is full, so the write is guaranteed to hit `EAGAIN` and have to resume.
         let payload = vec![b'x'; 256 * 1024];
         let expected = payload.len();
         let reader = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(300));
+            // Full is not writable: less room than `PIPE_BUF` is left, with nothing read yet.
+            let full = || {
+                let mut pollfd = libc::pollfd {
+                    fd: write_fd,
+                    events: libc::POLLOUT,
+                    revents: 0,
+                };
+                // SAFETY: one valid `pollfd`, for a descriptor the test keeps open until this
+                // thread has ended.
+                unsafe { libc::poll(&mut pollfd, 1, 0) == 0 }
+            };
+            let filled = crate::session::wait::wait_for(crate::test_support::PATIENCE, full);
             // SAFETY: this thread takes sole ownership of the read end.
             let mut file = unsafe { std::fs::File::from_raw_fd(read_fd) };
             let mut received = Vec::with_capacity(expected);
@@ -513,16 +523,16 @@ mod tests {
                     Err(_) => break,
                 }
             }
-            received.len()
+            (filled, received.len())
         });
 
-        let started = Instant::now();
         write_all(write_fd, &payload).expect("every byte goes through");
+        let (filled, received) = reader.join().expect("the reader thread");
         assert!(
-            started.elapsed() >= Duration::from_millis(200),
-            "the reader was held off, so this must have waited rather than fail"
+            filled,
+            "the pipe never filled up, so the write never had to wait"
         );
-        assert_eq!(reader.join().expect("the reader thread"), expected);
+        assert_eq!(received, expected);
         // SAFETY: the write end is still ours and is not used after this.
         unsafe { libc::close(write_fd) };
     }

@@ -799,33 +799,31 @@ mod tests {
     use std::sync::Arc;
 
     /// Runs `script` under bash through [`run_bounded`], the script recording its pid in a
-    /// file first, and returns the outcome with that pid once the script has written it — or
-    /// `None` when the run ended before it did, which a stalled exec can cause (see
-    /// [`until_the_shell_ran`]).
+    /// file first — after `setup`, a trap that has to be in place before anything signals it —
+    /// and returns the outcome with that pid once the script has written it, or `None` when the
+    /// run ended before it did, which a stalled exec can cause (see [`until_the_shell_ran`]).
+    /// When `cancelled`, the run is cancelled once the pid is recorded.
     fn bounded_run_of(
+        setup: &str,
         script: &str,
         bounds: Bounds,
-        cancel_after: Option<Duration>,
+        cancelled: bool,
     ) -> Option<(std::result::Result<Output, BoundedFailure>, i32)> {
         let pid_file = ScratchFile::new("env-shell-bounded", "pid");
         let mut command = Command::new(crate::test_support::bash());
         command.args([
             "-c",
             &format!(
-                "echo {} > '{}'; {script}",
+                "{setup} echo {} > '{}'; {script}",
                 crate::test_support::SHELL_PID,
                 pid_file.display()
             ),
         ]);
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        if let Some(delay) = cancel_after {
+        if cancelled {
             let (cancel, pid_file) = (cancel.clone(), pid_file.to_path_buf());
             thread::spawn(move || {
-                let deadline = Instant::now() + PATIENCE;
-                while read_pid_file(&pid_file).is_none() && Instant::now() < deadline {
-                    thread::sleep(Duration::from_millis(5));
-                }
-                thread::sleep(delay);
+                crate::session::wait::wait_for(PATIENCE, || read_pid_file(&pid_file).is_some());
                 cancel.store(true, std::sync::atomic::Ordering::Relaxed);
             });
         }
@@ -859,27 +857,23 @@ mod tests {
             ..bounds
         };
         // `exec`, so the pid recorded is the process doing the work, not a shell waiting on it.
-        let cases: [(&str, Bounds, Option<Duration>); 3] = [
-            ("exec /usr/bin/yes", bounds, None),
-            (
-                "exec /bin/sleep 300",
-                bounds,
-                Some(Duration::from_millis(50)),
-            ),
-            ("exec /bin/sleep 300", short, None),
+        let cases: [(&str, Bounds, bool); 3] = [
+            ("exec /usr/bin/yes", bounds, false),
+            ("exec /bin/sleep 300", bounds, true),
+            ("exec /bin/sleep 300", short, false),
         ];
-        for (script, bounds, cancel_after) in cases {
+        for (script, bounds, cancelled) in cases {
             let (outcome, pid) =
-                until_the_shell_ran(|| bounded_run_of(script, bounds, cancel_after));
+                until_the_shell_ran(|| bounded_run_of("", script, bounds, cancelled));
             let failure = outcome.expect_err("the run was stopped");
-            match (script, cancel_after) {
+            match (script, cancelled) {
                 ("exec /usr/bin/yes", _) => {
                     assert!(
                         matches!(failure, BoundedFailure::StdoutExceeded(_)),
                         "{failure}"
                     )
                 }
-                (_, Some(_)) => assert!(matches!(failure, BoundedFailure::Cancelled), "{failure}"),
+                (_, true) => assert!(matches!(failure, BoundedFailure::Cancelled), "{failure}"),
                 _ => assert!(matches!(failure, BoundedFailure::TimedOut(_)), "{failure}"),
             }
             assert_gone_by(pid, Instant::now() + PATIENCE);
@@ -1085,17 +1079,25 @@ mod tests {
 
     #[test]
     fn cancelling_during_the_grace_kills_the_program_and_keeps_the_reply() {
+        // The program marks the grace once its stdin closes, which happens only after its reply
+        // was taken; the cancel follows the mark, so it lands in the grace.
+        let in_grace = ScratchFile::new("env-shell-exchange-grace", "mark");
         let cancel = std::sync::Arc::new(AtomicBool::new(false));
-        let flag = cancel.clone();
+        let (flag, mark) = (cancel.clone(), in_grace.to_path_buf());
         thread::spawn(move || {
-            thread::sleep(Duration::from_millis(300));
-            flag.store(true, Ordering::Relaxed);
+            if crate::session::wait::wait_for(PATIENCE, || mark.exists()) {
+                flag.store(true, Ordering::Relaxed);
+            }
         });
+        let script = format!(
+            "echo reply; cat > /dev/null; : > '{}'; exec /bin/sleep 300",
+            in_grace.display()
+        );
         let mut trace = ExchangeTrace::default();
         let started = Instant::now();
         let (outcome, pid) = until_the_shell_ran(|| {
             exchange_graced_by(
-                "echo reply; exec /bin/sleep 300",
+                &script,
                 &[],
                 exchange_bounds(PATIENCE),
                 &cancel,
@@ -1166,24 +1168,30 @@ mod tests {
         let (outcome, pid) = until_the_shell_ran(|| {
             let cancel = Arc::new(AtomicBool::new(false));
             let setter = cancel.clone();
-            // A child that never replies, so only the flag can end the run before its timeout.
+            // A child that never replies, so only the flag can end the run before its timeout. It
+            // is cancelled once it runs, which it marks.
+            let running = ScratchFile::new("env-shell-exchange-cancel", "mark");
+            let mark = running.to_path_buf();
+            let script = format!(
+                "echo noise; : > '{}'; exec /bin/sleep 300",
+                running.display()
+            );
             let started = Instant::now();
             let canceller = thread::spawn(move || {
-                thread::sleep(Duration::from_millis(300));
+                let marked = crate::session::wait::wait_for(PATIENCE, || mark.exists());
                 setter.store(true, Ordering::Relaxed);
+                marked
             });
-            let ran = exchange_cancelled_by(
-                "echo noise; exec /bin/sleep 300",
-                &[],
-                exchange_bounds(PATIENCE),
-                &cancel,
-            );
-            canceller.join().unwrap();
+            let ran = exchange_cancelled_by(&script, &[], exchange_bounds(PATIENCE), &cancel);
+            let marked = canceller.join().unwrap();
+            // A run that ended before the shell recorded its pid is run again.
+            let ran = ran?;
+            assert!(marked, "the child never marked that it runs");
             assert!(
                 started.elapsed() < PATIENCE / 2,
                 "the cancel was not noticed"
             );
-            ran
+            Some(ran)
         });
         let failure = outcome.expect_err("no reply");
         assert!(matches!(failure, ExchangeFailure::Cancelled), "{failure}");
@@ -1364,8 +1372,15 @@ mod tests {
     /// marker is there only if the program was asked to exit, which a kill never does.
     #[cfg(unix)]
     fn term_marking_script(marker: &Path, then: &str) -> String {
+        format!("{} {then}", term_marking_trap(marker))
+    }
+
+    /// The trap of [`term_marking_script`], for [`bounded_run_of`] to set before the pid it waits
+    /// on is recorded: a `SIGTERM` that came before it would end the stand-in unmarked.
+    #[cfg(unix)]
+    fn term_marking_trap(marker: &Path) -> String {
         format!(
-            "trap \"echo termed > '{}'; exit 0\" TERM; {then}",
+            "trap \"echo termed > '{}'; exit 0\" TERM;",
             marker.display()
         )
     }
@@ -1375,10 +1390,16 @@ mod tests {
     #[cfg(unix)]
     fn a_timed_out_run_is_asked_to_exit_before_it_is_killed() {
         let marker = ScratchFile::new("term-handled", "marker");
-        let script = term_marking_script(&marker, "while :; do /bin/sleep 0.05; done");
+        let trap = term_marking_trap(&marker);
         let started = Instant::now();
-        let (outcome, pid) =
-            until_the_shell_ran(|| bounded_run_of(&script, terminable_bounds(PATIENCE), None));
+        let (outcome, pid) = until_the_shell_ran(|| {
+            bounded_run_of(
+                &trap,
+                "while :; do /bin/sleep 0.05; done",
+                terminable_bounds(PATIENCE),
+                false,
+            )
+        });
         assert!(matches!(outcome, Err(BoundedFailure::TimedOut(_))));
         assert!(
             marker.exists(),
@@ -1396,9 +1417,10 @@ mod tests {
         let started = Instant::now();
         let (outcome, pid) = until_the_shell_ran(|| {
             bounded_run_of(
-                "trap '' TERM; while :; do /bin/sleep 0.05; done",
+                "trap '' TERM;",
+                "while :; do /bin/sleep 0.05; done",
                 terminable_bounds(grace),
-                None,
+                false,
             )
         });
         assert!(matches!(outcome, Err(BoundedFailure::TimedOut(_))));
@@ -1415,13 +1437,13 @@ mod tests {
     #[cfg(unix)]
     fn a_cancelled_run_is_asked_to_exit_before_it_is_killed() {
         let marker = ScratchFile::new("term-handled-cancel", "marker");
-        let script = term_marking_script(&marker, "while :; do /bin/sleep 0.05; done");
+        let trap = term_marking_trap(&marker);
         let bounds = Bounds {
             timeout: PATIENCE,
             ..terminable_bounds(PATIENCE)
         };
         let (outcome, pid) = until_the_shell_ran(|| {
-            bounded_run_of(&script, bounds, Some(Duration::from_millis(300)))
+            bounded_run_of(&trap, "while :; do /bin/sleep 0.05; done", bounds, true)
         });
         assert!(matches!(outcome, Err(BoundedFailure::Cancelled)));
         assert!(
@@ -1436,27 +1458,26 @@ mod tests {
     #[cfg(unix)]
     fn a_stop_in_progress_waits_no_longer_than_the_cancel_cap_once_cancelled() {
         // Times out at 300 ms with a grace far longer than `PATIENCE`, and is cancelled while it
-        // waits out that grace: well after the shell started, so the timeout has fired first.
+        // waits out that grace: once the stand-in, which outlives the `SIGTERM`, has marked it, so
+        // the timeout has fired first.
         let bounds = terminable_bounds(Duration::from_secs(120));
         let started = Instant::now();
         let (outcome, pid) = until_the_shell_ran(|| {
             let cancel = Arc::new(AtomicBool::new(false));
             let flag = cancel.clone();
             let pid_file = ScratchFile::new("cancel-cap", "pid");
-            let pid_path = pid_file.to_path_buf();
+            let termed = ScratchFile::new("cancel-cap-termed", "mark");
+            let mark = termed.to_path_buf();
             thread::spawn(move || {
-                let deadline = Instant::now() + PATIENCE;
-                while !pid_path.exists() && Instant::now() < deadline {
-                    thread::sleep(Duration::from_millis(20));
-                }
-                thread::sleep(Duration::from_millis(1500));
+                crate::session::wait::wait_for(PATIENCE, || mark.exists());
                 flag.store(true, Ordering::Relaxed);
             });
             let mut command = Command::new(crate::test_support::bash());
             command.args([
                 "-c",
                 &format!(
-                    "trap '' TERM; echo {} > '{}'; while :; do /bin/sleep 0.05; done",
+                    "trap \": > '{}'\" TERM; echo {} > '{}'; while :; do /bin/sleep 0.05; done",
+                    termed.display(),
                     crate::test_support::SHELL_PID,
                     pid_file.display()
                 ),

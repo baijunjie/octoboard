@@ -230,7 +230,7 @@ mod tests {
 
     /// An ordinary stop asked for once a planned stop has begun escalates it: what the planned
     /// stop watches says so, at once, and the stop asked for reads as ordinary from then on.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn an_ordinary_stop_asked_during_a_planned_one_escalates_it() {
         let (state, _dir) = app_state("stop-escalates");
         state.request_planned_stop();
@@ -240,6 +240,7 @@ mod tests {
         );
         assert!(state.planned_stop_asked());
         assert!(!state.ordinary_stop_asked());
+        // On the paused clock this runs out only once every task is idle.
         assert!(
             tokio::time::timeout(Duration::from_millis(100), state.await_ordinary_stop())
                 .await
@@ -250,7 +251,8 @@ mod tests {
         let (escalated, ()) = tokio::join!(
             tokio::time::timeout(PATIENCE, state.await_ordinary_stop()),
             async {
-                tokio::time::sleep(Duration::from_millis(50)).await;
+                // Asked once the wait is under way: every task is idle by then.
+                crate::test_support::tasks_idle().await;
                 state.request_shutdown();
             },
         );

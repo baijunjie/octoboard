@@ -791,7 +791,6 @@ async fn output_printed_while_no_daemon_is_linked_is_kept_in_the_tail() {
         .await;
     daemon.output_until("t1", "got:\"unattended\"").await;
     drop(daemon);
-    tokio::time::sleep(Duration::from_millis(200)).await;
 
     let mut next = holder.link().await;
     let Some(Frame::Bulk(BulkKind::Tail, _, tail)) = next.next().await else {

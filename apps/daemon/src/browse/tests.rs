@@ -1524,27 +1524,37 @@ fn a_cancel_during_each_git_run_ends_the_read() {
     fn cancelled(err: anyhow::Error) -> bool {
         err.downcast_ref::<Cancelled>().is_some()
     }
-    // `git` stands in with a script that fails the runs `fails` names and stalls on the rest.
+    // `git` stands in with a script that fails the runs `fails` names and stalls on the rest,
+    // marking `stalled` in the folder it stands in from when it does.
     let stalling = |label: &str, fails: &str| {
         let bin = ScratchDir::new(label);
         let env = crate::test_support::fake_agent(
             &bin,
             "git",
-            &format!("case \"$*\" in *{fails}*) exit 128;; esac\n/bin/sleep 30\n"),
+            &format!(
+                "case \"$*\" in *{fails}*) exit 128;; esac\n: > \"$HOME/stalled\"\n/bin/sleep 30\n"
+            ),
         );
         let program = crate::env_shell::resolve_program("git", &env).unwrap();
         (program, env, bin)
     };
-    // The cancel comes a moment after the read has started.
-    let cancel_soon = |read: &dyn Fn(&AtomicBool) -> anyhow::Result<()>| {
+    // The cancel comes once a run of the read has stalled, which the stand-in marks in `bin`.
+    let cancel_soon = |bin: &ScratchDir, read: &dyn Fn(&AtomicBool) -> anyhow::Result<()>| {
+        let stalled = bin.join("stalled");
+        let _ = std::fs::remove_file(&stalled);
         let cancel = AtomicBool::new(false);
         let started = std::time::Instant::now();
         let result = std::thread::scope(|scope| {
-            scope.spawn(|| {
-                std::thread::sleep(std::time::Duration::from_millis(400));
+            let canceller = scope.spawn(|| {
+                let marked = crate::session::wait::wait_for(crate::test_support::PATIENCE, || {
+                    stalled.exists()
+                });
                 cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                marked
             });
-            read(&cancel)
+            let result = read(&cancel);
+            assert!(canceller.join().unwrap(), "no run of the read stalled");
+            result
         });
         assert!(started.elapsed() < std::time::Duration::from_secs(20));
         result.map(|()| false).unwrap_or_else(cancelled)
@@ -1557,28 +1567,28 @@ fn a_cancel_during_each_git_run_ends_the_read() {
     std::fs::create_dir_all(nesting.join("inner/.git")).unwrap();
 
     // The listing's `check-ignore`.
-    let (program, env, _bin) = stalling("browse-ignored-cancel-listing", "nothing-fails");
+    let (program, env, bin) = stalling("browse-ignored-cancel-listing", "nothing-fails");
     let make = || Ok(IsolatedGit::new(program.clone(), env.clone()));
     let git = BrowseGit::new(&make).with_ceiling(None);
     let canonical = crate::hostfs::canonical(&*repository).unwrap();
-    assert!(cancel_soon(&|cancel| {
+    assert!(cancel_soon(&bin, &|cancel| {
         let root = wire_path::RelPath::parse("").unwrap();
         live::list_dir(&canonical, &root, &git, cancel).map(|_| ())
     }));
     // The search's `ls-files` of the project's repository.
-    assert!(cancel_soon(&|cancel| {
+    assert!(cancel_soon(&bin, &|cancel| {
         live::search_files(&canonical, "a", false, &git, cancel).map(|_| ())
     }));
     // The `ls-files` of a repository nested in a project that is in none.
     let nested = crate::hostfs::canonical(&*nesting).unwrap();
-    assert!(cancel_soon(&|cancel| {
+    assert!(cancel_soon(&bin, &|cancel| {
         live::search_files(&nested, "a", false, &git, cancel).map(|_| ())
     }));
     // The `check-ignore` of the project folder itself, after its `ls-files` refused to run.
-    let (program, env, _bin) = stalling("browse-ignored-cancel-fallback", "ls-files");
+    let (program, env, bin) = stalling("browse-ignored-cancel-fallback", "ls-files");
     let make = || Ok(IsolatedGit::new(program.clone(), env.clone()));
     let git = BrowseGit::new(&make).with_ceiling(None);
-    assert!(cancel_soon(&|cancel| {
+    assert!(cancel_soon(&bin, &|cancel| {
         live::search_files(&canonical, "a", false, &git, cancel).map(|_| ())
     }));
 }

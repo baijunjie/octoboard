@@ -1141,7 +1141,7 @@ async fn a_project_at_an_associated_path_is_refused_by_the_store_and_skipped() {
 
 /// A second association for a console waits for the first one's claim to drop, while another
 /// console's goes ahead.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn associating_projects_with_one_console_is_serialised() {
     let (state, _dir) = crate::test_support::app_state("coordinator-project-association-claim");
     let first = state.claim_project_association("console-1").await;
@@ -1151,7 +1151,7 @@ async fn associating_projects_with_one_console_is_serialised() {
         tokio::spawn(async move { drop(state.claim_project_association("console-1").await) })
     };
     drop(state.claim_project_association("console-2").await);
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    crate::test_support::tasks_idle().await;
     assert!(
         !waiting.is_finished(),
         "the second claim for the console waits"
@@ -1188,7 +1188,7 @@ async fn add_local(state: Arc<AppState>, path: PathBuf) -> Result<Vec<Project>> 
 
 /// An association does not store anything while another holds the console's claim, and goes
 /// ahead once it is released.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn add_project_waits_for_the_consoles_claim_before_storing() {
     let (state, dir) = crate::test_support::app_state("coordinator-add-project-claim-wait");
     let workdir = console_workdir_in(&dir);
@@ -1201,7 +1201,9 @@ async fn add_project_waits_for_the_consoles_claim_before_storing() {
 
     let claim = state.claim_project_association("console-1").await;
     let adding = tokio::spawn(add_local(state.clone(), target));
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // The blocking reads before the claim hold the paused clock, so this returns once the
+    // association waits on the claim.
+    crate::test_support::tasks_idle().await;
     assert!(!adding.is_finished(), "the association waits for the claim");
     assert!(state.store.project_paths("console-1").unwrap().is_empty());
 

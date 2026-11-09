@@ -864,12 +864,25 @@ async fn overlapping_global_counts_share_one_computation() {
         assert!(Instant::now() < deadline, "the first count never started");
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    let second = count(&state);
-    // Time for the second to reach the claim; it computes nothing of its own whenever it does.
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // Not spawned, so the test sees it reach the claim: polled once, it waits there on the first.
+    let second = {
+        let state = Arc::clone(&state);
+        async move {
+            LIST_FLOOR_OVERRIDE.set(Some(Duration::from_secs(3600)));
+            let counts = super::list_all(&state).await;
+            LIST_FLOOR_OVERRIDE.set(None);
+            counts.unwrap()
+        }
+    };
+    let mut second = std::pin::pin!(second);
+    let polled = std::future::poll_fn(|cx| {
+        std::task::Poll::Ready(std::future::Future::poll(second.as_mut(), cx))
+    })
+    .await;
+    assert!(polled.is_pending(), "the second count did not wait");
     release_tx.send(()).unwrap();
     holder.join().unwrap();
-    let (first, second) = (first.await.unwrap(), second.await.unwrap());
+    let (first, second) = (first.await.unwrap(), second.await);
     assert_eq!(first, second);
     assert_eq!(state.process_ledger.counts_computed(), 1);
 }

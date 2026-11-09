@@ -604,16 +604,33 @@ fn an_app_read_that_gets_no_answer_leaves_the_apps_their_runtime_names() {
 fn a_cancelled_app_read_still_fails_the_reading() {
     let dir = ScratchDir::new("mcp-inventory-codex-read-cancelled");
     let cancel = AtomicBool::new(false);
-    // The fake's `app/read` never answers; setting the flag from a thread stops the reading.
-    let env = codex_failing_to_read_apps(&dir, "echo '[]'; exit 0", "sleep 30");
+    // The fake's `app/read` never answers; the flag is set from a thread once the fake marks that
+    // it got the read, and stops the reading.
+    let reading = dir.join("reading");
+    let on_read = format!(": > '{}'; sleep 30", reading.display());
+    let env = codex_failing_to_read_apps(&dir, "echo '[]'; exit 0", &on_read);
     let result = std::thread::scope(|scope| {
-        scope.spawn(|| {
-            std::thread::sleep(Duration::from_millis(1500));
+        let canceller = scope.spawn(|| {
+            let marked = crate::session::wait::wait_for(PATIENCE, || reading.exists());
             cancel.store(true, Ordering::Relaxed);
+            marked
         });
-        CodexMcpInventory.read(&env, None, false, Duration::from_secs(20), &cancel)
+        let result = CodexMcpInventory.read(&env, None, false, PATIENCE, &cancel);
+        assert!(
+            canceller.join().unwrap(),
+            "the app read never reached the fake"
+        );
+        result
     });
-    assert!(result.is_err());
+    let failure = result.expect_err("the reading fails");
+    assert_eq!(failure.reason, McpInventoryFailure::Failed, "{failure:?}");
+    assert!(
+        failure
+            .detail
+            .as_deref()
+            .is_some_and(|detail| detail.contains("cancelled")),
+        "{failure:?}"
+    );
 }
 
 #[test]

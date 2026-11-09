@@ -435,7 +435,7 @@ pub(crate) fn session_archived(id: &str) -> anyhow::Error {
 mod tests {
     /// A console's entry in the association map goes with its last claim, and stays while another
     /// claim for the console waits.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_consoles_association_entry_is_removed_with_its_last_claim() {
         let (state, _dir) = crate::test_support::app_state("claims-project-association-entry");
         let entries = || state.project_associations.lock().unwrap().len();
@@ -448,7 +448,7 @@ mod tests {
             let state = state.clone();
             tokio::spawn(async move { drop(state.claim_project_association("console-1").await) })
         };
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        crate::test_support::tasks_idle().await;
         drop(first);
         waiting.await.unwrap();
         assert_eq!(entries(), 0);

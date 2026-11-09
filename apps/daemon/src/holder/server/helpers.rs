@@ -544,13 +544,15 @@ mod tests {
         let key = served.helpers.launches.issue("t1", "s1", None).unwrap();
         let mut frames = link(&served.helpers, 1);
         let port = served.port;
+        // The helper hangs up once its call has been relayed to the daemon.
+        let (relayed, hang_up) = std::sync::mpsc::channel::<()>();
         let call = tokio::task::spawn_blocking(move || {
             let stream = crate::loopback::connect(port, PATIENCE).expect("connected");
             let exchanging = stream.try_clone().expect("a second handle");
             let waiting = std::thread::spawn(move || {
                 crate::loopback::exchange(&exchanging, port, &key, "/mcp/token", b"{}")
             });
-            std::thread::sleep(Duration::from_millis(300));
+            hang_up.recv().ok();
             stream.shutdown(std::net::Shutdown::Both).ok();
             waiting.join().ok();
         });
@@ -558,6 +560,7 @@ mod tests {
             panic!("not a relay");
         };
         assert!(waits);
+        relayed.send(()).unwrap();
         let FromHolder::RelayGone { req: gone } = next(&mut frames).await else {
             panic!("not a relay_gone");
         };

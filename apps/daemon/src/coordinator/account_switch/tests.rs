@@ -585,7 +585,7 @@ async fn a_switch_claim_is_held_after_the_relaunched_process_is_live_and_after_i
     let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "exit 1");
     state.register_live(live.clone());
     crate::coordinator::exit_watch::watch_exit(&state, live.clone());
-    let deadline = Instant::now() + Duration::from_secs(5);
+    let deadline = Instant::now() + crate::test_support::PATIENCE;
     while state.live_session("s").is_some() {
         assert!(Instant::now() < deadline, "the exit was never seen");
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -954,11 +954,17 @@ async fn a_switch_that_fails_stops_what_a_process_that_had_exited_by_itself_star
             .await,
         "the process exits by itself"
     );
-    // Still registered, as in the moment before the exit watcher deregisters it.
+    // Still registered, as in the moment before the exit watcher deregisters it: the watcher
+    // starts only once the switch holds the session's claim.
     let watched = live.clone();
     let watching = state.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(300)).await;
+    let watcher = tokio::spawn(async move {
+        let claimed = watching.clone();
+        let switching = crate::test_support::within(crate::test_support::PATIENCE, move || {
+            claimed.is_launching("s")
+        })
+        .await;
+        assert!(switching, "the switch never took the session's claim");
         crate::coordinator::exit_watch::watch_exit(&watching, watched);
     });
 
@@ -974,6 +980,7 @@ async fn a_switch_that_fails_stops_what_a_process_that_had_exited_by_itself_star
     )
     .await
     .expect_err("the relaunch failed");
+    watcher.await.unwrap();
 
     assert!(
         crate::test_support::stops_running(&state, child).await,

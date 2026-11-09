@@ -681,6 +681,7 @@ mod wait_tests {
         let started = Instant::now();
         assert!(!wait_for(Duration::from_millis(100), || false));
         assert!(started.elapsed() >= Duration::from_millis(100));
-        assert!(started.elapsed() < Duration::from_secs(2));
+        // Rules out a wait that never ends, with room for a machine that stalls for seconds.
+        assert!(started.elapsed() < Duration::from_secs(60));
     }
 }

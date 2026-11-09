@@ -1201,7 +1201,8 @@ fn a_process_whose_directory_was_removed_is_stopped_after_the_grace() {
         ))
     );
     let ledger = &state.process_ledger;
-    *ledger.cwd_grace.lock().unwrap() = Some(Duration::from_millis(500));
+    let grace = Duration::from_millis(500);
+    *ledger.cwd_grace.lock().unwrap() = Some(grace);
     let _live = agent(&state, "s1", &script);
     let child = wait_for_pid(&pid_file);
     let _guard = KillOnDrop(vec![child]);
@@ -1219,7 +1220,9 @@ fn a_process_whose_directory_was_removed_is_stopped_after_the_grace() {
     std::fs::remove_dir(&work).unwrap();
     ledger.tick();
     assert!(child_id.is_running(), "stopped before the grace was over");
-    std::thread::sleep(Duration::from_millis(600));
+    // The ledger measures the grace on the real clock from the tick that first saw the directory
+    // gone, so it is over once this much has passed; a slower run only waits longer.
+    std::thread::sleep(grace);
     ledger.tick();
     assert_stops_running(child);
 }
@@ -2330,8 +2333,11 @@ fn a_process_kept_while_a_stop_runs_is_not_signalled() {
     #[cfg(unix)]
     {
         let ready = dir.join("ignoring");
+        // It takes the polite request without ending, and marks that it got it.
+        let asked = dir.join("asked");
         let ignoring_script = format!(
-            "$SIG{{TERM}} = \"IGNORE\"; {} sleep 60;",
+            "$SIG{{TERM}} = sub {{ {} }}; {} sleep 60 while 1;",
+            perl_write(&asked, "1"),
             perl_write(&ready, "$$")
         );
         detached("/usr/bin/perl", &["-e", &ignoring_script], &[]);
@@ -2345,8 +2351,10 @@ fn a_process_kept_while_a_stop_runs_is_not_signalled() {
                     kept.load(std::sync::atomic::Ordering::Acquire)
                 })
             });
-            std::thread::sleep(Duration::from_millis(200));
+            // Kept once the stop has asked it to terminate, so within the grace before the kill.
+            let was_asked = crate::session::wait::wait_for(PATIENCE, || asked.exists());
             kept.store(true, std::sync::atomic::Ordering::Release);
+            assert!(was_asked, "the stop never asked it to terminate");
             assert!(stopping.join().unwrap().is_empty());
         });
         assert!(is_running(ignoring), "killed once kept");

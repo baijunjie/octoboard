@@ -291,13 +291,10 @@ fn the_lock_is_refused_while_held_and_free_once_released() {
     let held = try_lock_file(&path).expect("first");
     assert!(matches!(try_lock_file(&path), Err(Busy::Held)));
     drop(held);
-    // A process another test is starting may hold the descriptor for an instant, between the fork
-    // and the exec that closes it.
-    let free = (0..100).any(|_| {
-        try_lock_file(&path).is_ok() || {
-            std::thread::sleep(std::time::Duration::from_millis(10));
-            false
-        }
+    // A process another test is starting may hold the descriptor between the fork and the exec
+    // that closes it, which a stalled `exec` can make last seconds.
+    let free = crate::session::wait::wait_for(crate::test_support::PATIENCE, || {
+        try_lock_file(&path).is_ok()
     });
     assert!(free, "the lock was not free once released");
 }

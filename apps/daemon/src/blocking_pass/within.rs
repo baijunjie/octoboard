@@ -184,28 +184,45 @@ mod tests {
         let stuck = PathBuf::from("/octoboard-test/stuck");
         let fine = PathBuf::from("/octoboard-test/fine");
         let (release, held) = std::sync::mpsc::channel::<()>();
-        let held = Mutex::new(held);
+        let held = Arc::new(Mutex::new(held));
         let deadline = Duration::from_millis(100);
 
-        let begun = Instant::now();
-        let pass = within_deadline(&stalled, one(&stuck, 1), deadline, move |_| {
-            held.lock().unwrap().recv().ok();
-            Some(())
-        });
+        // A pass whose thread had not begun the key by the deadline tested nothing: its key was
+        // never started, and the pass is run again.
+        let tried_until = Instant::now() + PATIENCE;
+        let pass = loop {
+            let held = held.clone();
+            let begun = Instant::now();
+            let pass = within_deadline(&stalled, one(&stuck, 1), deadline, move |_| {
+                held.lock().unwrap().recv().ok();
+                Some(())
+            });
+            assert!(
+                begun.elapsed() < PATIENCE,
+                "the pass waited past its deadline"
+            );
+            if !pass.timed_out.is_empty() {
+                break pass;
+            }
+            assert!(
+                Instant::now() < tried_until,
+                "the thread never began the key before the deadline"
+            );
+        };
         assert!(pass.found.is_empty());
         assert_eq!(pass.timed_out, vec![stuck.clone()]);
-        assert!(
-            begun.elapsed() < PATIENCE,
-            "the pass waited past its deadline"
-        );
         // Past its own deadline, the work that is still running counts as stuck.
-        std::thread::sleep(Duration::from_millis(150));
+        assert!(
+            crate::session::wait::wait_for(PATIENCE, || stalled.is_stuck(&stuck)),
+            "the work still running never counted as stuck"
+        );
 
         let started = Arc::new(Mutex::new(Vec::new()));
         let counted = started.clone();
         let mut both = one(&stuck, 1);
         both.insert(fine.clone(), vec![2]);
-        let again = within_deadline(&stalled, both, deadline, move |item| {
+        // The stuck key is skipped at once, so only the other one's work is waited for.
+        let again = within_deadline(&stalled, both, PATIENCE, move |item| {
             counted.lock().unwrap().push(*item);
             Some(*item)
         });
@@ -232,39 +249,55 @@ mod tests {
     /// its own key does not keep the rest of the pass's work alive for as long as it is stuck.
     #[test]
     fn the_keys_never_started_are_let_go_when_the_pass_stops_waiting() {
-        let stalled = StalledPasses::default();
-        let token = Arc::new(());
-        let groups: HashMap<u32, Vec<Arc<()>>> = (0..=BLOCKING_WIDTH as u32)
-            .map(|key| (key, vec![token.clone()]))
-            .collect();
-        let (release, held) = std::sync::mpsc::channel::<()>();
-        let held = Mutex::new(held);
-        let began = Arc::new(AtomicUsize::new(0));
-        let counted = began.clone();
+        // A pass in which not every thread had taken its key by the deadline tested nothing, and
+        // is run again with a longer one.
+        let tried_until = Instant::now() + PATIENCE;
+        let mut deadline = Duration::from_millis(500);
+        loop {
+            let stalled = StalledPasses::default();
+            let token = Arc::new(());
+            let groups: HashMap<u32, Vec<Arc<()>>> = (0..=BLOCKING_WIDTH as u32)
+                .map(|key| (key, vec![token.clone()]))
+                .collect();
+            let (release, held) = std::sync::mpsc::channel::<()>();
+            let held = Mutex::new(held);
+            let began = Arc::new(AtomicUsize::new(0));
+            let counted = began.clone();
 
-        // A deadline long enough that every thread has taken its key before it runs out, even
-        // on a loaded machine; the count says so when it was not.
-        let pass = within_deadline(&stalled, groups, Duration::from_secs(2), move |_| {
-            counted.fetch_add(1, Ordering::SeqCst);
-            held.lock().unwrap().recv().ok();
-            Some(())
-        });
-        assert_eq!(
-            began.load(Ordering::SeqCst),
-            BLOCKING_WIDTH,
-            "every thread began a key before the deadline"
-        );
-        assert!(pass.found.is_empty());
-        assert_eq!(
-            pass.timed_out.len(),
-            BLOCKING_WIDTH,
-            "every key begun is recorded"
-        );
-        assert_eq!(
-            Arc::strong_count(&token),
-            1 + BLOCKING_WIDTH,
-            "only the keys being worked on are still held"
-        );
-        drop(release);
+            let pass = within_deadline(&stalled, groups, deadline, move |_| {
+                counted.fetch_add(1, Ordering::SeqCst);
+                held.lock().unwrap().recv().ok();
+                Some(())
+            });
+            if pass.timed_out.len() < BLOCKING_WIDTH {
+                drop(release);
+                assert!(
+                    Instant::now() < tried_until,
+                    "never did every thread begin a key before the deadline"
+                );
+                deadline *= 2;
+                continue;
+            }
+            // A thread records its key with the pass as it takes it, and counts it a moment after.
+            assert!(
+                crate::session::wait::wait_for(PATIENCE, || {
+                    began.load(Ordering::SeqCst) == BLOCKING_WIDTH
+                }),
+                "every thread began a key before the deadline"
+            );
+            assert!(pass.found.is_empty());
+            assert_eq!(
+                pass.timed_out.len(),
+                BLOCKING_WIDTH,
+                "every key begun is recorded"
+            );
+            assert_eq!(
+                Arc::strong_count(&token),
+                1 + BLOCKING_WIDTH,
+                "only the keys being worked on are still held"
+            );
+            drop(release);
+            break;
+        }
     }
 }

@@ -468,7 +468,7 @@ async fn the_started_sessions_brief_says_which_branches_it_was_handed() {
 /// that is not refused would wait for an answer, so it is cut short.
 async fn refused_promptly(state: &Arc<AppState>, args: &Map<String, Value>) -> anyhow::Error {
     tokio::time::timeout(
-        std::time::Duration::from_secs(5),
+        crate::test_support::PATIENCE,
         call(state, "loose", "request_session", args),
     )
     .await

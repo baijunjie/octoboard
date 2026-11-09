@@ -14,7 +14,6 @@ use crate::test_support::code_of;
 use crate::test_support::console_with_project_and_accounts;
 use anyhow::Result;
 use std::sync::Arc;
-use std::time::Duration;
 
 /// A launch that waits for `release` and then hands over `live` as the process it started.
 fn launch_after(
@@ -275,7 +274,7 @@ async fn the_launch_waits_for_the_reply_to_be_queued() {
     })
     .await
     .expect("opened");
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    crate::test_support::runtime_settled().await;
     assert!(!launched.load(std::sync::atomic::Ordering::SeqCst));
     assert!(state.store.get_session(&opened.id).unwrap().is_some());
 

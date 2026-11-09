@@ -409,19 +409,20 @@ mod tests {
         assert_eq!((answer.status, answer.body.as_str()), (200, "null"));
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_question_with_no_daemon_fails_once_the_deadline_passes() {
-        let relays = Relays::new(Duration::from_millis(150));
-        let started = std::time::Instant::now();
+        let deadline = Duration::from_millis(150);
+        let relays = Relays::new(deadline);
+        let started = Instant::now();
         let failed = relays
             .ask(RelayRoute::Mcp, "token".into(), Vec::new())
             .await
             .expect_err("no daemon");
         assert_eq!(failed, Failure::NoDaemon);
-        assert!(started.elapsed() >= Duration::from_millis(150));
+        assert!(started.elapsed() >= deadline);
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_question_waits_for_a_daemon_that_links_within_the_deadline() {
         let relays = Relays::new(PATIENCE);
         let asking = tokio::spawn({
@@ -432,7 +433,13 @@ mod tests {
                     .await
             }
         });
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        // On the paused clock the question is waiting for a link once every task is idle, short of
+        // its deadline running out.
+        crate::test_support::tasks_idle().await;
+        assert!(
+            !asking.is_finished(),
+            "the question did not wait for a daemon"
+        );
         let (sink, mut frames) = link();
         relays.attach(1, sink);
         let FromHolder::Relay { req, .. } = next(&mut frames).await else {

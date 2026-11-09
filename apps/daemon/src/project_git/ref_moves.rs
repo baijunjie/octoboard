@@ -83,7 +83,7 @@ mod tests {
     use crate::protocol::Event;
     use crate::test_support::{app_state, insert_project, repo_with, PATIENCE};
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_burst_of_reports_reads_the_project_once() {
         let (state, dir) = app_state("ref-moves-burst");
         state
@@ -112,6 +112,8 @@ mod tests {
         })
         .await;
         assert!(first.is_ok(), "the project is re-read");
+        // On the paused clock the reads hold the clock, so every read the burst set off has run
+        // when this times out.
         let second = tokio::time::timeout(DEBOUNCE * 3, async {
             loop {
                 if reread(events.recv().await.unwrap()) {

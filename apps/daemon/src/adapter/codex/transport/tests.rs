@@ -418,9 +418,10 @@ fn a_session_with_no_conversation_yet_holds_the_message_and_retries() {
 #[test]
 fn a_long_wait_is_told_once_and_withdrawn_when_the_message_goes_in() {
     let (mut transport, listener, token) = loopback();
+    let notice_after = Duration::from_millis(50);
     Arc::get_mut(&mut transport.shared)
         .unwrap()
-        .held_notice_after = Duration::from_millis(50);
+        .held_notice_after = notice_after;
     transport.shared.identify("main");
     let held = Arc::new(Mutex::new(Vec::new()));
     let released = Arc::new(Mutex::new(Vec::new()));
@@ -452,7 +453,9 @@ fn a_long_wait_is_told_once_and_withdrawn_when_the_message_goes_in() {
         let error = transport.send("hello", "id").unwrap_err();
         assert_eq!(error.error.kind(), io::ErrorKind::WouldBlock);
         assert!(error.error.get_ref().unwrap().is::<term::HeldByServer>());
-        std::thread::sleep(Duration::from_millis(60));
+        // The wait is measured on the real clock from the first message held, so it has lasted
+        // long enough to be told of by the next one; a slower run only makes it longer.
+        std::thread::sleep(notice_after);
     }
     assert_eq!(*held.lock().unwrap(), [held_code()]);
     assert!(released.lock().unwrap().is_empty());
@@ -1129,7 +1132,8 @@ fn stopping_the_session_reaps_its_server_and_removes_the_socket() {
     drop(listener);
 }
 
-/// Watches `transport`'s server as a started one is watched, its end reported to `gone`.
+/// Watches `transport`'s server as a started one is watched, its end reported to `gone`, which the
+/// watch holds a reference to until it ends.
 #[cfg(unix)]
 fn watch(transport: &CodexTransport, gone: Arc<AtomicBool>) {
     let stopping = transport.shared.clone();
@@ -1161,7 +1165,11 @@ fn a_server_that_dies_ends_the_session_and_a_stopped_one_does_not() {
     *transport.server.lock().unwrap() = Some(Box::new(stand_in_server("exec sleep 30", None)));
     watch(&transport, gone.clone());
     transport.stop();
-    std::thread::sleep(server::EXIT_POLL * 3);
+    // The watch lets go of `gone` as it ends, after which it can report nothing.
+    assert!(
+        crate::session::wait::wait_for(PATIENCE, || Arc::strong_count(&gone) == 1),
+        "the watch did not end with the stop"
+    );
     assert!(!gone.load(Ordering::Acquire));
 }
 

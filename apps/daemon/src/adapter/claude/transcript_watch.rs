@@ -318,13 +318,21 @@ fn still_at(state: &AppState, session_id: &str, status: SessionStatus) -> Owed {
     }
 }
 
-/// How long a test waits for an outcome of a transcript watch that is expected to happen, or for
-/// the watch loop to have had its chance to run when it is expected not to happen: enough headroom
-/// for the watcher to notice and write under load, without inflating the wait for the common case
-/// where nothing is expected to happen at all.
+/// Lets a transcript watch poll [`TEST_POLLS`] times, for a test on tokio's paused clock
+/// (`#[tokio::test(start_paused = true)]`) that then reads what the polls did. A poll's reads are
+/// blocking tasks, which hold that clock until they end, so each poll it reaches has run to its
+/// end when this returns, however slowly the machine ran it; the last one falls due as this
+/// returns and may not have run yet. A test that waits on the watch this way must not hold the
+/// clock with a blocking wait of its own (`test_support::within`).
 #[cfg(test)]
-pub(crate) const TEST_TIMEOUT: Duration =
-    Duration::from_millis(POLL_INTERVAL.as_millis() as u64 * 3);
+pub(crate) async fn polls_ran() {
+    tokio::time::sleep(POLL_INTERVAL * TEST_POLLS).await;
+}
+
+/// How many polls [`polls_ran`] lets a watch make: a few, so that a write the test made is read
+/// by at least two.
+#[cfg(test)]
+const TEST_POLLS: u32 = 3;
 
 #[cfg(test)]
 mod tests {
@@ -332,8 +340,8 @@ mod tests {
     use super::*;
     use crate::protocol::{AgentId, Console, Session, SessionKind};
     use crate::test_support::{
-        bare_session, captured_interrupt, fresh_interrupt, idle_stand_in, within, ScratchDir,
-        ScratchFile, StandIn,
+        bare_session, captured_interrupt, fresh_interrupt, idle_stand_in, ScratchDir, ScratchFile,
+        StandIn,
     };
 
     /// A real rejection record, trimmed to the two lines that carry the markers, captured from a
@@ -596,7 +604,7 @@ mod tests {
     /// write that moves the session only while it is still waiting. Neither race is reachable
     /// deterministically from outside the watch loop — the generation check is covered by
     /// `a_retired_watch_makes_no_write`, the conditional write by the store's own test.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_session_that_moved_on_is_not_scanned_at_all() {
         let mut session = waiting_session("s");
         let fixture = Fixture::new("moved-on", session.clone());
@@ -613,32 +621,29 @@ mod tests {
 
         std::fs::write(&fixture.path, REJECTION).expect("write rejection");
 
-        // Nothing is expected to happen, so there is no event to poll for; give the watch loop a
-        // few polls' worth of time to (wrongly) act, then check once. A false pass is bounded by
-        // `TEST_TIMEOUT`, same as the other tests use to wait for a real event.
-        let state = fixture.state.clone();
-        let changed = within(TEST_TIMEOUT, move || {
-            status_of(&state, "s") != Some(SessionStatus::Working)
-        })
-        .await;
-        assert!(!changed, "a session that moved on must not be scanned");
+        // Nothing is expected to happen, so there is no event to wait for: the watch is given
+        // its polls, and what they did is read after them.
+        polls_ran().await;
+        assert_eq!(
+            status_of(&fixture.state, "s"),
+            Some(SessionStatus::Working),
+            "a session that moved on must not be scanned"
+        );
     }
 
     /// A rejection that arrives while the session is still genuinely waiting is applied — the
     /// positive case the test above is the negative of.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_rejection_found_while_still_waiting_is_applied() {
         let fixture = Fixture::new("real-write", waiting_session("s"));
         watch_for_rejection(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
 
         std::fs::write(&fixture.path, REJECTION).expect("write rejection");
 
-        let state = fixture.state.clone();
-        let applied = within(TEST_TIMEOUT, move || {
-            status_of(&state, "s") == Some(SessionStatus::Idle)
-        })
-        .await;
-        assert!(applied, "the rejection must be applied");
+        assert!(
+            reaches(&fixture.state, SessionStatus::Idle).await,
+            "the rejection must be applied"
+        );
         assert!(
             fixture.state.last_turn_abnormal("s"),
             "a declined prompt leaves it paused"
@@ -648,7 +653,7 @@ mod tests {
     /// A watch follows the agent's own status, not the record's: with a session request
     /// holding the hand up, a decline found in the transcript moves what the agent is remembered
     /// at, and the record keeps showing the request's `WaitingUser`.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_rejection_during_a_held_hand_moves_the_agent_and_not_the_record() {
         let fixture = Fixture::new("held-hand", waiting_session("s"));
         fixture.state.raise_request_hand("s").expect("raise");
@@ -656,13 +661,13 @@ mod tests {
 
         std::fs::write(&fixture.path, REJECTION).expect("write rejection");
 
-        let state = fixture.state.clone();
-        let applied = within(TEST_TIMEOUT, move || {
-            let record = state.session_record("s").expect("record");
-            state.agent_status(&record) == SessionStatus::Idle
-        })
-        .await;
-        assert!(applied, "the rejection must move the agent's own status");
+        polls_ran().await;
+        let record = fixture.state.session_record("s").expect("record");
+        assert_eq!(
+            fixture.state.agent_status(&record),
+            SessionStatus::Idle,
+            "the rejection must move the agent's own status"
+        );
         assert_eq!(
             status_of(&fixture.state, "s"),
             Some(SessionStatus::WaitingUser)
@@ -698,7 +703,7 @@ mod tests {
     /// A watch superseded by a newer one for the same session must not write either — the second
     /// guarantee `state.begin_record_watch` exists for, alongside retiring the stale watcher's
     /// polling loop.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_superseded_watch_does_not_write() {
         let fixture = Fixture::new("superseded", waiting_session("s"));
         watch_for_rejection(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
@@ -709,17 +714,17 @@ mod tests {
 
         std::fs::write(&fixture.path, REJECTION).expect("write rejection");
 
-        let state = fixture.state.clone();
-        let changed = within(TEST_TIMEOUT, move || {
-            status_of(&state, "s") != Some(SessionStatus::WaitingUser)
-        })
-        .await;
-        assert!(!changed, "a superseded watch must not write");
+        polls_ran().await;
+        assert_eq!(
+            status_of(&fixture.state, "s"),
+            Some(SessionStatus::WaitingUser),
+            "a superseded watch must not write"
+        );
     }
 
     /// A logged request replaying an earlier decline — both of its records, in the request's own
     /// `message.content` — is not a decline, and must not take the hand down.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_decline_replayed_in_a_logged_request_does_not_lower_the_hand() {
         let fixture = Fixture::new("replayed-decline", waiting_session("s"));
         watch_for_rejection(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
@@ -739,7 +744,7 @@ mod tests {
 
     /// A transcript that shrinks mid-watch — the offset left pointing past the new end-of-file —
     /// must recover rather than stall: a rejection appended after the shrink is still found.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_shrunk_transcript_recovers_and_a_later_append_is_still_seen() {
         let fixture = Fixture::new("shrink-recovers", waiting_session("s"));
         watch_for_rejection(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
@@ -753,18 +758,13 @@ mod tests {
         let filler_line = "{\"type\":\"summary\"}\n";
         let filler = filler_line.repeat(1 + REJECTION.len() / filler_line.len());
         std::fs::write(&fixture.path, &filler).expect("write filler");
-        tokio::time::sleep(POLL_INTERVAL * 2).await;
+        polls_ran().await;
         std::fs::write(&fixture.path, "").expect("shrink transcript");
-        tokio::time::sleep(POLL_INTERVAL * 2).await;
+        polls_ran().await;
         std::fs::write(&fixture.path, REJECTION).expect("write rejection");
 
-        let state = fixture.state.clone();
-        let applied = within(TEST_TIMEOUT * 2, move || {
-            status_of(&state, "s") == Some(SessionStatus::Idle)
-        })
-        .await;
         assert!(
-            applied,
+            reaches(&fixture.state, SessionStatus::Idle).await,
             "a rejection appended after a shrink must still be found"
         );
     }
@@ -772,18 +772,18 @@ mod tests {
     /// A poll that finds the transcript exactly as long as it was last scanned to — nothing
     /// appended since — leaves the session's status unchanged, and growth after it is still
     /// detected normally.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn an_unchanged_transcript_length_leaves_status_unchanged_and_later_growth_is_still_seen()
     {
         let fixture = Fixture::new("equal-length", waiting_session("s"));
         watch_for_rejection(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
 
         std::fs::write(&fixture.path, "{\"type\":\"summary\"}\n").expect("write filler");
-        tokio::time::sleep(POLL_INTERVAL * 2).await;
+        polls_ran().await;
         // Rewriting the same content leaves the length — and so the offset check — unchanged
         // across a poll.
         std::fs::write(&fixture.path, "{\"type\":\"summary\"}\n").expect("rewrite filler");
-        tokio::time::sleep(POLL_INTERVAL * 2).await;
+        polls_ran().await;
         assert_eq!(
             status_of(&fixture.state, "s"),
             Some(SessionStatus::WaitingUser)
@@ -794,25 +794,20 @@ mod tests {
             format!("{{\"type\":\"summary\"}}\n{REJECTION}"),
         )
         .expect("append rejection");
-        let state = fixture.state.clone();
-        let applied = within(TEST_TIMEOUT * 2, move || {
-            status_of(&state, "s") == Some(SessionStatus::Idle)
-        })
-        .await;
         assert!(
-            applied,
+            reaches(&fixture.state, SessionStatus::Idle).await,
             "growth after an unchanged poll must still be detected"
         );
     }
 
-    /// Whether the session reaches `status` within `TEST_TIMEOUT`.
+    /// Whether the session `s` is at `status` once the watch has had its polls.
     async fn reaches(state: &Arc<AppState>, status: SessionStatus) -> bool {
-        let state = state.clone();
-        within(TEST_TIMEOUT, move || status_of(&state, "s") == Some(status)).await
+        polls_ran().await;
+        status_of(state, "s") == Some(status)
     }
 
     /// An interrupt written while the session is working puts it back at its prompt.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn an_interrupt_found_while_working_is_applied() {
         let fixture = Fixture::new("interrupt", working_session("s"));
         watch_for_interrupt(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
@@ -831,7 +826,7 @@ mod tests {
 
     /// An interrupt already in the transcript when the watch is armed belongs to an earlier turn,
     /// or to a resumed conversation's history, and must not end the turn now working.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn an_interrupt_written_before_the_watch_is_not_applied() {
         let fixture = Fixture::new("old-interrupt", working_session("s"));
         // Stamped as if fresh, so only where it sits in the file rules it out.
@@ -853,7 +848,7 @@ mod tests {
 
     /// A new conversation's transcript does not exist yet when its first prompt arms the watch;
     /// once it appears it is read from its start.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_transcript_that_appears_after_the_watch_is_read_from_its_start() {
         let fixture = Fixture::new("new-transcript", working_session("s"));
         std::fs::remove_file(&fixture.path).expect("no transcript yet");
@@ -871,7 +866,7 @@ mod tests {
     /// A transcript that appears after the watch is armed can still open with older lines, a
     /// conversation's copied history for one; an interrupt stamped before the watch is not this
     /// turn's.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn an_older_interrupt_in_a_transcript_that_appears_later_is_not_applied() {
         let fixture = Fixture::new("copied-history", working_session("s"));
         std::fs::remove_file(&fixture.path).expect("no transcript yet");

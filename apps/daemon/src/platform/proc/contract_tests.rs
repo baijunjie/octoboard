@@ -639,8 +639,14 @@ async fn the_parent_watch_calls_back_once_the_process_is_gone() {
     watch_parent(parent.id(), move || {
         gone.send(()).ok();
     });
-    // Longer than a poll, so that a watch that fires on a running process is caught.
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    // Several of the polls a watch on Unix makes, each run to its end on the paused clock before
+    // the next, so that a watch that fires on a running process is caught. A watch that waits on
+    // the process itself (Windows) has no poll for this to run.
+    #[cfg(unix)]
+    const WATCHED_FOR: Duration = super::unix::PARENT_POLL.saturating_mul(5);
+    #[cfg(windows)]
+    const WATCHED_FOR: Duration = Duration::from_secs(5);
+    crate::test_support::runtime_advanced(WATCHED_FOR).await;
     assert!(gone_rx.try_recv().is_err(), "the process was still running");
 
     parent.kill().expect("the helper is ended");

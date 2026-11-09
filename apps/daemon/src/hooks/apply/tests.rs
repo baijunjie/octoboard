@@ -219,7 +219,7 @@ async fn a_grok_prompt_watches_the_title_for_a_cancel_no_hook_reports() {
     }
     let idle = {
         let state = state.clone();
-        crate::test_support::within(std::time::Duration::from_secs(5), move || {
+        crate::test_support::within(PATIENCE, move || {
             state.store.get_session("s").unwrap().unwrap().status == SessionStatus::Idle
         })
         .await
@@ -280,10 +280,7 @@ async fn a_grok_card_s_title_does_not_end_the_turn_that_carries_on_after_it() {
     live.on_output(at_prompt);
     let idle = {
         let state = state.clone();
-        crate::test_support::within(std::time::Duration::from_secs(5), move || {
-            status(&state) == SessionStatus::Idle
-        })
-        .await
+        crate::test_support::within(PATIENCE, move || status(&state) == SessionStatus::Idle).await
     };
     assert!(
         idle,
@@ -329,21 +326,14 @@ fn claude_hook(event: &str, transcript: &std::path::Path) -> Vec<u8> {
     .into_bytes()
 }
 
-/// Whether the session reaches `status` within `timeout`.
-async fn reaches_within(
-    state: &Arc<AppState>,
-    status: SessionStatus,
-    timeout: std::time::Duration,
-) -> bool {
+/// Whether the session reaches `status` within [`PATIENCE`], polled from a blocking thread on the
+/// real clock, so not from a test on tokio's paused clock.
+async fn reaches_on_real_clock(state: &Arc<AppState>, status: SessionStatus) -> bool {
     let state = state.clone();
-    crate::test_support::within(timeout, move || {
+    crate::test_support::within(PATIENCE, move || {
         state.store.get_session("s").unwrap().unwrap().status == status
     })
     .await
-}
-
-async fn reaches(state: &Arc<AppState>, status: SessionStatus) -> bool {
-    reaches_within(state, status, PATIENCE).await
 }
 
 /// An idle Claude Code session whose outbox checks that what it writes is sent, with its output
@@ -563,9 +553,16 @@ async fn an_owner_is_told_when_a_hook_puts_its_session_in_waiting_for_the_user()
     apply_hook(&state, "w", &claude_hook("PostToolUse", &path));
     apply_hook(&state, "w", &claude_hook("Stop", &path));
     assert!(told(1).await, "{}", heard());
-    // The owner is written to off the hook's path, so give a second notice time to arrive.
-    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    assert_eq!(heard().matches("is waiting for the user").count(), 1);
+    // The owner is written to off the hook's path, on blocking tasks this waits out; the marker
+    // then shows whether one of them wrote a second notice.
+    crate::test_support::runtime_settled().await;
+    let behind_marker = {
+        let (state, owner) = (state.clone(), (*owner).clone());
+        tokio::task::spawn_blocking(move || crate::test_support::heard_after_marker(&state, &owner))
+            .await
+            .unwrap()
+    };
+    assert_eq!(behind_marker.matches("is waiting for the user").count(), 1);
 
     apply_hook(&state, "w", &claude_hook("UserPromptSubmit", &path));
     apply_hook(&state, "w", &claude_hook("PermissionRequest", &path));
@@ -583,7 +580,7 @@ async fn an_interrupted_claude_turn_goes_back_to_its_prompt() {
 
     std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
 
-    assert!(reaches(&state, SessionStatus::Idle).await);
+    assert!(reaches_on_real_clock(&state, SessionStatus::Idle).await);
 }
 
 /// The hand coming down on an answered prompt is a move back into work, which arms the watch
@@ -597,33 +594,32 @@ async fn a_claude_turn_interrupted_after_an_answered_prompt_goes_back_to_its_pro
 
     std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
 
-    assert!(reaches(&state, SessionStatus::Idle).await);
+    assert!(reaches_on_real_clock(&state, SessionStatus::Idle).await);
 }
 
 /// An interrupt the watch has not read yet when the next prompt arrives belongs to the turn
 /// before, and must not end the new one; the new turn's own interrupt still does, though the
 /// session never left `Working` between the two.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn only_the_next_turns_own_interrupt_ends_it() {
     let (state, _dir, _live, path) =
         claude_session_with_transcript("server-interrupt-next-turn", SessionStatus::Idle);
+    let status = || state.store.get_session("s").unwrap().unwrap().status;
     apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
     std::fs::write(&path, crate::test_support::fresh_interrupt()).unwrap();
-    // Well inside the first watch's first poll, a second apart.
+    // Before the first watch's first poll: the paused clock does not move until the test awaits.
     apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
 
-    assert!(
-        !reaches_within(
-            &state,
-            SessionStatus::Idle,
-            crate::adapter::claude::transcript_watch::TEST_TIMEOUT
-        )
-        .await,
+    crate::adapter::claude::transcript_watch::polls_ran().await;
+    assert_eq!(
+        status(),
+        SessionStatus::Working,
         "the next turn must keep working"
     );
 
     std::fs::write(&path, crate::test_support::fresh_interrupt().repeat(2)).unwrap();
-    assert!(reaches(&state, SessionStatus::Idle).await);
+    crate::adapter::claude::transcript_watch::polls_ran().await;
+    assert_eq!(status(), SessionStatus::Idle);
 }
 
 /// A helper agent's tool events carry an `agent_id` and no `agent_type`: they are not the

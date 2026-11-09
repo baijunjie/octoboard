@@ -5,12 +5,12 @@
 #![cfg(unix)]
 
 use std::path::PathBuf;
-use std::time::Duration;
 
 use serde_json::json;
 
 use super::*;
 use crate::coordinator::adopt::adopt_found;
+use crate::coordinator::exit_watch;
 use crate::coordinator::test_support::{found_in, left_running_script};
 use crate::holder::client::in_process;
 use crate::platform::term::Size;
@@ -132,7 +132,7 @@ async fn a_planned_stop_leaves_every_terminal_running_and_saves_its_screen_for_t
     assert!(state.is_handing_over());
 
     // Past several polls of the exit watchers.
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    tokio::time::sleep(exit_watch::EXIT_POLL_INTERVAL * 4).await;
     assert_eq!(
         state.session_record("s1").unwrap().status,
         SessionStatus::Working
@@ -198,7 +198,7 @@ async fn a_program_that_ends_while_the_terminals_are_handed_over_is_not_recorded
         );
     }
     // Past several polls of the exit watchers.
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    tokio::time::sleep(exit_watch::EXIT_POLL_INTERVAL * 4).await;
     assert_eq!(
         state.session_record("s1").unwrap().status,
         SessionStatus::Working
@@ -241,7 +241,15 @@ async fn an_ordinary_stop_cuts_the_wait_for_admitted_operations_short() {
     state.request_planned_stop();
     let path = dir.join("restart-screens.json");
     let (handover, ()) = tokio::join!(hand_over(&state, holders, path.clone()), async {
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        // Asked once the barrier is up, so while the stop waits for the admitted operation.
+        assert!(
+            within(PATIENCE, {
+                let s = state.clone();
+                move || s.handover_barrier_raised()
+            })
+            .await,
+            "the barrier never went up"
+        );
         state.request_shutdown();
     });
     assert_eq!(handover, Handover::Escalated);

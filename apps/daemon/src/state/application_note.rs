@@ -236,22 +236,22 @@ mod tests {
     }
 
     /// The note already in the pipe is read before the decision, which waits for the reader.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn the_decision_waits_for_the_reader_to_reach_the_end_of_the_input() {
         let (state, _dir) = app_state("application-note-wait");
-        let reader = state.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            reader.note_application_quit();
-            reader.note_application_input_ended();
+        let (kind, ()) = tokio::join!(state.stop_for_gone_application(PATIENCE), async {
+            // On the paused clock the decision is waiting once every task is idle, short of its
+            // bound running out.
+            crate::test_support::tasks_idle().await;
+            state.note_application_quit();
+            state.note_application_input_ended();
         });
-        let kind = state.stop_for_gone_application(PATIENCE).await;
         assert_eq!(kind, StopKind::Ordinary);
     }
 
     /// An input that never ends (an application whose pipe something else holds open) is waited on
     /// only so long.
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn the_wait_for_the_end_of_the_input_is_bounded() {
         let (state, _dir) = app_state("application-note-bounded");
         let kind = state

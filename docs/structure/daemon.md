@@ -628,7 +628,7 @@ new site is never excused: it goes under `platform`.
   provider's interface, never on which provider it is.
 - Tests sit beside the code they test (`tests.rs`, `*_tests.rs`); shared fixtures come from `src/test_support/`
   (`mod.rs` re-exports `scratch.rs`, `app.rs`, `stand_in.rs`, `processes.rs`, `git.rs` for repositories, `sessions.rs`
-  and `owner_team.rs`, and holds `code_of` and `param_of`, the code and a param of a coded error).
+  and `owner_team.rs`, and holds `code_of` and `param_of`, the code and a param of a coded error). A test that depends on time goes through `src/test_support/clock.rs` (`tasks_idle` and `runtime_settled`/`runtime_advanced` on a paused tokio clock, `next_millisecond` for the named wait on the wall clock).
 
 ## Shared entry points
 

@@ -161,3 +161,22 @@ and expect the operation under test to fail. The suite's Linux container runs ha
 asserting the refusal, return when it cannot happen: check `libc::geteuid() == 0` (`apps/daemon/src/path_links/tests.rs`)
 or try the write and return if it succeeds (`apps/daemon/src/accounts/relocate/tests.rs`). A test that fails only when
 run as root is missing this early return; it is not a regression in the change being verified.
+
+## On tokio's paused clock, nothing in the test blocks or times out on real I/O
+
+Applies to daemon tests on `#[tokio::test(start_paused = true)]`, and to the stretches a real-clock test pauses with
+`runtime_settled` / `runtime_advanced` (`apps/daemon/src/test_support/clock.rs`). The paused clock jumps to the next
+timer as soon as the runtime has nothing to run; a task waiting on I/O counts as nothing to run, while a
+`spawn_blocking` task (so any `tokio::fs` call) holds the jump until it ends. `pause()` works only on a current-thread
+runtime and panics on a multi-thread one.
+
+- A `tokio::time::timeout` or a sleep-bounded wait around real I/O — a socket, a pipe, a child process — runs out at
+  once. A test that waits on real I/O stays on the real clock and bounds the wait by `PATIENCE`.
+- Do not call `test_support::within`, `output_containing` or `heard_after_marker` from a paused test: `within` polls
+  in `spawn_blocking`, which holds the clock, so a condition that needs a timer to fire is never met and the wait runs
+  to its deadline; the other two block the runtime's thread outright. Let the clock run the code's own timers instead
+  (`tasks_idle`, or a helper of the module's like `polls_ran` in `apps/daemon/src/adapter/claude/transcript_watch.rs`)
+  and assert after it.
+- `tasks_idle` and `runtime_settled` show that the code under test reached its wait only when everything before that
+  wait is CPU work or `spawn_blocking`. With real I/O in between they return before the code got there, and an
+  absence asserted after them passes whatever the code does: wait for an event instead.

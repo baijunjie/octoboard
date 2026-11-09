@@ -355,17 +355,20 @@ fn waiting_for_endings_reports_one_that_failed_or_outlasts_the_bound() {
         "a holder that cannot be ended"
     );
     assert!(locked(&next.shared.endings).is_empty());
+    // An ending that goes on until the test lets it, so only the bound can end the wait.
+    let (finish, finished) = std::sync::mpsc::channel::<()>();
     push(
         "slow",
-        std::thread::spawn(|| {
-            std::thread::sleep(Duration::from_secs(2));
+        std::thread::spawn(move || {
+            finished.recv().ok();
             true
         }),
     );
     let started = Instant::now();
     assert!(!next.wait_endings(Duration::from_millis(100)));
-    assert!(started.elapsed() < Duration::from_secs(1), "the bound held");
+    assert!(started.elapsed() < PATIENCE, "the bound held");
     assert!(locked(&next.shared.endings).is_empty());
+    drop(finish);
 }
 
 /// The versions of the holders linked to come from their welcomes, those still tried again from

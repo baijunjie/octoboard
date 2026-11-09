@@ -263,21 +263,17 @@ async fn a_login_task_that_is_dropped_without_an_outcome_ends_the_login_as_faile
 async fn a_cancel_during_claudes_sign_in_check_ends_the_login_as_cancelled() {
     let body = CLAUDE_SIGNS_IN.replace(
         r#"echo '{"loggedIn":true}'"#,
-        r#"sleep 10; echo '{"loggedIn":true}'"#,
+        r#"touch "$HOME/checking"; sleep 30; echo '{"loggedIn":true}'"#,
     );
     let setup = setup("login-cancel-late", AgentId::CLAUDE, &body);
     let mut events = setup.state.subscribe();
     setup.start(AgentId::CLAUDE, None, LOGIN_TIMEOUT).unwrap();
-    loop {
-        let Ok(Event::AccountLoginUpdated { login }) = events.recv().await else {
-            continue;
-        };
-        if login.status == LoginStatus::Waiting {
-            break;
-        }
-    }
-    // The CLI exits 0.4 seconds after the page, and its last words are waited for after that.
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    // Cancelled once the sign-in check has begun, which the fake marks before it answers.
+    let checking = setup.dir.join("bin/checking");
+    assert!(
+        crate::test_support::within(PATIENCE, move || checking.exists()).await,
+        "the sign-in was never checked"
+    );
     setup
         .state
         .account_logins

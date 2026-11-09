@@ -17,11 +17,11 @@ use crate::test_support::{ScratchDir, PATIENCE};
 /// What the scripted holder does once it has been asked to start a program.
 #[derive(Clone, Copy)]
 enum Answer {
-    /// Fails the start, after the delay.
+    /// Fails the start, once released.
     Fail,
-    /// Confirms the start, after the delay.
+    /// Confirms the start, once released.
     Confirm,
-    /// Goes away, after the delay.
+    /// Goes away, once released.
     Vanish,
 }
 
@@ -49,10 +49,15 @@ fn welcome_text_of(version: &str) -> String {
 }
 
 /// A holder that welcomes the daemon with no terminals, and answers the first spawn as `answer`
-/// says after `delay`. Returns the port it listens on.
-async fn scripted_holder(answer: Answer, delay: Duration) -> u16 {
+/// says once `release` fires. Returns the port it listens on, and what fires once the spawn has
+/// reached it.
+async fn scripted_holder(
+    answer: Answer,
+    release: tokio::sync::oneshot::Receiver<()>,
+) -> (u16, tokio::sync::oneshot::Receiver<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("a port");
     let port = listener.local_addr().unwrap().port();
+    let (reached, spawn_reached) = tokio::sync::oneshot::channel();
     tokio::spawn(async move {
         let (stream, _) = listener.accept().await.expect("the daemon connects");
         let mut socket = tokio_tungstenite::accept_async(stream)
@@ -74,7 +79,8 @@ async fn scripted_holder(answer: Answer, delay: Duration) -> u16 {
                 _ => return,
             }
         };
-        tokio::time::sleep(delay).await;
+        reached.send(()).ok();
+        release.await.ok();
         let reply = match answer {
             Answer::Fail => FromHolder::SpawnFailed {
                 id,
@@ -98,7 +104,7 @@ async fn scripted_holder(answer: Answer, delay: Duration) -> u16 {
         .await
         .ok();
     });
-    port
+    (port, spawn_reached)
 }
 
 fn holders_over(dir: &ScratchDir, port: u16) -> Holders {
@@ -249,13 +255,18 @@ fn spawning(
 #[tokio::test(flavor = "multi_thread")]
 async fn an_unconfirmed_spawn_keeps_waiting_and_a_late_failure_ends_it() {
     let dir = ScratchDir::new("client-late-failure");
-    let port = scripted_holder(Answer::Fail, Duration::from_millis(1500)).await;
+    let (release, released) = tokio::sync::oneshot::channel();
+    let (port, reached) = scripted_holder(Answer::Fail, released).await;
     let (returned, thread) = spawning(holders_over(&dir, port));
-    tokio::time::sleep(Duration::from_millis(700)).await;
+    tokio::time::timeout(PATIENCE, reached)
+        .await
+        .expect("the spawn reached the holder")
+        .unwrap();
     assert!(
         !returned.load(Ordering::Acquire),
         "the spawn was given up on before the holder answered"
     );
+    release.send(()).unwrap();
 
     let (_holders, spawned) = tokio::task::spawn_blocking(move || thread.join().unwrap())
         .await
@@ -267,10 +278,15 @@ async fn an_unconfirmed_spawn_keeps_waiting_and_a_late_failure_ends_it() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_late_confirmation_is_the_terminal() {
     let dir = ScratchDir::new("client-late-confirmation");
-    let port = scripted_holder(Answer::Confirm, Duration::from_millis(1200)).await;
+    let (release, released) = tokio::sync::oneshot::channel();
+    let (port, reached) = scripted_holder(Answer::Confirm, released).await;
     let (returned, thread) = spawning(holders_over(&dir, port));
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    tokio::time::timeout(PATIENCE, reached)
+        .await
+        .expect("the spawn reached the holder")
+        .unwrap();
     assert!(!returned.load(Ordering::Acquire));
+    release.send(()).unwrap();
     let (_holders, spawned) = tokio::task::spawn_blocking(move || thread.join().unwrap())
         .await
         .unwrap();
@@ -281,7 +297,10 @@ async fn a_late_confirmation_is_the_terminal() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_holder_lost_with_a_spawn_pending_ends_the_wait() {
     let dir = ScratchDir::new("client-lost-holder");
-    let port = scripted_holder(Answer::Vanish, Duration::from_millis(300)).await;
+    // Gone as soon as the spawn reached it, so with the start pending.
+    let (release, released) = tokio::sync::oneshot::channel();
+    release.send(()).unwrap();
+    let (port, _reached) = scripted_holder(Answer::Vanish, released).await;
     let (_returned, thread) = spawning(holders_over(&dir, port));
     let started = Instant::now();
     let (_holders, spawned) = tokio::task::spawn_blocking(move || thread.join().unwrap())

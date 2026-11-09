@@ -368,7 +368,7 @@ async fn another_path_that_cannot_be_looked_at_is_not_called_shared() {
 }
 
 /// A look an inspection left stuck is waited for by the removal, which then looks afresh.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn the_removal_waits_for_a_look_an_inspection_left_stuck() {
     let (state, dir) = fixture("account-trash-wait-stuck");
     let directory = create_directory(&state);
@@ -378,17 +378,19 @@ async fn the_removal_waits_for_a_look_an_inspection_left_stuck() {
         Arc::downgrade(&guard),
     );
     assert_eq!(inspected(&state).await, AccountTrashOutcome::Undecided);
-    let ending = tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(150)).await;
-        drop(guard);
+    let confirming = tokio::spawn({
+        let state = state.clone();
+        async move { confirmed_within(&state, PATIENCE).await.unwrap() }
     });
-    assert_eq!(
-        confirmed_within(&state, Duration::from_secs(3))
-            .await
-            .unwrap(),
-        Some(directory)
+    // Everything the removal could do before the stuck look ends has run once every task is idle,
+    // so it is still waiting here only because it waits for that look.
+    crate::test_support::tasks_idle().await;
+    assert!(
+        !confirming.is_finished(),
+        "the removal must wait while the look is stuck"
     );
-    ending.await.unwrap();
+    drop(guard);
+    assert_eq!(confirming.await.unwrap(), Some(directory));
 }
 
 /// What the removal judged before it held the account's lock is judged again under it.

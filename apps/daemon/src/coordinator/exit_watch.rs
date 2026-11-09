@@ -13,7 +13,7 @@ use crate::time::now_millis;
 /// How often a session's process is polled for having exited. The agent's own exit (the user
 /// typing `/exit`, a crash) has no other signal: `SessionEnd` hooks are not reliable for this,
 /// since a killed process fires nothing at all.
-const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(500);
+pub(crate) const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 /// How long the exit of a session adopted from a holder waits for the adoption to end, which is
 /// when the reports its holder relayed meanwhile are queued: as long as such a report waits for it
@@ -237,7 +237,7 @@ mod tests {
             assert!(Instant::now() < deadline, "the stand-in never exited");
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
-        tokio::time::sleep(super::EXIT_POLL_INTERVAL + Duration::from_millis(200)).await;
+        crate::test_support::runtime_advanced(super::EXIT_POLL_INTERVAL * 2).await;
         assert_eq!(
             state.session_record("s").unwrap().status,
             SessionStatus::Working,

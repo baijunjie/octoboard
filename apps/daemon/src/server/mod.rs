@@ -154,7 +154,9 @@ mod tests {
         let host = format!("Host: 127.0.0.1:{port}");
 
         let waiter = state.clone();
-        let mut shutdown = tokio::spawn(async move { waiter.await_shutdown().await });
+        let shutdown = tokio::spawn(async move { waiter.await_shutdown().await });
+        // Lets the waiter reach its wait: a shutdown asked for before then is not remembered.
+        crate::test_support::runtime_settled().await;
 
         let refused = {
             let host = host.clone();
@@ -169,10 +171,10 @@ mod tests {
             .expect("the requests ran")
         };
         assert_eq!(refused, (401, 401));
+        // The replies are in, so whatever the requests set off has been handed to the runtime.
+        crate::test_support::runtime_settled().await;
         assert!(
-            tokio::time::timeout(std::time::Duration::from_millis(200), &mut shutdown)
-                .await
-                .is_err(),
+            !shutdown.is_finished(),
             "a refused request shut the daemon down"
         );
 

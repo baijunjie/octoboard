@@ -572,7 +572,10 @@ mod tests {
         let (lane, _control, _content) = lane(Gate::new(1, 1 << 20), 8);
         let saw_cancel = Arc::new(AtomicBool::new(false));
         let saw = saw_cancel.clone();
+        let started = Arc::new(AtomicBool::new(false));
+        let starting = started.clone();
         lane.submit(None, None, 1024, move |cancel| {
+            starting.store(true, Ordering::Relaxed);
             while !cancel.load(Ordering::Relaxed) {
                 std::thread::sleep(Duration::from_millis(2));
             }
@@ -580,7 +583,10 @@ mod tests {
             Err(anyhow::Error::new(Cancelled))
         })
         .await;
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        // Closed once the read runs: a read the close came before would never start to see it.
+        let running =
+            crate::test_support::within(PATIENCE, move || started.load(Ordering::Relaxed)).await;
+        assert!(running, "the read never started");
         lane.close();
         let deadline = std::time::Instant::now() + PATIENCE;
         while !saw_cancel.load(Ordering::Relaxed) {
@@ -609,7 +615,7 @@ mod tests {
             Err(anyhow::anyhow!("fails at once"))
         })
         .await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        crate::test_support::runtime_settled().await;
         assert_eq!(
             lane.pending.available_permits(),
             1,
@@ -627,15 +633,16 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn the_mcp_tools_share_one_connections_worth_of_the_retained_bytes() {
         let gate = Gate::new(4, 3000).with_tools_share(1000);
         let first = gate.admit(600).await;
-        // A second tool read does not fit the share although the gate has room for it...
+        // A second tool read does not fit the share although the gate has room for it: on the
+        // paused clock the timeout ends only once nothing more can run.
         let blocked = tokio::time::timeout(Duration::from_millis(50), gate.admit(600)).await;
         assert!(blocked.is_err());
         assert_eq!(gate.retained_available(), 2400);
-        // ...and a window's read still gets the rest of the gate.
+        // And a window's read still gets the rest of the gate.
         let window = gate.retained.clone().try_acquire_many_owned(2400);
         assert!(window.is_ok());
         drop(window);

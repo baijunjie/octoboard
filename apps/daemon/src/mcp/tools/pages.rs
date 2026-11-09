@@ -311,12 +311,13 @@ mod tests {
     async fn a_session_deletes_only_its_own_pages() {
         let (state, _dir) = peer_state("peer-delete-pages");
         let mut events = state.subscribe();
-        // Pages are ordered by the millisecond they were pushed at, so each push waits for the next
-        // one: three pushed within a millisecond would tie and fall back to their random ids.
+        // Pages are ordered by the millisecond they were pushed at, so each push waits for the
+        // millisecond clock to move on: three pushed within a millisecond would tie and fall back
+        // to their random ids.
         let push = |caller: &'static str| {
             let state = state.clone();
             async move {
-                tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+                crate::test_support::next_millisecond().await;
                 call(
                     &state,
                     caller,

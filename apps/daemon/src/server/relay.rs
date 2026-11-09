@@ -176,7 +176,7 @@ mod tests {
 
     /// A report that arrives while the adopted sessions are not there yet is held, and applied
     /// once they are; a question waits for them the same way.
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(start_paused = true)]
     async fn requests_wait_for_the_adoption_to_finish() {
         let (state, dir) = app_state("relay-adoption");
         state
@@ -204,7 +204,9 @@ mod tests {
             param: "no-such-token".to_string(),
             body: br#"{"tool":"x"}"#.to_vec(),
         });
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        // Everything the report and the question could do before the adoption ends has run by
+        // then, short of the wait for it running out.
+        crate::test_support::tasks_idle().await;
         assert!(state.background_tasks_of("s").is_empty());
         assert!(!question.is_finished());
 

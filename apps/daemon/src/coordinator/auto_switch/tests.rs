@@ -273,15 +273,16 @@ impl Fixture {
         self.install_recovery_launch().await;
     }
 
-    /// Gives the recovery a relaunch that starts a stand-in, and lets a moment pass: a probe
-    /// that started before the wait is not evidence of recovery.
+    /// Gives the recovery a relaunch that starts a stand-in, and returns once the millisecond
+    /// clock has moved past the wait: a probe that started in the same millisecond as the wait is
+    /// not evidence of recovery.
     async fn install_recovery_launch(&self) {
         let (started, launches) = (self.started.clone(), self.launches.clone());
         *self.state.quota_recovery.launch.lock().unwrap() = Some(RecoveryLaunch {
             env: self.env(),
             launch: Arc::new(move |request| stand_in_launch(&started, &launches, || {})(request)),
         });
-        tokio::time::sleep(Duration::from_millis(5)).await;
+        crate::test_support::next_millisecond().await;
     }
 
     /// Whether the worker's trigger is parked, and the token it was parked under.
@@ -2137,12 +2138,12 @@ async fn a_usage_limit_that_reaches_the_record_late_still_switches() {
     fixture.end_on_usage_limit();
     let limit_text = std::fs::read_to_string(&record).unwrap();
     fixture.end_on_a_tool_call();
-    std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(500));
+
+    tokio::join!(fixture.failed_turn(), async {
+        // Once every task is idle, the record has been read without the limit and is waited on.
+        crate::test_support::runtime_settled().await;
         std::fs::write(record, limit_text).unwrap();
     });
-
-    fixture.failed_turn().await;
 
     assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-a"));
 }
@@ -2190,26 +2191,27 @@ async fn a_session_moved_during_the_wait_is_left_alone() {
     let limit_text = std::fs::read_to_string(&record).unwrap();
     fixture.end_on_a_tool_call();
     let (state, to) = (fixture.state.clone(), fixture.dir.join("claude-a"));
-    let moved_meanwhile = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(500));
-        // Moved first, then the limit shows: the wait ends on an account that has changed.
-        state
-            .set_session_account("w", Some("claude-a"), to.to_str())
-            .unwrap();
-        std::fs::write(record, limit_text).unwrap();
-    });
     let env = fixture.env();
 
-    try_switch(
-        &fixture.state,
-        "w",
-        move || Ok(env),
-        fixture.launch_failing(0),
-    )
-    .await
-    .expect("left alone, not switched from the account it moved to");
+    let (switched, ()) = tokio::join!(
+        try_switch(
+            &fixture.state,
+            "w",
+            move || Ok(env),
+            fixture.launch_failing(0),
+        ),
+        async {
+            // Once every task is idle, the record has been read without the limit and is waited
+            // on. Moved first, then the limit shows: the wait ends on an account that has changed.
+            crate::test_support::runtime_settled().await;
+            state
+                .set_session_account("w", Some("claude-a"), to.to_str())
+                .unwrap();
+            std::fs::write(record, limit_text).unwrap();
+        }
+    );
+    switched.expect("left alone, not switched from the account it moved to");
 
-    moved_meanwhile.join().unwrap();
     assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-a"));
     assert_eq!(fixture.launched(), 0);
 }
@@ -2339,21 +2341,23 @@ async fn a_restore_waits_for_another_claim_on_the_session() {
     );
     // A transfer of branches holds the session for a moment.
     let claim = fixture.state.begin_switch("w").unwrap();
-    std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(600));
-        drop(claim);
-    });
     let (started, launches) = (fixture.started.clone(), fixture.launches.clone());
 
-    crate::coordinator::account_switch::restore_after_failed_switch(
-        &fixture.state,
-        &before,
-        None,
-        None,
-        move |request| stand_in_launch(&started, &launches, || {})(request),
-    )
-    .await
-    .expect("restored once the other claim ended");
+    let (restored, ()) = tokio::join!(
+        crate::coordinator::account_switch::restore_after_failed_switch(
+            &fixture.state,
+            &before,
+            None,
+            None,
+            move |request| stand_in_launch(&started, &launches, || {})(request),
+        ),
+        async {
+            // Once every task is idle, the restore has found the claim and waits for it to end.
+            crate::test_support::runtime_settled().await;
+            drop(claim);
+        }
+    );
+    restored.expect("restored once the other claim ended");
 
     assert!(fixture.state.live_session("w").is_some());
 }
@@ -2450,12 +2454,12 @@ async fn a_restore_does_not_undo_an_account_change_somebody_else_made() {
 async fn a_turn_that_fails_under_a_claim_is_switched_once_it_ends() {
     let fixture = Fixture::new("auto-switch-claimed", SessionStatus::Idle);
     let claim = fixture.state.begin_switch("w").unwrap();
-    std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(600));
+
+    tokio::join!(fixture.failed_turn(), async {
+        // Once every task is idle, the failed turn has found the claim and waits for it to end.
+        crate::test_support::runtime_settled().await;
         drop(claim);
     });
-
-    fixture.failed_turn().await;
 
     assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-a"));
     assert_eq!(fixture.launched(), 1);
@@ -2601,15 +2605,15 @@ async fn a_trigger_is_dropped_when_the_session_was_moved_during_the_claim_wait()
     let fixture = Fixture::new("auto-switch-moved-in-claim", SessionStatus::Idle);
     let claim = fixture.state.begin_switch("w").unwrap();
     let (state, dir) = (fixture.state.clone(), fixture.dir.join("claude-b"));
-    std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(400));
+
+    tokio::join!(fixture.failed_turn(), async {
+        // Once every task is idle, the failed turn has found the claim and waits for it to end.
+        crate::test_support::runtime_settled().await;
         state
             .set_session_account("w", Some("claude-b"), dir.to_str())
             .unwrap();
         drop(claim);
     });
-
-    fixture.failed_turn().await;
 
     assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-b"));
     assert_eq!(fixture.launched(), 0);
@@ -2672,7 +2676,8 @@ async fn the_owner_is_not_told_of_a_wait_by_a_usage_limit_dialog() {
     assert!(limit.is_some_and(|dialog| dialog.is_usage_limit()));
 
     crate::session::dialogs::react_to_dialog(&fixture.state, "g", limit);
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // A notice the reaction set off would be taken on a blocking task, which this waits out.
+    crate::test_support::runtime_settled().await;
 
     assert!(
         fixture.state.claim_waiting_notice("g"),

@@ -67,20 +67,23 @@ fn ids(names: &[&str]) -> Vec<String> {
 
 /// Every session is resumed once, a failure does not stop the rest, and no more than `WIDTH` run
 /// at the same time.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn the_resumes_are_limited_in_width_and_a_failure_does_not_stop_the_rest() {
     let (state, _dir) = console_with_project_and_accounts("resume-on-start-run");
     let in_flight = Arc::new(AtomicUsize::new(0));
     let widest = Arc::new(AtomicUsize::new(0));
     let resumed = Arc::new(Mutex::new(Vec::new()));
     let names = ["a", "b", "c", "d", "e", "f", "g"];
+    // How long a resume takes. Its length does not matter: on the paused clock a resume that waits
+    // at all is still running when every one the width admits has started.
+    const A_MOMENT: Duration = Duration::from_secs(1);
 
     run(&state, ids(&names), Duration::ZERO, |_, id| {
         let (in_flight, widest, resumed) = (in_flight.clone(), widest.clone(), resumed.clone());
         async move {
             let now = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
             widest.fetch_max(now, Ordering::SeqCst);
-            tokio::time::sleep(Duration::from_millis(30)).await;
+            tokio::time::sleep(A_MOMENT).await;
             in_flight.fetch_sub(1, Ordering::SeqCst);
             resumed.lock().unwrap().push(id.clone());
             if id == "b" {
@@ -121,29 +124,26 @@ async fn no_resume_starts_once_the_daemon_is_shutting_down() {
 
 /// Shutting down in the middle of the burst stops new resumes but waits for the running ones, so
 /// none is cancelled between its launch and its registration.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn a_shutdown_mid_burst_waits_for_the_resumes_running() {
     let (state, _dir) = console_with_project_and_accounts("resume-on-start-mid-burst");
     let finished = Arc::new(AtomicUsize::new(0));
     let counted = finished.clone();
     let stopper = state.clone();
+    // On the paused clock: the shutdown lands inside the gap after the first resume started, which
+    // is still running when the gap ends.
     tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        tokio::time::sleep(START_GAP / 2).await;
         stopper.stop_all_sessions().await;
     });
-    run(
-        &state,
-        ids(&["a", "b"]),
-        Duration::from_millis(60),
-        move |_, _| {
-            let counted = counted.clone();
-            async move {
-                tokio::time::sleep(Duration::from_millis(150)).await;
-                counted.fetch_add(1, Ordering::SeqCst);
-                Ok(())
-            }
-        },
-    )
+    run(&state, ids(&["a", "b"]), START_GAP, move |_, _| {
+        let counted = counted.clone();
+        async move {
+            tokio::time::sleep(START_GAP * 2).await;
+            counted.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+    })
     .await;
     assert_eq!(finished.load(Ordering::SeqCst), 1);
 }
@@ -194,7 +194,7 @@ async fn a_session_no_longer_interrupted_is_not_resumed() {
 }
 
 /// With the setting off, nothing is resumed and nothing is spawned.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn the_setting_off_resumes_nothing() {
     let (state, _dir) = console_with_project_and_accounts("resume-on-start-off");
     let called = Arc::new(AtomicUsize::new(0));
@@ -214,12 +214,13 @@ async fn the_setting_off_resumes_nothing() {
             Ok(())
         }
     });
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    // A resume spawned would have started by then: the first one starts without a gap.
+    crate::test_support::tasks_idle().await;
     assert_eq!(called.load(Ordering::SeqCst), 0);
 }
 
 /// With the setting on, the interrupted sessions are resumed and the others are not.
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn the_setting_on_resumes_the_interrupted_sessions() {
     let (state, _dir) = console_with_project_and_accounts("resume-on-start-on");
     state.store.set_resume_sessions_on_start(true).unwrap();
@@ -242,11 +243,8 @@ async fn the_setting_on_resumes_the_interrupted_sessions() {
             Ok(())
         }
     });
-    let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
-    while resumed.lock().unwrap().is_empty() && std::time::Instant::now() < deadline {
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    // Another resume would follow the first one after the gap between starts.
-    tokio::time::sleep(START_GAP + Duration::from_millis(100)).await;
+    // On the paused clock, past the gap between starts every resume due has started: another one
+    // would follow the first after that gap.
+    tokio::time::sleep(START_GAP * 2).await;
     assert_eq!(*resumed.lock().unwrap(), ["interrupted"]);
 }

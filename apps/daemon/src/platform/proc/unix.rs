@@ -481,7 +481,7 @@ pub(crate) fn shares_console(_leader: &ProcessIdentity, _id: &ProcessIdentity) -
 }
 
 /// How often [`watch_parent`] looks for its process.
-const PARENT_POLL: std::time::Duration = std::time::Duration::from_secs(1);
+pub(crate) const PARENT_POLL: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// Calls `on_gone` once the process `pid` no longer exists, polling for it. The caller is in the
 /// runtime: the watch is a task of it.

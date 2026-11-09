@@ -255,7 +255,8 @@ mod tests {
         assert!(!settled_at_prompt(&activity, armed, start + SETTLE * 10));
     }
 
-    /// Long enough for a watch to have seen a settled title and acted on it.
+    /// Long enough for a watch to have seen a settled title and acted on it, for a check that it
+    /// did not: the settle is timed on the real clock, which the test cannot move on.
     const ACTED: Duration = Duration::from_millis(SETTLE.as_millis() as u64 * 3);
 
     struct Fixture {
@@ -326,7 +327,7 @@ mod tests {
     }
 
     async fn reaches(state: &Arc<AppState>, status: SessionStatus) -> bool {
-        reaches_within(state, status, ACTED).await
+        reaches_within(state, status, crate::test_support::PATIENCE).await
     }
 
     fn armed(fixture: &Fixture) -> u64 {
@@ -369,7 +370,7 @@ mod tests {
         replay(&fixture.live, CANCEL_TITLES);
         armed(&fixture);
         replay(&fixture.live, IDLE_TITLE);
-        assert!(!reaches(&fixture.state, SessionStatus::Idle).await);
+        assert!(!reaches_within(&fixture.state, SessionStatus::Idle, ACTED).await);
     }
 
     /// The title is back at the prompt while a permission dialog waits as well; the hook that
@@ -383,7 +384,7 @@ mod tests {
             .state
             .apply_reported_status_if("s", SessionStatus::Working, SessionStatus::WaitingUser)
             .unwrap());
-        assert!(!reaches(&fixture.state, SessionStatus::Idle).await);
+        assert!(!reaches_within(&fixture.state, SessionStatus::Idle, ACTED).await);
         assert_eq!(status(&fixture.state), Some(SessionStatus::WaitingUser));
         assert!(
             !fixture.state.last_turn_abnormal("s"),
@@ -420,7 +421,7 @@ mod tests {
         );
         assert!(fixture.live.look_for_dialog().current.is_some());
         replay(&fixture.live, CANCEL_TITLES);
-        assert!(!reaches(&fixture.state, SessionStatus::Idle).await);
+        assert!(!reaches_within(&fixture.state, SessionStatus::Idle, ACTED).await);
     }
 
     /// A watch the next prompt retired does not end the turn that prompt opened.
@@ -430,7 +431,7 @@ mod tests {
         armed(&fixture);
         fixture.state.end_record_watch("s");
         replay(&fixture.live, CANCEL_TITLES);
-        assert!(!reaches(&fixture.state, SessionStatus::Idle).await);
+        assert!(!reaches_within(&fixture.state, SessionStatus::Idle, ACTED).await);
     }
 
     /// Ctrl-C before Grok Build's first token, the user's own or `interrupt_session`'s, fires no
@@ -495,6 +496,6 @@ mod tests {
         let fixture = grok_fixture("grok-tool");
         armed(&fixture);
         replay(&fixture.live, GROK_TOOL_TITLES);
-        assert!(!reaches(&fixture.state, SessionStatus::Idle).await);
+        assert!(!reaches_within(&fixture.state, SessionStatus::Idle, ACTED).await);
     }
 }

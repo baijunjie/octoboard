@@ -91,22 +91,18 @@ mod tests {
         let passes = StalledPasses::<String>::default();
         let key = "key".to_string();
         let begun = Instant::now();
+        // A time no run of this test reaches.
+        let later = begun + Duration::from_secs(60);
+
+        let waiting = Arc::new(());
+        passes.record_from("not yet".to_string(), Arc::downgrade(&waiting), later);
+        assert!(!passes.is_stuck("not yet"), "not stuck before its time");
 
         // The earlier thread's time is not pushed back by a later record.
         let first = Arc::new(());
-        passes.record_from(
-            key.clone(),
-            Arc::downgrade(&first),
-            begun + Duration::from_millis(300),
-        );
-        assert!(!passes.is_stuck(&key), "not stuck before its time");
+        passes.record_from(key.clone(), Arc::downgrade(&first), begun);
         let second = Arc::new(());
-        passes.record_from(
-            key.clone(),
-            Arc::downgrade(&second),
-            begun + Duration::from_secs(60),
-        );
-        std::thread::sleep(Duration::from_millis(350));
+        passes.record_from(key.clone(), Arc::downgrade(&second), later);
         assert!(passes.is_stuck(&key), "the first's own time stands");
 
         // Once it ended, the later thread is what the key waits on, from its own time.

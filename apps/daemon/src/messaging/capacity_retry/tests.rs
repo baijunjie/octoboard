@@ -254,15 +254,16 @@ async fn a_turn_that_ends_without_a_capacity_failure_starts_the_count_again() {
     fixture.state.turn_started(&fixture.id, Some("more work"));
     fixture.fail_at_capacity();
     // The notice for the first retry reaches the owner again: the sequence began from the start.
-    let mut heard = String::new();
-    for _ in 0..100 {
-        heard = String::from_utf8_lossy(&fixture.hub.recent_output(8 * 1024)).into_owned();
-        if heard.matches("retry 1 of 3").count() == 2 {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    assert_eq!(heard.matches("retry 1 of 3").count(), 2, "{heard}");
+    let hub = (*fixture.hub).clone();
+    let told_twice = crate::test_support::within(crate::test_support::PATIENCE, move || {
+        String::from_utf8_lossy(&hub.recent_output(8 * 1024))
+            .matches("retry 1 of 3")
+            .count()
+            == 2
+    })
+    .await;
+    let heard = String::from_utf8_lossy(&fixture.hub.recent_output(8 * 1024)).into_owned();
+    assert!(told_twice, "{heard}");
 }
 
 /// The retried turn finishing without a report of its own is reported on as any turn is: the owner

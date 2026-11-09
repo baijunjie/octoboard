@@ -250,15 +250,18 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn a_second_request_for_the_same_account_joins_the_reading_under_way() {
+        // How long a reading takes. Its length does not matter: on the paused clock a reading
+        // that waits at all is still under way when the other request of the pair asks.
+        const A_MOMENT: Duration = Duration::from_secs(1);
         let readings = McpInventoryReadings::default();
         let runs = AtomicUsize::new(0);
         let work = |read_at| {
             let runs = &runs;
             async move {
                 runs.fetch_add(1, Ordering::SeqCst);
-                tokio::time::sleep(Duration::from_millis(50)).await;
+                tokio::time::sleep(A_MOMENT).await;
                 inventory(read_at)
             }
         };

@@ -1721,9 +1721,12 @@ mod tests {
                 outbox.drain_with(
                     "s",
                     &mut |_, _, _| {
-                        // The message is off the queue and being written: the seal starts now.
+                        // The message is off the queue and being written: the seal starts now,
+                        // and the write goes on until it has, so the seal finds it still writing.
                         writing.send(()).ok();
-                        std::thread::sleep(Duration::from_millis(200));
+                        crate::session::wait::wait_for(crate::test_support::PATIENCE, || {
+                            outbox.is_sealed()
+                        });
                         Err(partial(0))
                     },
                     &MidTurn,
