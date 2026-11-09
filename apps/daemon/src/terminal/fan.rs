@@ -483,6 +483,10 @@ impl Fan {
         self.lock().size
     }
 
+    pub fn has_title(&self) -> bool {
+        self.lock().terminal.has_title()
+    }
+
     pub fn bracketed_paste_on(&self) -> bool {
         self.lock().terminal.bracketed_paste_on()
     }

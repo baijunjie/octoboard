@@ -306,6 +306,14 @@ impl TerminalSnapshot {
         (0..grid.columns()).any(|col| !matches!(cells[Column(col)].c, ' ' | '\t'))
     }
 
+    /// Whether the program has set a nonempty title on this terminal.
+    pub fn has_title(&self) -> bool {
+        self.unexposed
+            .title
+            .as_ref()
+            .is_some_and(|title| !title.is_empty())
+    }
+
     /// Whether bracketed paste is on now, read off the parsed state so that a sequence split
     /// across reads counts.
     pub fn bracketed_paste_on(&self) -> bool {

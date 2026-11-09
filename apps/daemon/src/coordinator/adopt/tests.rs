@@ -1187,6 +1187,157 @@ fn record_codex(state: &AppState, id: &str) {
         .expect("the session is stored");
 }
 
+/// A title the same terminal set before adoption still proves Codex passed its startup screens,
+/// whether it comes from the holder's tail or the exact screen saved at a planned handover.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_adopted_codex_session_accepts_messages_after_its_startup_title_is_restored() {
+    use crate::holder::protocol::HandoverTail;
+
+    for exact in [false, true] {
+        let (state, dir) = console_with_project_and_accounts(&format!("adopt-codex-ready-{exact}"));
+        record_codex(&state, "s1");
+        let run_dir = dir.join("run");
+        let left = left_with_server(&dir, codex_meta("s1", &run_dir.join("s1")));
+        let _guard = KillOnDrop(vec![left.terminal, left.companion]);
+        let (_next, mut found) = found_in(&dir);
+        let screen = b"\x1b]2;Codex session\x07ready before the daemon stopped\r\n";
+        if exact {
+            found[0].tail.clear();
+            found[0].handover = Some(HandoverTail {
+                token: "ready-handover".to_string(),
+                since: 0,
+                truncated: false,
+                ages: Vec::new(),
+            });
+            state.keep_restart_screen(
+                "ready-handover",
+                held_at(&found[0].holder_id, &found[0].id),
+                crate::terminal::saved_screen::SavedScreen::of_bytes(24, 80, screen),
+            );
+        } else {
+            found[0].tail = screen.to_vec();
+        }
+
+        let adopted = adopt_in_blocking(&state, found, run_dir).await;
+        assert_eq!(adopted.sessions, ["s1"]);
+        let live = state.live_session("s1").expect("the session is live");
+        assert_eq!(live.screen_inexact(), !exact);
+        assert!(live
+            .screen_text()
+            .contains("ready before the daemon stopped"));
+        let interrupted = crate::session::interrupt::interrupt_session(&state, "s1")
+            .await
+            .expect("the adopted session is no longer rejected as still starting");
+        assert!(
+            !interrupted.interrupted,
+            "the stand-in shows no active turn"
+        );
+        crate::coordinator::messages::send_message(&state, "s1", "hello again".to_string())
+            .await
+            .expect("the adopted session is past its startup screens");
+
+        let requests = left.requests.lock().unwrap().clone();
+        let (_, added) = requests
+            .iter()
+            .find(|(method, _)| method == "thread/queue/add")
+            .expect("the message went through the adopted session into Codex's queue");
+        assert_eq!(added["threadId"], "thread-1");
+        assert_eq!(added["input"][0]["text"], "hello again");
+        assert!(
+            added["clientUserMessageId"]
+                .as_str()
+                .is_some_and(|id| id.starts_with("launch-s1:")),
+            "{added:?}"
+        );
+        assert!(is_running(left.terminal));
+        assert!(is_running(left.companion));
+    }
+}
+
+/// Stored status, title and conversation identity may belong to an earlier launch. None lets a
+/// message answer the current launch's startup or folder-trust screen.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_adopted_codex_session_without_its_own_startup_title_still_refuses_messages() {
+    let trust_screen = include_bytes!("../../../testdata/codex_trust_screen.bin");
+    for (label, tail) in [
+        ("starting", b"starting Codex".as_slice()),
+        ("trust", trust_screen.as_slice()),
+        ("cleared", b"\x1b]2;old title\x07\x1b]2;\x07".as_slice()),
+    ] {
+        let (state, dir) = console_with_project_and_accounts(&format!("adopt-codex-held-{label}"));
+        record_codex(&state, "s1");
+        state
+            .store
+            .set_terminal_title("s1", Some("title from an earlier launch"))
+            .unwrap();
+        let run_dir = dir.join("run");
+        let pids = left_behind(
+            &dir,
+            vec![(
+                "t1",
+                codex_meta("s1", &run_dir.join("s1")),
+                programs::sleep(60),
+            )],
+        );
+        let _guard = KillOnDrop(pids);
+        let (_next, mut found) = found_in(&dir);
+        found[0].tail = tail.to_vec();
+        let adopted = adopt_in_blocking(&state, found, run_dir).await;
+        assert_eq!(adopted.sessions, ["s1"]);
+
+        let refused = crate::coordinator::messages::send_message(
+            &state,
+            "s1",
+            "do not type this".to_string(),
+        )
+        .await
+        .expect_err("the current terminal has not shown Codex's startup signal");
+        assert_eq!(
+            refused
+                .downcast_ref::<crate::protocol::CodedError>()
+                .expect("a coded refusal")
+                .code,
+            crate::protocol::error_code::SESSION_TRUST_PENDING,
+            "{label}: {refused:#}"
+        );
+    }
+}
+
+/// A console host can set a title before Codex is ready; adoption preserves the rule that its
+/// parsed composer, rather than the host's title, establishes readiness.
+#[cfg(windows)]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_adopted_host_rendered_codex_terminal_does_not_start_at_its_title() {
+    let (state, dir) = console_with_project_and_accounts("adopt-codex-host-title");
+    record_codex(&state, "s1");
+    let run_dir = dir.join("run");
+    let pids = left_behind(
+        &dir,
+        vec![(
+            "t1",
+            codex_meta("s1", &run_dir.join("s1")),
+            programs::sleep(60),
+        )],
+    );
+    let _guard = KillOnDrop(pids);
+    let (_next, mut found) = found_in(&dir);
+    found[0].tail = b"loading\x1b]2;codex.exe\x07".to_vec();
+    adopt_in_blocking(&state, found, run_dir).await;
+
+    let refused =
+        crate::coordinator::messages::send_message(&state, "s1", "do not type this".to_string())
+            .await
+            .expect_err("the host title does not say Codex is ready");
+    assert_eq!(
+        refused
+            .downcast_ref::<crate::protocol::CodedError>()
+            .expect("a coded refusal")
+            .code,
+        crate::protocol::error_code::SESSION_TRUST_PENDING
+    );
+}
+
 /// A stand-in for Codex's app server listening on the socket `path`, answering what a message
 /// written to the session's queue asks of it; gives every request it was sent, by method and
 /// parameters.

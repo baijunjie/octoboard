@@ -440,6 +440,12 @@ fn adopt_session(
             live.seed_output(&tail);
         }
     }
+    // This title belongs to the same held terminal, so its provider's startup signal remains
+    // valid without replaying the old output's status changes. Hosts that render their own
+    // titles still use the input box as their start signal.
+    if live.has_title() {
+        live.trust.note_title();
+    }
     session::spawn_reader_thread(live.clone(), pty::READ_BUF);
     if let Some(token) = &meta.mcp_token {
         state.restore_mcp_token(&meta.session_id, token);

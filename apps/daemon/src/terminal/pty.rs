@@ -410,6 +410,11 @@ impl PtyCore {
         self.fan.total()
     }
 
+    /// Whether this terminal's parsed state holds a nonempty program title.
+    pub fn has_title(&self) -> bool {
+        self.fan.has_title()
+    }
+
     /// Whether bracketed paste is on now; see
     /// [`crate::terminal::snapshot::TerminalSnapshot::bracketed_paste_on`].
     pub fn bracketed_paste_on(&self) -> bool {
