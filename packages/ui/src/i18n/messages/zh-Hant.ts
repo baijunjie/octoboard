@@ -2087,7 +2087,7 @@ export const zhHant: Translation<"other"> = {
   "settings.sort.option.name": "名稱",
   "settings.sort.option.used": "最近使用",
   "settings.language.label": "語言",
-  "settings.language.sharedDescription": "所有視窗的語言，也是代理程式與你交談所用的語言。",
+  "settings.language.sharedDescription": "所有視窗的語言，也是代理程式用來與你對話的語言。",
   "settings.cloneDir.label": "預設複製目錄",
   "settings.cloneDir.description.gitUrl": "透過 {git} 儲存庫網址加入專案時，預設複製到此目錄，也可另選目錄。",
   "settings.cloneDir.placeholder": "~/Projects",

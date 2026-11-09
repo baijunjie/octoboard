@@ -1937,7 +1937,7 @@ export const es: Translation<"one" | "many" | "other"> = {
   "settings.sort.option.name": "Nombre",
   "settings.sort.option.used": "Usados recientemente",
   "settings.language.label": "Idioma",
-  "settings.language.sharedDescription": "El idioma de todas las ventanas y el que los agentes usan para hablar contigo.",
+  "settings.language.sharedDescription": "El idioma de todas las ventanas y aquel en el que los agentes te hablan.",
   "settings.cloneDir.label": "Directorio de clonación predeterminado",
   "settings.cloneDir.description.gitUrl": "Los proyectos añadidos desde una URL de {git} se clonan en este directorio, salvo que elijas otro.",
   "settings.cloneDir.placeholder": "~/Projects",

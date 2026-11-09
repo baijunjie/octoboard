@@ -2142,7 +2142,7 @@ export const zhHans: Translation<"other"> = {
   "settings.sort.option.name": "名称",
   "settings.sort.option.used": "最近使用",
   "settings.language.label": "语言",
-  "settings.language.sharedDescription": "所有窗口的语言，也是智能体与你交流所用的语言。",
+  "settings.language.sharedDescription": "所有窗口的语言，也是智能体用来与你对话的语言。",
   "settings.cloneDir.label": "默认克隆目录",
   "settings.cloneDir.description.gitUrl":
     "通过 {git} 仓库网址添加项目时，默认克隆到此目录，也可另选目录。",
