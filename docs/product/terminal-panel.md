@@ -230,9 +230,12 @@ is, and described by its heading and line; focus in the shell terminal, or on a 
 cover; `F6` and a maximize land on it; when the cover goes, focus moves on only if it is still on the cover, back to the
 terminal or, when the last interaction was a tap, to the panel's first control that takes no text, otherwise the top
 bar's, with no focus ring; and a recovery in the background never moves focus. Assistive technology is told the cover's
-heading and line once, only for the shown tab: as the cover comes while the tab is shown, or about 1.5 seconds after a
-tab already covered is shown, and not when keyboard focus is on the cover at that moment. A tab hidden throughout is
-never told. A recovered-display announcement for the shown tab waits until the cover is gone.
+heading and line once, only for the shown tab: as the cover comes while the tab is shown, or, for a tab already covered
+when it is shown, after the attended wait the session terminal uses for a session shown already covered (see "While the
+session's process cannot be reached" in `docs/product/session-terminal.md`), dropped unsaid if the tab is hidden,
+another tab is shown or the process can be reached again first; and not when keyboard focus is on the cover at the
+moment it would be said. A tab hidden throughout is never told. A recovered-display announcement for the shown tab
+waits until the cover is gone.
 
 A shell terminal of a holder that a daemon start finds unreachable is not listed, and has no tab, until its process
 can be reached (see "A holder that cannot be connected to" in `docs/product/process-holders.md`).

@@ -338,6 +338,8 @@ Where to start, by question:
   and provider interface defaults that claim nothing.
 - [Writing desktop shell code](memory/writing-desktop-shell-code.md) — main-thread queuing, native hooks into Tauri
   internals and native menu width.
+- [Writing screen-reader announcements and focus moves](memory/writing-screen-reader-announcements-and-focus-moves.md) —
+  choosing a passing case in `voiceover-cases.md` before writing, so no new listening pass is needed.
 - [Writing text into a session](memory/writing-text-into-a-session.md) — how the daemon adds text or keys to a session's
   input safely and diagnoses unsent messages.
 - [Writing UI code under the React Compiler](memory/writing-ui-code-under-the-react-compiler.md) — what a render may

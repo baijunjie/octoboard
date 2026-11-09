@@ -6,6 +6,8 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { AFTER_FOCUS_MOVE_DELAY_MS, READ_TIME_MS } from "../components/announce/StatusAnnouncer";
+import { windowAttention } from "../components/announce/windowTestSupport";
 import { startResizeDrag } from "../components/panel/resizeDrag";
 import type { PlatformAdapter } from "../platform";
 import type { Event, ClientRequestBody } from "../protocol";
@@ -97,16 +99,22 @@ const host = (ui: React.ReactNode) => <TestHost daemon={daemon} platform={platfo
 const setState = (state: Partial<State>) => act(() => daemon.store.setState(state));
 
 const roots: Root[] = [];
+/** Puts the window in or out of the user's attention; every test starts attended, as the announcements being
+ * tested are only delivered to a user who is in the window (jsdom would answer from what was focused earlier). */
+let attention: ReturnType<typeof windowAttention>;
 beforeEach(() => {
+  attention = windowAttention();
   vi.useFakeTimers();
   platform.links = undefined;
   request.mockClear();
   daemon = testDaemon({ state: { connectionState: "open" }, request, terminalUrl: () => "" });
 });
 afterEach(() => {
-  vi.useRealTimers();
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
+  act(() => void vi.runOnlyPendingTimers());
+  expect(vi.getTimerCount()).toBe(0);
+  vi.useRealTimers();
   while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
 });
 
@@ -133,6 +141,9 @@ function failAttempt(): void {
 const FIRST_WRITE_MS = 100;
 /** Lets the status regions pass their first write delay. */
 const speak = () => act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
+/** The terminal's own isolated layer, which a cover makes inert; announcers that must stay heard sit outside it. */
+const isolatedTerminal = (container: HTMLElement) => container.querySelector("[data-region=terminal] > .isolate")!;
 /** The cover's spoken text: its region is the first status region the pane renders. */
 const status = (container: HTMLElement) => container.querySelector("[role=status]:not([data-slot=spinner])")?.textContent;
 
@@ -400,7 +411,7 @@ it("offers to add an agent instead of the installation step when installed agent
 it("covers the terminal with the switching state, inert and ahead of a failing connection, while an account switch holds the session", () => {
   const { container, root } = mount();
   FakeController.last.settle("open");
-  const terminal = () => container.querySelector("[data-region=terminal] > .isolate")!;
+  const terminal = () => isolatedTerminal(container);
   expect(terminal().hasAttribute("inert")).toBe(false);
   render(root, { ...session, switching_account: true });
   speak();
@@ -646,7 +657,7 @@ it("mounts the switching and resuming statuses empty, then writes them", () => {
   expect(switching.textContent).toBe("Switching account");
   const noProcessPane = mountArchived();
   noProcessPane.show({ resuming: true });
-  expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toEqual(["", "", "", ""]);
+  expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toEqual(["", "", "", "", ""]);
   act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
   expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toContain("Resuming session…");
 });
@@ -728,36 +739,141 @@ it("keeps a sentence already spoken in the region while a modal opens and closes
 });
 
 const RECOVERED = "Recovered terminal display";
+/** The recovered-display sentences currently in the status regions. */
+const recovered = (container: HTMLElement) => statusRegions(container).map((region) => region.textContent).filter((text) => text === RECOVERED);
 
 it("speaks the recovered display only when the flag turns on while the session is open, not as it opens or for another session", () => {
-  const spokenRecovered = (container: HTMLElement) => statusRegions(container).map((region) => region.textContent).filter((text) => text === RECOVERED);
   const { container, root } = mount();
   speak();
   render(root, { ...session, screen_inexact: false });
   speak();
-  expect(spokenRecovered(container)).toEqual([]);
+  expect(recovered(container)).toEqual([]);
   render(root, { ...session, screen_inexact: true });
-  speak();
-  expect(spokenRecovered(container)).toEqual([RECOVERED]);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(recovered(container)).toEqual([]);
+  advance(1);
+  expect(recovered(container)).toEqual([RECOVERED]);
   // Not again after a redraw with the flag still on.
   render(root, { ...session, screen_inexact: true, title: "Renamed" });
-  expect(spokenRecovered(container)).toEqual([RECOVERED]);
+  expect(recovered(container)).toEqual([RECOVERED]);
   render(root, { ...session, screen_inexact: false });
-  expect(spokenRecovered(container)).toEqual([]);
+  expect(recovered(container)).toEqual([]);
 });
 
 it("does not speak the recovered display for a session found with the flag on, or one selected with it on", () => {
-  const spokenRecovered = (container: HTMLElement) => statusRegions(container).map((region) => region.textContent).filter((text) => text === RECOVERED);
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   render(root, { ...session, screen_inexact: true });
   speak();
-  expect(spokenRecovered(container)).toEqual([]);
+  expect(recovered(container)).toEqual([]);
   render(root, sessionOf("s-2", "c-1", undefined, "Other", "working", { screen_inexact: false }));
   render(root, sessionOf("s-3", "c-1", undefined, "Third", "working", { screen_inexact: true }));
   speak();
-  expect(spokenRecovered(container)).toEqual([]);
+  expect(recovered(container)).toEqual([]);
+});
+
+describe("the recovered display's announcement, delivered while the window is attended", () => {
+  const recoveredRegion = (container: HTMLElement) => statusRegions(container).find((region) => region.textContent === RECOVERED);
+  /** Mounts a session with the flag off, as a view open before the flag rises. */
+  function mountOpen() {
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    render(root, { ...session, screen_inexact: false });
+    speak();
+    return { container, root };
+  }
+
+  it("writes it after the focus-move wait of attended time, and empties it again after the read time", () => {
+    const { container, root } = mountOpen();
+    render(root, { ...session, screen_inexact: true });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(recovered(container)).toEqual([]);
+    advance(1);
+    expect(recovered(container)).toEqual([RECOVERED]);
+    advance(READ_TIME_MS - 1);
+    expect(recovered(container)).toEqual([RECOVERED]);
+    advance(1);
+    expect(recovered(container)).toEqual([]);
+  });
+
+  it("writes nothing while the user is away, and waits the whole time again once they are back", () => {
+    const setAttended = attention;
+    const { container, root } = mountOpen();
+    render(root, { ...session, screen_inexact: true });
+    setAttended(false);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 5);
+    expect(recovered(container)).toEqual([]);
+    setAttended(true);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(recovered(container)).toEqual([]);
+    advance(1);
+    expect(recovered(container)).toEqual([RECOVERED]);
+  });
+
+  it("starts the wait over when the user leaves the window and comes back before it ends", () => {
+    const setAttended = attention;
+    const { container, root } = mountOpen();
+    render(root, { ...session, screen_inexact: true });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    setAttended(false);
+    setAttended(true);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(recovered(container)).toEqual([]);
+    advance(1);
+    expect(recovered(container)).toEqual([RECOVERED]);
+  });
+
+  it("drops it unsaid when another session is selected before the wait ends", () => {
+    const { container, root } = mountOpen();
+    render(root, { ...session, screen_inexact: true });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    render(root, sessionOf("s-2", "c-1", undefined, "Other", "working", { screen_inexact: true }));
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(recovered(container)).toEqual([]);
+  });
+
+  it("drops it unsaid when the session is gone before the wait ends", () => {
+    const { container, root } = mountOpen();
+    render(root, { ...session, screen_inexact: true });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    act(() => root.render(host(<TerminalPane session={undefined} onResume={async () => true} onAddAgent={() => {}} />)));
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(recovered(container)).toEqual([]);
+  });
+
+  it("drops it unsaid when the display recovers (the flag turns off) before the wait ends", () => {
+    const { container, root } = mountOpen();
+    render(root, { ...session, screen_inexact: true });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    render(root, { ...session, screen_inexact: false });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(recovered(container)).toEqual([]);
+  });
+
+  it("says it again when the flag goes off and comes on again for the same session", () => {
+    const { container, root } = mountOpen();
+    render(root, { ...session, screen_inexact: true });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS);
+    expect(recovered(container)).toEqual([RECOVERED]);
+    render(root, { ...session, screen_inexact: false });
+    expect(recovered(container)).toEqual([]);
+    render(root, { ...session, screen_inexact: true });
+    expect(recovered(container)).toEqual([]);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS);
+    expect(recovered(container)).toEqual([RECOVERED]);
+  });
+
+  it("sits in a live announcer beside an unrelated modal, outside the inert terminal", () => {
+    const { container, root } = mountOpen();
+    render(root, { ...session, screen_inexact: true });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS);
+    const region = recoveredRegion(container)!;
+    expect(region.closest("[data-live-announcer=true]")).not.toBeNull();
+    expect(isolatedTerminal(container).contains(region)).toBe(false);
+    expect(region.closest("[inert]")).toBeNull();
+  });
 });
 
 describe("a session whose process the daemon cannot reach", () => {
@@ -766,7 +882,7 @@ describe("a session whose process the daemon cannot reach", () => {
   const BODY = "The session process is still running. Input is unavailable until the connection returns. Reconnection is automatic.";
   const SENTENCE = "Reconnecting to the session. The session process is still running. Input is unavailable until the connection returns. Reconnection is automatic.";
   const region = (container: HTMLElement) => container.querySelector<HTMLElement>("[role=region][aria-label]");
-  const terminal = (container: HTMLElement) => container.querySelector("[data-region=terminal] > .isolate")!;
+  const terminal = isolatedTerminal;
   const buttons = (container: HTMLElement) => [...container.querySelectorAll("button:not([hidden])")].map((button) => button.textContent).filter(Boolean);
   const spoken = (container: HTMLElement) => statusRegions(container).map((r) => r.textContent).filter((text) => text === SENTENCE);
 
@@ -1036,8 +1152,150 @@ describe("a session whose process the daemon cannot reach", () => {
     expect(spoken(container)).toEqual([SENTENCE]);
   });
 
+  /** A pane opened on `current` with nothing yet attached, as a session picked while pending. */
+  function open(current: typeof session) {
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    render(root, current);
+    speak();
+    return { container, root };
+  }
+
+  it("writes the sentence of a pane opened pending after the wait, into a live announcer outside the inert terminal", () => {
+    const { container } = open(pending);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_MS - 1);
+    expect(spoken(container)).toEqual([]);
+    advance(1);
+    expect(spoken(container)).toEqual([SENTENCE]);
+    const delayed = statusRegions(container).find((r) => r.textContent === SENTENCE)!;
+    expect(delayed.closest("[data-live-announcer=true]")).not.toBeNull();
+    expect(terminal(container).contains(delayed)).toBe(false);
+    expect(delayed.closest("[inert]")).toBeNull();
+  });
+
+  it("writes nothing for a pane opened pending while the user is away, and waits the whole time once they are back", () => {
+    const setAttended = attention;
+    const { container } = open(pending);
+    setAttended(false);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 5);
+    expect(spoken(container)).toEqual([]);
+    setAttended(true);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(spoken(container)).toEqual([]);
+    advance(1);
+    expect(spoken(container)).toEqual([SENTENCE]);
+  });
+
+  it("starts the wait over when the user leaves the window and comes back before it ends", () => {
+    const setAttended = attention;
+    const { container } = open(pending);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_MS - 1);
+    setAttended(false);
+    setAttended(true);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(spoken(container)).toEqual([]);
+    advance(1);
+    expect(spoken(container)).toEqual([SENTENCE]);
+  });
+
+  it("empties the sentence on a switch to another pending session and writes it again after the new one's own wait", () => {
+    const { container, root } = open(pending);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS);
+    expect(spoken(container)).toEqual([SENTENCE]);
+    render(root, sessionOf("s-3", "c-1", undefined, "Third", "working", { holder_link: "pending" }));
+    expect(spoken(container)).toEqual([]);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(spoken(container)).toEqual([]);
+    advance(1);
+    expect(spoken(container)).toEqual([SENTENCE]);
+  });
+
+  it("does not carry the wait of the first pending session over to the one switched to", () => {
+    const { container, root } = open(pending);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_MS - 1);
+    render(root, sessionOf("s-3", "c-1", undefined, "Third", "working", { holder_link: "pending" }));
+    advance(FIRST_WRITE_MS + 1);
+    expect(spoken(container)).toEqual([]);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS);
+    expect(spoken(container)).toEqual([SENTENCE]);
+  });
+
+  it("drops the sentence unsaid when another session is selected, or the pending ends, before the wait", () => {
+    const first = open(pending);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_MS - 1);
+    render(first.root, sessionOf("s-2", "c-1", undefined, "Other", "working"));
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(spoken(first.container)).toEqual([]);
+
+    const second = open(sessionOf("s-4", "c-1", undefined, "Fourth", "working", { holder_link: "pending" }));
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_MS - 1);
+    render(second.root, sessionOf("s-4", "c-1", undefined, "Fourth", "working"));
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(spoken(second.container)).toEqual([]);
+  });
+
+  it("says the sentence again for a session selected pending a second time, as a fresh announcement", () => {
+    const { container, root } = open(pending);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS);
+    expect(spoken(container)).toEqual([SENTENCE]);
+    render(root, sessionOf("s-2", "c-1", undefined, "Other", "working"));
+    expect(spoken(container)).toEqual([]);
+    render(root, pending);
+    expect(spoken(container)).toEqual([]);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS);
+    expect(spoken(container)).toEqual([SENTENCE]);
+  });
+
+  it("does not write the sentence when focus is on the cover as the wait ends, nor queue it again for that period", () => {
+    const outside = document.body.appendChild(document.createElement("button"));
+    const setAttended = attention;
+    const handle = createRef<TerminalPaneHandle>();
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    act(() => root.render(host(<TerminalPane ref={handle} session={pending} onResume={async () => true} onAddAgent={() => {}} />)));
+    act(() => handle.current?.focus());
+    expect(document.activeElement).toBe(region(container));
+    advance(AFTER_FOCUS_MOVE_DELAY_MS);
+    expect(spoken(container)).toEqual([]);
+    // Focus leaving the cover, and the user leaving and coming back, queue nothing for the same period.
+    act(() => outside.focus());
+    setAttended(false);
+    setAttended(true);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(spoken(container)).toEqual([]);
+  });
+
+  it("writes the sentence when focus was on the cover but has left it by the time the wait ends", () => {
+    const outside = document.body.appendChild(document.createElement("button"));
+    const handle = createRef<TerminalPaneHandle>();
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    act(() => root.render(host(<TerminalPane ref={handle} session={pending} onResume={async () => true} onAddAgent={() => {}} />)));
+    act(() => handle.current?.focus());
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    act(() => outside.focus());
+    advance(1);
+    expect(spoken(container)).toEqual([SENTENCE]);
+  });
+
+  it("writes the sentence at once into the cover's own region when the shown session turns pending, even with the user away", () => {
+    const setAttended = attention;
+    const { container, root } = open(session);
+    setAttended(false);
+    render(root, pending);
+    expect(status(container)).toBe(SENTENCE);
+    const immediate = statusRegions(container).find((r) => r.textContent === SENTENCE)!;
+    expect(immediate.closest("[data-live-announcer=true]")).toBeNull();
+    // Written once: nothing more arrives from the attended wait.
+    setAttended(true);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(spoken(container)).toEqual([SENTENCE]);
+  });
+
   it("holds the recovered display's announcement until the cover has gone, and does not repeat one already said", () => {
-    const recovered = (container: HTMLElement) => statusRegions(container).map((r) => r.textContent).filter((text) => text === RECOVERED);
     const { container, root } = mount();
     speak();
     render(root, { ...pending, screen_inexact: false });
@@ -1052,15 +1310,73 @@ describe("a session whose process the daemon cannot reach", () => {
     // The loading cover that follows holds it too, and its own sentence is not overwritten.
     expect(status(container)).toBe("Loading terminal…");
     expect(recovered(container)).toEqual([]);
+    // However long the loading cover stays, the wait of attended time has not begun.
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(recovered(container)).toEqual([]);
     FakeController.last.settle("open");
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(recovered(container)).toEqual([]);
     FakeController.last.paint();
-    speak();
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(recovered(container)).toEqual([]);
+    advance(1);
     expect(recovered(container)).toEqual([RECOVERED]);
     // Already said, then pending again and clear: said no more.
-    act(() => void vi.advanceTimersByTime(10_000));
+    advance(READ_TIME_MS);
     render(root, { ...session, screen_inexact: true, holder_link: "pending" });
     render(root, { ...session, screen_inexact: true });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(recovered(container)).toEqual([]);
+  });
+
+  it("does not lose a recovered display queued but not yet said when the session turns pending, and says it once after the covers lift", () => {
+    const { container, root } = mount();
     speak();
+    render(root, { ...session, screen_inexact: false });
+    render(root, { ...session, screen_inexact: true });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(recovered(container)).toEqual([]);
+    render(root, { ...pending, screen_inexact: true });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(recovered(container)).toEqual([]);
+    render(root, { ...session, screen_inexact: true });
+    speak();
+    FakeController.last.settle("open");
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(recovered(container)).toEqual([]);
+    FakeController.last.paint();
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(recovered(container)).toEqual([]);
+    advance(1);
+    expect(recovered(container)).toEqual([RECOVERED]);
+    // Said once: after it is read away and a further wait, nothing comes again.
+    advance(READ_TIME_MS);
+    expect(recovered(container)).toEqual([]);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+    expect(recovered(container)).toEqual([]);
+  });
+
+  it("does not lose a recovered display flagged while the user was away when the session turns pending, and says it once after the user is back", () => {
+    const setAttended = attention;
+    const { container, root } = mount();
+    speak();
+    render(root, { ...session, screen_inexact: false });
+    setAttended(false);
+    render(root, { ...session, screen_inexact: true });
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 5);
+    render(root, { ...pending, screen_inexact: true });
+    render(root, { ...session, screen_inexact: true });
+    speak();
+    FakeController.last.settle("open");
+    FakeController.last.paint();
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 5);
+    expect(recovered(container)).toEqual([]);
+    setAttended(true);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(recovered(container)).toEqual([]);
+    advance(1);
+    expect(recovered(container)).toEqual([RECOVERED]);
+    advance(READ_TIME_MS + AFTER_FOCUS_MOVE_DELAY_MS * 3);
     expect(recovered(container)).toEqual([]);
   });
 

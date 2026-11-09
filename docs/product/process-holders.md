@@ -173,8 +173,15 @@ program drew before those last bytes is missing.
   never carries it. Octoboard's window shows it as a note mark ("Recovered terminal display") right after the
   session's title in the title bar, and after the tab strip for the shown shell terminal; its explanation says the
   display was rebuilt after a connection interruption and that earlier output and parts of the screen may be
-  missing. The mark stays while the flag does, a redraw included, and appearing while the view is open is announced
-  once. It says only how faithful the screen is, apart from whether the process can be reached: a terminal can carry
+  missing. The mark stays while the flag does, a redraw included. Appearing while the view is open, it is announced
+  once, after the window has been attended (visible and focused) for about 1.5 seconds, the wait starting over each
+  time the user comes back to the window, so nothing is said while the user is away; an open dialog that hides the rest
+  of the window from assistive technology, such as Settings, does not silence it. The announcement is dropped unsaid if,
+  before then, the flag clears, the view is hidden (a shell terminal's tab no longer shown) or another session or
+  terminal is shown. One that comes, or is still waiting, while the view is covered because its process cannot be
+  reached waits until that cover is gone (see "While the session's process cannot be reached" in
+  `docs/product/session-terminal.md`). A mark already there when the view is opened or shown is not announced on its
+  own. It says only how faithful the screen is, apart from whether the process can be reached: a terminal can carry
   both the mark and the *Reconnecting* presentation at once, each in its own place.
 - The program is made to **redraw**: its terminal is resized one row smaller and back (one row larger and back at a
   single row), so a full-screen program paints its whole screen again over the rebuilt one. No client asked for those

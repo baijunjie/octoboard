@@ -10,6 +10,7 @@ import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announ
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useLatest } from "../components/hooks/useLatest";
 import { Message, useT } from "../i18n/react";
+import { liveAnnouncerProps } from "../primitives";
 import { type Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { hasNoProcess, holdsPendingLink, isLive } from "../sessions/sessionStatus";
@@ -436,7 +437,7 @@ export function TerminalPane({
           its first delay (`StatusAnnouncer`). The loading and reconnecting covers are hidden from
           assistive technology; the disconnected one and the pending one are not, so that the button
           and the focusable region stay reachable, and browsing meets their message a second time. */}
-      <StatusAnnouncer text={livePending ? pendingSaid : cover?.text} />
+      <StatusAnnouncer text={livePending ? pendingSaid.immediate : cover?.text} />
       {!session && (
         // `held`: a creation button goes away when its list gains content, from this window
         // or another, and a focused element that is removed leaves focus on `<body>`. It is the
@@ -473,7 +474,12 @@ export function TerminalPane({
           pane never opens on a session without a process); the visible sentence is hidden from assistive
           technology so nothing is said twice, and the button stays reachable. */}
       <StatusAnnouncer text={barSaid} />
-      <StatusAnnouncer text={recoveredSaid} clearAfterRead />
+      {/* Written after an attended wait, so they may arrive with an unrelated modal open, which hides
+          the rest of the window from assistive technology: marked live announcers, they stay heard. */}
+      <div {...liveAnnouncerProps()}>
+        <StatusAnnouncer text={pendingSaid.delayed} />
+        <StatusAnnouncer text={recoveredSaid} clearAfterRead />
+      </div>
       <TerminalNoticeSlot>
         {noProcessBar && (
           <TerminalNoticeBar

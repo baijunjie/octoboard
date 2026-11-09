@@ -8,6 +8,7 @@ import { useFocusHandoff } from "../../components/focus/useFocusHandoff";
 import { useLatest } from "../../components/hooks/useLatest";
 import { interactionIsTouch } from "../../input/touchInput";
 import { useT } from "../../i18n/react";
+import { liveAnnouncerProps } from "../../primitives";
 import type { ShellTerminal } from "../../protocol";
 import { useDaemon } from "../../store";
 import { TerminalController, type TerminalControllerOptions } from "../TerminalController";
@@ -216,9 +217,16 @@ export function ShellTerminalView({
           delay is the one for a focus move, which pressing a tab or starting a terminal makes into the
           view. The exit sentence is hidden from assistive technology on screen, so nothing is said
           twice, and its button stays reachable. */}
-      {shown && <StatusAnnouncer text={pending ? pendingSaid : trouble ? troubleText : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />}
+      {shown && <StatusAnnouncer text={pending ? pendingSaid.immediate : trouble ? troubleText : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />}
       {shown && <StatusAnnouncer text={!running ? t("shellTerminal.exited") : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />}
-      {shown && <StatusAnnouncer text={recoveredSaid} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} clearAfterRead />}
+      {/* These two wait out the focus move themselves, in attended time, so their regions keep the
+          ordinary first delay; marked live announcers, they stay heard beside an unrelated modal. */}
+      {shown && (
+        <div {...liveAnnouncerProps()}>
+          <StatusAnnouncer text={pendingSaid.delayed} />
+          <StatusAnnouncer text={recoveredSaid} clearAfterRead />
+        </div>
+      )}
       <TerminalNoticeSlot>
         {shown && !running && (
           <TerminalNoticeBar sentence={t("shellTerminal.exited")} action={t("shellTerminal.close")} variant="secondary" onPress={onClose} />

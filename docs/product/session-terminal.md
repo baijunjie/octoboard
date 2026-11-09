@@ -285,11 +285,15 @@ no focus ring. Either way the reattach counts as turning to the terminal (see "T
 `docs/product/terminals-on-several-clients.md`). A recovery never moves focus that is elsewhere.
 
 **Assistive technology** is told the cover's heading and line as one message, once: as the cover comes while the session
-is shown, or, for a session shown while its process already cannot be reached, after the usual delay of a focus move. It
-is not told at all when keyboard focus is on the cover at that moment, since the cover's name and description already
-say the same. Reconnect attempts, renames and other updates of the session do not repeat it. When the recovered-display
-note (see "The screen of a terminal taken over" in `docs/product/process-holders.md`) comes while the cover is up, its
-announcement waits until the cover, and the loading state that follows it, are gone.
+is shown, or, for a session shown while its process already cannot be reached, once the window has been attended
+(visible and focused) for about 1.5 seconds after it is shown, the wait starting over each time the user comes back to
+the window, so nothing is said while the user is away. That later message is dropped unsaid if the session is no
+longer shown or the process can be reached again before then, and an open dialog that hides the rest of the window
+from assistive technology, such as Settings, does not silence it. It is not told at all when keyboard focus is on the
+cover at the moment it would be said, since the cover's name and description already say the same. Reconnect
+attempts, renames and other updates of the session do not repeat it. When the recovered-display note (see "The screen
+of a terminal taken over" in `docs/product/process-holders.md`) comes while the cover is up, its announcement waits
+until the cover, and the loading state that follows it, are gone.
 
 ## Loading
 

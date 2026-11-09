@@ -3,6 +3,8 @@ import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { AFTER_FOCUS_MOVE_DELAY_MS, READ_TIME_MS } from "../../components/announce/StatusAnnouncer";
+import { windowAttention } from "../../components/announce/windowTestSupport";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import type { ShellTerminal } from "../../protocol";
 import type { Daemon, State } from "../../store";
@@ -73,15 +75,21 @@ const terminal: ShellTerminal = {
 };
 
 const roots: Root[] = [];
+/** Puts the window in or out of the user's attention; every test starts attended, as the announcements being
+ * tested are only delivered to a user who is in the window (jsdom would answer from what was focused earlier). */
+let attention: ReturnType<typeof windowAttention>;
 beforeEach(() => {
+  attention = windowAttention();
   vi.useFakeTimers();
   // Every automatic attempt follows the last at once, so a test spends them without waiting out the backoff.
   daemon = testDaemon({ state: { connectionState: "open" }, terminalReconnectDelay: () => 0 });
 });
 afterEach(() => {
-  vi.useRealTimers();
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
+  act(() => void vi.runOnlyPendingTimers());
+  expect(vi.getTimerCount()).toBe(0);
+  vi.useRealTimers();
 });
 
 function mount(shown = true, record: ShellTerminal = terminal) {
@@ -176,7 +184,8 @@ it("reports no focus when it did not land in the view", () => {
   expect(ref.current!.focus()).toBe(false);
 });
 
-const FIRST_WRITE_MS = 1500;
+const FIRST_WRITE_MS = AFTER_FOCUS_MOVE_DELAY_MS;
+const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 const regions = (container: HTMLElement) => Array.from(container.querySelectorAll<HTMLElement>("[role=status]:not([data-slot=spinner])"));
 const spoken = (container: HTMLElement) => regions(container).map((region) => region.textContent).filter(Boolean);
 
@@ -598,12 +607,293 @@ it("says it after the focus delay for a shell opened pending or shown later, and
   expect(sentenceSpoken(hidden.container)).toHaveLength(1);
 });
 
+const RECOVERED = "Recovered terminal display";
+
 it("holds the recovered display's sentence until the cover has gone", () => {
   const { container, update } = mount(true, { ...terminal, holder_link: "pending", screen_inexact: false });
   act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS * 2));
   update({ ...pendingShell, screen_inexact: true });
   expect(spoken(container)).toEqual([SHELL_SENTENCE]);
   update({ ...terminal, screen_inexact: true });
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
-  expect(spoken(container)).toEqual(["Recovered terminal display"]);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(spoken(container)).toEqual([]);
+  advance(1);
+  expect(spoken(container)).toEqual([RECOVERED]);
+});
+
+it("queues the recovered display behind the end of pending alone, not behind the connection that follows, and says it once", () => {
+  const { container, update } = mount(true, { ...terminal, holder_link: "pending", screen_inexact: false });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 2);
+  update({ ...pendingShell, screen_inexact: true });
+  // Pending holds the wait however long it lasts.
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(spoken(container)).toEqual([SHELL_SENTENCE]);
+  update({ ...terminal, screen_inexact: true });
+  // The attach that follows is still connecting, which does not hold it.
+  expect(FakeController.last.currentStatus).toBe("connecting");
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(spoken(container)).toEqual([RECOVERED]);
+  // Said already, then pending again and clear: said no more.
+  advance(READ_TIME_MS);
+  update({ ...pendingShell, screen_inexact: true });
+  update({ ...terminal, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(spoken(container).filter((text) => text === RECOVERED)).toEqual([]);
+});
+
+/** A shown tab whose flag is off, ready for it to rise. */
+function mountRecoverable() {
+  const mounted = mount(true, { ...terminal, screen_inexact: false });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  return mounted;
+}
+const recoveredOf = (container: HTMLElement) => spoken(container).filter((text) => text === RECOVERED);
+
+it("writes the recovered display after the focus-move wait of attended time and empties it after the read time", () => {
+  const { container, update } = mountRecoverable();
+  update({ ...terminal, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(recoveredOf(container)).toEqual([]);
+  advance(1);
+  expect(recoveredOf(container)).toEqual([RECOVERED]);
+  advance(READ_TIME_MS - 1);
+  expect(recoveredOf(container)).toEqual([RECOVERED]);
+  advance(1);
+  expect(recoveredOf(container)).toEqual([]);
+});
+
+it("writes no recovered display while the user is away, and waits the whole time again once they are back", () => {
+  const setAttended = attention;
+  const { container, update } = mountRecoverable();
+  update({ ...terminal, screen_inexact: true });
+  setAttended(false);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 5);
+  expect(recoveredOf(container)).toEqual([]);
+  setAttended(true);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(recoveredOf(container)).toEqual([]);
+  advance(1);
+  expect(recoveredOf(container)).toEqual([RECOVERED]);
+});
+
+it("starts the recovered display's wait over when the user leaves the window and comes back before it ends", () => {
+  const setAttended = attention;
+  const { container, update } = mountRecoverable();
+  update({ ...terminal, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  setAttended(false);
+  setAttended(true);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(recoveredOf(container)).toEqual([]);
+  advance(1);
+  expect(recoveredOf(container)).toEqual([RECOVERED]);
+});
+
+it("does not lose a recovered display queued but not yet said when the terminal turns pending, and says it once after pending ends", () => {
+  const { container, update } = mountRecoverable();
+  update({ ...terminal, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(recoveredOf(container)).toEqual([]);
+  update({ ...pendingShell, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(recoveredOf(container)).toEqual([]);
+  update({ ...terminal, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(recoveredOf(container)).toEqual([]);
+  advance(1);
+  expect(recoveredOf(container)).toEqual([RECOVERED]);
+  // Said once: after it is read away and a further wait, nothing comes again.
+  advance(READ_TIME_MS);
+  expect(recoveredOf(container)).toEqual([]);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(recoveredOf(container)).toEqual([]);
+});
+
+it("does not lose a recovered display flagged while the user was away when the terminal turns pending, and says it once after the user is back", () => {
+  const setAttended = attention;
+  const { container, update } = mountRecoverable();
+  setAttended(false);
+  update({ ...terminal, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 5);
+  update({ ...pendingShell, screen_inexact: true });
+  update({ ...terminal, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 5);
+  expect(recoveredOf(container)).toEqual([]);
+  setAttended(true);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(recoveredOf(container)).toEqual([]);
+  advance(1);
+  expect(recoveredOf(container)).toEqual([RECOVERED]);
+  advance(READ_TIME_MS + AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(recoveredOf(container)).toEqual([]);
+});
+
+it("drops the recovered display unsaid when the tab is hidden before the wait ends, and does not say it as the tab is shown again", () => {
+  const { container, update, show } = mountRecoverable();
+  update({ ...terminal, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  show(false);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  show(true);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(recoveredOf(container)).toEqual([]);
+});
+
+it("drops the recovered display unsaid when another terminal takes the view before the wait ends", () => {
+  const { container, update } = mountRecoverable();
+  update({ ...terminal, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  update({ ...terminal, id: "t2", screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(recoveredOf(container)).toEqual([]);
+});
+
+it("drops the recovered display unsaid when the flag turns off before the wait ends", () => {
+  const { container, update } = mountRecoverable();
+  update({ ...terminal, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  update({ ...terminal, screen_inexact: false });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(recoveredOf(container)).toEqual([]);
+});
+
+it("says the recovered display again when the flag goes off and comes on again", () => {
+  const { container, update } = mountRecoverable();
+  update({ ...terminal, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(recoveredOf(container)).toEqual([RECOVERED]);
+  update({ ...terminal, screen_inexact: false });
+  expect(recoveredOf(container)).toEqual([]);
+  update({ ...terminal, screen_inexact: true });
+  expect(recoveredOf(container)).toEqual([]);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(recoveredOf(container)).toEqual([RECOVERED]);
+});
+
+it("puts the recovered display in a live announcer, outside the inert terminal", () => {
+  const { container, update } = mountRecoverable();
+  update({ ...terminal, screen_inexact: true });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  const region = regions(container).find((r) => r.textContent === RECOVERED)!;
+  expect(region.closest("[data-live-announcer=true]")).not.toBeNull();
+  expect(inertRoot(container).contains(region)).toBe(false);
+  expect(region.closest("[inert]")).toBeNull();
+});
+
+it("writes the sentence of a shell opened pending after the wait, into a live announcer outside the inert terminal", () => {
+  const { container } = mount(true, pendingShell);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(sentenceSpoken(container)).toHaveLength(0);
+  advance(1);
+  expect(sentenceSpoken(container)).toHaveLength(1);
+  const delayed = sentenceSpoken(container)[0];
+  expect(delayed.closest("[data-live-announcer=true]")).not.toBeNull();
+  expect(inertRoot(container).contains(delayed)).toBe(false);
+  expect(delayed.closest("[inert]")).toBeNull();
+});
+
+it("writes nothing for a shell opened pending while the user is away, and waits the whole time once they are back", () => {
+  const setAttended = attention;
+  const { container } = mount(true, pendingShell);
+  setAttended(false);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 5);
+  expect(sentenceSpoken(container)).toHaveLength(0);
+  setAttended(true);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(sentenceSpoken(container)).toHaveLength(0);
+  advance(1);
+  expect(sentenceSpoken(container)).toHaveLength(1);
+});
+
+it("starts the pending sentence's wait over when the user leaves the window and comes back before it ends", () => {
+  const setAttended = attention;
+  const { container } = mount(true, pendingShell);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  setAttended(false);
+  setAttended(true);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(sentenceSpoken(container)).toHaveLength(0);
+  advance(1);
+  expect(sentenceSpoken(container)).toHaveLength(1);
+});
+
+it("empties the pending sentence on a switch to another pending terminal and writes it again after the new one's own wait", () => {
+  const { container, update } = mount(true, pendingShell);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(sentenceSpoken(container)).toHaveLength(1);
+  update({ ...pendingShell, id: "t2" });
+  expect(sentenceSpoken(container)).toHaveLength(0);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(sentenceSpoken(container)).toHaveLength(0);
+  advance(1);
+  expect(sentenceSpoken(container)).toHaveLength(1);
+});
+
+it("drops the pending sentence unsaid when the tab is hidden, another terminal takes the view or the pending ends before the wait", () => {
+  const hidden = mount(true, pendingShell);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  hidden.show(false);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(sentenceSpoken(hidden.container)).toHaveLength(0);
+
+  const switched = mount(true, pendingShell);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  switched.update({ ...terminal, id: "t2" });
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(sentenceSpoken(switched.container)).toHaveLength(0);
+
+  const recovered = mount(true, pendingShell);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  recovered.update(terminal);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(sentenceSpoken(recovered.container)).toHaveLength(0);
+});
+
+it("says the pending sentence again for a tab hidden and shown again while pending, as a fresh announcement", () => {
+  const { container, show } = mount(true, pendingShell);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(sentenceSpoken(container)).toHaveLength(1);
+  show(false);
+  show(true);
+  expect(sentenceSpoken(container)).toHaveLength(0);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(sentenceSpoken(container)).toHaveLength(1);
+});
+
+it("does not queue the pending sentence again for a period whose wait ended with focus on the cover", () => {
+  const setAttended = attention;
+  const outside = document.body.appendChild(document.createElement("button"));
+  const { container, ref } = mount(true, pendingShell);
+  act(() => ref.current!.focus());
+  expect(document.activeElement).toBe(shellRegion(container));
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(sentenceSpoken(container)).toHaveLength(0);
+  act(() => outside.focus());
+  setAttended(false);
+  setAttended(true);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(sentenceSpoken(container)).toHaveLength(0);
+});
+
+it("writes the pending sentence when focus was on the cover but has left it by the time the wait ends", () => {
+  const outside = document.body.appendChild(document.createElement("button"));
+  const { container, ref } = mount(true, pendingShell);
+  act(() => ref.current!.focus());
+  advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  act(() => outside.focus());
+  advance(1);
+  expect(sentenceSpoken(container)).toHaveLength(1);
+});
+
+it("writes the pending sentence at once when the shown shell turns pending, even with the user away, outside the attended wait", () => {
+  const setAttended = attention;
+  const { container, update } = mount();
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  setAttended(false);
+  update(pendingShell);
+  expect(sentenceSpoken(container)).toHaveLength(1);
+  expect(sentenceSpoken(container)[0].closest("[data-live-announcer=true]")).toBeNull();
+  setAttended(true);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(sentenceSpoken(container)).toHaveLength(1);
 });
