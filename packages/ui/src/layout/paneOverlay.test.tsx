@@ -7,6 +7,7 @@ import { ChromeButton } from "../shell/ChromeButton";
 import { AsidePane } from "./AsidePane";
 import { PANE_ID } from "./paneOverlay";
 import type { PanePeek } from "./usePaneToggles";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -14,11 +15,10 @@ let root: Root | undefined;
 let container: HTMLElement | undefined;
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  fakeTimers();
   vi.stubGlobal("matchMedia", () => ({ matches: false }));
   // Registered first, so it runs after the unmounts that `mount` and `mountToggle` register.
   onTestFinished(() => {
-    vi.useRealTimers();
     vi.unstubAllGlobals();
     root = container = undefined;
   });

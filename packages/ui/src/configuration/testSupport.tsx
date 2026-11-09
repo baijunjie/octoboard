@@ -5,7 +5,6 @@ import { act } from "react";
 import { onTestFinished, vi } from "vitest";
 
 import { ErrorAlerts } from "../shell/ErrorAlerts";
-import { errorAlerts } from "../components/alerts/errorAlerts";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { ConfigurationFileCapability, PlatformAdapter } from "../platform";
@@ -63,7 +62,6 @@ export function mountDialog(
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   // Registered before the mount, so it runs after the unmount.
   onTestFinished(() => {
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
     vi.unstubAllGlobals();
   });
   mountHost(<ThemeProvider>{dialog(closed)}<ErrorAlerts daemon={daemon} /></ThemeProvider>, { daemon, platform: { kind: "browser", host: BROWSER_HOST, configurationFile, ...capabilities } });

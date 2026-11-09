@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
+import { acknowledgeAllAlerts } from "../test/alertQueue";
 import { ACCOUNT_SWITCH_CONCURRENCY, runAccountSwitchBatch } from "./accountSwitchBatch";
 import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
@@ -9,6 +10,7 @@ import type { Session } from "../protocol";
 import { sessionWithDescendants } from "../sessions/order";
 import { holdsAccountSwitch, sessionShownStatusKind } from "../sessions/sessionStatus";
 import { applyDaemonEvent, createStateStore, setAccountSwitchesQueued } from "../store";
+import { afterQueuedWork } from "../test/clock";
 
 const console_ = consoleOf("c-1", "Main");
 const project = projectOf("p-1", console_.id, "Search API");
@@ -37,11 +39,6 @@ function batch(store: ReturnType<typeof storeOf>, ids: string[], account: string
   return runAccountSwitchBatch(store, ids, account, { accountName: "Work", switchOne, onFinished: (outcome) => { result = outcome; } }).then(() => result);
 }
 
-const flush = () => new Promise<void>((done) => setTimeout(done, 0));
-
-afterEach(() => {
-  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-});
 
 it("collects a session's descendants through every level of binding, archived ones included, once each", () => {
   const root = session("root");
@@ -70,13 +67,13 @@ it("runs at most four switches at once, starts the next as one finishes, and cle
     running -= 1;
   });
   const done = batch(store, ids, "a-1", switchOne);
-  await flush();
+  await afterQueuedWork();
   expect(ACCOUNT_SWITCH_CONCURRENCY).toBe(4);
   expect(started).toEqual(["s0", "s1", "s2", "s3"]);
   // Queued sessions show as switching, running or not.
   expect(ids.every((id) => switching(store, id))).toBe(true);
   gates.get("s1")!.resolve();
-  await flush();
+  await afterQueuedWork();
   expect(started).toEqual(["s0", "s1", "s2", "s3", "s4"]);
   expect(switching(store, "s1")).toBe(false);
   for (const id of ids) gates.get(id)!.resolve();
@@ -96,7 +93,7 @@ it("skips a session that was archived, deleted or already moved before its turn,
     switched.push(id);
     await gate.promise;
   });
-  await flush();
+  await afterQueuedWork();
   gate.resolve();
   await done;
   expect(switched).toEqual(["s0", "s1", "s2", "s3", "s4", "s5"]);
@@ -125,7 +122,7 @@ it("holds the alert back until the last switch of the batch has ended", async ()
     if (id === "a") throw new Error("Boom");
     await gate.promise;
   });
-  await flush();
+  await afterQueuedWork();
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
   gate.resolve();
   await done;
@@ -240,7 +237,7 @@ it("gives a failure with nothing raw to show no details, and an unexpected one i
   const store = storeOf([session("a")]);
   await batch(store, ["a"], "a-1", async () => { throw new CodedError("Session is locked", "session_locked", {}); });
   expect(errorAlerts.getSnapshot()[0].details).toBeFalsy();
-  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  acknowledgeAllAlerts();
   await batch(store, ["a"], "a-1", async () => { throw new Error("Boom"); });
   expect(errorAlerts.getSnapshot()[0].classification.kind).toBe("unexpected");
   expect(errorAlerts.getSnapshot()[0].details).toBeTruthy();

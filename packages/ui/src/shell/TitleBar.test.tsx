@@ -89,8 +89,11 @@ it("hands focus to the terminal, with the focus ring, when the toggle that holds
   const onPress = vi.fn();
   const { container, render } = mount({ panelToggles: [toggle(false, onPress)], focusTerminal });
   act(() => container.querySelector<HTMLElement>(".title-bar-end button")!.focus());
-  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
-  act(() => setInteractionModality("pointer"));
+  act(() => {
+    // Reset touchInput's last input as well: an earlier touch press can leave its module state set to touch.
+    document.body.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+    setInteractionModality("pointer");
+  });
   render({ panelToggles: [], focusTerminal });
   expect(focusTerminal).toHaveBeenCalledOnce();
   expect(getInteractionModality()).toBe("keyboard");

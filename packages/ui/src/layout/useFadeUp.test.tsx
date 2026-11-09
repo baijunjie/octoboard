@@ -4,13 +4,14 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { PANE_INSET_MS, useFadeUp } from "./paneDockMotion";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** `useFadeUp` on a probe that shows its state, with frames that run only when `frame` is called
  * and timers that run only when `advance` is. */
 function mount(reduce = false) {
-  vi.useFakeTimers();
+  fakeTimers();
   const frames = new Map<number, FrameRequestCallback>();
   let nextFrame = 0;
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
@@ -28,7 +29,6 @@ function mount(reduce = false) {
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
   const render = (open: boolean, entry = "files") => act(() => root.render(<Probe open={open} entry={entry} />));

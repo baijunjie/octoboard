@@ -5,14 +5,18 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { BROWSER_HOST, IS_MAC } from "../test/hosts";
 import { eventKey } from "../shortcuts/binding";
+import { settleLazyImport } from "../test/lazyImport";
 import { FIND_BINDING } from "../shortcuts/commands";
 import { ThemeProvider } from "../preferences/theme";
 import type { ViewerSubject } from "./content";
 import * as findDom from "./find/findDom";
+import { SETTLE_MS } from "./find/useFind";
 import { FileViewer } from "./FileViewer";
 import { ViewerHost } from "./viewerTestSupport";
+import { fakeTimers, flushPromises } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -72,7 +76,6 @@ beforeEach(() => {
 afterEach(() => {
   document.getSelection()?.removeAllRanges();
   act(() => root.unmount());
-  vi.useRealTimers();
   container.remove();
 });
 
@@ -91,8 +94,6 @@ function show(subject: ViewerSubject): void {
   });
 }
 
-// The code surface draws through a lazily imported renderer, which a timer reaches.
-const settled = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
 const dialog = () => document.querySelector<HTMLElement>("[role=dialog]")!;
 const bar = () => document.querySelector<HTMLElement>("[role=search]");
 const input = () => bar()!.querySelector("input")!;
@@ -118,13 +119,12 @@ function type(value: string): void {
   });
 }
 
-// The query rests before it is searched.
-const rest = () => act(() => vi.advanceTimersByTimeAsync(300));
+const rest = () => act(() => vi.advanceTimersByTimeAsync(SETTLE_MS));
 
 async function open(text = "alpha beta\nBeta gamma\nbeta"): Promise<void> {
   show(textFile("a.ts", text));
-  await settled();
-  vi.useFakeTimers();
+  await settleLazyImport();
+  fakeTimers();
   find();
 }
 
@@ -166,8 +166,8 @@ function selectText(node: Node, start: number, end: number): void {
 
 it("prefills Find with selected file text, focuses and selects the query, and searches immediately", async () => {
   show(textFile("a.ts", "alpha beta beta"));
-  await settled();
-  vi.useFakeTimers();
+  await settleLazyImport();
+  fakeTimers();
   const text = dialog().querySelector("[data-renderer]")!.firstChild!;
   selectText(text, 6, 10);
   find();
@@ -199,8 +199,8 @@ it("replaces an open query with selected file text and keeps it when there is no
 
 it("handles line breaks like pasting into the single-line query, keeping its value and search in sync", async () => {
   show(textFile("a.ts", "alpha\nbeta\nalphabeta"));
-  await settled();
-  vi.useFakeTimers();
+  await settleLazyImport();
+  fakeTimers();
   const text = dialog().querySelector("[data-renderer]")!.firstChild!;
   selectText(text, 0, 10);
   find();
@@ -228,8 +228,8 @@ it("reveals the first match when the selection is the same as the open query", a
 
 it("does not seed Find from a selected viewer heading", async () => {
   show(textFile("a.ts", "alpha beta"));
-  await settled();
-  vi.useFakeTimers();
+  await settleLazyImport();
+  fakeTimers();
   const heading = dialog().querySelector("h2")!;
   const selection = document.getSelection()!;
   selection.selectAllChildren(heading);
@@ -285,8 +285,8 @@ it("keeps what the reader is reading in place as the bar opens and closes over a
   const supports = vi.spyOn(CSS, "supports").mockReturnValue(false);
   onTestFinished(() => supports.mockRestore());
   show(textFile("a.ts", lines(100, { 10: "needle" })));
-  await settled();
-  vi.useFakeTimers();
+  await settleLazyImport();
+  fakeTimers();
   const region = dialog().querySelector<HTMLElement>("[data-find-region]")!;
   scrollable(region);
   // The gap is read where the content inherits it, so it is there before any region is drawn.
@@ -303,7 +303,7 @@ it("announces the count in full, after the focus move that opened the bar, and d
   type("beta");
   await rest();
   expect(announced()).toBe("");
-  await act(() => vi.advanceTimersByTimeAsync(1600));
+  await act(() => vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(announced()).toBe("1 of 3");
   expect(input().getAttribute("aria-describedby")).toBeTruthy();
   expect(document.getElementById(input().getAttribute("aria-describedby")!)!.getAttribute("aria-hidden")).toBe("true");
@@ -362,14 +362,13 @@ it("closes on Escape pressed in the code while the bar is open", async () => {
 it("opens and closes from the header's toggle, which is there only over text", async () => {
   const headerToggle = () => document.querySelector<HTMLButtonElement>("[data-viewer-description] button[aria-expanded]");
   show(binary);
-  await settled();
+  await flushPromises();
   expect(headerToggle()).toBeNull();
   show(textFile("a.ts", "alpha"));
-  await settled();
+  await settleLazyImport();
   expect(headerToggle()!.getAttribute("aria-label")).toBe("Find in file");
   act(() => headerToggle()!.click());
-  await settled();
-  expect(bar()).not.toBeNull();
+  await vi.waitFor(() => expect(bar()).not.toBeNull());
   expect(document.activeElement).toBe(input());
   expect(headerToggle()!.getAttribute("aria-label")).toBe("Close find");
   expect(headerToggle()!.getAttribute("aria-expanded")).toBe("true");
@@ -548,13 +547,13 @@ it("waits for a file that is on its way, and shows its first match, with no coun
   show({ key: "b", path: "b.ts", content: { state: "loading" } });
   await rest();
   expect(status()).toBe("");
-  await act(() => vi.advanceTimersByTimeAsync(2000));
+  await act(() => vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(announced()).toBe("");
   show(textFile("b.ts", "first needle\nsecond needle"));
   await rest();
   expect(status()).toBe("1/2");
   expect(revealed).toEqual(["first needle\nsecond needle"]);
-  await act(() => vi.advanceTimersByTimeAsync(2000));
+  await act(() => vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(announced()).toBe("1 of 2");
 });
 
@@ -569,7 +568,7 @@ it("closes the viewer on Escape again once the bar has gone with its text by its
 
 it("matches the find key by its physical key, as the shortcut list does, whatever character it types", async () => {
   show(textFile("a.ts", "alpha"));
-  await settled();
+  await settleLazyImport();
   const modifier = IS_MAC ? { metaKey: true } : { ctrlKey: true };
   // The same key on a layout whose letter is not Latin.
   expect(press(dialog(), "а", { code: "KeyF", ...modifier }).defaultPrevented).toBe(true);

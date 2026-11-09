@@ -3,10 +3,11 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { LanguageProvider } from "../i18n/react";
 import { ThirdPartyLicensesDialog, ThirdPartyLicensesList } from "./ThirdPartyLicensesDialog";
 import { filterPackages, loadThirdPartyLicenses, type ThirdPartyLicenses } from "./thirdPartyLicenses";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -71,6 +72,7 @@ it("says so when the build carries no list", () => {
 });
 
 it("says so when no package matches, and points aria-controls at the list only while it is there", async () => {
+  fakeTimers();
   const container = mount(licenses);
   const input = container.querySelector("input")!;
   const type = async (value: string) =>
@@ -84,7 +86,7 @@ it("says so when no package matches, and points aria-controls at the list only w
   expect(container.querySelector("ul")).toBeNull();
   expect(input.hasAttribute("aria-controls")).toBe(false);
   expect(container.querySelector("h2")?.textContent).toBe("No matching packages");
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(container.querySelector("[role=status]")?.textContent).toBe("No package matches the search.");
 });
 
@@ -149,8 +151,7 @@ it("loads again on Try again, keeping the button where it is while it runs, and 
 });
 
 it("announces the loading line from a status region that already exists, after the dialog's focus move", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   await mountDialog(() => new Promise(() => {}));
   const status = () => document.querySelector("[role=status]")?.textContent;
   expect(document.querySelector("p[role=status]")).toBeNull();

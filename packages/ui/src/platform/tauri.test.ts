@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { afterQueuedWork } from "../test/clock";
 import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { ConfigurationFileError } from "./configurationFileError";
 import { browserHost } from "./host";
@@ -194,12 +195,9 @@ async function registerExit(answer: Promise<string | null>) {
   return { onDaemonExited, undo, emitExited: (detail: string) => listeners.get("daemon-exited")?.({ payload: detail }) };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
 it("reports a daemon end the shell gave up on before the page was listening", async () => {
   const { onDaemonExited } = await registerExit(Promise.resolve("restarted 3 times"));
-  await settle();
-  expect(onDaemonExited.mock.calls).toEqual([["restarted 3 times"]]);
+  await vi.waitFor(() => expect(onDaemonExited.mock.calls).toEqual([["restarted 3 times"]]));
 });
 
 it("reports the end once when the event arrives as well, in either order", async () => {
@@ -207,18 +205,17 @@ it("reports the end once when the event arrives as well, in either order", async
   const first = await registerExit(new Promise((resolve) => (answer = resolve)));
   first.emitExited("restarted 3 times");
   answer("restarted 3 times");
-  await settle();
-  expect(first.onDaemonExited.mock.calls).toEqual([["restarted 3 times"]]);
+  await vi.waitFor(() => expect(first.onDaemonExited.mock.calls).toEqual([["restarted 3 times"]]));
 
   const second = await registerExit(Promise.resolve("exit code 0"));
-  await settle();
+  await vi.waitFor(() => expect(second.onDaemonExited).toHaveBeenCalledTimes(1));
   second.emitExited("exit code 0");
   expect(second.onDaemonExited.mock.calls).toEqual([["exit code 0"]]);
 });
 
 it("reports nothing while the shell has not given up, and the event still once it does", async () => {
   const { onDaemonExited, emitExited } = await registerExit(Promise.resolve(null));
-  await settle();
+  await afterQueuedWork();
   expect(onDaemonExited).not.toHaveBeenCalled();
   emitExited("restarted 3 times");
   expect(onDaemonExited.mock.calls).toEqual([["restarted 3 times"]]);
@@ -229,13 +226,13 @@ it("reports nothing for an answer that comes after the registration was undone",
   const { onDaemonExited, undo } = await registerExit(new Promise((resolve) => (answer = resolve)));
   undo();
   answer("restarted 3 times");
-  await settle();
+  await afterQueuedWork();
   expect(onDaemonExited).not.toHaveBeenCalled();
 });
 
 it("reports nothing when the shell cannot be asked", async () => {
   const { onDaemonExited } = await registerExit(Promise.reject(new Error("not allowed")));
-  await settle();
+  await afterQueuedWork();
   expect(onDaemonExited).not.toHaveBeenCalled();
 });
 

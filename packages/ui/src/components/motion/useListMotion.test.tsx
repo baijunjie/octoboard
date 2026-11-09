@@ -5,8 +5,9 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { BrowserListMotion, useBrowserListMotion } from "../../project-browser/useBrowserListMotion";
-import { releaseListMotion, useListMotion } from "./useListMotion";
+import { DURATION, releaseListMotion, useListMotion } from "./useListMotion";
 import { MotionListBox } from "./MotionListBox";
+import { fakeTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -54,6 +55,13 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.unstubAllGlobals());
+
+/** Fakes the timers the hook arms (its deferred bookkeeping at 0 ms, its hold for a motion's length), to be called
+ * before the list mounts. */
+const installMotionClock = () => fakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+/** Runs the 0 ms timers the hook has armed. */
+const deferredWorkRuns = () => act(() => void vi.runOnlyPendingTimers());
 
 function List({ keys, descendants, virtualized }: { keys: string[]; descendants?: boolean; virtualized?: boolean }) {
   const ref = useListMotion<HTMLDivElement>({ descendants, virtualized });
@@ -118,14 +126,15 @@ it("resets width changes, cancels live slides when reduced motion changes, and d
   expect(animate).toHaveBeenCalledTimes(2);
 });
 
-it("keeps focus on a surviving moved control, and does not reclaim deliberately left focus", async () => {
+it("keeps focus on a surviving moved control, and does not reclaim deliberately left focus", () => {
+  installMotionClock();
   const list = mount(["a", "b"]);
   const button = list.host.querySelector("button")!;
   act(() => button.focus());
   list.render(["b", "a"]);
   expect(document.activeElement).toBe(button);
   act(() => button.blur());
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  deferredWorkRuns();
   list.render(["a", "b"]);
   expect(document.activeElement).toBe(document.body);
 });
@@ -275,6 +284,7 @@ it("animates a live first addition to an initially empty collection after mounti
 });
 
 it("takes rows a collection commits after its list, while the mount settles, as part of the mount", async () => {
+  installMotionClock();
   // In a browser the observer reports those rows only after the mount has settled.
   const Observer = MutationObserver;
   vi.stubGlobal("MutationObserver", class extends Observer {
@@ -285,7 +295,9 @@ it("takes rows a collection commits after its list, while the mount settles, as 
   const row = document.createElement("button");
   row.dataset.listMotion = "late";
   list.list.appendChild(row);
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  // The observer's records are delivered in a microtask, which arms the stand-in's timer.
+  await act(async () => {});
+  deferredWorkRuns();
   expect(animate).not.toHaveBeenCalled();
 });
 
@@ -368,7 +380,8 @@ it("bounds exit visuals to their previous box without clipping real controls or 
 });
 
 
-it("captures logical virtual exits before recycled DOM changes and ignores viewport-only identities", async () => {
+it("captures logical virtual exits before recycled DOM changes and ignores viewport-only identities", () => {
+  installMotionClock();
   let presenceShift = 0;
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
     const [layoutX, y] = points[this.dataset.listMotion ?? ""] ?? [0, 0];
@@ -416,7 +429,7 @@ it("captures logical virtual exits before recycled DOM changes and ignores viewp
   expect(animate).toHaveBeenCalledTimes(2);
   reduced = false;
   render(["e", "offscreen"], ["e"]);
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  deferredWorkRuns();
   render(["e", "offscreen"], ["offscreen"]);
   expect(animate).toHaveBeenCalledTimes(2);
 });
@@ -576,7 +589,8 @@ it("measures a right-to-left strip from its right edge, so tabs that stay put wh
   expect(strip.strip.querySelector<HTMLElement>("[data-list-motion-exit]")!.style.left).toBe("220px");
 });
 
-it("starts a released drag's move from where its transforms show the tabs, for the change that follows only", async () => {
+it("starts a released drag's move from where its transforms show the tabs, for the change that follows only", () => {
+  installMotionClock();
   vi.stubGlobal("DOMMatrixReadOnly", class {
     m41: number;
     m42 = 0;
@@ -601,7 +615,7 @@ it("starts a released drag's move from where its transforms show the tabs, for t
   a.style.transform = "translateX(-80px)";
   releaseListMotion(a);
   a.style.transform = "";
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  deferredWorkRuns();
   points = { a: [0, 0], b: [80, 0] };
   strip.render(["a", "b"]);
   expect(animate.mock.calls.map(([frames]) => frames)).toEqual([
@@ -613,14 +627,13 @@ it("starts a released drag's move from where its transforms show the tabs, for t
 it("keeps a strip that loses a tab at its width, clipping, until the motion has played out, and not under reduced motion", () => {
   width = 160;
   points = { a: [0, 0], b: [80, 0] };
+  installMotionClock();
   const strip = mountStrip(["a", "b"]);
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-  onTestFinished(() => { vi.useRealTimers(); });
   width = 80;
   points = { b: [0, 0] };
   strip.render(["b"]);
   expect([strip.strip.style.minWidth, strip.strip.style.overflow]).toEqual(["160px", "clip"]);
-  act(() => { vi.advanceTimersByTime(300); });
+  act(() => { vi.advanceTimersByTime(DURATION); });
   expect([strip.strip.style.minWidth, strip.strip.style.overflow]).toEqual(["", ""]);
   reduced = true;
   width = 160;

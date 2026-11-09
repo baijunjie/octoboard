@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act, StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { setInteractionModality } from "react-aria";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonProvider } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
@@ -11,12 +12,19 @@ import { CodedError } from "../../errors/codedError";
 import { Dialog } from "./Dialog";
 import { useDialogAction } from "./dialogHooks";
 import { framesAsTimers, settleFrames } from "./dialogTestSupport";
+import { fakeTimers, runOutTimers } from "../../test/clock";
 import { TextInput } from "../form/TextInput";
 import { TitledControl } from "../hint/TitledControl";
 import { Button, Checkbox, Input, Switch } from "../../primitives";
 import { ExternalLink } from "../text/ExternalLink";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// react-aria reads how focus last arrived from a page-wide state that a virtual click of an earlier test leaves behind,
+// and a dialog opened under it waits a frame for its opening focus: start each test as after a pointer.
+beforeEach(() => {
+  act(() => setInteractionModality("pointer"));
+});
 
 /** Renders the frame's own footer — the case `submitLabel` covers — and hands the two buttons to
  * `check`, found by their labels rather than by their type, since `busy` changes the submit button's
@@ -282,9 +290,11 @@ async function withMeasuredFooters(
   });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
+  // The measuring waits for the next frame after each change, which `settleFrames` runs.
+  framesAsTimers("pointer");
   try {
     render(root, element);
-    await frame();
+    await settleFrames();
     await check(root);
   } finally {
     act(() => root.unmount());
@@ -293,8 +303,6 @@ async function withMeasuredFooters(
     region.remove();
   }
 }
-
-const frame = () => act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
 
 const wide = { left: 16, right: 1008 };
 const centred = { left: 200, right: 500 };
@@ -339,7 +347,7 @@ it.each([
     async () => {
       const toast = document.querySelector<HTMLElement>('[data-slot="toast"]')!;
       toast.style.setProperty("--toast-height", `${height}px`);
-      await frame();
+      await settleFrames();
       expect(clearance()).toBe(lifted ? `${window.innerHeight - top}px` : "");
     },
   );
@@ -354,24 +362,24 @@ it("remeasures when a toast arrives, grows or disappears without changing the di
       const toast = region.firstElementChild as HTMLElement;
       expect(clearance()).toBe("");
       toast.style.setProperty("--toast-height", "120px");
-      await frame();
+      await settleFrames();
       expect(clearance()).toBe("168px");
       // Repeated measurements while lifted must still use the ordinary bottom position.
       window.dispatchEvent(new Event("resize"));
-      await frame();
+      await settleFrames();
       expect(clearance()).toBe("168px");
       toast.style.setProperty("--toast-height", "64px");
-      await frame();
+      await settleFrames();
       expect(clearance()).toBe("");
       toast.remove();
-      await frame();
+      await settleFrames();
       expect(clearance()).toBe("");
       toast.style.setProperty("--toast-height", "120px");
       region.append(toast);
-      await frame();
+      await settleFrames();
       expect(clearance()).toBe("168px");
       toast.remove();
-      await frame();
+      await settleFrames();
       expect(clearance()).toBe("");
     },
   );
@@ -399,7 +407,7 @@ it("keeps the same clearance while a toast stack expands and collapses", async (
           front.dataset.expanded = older.dataset.expanded = String(expanded);
           // Force a fresh measurement in both states, independent of the observers' filters.
           window.dispatchEvent(new Event("resize"));
-          await frame();
+          await settleFrames();
           expect(clearance()).toBe("270px");
         }
       },
@@ -418,16 +426,16 @@ it("remeasures the ordinary toast position above connection and update strips", 
       try {
         expect(clearance()).toBe("");
         style.setProperty("--connection-banner-height", "48px");
-        await frame();
+        await settleFrames();
         expect(clearance()).toBe("168px");
         style.setProperty("--update-notice-height", "160px");
-        await frame();
+        await settleFrames();
         expect(clearance()).toBe("");
         style.removeProperty("--update-notice-height");
-        await frame();
+        await settleFrames();
         expect(clearance()).toBe("168px");
         style.removeProperty("--connection-banner-height");
-        await frame();
+        await settleFrames();
         expect(clearance()).toBe("");
       } finally {
         style.removeProperty("--connection-banner-height");
@@ -490,10 +498,10 @@ it("measures the outer dialog again when a dialog nested in it closes", async ()
     async (root) => {
       expect(clearance()).toBe("80px");
       render(root, outer(true));
-      await frame();
+      await settleFrames();
       expect(clearance()).toBe("");
       render(root, outer(false));
-      await frame();
+      await settleFrames();
       expect(clearance()).toBe("80px");
     },
   );
@@ -627,6 +635,7 @@ it("does not close on Escape while busy, with a tooltip open or not", () => {
 /** Renders a dialog whose body measures `scrollHeight` tall in a `clientHeight` box (jsdom has no
  * layout), and hands the body's scroll container to `check`. */
 async function withScroller(sizes: { scrollHeight: number; clientHeight: number }, check: (scroller: HTMLElement) => void): Promise<void> {
+  fakeTimers();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const restore = (["scrollHeight", "clientHeight"] as const).map((key) => {
@@ -645,7 +654,7 @@ async function withScroller(sizes: { scrollHeight: number; clientHeight: number 
       );
     });
     // HeroUI writes the fade's state on the next frame.
-    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    runOutTimers();
     const scroller = document.querySelector<HTMLElement>("[role=dialog] [data-slot=scroll-shadow]");
     if (!scroller) throw new Error("the dialog's body is not inside a scroll container with a fade");
     check(scroller);
@@ -758,7 +767,6 @@ it("reports a failed dialog action to the acknowledgement queue, with no inline 
   } finally {
     act(() => root.unmount());
     container.remove();
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   }
 });
 
@@ -777,7 +785,6 @@ it("titles a failed dialog action with the dialog's title even where the failure
   } finally {
     act(() => root.unmount());
     container.remove();
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   }
 });
 
@@ -1135,7 +1142,6 @@ function withFailingRequest(check: (dialog: { field: () => HTMLInputElement; sav
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   });
   const dialogButton = (label: string) => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === label)!;
   return check({

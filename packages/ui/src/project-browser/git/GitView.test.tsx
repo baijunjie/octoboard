@@ -6,9 +6,12 @@ import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import type { ProjectSourceInfo } from "../../protocol";
 import { press } from "../../components/alerts/detailsTestSupport";
+import { FIRST_WRITE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
+import { framesAsTimers, settleFrames } from "../../components/dialog/dialogTestSupport";
 import { change, changeViewFixture, mountRows } from "../browserTestSupport";
 import { changeItem } from "./changes";
 import { GitView, type ChangesViewProps } from "./GitView";
+import { fakeTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -145,6 +148,7 @@ it("words a repository with no Git to read it as Git missing, with the install r
 });
 
 it("keeps a pending comparison rich in visible prose and isolated plain text in its announcement", async () => {
+  fakeTimers();
   const branch = "feature/مراجعة-中文(2)";
   const base = "origin/أساس-中文(1)";
   const onBranchChange = vi.fn();
@@ -178,7 +182,7 @@ it("keeps a pending comparison rich in visible prose and isolated plain text in 
   expect(selector.textContent).toContain(branch);
   expect(selector.textContent).not.toMatch(/[\u2066-\u2069]/u);
   expect(selector.querySelector("[data-inline-reference]")).toBeNull();
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   const announcement = container.querySelector('[role="status"].sr-only')!;
   expect(announcement.textContent).toBe(`Comparing with \u2068${base}\u2069…`);
   expect(announcement.children).toHaveLength(0);
@@ -283,7 +287,7 @@ it("does not take focus from a mouse press on the mark, which the list would ans
 });
 
 it("gives focus back to the heading's band when the mark's popover closes with Escape or with Try again", async () => {
-  const frames = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 80)));
+  framesAsTimers("pointer");
   const { band, mark, key, focusBand, onRetry } = headingWithMark();
   focusBand();
   key(band, "ArrowRight");
@@ -291,12 +295,12 @@ it("gives focus back to the heading's band when the mark's popover closes with E
   press(mark);
   const dialog = document.querySelector('[role="dialog"]')!;
   act(() => void dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-  await frames();
+  await settleFrames();
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(document.activeElement).toBe(band);
   press(mark);
   act(() => [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === "Try again")!.click());
-  await frames();
+  await settleFrames();
   expect(onRetry).toHaveBeenCalledOnce();
   expect(document.activeElement).toBe(band);
 });
@@ -360,6 +364,7 @@ it("shows an uncommitted listing failure with other changes as an Alert above th
 });
 
 it("speaks the title of an uncommitted listing failure once through the status region when it appears after paint", async () => {
+  fakeTimers();
   const listed = COMMITTED_FAILED.uncommitted!;
   const failed: ChangesViewProps["uncommitted"] = { ...(listed as Extract<typeof listed, { state: "listed" }>), list: { state: "error", message: "Unable to read the index", unavailable: false, refreshing: false } };
   let fail = () => {};
@@ -387,10 +392,10 @@ it("speaks the title of an uncommitted listing failure once through the status r
   }
   const container = mountRows(<Host />);
   const announcement = () => container.querySelector('[role="status"].sr-only')?.textContent ?? "";
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(announcement()).toBe("");
   act(() => fail());
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(announcement()).toBe("Could not list the changes in this worktree");
 });
 
@@ -497,6 +502,7 @@ const GONE_MARK = 'button[aria-label$=" deleted"]';
 const MAIN_GONE = "\u2068main\u2069 deleted";
 
 it("marks a deleted base branch at its name in the Forked-from line, with no loose text, Alert or status line, and says it once when found gone", async () => {
+  fakeTimers();
   const { container, both, read } = mountGoneComparison();
   expect(container.querySelector(GONE_MARK)).toBeNull();
   read([both[1]]);
@@ -514,7 +520,7 @@ it("marks a deleted base branch at its name in the Forked-from line, with no loo
   expect(container.querySelectorAll('[role="status"]:not(.sr-only)')).toHaveLength(0);
   press(mark);
   expect(document.querySelector('[role="dialog"]')!.textContent).toBe("main no longer exists. The comparison still uses the commits it was made at.");
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(container.querySelector('[role="status"].sr-only')!.textContent).toBe(MAIN_GONE);
 });
 

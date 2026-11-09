@@ -5,17 +5,18 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { windowAttention } from "../components/announce/windowTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
-import { enter, mountForTooltip, openTooltip } from "../components/hint/tooltipTestSupport";
+import { CONTROL_TOOLTIP_DELAY_MS, enter, mountForTooltip, openTooltip } from "../components/hint/tooltipTestSupport";
 import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Event, ProcessTree, ClientRequestBody, Session } from "../protocol";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
-import { HOVER_OPEN_DELAY_MS } from "../components/hint/Hint";
+import { POLL_MS } from "./processPolling";
 import { ProcessesPanel } from "./ProcessesPanel";
 import { ProcessPanelProvider, useProcessPanel } from "./useProcessPanel";
 import type { Project } from "../protocol";
+import { fakeTimers } from "../test/clock";
 
 type ProcessesScope = { session: Session } | { project: Project } | { console: Session };
 
@@ -34,11 +35,7 @@ const tree = (id: string, extra: Partial<ProcessTree> = {}): ProcessTree => ({
 
 /** Mounts the panel over a store holding `sessions`, with the daemon answering `request`. */
 async function mount(scope: ProcessesScope, request: (body: ClientRequestBody) => Promise<Event>, sessions: Session[] = [running, second]) {
-  vi.useFakeTimers({ now: NOW });
-  onTestFinished(() => {
-    vi.useRealTimers();
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  });
+  fakeTimers({ now: NOW });
   const handler = vi.fn(request);
   const daemon = testDaemon({
     state: { sessions: new Map(sessions.map((s) => [s.id, s])), projects: new Map([[project.id, project]]) },
@@ -269,7 +266,8 @@ it("leaves Keep unavailable on a tree that cannot be kept, saying why as its des
   expect(keep.getAttribute("aria-label")).toBe("Keep \u2068npm run dev\u2069");
   expect(describedBy(keep)).toBe(AGENT_CONSOLE_REASON);
   enter(keep);
-  act(() => void vi.advanceTimersByTime(HOVER_OPEN_DELAY_MS));
+  // Control tooltips use HeroUI's CSS delay (react-stately's default without styles), not the popover delay.
+  act(() => void vi.advanceTimersByTime(CONTROL_TOOLTIP_DELAY_MS));
   expect(openTooltip()?.textContent).toBe(AGENT_CONSOLE_REASON);
   // A press explains, raising the refusal the daemon would answer a keep with, and asks nothing.
   await act(async () => keep.click());
@@ -417,18 +415,18 @@ it("asks again every few seconds while open, and shows a failed refresh as an Al
   });
   expect(sent(request, "list_processes")).toHaveLength(1);
   expect(panel().textContent).not.toContain("Could not refresh the list");
-  await act(async () => void vi.advanceTimersByTime(3000));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.live));
   expect(sent(request, "list_processes")).toHaveLength(2);
   failing = true;
-  await act(async () => void vi.advanceTimersByTime(3000));
-  await act(async () => void vi.advanceTimersByTime(3000));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.live));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.live));
   expect(sent(request, "list_processes")).toHaveLength(4);
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
   expect(panel().textContent).toContain("Could not refresh the list");
   expect(panel().textContent).toContain("The processes shown may be out of date.");
   expect(rows()).toHaveLength(1);
   failing = false;
-  await act(async () => void vi.advanceTimersByTime(3000));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.live));
   expect(panel().textContent).not.toContain("Could not refresh the list");
 });
 
@@ -440,7 +438,7 @@ it("keeps showing the refresh failure after a stop, which asks again at once", a
     return { type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2")] };
   });
   failing = true;
-  await act(async () => void vi.advanceTimersByTime(3000));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.live));
   await act(async () => button("Stop").click());
   await confirmStop();
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
@@ -456,12 +454,12 @@ it("shows a first-list failure in the panel and waits for explicit retry", async
   expect(panel().textContent).toContain("Could not list the processes");
   expect(panel().querySelector("h2")?.textContent).toBe("Processes");
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
-  await act(async () => void vi.advanceTimersByTime(9000));
+  await act(async () => void vi.advanceTimersByTime(3 * POLL_MS.live));
   expect(sent(request, "list_processes")).toHaveLength(1);
   failing = false;
   await act(async () => [...panel().querySelectorAll("button")].find((candidate) => candidate.textContent === "Try again")!.click());
   expect(rows()).toHaveLength(1);
-  await act(async () => void vi.advanceTimersByTime(3000));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.live));
   expect(sent(request, "list_processes")).toHaveLength(3);
 });
 
@@ -498,7 +496,7 @@ it("hands focus back into the panel when a focused process row disappears during
   await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: gone ? [] : [tree("1:1")] }));
   await act(async () => button("Stop").focus());
   gone = true;
-  await act(async () => void vi.advanceTimersByTime(3000));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.live));
   expect(panel().contains(document.activeElement)).toBe(true);
   expect(rows()).toHaveLength(0);
 });
@@ -508,7 +506,7 @@ it("dismisses the confirmation if its process disappears before confirmation", a
   const { request } = await mount({ session: running }, async () => ({ type: "processes_listed", id: null, trees: gone ? [] : [tree("1:1")] }));
   await act(async () => button("Stop").click());
   gone = true;
-  await act(async () => void vi.advanceTimersByTime(3000));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.live));
   expect(confirmation()).toBeNull();
   expect(sent(request, "stop_processes")).toEqual([]);
 });
@@ -604,7 +602,7 @@ it("keeps the confirmation, the notice and the focus handoff when a refresh take
   await act(async () => button("Stop").click());
   await confirmStop();
   gone = true;
-  await act(async () => void vi.advanceTimersByTime(3000));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.live));
   expect(confirmation()).not.toBeNull();
   await act(async () => answer({ type: "processes_stopped", id: null, ids: ["1:1"] }));
   await settleFocus();
@@ -660,7 +658,7 @@ it("hands focus to the card that followed the tree when a refresh took it out wh
   await act(async () => button("Stop", rows()[1]).click());
   await confirmStop();
   gone = true;
-  await act(async () => void vi.advanceTimersByTime(3000));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.live));
   expect(rows()).toHaveLength(2);
   await act(async () => answer({ type: "processes_stopped", id: null, ids: ["2:2"] }));
   await settleFocus();
@@ -675,7 +673,7 @@ it("hands focus to the next row's first action when a refresh takes the tree out
   await act(async () => button("Stop", rows()[1]).focus());
   await act(async () => button("Stop", rows()[1]).click());
   gone = true;
-  await act(async () => void vi.advanceTimersByTime(3000));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.live));
   await settleFocus();
   expect(confirmation()).toBeNull();
   expect(rows()).toHaveLength(2);

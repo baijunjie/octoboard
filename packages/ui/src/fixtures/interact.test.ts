@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { settle } from "./clockTestSupport";
+import { fakeTimers } from "../test/clock";
 import { createUi, stuckExit, type Matcher } from "./interact";
 import { format } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { IS_MAC, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 
-beforeEach(() => vi.useFakeTimers());
+beforeEach(() => fakeTimers());
 afterEach(() => {
-  vi.useRealTimers();
   document.body.replaceChildren();
   document.body.removeAttribute("data-sidebar-dockable");
 });
@@ -29,8 +30,7 @@ it.each(["input", "textarea"])("focus and type replace a labelled %s and emit it
   const ui = createUi(document, "en");
   await ui.focus("Description");
   const done = ui.type("Project notes\nwith another line");
-  await vi.advanceTimersByTimeAsync(200);
-  await done;
+  await settle(done);
   expect(document.activeElement).toBe(field);
   expect(seen).toEqual([tag === "textarea" ? "Project notes\nwith another line" : "Project noteswith another line"]);
 });
@@ -52,25 +52,22 @@ it("pressTab presses the tab of a name a checkbox before it shares", async () =>
   tab.addEventListener("click", () => pressed.push("tab"));
   const ui = createUi(document, "en");
   const done = ui.pressTab("Agent accounts");
-  await vi.advanceTimersByTimeAsync(400);
-  await done;
+  await settle(done);
   expect(pressed).toEqual(["tab"]);
 });
 
 it("stuckExit names what is still closing once the wait is spent", async () => {
   exiting("General Appearance");
   const result = stuckExit(document);
-  await vi.advanceTimersByTimeAsync(6000);
-  expect(await result).toBe("<div> beginning “General Appearance”");
+  expect(await settle(result)).toBe("<div> beginning “General Appearance”");
 });
 
 it("stuckExit reports nothing for an exit that ends within the wait", async () => {
   const element = exiting("General");
   const result = stuckExit(document);
-  await vi.advanceTimersByTimeAsync(200);
+  await vi.advanceTimersToNextTimerAsync();
   element.remove();
-  await vi.advanceTimersByTimeAsync(100);
-  expect(await result).toBeUndefined();
+  expect(await settle(result)).toBeUndefined();
 });
 
 it("tabToRegion sends Tab before it focuses the region its dialog's title names", async () => {
@@ -79,8 +76,7 @@ it("tabToRegion sends Tab before it focuses the region its dialog's title names"
   const seen: string[] = [];
   document.addEventListener("keydown", (event) => seen.push(`${event.key}:${document.activeElement === region}`), { once: true });
   const done = createUi(document, "en").tabToRegion("Import configuration");
-  await vi.advanceTimersByTimeAsync(500);
-  await done;
+  await settle(done);
   expect(seen).toEqual(["Tab:false"]);
   expect(document.activeElement).toBe(region);
 });
@@ -88,8 +84,7 @@ it("tabToRegion sends Tab before it focuses the region its dialog's title names"
 it("tabToRegion fails where no region has the name, as in a window tall enough for the dialog", async () => {
   document.body.innerHTML = "<h2 id=\"title\">Import configuration</h2><div tabindex=\"-1\" aria-labelledby=\"title\"></div>";
   const done = expect(createUi(document, "en").tabToRegion("Import configuration")).rejects.toThrow(/No scroll region/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settle(done);
 });
 
 it("scrollPanel scrolls the scroller inside the tab panel its tab names", async () => {
@@ -100,16 +95,14 @@ it("scrollPanel scrolls the scroller inside the tab panel its tab names", async 
   const scrolled: ScrollToOptions[] = [];
   scroller.scrollTo = ((options: ScrollToOptions) => { scrolled.push(options); }) as typeof scroller.scrollTo;
   const done = createUi(document, "en").scrollPanel("Agent accounts", 420);
-  await vi.advanceTimersByTimeAsync(500);
-  await done;
+  await settle(done);
   expect(scrolled).toEqual([{ top: 420, behavior: "instant" }]);
 });
 
 it("scrollPanel fails where no panel of that name has a vertical scroller", async () => {
   document.body.innerHTML = "<div role=\"tab\" id=\"tab\">Agent accounts</div><div role=\"tabpanel\" aria-labelledby=\"tab\"><div></div></div>";
   const done = expect(createUi(document, "en").scrollPanel("Agent accounts", 420)).rejects.toThrow(/No tab panel named/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settle(done);
 });
 
 it("press takes the control inside a band of the same name, not the band", async () => {
@@ -117,8 +110,7 @@ it("press takes the control inside a band of the same name, not the band", async
   const pressed: string[] = [];
   document.addEventListener("click", (event) => pressed.push((event.target as Element).id));
   const done = createUi(document, "en").press("Staged15");
-  await vi.advanceTimersByTimeAsync(500);
-  await done;
+  await settle(done);
   expect(pressed).toEqual(["fold"]);
 });
 
@@ -128,8 +120,7 @@ it("press names a menu item by its label without its keyboard hint", async () =>
   const pressed = vi.fn();
   item.addEventListener("click", pressed);
   const done = createUi(document, "en").press("Archive");
-  await vi.advanceTimersByTimeAsync(500);
-  await done;
+  await settle(done);
   expect(pressed).toHaveBeenCalledOnce();
 });
 
@@ -138,8 +129,7 @@ it("pressEach presses every control of that name once, in document order", async
   const pressed: string[] = [];
   document.addEventListener("click", (event) => pressed.push((event.target as Element).id));
   const done = createUi(document, "en").pressEach("Details");
-  await vi.advanceTimersByTimeAsync(1000);
-  await done;
+  await settle(done);
   expect(pressed).toEqual(["a", "b"]);
 });
 
@@ -147,12 +137,10 @@ it("focusControl focuses an unavailable control (aria-disabled), and presses non
   document.body.innerHTML = '<button id="keep" aria-disabled="true">Keep</button><button id="off" disabled>Off</button>';
   const ui = createUi(document, "en");
   const focused = ui.focusControl("Keep");
-  await vi.advanceTimersByTimeAsync(500);
-  await focused;
+  await settle(focused);
   expect(document.activeElement?.id).toBe("keep");
   const refused = expect(ui.focusControl("Off")).rejects.toThrow(/Nothing to focus matching Off/);
-  await vi.advanceTimersByTimeAsync(10_000);
-  await refused;
+  await settle(refused);
 });
 
 it("changeRow names a change row by its file and status in the window's language, whatever follows", () => {
@@ -203,8 +191,7 @@ it.each(["session", "change", "actions"] as const)("press finds an Arabic %s wit
   }
   const matcher = kind === "session" ? ui.session(name) : kind === "change" ? ui.changeRow(name, "renamed") : ui.t("sidebar.session.actions", { title: isolate(name) });
   const done = ui.press(matcher).then(() => undefined, (error: unknown) => error);
-  await vi.advanceTimersByTimeAsync(6000);
-  expect(await done).toBeUndefined();
+  expect(await settle(done)).toBeUndefined();
   expect(pressed).toEqual([name]);
 });
 
@@ -225,16 +212,14 @@ it("floatPane moves the pointer from the toggle onto the pane that floats in, so
   document.addEventListener("pointerover", (event) => seen.push(`over:${(event.target as HTMLElement).tagName}`));
   document.addEventListener("pointerout", (event) => seen.push(`out:${(event.target as HTMLElement).tagName}`));
   const done = createUi(document, "en").floatPane("Show files panel");
-  await vi.advanceTimersByTimeAsync(2000);
-  await done;
+  await settle(done);
   expect(seen).toEqual(["over:BUTTON", "out:BUTTON", "over:DIV"]);
 });
 
 it("floatPane fails where the toggle floats in no pane, as one whose pane is docked", async () => {
   document.body.innerHTML = "<button aria-label=\"Hide files panel\"></button><div data-pane=\"aside\"></div>";
   const done = expect(createUi(document, "en").floatPane("Hide files panel")).rejects.toThrow(/floated in no pane/);
-  await vi.advanceTimersByTimeAsync(10_000);
-  await done;
+  await settle(done);
 });
 
 it.each([390, 768])("floatPane opens its mobile card at %ipx without looking for the absent group trigger", async (width) => {
@@ -243,8 +228,7 @@ it.each([390, 768])("floatPane opens its mobile card at %ipx without looking for
   const pressed = vi.fn();
   document.querySelector("button")!.addEventListener("click", pressed);
   const done = createUi(document, "en").floatPane("Dock panels", "report");
-  await vi.advanceTimersByTimeAsync(500);
-  await done;
+  await settle(done);
   expect(pressed).toHaveBeenCalledOnce();
 });
 
@@ -253,8 +237,7 @@ it("pressInPanel presses the control of the panel it names and leaves the same n
   const pressed: string[] = [];
   for (const section of document.querySelectorAll("section")) section.querySelector("button")!.addEventListener("click", () => pressed.push(section.id));
   const done = createUi(document, "en").pressInPanel("terminal", "Close panel");
-  await vi.advanceTimersByTimeAsync(500);
-  await done;
+  await settle(done);
   expect(pressed).toEqual(["panel-terminal"]);
 });
 
@@ -266,8 +249,7 @@ it("pressInDiff presses the named control inside the diff renderer's shadow root
   document.querySelector("button")!.addEventListener("click", () => pressed.push("outside"));
   root.querySelector("div")!.addEventListener("click", () => pressed.push("diff"));
   const done = createUi(document, "en").pressInDiff("Show unmodified lines above");
-  await vi.advanceTimersByTimeAsync(500);
-  await done;
+  await settle(done);
   expect(pressed).toEqual(["diff"]);
 });
 
@@ -277,11 +259,9 @@ it("pressWithModifier presses with the platform's shortcut modifier down and pre
   document.querySelector("button")!.addEventListener("click", (event) => seen.push({ meta: event.metaKey, ctrl: event.ctrlKey }));
   const ui = createUi(document, "en");
   const modified = ui.pressWithModifier("New session");
-  await vi.advanceTimersByTimeAsync(200);
-  await modified;
+  await settle(modified);
   const plain = ui.press("New session");
-  await vi.advanceTimersByTimeAsync(200);
-  await plain;
+  await settle(plain);
   expect(seen).toEqual([IS_MAC ? { meta: true, ctrl: false } : { meta: false, ctrl: true }, { meta: false, ctrl: false }]);
 });
 
@@ -290,8 +270,7 @@ it("press finds a switch by the text beside it that labels it, past a label hold
   const control = document.querySelector("input") as HTMLInputElement;
   const ui = createUi(document, "en");
   const pressed = ui.press("Show agent replies");
-  await vi.advanceTimersByTimeAsync(300);
-  await pressed;
+  await settle(pressed);
   expect(control.checked).toBe(true);
 });
 
@@ -301,8 +280,7 @@ it("chord presses a portable binding with this platform's modifiers on the focus
   const seen: string[] = [];
   document.addEventListener("keydown", (event) => seen.push([event.code, event.key, event.metaKey, event.ctrlKey, event.shiftKey].join(":")));
   const done = createUi(document, "en").chord({ code: "KeyF", primary: true, shift: true });
-  await vi.advanceTimersByTimeAsync(400);
-  await done;
+  await settle(done);
   expect(seen).toEqual([`KeyF:F:${IS_MAC}:${!IS_MAC}:true`]);
 });
 
@@ -312,8 +290,7 @@ it.each([[WINDOWS_HOST, false], [MAC_HOST, true]])("chord presses the modifiers 
   const seen: string[] = [];
   document.addEventListener("keydown", (event) => seen.push([event.code, event.metaKey, event.ctrlKey, event.shiftKey].join(":")));
   const done = createUi(document, "en", undefined, host).chord({ code: "KeyF", primary: true, shift: true });
-  await vi.advanceTimersByTimeAsync(400);
-  await done;
+  await settle(done);
   expect(seen).toEqual([`KeyF:${apple}:${!apple}:true`]);
 });
 
@@ -347,8 +324,7 @@ it("press opens the sidebar's drawer first for a control that is only inside it,
   const pressed = vi.fn();
   hub.addEventListener("click", pressed);
   const done = createUi(document, "en").press("Hub");
-  await vi.advanceTimersByTimeAsync(2000);
-  await done;
+  await settle(done);
   expect(drawer.hasAttribute("inert")).toBe(false);
   expect(pressed).toHaveBeenCalledOnce();
 });
@@ -357,8 +333,7 @@ it("press leaves the drawer alone in a docked window and fails for a control ine
   windowOfWidth(1440);
   const { toggle } = drawerWithToggle();
   const done = expect(createUi(document, "en").press("Hub")).rejects.toThrow(/Nothing to press matching Hub/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settle(done);
   expect(toggle.getAttribute("aria-label")).toBe(SHOW_SESSIONS);
 });
 
@@ -369,8 +344,7 @@ it("press follows a floating sidebar's layout marker even in a wide window", asy
   const pressed = vi.fn();
   hub.addEventListener("click", pressed);
   const done = createUi(document, "en").press("Hub");
-  await vi.advanceTimersByTimeAsync(2000);
-  await done;
+  await settle(done);
   expect(drawer.hasAttribute("inert")).toBe(false);
   expect(pressed).toHaveBeenCalledOnce();
   document.body.removeAttribute("data-sidebar-dockable");
@@ -384,8 +358,7 @@ it("closeDrawer leaves a sidebar docked by the actual layout alone independently
   const clicked = vi.fn();
   toggle.addEventListener("click", clicked);
   const done = createUi(document, "en").closeDrawer();
-  await vi.advanceTimersByTimeAsync(500);
-  await done;
+  await settle(done);
   expect(clicked).not.toHaveBeenCalled();
   expect(toggle.getAttribute("aria-label")).toBe(HIDE_SESSIONS);
   document.body.removeAttribute("data-sidebar-dockable");
@@ -398,8 +371,7 @@ it("press does not open the drawer for a control that only takes a moment to app
   document.addEventListener("click", (event) => pressed.push((event.target as Element).id));
   setTimeout(() => document.body.insertAdjacentHTML("beforeend", '<button id="late">Hub</button>'), 100);
   const done = createUi(document, "en").press("Hub");
-  await vi.advanceTimersByTimeAsync(1000);
-  await done;
+  await settle(done);
   expect(toggle.getAttribute("aria-label")).toBe(SHOW_SESSIONS);
   expect(pressed).toEqual(["late"]);
 });
@@ -412,8 +384,7 @@ it.each([
   const pressed = vi.fn();
   document.addEventListener("click", pressed);
   const done = createUi(document, "en").showPanel("files");
-  await vi.advanceTimersByTimeAsync(500);
-  await done;
+  await settle(done);
   expect(pressed).toHaveBeenCalledTimes(pressesIt ? 1 : 0);
 });
 
@@ -425,8 +396,7 @@ it("showPanel reveals an open floating group without closing its panel", async (
     document.body.insertAdjacentHTML("beforeend", '<div data-pane="aside" style="position:fixed;visibility:visible;opacity:1"><div data-panel-card></div></div>');
   });
   const done = createUi(document, "en").showPanel("files");
-  await vi.advanceTimersByTimeAsync(2000);
-  await done;
+  await settle(done);
   expect(pressed).not.toHaveBeenCalled();
   expect(document.querySelector("[data-panel-card]")).not.toBeNull();
 });
@@ -437,13 +407,11 @@ it("showPanel waits for a toggle that is drawn late and fails where there is non
   const pressed = vi.fn();
   document.addEventListener("click", pressed);
   const late = createUi(document, "en").showPanel("report");
-  await vi.advanceTimersByTimeAsync(1500);
-  await late;
+  await settle(late);
   expect(pressed).toHaveBeenCalledOnce();
   document.body.innerHTML = "";
   const none = expect(createUi(document, "en").showPanel("terminal")).rejects.toThrow(/Nothing is named Show terminal panel or Hide terminal panel/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await none;
+  await settle(none);
 });
 
 it.each([
@@ -457,8 +425,7 @@ it.each([
   if (width <= 768) toggle.click();
   else toggle.setAttribute("aria-label", HIDE_SESSIONS);
   const done = createUi(document, "en").closeDrawer();
-  await vi.advanceTimersByTimeAsync(500);
-  await done;
+  await settle(done);
   expect(toggle.getAttribute("aria-label")).toBe(closes ? SHOW_SESSIONS : HIDE_SESSIONS);
 });
 
@@ -477,8 +444,7 @@ it.each([true, false])("closeDrawer uses Escape for a medium sidebar only while 
     }
   });
   const done = createUi(document, "en").closeDrawer();
-  await vi.advanceTimersByTimeAsync(500);
-  await done;
+  await settle(done);
   expect(clicked).not.toHaveBeenCalled();
   expect(escaped).toHaveBeenCalledTimes(expanded ? 1 : 0);
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
@@ -497,8 +463,7 @@ it("hoverTerminalUrl puts the pointer on the first row of a link that wraps in a
     xterm.classList.add("xterm-cursor-pointer");
   });
   const done = createUi(document, "en").hoverTerminalUrl("abcdefgh");
-  await vi.advanceTimersByTimeAsync(500);
-  await done;
+  await settle(done);
   // Cell 4 of row 0 starts it and six cells of the row hold it: the middle is cell 7, in the row's own height.
   expect(moves[0]).toEqual([70, 5]);
 });

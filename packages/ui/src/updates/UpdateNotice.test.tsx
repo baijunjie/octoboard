@@ -17,6 +17,7 @@ import type { UpdateStore } from "./updateStore";
 import { UpdatesProvider, useUpdates } from "./UpdatesProvider";
 import { UpdaterError } from "../platform/updaterError";
 import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -28,11 +29,12 @@ class FakeResizeObserver {
 }
 
 beforeEach(() => {
+  // Registered before any test's `fakeTimers()`, so the stub stays while its run-out fires the timers still pending.
+  onTestFinished(() => void vi.unstubAllGlobals());
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   updateChannel.set("beta");
 });
 afterEach(() => {
-  vi.unstubAllGlobals();
   localStorage.clear();
 });
 
@@ -251,8 +253,7 @@ it("publishes its height while it is shown and clears it as it goes", async () =
 });
 
 it("announces what it says only once the window is attended, then after the focus-move delay", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const attend = windowAttention();
   attend(false);
   const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: fakeUpdater().updater });
@@ -280,7 +281,6 @@ it("shows only the remedy for a generic installation failure", async () => {
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   });
   act(() => root.render(<>{alert.content}</>));
   expect([...container.querySelectorAll("p")].map((line) => line.textContent)).toEqual([t("updates.error.install.remedy")]);

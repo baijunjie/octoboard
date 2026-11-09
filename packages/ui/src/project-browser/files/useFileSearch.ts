@@ -5,6 +5,9 @@ import { useLatestRequest } from "../../components/hooks/useLatestRequest";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
 import { useDaemon } from "../../store";
 
+/** How long the file filter waits for the last keystroke before it searches. */
+export const SEARCH_DEBOUNCE_MS = 250;
+
 export type FileSearch =
   | { state: "loading" }
   | { state: "loaded"; paths: string[]; /** The `paths` Git ignores, as the daemon marks them. */ ignored: ReadonlySet<string>; complete: boolean }
@@ -52,7 +55,7 @@ export function useFileSearch(project: string, query: string, active: boolean, i
       return;
     }
     const toggled = sentWith.current !== includeIgnored;
-    const timer = setTimeout(() => void send(), toggled ? 0 : 250);
+    const timer = setTimeout(() => void send(), toggled ? 0 : SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [query, active, includeIgnored]);
 

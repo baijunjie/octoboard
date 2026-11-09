@@ -48,7 +48,6 @@ export function mountPendingQuestionDialog(
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   });
   const tree = (
     <TestHost daemon={daemon}>

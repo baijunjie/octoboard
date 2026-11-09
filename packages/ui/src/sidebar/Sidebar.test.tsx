@@ -17,6 +17,7 @@ import { testDaemon } from "../test/testDaemon";
 import { Sidebar } from "./Sidebar";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { TEST_AGENTS } from "../test/testProviders";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -39,9 +40,8 @@ const unbound = sessionOf("web-unbound", main.id, web.id, "Tidy the changelog", 
 const sidebarWidth = { width: 280, preferredWidth: 280, min: 280, max: 480, setWidth: () => {}, persist: () => {}, reset: () => {} };
 
 beforeEach(() => {
-  vi.useFakeTimers();
   // Registered first, so it runs after the unmounts that `mountSidebar` registers.
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   // jsdom loads no stylesheet, so the token the floating card's pointer watch reads is declared here.
   document.documentElement.style.setProperty("--peek-gap", "8px");
 });

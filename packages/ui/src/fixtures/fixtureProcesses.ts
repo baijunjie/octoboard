@@ -6,7 +6,7 @@ import { neverReplied, type FixtureContext, type Handlers } from "./fixtureConte
 /** How long after its first `list_processes` (or, for the rail's list, its first `list_all_processes`) the fixture
  * daemon starts answering with a scenario's `listLater`: past the moments a dialog asks twice while it mounts
  * (StrictMode), before its next poll. */
-const LIST_LATER_AFTER_MS = 1000;
+export const LIST_LATER_AFTER_MS = 1000;
 
 /** The process ledger of a scenario (`processes`), which the replies about processes read and the archive of a session
  * and the removal of a project change. */

@@ -15,6 +15,7 @@ import { shortcutOverrides } from "../shortcuts/store";
 import { markdownStyle } from "../viewer/markdown/markdownStyle";
 import { ExportConfigurationDialog, exportFileName } from "./ExportConfigurationDialog";
 import { documentSettings, mountDialog, press } from "./testSupport";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -76,10 +77,7 @@ it("warns under the option, while it is checked, that the file carries project p
 });
 
 it("reaches a screen-reader user: described by the checkbox while checked, and spoken once after the tick", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    vi.useRealTimers();
-  });
+  fakeTimers();
   mount();
   const box = pathsBox();
   expect(box.getAttribute("aria-describedby")!.split(" ")).toHaveLength(1);

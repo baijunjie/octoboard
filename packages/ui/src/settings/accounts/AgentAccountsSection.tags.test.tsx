@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { CodedError } from "../../errors/codedError";
@@ -213,7 +213,6 @@ it("sends again, silently, a save the daemon refused because the store was behin
 });
 
 it("reports another client's change as a conflict and shows its tags", async () => {
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   settings.agent_tags = { codex: ["review"] };
   settings.versions = { "agent_tags.codex": 1 };
   const version = { current: 3 };
@@ -251,7 +250,6 @@ it("sends one save for two edits made in the same event, the second waiting for 
 });
 
 it("drops an edit that waited when another client's list reached the store meanwhile, and shows that list", async () => {
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   settings.agent_tags = { codex: ["review"] };
   const replies: (() => void)[] = [];
   request.mockImplementation(() => new Promise<object>((resolve) => replies.push(() => resolve({}))));

@@ -7,7 +7,8 @@ import { expect, it, onTestFinished } from "vitest";
 import { CodedError } from "../errors/codedError";
 import { projectOf } from "../fixtures/builders";
 import type { Agent } from "../protocol";
-import { roots, work, personal, render, input, type, settle, click, answer, chooseSource, buttonText, accountPicker, buttons, pickerNamed, sentOf, fillDirectory, stored } from "./projectDialogTestSupport";
+import { roots, work, personal, render, input, type, settle, PAST_LOCAL_DETECTION_MS, PAST_GIT_DETECTION_MS, click, answer, chooseSource, buttonText, accountPicker, buttons, pickerNamed, sentOf, fillDirectory, stored } from "./projectDialogTestSupport";
+import { runOutTimers } from "../test/clock";
 
 /** The hidden native select behind the Default agent field, which holds the chosen value. */
 const agentValue = () =>
@@ -26,9 +27,9 @@ it("opens on the directory when adding and on the name when editing, so Enter su
 it("preselects the agent detected for a typed directory, and only the latest answer counts", async () => {
   const pending = render();
   type(input("Directory"), "~/code/a");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   type(input("Directory"), "~/code/b");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   expect(pending.map((p) => p.body)).toEqual([
     { type: "detect_directory_agent", path: "~/code/a" },
     { type: "detect_directory_agent", path: "~/code/b" },
@@ -47,7 +48,7 @@ it("describes creating an empty project only after the directory is confirmed mi
   type(directory, "~/code/new-project");
   expect(document.body.textContent).toContain("Checking the directory…");
   expect(document.body.textContent).not.toContain(emptyProjectHint);
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   await answer(pending[0], null, false);
   expect(document.body.textContent).toContain(emptyProjectHint);
   expect(input("Directory")).toBe(directory);
@@ -57,11 +58,11 @@ it("describes creating an empty project only after the directory is confirmed mi
   type(directory, "~/code/existing");
   expect(document.body.textContent).not.toContain(emptyProjectHint);
   expect(document.body.textContent).toContain("Checking the directory…");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   await answer(pending[1], null, true);
   expect(document.body.textContent).not.toContain(emptyProjectHint);
   type(directory, "~/code/another-new-project");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   await answer(pending[2], null, false);
   expect(document.body.textContent).toContain(emptyProjectHint);
   type(directory, "");
@@ -71,14 +72,14 @@ it("describes creating an empty project only after the directory is confirmed mi
 it("drops stale missing-directory replies and shows no creation hint after a failed check", async () => {
   const pending = render();
   type(input("Directory"), "~/code/old");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   type(input("Directory"), "~/code/current");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   await answer(pending[1], null, true);
   await answer(pending[0], null, false);
   expect(document.body.textContent).not.toContain(emptyProjectHint);
   type(input("Directory"), "~/code/unreadable");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   await act(async () => pending[2].reject(new CodedError("Cannot read directory", "directory_unreadable", { path: "~/code/unreadable", detail: "Permission denied" })));
   expect(document.body.textContent).not.toContain(emptyProjectHint);
 });
@@ -86,14 +87,14 @@ it("drops stale missing-directory replies and shows no creation hint after a fai
 it.each(["A parent directory", "Git repository URL"])("drops the creation hint when switching to %s", async (source) => {
   const pending = render();
   type(input("Directory"), "~/code/new-project");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   await answer(pending[0], null, false);
   expect(document.body.textContent).toContain(emptyProjectHint);
   await chooseSource(source);
   expect(document.body.textContent).not.toContain(emptyProjectHint);
   if (source === "Git repository URL") {
     type(input("Repository URL"), "https://example.com/project.git");
-    await settle(900);
+    await settle(PAST_GIT_DETECTION_MS);
     await answer(pending[1], null);
     expect(document.body.textContent).not.toContain(emptyProjectHint);
   }
@@ -101,7 +102,7 @@ it.each(["A parent directory", "Git repository URL"])("drops the creation hint w
 
 it("shows no creation hint and makes no directory probe when editing", async () => {
   const pending = render(stored);
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   expect(pending.some((request) => request.body.type === "detect_directory_agent")).toBe(false);
   expect(document.body.textContent).not.toContain(emptyProjectHint);
 });
@@ -109,7 +110,7 @@ it("shows no creation hint and makes no directory probe when editing", async () 
 it.each(["path_not_found", "path_not_a_directory"])("shows %s as the Directory field's own error, with the path as danger-toned code", async (code) => {
   const pending = render();
   type(input("Directory"), "~/code/missing");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   await act(async () => pending[0].reject(new CodedError("plain", code, { path: "/Users/dev/code/missing" })));
   const error = document.body.querySelector('[data-slot="field-error"] [role="alert"]');
   expect(error?.querySelector("code")?.textContent).toBe("/Users/dev/code/missing");
@@ -122,7 +123,7 @@ it.each(["path_not_found", "path_not_a_directory"])("shows %s as the Directory f
 it("keeps an Alert under the Directory field when the check could not run", async () => {
   const pending = render();
   type(input("Directory"), "~/code/a");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   await act(async () => pending[0].reject(new CodedError("plain", "directory_unreachable", { path: "/Users/dev/code/a" })));
   const alert = document.body.querySelector('[data-slot="alert-root"]')!.parentElement!;
   const described = input("Directory").getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id)!);
@@ -137,7 +138,7 @@ it("keeps the form locked while the answer for the path as it stands is out", as
   type(input("Directory"), "~/code/a");
   // Locked from the keystroke on: the wait before the ask is part of the check.
   expect(input("Name").disabled).toBe(true);
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   expect(input("Name").disabled).toBe(true);
   await answer(pending[0], null);
   expect(input("Name").disabled).toBe(false);
@@ -149,7 +150,7 @@ it("keeps the git form locked until the probe succeeds", async () => {
   const clone = () => input("Clone into (parent directory)");
   expect(clone().disabled).toBe(true);
   type(input("Repository URL"), "https://example.com/o/r.git");
-  await settle(900);
+  await settle(PAST_GIT_DETECTION_MS);
   expect(pending[0].body).toEqual({ type: "probe_git_remote", remote_url: "https://example.com/o/r.git" });
   expect(clone().disabled).toBe(true);
   await answer(pending[0], null);
@@ -160,7 +161,7 @@ it("offers Download Git, then Try again, under the Repository URL when no Git is
   const pending = render();
   await chooseSource("Git repository URL");
   type(input("Repository URL"), "https://example.com/o/r.git");
-  await settle(900);
+  await settle(PAST_GIT_DETECTION_MS);
   await act(async () => pending[0].reject(new CodedError("plain", "binary_not_found", { binary: "git" })));
   const alert = document.body.querySelector<HTMLElement>('[data-slot="alert-root"]')!;
   const controls = [...alert.querySelectorAll("a, button")].map((control) => control.textContent);
@@ -186,7 +187,7 @@ async function failedProbe(error: Error) {
   const pending = render();
   await chooseSource("Git repository URL");
   type(input("Repository URL"), "https://example.com/o/r.git");
-  await settle(900);
+  await settle(PAST_GIT_DETECTION_MS);
   await act(async () => pending[0].reject(error));
   return pending;
 }
@@ -234,7 +235,7 @@ it("drops the answer of a retry once the URL has been typed over", async () => {
   const pending = await failedProbe(new CodedError("plain", "binary_not_found", { binary: "git" }));
   await act(async () => tryAgain().click());
   type(input("Repository URL"), "https://example.com/o/other.git");
-  await settle(900);
+  await settle(PAST_GIT_DETECTION_MS);
   await answer(pending[1], null);
   // The retry was for the URL before; its answer does not unlock the form for the one entered now.
   expect(input("Clone into (parent directory)").disabled).toBe(true);
@@ -245,7 +246,7 @@ it("drops the answer of a retry once the URL has been typed over", async () => {
 it("offers no Try again under the Directory field for a failed directory check", async () => {
   const pending = render();
   type(input("Directory"), "~/code/a");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   await act(async () => pending[0].reject(new CodedError("plain", "directory_unreachable", { path: "/Users/dev/code/a" })));
   expect(document.body.querySelector('[data-slot="alert-root"]')).not.toBeNull();
   expect([...document.body.querySelectorAll('[data-slot="alert-root"] button')].some((button) => button.textContent === "Try again")).toBe(false);
@@ -260,7 +261,7 @@ it.each([
   if (source !== "A single directory") await chooseSource(source);
   type(input("Directory"), "~/code/x");
   if (source === "A single directory") {
-    await settle(500);
+    await settle(PAST_LOCAL_DETECTION_MS);
     await answer(pending[0], detected);
   }
   await click(Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Add"));
@@ -393,12 +394,14 @@ it.each(["trigger", "popover"] as const)("hands focus back to the agent picker w
   act(() => accountPicker()!.focus());
   if (focused === "popover") {
     await click(accountPicker());
-    await settle(50);
+    await settle(0);
+    runOutTimers();
     expect(document.activeElement?.getAttribute("role")).toBe("option");
   }
   act(() => store.setState({ settings: { ...store.getState().settings!, accounts: [] } }));
   expect(accountPicker()).toBeUndefined();
-  await settle(50);
+  await settle(0);
+  runOutTimers();
   expect(document.activeElement).toBe(agentTrigger);
 });
 
@@ -408,7 +411,7 @@ it("updates the optional name hint with the normalized directory without changin
   expect(input("Name").placeholder).toBe("Directory name");
   type(input("Directory"), "~/site/../website/./");
   expect(input("Name").placeholder).toBe("website");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   await answer(pending[0], null);
   await click(buttonText("Add"));
   expect(sentOf(pending, "add_project")).toMatchObject({ path: "~/site/../website/./", name: undefined, tags: [] });
@@ -424,7 +427,7 @@ it("uses the repository's clone name as a live hint, preserving an entered name 
   type(input("Repository URL"), "https://example.com/owner/other.git/");
   expect(input("Name").placeholder).toBe("other");
   expect(input("Name").value).toBe("My name");
-  await settle(900);
+  await settle(PAST_GIT_DETECTION_MS);
   await answer(pending[0], null);
   type(input("Name"), "");
   await click(buttonText("Add"));
@@ -464,7 +467,8 @@ it.each(["keyboard", "mouse"] as const)("opens the directory browser on its path
   expect(path).not.toBeNull();
   expect(document.activeElement).toBe(path);
   act(() => void path!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
-  await settle(50);
+  await settle(0);
+  runOutTimers();
   expect(document.body.querySelector('input[aria-label="Directory path"]')).toBeNull();
   expect(input("Directory")).toBeDefined();
   expect(document.activeElement).toBe(browse);

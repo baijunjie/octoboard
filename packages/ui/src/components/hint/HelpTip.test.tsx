@@ -4,7 +4,8 @@ import { expect, it, vi } from "vitest";
 
 import { HelpTip } from "./HelpTip";
 import { HOVER_CLOSE_DELAY_MS, HOVER_OPEN_DELAY_MS } from "./Hint";
-import { activate, enter, leave, mountForTooltip, openPopover, openTooltip, press, tap, withFakeTimers } from "./tooltipTestSupport";
+import { activate, enter, leave, mountForTooltip, openPopover, openTooltip, press, tap } from "./tooltipTestSupport";
+import { fakeTimers, runOutTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -31,7 +32,7 @@ it("is a button named for what it explains, with no text of its own", () => {
 });
 
 it("opens the explanation once the mouse has rested on it, without moving focus", () => {
-  withFakeTimers();
+  fakeTimers();
   const button = mount();
   enter(button);
   expect(openPopover()).toBeNull();
@@ -42,7 +43,7 @@ it("opens the explanation once the mouse has rested on it, without moving focus"
 });
 
 it("stays open while the pointer moves into it, and closes shortly after the pointer has left both", () => {
-  withFakeTimers();
+  fakeTimers();
   const button = mount();
   enter(button);
   hoverDelay();
@@ -84,23 +85,25 @@ it.each([["Enter", "Enter"], ["Space", " "]] as const)("opens on %s with focus i
   expect(openPopover()?.contains(document.activeElement)).toBe(true);
 });
 
-it("opens on a virtual press, which is what assistive technology sends", async () => {
+it("opens on a virtual press, which is what assistive technology sends", () => {
+  fakeTimers();
   const button = mount();
   activate(button);
   // react-aria hands focus over once a transition has run for a virtual press.
-  await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+  runOutTimers();
   expect(openPopover()?.textContent).toBe("It runs under no account.");
   expect(openPopover()!.contains(document.activeElement)).toBe(true);
 });
 
-it("closes on Escape and gives focus back to the button", async () => {
+it("closes on Escape and gives focus back to the button", () => {
+  fakeTimers();
   const button = mount();
   act(() => button.focus());
   press(button);
   expect(openPopover()).not.toBeNull();
   act(() => void openPopover()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   expect(openPopover()).toBeNull();
-  await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+  runOutTimers();
   expect(document.activeElement).toBe(button);
 });
 

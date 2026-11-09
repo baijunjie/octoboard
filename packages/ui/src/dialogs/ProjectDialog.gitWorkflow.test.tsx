@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 
 import { PROJECT_VERSIONS, projectOf } from "../fixtures/builders";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
-import { answer, chooseSource, click, fillDirectory, input, pickerNamed, render, sentOf, settle, stored, type } from "./projectDialogTestSupport";
+import { answer, chooseSource, click, fillDirectory, input, pickerNamed, render, sentOf, settle, PAST_LOCAL_DETECTION_MS, stored, type } from "./projectDialogTestSupport";
 
 const tabs = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]'));
 
@@ -79,7 +79,7 @@ it("keeps the pickers disabled while the form is locked and enables them once it
   type(input("Directory"), "~/code/x");
   const disabled = () => pickerNamed("Revert gate").hasAttribute("disabled") || pickerNamed("Revert gate").getAttribute("aria-disabled") === "true";
   expect(disabled()).toBe(true);
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   await answer(pending[0], null);
   expect(disabled()).toBe(false);
 });

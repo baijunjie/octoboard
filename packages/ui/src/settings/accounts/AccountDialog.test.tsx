@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { accountOf } from "../../fixtures/builders";
 import { CodedError } from "../../errors/codedError";
@@ -76,7 +76,6 @@ const taken = () =>
 
 it("reports a refused directory in the error alert dialog, leaving the field and its value alone", async () => {
   render(work, () => Promise.reject(taken()));
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   type("Config directory", "/home/dev/.claude-other");
   await submit();
   // The refusal comes after the submit, so it is no mark on the field.
@@ -90,7 +89,6 @@ it("reports a refused directory in the error alert dialog, leaving the field and
 it("keeps a directory picked after a refusal and the dialog open for another try", async () => {
   const request = vi.fn(() => Promise.reject(taken()));
   render(work, request, new Map(), null, false, { listDirectory: () => Promise.resolve({ type: "dir_listing", path: "/home/dev/.claude-picked", entries: [] }) });
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   type("Config directory", "/home/dev/.claude-other");
   await submit();
   const press = (text: string) => act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === text)!.click());
@@ -143,7 +141,6 @@ it("fixes the agent when renaming a default account, so no other agent's default
 const denied = () => new CodedError("Octoboard could not read or write its own data: attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY", "store_write_failed", { cause: "access", detail: "attempt to write a readonly database: Error code 1544: SQLITE_READONLY_DIRECTORY" });
 
 it("gives a denied rename of a default account the data folder remedy", async () => {
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   render(undefined, () => Promise.reject(denied()), new Map(), null, true);
   type("Name", "Main");
   await submit();
@@ -151,7 +148,6 @@ it("gives a denied rename of a default account the data folder remedy", async ()
 });
 
 it("leaves a denied edit of an account the remedy of the failure itself", async () => {
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   render(work, () => Promise.reject(denied()));
   type("Name", "Other");
   await submit();
@@ -232,7 +228,6 @@ it("sends only the field that changed, with the version the form read", async ()
 });
 
 it("puts a conflicting field back to the account's current value and bases the retry on its version", async () => {
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   const answers: Array<() => Promise<unknown>> = [
     () => Promise.reject(new CodedError("changed elsewhere", "write_conflict", { fields: "name", versions: '{"name":6}' })),
     () => Promise.resolve({ type: "ack", id: null }),

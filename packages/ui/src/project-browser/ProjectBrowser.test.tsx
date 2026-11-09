@@ -3,6 +3,7 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { press as pressMark } from "../components/alerts/detailsTestSupport";
 import { isolate } from "../i18n/isolate";
 import { CodedError } from "../errors/codedError";
@@ -10,9 +11,12 @@ import { PlatformProvider } from "../platform/react";
 import type { Event, GitStatus, Project, ClientRequestBody } from "../protocol";
 import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
+import { AUTO_REFRESH_MS } from "./autoRefresh";
 import { useProjectBrowserState } from "./browserState";
-import { ProjectBrowser } from "./ProjectBrowser";
+import { MIN_SPIN_MS, ProjectBrowser } from "./ProjectBrowser";
+import { SEARCH_DEBOUNCE_MS } from "./files/useFileSearch";
 import { BROWSER_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 // These checks exercise the browser's reads and navigation; the viewer's rendering has its own suite.
 vi.mock("../viewer/FileViewer", () => ({ FileViewer: () => null }));
@@ -24,14 +28,13 @@ const pending: Pending[] = [];
 const roots: Root[] = [];
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  fakeTimers();
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
 });
 
 afterEach(async () => {
   for (const root of roots.splice(0)) act(() => root.unmount());
   await act(async () => pending.splice(0).forEach((request) => request.reject(new Error("test over"))));
-  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -129,12 +132,12 @@ it("spins the Files refresh icon while the listings it asked for are out, and fo
   // Answered at once, it keeps spinning until the minimum has passed, then stops.
   await answer("list_project_dir", dir("files-p"));
   expect(spinning(icon())).toBe(true);
-  await wait(1100);
+  await wait(MIN_SPIN_MS);
   expect(spinning(icon())).toBe(false);
 
   // Slower than the minimum, it spins until the listing is answered.
   await press(icon());
-  await wait(5000);
+  await wait(MIN_SPIN_MS);
   expect(spinning(icon())).toBe(true);
   await answer("list_project_dir", dir("files-p"));
   expect(spinning(icon())).toBe(false);
@@ -143,7 +146,7 @@ it("spins the Files refresh icon while the listings it asked for are out, and fo
 it("does not spin the icon for the periodic refresh", async () => {
   const icon = await mount("files-bg", "files");
   await answer("list_project_dir", dir("files-bg"));
-  await wait(10_000);
+  await wait(AUTO_REFRESH_MS);
   expect(pending.some((request) => request.body.type === "list_project_dir")).toBe(true);
   expect(spinning(icon())).toBe(false);
   await answer("list_project_dir", dir("files-bg"));
@@ -159,7 +162,7 @@ it("spins the Git refresh icon until the worktrees and the changes it asked for 
 
   await press(icon());
   expect(spinning(icon())).toBe(true);
-  await wait(1100);
+  await wait(MIN_SPIN_MS);
   await answer("get_project_source", source("git-p"));
   await answer("list_project_branches", branches("git-p"));
   expect(spinning(icon())).toBe(true);
@@ -176,7 +179,7 @@ it("stops the Files icon after the minimum when the listing it asked for fails",
   const [request] = pending.splice(index, 1);
   await act(async () => request.reject(new Error("no answer")));
   expect(spinning(icon())).toBe(true);
-  await wait(1100);
+  await wait(MIN_SPIN_MS);
   expect(spinning(icon())).toBe(false);
 });
 
@@ -193,7 +196,7 @@ it("stops the Git icon after the minimum when the source request it asked for is
   await answer("list_project_branches", branches("git-fail"));
   await answer("list_project_changes", changes("git-fail"));
   expect(spinning(icon())).toBe(true);
-  await wait(1100);
+  await wait(MIN_SPIN_MS);
   expect(spinning(icon())).toBe(false);
 });
 
@@ -202,10 +205,10 @@ it("keeps spinning after two quick presses until the last refresh settles", asyn
   await answer("list_project_dir", dir("files-twice"));
 
   await press(icon());
-  await wait(500);
+  await wait(MIN_SPIN_MS / 2);
   await press(icon());
   await answer("list_project_dir", dir("files-twice"));
-  await wait(1100);
+  await wait(MIN_SPIN_MS);
   // The first press is done, the second one is still out.
   expect(spinning(icon())).toBe(true);
   await answer("list_project_dir", dir("files-twice"));
@@ -248,7 +251,7 @@ it("says the files are loading from a status region that outlives the loading", 
   const [region] = statuses();
   expect(statuses()).toHaveLength(1);
   expect(region?.textContent).toBe("");
-  await wait(150);
+  await wait(FIRST_WRITE_DELAY_MS);
   expect(region?.textContent).toBe("Loading files…");
 
   await answer("list_project_dir", dir("files-live"));
@@ -261,7 +264,7 @@ it("says the changes are loading once, from one status region, across the source
   const [region] = statuses();
   expect(statuses()).toHaveLength(1);
   expect(region?.textContent).toBe("");
-  await wait(150);
+  await wait(FIRST_WRITE_DELAY_MS);
   expect(region?.textContent).toBe("Loading changes…");
 
   // The source arrives and the change list starts loading: the same words, in the same region.
@@ -325,7 +328,7 @@ it("opens the Files filter, narrows rows, and clears it when hidden", async () =
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "ALPHA");
     input.dispatchEvent(new window.Event("input", { bubbles: true }));
   });
-  await wait(250);
+  await wait(SEARCH_DEBOUNCE_MS);
   expect(pending.find((request) => request.body.type === "search_project_files")?.body).toMatchObject({ query: "ALPHA", project: "files-filter" });
   await answer("search_project_files", { type: "project_file_matches", id: null, project: "files-filter", query: "ALPHA", paths: ["alpha.md", "nested/alpha.md"], complete: true });
   expect(document.querySelector('[data-key="path:nested/alpha.md"]')).not.toBeNull();
@@ -348,13 +351,13 @@ it("debounces whole-project searches and ignores an older query's reply", async 
     input.dispatchEvent(new window.Event("input", { bubbles: true }));
   });
   await type("old");
-  await wait(100);
+  await wait(SEARCH_DEBOUNCE_MS - 1);
   expect(pending.some((request) => request.body.type === "search_project_files")).toBe(false);
-  await wait(150);
+  await wait(1);
   await type("new");
   await answer("search_project_files", { type: "project_file_matches", id: null, project: "search-races", query: "old", paths: ["old.ts"], complete: true });
   expect(document.querySelector('[data-key="path:old.ts"]')).toBeNull();
-  await wait(250);
+  await wait(SEARCH_DEBOUNCE_MS);
   await answer("search_project_files", { type: "project_file_matches", id: null, project: "search-races", query: "new", paths: [], complete: false });
   expect(document.body.textContent).toContain("No matching files");
   // The incomplete search is a warning mark inside the field, not a loose line in the pane.
@@ -399,7 +402,7 @@ it("lists every ancestor of an unopened search match so its viewer can notice fi
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "target");
     input.dispatchEvent(new window.Event("input", { bubbles: true }));
   });
-  await wait(250);
+  await wait(SEARCH_DEBOUNCE_MS);
   await answer("search_project_files", { type: "project_file_matches", id: null, project: "search-viewer", query: "target", paths: ["src/nested/target.txt"], complete: true });
   await act(async () => document.querySelector<HTMLElement>('[data-key="path:src/nested/target.txt"]')!.click());
   expect(pending.some((request) => request.body.type === "read_project_file")).toBe(true);
@@ -407,7 +410,7 @@ it("lists every ancestor of an unopened search match so its viewer can notice fi
   await answer("list_project_dir", { ...dir("search-viewer"), path: "src", entries: [{ name: "nested", kind: "directory", size: null, version: null, target: null }] } as Event);
   await answer("list_project_dir", { ...dir("search-viewer"), path: "src/nested", entries: [{ name: "target.txt", kind: "file", size: 5, version: "v1", target: null }] } as Event);
   await answer("read_project_file", { type: "project_file", id: null, project: "search-viewer", worktree: null, path: "src/nested/target.txt", source: { kind: "live", root_id: "r", version: "v1" }, file: { size: 5, kind: "text", text: "hello", data: null, media_type: null } });
-  await wait(10_000);
+  await wait(AUTO_REFRESH_MS);
   expect(pending.filter((request) => request.body.type === "list_project_dir").map((request) => (request.body as { path: string }).path)).toEqual(["", "src", "src/nested"]);
   await answer("list_project_dir", { ...dir("search-viewer"), entries: [{ name: "src", kind: "directory", size: null, version: null, target: null }] } as Event);
   await answer("list_project_dir", { ...dir("search-viewer"), path: "src", entries: [{ name: "nested", kind: "directory", size: null, version: null, target: null }] } as Event);
@@ -463,7 +466,7 @@ it("keeps Files result folders collapsed through tab switches", async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "target");
     input.dispatchEvent(new window.Event("input", { bubbles: true }));
   });
-  await wait(250);
+  await wait(SEARCH_DEBOUNCE_MS);
   await answer("search_project_files", { type: "project_file_matches", id: null, project: "files-folds", query: "target", paths: ["src/nested/target.txt"], complete: true });
   await act(async () => document.querySelector<HTMLElement>('[data-key="path:src"]')!.click());
   expect(document.querySelector('[data-key="path:src/nested/target.txt"]')).toBeNull();
@@ -525,7 +528,7 @@ it("folds every expanded folder from the header, and is disabled while none is o
   // Focus on a row that goes with the folding moves to the top-level folder it was under.
   await act(async () => document.querySelector<HTMLElement>('[data-key="path:src/nested/a.ts"]')!.focus());
   await act(async () => labelled("Collapse all folders").click());
-  await act(async () => void vi.advanceTimersByTime(100));
+  await act(async () => void vi.runOnlyPendingTimers());
   expect(rowKeys()).toEqual(["path:docs", "path:src"]);
   expect(document.activeElement).toBe(document.querySelector('[data-key="path:src"]'));
   expect(labelled("Collapse all folders").disabled).toBe(true);
@@ -573,7 +576,7 @@ it("folds every folder of the filter's results, and keeps the button out of the 
   await answer("list_project_dir", dir("collapse-results"));
   await act(async () => labelled("Filter by file name").click());
   await typeKeyword("target");
-  await wait(250);
+  await wait(SEARCH_DEBOUNCE_MS);
   await answer("search_project_files", { type: "project_file_matches", id: null, project: "collapse-results", query: "target", paths: ["src/nested/target.txt", "docs/target.md"], complete: true });
   expect(rowKeys()).toEqual(["path:docs", "path:docs/target.md", "path:src", "path:src/nested", "path:src/nested/target.txt"]);
   await act(async () => labelled("Collapse all folders").click());
@@ -590,7 +593,7 @@ it("keeps Collapse all disabled over the filter's results when only a folder und
   await answer("list_project_dir", dir("collapse-results-hidden"));
   await act(async () => labelled("Filter by file name").click());
   await typeKeyword("target");
-  await wait(250);
+  await wait(SEARCH_DEBOUNCE_MS);
   await answer("search_project_files", { type: "project_file_matches", id: null, project: "collapse-results-hidden", query: "target", paths: ["src/nested/target.txt"], complete: true });
   expect(labelled("Collapse all folders").disabled).toBe(false);
   await act(async () => document.querySelector<HTMLElement>('[data-key="path:src"]')!.click());
@@ -607,7 +610,7 @@ it("leaves ignored files out of the search until the toggle beside the field inc
   expect(toggle().getAttribute("aria-label")).toBe("Include ignored files");
   expect(toggle().getAttribute("aria-pressed")).toBe("false");
   await typeKeyword("app");
-  await wait(250);
+  await wait(SEARCH_DEBOUNCE_MS);
   expect(pending.find((request) => request.body.type === "search_project_files")?.body).not.toHaveProperty("include_ignored");
   await answer("search_project_files", { type: "project_file_matches", id: null, project: "include-ignored", query: "app", paths: ["src/app.ts"], complete: true });
   // The toggle repeats the search at once, with no debounce to wait out.

@@ -1,6 +1,7 @@
 import { vi } from "vitest";
 
 import { errorAlerts } from "./errorAlerts";
+import { acknowledgeAllAlerts } from "../../test/alertQueue";
 
 type Report = typeof errorAlerts.report;
 
@@ -49,6 +50,6 @@ export function forwardAlerts(error: (message: string) => void): () => void {
     if (sinks.size) return;
     installed?.uninstall();
     installed = null;
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+    acknowledgeAllAlerts();
   };
 }

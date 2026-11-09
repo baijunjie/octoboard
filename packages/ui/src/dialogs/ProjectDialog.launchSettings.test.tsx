@@ -7,7 +7,7 @@ import { press } from "../components/alerts/detailsTestSupport";
 import { projectOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { Agent, AgentModel, ModelsUnavailable, ProjectAccount } from "../protocol";
-import { type Pending, work, personal, render, input, type, settle, click, answer, chooseSource, buttons, buttonText, accountPicker, pickerNamed, sentOf, fillDirectory, stored } from "./projectDialogTestSupport";
+import { type Pending, work, personal, render, input, type, settle, PAST_LOCAL_DETECTION_MS, click, answer, chooseSource, buttons, buttonText, accountPicker, pickerNamed, sentOf, fillDirectory, stored } from "./projectDialogTestSupport";
 
 const PLACEHOLDER = "Same as console, The agent's own setting";
 
@@ -338,7 +338,7 @@ it("locks the launch settings and dims the group's label with the rest of the fo
   expect(pickerNamed("Model").hasAttribute("disabled")).toBe(true);
   expect(pickerNamed("Reasoning effort").hasAttribute("disabled")).toBe(true);
   expect(group("Default agent").getAttribute("data-disabled")).toBe("true");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   // The model list was asked for as soon as the section opened, ahead of the detection.
   await answer(pending.find((p) => p.body.type === "detect_directory_agent"), null);
   await answerModels(pending);

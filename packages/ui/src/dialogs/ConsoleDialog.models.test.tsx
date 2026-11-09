@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { consoleOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { Event, ClientRequestBody } from "../protocol";
 import { press } from "../components/alerts/detailsTestSupport";
+import { FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { work, personal, MODELS, listing, render, click, clickButton, choose, sent, asked, openAdvanced, clickTab, groupPicker, pickerNamed, clearButton, stored, optionTexts } from "./consoleDialogTestSupport";
+import { fakeTimers } from "../test/clock";
 
 const locked = (name: string) => (pickerNamed(name) as HTMLButtonElement).disabled;
 
@@ -57,6 +59,7 @@ it("ignores a late answer for an agent the form has moved off", async () => {
 });
 
 it("locks the pickers and says so while the list is out, with the stored value in view", async () => {
+  fakeTimers();
   render(stored, [], () => new Promise(() => {}));
   await openAdvanced();
   for (const group of ["Console sessions", "Project sessions"]) {
@@ -78,7 +81,7 @@ it("locks the pickers and says so while the list is out, with the stored value i
  * passed, so what they say is part of what is checked; the form's other regions (the announcement of fields changed
  * elsewhere) stay mounted and empty. */
 async function exposedStatusesAfterFirstWrite(): Promise<Element[]> {
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   return Array.from(document.body.querySelectorAll('[role="status"]')).filter((node) => !node.closest("[hidden], [inert], [aria-hidden='true']") && node.textContent !== "");
 }
 
@@ -89,6 +92,7 @@ it.each([
   ["models_command_failed", { agent: "Claude Code", detail: "exit 1" }, "Claude Code could not list its models.", `${isolate("Claude Code")} could not list its models.`],
   ["models_unreadable_output", { agent: "Claude Code" }, "Claude Code printed no models that could be read.", `${isolate("Claude Code")} printed no models that could be read.`],
 ])("says why there is no list for %s, and leaves the form usable", async (code, params, summary, reason) => {
+  fakeTimers();
   const request = render(stored, [], async (body) => listing(body, [], { code, params, message: "daemon words" }));
   await openAdvanced();
   // No Alert under the table: the failure is a warning mark after the Model setting's name, in the row header and,
@@ -140,6 +144,7 @@ it.each([
 });
 
 it("shows the generic sentence for a reason the catalogue does not know, with the daemon's own words behind Details", async () => {
+  fakeTimers();
   render(undefined, [], async (body) => listing(body, [], { code: "models_something_new", params: {}, message: "daemon words" }));
   await openAdvanced();
   const statuses = await exposedStatusesAfterFirstWrite();

@@ -10,6 +10,7 @@ import { partSelector, toastStateAttributes } from "./parts";
 import { mount } from "./testSupport";
 import { closeToast, showToast, Toast, ToastContent, ToastRegion } from "./Toast";
 import { Tooltip, TooltipContent, TooltipTrigger, useTooltipState } from "./Tooltip";
+import { flushPromises } from "../test/clock";
 
 it("announces a modal given the alert dialog role as one, described by the element it names", () => {
   mount(
@@ -140,10 +141,8 @@ function OpenNow(): null {
 it("closes an open tooltip once what it belongs to turns inert", async () => {
   const { container } = mount(<AnchoredTooltip />);
   expect(document.querySelector('[role="tooltip"]')).not.toBeNull();
-  await act(async () => {
-    container.querySelector("#region")!.setAttribute("inert", "");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
+  await act(async () => container.querySelector("#region")!.setAttribute("inert", ""));
+  await flushPromises();
   expect(document.querySelector('[role="tooltip"]')).toBeNull();
 });
 

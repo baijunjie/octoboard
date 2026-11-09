@@ -7,7 +7,8 @@ import { sessionOf } from "../../fixtures/builders";
 import { isolate } from "../../i18n/isolate";
 import type { SessionContext } from "../../protocol";
 import { ArchivedSessionMetadata, SessionContextLabel, SessionRelativeTime } from "./SessionMetadata";
-import { enter, mountForTooltip, openTooltip, trigger, withFakeTimers } from "../hint/tooltipTestSupport";
+import { enter, mountForTooltip, openTooltip, trigger } from "../hint/tooltipTestSupport";
+import { fakeTimers, runPendingTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -47,11 +48,11 @@ it("shows the compact size as a badge when the agent records no limit", () => {
 /** Mounts the mark of a window with a share used and opens its card: the card, and the tone class
  * the ring and the card's meter each carry. */
 function hoverCard(used_percent: number, tokens = 1000, window = 2000) {
-  const runOut = withFakeTimers();
+  fakeTimers();
   const container = mountForTooltip(<SessionContextLabel context={{ tokens, window, used_percent }} />);
   const ring = container.querySelector<HTMLElement>(".progress-circle")!;
   enter(trigger(container));
-  runOut();
+  runPendingTimers();
   const card = openTooltip()!;
   const meter = card.querySelector<HTMLElement>(".meter")!;
   const tone = (element: Element) => Array.from(element.classList).find((name) => name.startsWith("context-tone--"));
@@ -83,10 +84,10 @@ it("works the share out from the counts, as a whole percent, when the agent give
 });
 
 it("draws the card of a size without a limit as its name and size alone", () => {
-  const runOut = withFakeTimers();
+  fakeTimers();
   const container = mountForTooltip(<SessionContextLabel context={{ tokens: 190123 }} />);
   enter(trigger(container));
-  runOut();
+  runPendingTimers();
   const card = openTooltip()!;
   expect(card.textContent).toBe(`Context window${isolate("190.1K")}`);
   expect(card.querySelector(".meter")).toBeNull();
@@ -119,7 +120,7 @@ it("shows both absolute timestamps and never invents a missing archive timestamp
 });
 
 it("shows how long ago an archived session was archived, and writes out its archive and creation dates", () => {
-  const runOut = withFakeTimers();
+  fakeTimers();
   const session = { started_at: 1700000000000, ended_at: 1700000600000 };
   vi.setSystemTime(session.ended_at + 5 * 60_000);
   const container = mountForTooltip(<SessionRelativeTime session={session} />);
@@ -129,7 +130,7 @@ it("shows how long ago an archived session was archived, and writes out its arch
   const label = trigger(container).getAttribute("aria-label")!;
   expect(label).toMatch(/^Archived .+, Created .+$/);
   enter(trigger(container));
-  runOut();
+  runPendingTimers();
   const lines = Array.from(openTooltip()!.querySelectorAll("span"), (line) => line.textContent);
   expect(lines).toHaveLength(2);
   expect(lines[0]).toMatch(/^Archived /);
@@ -137,7 +138,7 @@ it("shows how long ago an archived session was archived, and writes out its arch
 });
 
 it("shows how long ago a session that is not archived was created, and writes out its creation date alone", () => {
-  const runOut = withFakeTimers();
+  fakeTimers();
   const session = { started_at: 1700000000000, ended_at: null };
   vi.setSystemTime(session.started_at + 3 * 60 * 60_000);
   const container = mountForTooltip(<SessionRelativeTime session={session} />);
@@ -145,6 +146,6 @@ it("shows how long ago a session that is not archived was created, and writes ou
   expect(trigger(container).getAttribute("aria-label")).toMatch(/^Created /);
   expect(trigger(container).getAttribute("aria-label")).not.toContain("Archived");
   enter(trigger(container));
-  runOut();
+  runPendingTimers();
   expect(openTooltip()!.textContent).toMatch(/^Created /);
 });

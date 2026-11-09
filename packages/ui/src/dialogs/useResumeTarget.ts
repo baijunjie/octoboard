@@ -15,7 +15,7 @@ import { useChoiceGroups } from "./useLaunchChoice";
 import { useLocatedConversation } from "./useLocatedConversation";
 
 /** How long the typed Session ID rests before the daemon is asked where its conversation is. */
-const LOCATE_DELAY_MS = 300;
+export const LOCATE_DELAY_MS = 300;
 
 /** What the Resume tab found for the ID. A session of the project is classified by its state now,
  * which may have moved on since the daemon's reply: an archived or interrupted one is resumed, any

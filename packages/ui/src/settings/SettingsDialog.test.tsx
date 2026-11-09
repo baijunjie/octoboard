@@ -1,17 +1,20 @@
 // @vitest-environment jsdom
+import { setInteractionModality } from "react-aria";
 import { useContext, useEffect } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext";
-import { SettingsDialog } from "./SettingsDialog";
+import { MAX_FRAMES_TO_WAIT_FOR_MODAL, SettingsDialog } from "./SettingsDialog";
 import type { SettingsNavigation } from "./sections";
 import type { HostFacts } from "../platform/host";
 import { PlatformProvider } from "../platform/react";
 import { browserHost } from "../platform/host";
 import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { matchesWidthQuery } from "../test/viewport";
+import { framesAsTimers, settleFrames } from "../components/dialog/dialogTestSupport";
+import { fakeTimers, runOutTimers } from "../test/clock";
 
 beforeEach(() => {
   const globals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -111,9 +114,10 @@ it("marks no tab when the Add agent dialog takes focus in its place", async () =
 });
 
 it("follows a later request: another section is shown and its tab takes focus", async () => {
+  framesAsTimers("pointer");
   const { show, selected } = mount({ nonce: 1, section: "accounts", addAgent: false });
   show({ nonce: 2, section: "git", addAgent: false });
-  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
+  await settleFrames();
   expect(selected()?.textContent).toContain("Git");
   expect(document.activeElement?.textContent).toBe(selected()?.textContent);
 });
@@ -176,20 +180,24 @@ it("asks account forms to close for every later navigation request", async () =>
 });
 
 it("waits for a modal still in front, such as the Add agent dialog being dismissed, before the new tab takes focus", async () => {
+  act(() => setInteractionModality("pointer"));
+  onTestFinished(() => { act(() => setInteractionModality("pointer")); });
+  fakeTimers();
   const { show, selected } = mount({ nonce: 1, section: "accounts", addAgent: false });
   await act(async () => {});
   // What a modal in front of Settings does to it: makes it inert to assistive technology.
   const settings = document.querySelector('[role="dialog"]')!;
   settings.setAttribute("aria-hidden", "true");
   onTestFinished(() => settings.removeAttribute("aria-hidden"));
-  const frames = (count: number) => act(async () => {
-    for (let i = 0; i < count; i++) await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
-  });
+  runOutTimers();
   show({ nonce: 2, section: "git", addAgent: false });
-  await frames(4);
+  // Advance frames explicitly, so other pending timers cannot turn a step into less than a frame.
+  // The tab tries on each frame and gives up after `MAX_FRAMES_TO_WAIT_FOR_MODAL` retries,
+  // so it is still waiting one frame short of that.
+  for (let frame = 0; frame < MAX_FRAMES_TO_WAIT_FOR_MODAL - 1; frame += 1) act(() => void vi.advanceTimersToNextFrame());
   expect(selected()?.textContent).toContain("Git");
   expect(document.activeElement).not.toBe(selected());
   settings.removeAttribute("aria-hidden");
-  await frames(3);
+  act(() => void vi.advanceTimersToNextFrame());
   expect(document.activeElement).toBe(selected());
 });

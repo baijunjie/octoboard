@@ -5,8 +5,8 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS, READ_TIME_MS } from "../components/announce/StatusAnnouncer";
 import { errorAlerts } from "../components/alerts/errorAlerts";
-import { AFTER_FOCUS_MOVE_DELAY_MS, READ_TIME_MS } from "../components/announce/StatusAnnouncer";
 import { windowAttention } from "../components/announce/windowTestSupport";
 import { startResizeDrag } from "../components/panel/resizeDrag";
 import type { PlatformAdapter } from "../platform";
@@ -19,9 +19,12 @@ import { sessionOf } from "../fixtures/builders";
 import { CATALOGS, format } from "../i18n/catalog";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { Language } from "../i18n/languages";
+import { MAX_AUTO_RECONNECT_ATTEMPTS, reconnectDelay } from "./reconnectPolicy";
+import { PAST_ANY_RETRY_MS } from "./reconnectTestSupport";
 import type { TermStatus } from "./TerminalController";
-import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
+import { LOADING_LIMIT_MS, TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 import { BROWSER_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -104,7 +107,7 @@ const roots: Root[] = [];
 let attention: ReturnType<typeof windowAttention>;
 beforeEach(() => {
   attention = windowAttention();
-  vi.useFakeTimers();
+  fakeTimers();
   platform.links = undefined;
   request.mockClear();
   daemon = testDaemon({ state: { connectionState: "open" }, request, terminalUrl: () => "" });
@@ -112,10 +115,6 @@ beforeEach(() => {
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
-  act(() => void vi.runOnlyPendingTimers());
-  expect(vi.getTimerCount()).toBe(0);
-  vi.useRealTimers();
-  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
 });
 
 const session = sessionOf("s-1", "c-1", undefined, "Work", "working");
@@ -135,12 +134,11 @@ function mount() {
 /** Fails the attempt in flight, then lets the next one start after the longest backoff delay. */
 function failAttempt(): void {
   FakeController.last.settle("closed");
-  act(() => void vi.advanceTimersByTime(8000));
+  act(() => void vi.advanceTimersByTime(reconnectDelay(MAX_AUTO_RECONNECT_ATTEMPTS)));
 }
 
-const FIRST_WRITE_MS = 100;
 /** Lets the status regions pass their first write delay. */
-const speak = () => act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+const speak = () => act(() => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
 const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 /** The terminal's own isolated layer, which a cover makes inert; announcers that must stay heard sit outside it. */
 const isolatedTerminal = (container: HTMLElement) => container.querySelector("[data-region=terminal] > .isolate")!;
@@ -149,7 +147,7 @@ const status = (container: HTMLElement) => container.querySelector("[role=status
 
 it("keeps the loading cover up past the limit while the first connect hangs", () => {
   const { container } = mount();
-  act(() => void vi.advanceTimersByTime(60_000));
+  act(() => void vi.advanceTimersByTime(LOADING_LIMIT_MS + 1));
   expect(status(container)).toBe("Loading terminal…");
 });
 
@@ -159,7 +157,7 @@ it("keeps the cover up past the loading limit while the connection is failing", 
   expect(status(container)).toBe("Loading terminal…");
   failAttempt();
   expect(status(container)).toBe("Reconnecting the terminal…");
-  act(() => void vi.advanceTimersByTime(60_000));
+  act(() => void vi.advanceTimersByTime(LOADING_LIMIT_MS + 1));
   expect(status(container)).toBe("Reconnecting the terminal…");
   expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
 });
@@ -167,7 +165,7 @@ it("keeps the cover up past the loading limit while the connection is failing", 
 it("still lets a silent, connected terminal go bare after the loading limit", () => {
   const { container } = mount();
   FakeController.last.settle("open");
-  act(() => void vi.advanceTimersByTime(10_001));
+  act(() => void vi.advanceTimersByTime(LOADING_LIMIT_MS + 1));
   expect(status(container)).toBe("");
 });
 
@@ -449,7 +447,7 @@ it("covers a starting session with its own message and attaches only once it is 
   expect(status(container)).toBe("Starting session…");
   expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
   // No process to connect to, so no error cover, no Reconnect and no unavailable message.
-  act(() => void vi.advanceTimersByTime(60_000));
+  act(() => void vi.advanceTimersByTime(LOADING_LIMIT_MS + 1));
   expect(status(container)).toBe("Starting session…");
   expect(container.querySelector<HTMLButtonElement>("button:not([hidden])")).toBeNull();
   expect(controller.attaches).toBe(0);
@@ -551,7 +549,7 @@ it("covers the history with the loading state while a reopen is under way", asyn
   const { container, show } = mountArchived();
   await act(async () => {});
   show({ resuming: true });
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
   expect(container.querySelector("[inert] section")).not.toBeNull();
   const statuses = [...container.querySelectorAll("[role=status]")].map((node) => node.textContent);
   expect(statuses).toContain("Resuming session…");
@@ -638,7 +636,7 @@ it("mounts the cover's status region empty and writes its first text after the f
   const [region] = statusRegions(container);
   expect(region.textContent).toBe("");
   expect(container.textContent).toContain("Loading terminal…");
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS - 1));
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS - 1));
   expect(region.textContent).toBe("");
   act(() => void vi.advanceTimersByTime(1));
   expect(region.textContent).toBe("Loading terminal…");
@@ -653,12 +651,12 @@ it("mounts the switching and resuming statuses empty, then writes them", () => {
   render(root, { ...session, switching_account: true });
   const switching = statusRegions(container)[0];
   expect(switching.textContent).toBe("");
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
   expect(switching.textContent).toBe("Switching account");
   const noProcessPane = mountArchived();
   noProcessPane.show({ resuming: true });
   expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toEqual(["", "", "", "", ""]);
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
   expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toContain("Resuming session…");
 });
 
@@ -684,7 +682,7 @@ it("speaks a no-process bar's sentence once, from a region mounted empty, and le
   const sentence = [...container.querySelectorAll("[aria-hidden=true]")].find((node) => node.textContent === "Not running");
   expect(sentence).toBeDefined();
   expect(container.querySelector("button")?.closest("[aria-hidden=true]")).toBeNull();
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
   expect(spoken().filter((text) => text === "Not running")).toHaveLength(1);
   // Resume's own cover takes the bar's place without a second copy of the bar's sentence.
   render(root, { ...interrupted, switching_account: true });
@@ -695,7 +693,7 @@ it("speaks an archived bar's sentence and leaves the history's own announcer to 
   request.mockResolvedValueOnce({ type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as never);
   const { container } = mountArchived();
   await act(async () => {});
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
   const spoken = statusRegions(container).map((region) => region.textContent).filter(Boolean);
   expect(spoken).toEqual(["This session is archived"]);
 });
@@ -711,7 +709,7 @@ it("holds the no-process sentence while a modal is open and writes it after the 
   speak();
   expect(spoken()).toEqual([]);
   show(false);
-  act(() => void vi.advanceTimersByTime(1499));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
   expect(spoken()).toEqual([]);
   act(() => void vi.advanceTimersByTime(1));
   expect(spoken()).toEqual(["Not running"]);
@@ -730,11 +728,11 @@ it("keeps a sentence already spoken in the region while a modal opens and closes
   const text = () => statusRegions(container).map((node) => node.textContent).filter(Boolean);
   show(true);
   expect(text()).toEqual(["Not running"]);
-  act(() => void vi.advanceTimersByTime(500));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS / 3));
   expect(text()).toEqual(["Not running"]);
   show(false);
   expect(text()).toEqual(["Not running"]);
-  act(() => void vi.advanceTimersByTime(3000));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS * 2));
   expect(text()).toEqual(["Not running"]);
 });
 
@@ -930,7 +928,7 @@ describe("a session whose process the daemon cannot reach", () => {
     expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
     expect(buttons(container)).toEqual([]);
     expect(container.textContent).not.toContain("Not running");
-    act(() => void vi.advanceTimersByTime(60_000));
+    act(() => void vi.advanceTimersByTime(PAST_ANY_RETRY_MS));
     expect(controller.attaches).toBe(0);
   });
 
@@ -945,7 +943,7 @@ describe("a session whose process the daemon cannot reach", () => {
     const attaches = FakeController.last.attaches;
     // Past every automatic attempt there is: no attach, no Reconnect, no failure cover.
     FakeController.last.settle("closed");
-    act(() => void vi.advanceTimersByTime(120_000));
+    act(() => void vi.advanceTimersByTime(PAST_ANY_RETRY_MS));
     FakeController.last.settle("closed");
     expect(FakeController.last.attaches).toBe(attaches);
     expect(buttons(container)).toEqual([]);
@@ -1008,7 +1006,7 @@ describe("a session whose process the daemon cannot reach", () => {
     FakeController.last.paint();
     expect(document.activeElement).toBe(outside);
     show(pending);
-    act(() => void vi.advanceTimersByTime(1500));
+    act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
     expect(spoken(container)).toEqual([SENTENCE]);
     const focuses = FakeController.last.focuses;
     show(session);
@@ -1075,7 +1073,7 @@ describe("a session whose process the daemon cannot reach", () => {
     FakeController.last.settle("closed");
     expect(status(container)).toBe("Terminal disconnected");
     render(root, pending);
-    act(() => void vi.advanceTimersByTime(300_000));
+    act(() => void vi.advanceTimersByTime(PAST_ANY_RETRY_MS));
     const attaches = FakeController.last.attaches;
     render(root, session);
     expect(FakeController.last.held).toBe(false);
@@ -1092,7 +1090,7 @@ describe("a session whose process the daemon cannot reach", () => {
     expect(status(container)).toBe("");
     // The attempts are fresh: a drop now is retried again.
     FakeController.last.settle("closed");
-    act(() => void vi.advanceTimersByTime(8000));
+    act(() => void vi.advanceTimersByTime(reconnectDelay(MAX_AUTO_RECONNECT_ATTEMPTS)));
     expect(FakeController.last.attaches).toBe(attaches + 2);
   });
 
@@ -1126,7 +1124,7 @@ describe("a session whose process the daemon cannot reach", () => {
     expect(spoken(container)).toEqual([SENTENCE]);
     render(root, { ...pending, title: "Renamed" });
     FakeController.last.settle("closed");
-    act(() => void vi.advanceTimersByTime(60_000));
+    act(() => void vi.advanceTimersByTime(PAST_ANY_RETRY_MS));
     render(root, { ...pending, title: "Renamed again", status: "idle" });
     expect(spoken(container)).toEqual([SENTENCE]);
     expect(statusRegions(container).map((r) => r.textContent)).not.toContain(TITLE);
@@ -1138,7 +1136,7 @@ describe("a session whose process the daemon cannot reach", () => {
     render(root, pending);
     expect(document.activeElement).toBe(region(container));
     speak();
-    act(() => void vi.advanceTimersByTime(1500));
+    act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
     expect(spoken(container)).toEqual([]);
     // Opened pending with focus landed in the cover before the delay ends: not said either.
     const other = document.body.appendChild(document.createElement("div"));
@@ -1148,7 +1146,7 @@ describe("a session whose process the daemon cannot reach", () => {
     act(() => otherRoot.render(host(<TerminalPane ref={handle} session={pending} onResume={async () => true} onAddAgent={() => {}} />)));
     act(() => handle.current?.focus());
     expect(document.activeElement).toBe(region(other));
-    act(() => void vi.advanceTimersByTime(1500));
+    act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
     expect(spoken(other)).toEqual([]);
   });
 
@@ -1159,13 +1157,13 @@ describe("a session whose process the daemon cannot reach", () => {
     render(root, pending);
     speak();
     expect(spoken(container)).toEqual([]);
-    act(() => void vi.advanceTimersByTime(1500));
+    act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
     expect(spoken(container)).toEqual([SENTENCE]);
     render(root, sessionOf("s-2", "c-1", undefined, "Other", "working"));
     expect(spoken(container)).toEqual([]);
     render(root, sessionOf("s-3", "c-1", undefined, "Third", "working", { holder_link: "pending" }));
     expect(spoken(container)).toEqual([]);
-    act(() => void vi.advanceTimersByTime(1500));
+    act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
     expect(spoken(container)).toEqual([SENTENCE]);
   });
 
@@ -1181,7 +1179,7 @@ describe("a session whose process the daemon cannot reach", () => {
 
   it("writes the sentence of a pane opened pending after the wait, into a live announcer outside the inert terminal", () => {
     const { container } = open(pending);
-    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_MS - 1);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_DELAY_MS - 1);
     expect(spoken(container)).toEqual([]);
     advance(1);
     expect(spoken(container)).toEqual([SENTENCE]);
@@ -1207,7 +1205,7 @@ describe("a session whose process the daemon cannot reach", () => {
   it("starts the wait over when the user leaves the window and comes back before it ends", () => {
     const setAttended = attention;
     const { container } = open(pending);
-    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_MS - 1);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_DELAY_MS - 1);
     setAttended(false);
     setAttended(true);
     advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
@@ -1230,9 +1228,9 @@ describe("a session whose process the daemon cannot reach", () => {
 
   it("does not carry the wait of the first pending session over to the one switched to", () => {
     const { container, root } = open(pending);
-    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_MS - 1);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_DELAY_MS - 1);
     render(root, sessionOf("s-3", "c-1", undefined, "Third", "working", { holder_link: "pending" }));
-    advance(FIRST_WRITE_MS + 1);
+    advance(FIRST_WRITE_DELAY_MS + 1);
     expect(spoken(container)).toEqual([]);
     advance(AFTER_FOCUS_MOVE_DELAY_MS);
     expect(spoken(container)).toEqual([SENTENCE]);
@@ -1240,13 +1238,13 @@ describe("a session whose process the daemon cannot reach", () => {
 
   it("drops the sentence unsaid when another session is selected, or the pending ends, before the wait", () => {
     const first = open(pending);
-    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_MS - 1);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_DELAY_MS - 1);
     render(first.root, sessionOf("s-2", "c-1", undefined, "Other", "working"));
     advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
     expect(spoken(first.container)).toEqual([]);
 
     const second = open(sessionOf("s-4", "c-1", undefined, "Fourth", "working", { holder_link: "pending" }));
-    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_MS - 1);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - FIRST_WRITE_DELAY_MS - 1);
     render(second.root, sessionOf("s-4", "c-1", undefined, "Fourth", "working"));
     advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
     expect(spoken(second.container)).toEqual([]);
@@ -1316,7 +1314,7 @@ describe("a session whose process the daemon cannot reach", () => {
     const { container, root } = mount();
     speak();
     render(root, { ...pending, screen_inexact: false });
-    act(() => void vi.advanceTimersByTime(1500));
+    act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
     render(root, { ...pending, screen_inexact: true });
     speak();
     expect(spoken(container)).toEqual([SENTENCE]);

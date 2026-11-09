@@ -10,9 +10,11 @@ import { testDaemon } from "../test/testDaemon";
 import { registerSettingsLauncher } from "../settings/settingsLauncher";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { HandoffDialog } from "./HandoffDialog";
+import { LOCATE_DELAY_MS } from "./sessionDialogTestSupport";
 import { SessionDialog } from "./SessionDialog";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
 import { useConfirmIncompleteLaunch, type ConfirmLaunch } from "./useConfirmIncompleteLaunch";
+import { fakeTimers, flushPromises } from "../test/clock";
 
 vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
@@ -58,7 +60,7 @@ function render(accounts: Account[], ui: (daemon: Daemon) => React.ReactElement,
 const press = (label: string) => act(async () => Array.from(document.body.querySelectorAll("button")).filter((button) => button.textContent === label).at(-1)!.click());
 /** Closes the question with its close button, which is the only way out besides Escape and the two answers. */
 const close = () => act(async () => Array.from(document.body.querySelectorAll<HTMLElement>(ASKING + ' button[aria-label="Close"]')).at(-1)!.click());
-const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+const settle = flushPromises;
 const sent = (request: ReturnType<typeof render>["request"], type: string) => request.mock.calls.filter(([body]) => body.type === type);
 
 /** Renders the hook with no dialog around its question and returns the `confirmLaunch` it hands out. */
@@ -162,8 +164,7 @@ const archived = sessionOf("s-old", "c-1", project.id, "Old work", "archived", {
 
 /** Opens the Resume tab of the new-session dialog and types the ID of the archived session, whose account is `half("claude")`. */
 async function resumeArchived(onResume: (sessionId: string) => Promise<void>) {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   const rendered = render([half("claude")], (daemon) => sessionDialog(daemon, onResume), [archived]);
   await act(async () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]')).find((tab) => tab.textContent === "Resume conversation")!.click());
   act(() => {
@@ -171,7 +172,7 @@ async function resumeArchived(onResume: (sessionId: string) => Promise<void>) {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, "11111111-2222-3333-4444-555555555555");
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(LOCATE_DELAY_MS); });
   return rendered;
 }
 

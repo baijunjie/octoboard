@@ -38,7 +38,7 @@ function parseActive(raw: string | null): Record<string, string> {
 
 /** The tab each project's Terminal panel shows, by terminal id: a per-client choice, as the open
  * panels are, so another window keeps its own. */
-const activePreference = createPersistedPreference<Record<string, string>>(
+export const activePreference = createPersistedPreference<Record<string, string>>(
   PREFERENCE_KEYS.activeShellTerminals,
   parseActive,
   (value) => JSON.stringify(value),

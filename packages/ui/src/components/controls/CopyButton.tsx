@@ -9,11 +9,11 @@ import { TitledControl } from "../hint/TitledControl";
 
 /** How long the copied state outlasts the tooltip's close, so the tooltip's exit animation (100 ms)
  * is over before the text and icon go back, and the user never sees them flip while it fades. */
-const RESET_AFTER_TOOLTIP_CLOSE_MS = 150;
+export const RESET_AFTER_TOOLTIP_CLOSE_MS = 150;
 
 /** How long the copied state lasts when no tooltip is open to close it (a press that did not show
  * one, such as a tap). */
-const COPIED_HOLD_MS = 2000;
+export const COPIED_HOLD_MS = 2000;
 
 /**
  * An icon button that puts `text` on the clipboard and says so where the user is looking: its

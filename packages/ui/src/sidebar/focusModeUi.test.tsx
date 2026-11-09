@@ -2,7 +2,7 @@
 import { act } from "react";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { enter, openTooltip, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { enter, openTooltip } from "../components/hint/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import { menuOfTrigger, partSelector } from "../primitives";
@@ -13,6 +13,7 @@ import { testDaemon } from "../test/testDaemon";
 import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import type { SidebarHandlers } from "./types";
+import { fakeTimers, runPendingTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 afterEach(() => restoreAllBindings());
@@ -42,10 +43,10 @@ it.each(["project", "console"] as const)("omits Enter focus mode from a selected
 });
 
 it.each(["project", "console"] as const)("shows the live global focus binding in the %s exit tooltip", (view) => {
-  const settle = withFakeTimers();
+  fakeTimers();
   const host = mount(view);
   enter(host.querySelector<HTMLButtonElement>('button[aria-label="Leave focus mode"]')!);
-  settle();
+  runPendingTimers();
   const tooltip = openTooltip()!;
   expect(tooltip.textContent).toContain("Leave focus mode");
   expect(tooltip.querySelector("kbd")?.textContent?.endsWith("F")).toBe(true);

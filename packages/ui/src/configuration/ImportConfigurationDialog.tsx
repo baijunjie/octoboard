@@ -63,7 +63,7 @@ type Stage =
 
 /** How long after the window regains focus a file may still arrive before the picker is taken as
  * dismissed: a browser reports the chosen file just after the focus returns. */
-const FOCUS_GRACE_MS = 500;
+export const FOCUS_GRACE_MS = 500;
 
 /** Runs the platform's file picker: what it returns, or `undefined` once `failed` has been told why it threw; `settled`
  * runs either way. A function of its own because the React Compiler skips whatever holds a `try` with a `finally`. */

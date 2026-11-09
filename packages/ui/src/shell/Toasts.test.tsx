@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { toast } from "@heroui/react";
-import { afterEach, expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
@@ -15,6 +15,7 @@ import { ErrorAlerts } from "./ErrorAlerts";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { Toasts } from "./Toasts";
 import { matchesWidthQuery } from "../test/viewport";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -35,12 +36,13 @@ function stubWidth(width: number): void {
     removeEventListener: () => {},
   }));
 }
-
-afterEach(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); vi.unstubAllGlobals(); });
+// Registered before any test's `fakeTimers()`, so the globals stay stubbed while its run-out fires the timers still pending.
+beforeEach(() => {
+  onTestFinished(() => void vi.unstubAllGlobals());
+});
 
 it.each(["model_change_did_not_stop", "model_change_did_not_come_up"])("names the affected session once in a %s alert and retains the failure metadata", (code) => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = {
@@ -72,10 +74,7 @@ it.each(["model_change_did_not_stop", "model_change_did_not_come_up"])("names th
 it("puts the toasts at the top through iPad portrait and at the bottom end above 768px", () => {
   // The toast queue is a module-level singleton that closes a toast on a timer of its own, which an
   // unmounted root cannot cancel; faked timers let the test run those exits to the end itself.
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    vi.useRealTimers();
-  });
+  fakeTimers();
   for (const [width, expected] of [
     [390, "toast-region--top"],
     [767, "toast-region--top"],
@@ -116,8 +115,7 @@ it("puts the toasts at the top through iPad portrait and at the bottom end above
 });
 
 it("renders a coded shell timeout with a separate title and command while plain messages stay plain", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
@@ -153,8 +151,7 @@ it.each([
   ["account_sharing_in_progress", { account: "a1", name: "Work" }, "is being changed", "Wait for the change to finish"],
   ["account_sharing_failed", { account: "a1", name: "Work", detail: "x", items: "[]" }, "Nothing was rolled back", "try once more with the account’s Share default configuration switch"],
 ])("words the sharing refusal %s with the account and a remedy, not as an unexpected failure", (code, params, sentence, remedy) => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
@@ -182,8 +179,7 @@ it.each([
   ["config_dir_unreachable", { agent: "Claude Code", path: "/home/w/.claude" }, "is not a directory the daemon can reach", "correct the path in the dialog"],
   ["relocation_failed", { path: "/t", stage: "copy", cause: "other", detail: "odd" }, "could not be copied into", "Then try the switch again"],
 ])("shows a failed automatic switch whose cause is %s with its own sentence as the only remedy", (reasonCode, nested, reasonLine, remedy) => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
@@ -212,8 +208,7 @@ it.each([
 });
 
 it("tells a failed automatic switch's user to copy out the older item it kept aside, without asking them to try the switch again", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
@@ -240,8 +235,7 @@ it("tells a failed automatic switch's user to copy out the older item it kept as
 });
 
 it("adds the remedy for what the system said to the copy-out advice of a failed automatic switch, each once", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
@@ -269,8 +263,7 @@ it("adds the remedy for what the system said to the copy-out advice of a failed 
 });
 
 it("adds the remedy for what the system said to a failed automatic switch with a worded cause", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
@@ -302,8 +295,7 @@ it.each([
   ["an internal cause with nothing recognisable in its text", "internal_error", "spawn failed", true],
   ["an internal cause whose text names a full disk", "internal_error", "No space left on device (os error 28)", false],
 ])("keeps the report guidance for a failed automatic switch with %s only when nothing in it is recognised", (_case, reasonCode, reason, reported) => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
@@ -332,8 +324,7 @@ it.each([
 });
 
 it("sets the path of a coded daemon error as code in its acknowledgement dialog", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
@@ -355,8 +346,7 @@ it("sets the path of a coded daemon error as code in its acknowledgement dialog"
 });
 
 it("shows a coded notice under the session's location, the path as code in the description", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = {
@@ -412,15 +402,13 @@ it.each<{ code: string; params: Record<string, string>; title: string; sentence:
     // An expected failure, not one to report as a bug.
     expect(explanation.textContent).not.toContain("Report issue");
   } finally {
-    act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
     act(() => root.unmount());
     container.remove();
   }
 });
 
 it("shows a failed launch's shell timeout once: the title names the launch, the details sit beneath it", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
@@ -447,8 +435,7 @@ it("shows a failed launch's shell timeout once: the title names the launch, the 
 });
 
 it("shows the error heading above a structured error's details when the alert has a session", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const session = { id: "s1", console_id: "c1", project_id: "p1" } as unknown as import("../protocol").Session;
@@ -479,8 +466,7 @@ it.each([
   ["missing project", "p1", false, "Project: Unknown", undefined],
   ["missing console", undefined, false, "Console: Unknown", undefined],
 ] as const)("labels the session and its %s separately in an error alert", (_case, projectId, known, placeText, placeName) => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = {
@@ -518,8 +504,7 @@ it.each([
 });
 
 it("titles a failed launch's alert for the failure, never with the session's name, which is in its body, even when the session is gone", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = {
@@ -559,8 +544,7 @@ it("titles a failed launch's alert for the failure, never with the session's nam
 });
 
 it("titles the toast of an automatic account switch with the session's project and names the switched session in its description", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = {
@@ -590,8 +574,7 @@ it("titles the toast of an automatic account switch with the session's project a
 });
 
 it("preserves a failed launch's name and nested path, and renders rich notices from their plain signature", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = { ...daemon, onNotification: (listener) => { deliver = listener; return () => {}; } };
@@ -621,8 +604,7 @@ it("preserves a failed launch's name and nested path, and renders rich notices f
 /** Mounts the toasts and the alert over a daemon whose notifications `deliver` sends, and gives the daemon's two
  * broadcasts about a session's `code` as notifications. */
 function mountForWithdrawal() {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   stubWidth(1280);
   let deliver!: (request: import("../store").WindowNotification) => void;
   const source: Daemon = {

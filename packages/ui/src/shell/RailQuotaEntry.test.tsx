@@ -5,7 +5,8 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { accountOf } from "../fixtures/builders";
 import { presence, stubListMotion } from "../components/motion/listMotionTestSupport";
-import { enter, leave, mountForTooltip, openTooltip, pointer, press as pressWith, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { HOVER_CLOSE_DELAY_MS, HOVER_OPEN_DELAY_MS } from "../components/hint/hintPopover";
+import { enter, leave, mountForTooltip, openTooltip, pointer, press as pressWith } from "../components/hint/tooltipTestSupport";
 import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { Account, AccountQuota, Agent, Availability, Event, Session } from "../protocol";
@@ -16,6 +17,7 @@ import { MODAL_OPEN } from "../components/focus/selectors";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
+import { fakeTimers, runOutTimers } from "../test/clock";
 
 // jsdom has no layout, so a scroller never reports overflow. This one reports the way the library's
 // does, once when it mounts: overflowing when its list holds the marked account. Each scroller's report
@@ -61,8 +63,10 @@ vi.mock("../components/motion/useListMotion", async (importOriginal) => {
 
 const MINUTE = 60_000;
 const NOW = Date.UTC(2026, 9, 18, 12, 0, 0);
-const OPEN_DELAY = 250;
-const CLOSE_DELAY = 150;
+const OPEN_DELAY = HOVER_OPEN_DELAY_MS;
+const CLOSE_DELAY = HOVER_CLOSE_DELAY_MS;
+/** Past both hover delays, to see the panel stay or close however the pointer moved. */
+const PAST_HOVER_DELAYS = OPEN_DELAY + CLOSE_DELAY;
 
 const request = vi.fn(() => Promise.resolve({} as Event));
 const showNotice = vi.fn();
@@ -157,13 +161,13 @@ const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
 /** Opens the panel the way a mouse does, by resting on the button: a mouse click opens nothing. */
 function openPanel(button: Element) {
-  if (!vi.isFakeTimers()) withFakeTimers();
+  if (!vi.isFakeTimers()) fakeTimers();
   enter(button);
   advance(OPEN_DELAY);
 }
 
 it("floats the panel in after a short rest on the button, and out once the pointer is off both", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   enter(button);
   advance(OPEN_DELAY - 1);
@@ -181,14 +185,14 @@ it("floats the panel in after a short rest on the button, and out once the point
 });
 
 it("keeps the panel while the pointer crosses from the button to it, and closes when it leaves the panel", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   enter(button);
   advance(OPEN_DELAY);
   leave(button);
   advance(CLOSE_DELAY - 10);
   act(() => void panel()!.dispatchEvent(pointer("pointerover")));
-  advance(1000);
+  advance(PAST_HOVER_DELAYS);
   expect(panel()).not.toBeNull();
 
   act(() => void panel()!.dispatchEvent(pointer("pointerout")));
@@ -197,7 +201,7 @@ it("keeps the panel while the pointer crosses from the button to it, and closes 
 });
 
 it("has no tooltip, on hover or on keyboard focus, while its name stays", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button, outside } = mount();
   enter(button);
   advance(OPEN_DELAY);
@@ -211,27 +215,27 @@ it("has no tooltip, on hover or on keyboard focus, while its name stays", () => 
     outside.focus();
   });
   act(() => button.focus());
-  advance(1000);
+  advance(PAST_HOVER_DELAYS);
   expect(openTooltip()).toBeNull();
   expect(button.getAttribute("aria-label")).toBe("Account usage");
 });
 
 it("shows nothing for a pointer that only crosses the button", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   enter(button);
   advance(OPEN_DELAY - 50);
   leave(button);
-  advance(1000);
+  advance(PAST_HOVER_DELAYS);
   expect(panel()).toBeNull();
 });
 
 it("opens nothing on a mouse click, and a click on a hover-opened panel's button leaves it as it is, not pinned", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   click(button);
   expect(panel()).toBeNull();
-  advance(1000);
+  advance(PAST_HOVER_DELAYS);
   expect(panel()).toBeNull();
 
   enter(button);
@@ -239,16 +243,16 @@ it("opens nothing on a mouse click, and a click on a hover-opened panel's button
   click(button);
   expect(panel()!.getAttribute("aria-modal")).toBe("false");
   leave(button);
-  advance(1000);
+  advance(PAST_HOVER_DELAYS);
   expect(panel()).toBeNull();
 });
 
 it("opens on a touch or pen tap and on keyboard activation, and stays open as the pointer goes", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   pressWith(button, "touch");
   expect(panel()).not.toBeNull();
-  advance(1000);
+  advance(PAST_HOVER_DELAYS);
   expect(panel()).not.toBeNull();
   press(panel()!, "Escape");
   expect(panel()).toBeNull();
@@ -261,12 +265,12 @@ it("opens on a touch or pen tap and on keyboard activation, and stays open as th
   act(() => button.focus());
   press(button, "Enter");
   expect(panel()).not.toBeNull();
-  advance(1000);
+  advance(PAST_HOVER_DELAYS);
   expect(panel()).not.toBeNull();
 });
 
 it("moves keyboard focus into a panel the keyboard pinned, and Escape closes it and returns focus to the button", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   act(() => button.focus());
   press(button, "Enter");
@@ -275,12 +279,12 @@ it("moves keyboard focus into a panel the keyboard pinned, and Escape closes it 
 
   press(document.activeElement as HTMLElement, "Escape");
   expect(panel()).toBeNull();
-  advance(100);
+  runOutTimers();
   expect(document.activeElement).toBe(button);
 });
 
 it("moves a keyboard pin's focus to Add agent when there is no tab to take it", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount(undefined, []);
   act(() => button.focus());
   press(button, "Enter");
@@ -288,30 +292,30 @@ it("moves a keyboard pin's focus to Add agent when there is no tab to take it", 
 });
 
 it("closes on a press outside, handing focus back to the button for a keyboard pin", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button, outside } = mount();
   act(() => button.focus());
   press(button, "Enter");
   pressWith(outside, "mouse");
   expect(panel()).toBeNull();
-  advance(100);
+  runOutTimers();
   expect(document.activeElement).toBe(button);
 });
 
 it("returns a tap-opened panel's focus to whatever held it, not to the button", () => {
-  withFakeTimers();
+  fakeTimers();
   const { before, button } = mount();
   act(() => before.focus());
   pressWith(button, "touch");
   expect(panel()!.contains(document.activeElement)).toBe(true);
   press(document.activeElement as HTMLElement, "Escape");
   expect(panel()).toBeNull();
-  advance(100);
+  runOutTimers();
   expect(document.activeElement).toBe(before);
 });
 
 it("closes a hover-opened panel on Escape and on a press outside", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button, outside } = mount();
   enter(button);
   advance(OPEN_DELAY);
@@ -326,7 +330,7 @@ it("closes a hover-opened panel on Escape and on a press outside", () => {
 });
 
 it("does not let Escape reach anything else while the panel is open", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   const seen = vi.fn();
   document.body.addEventListener("keydown", seen);
@@ -337,7 +341,7 @@ it("does not let Escape reach anything else while the panel is open", () => {
 });
 
 it("follows saved account order and updates it while the quota panel is open", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button, store } = mount();
   act(() => store.setState({ settings: { ...store.getState().settings, account_order: { claude: ["claude-work", null] } } }));
   openPanel(button);
@@ -348,7 +352,7 @@ it("follows saved account order and updates it while the quota panel is open", (
 });
 
 it("has one tab per added agent and lists each agent's accounts with plan and quota", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   openPanel(button);
   expect(tabs().map((tab) => tab.textContent)).toEqual(["Claude Code", "Codex"]);
@@ -368,7 +372,7 @@ it("has one tab per added agent and lists each agent's accounts with plan and qu
 });
 
 it("mounts each agent's account list once, not again in the hidden copy the tabs build their collection from", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   accountLists.mounted = 0;
   openPanel(button);
@@ -377,7 +381,7 @@ it("mounts each agent's account list once, not again in the hidden copy the tabs
 });
 
 it("marks a failed reading on its account's name line, and the mark's popover opens on a tap without closing the panel", async () => {
-  withFakeTimers();
+  fakeTimers();
   const { button, store } = mount();
   act(() => store.setState({ accountQuotas: [{ ...quota("claude", "claude-work", "pro"), unavailable: { code: "quota_timed_out", params: { agent: "Claude Code" }, message: "timed out" } }] }));
   openPanel(button);
@@ -406,23 +410,23 @@ function moveTo(from: Element, to: Element | null) {
 }
 
 it("keeps a hover-opened panel while the pointer crosses into a failed reading's popover, which Escape closes first, and closes it a grace after the pointer leaves", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button, store } = mount();
   act(() => store.setState({ accountQuotas: [{ ...quota("claude", "claude-work", "pro"), unavailable: { code: "quota_timed_out", params: { agent: "Claude Code" }, message: "timed out" } }] }));
   // Opened by hover alone, not pinned by a press.
   enter(button);
-  act(() => void vi.advanceTimersByTime(300));
+  act(() => void vi.advanceTimersByTime(OPEN_DELAY));
   expect(panel()).not.toBeNull();
   const mark = document.querySelector<HTMLElement>('[role="tabpanel"] button[aria-label^="Out of date"]')!;
   moveTo(button, panel());
   enter(mark);
-  act(() => void vi.advanceTimersByTime(300));
+  act(() => void vi.advanceTimersByTime(OPEN_DELAY));
   const reason = document.querySelector<HTMLElement>("[data-status-mark-popover]")!;
   expect(reason).not.toBeNull();
   expect(reason.hasAttribute("data-escape-topmost")).toBe(true);
   // Out of the panel and into the mark's popover, which stands outside it: the panel stays.
   moveTo(mark, reason.querySelector('[role="dialog"]'));
-  act(() => void vi.advanceTimersByTime(1000));
+  act(() => void vi.advanceTimersByTime(PAST_HOVER_DELAYS));
   expect(panel()).not.toBeNull();
   expect(document.querySelector("[data-status-mark-popover]")).not.toBeNull();
   act(() => void document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
@@ -430,12 +434,12 @@ it("keeps a hover-opened panel while the pointer crosses into a failed reading's
   expect(panel()).not.toBeNull();
   // Leaving for the page closes the panel after the grace.
   moveTo(panel()!, null);
-  act(() => void vi.advanceTimersByTime(1000));
+  act(() => void vi.advanceTimersByTime(PAST_HOVER_DELAYS));
   expect(panel()).toBeNull();
 });
 
 it("leaves a hover-opened panel's Escape to a terminal, to a text field with text and to an input method's composition, where focus is", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   const terminal = document.body.appendChild(document.createElement("div"));
   terminal.className = "xterm";
@@ -447,7 +451,7 @@ it("leaves a hover-opened panel's Escape to a terminal, to a text field with tex
     field.remove();
   });
   enter(button);
-  act(() => void vi.advanceTimersByTime(300));
+  act(() => void vi.advanceTimersByTime(OPEN_DELAY));
   const escape = (target: Element, init: KeyboardEventInit = {}) => {
     const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
     act(() => void target.dispatchEvent(event));
@@ -462,7 +466,7 @@ it("leaves a hover-opened panel's Escape to a terminal, to a text field with tex
 });
 
 it("leaves Escape to a terminal even with a mark's popover hover-opened in the hover-opened panel: neither closes", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button, store } = mount();
   act(() => store.setState({ accountQuotas: [{ ...quota("claude", "claude-work", "pro"), unavailable: { code: "quota_timed_out", params: { agent: "Claude Code" }, message: "timed out" } }] }));
   const terminal = document.body.appendChild(document.createElement("div"));
@@ -472,7 +476,7 @@ it("leaves Escape to a terminal even with a mark's popover hover-opened in the h
   openPanel(button);
   act(() => helper.focus());
   enter(document.querySelector<HTMLElement>('[role="tabpanel"] button[aria-label^="Out of date"]')!);
-  advance(300);
+  advance(OPEN_DELAY);
   expect(document.querySelector("[data-status-mark-popover][data-escape-topmost]")).not.toBeNull();
   const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
   act(() => void helper.dispatchEvent(event));
@@ -482,7 +486,7 @@ it("leaves Escape to a terminal even with a mark's popover hover-opened in the h
 });
 
 it("recedes a used-up account, naming it used up, and draws it as before once its window resets", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button, store } = mount();
   const used = quota("claude", "claude-work", "pro");
   used.windows = [{ ...used.windows[0]!, used_percent: 100, resets_at: NOW + 10 * MINUTE }];
@@ -504,7 +508,7 @@ it("recedes a used-up account, naming it used up, and draws it as before once it
 });
 
 it("holds the panel's height across tabs, so that choosing a tab with fewer accounts moves nothing under the pointer", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   openPanel(button);
   // jsdom has no layout, so the guarantee is checked in its structure: every tab's panel stands in
@@ -535,7 +539,7 @@ it("holds the panel's height across tabs, so that choosing a tab with fewer acco
 });
 
 it("makes the list a scroll region only on a tab whose own list overflows", () => {
-  withFakeTimers();
+  fakeTimers();
   overflowing.marker = "Codex Work";
   onTestFinished(() => void (overflowing.marker = ""));
   const { button } = mount();
@@ -554,7 +558,7 @@ it("makes the list a scroll region only on a tab whose own list overflows", () =
 });
 
 it("is no tab stop of its own in front of a list that has become a scroll region, so Tab goes from the tabs to the list", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   openPanel(button);
   // The lists find they overflow only after the panel has rendered without a region.
@@ -566,28 +570,28 @@ it("is no tab stop of its own in front of a list that has become a scroll region
 });
 
 it("lists the agents that are added and installed in the order they were added, and no other", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount({ claude: "available", codex: "available", grok: "available" }, ["grok", "codex"]);
   openPanel(button);
   expect(tabs().map((tab) => tab.textContent)).toEqual(["Grok Build", "Codex"]);
 });
 
 it("leaves out an added agent that is not installed", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount({ claude: "available", codex: "available", grok: "unavailable" }, ["grok", "codex"]);
   openPanel(button);
   expect(tabs().map((tab) => tab.textContent)).toEqual(["Codex"]);
 });
 
 it("lists every installed agent while the daemon has not decided the added list", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount(undefined, null);
   openPanel(button);
   expect(tabs().map((tab) => tab.textContent)).toEqual(["Claude Code", "Codex", "Test Agent"]);
 });
 
 it("says so, pointing to Settings, when agents are installed but none is added", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount(undefined, []);
   openPanel(button);
   expect(tabs()).toHaveLength(0);
@@ -602,7 +606,7 @@ it("says so, pointing to Settings, when agents are installed but none is added",
 });
 
 it("says that no agent is available when the added ones are not installed and nothing else is", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount({ claude: "unavailable", codex: "unavailable", grok: "unavailable", test_agent: "unavailable" }, ["claude"]);
   openPanel(button);
   expect(tabs()).toHaveLength(0);
@@ -611,7 +615,7 @@ it("says that no agent is available when the added ones are not installed and no
 });
 
 it("asks the daemon to refresh the quotas each time the panel opens, and not when it only changes mode", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   expect(request).not.toHaveBeenCalled();
   enter(button);
@@ -631,7 +635,7 @@ it("asks the daemon to refresh the quotas each time the panel opens, and not whe
 });
 
 it("opens Settings' accounts section from the panel, and closes the panel", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   openPanel(button);
   const manage = Array.from(panel()!.querySelectorAll("button")).find((b) => b.textContent === "Manage accounts")!;
@@ -641,7 +645,7 @@ it("opens Settings' accounts section from the panel, and closes the panel", () =
 });
 
 it("points the button at the panel it opens", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   openPanel(button);
   expect(panel()!.id).not.toBe("");
@@ -650,7 +654,7 @@ it("points the button at the panel it opens", () => {
 });
 
 it("closes when a modal opens without a press on the entry", async () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   openPanel(button);
   const modal = document.body.appendChild(document.createElement("div"));
@@ -662,7 +666,7 @@ it("closes when a modal opens without a press on the entry", async () => {
 });
 
 it("closes a keyboard-opened (modal) panel when another modal opens and takes focus", async () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   act(() => button.focus());
   press(button, "Enter");
@@ -677,7 +681,7 @@ it("closes a keyboard-opened (modal) panel when another modal opens and takes fo
 });
 
 it("is not a modal to the window: its F6 cycle, shortcuts and floating panes go on working beside it", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   openPanel(button);
   expect(panel()).not.toBeNull();
@@ -686,7 +690,7 @@ it("is not a modal to the window: its F6 cycle, shortcuts and floating panes go 
 });
 
 it("marks itself the topmost Escape taker only while open", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mount();
   openPanel(button);
   expect(document.querySelector("[data-escape-topmost]")).not.toBeNull();
@@ -695,7 +699,7 @@ it("marks itself the topmost Escape taker only while open", () => {
 });
 
 it("follows the selected session's actual agent and account, account switches and live quota updates", () => {
-  withFakeTimers();
+  fakeTimers();
   const { store, container } = mount();
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
@@ -741,7 +745,7 @@ it("follows the selected session's actual agent and account, account switches an
 });
 
 it("opens on the tab of the agent whose quota the button shows, each time, and on the first tab with none", () => {
-  withFakeTimers();
+  fakeTimers();
   const { store, container } = mount();
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
@@ -766,12 +770,12 @@ it("opens on the tab of the agent whose quota the button shows, each time, and o
   click(tabs()[0]!);
   expect(selectedTab()).toBe("Claude Code");
   leave(entry());
-  advance(1000);
+  advance(PAST_HOVER_DELAYS);
   expect(panel()).toBeNull();
   openPanel(entry());
   expect(selectedTab()).toBe("Codex");
   leave(entry());
-  advance(1000);
+  advance(PAST_HOVER_DELAYS);
 
   select();
   openPanel(entry());
@@ -779,7 +783,7 @@ it("opens on the tab of the agent whose quota the button shows, each time, and o
 });
 
 it("opens the shown agent's list scrolled to the selected session's account, with room for the fade", () => {
-  withFakeTimers();
+  fakeTimers();
   const { store, container } = mount();
   // jsdom has no layout: a row's offset is its place among its siblings, 100 px each, and a scroller keeps what is set.
   const scrolled = new WeakMap<Element, number>();
@@ -816,7 +820,7 @@ it("opens the shown agent's list scrolled to the selected session's account, wit
   // Claude's list holds the default account, then Work: Work is the second row, 100 px down, less the 24 px fade.
   expect(positions()).toEqual([76]);
   leave(entry());
-  advance(1000);
+  advance(PAST_HOVER_DELAYS);
   expect(panel()).toBeNull();
 
   // The default account is the first row, which needs no scrolling.
@@ -826,7 +830,7 @@ it("opens the shown agent's list scrolled to the selected session's account, wit
 });
 
 it("draws the button's window full, and says so, once its reset time passes while mounted", () => {
-  withFakeTimers();
+  fakeTimers();
   const { store, container } = mount();
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
@@ -853,7 +857,7 @@ it("draws the button's window full, and says so, once its reset time passes whil
 });
 
 it("hides the mini bar for unread, failed, stale or unavailable quota instead of showing another account", () => {
-  withFakeTimers();
+  fakeTimers();
   const { store, container } = mount();
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
@@ -881,7 +885,7 @@ it("hides the mini bar for unread, failed, stale or unavailable quota instead of
 });
 
 it("keeps the mini bar of a session whose agent was removed", () => {
-  withFakeTimers();
+  fakeTimers();
   const { store, container } = mount();
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
@@ -902,7 +906,7 @@ it("keeps the mini bar of a session whose agent was removed", () => {
 });
 
 it("moves the accounts and agent tabs that come and go while the panel is open, and nothing as it opens", async () => {
-  withFakeTimers();
+  fakeTimers();
   const motion = stubListMotion();
   const { button, store } = mount();
   openPanel(button);
@@ -929,7 +933,7 @@ it("moves the accounts and agent tabs that come and go while the panel is open, 
 });
 
 it("drops a removed account at once, with no copy, while reduced motion is asked for", () => {
-  withFakeTimers();
+  fakeTimers();
   const motion = stubListMotion();
   const { button, store } = mount();
   openPanel(button);
@@ -963,7 +967,7 @@ function mountWithSession(accountId: string | null = "claude-work") {
 const dimmedRows = () => Array.from(document.querySelectorAll("[data-list-motion][data-dimmed]"), (row) => row.getAttribute("data-list-motion"));
 
 it("dims every account but the one the button shows while the mouse is on the button, and lifts it only once the mouse enters the panel", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mountWithSession();
   enter(button);
   expect(panel()).toBeNull();
@@ -979,12 +983,12 @@ it("dims every account but the one the button shows while the mouse is on the bu
   // The mouse comes into the panel onto one of its rows, entering the panel and its contents at once.
   act(() => void panel()!.querySelector("[data-list-motion]")!.dispatchEvent(pointer("pointerover")));
   expect(dimmedRows()).toEqual([]);
-  advance(1000);
+  advance(PAST_HOVER_DELAYS);
   expect(panel()).not.toBeNull();
 });
 
 it("dims the other accounts for the default account too, and not at all when the button shows no account", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mountWithSession(null);
   enter(button);
   advance(OPEN_DELAY);
@@ -1001,7 +1005,7 @@ it("dims the other accounts for the default account too, and not at all when the
 });
 
 it("leaves the accounts alone for keyboard focus and a keyboard pin", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mountWithSession();
   act(() => button.focus());
   press(button, "Enter");
@@ -1011,12 +1015,12 @@ it("leaves the accounts alone for keyboard focus and a keyboard pin", () => {
 });
 
 it("leaves the accounts alone for a keyboard opening after the mouse crossed the button without opening the panel", () => {
-  withFakeTimers();
+  fakeTimers();
   const { button } = mountWithSession();
   enter(button);
   advance(OPEN_DELAY - 10);
   leave(button);
-  advance(1000);
+  advance(PAST_HOVER_DELAYS);
   expect(panel()).toBeNull();
   act(() => button.focus());
   press(button, "Enter");
@@ -1025,7 +1029,7 @@ it("leaves the accounts alone for a keyboard opening after the mouse crossed the
 });
 
 it("lists a turned-off account only for the selected session that is still running on it", () => {
-  withFakeTimers();
+  fakeTimers();
   const { store, container } = mount();
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
@@ -1047,7 +1051,7 @@ it("lists a turned-off account only for the selected session that is still runni
     // Claude Code's tab is the first, when it is listed at all.
     const text = tabs()[0]?.textContent === "Claude Code" ? document.querySelector<HTMLElement>('[role="tabpanel"]')!.textContent! : "";
     leave(host.querySelector("button")!);
-    advance(1000);
+    advance(PAST_HOVER_DELAYS);
     return text;
   };
 
@@ -1070,7 +1074,7 @@ it("lists a turned-off account only for the selected session that is still runni
 });
 
 it("drops the tab of an agent whose accounts are all turned off, bar the one the selected running session is on, and explains an empty panel", () => {
-  withFakeTimers();
+  fakeTimers();
   const { store, container } = mount();
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
@@ -1092,7 +1096,7 @@ it("drops the tab of an agent whose accounts are all turned off, bar the one the
     openPanel(host.querySelector("button")!);
     const names = tabs().map((tab) => tab.textContent);
     leave(host.querySelector("button")!);
-    advance(1000);
+    advance(PAST_HOVER_DELAYS);
     return names;
   };
 
@@ -1122,7 +1126,7 @@ it("drops the tab of an agent whose accounts are all turned off, bar the one the
 /** The entry with Claude Code's accounts both turned off and a session of the given status on the owned one, rendered
  * into a host of its own so the test can change the session and the store. */
 function mountOnTurnedOff(status: Session["status"] = "idle") {
-  withFakeTimers();
+  fakeTimers();
   const { store, container } = mount();
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
@@ -1234,6 +1238,7 @@ const CREDIT_EXPIRES = NOW + 6 * 24 * 60 * MINUTE + 3 * 60 * MINUTE;
 
 /** The Codex tab of a panel opened by the mouse, on an account holding one reset credit. */
 function openCodexWithResetCredit() {
+  fakeTimers();
   const view = mount();
   act(() => view.store.setState({
     accountQuotas: [
@@ -1289,7 +1294,7 @@ it("takes Cancel as leaving the credit unused and the confirmation gone", () => 
 });
 
 it("returns focus to the rail button after a keyboard-opened panel raised the confirmation and it was cancelled", () => {
-  withFakeTimers();
+  fakeTimers();
   const { store, button } = mount();
   act(() => store.setState({
     accountQuotas: [
@@ -1323,6 +1328,6 @@ it.each(["nothing_to_reset", "no_credit"] as const)("hands focus to the rail but
   expect(showNotice).toHaveBeenCalled();
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   (document.activeElement as HTMLElement | null)?.blur();
-  advance(100);
+  runOutTimers();
   expect(document.activeElement).toBe(button);
 });

@@ -54,7 +54,7 @@ const SECTIONS: Record<SettingsSectionId, Section> = {
 
 /** How many animation frames (about half a second) a tab waits for a modal in front of Settings to go before it
  * gives up taking focus. */
-const MAX_FRAMES_TO_WAIT_FOR_MODAL = 30;
+export const MAX_FRAMES_TO_WAIT_FOR_MODAL = 30;
 
 /** A section's panel. The section scrolls on its own inside the dialog and fades at the edge it can
  * still be scrolled towards, as the body of a `Dialog` does. The scroller sits inside the panel, not

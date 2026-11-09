@@ -139,6 +139,10 @@ export interface TerminalScript {
   interval?: number;
 }
 
+/** How long after a socket opens its first screen is drawn, for the terminal to report its size first. */
+export const FIRST_DRAW_MS = 20;
+/** How long after an exited shell's screen is drawn the socket closes. */
+const CLOSE_AFTER_EXIT_MS = 20;
 const DEFAULT_TICK_INTERVAL = 125;
 
 const sample = (cols: number) => [
@@ -329,8 +333,8 @@ class FakeTerminalSocket extends EventTarget {
         this.draw("");
         this.startTicking();
         // The daemon closes the socket once an exited shell's output has been sent.
-        if (behaviour === "exited") setTimeout(() => this.close(), 20);
-      }, 20);
+        if (behaviour === "exited") setTimeout(() => this.close(), CLOSE_AFTER_EXIT_MS);
+      }, FIRST_DRAW_MS);
     }, behaviour === "refuse" ? 100 : 0);
   }
 

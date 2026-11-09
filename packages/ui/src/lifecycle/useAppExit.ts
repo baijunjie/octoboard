@@ -16,7 +16,7 @@ const SHUTDOWN_TIMEOUT_MS = 2000;
 
 /** How long a restart waits for the daemon to say which sessions and shell terminals it would interrupt, before it
  * asks as if it could not say. */
-const HANDOVER_CHECK_TIMEOUT_MS = 2000;
+export const HANDOVER_CHECK_TIMEOUT_MS = 2000;
 
 /** What the daemon says a restart into an update would not carry over: the ids of the running sessions and shell
  * terminals whose process holder is outside the range the update's daemon adopts, whose version is unknown, or that

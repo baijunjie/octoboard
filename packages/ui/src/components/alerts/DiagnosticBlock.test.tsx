@@ -7,12 +7,15 @@ import { PlatformProvider } from "../../platform/react";
 import { activate, mountForTooltip } from "../hint/tooltipTestSupport";
 import { DiagnosticBlock, DiagnosticLabelContext } from "./DiagnosticBlock";
 import { BROWSER_HOST } from "../../test/hosts";
+import { fakeTimers, runOutTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const TEXT = "  first line\r\n\tindented line\n" + "a long message ".repeat(100) + "\n\n";
 
 function mount({ text = TEXT, labelledBy, disclosure }: { text?: string; labelledBy?: string; disclosure?: string } = {}) {
+  // Before anything mounts: the frame HeroUI's overflow watch reports from is armed on the faked clock.
+  fakeTimers();
   const writeText = vi.fn(async (_text: string) => {});
   // No daemon: diagnostics must still work when startup fails before a connection exists.
   const container = mountForTooltip(
@@ -58,7 +61,8 @@ function layout(width: number, height: number): void {
 }
 
 async function settle(): Promise<void> {
-  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  await act(async () => {});
+  runOutTimers();
 }
 
 it.each([[300, 100], [100, 300], [300, 300]])("makes overflowing diagnostics keyboard reachable at %i by %i", async (width, height) => {

@@ -30,6 +30,14 @@ import { Button, Spinner } from "../primitives";
 /** How many rows the list adds each time its end scrolls into view. */
 const PAGE = 30;
 
+/** How long after it opens the view waits to take focus: the menu item that opened it hands focus back a task after its
+ * menu closes, and that must not win. */
+export const FOCUS_DELAY_MS = 50;
+
+/** How long the view waits, after it opens and after a dialog over it opens or closes, before it moves focus lost to the
+ * page on to Close. */
+export const FOCUS_FALLBACK_DELAY_MS = 100;
+
 /** How far an archive view was loaded and scrolled, which Back and Forward put back. */
 export interface ArchiveViewState {
   shown: number;
@@ -143,7 +151,7 @@ export function ArchiveView({
   // menu took it from (`ActionMenu`) a task after it closes, which would otherwise win.
   useEffect(() => {
     if (!active) return;
-    const timer = setTimeout(() => rootRef.current?.focus({ preventScroll: true }), 50);
+    const timer = setTimeout(() => rootRef.current?.focus({ preventScroll: true }), FOCUS_DELAY_MS);
     return () => clearTimeout(timer);
   }, [active]);
 
@@ -167,7 +175,7 @@ export function ArchiveView({
       if (focused !== document.body && !(deleted && focused === rootRef.current)) return;
       ringForAutomaticFocus();
       closeRef.current?.focus({ preventScroll: true });
-    }, 100);
+    }, FOCUS_FALLBACK_DELAY_MS);
     return () => clearTimeout(timer);
   }, [archived.length, dialogOpen, active]);
 

@@ -7,6 +7,9 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Console } from "../protocol";
 import { useDaemon } from "../store";
 
+/** How long after the new-console dialog closes the window keeps looking for the console it created. */
+export const CREATED_CONSOLE_WAIT_MS = 2000;
+
 /** What the open drawer is made of: the sidebar and, at tablet width and below, the rail inside its card. */
 export const DRAWER_CONTROLS = "[data-pane=sidebar], [data-region=rail]";
 
@@ -38,7 +41,7 @@ export function useDialogRouting({
   // The new console's broadcast can trail the ack that closed the dialog by a moment.
   const forgetSoon = () => {
     clearTimeout(forgetTimer.current);
-    if (consolesBeforeNew.current) forgetTimer.current = setTimeout(() => (consolesBeforeNew.current = undefined), 2000);
+    if (consolesBeforeNew.current) forgetTimer.current = setTimeout(() => (consolesBeforeNew.current = undefined), CREATED_CONSOLE_WAIT_MS);
   };
   // The control last pressed in the sidebar's open drawer, or in a menu it opened. A tap does not
   // move focus to what it presses, so a dialog it opens would otherwise give focus back, as it

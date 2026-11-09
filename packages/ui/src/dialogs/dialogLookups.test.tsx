@@ -10,6 +10,7 @@ import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { useDetectedAgent, type Detection, type DetectionQuery } from "./useDetectedAgent";
 import { useResponsibleBranches } from "./useBranchInspections";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -43,8 +44,7 @@ function mount<T>(use: (request: RequestSender) => T) {
 }
 
 function mountDetected() {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   let query: DetectionQuery | undefined = { type: "detect_directory_agent", path: "/a" };
   const onDetected = vi.fn();
   const hook = mount((request) => useDetectedAgent(request, query, DELAY_MS, onDetected));

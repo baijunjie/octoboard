@@ -6,12 +6,14 @@ import { expect, it, vi } from "vitest";
 import type { Event, ClientRequestBody } from "../../protocol";
 import { DaemonProvider } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
-import { useFileSearch, type FileSearch } from "./useFileSearch";
+import { AUTO_REFRESH_MS } from "../autoRefresh";
+import { SEARCH_DEBOUNCE_MS, useFileSearch, type FileSearch } from "./useFileSearch";
+import { fakeTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 it("searches only while the caller enables it, and does not search again on a timer", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   let resolve!: (event: Event) => void;
@@ -24,27 +26,26 @@ it("searches only while the caller enables it, and does not search again on a ti
   }
   try {
     await act(async () => root.render(<DaemonProvider value={daemon}><Search active={false} /></DaemonProvider>));
-    await act(async () => { vi.advanceTimersByTime(250); });
+    await act(async () => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
     expect(request).not.toHaveBeenCalled();
     await act(async () => root.render(<DaemonProvider value={daemon}><Search active /></DaemonProvider>));
-    await act(async () => { vi.advanceTimersByTime(250); });
+    await act(async () => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
     expect(request).toHaveBeenCalledWith({ type: "search_project_files", project: "all-files", query: "ts", slot: "file-search:all-files" });
     await act(async () => resolve({ type: "project_file_matches", id: null, project: "all-files", query: "ts", paths: ["nested/file.ts"], complete: true }));
     expect(result).toEqual({ state: "loaded", paths: ["nested/file.ts"], ignored: new Set(), complete: true });
-    await act(async () => { vi.advanceTimersByTime(60_000); });
+    await act(async () => { vi.advanceTimersByTime(AUTO_REFRESH_MS); });
     expect(request).toHaveBeenCalledTimes(1);
     await act(async () => root.render(<DaemonProvider value={daemon}><Search active={false} /></DaemonProvider>));
-    await act(async () => { vi.advanceTimersByTime(60_000); });
+    await act(async () => { vi.advanceTimersByTime(AUTO_REFRESH_MS); });
     expect(request).toHaveBeenCalledTimes(1);
   } finally {
     act(() => root.unmount());
     container.remove();
-    vi.useRealTimers();
   }
 });
 
 it("repeats the search at once when ignored files are included, and tells which matches are ignored", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   let result!: FileSearch;
@@ -64,7 +65,7 @@ it("repeats the search at once when ignored files are included, and tells which 
   }
   try {
     await act(async () => root.render(<DaemonProvider value={daemon}><Search includeIgnored={false} /></DaemonProvider>));
-    await act(async () => { vi.advanceTimersByTime(250); });
+    await act(async () => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
     expect(request).toHaveBeenCalledTimes(1);
     expect(request.mock.calls[0][0]).not.toHaveProperty("include_ignored");
     expect(result).toMatchObject({ state: "loaded", paths: ["src/b.ts"] });
@@ -77,12 +78,11 @@ it("repeats the search at once when ignored files are included, and tells which 
   } finally {
     act(() => root.unmount());
     container.remove();
-    vi.useRealTimers();
   }
 });
 
 it("repeats the search at once on a toggle under StrictMode, whose effects run twice", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const request = vi.fn(async (): Promise<Event> => ({ type: "project_file_matches", id: null, project: "all-files", query: "ts", paths: ["src/b.ts"], complete: true }));
@@ -94,7 +94,7 @@ it("repeats the search at once on a toggle under StrictMode, whose effects run t
   const render = (includeIgnored: boolean) => act(async () => root.render(<StrictMode><DaemonProvider value={daemon}><Search includeIgnored={includeIgnored} /></DaemonProvider></StrictMode>));
   try {
     await render(false);
-    await act(async () => { vi.advanceTimersByTime(250); });
+    await act(async () => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
     const sent = request.mock.calls.length;
     await render(true);
     await act(async () => { vi.advanceTimersByTime(0); });
@@ -103,6 +103,5 @@ it("repeats the search at once on a toggle under StrictMode, whose effects run t
   } finally {
     act(() => root.unmount());
     container.remove();
-    vi.useRealTimers();
   }
 });

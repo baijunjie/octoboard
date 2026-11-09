@@ -141,7 +141,7 @@ A mouse never shows it, and a jsdom test reaches it only with `framesAsTimers()`
 of any timer set after it), focus on an opener outside (a test starting from `<body>` passes either way), a `Dialog`
 mounted first (`openable` in the same file), the modal raised in an `act` of its own, and `settleFrames()` rather than a
 fixed wait. The half-second take-back needs on top of that a `transitionrun` that never ends, dispatched on an element
-of the dialog underneath, and a real wait past 500 ms. Cover the replacing cases too — a queued modal shown once the
+of the dialog underneath, and awaiting `trackMountRefocus()` (same file), armed once the modal is raised. Cover the replacing cases too — a queued modal shown once the
 first is acknowledged, and one put in front of it — and the meeting ones: a dialog that opens another from a mount
 effect (`OpensAnotherDialog` in `packages/ui/src/components/dialog/nestedDialogTestSupport.tsx`), an alert and a question raised
 in one task, and a dialog opened later, which must cover the modal (assert the modal hidden then); run them under

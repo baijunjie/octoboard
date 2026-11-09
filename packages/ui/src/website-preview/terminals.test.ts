@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /* eslint-disable no-control-regex -- the tests read escape sequences. */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cells } from "../fixtures/fakeTerminal";
 import { createPreviewScenario } from "./scenarios";
 import { previewCopy as english } from "./locales/en";
@@ -9,9 +9,9 @@ import { createTerminalScript, liveSchedule, type TerminalSession } from "./term
 import { terminalScripts } from "./terminalScripts";
 import { previewRepositories } from "./repositories";
 import { sessionOf } from "../fixtures/builders";
+import { fakeTimers } from "../test/clock";
 
-beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(1_000_000); });
-afterEach(() => vi.useRealTimers());
+beforeEach(() => { fakeTimers(); vi.setSystemTime(1_000_000); });
 
 const plain = (text: string) => text.replace(/\x1b\[[0-9;]*m/g, "");
 

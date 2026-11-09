@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
+import { resetAppPreferences } from "../appTestSupport";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import { DEFAULT_SETTINGS } from "../store";
 import type { ClientRequestBody, Console, ShellTerminal } from "../protocol";
 import { usePaneLayout } from "./usePaneLayout";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const viewport = vi.hoisted(() => ({ floats: false, narrow: false }));
 vi.mock("../layout/paneWidth", () => ({ useAsideFloats: () => viewport.floats, usePaneDocking: () => ({ sidebarDockable: !viewport.narrow, asideDockable: !viewport.narrow }) }));
@@ -22,6 +25,7 @@ const shell = (id: string, extra: Partial<ShellTerminal> = {}): ShellTerminal =>
 });
 
 function mount(enabled: boolean, { floats = false, narrow = false } = {}) {
+  onTestFinished(resetAppPreferences);
   viewport.floats = floats;
   viewport.narrow = narrow;
   const request = vi.fn(async (_body: ClientRequestBody) => ({ type: "ack" as const, id: null }));
@@ -45,7 +49,7 @@ function mount(enabled: boolean, { floats = false, narrow = false } = {}) {
   act(() => layout.setPanelStack("project", { open: ["terminal"], shares: {} }));
   if (floats) act(() => layout.openFloating("project", "terminal"));
   request.mockClear();
-  return { layout: () => layout, request, daemon, render: (project = "p") => act(() => host.render(<Probe project={project} />)) };
+  return { layout: () => layout, request, daemon, render: (project = "p") => { host.render(<Probe project={project} />); } };
 }
 
 it.each([false, true])("only cleans up on explicit closes when enabled: %s", async (enabled) => {

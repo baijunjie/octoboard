@@ -3,14 +3,14 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { fakeTimers } from "../../test/clock";
 import { usePressedControl } from "./usePressedControl";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Mounts the hook and returns its reader, and a focusable list holding a button and a plain item. */
 function mount() {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   let read!: () => HTMLElement | null;
   function Probe() {
     read = usePressedControl();

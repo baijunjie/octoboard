@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { browserPlatform } from "./browser";
 import { ConfigurationFileError } from "./configurationFileError";
+import { fakeTimers } from "../test/clock";
 
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.unstubAllGlobals();
+});
+// Registered before any test's `fakeTimers()`, so the globals stay stubbed while its run-out fires the timers still pending.
+beforeEach(() => {
+  onTestFinished(() => void vi.unstubAllGlobals());
 });
 
 it("opens a link in a new tab with no access to the page and no referrer", async () => {
@@ -70,7 +74,7 @@ describe("the configuration file capability", () => {
 
 describe("saving the configuration file as a download", () => {
   it("puts the link in the document for the click and revokes the URL only after it", async () => {
-    vi.useFakeTimers();
+    fakeTimers();
     const revoked = vi.fn();
     Object.assign(URL, { createObjectURL: () => "blob:fixture", revokeObjectURL: revoked });
     let inDocument: boolean | undefined;
@@ -84,7 +88,6 @@ describe("saving the configuration file as a download", () => {
     expect(revoked).not.toHaveBeenCalled();
     vi.runAllTimers();
     expect(revoked).toHaveBeenCalledExactlyOnceWith("blob:fixture");
-    vi.useRealTimers();
   });
 });
 

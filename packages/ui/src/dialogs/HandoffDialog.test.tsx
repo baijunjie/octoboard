@@ -16,6 +16,7 @@ import { availabilityOf } from "../fixtures/fixtureProviders";
 import { testDaemon } from "../test/testDaemon";
 import { TEST_PROVIDERS } from "../test/testProviders";
 import { HandoffDialog } from "./HandoffDialog";
+import { fakeTimers, flushPromises } from "../test/clock";
 
 vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
@@ -63,7 +64,7 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
   return { request, onClose, onHandedOff };
 }
 
-const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+const settle = flushPromises;
 const elapse = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 
 it("says what moves for a project session, then hands off to another agent and selects the receiving session", async () => {
@@ -119,8 +120,7 @@ const popoverRetry = () => [...document.body.querySelectorAll<HTMLElement>("[dat
 const announcements = () => [...document.body.querySelectorAll('[role="status"]')].map((node) => node.textContent).filter((text) => text?.includes("Could not check"));
 
 it("says the branches could not be checked rather than that nothing moves, in a mark after the heading", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { request } = mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle"), [], "fail");
   await elapse(0);
   const text = (document.body.textContent ?? "").replace(/[\u2066-\u2069]/g, "");
@@ -161,8 +161,7 @@ it("says the branches could not be checked rather than that nothing moves, in a 
 });
 
 it("offers Download Git before Try again in the mark's popover when no Git is found, and Try again asks the check again", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { request } = mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle"), [], "gitMissing");
   await elapse(0);
   press(mark()!);
@@ -264,7 +263,6 @@ it.each([
   expect(raised[0].title).toBe("Could not finish the handoff");
   // The message names the receiving session; the original, which may share its name, is not named again.
   expect(raised[0].session).toBeUndefined();
-  act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
 });
 
 it("keeps the dialog open and the old title for another handoff failure", async () => {
@@ -278,5 +276,4 @@ it("keeps the dialog open and the old title for another handoff failure", async 
   expect(onClose).not.toHaveBeenCalled();
   const raised = errorAlerts.getSnapshot();
   expect(raised[0].title).toBe("Could not hand off the session");
-  act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
 });

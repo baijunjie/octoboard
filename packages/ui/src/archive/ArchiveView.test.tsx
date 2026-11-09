@@ -20,7 +20,8 @@ import { isolate } from "../i18n/isolate";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Session } from "../protocol";
 import { TEST_PROVIDERS } from "../test/testProviders";
-import { ArchiveView } from "./ArchiveView";
+import { ArchiveView, FOCUS_DELAY_MS, FOCUS_FALLBACK_DELAY_MS } from "./ArchiveView";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -203,10 +204,9 @@ it.each(["header", "row"] as const)("runs only the hovered text in the archive %
 });
 
 it("brings focus lost to the page back to the close button, with its ring shown", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   const { container } = renderArchiveView();
-  act(() => vi.advanceTimersByTime(50));
+  act(() => vi.advanceTimersByTime(FOCUS_DELAY_MS));
   expect(document.activeElement).toBe(container.querySelector("section[data-region='archive']"));
   // What a deleted row's button leaves behind, with the last input a pointer press.
   act(() => {
@@ -214,7 +214,7 @@ it("brings focus lost to the page back to the close button, with its ring shown"
     setInteractionModality("pointer");
   });
   expect(document.activeElement).toBe(document.body);
-  act(() => vi.advanceTimersByTime(50));
+  act(() => vi.advanceTimersByTime(FOCUS_FALLBACK_DELAY_MS));
   expect(document.activeElement).toBe(container.querySelector("button[aria-label='Close']"));
   expect(getInteractionModality()).toBe("keyboard");
 });
@@ -226,29 +226,27 @@ it.each([
   { what: "deleted every row", after: OTHER_SESSIONS, lands: "close" },
   { what: "deleted nothing", after: undefined, lands: "section" },
 ])("moves focus from the section to the close button only once a dialog that deleted rows closes ($what)", ({ after, lands }) => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   const { container, rerender } = renderArchiveView();
-  act(() => vi.advanceTimersByTime(50));
+  act(() => vi.advanceTimersByTime(FOCUS_DELAY_MS));
   const section = container.querySelector("section[data-region='archive']");
   expect(document.activeElement).toBe(section);
   act(() => setInteractionModality("pointer"));
   rerender({ dialogOpen: true });
-  act(() => vi.advanceTimersByTime(100));
+  act(() => vi.advanceTimersByTime(FOCUS_FALLBACK_DELAY_MS));
   rerender({ dialogOpen: false, ...(after ? { sessions: after } : {}) });
-  act(() => vi.advanceTimersByTime(100));
+  act(() => vi.advanceTimersByTime(FOCUS_FALLBACK_DELAY_MS));
   expect(document.activeElement).toBe(lands === "close" ? container.querySelector("button[aria-label='Close']") : section);
   expect(getInteractionModality()).toBe(lands === "close" ? "keyboard" : "pointer");
 });
 
 it("leaves focus that is on a control where it is when the fallback runs", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   const { container } = renderArchiveView();
-  act(() => vi.advanceTimersByTime(50));
+  act(() => vi.advanceTimersByTime(FOCUS_DELAY_MS));
   const row = container.querySelector<HTMLElement>("ul > li [role=button]")!;
   act(() => row.focus());
-  act(() => vi.advanceTimersByTime(50));
+  act(() => vi.advanceTimersByTime(FOCUS_FALLBACK_DELAY_MS));
   expect(document.activeElement).toBe(row);
 });
 

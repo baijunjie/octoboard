@@ -2,7 +2,7 @@
 import { act } from "react";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 
 import { LanguageProvider } from "../i18n/react";
 import type { PlatformAdapter } from "../platform";
@@ -11,6 +11,7 @@ import { eventKey as eventKeyFor, type Binding } from "../shortcuts/binding";
 import { bindingFor, restoreAllBindings, setBinding as setBindingFor } from "../shortcuts/store";
 import { ShortcutsSection } from "./ShortcutsSection";
 import { BROWSER_HOST, WINDOWS_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -153,9 +154,10 @@ it("ends the recording on Tab and on ⌥Tab, which move on as they always do", (
   }
 });
 
-it("shows a refusal as a field's error is, tied to the control, and speaks it again when it repeats", async () => {
+it("shows a refusal as a field's error is, tied to the control, and speaks it again when it repeats", () => {
+  fakeTimers();
   const container = mount();
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 150)); });
+  act(() => { vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS); });
   act(() => button(container, FOCUS_MODE_CHANGE)!.click());
   press({ code: "KeyN", primary: true, shift: true });
   const message = [...container.querySelectorAll("span")].find((span) => span.textContent === "Already used for New session with defaults.")!;
@@ -185,18 +187,17 @@ it("keeps a row's override and says why when its default has been taken by anoth
 });
 
 it("moves focus to Change only when a reset succeeds, and speaks it once the focus move is over", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   setBinding("focusMode", { code: "KeyK", primary: true, shift: true });
   const container = mount();
-  await act(async () => { await vi.advanceTimersByTimeAsync(200); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS); });
   const status = () => container.querySelector("[role=status]")!.textContent!.trim();
   const reset = button(container, "Reset the shortcut for Toggle focus mode to its default")!;
   act(() => reset.focus());
   act(() => reset.click());
   expect(document.activeElement).toBe(button(container, FOCUS_MODE_CHANGE));
   expect(status()).toBe("");
-  await act(async () => { await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS + 10); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS); });
   expect(status()).toMatch(/^Toggle focus mode is back to .*F\.$/);
 });
 

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { framesAsTimers, settleFrames } from "../components/dialog/dialogTestSupport";
 import { mountForTooltip } from "../components/hint/tooltipTestSupport";
 import { type ConsoleSessionColour } from "../protocol";
 import { CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
@@ -27,8 +27,10 @@ function mount(colour: ConsoleSessionColour | null = "teal") {
 
 const key = (target: Element, name: string) => act(() => void target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true })));
 
-it("lists the palette, names every swatch from its colour alone and focuses the current one", () => {
+it("lists the palette, names every swatch from its colour alone and focuses the current one", async () => {
+  framesAsTimers();
   const { options } = mount();
+  await settleFrames();
   expect(options).toHaveLength(CONSOLE_SESSION_COLOURS.length);
   // A colour name from react-aria, in the user's language: the catalog has none of its own.
   for (const option of options) expect(option.querySelector('[role="img"]')!.getAttribute("aria-label")).toMatch(/\w/);
@@ -62,18 +64,16 @@ it("only moves focus with the arrow keys, closes on the current swatch, and chan
 });
 
 // Under virtual modality react-aria focuses the swatch only after the list box has mounted.
-const settle = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 100)));
-
 it("keeps focus on a swatch, not the list box, when opened by a virtual click", async () => {
-  setInteractionModality("virtual");
+  framesAsTimers();
   const { options } = mount();
-  await settle();
+  await settleFrames();
   expect(document.activeElement).toBe(options[CONSOLE_SESSION_COLOURS.indexOf("teal")]);
 });
 
 it("focuses the first swatch when there is no current colour", async () => {
-  setInteractionModality("virtual");
+  framesAsTimers();
   const { options } = mount(null);
-  await settle();
+  await settleFrames();
   expect(document.activeElement).toBe(options[0]);
 });

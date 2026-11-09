@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { FIRST_WRITE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { isolate } from "../../i18n/isolate";
@@ -11,13 +12,18 @@ import type { Event, HistoryMessage, Session, SessionContext } from "../../proto
 import type { RequestHandler } from "../../requests";
 import type { Daemon, State } from "../../store";
 import { TestHost } from "../../test/TestHost";
+import { settleLazyImport } from "../../test/lazyImport";
 import { testDaemon } from "../../test/testDaemon";
 import { SessionHistoryView } from "./SessionHistoryView";
+import { fakeTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const request = vi.fn<RequestHandler>();
-vi.mock("../../components/alerts/errorAlerts", () => ({ errorAlerts: { report: vi.fn() } }));
+vi.mock("../../components/alerts/errorAlerts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../components/alerts/errorAlerts")>();
+  return { ...actual, errorAlerts: { ...actual.errorAlerts, report: vi.fn() } };
+});
 let daemon: Daemon;
 const host = (ui: React.ReactNode) => <TestHost daemon={daemon}>{ui}</TestHost>;
 /** Updates the daemon's state the way a broadcast would. */
@@ -56,7 +62,7 @@ async function mount(reply: Event | Promise<Event> | Error, context?: SessionCon
   roots.push(root);
   await act(async () => root.render(host(<SessionHistoryView session={{ ...session, context }} />)));
   // Settle the lazy renderer even when this is the first test to show an agent reply.
-  if (!vi.isFakeTimers()) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  if (!vi.isFakeTimers()) await settleLazyImport();
   return container;
 }
 
@@ -174,26 +180,23 @@ it("treats a history containing only Octoboard messages as empty", async () => {
 });
 
 it("speaks an unavailable and an empty history through a status", async () => {
-  vi.useFakeTimers();
-  try {
-    const unavailable = await mount({ type: "session_history", id: null, session: "s-1", messages: [], unavailable: true });
-    await act(async () => void vi.advanceTimersByTime(200));
-    expect(unavailable.querySelector("[role=status]")?.textContent).toContain("Reopen the session to see its terminal.");
-    const empty = await mount({ type: "session_history", id: null, session: "s-1", messages: [] });
-    await act(async () => void vi.advanceTimersByTime(200));
-    expect(empty.querySelector("[role=status]")?.textContent).toContain("No messages in this session");
-  } finally {
-    vi.useRealTimers();
-  }
+  fakeTimers();
+  const unavailable = await mount({ type: "session_history", id: null, session: "s-1", messages: [], unavailable: true });
+  await act(async () => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
+  expect(unavailable.querySelector("[role=status]")?.textContent).toContain("Reopen the session to see its terminal.");
+  const empty = await mount({ type: "session_history", id: null, session: "s-1", messages: [] });
+  await act(async () => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
+  expect(empty.querySelector("[role=status]")?.textContent).toContain("No messages in this session");
 });
 
 it("shows a loading state until the reply arrives", async () => {
+  fakeTimers();
   request.mockImplementation(() => new Promise(() => {}));
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   await act(async () => root.render(host(<SessionHistoryView session={session} />)));
-  await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 200))));
+  await act(async () => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
   expect(container.querySelector("[role=status]")?.textContent).toBe("Loading history…");
   expect(container.querySelector("article")).toBeNull();
 });

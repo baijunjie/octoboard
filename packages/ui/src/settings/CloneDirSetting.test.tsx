@@ -2,6 +2,7 @@
 import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { windowAttention } from "../components/announce/windowTestSupport";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { CodedError } from "../errors/codedError";
@@ -10,6 +11,7 @@ import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import { CloneDirSetting } from "./CloneDirSetting";
 import { BROWSER_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -18,6 +20,7 @@ const request = vi.fn((_body?: { type: string }) => Promise.resolve({}) as Promi
 /** Mounts the field and returns its input, with the keys that bubbled past React's own listener on
  * the container to `<body>`, where a dialog portalled there would be waiting for Escape. */
 function mount() {
+  windowAttention();
   const bubbled: string[] = [];
   const record = (event: KeyboardEvent) => bubbled.push(event.key);
   document.body.addEventListener("keydown", record);
@@ -225,23 +228,21 @@ const settingsOf = (store: ReturnType<typeof mount>["store"], change: Record<str
 const status = () => document.body.querySelector("[role=status]")?.textContent;
 
 it("replaces what was typed when the value changes elsewhere, and names the field", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { input, store } = mount();
   typeInto(input, "/srv/draft");
   settingsOf(store, { default_clone_dir: "/srv/theirs", versions: { default_clone_dir: 4 } });
   expect(input.value).toBe("/srv/theirs");
-  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS + 150));
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(status()).toBe("Changed elsewhere: Default clone directory. The current value is shown.");
 });
 
 it("shows a change elsewhere to a field the user did not touch, without announcing it", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { input, store } = mount();
   settingsOf(store, { default_clone_dir: "/srv/theirs", versions: { default_clone_dir: 4 } });
   expect(input.value).toBe("/srv/theirs");
-  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS + 150));
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(status() ?? "").toBe("");
 });
 
@@ -297,8 +298,7 @@ it("drops a waiting value, shows the stored one and reports it when another clie
 });
 
 it("shows a foreign change after a send that changed nothing, and announces it over what was typed since", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   request.mockClear();
   const { input, press, store } = mount();
   typeInto(input, "~/Projects/");
@@ -309,7 +309,7 @@ it("shows a foreign change after a send that changed nothing, and announces it o
   typeInto(input, "/srv/typed");
   settingsOf(store, { default_clone_dir: "/srv/theirs", versions: { default_clone_dir: 4 } });
   expect(input.value).toBe("/srv/theirs");
-  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS + 150));
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(status()).toBe("Changed elsewhere: Default clone directory. The current value is shown.");
 });
 

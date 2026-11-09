@@ -11,11 +11,16 @@ import { DRAG_THRESHOLD } from "./tabDrag";
 import { presence, stubListMotion } from "../motion/listMotionTestSupport";
 import { Tabs } from "../../primitives";
 import { TEST_PROVIDERS } from "../../test/testProviders";
+import { fakeTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** Longer than the strip follows its tabs after a press ends. */
-const MOTION_WAIT_MS = MOTION_MS + 100;
+/** Lets the strip follow its tabs for as long as a motion lasts, and on to the next frame, the first that finds the
+ * motion over. */
+const motionPasses = () => act(() => {
+  vi.advanceTimersByTime(MOTION_MS);
+  vi.advanceTimersToNextFrame();
+});
 
 /** Lays the strip out under jsdom: each tab 100 pixels wide with 10 between, at the place its agent holds in
  * `order`, and shown where its `transform` puts it. */
@@ -73,6 +78,7 @@ it("moves a dropped tab into its new place from where the drag left it, and the 
 });
 
 it("ends a drag, and the press the strip's controls fade for, when the window loses focus", async () => {
+  fakeTimers();
   stubListMotion();
   const order: Agent[] = ["claude", "codex"];
   layOut(() => order);
@@ -98,17 +104,18 @@ it("ends a drag, and the press the strip's controls fade for, when the window lo
   expect(claude.style.transform).toBe("translateX(130px)");
   expect(faded()).toBe(true);
   // The controls stay faded for as long as the press lasts, well past the motion that follows a release.
-  await act(() => new Promise((resolve) => setTimeout(resolve, MOTION_WAIT_MS)));
+  await motionPasses();
   expect(faded()).toBe(true);
   act(() => void window.dispatchEvent(new Event("blur")));
   expect(claude.style.transform).toBe("");
-  await act(() => new Promise((resolve) => setTimeout(resolve, MOTION_WAIT_MS)));
+  await motionPasses();
   expect(faded()).toBe(false);
   act(() => void document.dispatchEvent(new PointerEvent("pointerup", { bubbles: true })));
   expect(onReorder).not.toHaveBeenCalled();
 });
 
 it("gives focus back to an agent's actions button when reordering the tabs dropped it", async () => {
+  fakeTimers();
   stubListMotion();
   let order: Agent[] = ["claude", "codex"];
   layOut(() => order);
@@ -129,7 +136,7 @@ it("gives focus back to an agent's actions button when reordering the tabs dropp
   act(() => root.render(<Strip />));
   await act(async () => {});
   // The controls are placed once list motion has ended.
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 400)); });
+  await motionPasses();
   const actions = () => host.querySelector<HTMLElement>('[data-tab-actions="claude"] button')!;
   act(() => actions().focus());
   expect(document.activeElement).toBe(actions());

@@ -5,6 +5,9 @@ import { ringForAutomaticFocus } from "../input/touchInput";
 import { useLatest } from "../components/hooks/useLatest";
 import { ArchiveView } from "./ArchiveView";
 
+/** How long the exit waits for its animation to end before it removes the view anyway. */
+export const EXIT_FALLBACK_MS = 290;
+
 type View = React.ComponentProps<typeof ArchiveView>;
 
 /** Keeps the last archive on screen for its exit without delaying selection or navigation. */
@@ -30,7 +33,7 @@ export function ArchiveLayer({ view, focusTerminal }: { view: View | undefined; 
       return;
     }
     // A backgrounded tab or a skipped animation event must not retain the archive indefinitely.
-    const fallback = setTimeout(finish, 290);
+    const fallback = setTimeout(finish, EXIT_FALLBACK_MS);
     const root = rootRef.current;
     const ended = (event: AnimationEvent) => {
       if (event.animationName === "archive-exit" && (event.target as HTMLElement).matches("[data-region=archive]")) finish();

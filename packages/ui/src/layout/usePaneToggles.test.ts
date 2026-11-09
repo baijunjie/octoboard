@@ -2,13 +2,18 @@
 import { setInteractionModality } from "react-aria";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { usePaneToggles, type PaneToggles } from "./usePaneToggles";
+import { fakeTimers } from "../test/clock";
+import { resetAppPreferences } from "../appTestSupport";
 
 afterEach(() => {
   document.body.replaceChildren();
-  vi.unstubAllGlobals();
+});
+// Registered before any test's `fakeTimers()`, so the globals stay stubbed while its run-out fires the timers still pending.
+beforeEach(() => {
+  onTestFinished(() => void vi.unstubAllGlobals());
 });
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -34,6 +39,7 @@ function mountToggles(narrow: boolean, focusTerminal: () => void = () => {}, noH
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
+    resetAppPreferences();
     document.documentElement.style.removeProperty("--breakpoint-tablet");
     document.documentElement.style.removeProperty("--breakpoint-phone");
     // Hiding a docked pane persists the choice, which the next test would start from.
@@ -93,8 +99,7 @@ it.each([
   { modality: "pointer", dismissed: true },
   { modality: "keyboard", dismissed: false },
 ] as const)("lets the floating aside go when the pointer leaves with focus a $modality put inside: dismissed $dismissed", ({ modality, dismissed }) => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { panes } = mountToggles(false);
   const pane = document.body.appendChild(document.createElement("div"));
   pane.setAttribute("data-pane", "aside");

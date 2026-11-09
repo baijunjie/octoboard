@@ -3,6 +3,7 @@ import { expect, it, vi } from "vitest";
 import type { Event, ClientRequestBody } from "../../protocol";
 import { looseRequestSender } from "../../requests";
 import { readDocumentImage } from "./documentImageReads";
+import { afterQueuedWork } from "../../test/clock";
 
 function daemon() {
   const sent: { path: string; slot?: string; answer: (event: Event) => void }[] = [];
@@ -17,7 +18,8 @@ function daemon() {
 }
 
 const file = (path: string) => ({ type: "project_file", id: null, path }) as unknown as Event;
-const settle = () => new Promise((resolve) => setTimeout(resolve));
+// A timer comes after every microtask the reads are chained on: an order, not a stretch of time.
+const settle = afterQueuedWork;
 
 it("reads one image at a time across the window, in order", async () => {
   const { sent, request } = daemon();

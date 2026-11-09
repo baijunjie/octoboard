@@ -15,6 +15,7 @@ import { testDaemon } from "../test/testDaemon";
 import type { Location } from "./history";
 import { type Navigation, useNavigationHistory } from "./useNavigationHistory";
 import { BROWSER_HOST, MAC_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -272,8 +273,7 @@ describe("joinPressVisits", () => {
     window.dispatchEvent(new MouseEvent(type));
     act(() => void vi.advanceTimersByTime(100));
   };
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  beforeEach(() => fakeTimers());
 
   it("records the console change and the selection that follows it before the release as one visit", () => {
     const ui = mountConsoles();

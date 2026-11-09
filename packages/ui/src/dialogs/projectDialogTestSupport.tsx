@@ -2,7 +2,7 @@
 // for each test of the importing file and takes down what the test rendered after it.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, vi } from "vitest";
+import { beforeEach, vi } from "vitest";
 
 import { type ConsoleExtra, consoleOf, projectOf } from "../fixtures/builders";
 import type { Account, Agent, AgentAvailability, Event, Project, ClientRequestBody } from "../protocol";
@@ -10,9 +10,10 @@ import { DaemonProvider } from "../store";
 import { buttons, click, inputLabelled, pickerNamed, type, withoutIsolates } from "../test/dom";
 import { testDaemon } from "../test/testDaemon";
 import { personal, work } from "../fixtures/accountTestSupport";
-import { ProjectDialog } from "./ProjectDialog";
+import { DETECT_DELAY_MS, ProjectDialog } from "./ProjectDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -20,12 +21,13 @@ import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 export type Pending = { body: ClientRequestBody; resolve: (event: Event) => void; reject: (error: Error) => void };
 export const roots: Root[] = [];
 
-beforeEach(() => vi.useFakeTimers());
-afterEach(() => {
-  for (const root of roots.splice(0)) act(() => root.unmount());
-  document.body.replaceChildren();
-  vi.useRealTimers();
-});
+beforeEach(() =>
+  void fakeTimers({
+    beforeDrain: () => {
+      for (const root of roots.splice(0)) root.unmount();
+      document.body.replaceChildren();
+    },
+  }));
 
 export { work, personal };
 
@@ -64,6 +66,11 @@ export function render(
 export { buttons, click, pickerNamed, type };
 export const input = (label: string) => inputLabelled(label);
 
+/** Just past the wait before a typed directory is looked up. */
+export const PAST_LOCAL_DETECTION_MS = DETECT_DELAY_MS.local + 1;
+/** Just past the wait before a typed repository URL is probed. */
+export const PAST_GIT_DETECTION_MS = DETECT_DELAY_MS.git + 1;
+
 export const settle = (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
 export const answer = (request: Pending | undefined, agent: Agent | null, directoryExists?: boolean) =>
   act(async () => request?.resolve({ type: "agent_detected", id: null, agent, ...(directoryExists !== undefined && { directory_exists: directoryExists }) }));
@@ -81,7 +88,7 @@ export const sentOf = (pending: Pending[], type: string) => pending.find((p) => 
 /** Fills in a directory whose agent is not detected, so the form is open and adds as inheriting. */
 export async function fillDirectory(pending: Pending[]) {
   type(input("Directory"), "~/code/x");
-  await settle(500);
+  await settle(PAST_LOCAL_DETECTION_MS);
   await answer(pending[0], null);
 }
 

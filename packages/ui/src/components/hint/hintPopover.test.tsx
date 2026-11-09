@@ -3,7 +3,8 @@ import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { HOVER_CLOSE_DELAY_MS, HOVER_OPEN_DELAY_MS, PopoverHint } from "./hintPopover";
-import { enter, leave, mountForTooltip, openPopover as panel, pointer, trigger as triggerOf, withFakeTimers } from "./tooltipTestSupport";
+import { enter, leave, mountForTooltip, openPopover as panel, pointer, trigger as triggerOf } from "./tooltipTestSupport";
+import { fakeTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -34,7 +35,7 @@ function hoverThenLeave(runFor: (ms: number) => void, button: HTMLElement) {
 
 /** Fake timers for the test; returns the call that lets `ms` of them pass. */
 function clock() {
-  withFakeTimers();
+  fakeTimers();
   return (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 }
 

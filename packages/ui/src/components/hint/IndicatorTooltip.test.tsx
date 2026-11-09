@@ -4,7 +4,8 @@ import { act, useState } from "react";
 import { expect, it } from "vitest";
 
 import { IndicatorTooltip } from "./IndicatorTooltip";
-import { enter, mountForTooltip, openPopover, openTooltip, press, trigger, withFakeTimers } from "./tooltipTestSupport";
+import { enter, mountForTooltip, openPopover, openTooltip, press, trigger } from "./tooltipTestSupport";
+import { fakeTimers, runOutTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -18,9 +19,9 @@ function mount(touchPopover?: boolean) {
 }
 
 it("shows the tooltip once a mouse has rested on the mark", () => {
-  const runTimers = withFakeTimers();
+  fakeTimers();
   enter(mount());
-  runTimers();
+  runOutTimers();
   expect(openTooltip()?.textContent).toBe("Waiting for you");
 });
 
@@ -63,13 +64,13 @@ it.each([undefined, "Waiting for you"])("names the popover by a generic word whe
 });
 
 it("keeps the tooltip out while the popover is open", () => {
-  const runTimers = withFakeTimers();
+  fakeTimers();
   const mark = mount();
   enter(mark);
-  runTimers();
+  runOutTimers();
   expect(openTooltip()).not.toBeNull();
   press(mark, "pen");
-  runTimers();
+  runOutTimers();
   expect(openPopover()).not.toBeNull();
   expect(openTooltip()).toBeNull();
 });
@@ -85,13 +86,13 @@ it("closes the popover on a tap outside it and on Escape", () => {
 });
 
 it("opens no popover on a touch press where the mark turns it off, and keeps its tooltip", () => {
-  const runTimers = withFakeTimers();
+  fakeTimers();
   const mark = mount(false);
   press(mark, "touch");
   expect(openPopover()).toBeNull();
   expect(mark.classList.contains("touch-target")).toBe(false);
   enter(mark);
-  runTimers();
+  runOutTimers();
   expect(openTooltip()?.textContent).toBe("Waiting for you");
 });
 

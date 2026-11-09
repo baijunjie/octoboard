@@ -4,11 +4,12 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
 import { PanelHeader } from "./components/panel/PanelHeader";
+import { framesAsTimers, settleFrames } from "./components/dialog/dialogTestSupport";
 import { mountForTooltip, openTooltip } from "./components/hint/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import { touchEvent } from "./layout/touchTestSupport";
-import { defaultStack } from "./panels/stackState";
+import { resetAppPreferences } from "./appTestSupport";
 import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
 import { type Project, type ClientRequestBody } from "./protocol";
@@ -18,6 +19,7 @@ import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { matchesWidthQuery } from "./test/viewport";
 import { BROWSER_HOST } from "./test/hosts";
+import { fakeTimers, runPendingTimers } from "./test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
@@ -92,7 +94,7 @@ function stubWidth(width: number, touch = false) {
 
 function mountApp(width: number, touch = false, agents = false, waiting = false) {
   let stacks!: ReturnType<typeof usePanelStacks>;
-  function StackReset() {
+  function StackProbe() {
     stacks = usePanelStacks();
     return null;
   }
@@ -104,10 +106,7 @@ function mountApp(width: number, touch = false, agents = false, waiting = false)
   document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
   document.documentElement.style.setProperty("--breakpoint-phone", "390px");
   onTestFinished(() => {
-    act(() => {
-      stacks.setStack("project", defaultStack("project"));
-      stacks.setStack("report", defaultStack("report"));
-    });
+    resetAppPreferences();
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--rail-width");
     document.documentElement.style.removeProperty("--peek-gap");
@@ -131,7 +130,7 @@ function mountApp(width: number, touch = false, agents = false, waiting = false)
   });
   mountForTooltip(
     <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
-      <ThemeProvider><DaemonProvider value={daemon}><StackReset /><App /></DaemonProvider></ThemeProvider>
+      <ThemeProvider><DaemonProvider value={daemon}><StackProbe /><App /></DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
   return { resize, stacks: () => stacks, daemon, project };
@@ -306,22 +305,19 @@ it("closes the floating panel on a press beside it or on Escape, but leaves Esca
 });
 
 it("floats no panel in from a toggle the pointer rests on while panels float over the terminal: a toggle opens one only on a press", async () => {
+  fakeTimers();
   mountApp(390);
   await selectProjectSession();
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    vi.useRealTimers();
-  });
   const button = toggle("Show files panel")!;
   const pointer = (type: string) => new PointerEvent(type, { pointerType: "mouse", bubbles: type !== "pointerenter" });
   await act(async () => {
     button.dispatchEvent(pointer("pointerover"));
     button.dispatchEvent(pointer("pointerenter"));
-    await vi.advanceTimersByTimeAsync(400);
   });
+  // Settle pending hover work; App's relative-time ticker keeps re-arming while mounted.
+  runPendingTimers();
   expect(document.querySelector("[data-panel-card]")).toBeNull();
   expect(document.querySelector("[data-pane=aside]")).toBeNull();
-  vi.useRealTimers();
   await pressElement(toggle("Show files panel"));
   expect(cards()).toEqual(["panel-files"]);
 });
@@ -367,9 +363,10 @@ it("hands focus back, as a dialog opened from the open drawer closes, to the con
   const dialog = document.querySelector("[role=dialog]");
   expect(dialog).not.toBeNull();
   await act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
-  expect(document.querySelector("[role=dialog]")).toBeNull();
-  expect(document.activeElement).toBe(plus);
+  await vi.waitFor(() => {
+    expect(document.querySelector("[role=dialog]")).toBeNull();
+    expect(document.activeElement).toBe(plus);
+  });
 });
 
 it.each([false, true])("lands focus that Back leaves nowhere on the top bar when no session takes it (touch: %s)", async (touch) => {
@@ -383,6 +380,7 @@ it.each([false, true])("lands focus that Back leaves nowhere on the top bar when
 
 it("records no drawer control for a dialog from a pointer that went down only to scroll the drawer", async () => {
   mountApp(390, false, true);
+  framesAsTimers();
   await pressElement(toggle("Show sessions"));
   const sessionRow = row("Fix header")!;
   await act(async () => {
@@ -393,7 +391,8 @@ it("records no drawer control for a dialog from a pointer that went down only to
   await pressElement(byLabel("New console session", document.querySelector("[data-region=sidebar]")!));
   expect(document.querySelector("[role=dialog]")).not.toBeNull();
   await act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+  await settleFrames();
+  expect(document.querySelector("[role=dialog]")).toBeNull();
   expect(document.activeElement).not.toBe(sessionRow);
 });
 
@@ -529,14 +528,16 @@ it("ignores swipes above 768px and enables them at iPad portrait width", async (
   expect(toggle("Hide sessions")).not.toBeNull();
 });
 
-/** Focus put on `element` the way a key leaves it, which is what opens its tooltip. */
-async function focusByKey(element: HTMLElement) {
+/** Focus put on `element` the way a key leaves it, which is what opens its tooltip, and the wait for that tooltip: the one
+ * open is named after the element, since a tooltip left up by an earlier focus would end the wait without being its own.
+ * `tooltip` is false for an element that has none. */
+async function focusByKey(element: HTMLElement, tooltip = true) {
   await act(async () => {
     element.blur();
     element.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
     element.focus();
   });
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+  if (tooltip) await vi.waitFor(() => expect(openTooltip()?.textContent).toContain(element.getAttribute("aria-label")));
 }
 
 it("shows the scrim for what a swipe opens, leaving focus on the top bar's toggle", async () => {
@@ -576,17 +577,16 @@ it.each(["Settings", "New console"])("hands focus on when a swipe closes the dra
   await pressElement(toggle("Show sessions"));
   const control = byLabel(label, rail())!;
   await focusByKey(control);
-  expect(openTooltip()).not.toBeNull();
   await swipe(-120);
   expect(toggle("Show sessions")).not.toBeNull();
   expect(document.activeElement).not.toBe(document.body);
   expect(rail().contains(document.activeElement)).toBe(false);
 });
 
-it("hands focus on when a swipe closes the drawer from a row of the sidebar with a tooltip shown", async () => {
+it("hands focus on when a swipe closes the drawer from a row of the sidebar, which has no tooltip", async () => {
   mountApp(390);
   await pressElement(toggle("Show sessions"));
-  await focusByKey(row("Plan release")!);
+  await focusByKey(row("Plan release")!, false);
   await swipe(-120);
   expect(toggle("Show sessions")).not.toBeNull();
   expect(document.activeElement).not.toBe(document.body);
@@ -627,9 +627,10 @@ it("hands focus back to the rail's Settings as Settings opened from it in the dr
   });
   expect(document.querySelector("[role=dialog]")).not.toBeNull();
   await act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
-  expect(document.querySelector("[role=dialog]")).toBeNull();
-  expect(document.activeElement).toBe(settings);
+  await vi.waitFor(() => {
+    expect(document.querySelector("[role=dialog]")).toBeNull();
+    expect(document.activeElement).toBe(settings);
+  });
   expect(toggle("Hide sessions")).not.toBeNull();
 });
 
@@ -644,9 +645,10 @@ it("hands focus back to the rail's Settings as Settings opened from it by a key 
   });
   expect(document.querySelector("[role=dialog]")).not.toBeNull();
   await act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
-  expect(document.querySelector("[role=dialog]")).toBeNull();
-  expect(document.activeElement).toBe(settings);
+  await vi.waitFor(() => {
+    expect(document.querySelector("[role=dialog]")).toBeNull();
+    expect(document.activeElement).toBe(settings);
+  });
   expect(toggle("Hide sessions")).not.toBeNull();
 });
 

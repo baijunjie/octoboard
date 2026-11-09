@@ -5,7 +5,6 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished } from "vitest";
 
 import { ErrorAlerts } from "../../shell/ErrorAlerts";
-import { errorAlerts } from "./errorAlerts";
 import { raiseError } from "./raiseError";
 import { CODES } from "../../errors/codes";
 import { daemonMessage } from "../../errors/daemonMessage";
@@ -37,7 +36,6 @@ function mount(element: React.ReactNode): HTMLElement {
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
     act(() => setLanguage(previousLanguage));
   });
   act(() => root.render(element));

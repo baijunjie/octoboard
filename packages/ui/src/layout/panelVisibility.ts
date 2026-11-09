@@ -5,7 +5,7 @@ import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
  * pane's open panel kinds are stored separately. */
 export type DockedPanel = "sidebar" | "aside";
 
-const visibility: Record<DockedPanel, PersistedPreference<boolean>> = {
+export const visibility: Record<DockedPanel, PersistedPreference<boolean>> = {
   sidebar: createPersistedPreference(PREFERENCE_KEYS.sidebarVisible, (raw) => raw !== "false", String),
   aside: createPersistedPreference(PREFERENCE_KEYS.asideDocked, (raw) => raw !== "false", String),
 };

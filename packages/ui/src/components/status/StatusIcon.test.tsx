@@ -5,8 +5,9 @@ import { expect, it, vi } from "vitest";
 import type { ShownStatusKind, StatusKind } from "../../sessions/sessionStatus";
 import { BUBBLE_SHIFT, HAND_SHIFT, shiftedViewBox } from "./opticalCentring";
 import { StatusIcon } from "./StatusIcon";
-import { enter, leave, mountForTooltip, openPopover, openTooltip, press, trigger, withFakeTimers } from "../hint/tooltipTestSupport";
+import { enter, leave, mountForTooltip, openPopover, openTooltip, press, trigger } from "../hint/tooltipTestSupport";
 import { SLEEP_PATHS } from "./sleepGlyph";
+import { fakeTimers, runOutTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -23,16 +24,16 @@ const STATUS_TEXT: Array<[StatusKind, string]> = [
 ];
 
 it.each(STATUS_TEXT)("says what the %s glyph stands for, after the delay the pointer rests on it", (status, text) => {
-  const settle = withFakeTimers();
+  fakeTimers();
   const container = mountForTooltip(<StatusIcon status={status} decorative withTooltip />);
 
   enter(trigger(container));
   expect(openTooltip()).toBeNull();
-  settle();
+  runOutTimers();
   expect(openTooltip()?.textContent).toBe(text);
 
   leave(trigger(container));
-  settle();
+  runOutTimers();
   expect(openTooltip()).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
 });
@@ -79,10 +80,10 @@ it("takes no focus and no press: the glyph is no tab stop and a press on it fall
 });
 
 it("carries no tooltip where a visible status label sits beside the glyph", () => {
-  const settle = withFakeTimers();
+  fakeTimers();
   const container = mountForTooltip(<StatusIcon status={"working"} decorative />);
   enter(trigger(container));
-  settle();
+  runOutTimers();
   expect(openTooltip()).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
 });

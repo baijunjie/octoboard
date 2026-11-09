@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ShownStatusKind } from "../../sessions/sessionStatus";
 import { AvatarStatusBadge, TopStatusMarker } from "./TopStatusMarker";
-import { enter, leave, mountForTooltip, openPopover, openTooltip, press, trigger, withFakeTimers } from "../hint/tooltipTestSupport";
+import { enter, leave, mountForTooltip, openPopover, openTooltip, press, trigger } from "../hint/tooltipTestSupport";
+import { fakeTimers, runOutTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -23,16 +24,16 @@ const STATUS_TEXT: Array<[Exclude<ShownStatusKind, "archived">, string]> = [
 ];
 
 it.each(STATUS_TEXT)("says the %s status in words when the pointer rests on its marker", (status, text) => {
-  const settle = withFakeTimers();
+  fakeTimers();
   const container = mountForTooltip(<TopStatusMarker status={status} />);
 
   enter(trigger(container));
   expect(openTooltip()).toBeNull();
-  settle();
+  runOutTimers();
   expect(openTooltip()?.textContent).toBe(text);
 
   leave(trigger(container));
-  settle();
+  runOutTimers();
   expect(openTooltip()).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
 });

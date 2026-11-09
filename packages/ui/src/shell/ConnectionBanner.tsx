@@ -13,7 +13,7 @@ import { Button, topLayerProps } from "../primitives";
 const BANNER_HEIGHT_VAR = "--connection-banner-height";
 
 /** A recovered blip stays silent even after the window has been connected for a long time. */
-const ANNOUNCEMENT_DELAY_MS = 100;
+export const ANNOUNCEMENT_DELAY_MS = 100;
 
 /** HeroUI's outline button retinted through the button's own color tokens to sit on the banner's
  * solid warning fill, whose stock tokens are neutral greys meant for a surface background: the

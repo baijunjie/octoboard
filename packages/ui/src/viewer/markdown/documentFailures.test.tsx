@@ -10,29 +10,24 @@ import { press, tap } from "../../components/hint/tooltipTestSupport";
 import { DocumentImage } from "./DocumentImage";
 import { FormulaView } from "./FormulaView";
 import { MarkdownDocument } from "./MarkdownDocument";
+import { LAZY_IMPORT_TIMEOUT_MS } from "../../test/lazyImport";
 import { markNames, ViewerHost } from "../viewerTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const failureShown = () => document.querySelector("[data-status-mark]") !== null || document.querySelector('[role="img"]') !== null;
 
-async function mount(content: React.ReactNode): Promise<void> {
+async function mount(content: React.ReactNode, ready = failureShown): Promise<void> {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
     vi.restoreAllMocks();
   });
-  await act(async () => {
-    root.render(content);
-    // Imports and effects settle several microtask hops after the first paint.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-  // The renderer and its stylesheet load on first use, which takes more than a few ticks, and seconds on a
-  // loaded machine.
-  for (let i = 0; i < 1000 && !failureShown(); i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 5)));
+  act(() => root.render(content));
+  // The renderer and its stylesheet load on first use, which takes seconds on a loaded machine.
+  await vi.waitFor(() => expect(ready()).toBe(true), { timeout: LAZY_IMPORT_TIMEOUT_MS });
 }
 
 /** A failure of what the document shows is on the screen only, so no error alert dialog is queued. */
@@ -81,6 +76,8 @@ it("marks a document image whose data cannot be decoded, with no error alert dia
     <ViewerHost request={async () => ({ type: "project_file", id: null, project: "project", worktree: null, source: { kind: "live", root_id: "root", version: "version" }, path: "image.png", file: { kind: "binary", text: null, size: 3, media_type: "image/png", data: "AAEC" } })}>
       <p id="paragraph"><DaemonImageFixture /></p>
     </ViewerHost>,
+    // The image is only marked once the browser fails to decode it, which this test makes happen.
+    () => document.querySelector("img") !== null,
   );
   act(() => document.querySelector("img")!.dispatchEvent(new Event("error")));
   expect(document.querySelector("#paragraph button")?.getAttribute("aria-label")).toBe("This image could not be shown.");
@@ -121,7 +118,7 @@ async function mountLinkedFailedImage() {
       />
     </ViewerHost>,
   );
-  for (let i = 0; i < 100 && !document.querySelector("button"); i += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 5)));
+  await vi.waitFor(() => expect(document.querySelector("button")).not.toBeNull(), { timeout: LAZY_IMPORT_TIMEOUT_MS });
   return { opened, link: document.querySelector("a")!, mark: document.querySelector<HTMLButtonElement>("button")! };
 }
 

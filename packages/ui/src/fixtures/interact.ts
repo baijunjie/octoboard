@@ -148,7 +148,7 @@ const TOOLTIP_TRIGGER = partSelector.tooltipTrigger;
  * terminals are xterm instances too, and must not be matched in its place. */
 const AGENT_TERMINAL = '[data-region="terminal"]';
 
-const POLL_MS = 50;
+export const POLL_MS = 50;
 /** What the sidebar's drawer is given to finish sliding in, after its toggle is pressed. */
 const DRAWER_SETTLE_MS = 300;
 /** How long a lookup that finds only a same-named control in the closed drawer waits before opening it: the control it
@@ -156,16 +156,16 @@ const DRAWER_SETTLE_MS = 300;
 const DRAWER_REACH_AFTER_MS = 200;
 /** What the sidebar's closed drawer holds inert: the sidebar itself and, below the phone breakpoint, the rail. */
 const DRAWER_REGIONS = '[data-region="sidebar"], [data-region="rail"]';
-const TIMEOUT_MS = 5000;
+export const TIMEOUT_MS = 5000;
 /** For a dialog that opens a file in the viewer, whose code is loaded the first time one is shown (a lazy
  * chunk the gallery's dev server serves unbundled): on a heavily loaded machine that takes seconds. */
 const VIEWER_LOAD_TIMEOUT_MS = 30_000;
 
 /** The app's global `--tooltip-delay`: a tooltip opens this long after the pointer comes to rest
  * on its trigger. */
-const TOOLTIP_DELAY_MS = 500;
+export const TOOLTIP_DELAY_MS = 500;
 /** Left after the delay for the tooltip to mount, be placed and finish fading in. */
-const TOOLTIP_SHOW_MS = 500;
+export const TOOLTIP_SHOW_MS = 500;
 
 /**
  * What a scenario's steps drive the mounted app with: they press controls the way a user would, by
@@ -379,7 +379,7 @@ export interface Ui {
    * conflict's kind, which is the subject's own wording, so the step takes no text to compare). The chip is
    * `aria-hidden` inside the trigger of its indicator tooltip, so it is found by its word among the
    * title's chips and the pointer reaches the trigger from it. It fails if no chip reads the word, or if
-   * no tooltip opens. */
+   * no tooltip opens that the dialog's heading repeats in its name as the detail. */
   hoverTitleStatus: (status: StatusKey) => Promise<void>;
   /** Presses the hovered status letter without moving the pointer or sending pointerleave. Fails
    * if its anchored tooltip survives the press that opens the change viewer. */
@@ -585,14 +585,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
 
   /** Polls for what `look` finds, up to the timeout, so a step can name something a press or a
    * render has not yet brought into the page. */
-  const waitFor = async <T>(look: () => T | undefined, missing: string, timeout = TIMEOUT_MS): Promise<T> => {
+  const waitFor = async <T>(look: () => T | undefined, missing: string | (() => string), timeout = TIMEOUT_MS): Promise<T> => {
     for (let waited = 0; waited <= timeout; waited += POLL_MS) {
       const found = look();
       if (found !== undefined) return found;
       if (inClosedDrawer && waited >= DRAWER_REACH_AFTER_MS) await openDrawer();
       else await wait(POLL_MS);
     }
-    throw new Error(missing);
+    throw new Error(typeof missing === "string" ? missing : missing());
   };
 
   /** Clicks what `look` finds once it is there; with `modifier` the click carries the shortcut modifier, whether
@@ -717,8 +717,8 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     }
   };
 
-  /** Puts the pointer on what `look` finds, waiting for it to appear, and waits for its tooltip.
-   * Returns what it hovered. */
+  /** Puts the pointer on what `look` finds, waiting for it to appear, and gives its tooltip the time to open and
+   * show. What the tooltip then says is for `tooltipWhere` to check. Returns what it hovered. */
   const hover = async (look: () => HTMLElement | null | undefined, missing: string): Promise<HTMLElement> => {
     const indicator = await waitFor(() => look() ?? undefined, missing);
     pointAt(indicator);
@@ -726,18 +726,34 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     return indicator;
   };
 
-  /** Waits for the anchored tooltip (found by its `data-anchored-tooltip` mark) and fails unless it reads `tooltip`;
+  /** Waits for the tooltip `selector` finds to be one `accept` takes, and returns it. The fixed wait of `hover` only
+   * gives a tooltip the time to open; what a step then asserts about it is waited for here, since a loaded page opens it
+   * later than that. One that never comes fails with `refuse`, told the tooltip that was up last, if any. */
+  const tooltipWhere = (selector: string, accept: (tooltip: Element) => boolean, refuse: (last: Element | null) => string): Promise<Element> => {
+    let last = null as Element | null;
+    return waitFor(
+      () => {
+        last = doc.querySelector(selector);
+        return last !== null && accept(last) ? last : undefined;
+      },
+      () => refuse(last),
+    );
+  };
+
+  /** What a tooltip said, for a step's error: the quoted text, or `none` for no tooltip. */
+  const quoted = (tooltip: Element | null): string => {
+    const text = withoutIsolates(tooltip?.textContent ?? "").trim();
+    return text ? `"${text}"` : "none";
+  };
+
+  /** Waits for the anchored tooltip (found by its `data-anchored-tooltip` mark) to read `tooltip` and fails if it does not;
    * `owner` says whose tooltip it was to be. */
   const expectAnchoredTooltip = async (owner: string, tooltip: string): Promise<void> => {
-    const shown = withoutIsolates(
-      await waitFor(
-        () => doc.querySelector("[data-anchored-tooltip]")?.textContent ?? undefined,
-        `${owner} has no tooltip "${tooltip}": its anchored tooltip is none`,
-      ),
-    ).trim();
-    if (shown !== tooltip) {
-      throw new Error(`${owner} has no tooltip "${tooltip}": its anchored tooltip is "${shown}"`);
-    }
+    await tooltipWhere(
+      "[data-anchored-tooltip]",
+      (shown) => withoutIsolates(shown.textContent ?? "").trim() === tooltip,
+      (last) => `${owner} has no tooltip "${tooltip}": its anchored tooltip is ${quoted(last)}`,
+    );
   };
 
   /** Presses `element` with a finger: the pointer events react-aria's `usePress` reads, then the click
@@ -947,10 +963,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
         return glyph?.matches("[role=img]") ? (glyph as HTMLElement) : undefined;
       }, `No session titled ${title} in a dialog's callout list with a status glyph to hover`);
       // A glyph without `withTooltip` is the same `role="img"` first child, and hovering it opens nothing.
-      const shown = doc.querySelector("[role=tooltip]")?.textContent;
-      if (!shown || !SHOWN_STATUSES.some((status) => statusLabel(t, status) === shown)) {
-        throw new Error(`The status glyph of ${title} has no tooltip: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
-      }
+      await tooltipWhere(
+        "[role=tooltip]",
+        (shown) => SHOWN_STATUSES.some((status) => statusLabel(t, status) === shown.textContent),
+        (last) => `The status glyph of ${title} has no tooltip: its last tooltip is ${quoted(last)}`,
+      );
     },
     async hoverCalloutAgent(title, agent, account) {
       const tooltip = agentTooltipText(agent, account);
@@ -958,10 +975,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
         const icon = calloutRow(title)?.children[1];
         return icon?.matches("[role=presentation]") ? (icon as HTMLElement) : undefined;
       }, `No session titled ${title} in a dialog's callout list with an agent icon to hover`);
-      const shown = withoutIsolates(doc.querySelector("[role=tooltip]")?.textContent ?? "").trim();
-      if (shown !== tooltip) {
-        throw new Error(`The agent icon of ${title} has no tooltip "${tooltip}": its last tooltip is ${shown ? `"${shown}"` : "none"}`);
-      }
+      await tooltipWhere(
+        "[role=tooltip]",
+        (shown) => withoutIsolates(shown.textContent ?? "").trim() === tooltip,
+        (last) => `The agent icon of ${title} has no tooltip "${tooltip}": its last tooltip is ${quoted(last)}`,
+      );
     },
     async hoverTopBarStatus() {
       await hover(() => doc.querySelector<HTMLElement>("[data-region=topbar] [role=img]"), "No status glyph in the top bar");
@@ -975,17 +993,19 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
         // below then refuses.
         return Array.from(found.querySelectorAll<HTMLElement>("[role=presentation]")).at(-1);
       }, `No row or chip matching ${String(host)} with a status marker to hover`);
-      const shown = doc.querySelector("[role=tooltip]")?.textContent;
-      if (!shown || !MARKER_STATUSES.some((status) => statusLabel(t, status) === shown)) {
-        throw new Error(`The control matching ${String(host)} has no status marker: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
-      }
+      await tooltipWhere(
+        "[role=tooltip]",
+        (shown) => MARKER_STATUSES.some((status) => statusLabel(t, status) === shown.textContent),
+        (last) => `The control matching ${String(host)} has no status marker: its last tooltip is ${quoted(last)}`,
+      );
     },
     async hoverTitledControl(matcher) {
       const control = await hover(() => find(matcher), `Nothing to hover matching ${String(matcher)}`);
-      const shown = doc.querySelector("[role=tooltip]")?.textContent;
-      if (!shown || withoutIsolates(shown).trim() !== nameOf(control)) {
-        throw new Error(`The control matching ${String(matcher)} has no tooltip of its name: its last tooltip is ${shown ? `"${shown}"` : "none"}`);
-      }
+      await tooltipWhere(
+        "[role=tooltip]",
+        (shown) => withoutIsolates(shown.textContent ?? "").trim() === nameOf(control),
+        (last) => `The control matching ${String(matcher)} has no tooltip of its name: its last tooltip is ${quoted(last)}`,
+      );
     },
     async hoverPanel(host, panel) {
       const control = await waitFor(() => find(host), `Nothing to hover matching ${String(host)}`);
@@ -1066,22 +1086,36 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
       );
       // The mark's name starts with the heading; the tooltip is the context window card, which does not.
       const title = t("session.context.title");
-      const shown = doc.querySelector("[role=tooltip]")?.textContent ?? "";
-      if (!withoutIsolates(shown).includes(withoutIsolates(title))) {
-        throw new Error(`The context size of ${String(row)} did not open its tooltip, which holds ${title}: ${shown === "" ? "no tooltip" : shown} is up`);
-      }
+      await tooltipWhere(
+        "[role=tooltip]",
+        (shown) => withoutIsolates(shown.textContent ?? "").includes(withoutIsolates(title)),
+        (last) => `The context size of ${String(row)} did not open its tooltip, which holds ${title}: ${last?.textContent ? last.textContent : "no tooltip"} is up`,
+      );
     },
     async hoverSessionDates(row, archived) {
       await hover(
         () => Array.from(find(row)?.querySelectorAll<HTMLElement>("[role=img]") ?? []).find((element) => element.querySelector("time") !== null),
         `No session card or row matching ${String(row)} with a relative time to hover`,
       );
-      const [created, archivedAt] = [t("session.meta.created", { time: "\0" }), t("session.meta.archived", { time: "\0" })].map((phrase) => phrase.split("\0")[0].trim());
-      const lines = Array.from(doc.querySelector("[role=tooltip]")?.querySelectorAll("span") ?? [], (line) => withoutIsolates(line.textContent ?? ""));
+      // Each phrase is the words around its time, in the language's order: before it, after it, or both.
+      const [created, archivedAt] = [t("session.meta.created", { time: "\0" }), t("session.meta.archived", { time: "\0" })].map((phrase) => {
+        const [before, after] = withoutIsolates(phrase).split("\0");
+        return { before: before.trim(), after: after.trim() };
+      });
+      const linesOf = (tooltip: Element | null): string[] => Array.from(tooltip?.querySelectorAll("span") ?? [], (line) => withoutIsolates(line.textContent ?? "").trim());
       const expected = archived ? [archivedAt, created] : [created];
-      if (lines.length !== expected.length || !lines.every((line, index) => line.startsWith(expected[index]))) {
-        throw new Error(`The relative time of ${String(row)} did not open a tooltip of lines starting ${expected.map((start) => `"${start}"`).join(", ")}: it has ${lines.length === 0 ? "no lines" : lines.map((line) => `"${line}"`).join(", ")}`);
-      }
+      await tooltipWhere(
+        "[role=tooltip]",
+        (tooltip) => {
+          const lines = linesOf(tooltip);
+          return lines.length === expected.length && lines.every((line, index) => line.startsWith(expected[index].before) && line.endsWith(expected[index].after));
+        },
+        (last) => {
+          const lines = linesOf(last);
+          const shape = expected.map(({ before, after }) => `"${[before, "…", after].filter(Boolean).join(" ")}"`).join(", ");
+          return `The relative time of ${String(row)} did not open a tooltip of lines shaped ${shape}: it has ${lines.length === 0 ? "no lines" : lines.map((line) => `"${line}"`).join(", ")}`;
+        },
+      );
     },
     async hoverSessionAgent(row, agent, details) {
       const tooltip = agentDetailsText(t, agent, details);
@@ -1092,10 +1126,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
             .at(-1),
         `No session row or card matching ${String(row)} with an agent mark to hover`,
       );
-      const shown = shownAgentDetails(doc.querySelector("[role=tooltip]"));
-      if (shown !== tooltip) {
-        throw new Error(`The agent mark of ${String(row)} has no tooltip "${tooltip}": its last tooltip is ${shown ? `"${shown}"` : "none"}`);
-      }
+      await tooltipWhere(
+        "[role=tooltip]",
+        (shown) => shownAgentDetails(shown) === tooltip,
+        (last) => {
+          const shown = shownAgentDetails(last);
+          return `The agent mark of ${String(row)} has no tooltip "${tooltip}": its last tooltip is ${shown ? `"${shown}"` : "none"}`;
+        },
+      );
     },
     async hoverFilterConditions() {
       const strip = await hover(() => {
@@ -1103,13 +1141,18 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
         return Array.from(doc.querySelectorAll<HTMLElement>("[role=group]")).find((group) => names.includes(group.getAttribute("aria-label") ?? ""))
           ?.parentElement ?? undefined;
       }, "No project filter conditions beside the Projects heading to hover");
-      const tooltip = await waitFor(() => doc.querySelector("[data-anchored-tooltip]") ?? undefined, "The project filter's conditions opened no tooltip: they fit the heading's line");
       const chipsOf = (root: Element, selector: string) => Array.from(root.querySelectorAll(selector), (chip) => chip.textContent).join(", ");
       // The strip's chips sit in its named groups; the tooltip's sit in it directly.
-      const [expected, shown] = [chipsOf(strip, "[role=group] span"), chipsOf(tooltip, "span")];
-      if (shown !== expected) {
-        throw new Error(`The project filter's conditions (${expected}) opened another tooltip: it holds ${shown ? `"${shown}"` : "no chips"}`);
-      }
+      const expected = chipsOf(strip, "[role=group] span");
+      await tooltipWhere(
+        "[data-anchored-tooltip]",
+        (shown) => chipsOf(shown, "span") === expected,
+        (last) => {
+          if (last === null) return "The project filter's conditions opened no tooltip: they fit the heading's line";
+          const holds = chipsOf(last, "span");
+          return `The project filter's conditions (${expected}) opened another tooltip: it holds ${holds ? `"${holds}"` : "no chips"}`;
+        },
+      );
     },
     async hoverTerminalLink(text) {
       // Until xterm has the link, a hover over it is nothing: a busy page is slow to have it, so wait for its cursor
@@ -1135,18 +1178,34 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     },
     async hoverChangeStatus(row, status) {
       await hover(() => find(row)?.querySelector<HTMLElement>("[data-variant]"), `No change row matching ${String(row)} with a status letter to hover`);
-      const shown = doc.querySelector("[data-anchored-tooltip]")?.textContent;
-      if (shown !== t(STATUS_LABELS[status])) {
-        throw new Error(`The row matching ${String(row)} did not open the tooltip for ${status} (${t(STATUS_LABELS[status])}): ${shown ? `"${shown}"` : "none"} is up`);
-      }
+      await tooltipWhere(
+        "[data-anchored-tooltip]",
+        (shown) => shown.textContent === t(STATUS_LABELS[status]),
+        (last) => `The row matching ${String(row)} did not open the tooltip for ${status} (${t(STATUS_LABELS[status])}): ${quoted(last)} is up`,
+      );
     },
     async hoverTitleStatus(status) {
       const word = t(STATUS_LABELS[status]);
-      await hover(
+      const chip = await hover(
         () => Array.from(doc.querySelectorAll<HTMLElement>("[role=dialog] [data-variant]")).find((chip) => chip.textContent === word),
         `The open viewer's title has no status chip reading ${word}`,
       );
-      if (!doc.querySelector("[role=tooltip]")?.textContent?.trim()) throw new Error(`The title's ${word} chip opened no tooltip`);
+      const dialog = chip.closest("[role=dialog]");
+      // The heading's name carries the tooltip's words as its detail (`viewer.titleWithDetail`), since the drawn chip is
+      // hidden from assistive technology: a tooltip the heading does not repeat is some other tooltip's.
+      const inHeading = (text: string): boolean => {
+        const [before, after] = withoutIsolates(t("viewer.titleWithDetail", { title: "\0", detail: text })).split("\0");
+        const heading = (dialog && labelledNameOf(doc, dialog)) ?? "";
+        return heading.includes(before.trim()) && heading.includes(after.trim());
+      };
+      await tooltipWhere(
+        "[role=tooltip]",
+        (shown) => {
+          const text = withoutIsolates(shown.textContent ?? "").trim();
+          return text !== "" && inHeading(text);
+        },
+        (last) => `The title's ${word} chip opened no tooltip that its heading repeats as the detail of its name: its last tooltip is ${quoted(last)}`,
+      );
     },
     async pressChangeStatus(row) {
       const chip = await waitFor(() => find(row)?.querySelector<HTMLElement>("[data-variant]") ?? undefined, `No change row matching ${String(row)} with a status letter to press`);
@@ -1199,10 +1258,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
       );
       // The tooltip shows the sentence as rich content, its references drawn as chips, so it holds no isolates.
       const spoken = withoutIsolates(sentence);
-      const shown = withoutIsolates(doc.querySelector("[role=tooltip]")?.textContent ?? "").trim();
-      if (shown !== spoken) {
-        throw new Error(`The git badge's tooltip is not its sentence "${spoken}": the last tooltip is ${shown ? `"${shown}"` : "none"}`);
-      }
+      await tooltipWhere(
+        "[role=tooltip]",
+        (shown) => withoutIsolates(shown.textContent ?? "").trim() === spoken,
+        (last) => `The git badge's tooltip is not its sentence "${spoken}": the last tooltip is ${quoted(last)}`,
+      );
     },
     async openGitFailure(row) {
       const label = gitFailureLabel(t);

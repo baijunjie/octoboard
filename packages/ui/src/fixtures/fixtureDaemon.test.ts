@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { createElement } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { currentLanguage, t } from "../i18n/language";
 import type { NotificationRequest, State, WindowNotification } from "../store";
@@ -10,7 +10,10 @@ import { broadcastNotification } from "../store/notifications";
 import type { Agent, ClientRequestBody, Settings, SettingsSection } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
 import { SAMPLE_CLAUDE_MODELS, SAMPLE_CLAUDE_MODELS_PRO } from "./agentModels";
-import { createFixtureDaemon } from "./fixtureDaemon";
+import { fakeTimers } from "../test/clock";
+import { LOGIN_ENDS_MS, LOGIN_WAITING_MS, RESET_CREDIT_REREAD_MS } from "./fixtureAccounts";
+import { createFixtureDaemon, NOTIFICATION_DELAY_MS } from "./fixtureDaemon";
+import { LIST_LATER_AFTER_MS } from "./fixtureProcesses";
 import { FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "./fixtureProviders";
 import type { AccountMcpAnswer, Fixture, McpServerAuthAnswer } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -101,10 +104,11 @@ describe("the fixture daemon's conversation lookup", () => {
   });
 
   it("refuses with the scenario's error, and never answers a pending one", async () => {
+    fakeTimers();
     await expect(ask({ code: "unknown_project", params: { project: "p" }, message: "unknown project p" })).rejects.toMatchObject({ code: "unknown_project" });
     const settled = vi.fn();
     void ask("pending").then(settled, settled);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.runAllTimersAsync();
     expect(settled).not.toHaveBeenCalled();
   });
 });
@@ -120,6 +124,7 @@ describe("the fixture daemon's MCP inventory", () => {
   });
 
   it("answers each account's reads in order, the last staged answer repeating", async () => {
+    fakeTimers();
     const daemon = createFixtureDaemon({ accountMcpInventory: new Map<string | null, AccountMcpAnswer | readonly AccountMcpAnswer[]>([["a-work", [unavailable, {}]], [null, "pending"]]) });
     const ask = (account: string | null) => daemon.request({ type: "read_account_mcp_inventory", agent: "claude", account, refresh: true });
     await expect(ask("a-work")).resolves.toMatchObject({ inventory: { unavailable: unavailable.unavailable } });
@@ -128,7 +133,7 @@ describe("the fixture daemon's MCP inventory", () => {
     await expect(ask("a-other")).resolves.toMatchObject({ inventory: { servers: [] } });
     const settled = vi.fn();
     void ask(null).then(settled, settled);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.runAllTimersAsync();
     expect(settled).not.toHaveBeenCalled();
   });
 
@@ -168,11 +173,12 @@ describe("the fixture daemon's MCP server sign-in", () => {
   });
 
   it("keeps a pending sign-in running until its cancel ends it as cancelled, and refuses a cancel with nothing to cancel", async () => {
+    fakeTimers();
     const daemon = daemonOf("pending");
     await expect(daemon.request({ type: "cancel_account_mcp_sign_in", ...target })).rejects.toMatchObject({ code: "mcp_sign_in_not_running" });
     const settled = vi.fn();
     const signIn = daemon.request({ type: "sign_in_account_mcp_server", ...target }).then(settled);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.runAllTimersAsync();
     expect(settled).not.toHaveBeenCalled();
     await expect(daemon.request({ type: "cancel_account_mcp_sign_in", ...target })).resolves.toMatchObject({ type: "ack" });
     await expect(signIn).resolves.toBeUndefined();
@@ -181,6 +187,7 @@ describe("the fixture daemon's MCP server sign-in", () => {
   });
 
   it("joins a second sign-in to a pending one, and holds a pending sign-out with nothing to cancel", async () => {
+    fakeTimers();
     const daemon = daemonOf("pending");
     const first = daemon.request({ type: "sign_in_account_mcp_server", ...target });
     const second = daemon.request({ type: "sign_in_account_mcp_server", ...target });
@@ -192,7 +199,7 @@ describe("the fixture daemon's MCP server sign-in", () => {
     const settled = vi.fn();
     void daemon.request({ type: "sign_out_account_mcp_server", ...target }).then(settled, settled);
     await expect(daemon.request({ type: "cancel_account_mcp_sign_in", ...target })).rejects.toMatchObject({ code: "mcp_sign_in_not_running" });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.runAllTimersAsync();
     expect(settled).not.toHaveBeenCalled();
   });
 });
@@ -399,18 +406,14 @@ describe("the fixture daemon's Git re-check", () => {
   const missing = gitStatusOf(project.id, { branch: null, upstream: null, error: "git was not found", error_code: "binary_not_found" });
 
   it("broadcasts the check running, then answers with the status it ended with", async () => {
-    vi.useFakeTimers();
-    try {
-      const daemon = createFixtureDaemon({ state: snapshotState({ projects: [project], gitStatuses: [missing] }) });
-      const answer = daemon.request({ type: "refresh_project_git_status", project: project.id });
-      expect(daemon.store.getState().gitStatuses.get(project.id)).toMatchObject({ activity: "checking", error_code: "binary_not_found" });
-      await vi.runAllTimersAsync();
-      const ended = { ...missing, activity: "idle" };
-      await expect(answer).resolves.toEqual({ type: "project_git_rechecked", id: null, status: ended });
-      expect(daemon.store.getState().gitStatuses.get(project.id)).toEqual(ended);
-    } finally {
-      vi.useRealTimers();
-    }
+    fakeTimers();
+    const daemon = createFixtureDaemon({ state: snapshotState({ projects: [project], gitStatuses: [missing] }) });
+    const answer = daemon.request({ type: "refresh_project_git_status", project: project.id });
+    expect(daemon.store.getState().gitStatuses.get(project.id)).toMatchObject({ activity: "checking", error_code: "binary_not_found" });
+    await vi.runAllTimersAsync();
+    const ended = { ...missing, activity: "idle" };
+    await expect(answer).resolves.toEqual({ type: "project_git_rechecked", id: null, status: ended });
+    expect(daemon.store.getState().gitStatuses.get(project.id)).toEqual(ended);
   });
 
   it("answers with no status for a project that has none, and refuses an unknown one", async () => {
@@ -1134,13 +1137,14 @@ describe("the fixture daemon's bound branches and worktrees", () => {
   });
 
   it("can fail a project's inspection, and leave a session inspection unanswered", async () => {
+    fakeTimers();
     const error = { code: "internal_error", params: { detail: "no git" }, message: "no git" };
     const failing = createFixtureDaemon({ ...scenario, projectRemovalBranches: { [project.id]: error } });
     await expect(failing.request({ type: "inspect_project_removal", project: project.id })).rejects.toMatchObject({ code: "internal_error" });
     const silent = createFixtureDaemon({ ...scenario, sessionBranches: "pending" });
     const answered = vi.fn();
     void silent.request({ type: "inspect_session_branches", sessions: [owner.id] }).then(answered);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.runAllTimersAsync();
     expect(answered).not.toHaveBeenCalled();
   });
 });
@@ -1210,44 +1214,36 @@ describe("the fixture daemon's structured notices", () => {
   });
 
   it("settles the scenario's notifications as raised only once the stack has been handed them, a delay after it subscribed", async () => {
-    vi.useFakeTimers();
-    try {
-      const daemon = createFixtureDaemon({ ...scenario, notifications: [{ kind: "notice", message: "Could not save" }] });
-      const notifications: NotificationRequest[] = [];
-      const raised = vi.fn();
-      void daemon.scenarioNotificationsRaised.then(raised);
-      await vi.advanceTimersByTimeAsync(10_000);
-      expect(raised).not.toHaveBeenCalled();
-      const unsubscribe = daemon.onNotification(shownInto(notifications));
-      await vi.advanceTimersByTimeAsync(299);
-      expect(raised).not.toHaveBeenCalled();
-      expect(notifications).toEqual([]);
-      await vi.advanceTimersByTimeAsync(1);
-      expect(notifications).toHaveLength(1);
-      expect(raised).toHaveBeenCalledOnce();
-      unsubscribe();
-    } finally {
-      vi.useRealTimers();
-    }
+    fakeTimers();
+    const daemon = createFixtureDaemon({ ...scenario, notifications: [{ kind: "notice", message: "Could not save" }] });
+    const notifications: NotificationRequest[] = [];
+    const raised = vi.fn();
+    void daemon.scenarioNotificationsRaised.then(raised);
+    await vi.runAllTimersAsync();
+    expect(raised).not.toHaveBeenCalled();
+    const unsubscribe = daemon.onNotification(shownInto(notifications));
+    await vi.advanceTimersByTimeAsync(NOTIFICATION_DELAY_MS - 1);
+    expect(raised).not.toHaveBeenCalled();
+    expect(notifications).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(notifications).toHaveLength(1);
+    expect(raised).toHaveBeenCalledOnce();
+    unsubscribe();
   });
 
   it("keeps a failed launch's title metadata, nested path and complete plain message", async () => {
-    vi.useFakeTimers();
-    try {
-      const params = { title: "Release notes", reason_code: "config_dir_unreachable", agent: "Claude Code", path: "/Users/dev/.claude-work", reason: "Permission denied" };
-      const daemon = createFixtureDaemon({ ...scenario, notifications: [sessionNoticeNotification("s-gone", "launch_failed", params)] });
-      const notifications: NotificationRequest[] = [];
-      const unsubscribe = daemon.onNotification(shownInto(notifications));
-      await vi.runAllTimersAsync();
-      expect(notifications).toHaveLength(1);
-      expect(notifications[0]?.daemonTitle).toMatchObject({ code: "launch_failed.title", params });
-      expect(notifications[0]?.daemonError).toMatchObject({ code: "config_dir_unreachable", params: expect.objectContaining({ path: params.path }) });
-      expect(notifications[0]?.message).toContain(params.title);
-      expect(notifications[0]?.message).toContain(params.path);
-      unsubscribe();
-    } finally {
-      vi.useRealTimers();
-    }
+    fakeTimers();
+    const params = { title: "Release notes", reason_code: "config_dir_unreachable", agent: "Claude Code", path: "/Users/dev/.claude-work", reason: "Permission denied" };
+    const daemon = createFixtureDaemon({ ...scenario, notifications: [sessionNoticeNotification("s-gone", "launch_failed", params)] });
+    const notifications: NotificationRequest[] = [];
+    const unsubscribe = daemon.onNotification(shownInto(notifications));
+    await vi.runAllTimersAsync();
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]?.daemonTitle).toMatchObject({ code: "launch_failed.title", params });
+    expect(notifications[0]?.daemonError).toMatchObject({ code: "config_dir_unreachable", params: expect.objectContaining({ path: params.path }) });
+    expect(notifications[0]?.message).toContain(params.title);
+    expect(notifications[0]?.message).toContain(params.path);
+    unsubscribe();
   });
 });
 
@@ -1257,17 +1253,13 @@ describe("the fixture daemon's scenario notifications", () => {
   /** The notifications a scenario's fixtures raise once the stack has subscribed, with the records they were worded
    * from. */
   async function raised(notifications: Fixture["notifications"]): Promise<{ got: NotificationRequest[]; records: State }> {
-    vi.useFakeTimers();
-    try {
-      const daemon = createFixtureDaemon({ state: state(), notifications });
-      const got: NotificationRequest[] = [];
-      const unsubscribe = daemon.onNotification(shownInto(got));
-      await vi.runAllTimersAsync();
-      unsubscribe();
-      return { got, records: daemon.store.getState() };
-    } finally {
-      vi.useRealTimers();
-    }
+    fakeTimers();
+    const daemon = createFixtureDaemon({ state: state(), notifications });
+    const got: NotificationRequest[] = [];
+    const unsubscribe = daemon.onNotification(shownInto(got));
+    await vi.runAllTimersAsync();
+    unsubscribe();
+    return { got, records: daemon.store.getState() };
   }
 
   it("routes a broadcast fixture through the code the store routes the daemon's event with", async () => {
@@ -1311,23 +1303,19 @@ describe("the fixture daemon's error titles", () => {
   const scenario = { };
 
   it("gives a scenario's notification the title it names, worded in the viewing language when it is a function", async () => {
-    vi.useFakeTimers();
-    try {
-      const daemon = createFixtureDaemon({
-        ...scenario,
-        notifications: [
-          { kind: "raised", message: "one", title: "Could not open the folder" },
-          { kind: "raised", message: "two", title: (t) => t("settings.saveFailedTitle") },
-        ],
-      });
-      const notifications: NotificationRequest[] = [];
-      const unsubscribe = daemon.onNotification(shownInto(notifications));
-      await vi.runAllTimersAsync();
-      expect(notifications.map((notification) => notification.title)).toEqual(["Could not open the folder", t("settings.saveFailedTitle")]);
-      unsubscribe();
-    } finally {
-      vi.useRealTimers();
-    }
+    fakeTimers();
+    const daemon = createFixtureDaemon({
+      ...scenario,
+      notifications: [
+        { kind: "raised", message: "one", title: "Could not open the folder" },
+        { kind: "raised", message: "two", title: (t) => t("settings.saveFailedTitle") },
+      ],
+    });
+    const notifications: NotificationRequest[] = [];
+    const unsubscribe = daemon.onNotification(shownInto(notifications));
+    await vi.runAllTimersAsync();
+    expect(notifications.map((notification) => notification.title)).toEqual(["Could not open the folder", t("settings.saveFailedTitle")]);
+    unsubscribe();
   });
 });
 
@@ -1864,10 +1852,13 @@ describe("the fixture daemon's added agents", () => {
   });
 
   it("never answers an add a scenario holds pending, leaving the list as it was", async () => {
+    fakeTimers();
     const daemon = createFixtureDaemon({ agentAdd: "pending", state: snapshotState({ settings: { ...settings, added_agents: ["claude"] } }) });
     daemon.store.setState({ agentAvailability: new Map([["grok" as const, { agent: "grok" as const, availability: "available" as const, default_account_dir: null }]]) });
-    const outcome = await Promise.race([daemon.request({ type: "add_agent", agent: "grok" }).then(() => "answered", () => "answered"), new Promise((resolve) => setTimeout(() => resolve("waiting"), 50))]);
-    expect(outcome).toBe("waiting");
+    const answered = vi.fn();
+    void daemon.request({ type: "add_agent", agent: "grok" }).then(answered, answered);
+    await vi.runAllTimersAsync();
+    expect(answered).not.toHaveBeenCalled();
     expect(added(daemon)).toEqual(["claude"]);
   });
 
@@ -1924,34 +1915,26 @@ describe("the fixture daemon's account login and default account name", () => {
     daemon.store.getState().accountLogins.find((held) => held.agent === agent && held.account === account);
 
   it("walks a login from starting to waiting with its page, Grok Build's with the device code the agent shows itself", async () => {
-    vi.useFakeTimers();
-    try {
-      const daemon = daemonWith();
-      await daemon.request({ type: "start_account_login", agent: "claude", account: "work" });
-      expect(login(daemon, "claude", "work")?.status).toBe("starting");
-      await expect(daemon.request({ type: "start_account_login", agent: "claude", account: "work" })).rejects.toMatchObject({ code: "login_already_running" });
-      await daemon.request({ type: "start_account_login", agent: "grok" });
-      await vi.advanceTimersByTimeAsync(100);
-      expect(login(daemon, "claude", "work")).toMatchObject({ status: "waiting", opened_by_agent: false, device_code: null });
-      expect(login(daemon, "grok", null)).toMatchObject({ status: "waiting", opened_by_agent: true, device_code: "ABCD-1234" });
-      await daemon.request({ type: "cancel_account_login", agent: "claude", account: "work" });
-      expect(login(daemon, "claude", "work")?.status).toBe("cancelled");
-      await expect(daemon.request({ type: "cancel_account_login", agent: "claude", account: "work" })).rejects.toMatchObject({ code: "login_not_running" });
-    } finally {
-      vi.useRealTimers();
-    }
+    fakeTimers();
+    const daemon = daemonWith();
+    await daemon.request({ type: "start_account_login", agent: "claude", account: "work" });
+    expect(login(daemon, "claude", "work")?.status).toBe("starting");
+    await expect(daemon.request({ type: "start_account_login", agent: "claude", account: "work" })).rejects.toMatchObject({ code: "login_already_running" });
+    await daemon.request({ type: "start_account_login", agent: "grok" });
+    await vi.advanceTimersByTimeAsync(LOGIN_WAITING_MS);
+    expect(login(daemon, "claude", "work")).toMatchObject({ status: "waiting", opened_by_agent: false, device_code: null });
+    expect(login(daemon, "grok", null)).toMatchObject({ status: "waiting", opened_by_agent: true, device_code: "ABCD-1234" });
+    await daemon.request({ type: "cancel_account_login", agent: "claude", account: "work" });
+    expect(login(daemon, "claude", "work")?.status).toBe("cancelled");
+    await expect(daemon.request({ type: "cancel_account_login", agent: "claude", account: "work" })).rejects.toMatchObject({ code: "login_not_running" });
   });
 
   it("ends a login as the scenario says", async () => {
-    vi.useFakeTimers();
-    try {
-      const daemon = daemonWith("failed");
-      await daemon.request({ type: "start_account_login", agent: "claude" });
-      await vi.advanceTimersByTimeAsync(500);
-      expect(login(daemon, "claude", null)).toMatchObject({ status: "failed", failure: { code: "login_failed" } });
-    } finally {
-      vi.useRealTimers();
-    }
+    fakeTimers();
+    const daemon = daemonWith("failed");
+    await daemon.request({ type: "start_account_login", agent: "claude" });
+    await vi.advanceTimersByTimeAsync(LOGIN_WAITING_MS + LOGIN_ENDS_MS);
+    expect(login(daemon, "claude", null)).toMatchObject({ status: "failed", failure: { code: "login_failed" } });
   });
 
   it("names and unnames the default account, refusing a name an account of the agent has, both ways", async () => {
@@ -2082,16 +2065,22 @@ describe("the fixture daemon's shell terminals", () => {
   });
 
   it("leaves a start unanswered when the scenario says so", async () => {
+    fakeTimers();
     const daemon = createFixtureDaemon({ shellTerminalStart: "pending", state: snapshotState({ consoles: [consoleOf("c", "Work")], projects: [projectOf("p", "c", "Site")] }) });
-    const outcome = await Promise.race([daemon.request({ type: "create_shell_terminal", project: "p" }).then(() => "answered"), new Promise((resolve) => setTimeout(() => resolve("pending"), 50))]);
-    expect(outcome).toBe("pending");
+    const answered = vi.fn();
+    void daemon.request({ type: "create_shell_terminal", project: "p" }).then(answered, answered);
+    await vi.runAllTimersAsync();
+    expect(answered).not.toHaveBeenCalled();
     expect(daemon.store.getState().shellTerminals.size).toBe(0);
   });
 
   it("leaves a close unanswered when the scenario says so", async () => {
+    fakeTimers();
     const daemon = createFixtureDaemon({ shellTerminalClose: "pending", state: snapshotState({ consoles: [consoleOf("c", "Work")], projects: [projectOf("p", "c", "Site")], shellTerminals: [shellTerminalOf("sh-1", projectOf("p", "c", "Site"), "zsh", 0)] }) });
-    const outcome = await Promise.race([daemon.request({ type: "close_shell_terminal", shell_terminal: "sh-1" }).then(() => "answered"), new Promise((resolve) => setTimeout(() => resolve("pending"), 50))]);
-    expect(outcome).toBe("pending");
+    const answered = vi.fn();
+    void daemon.request({ type: "close_shell_terminal", shell_terminal: "sh-1" }).then(answered, answered);
+    await vi.runAllTimersAsync();
+    expect(answered).not.toHaveBeenCalled();
     expect(daemon.store.getState().shellTerminals.size).toBe(1);
   });
 
@@ -2339,11 +2328,12 @@ describe("the fixture daemon's session history", () => {
   });
 
   it("can leave a read, and a reopen, unanswered", async () => {
+    fakeTimers();
     const daemon = createFixtureDaemon({ ...base, sessionHistory: { [archived.id]: "pending" }, sessionResumes: { [archived.id]: "pending" } });
     const answered = vi.fn();
     void daemon.request({ type: "read_session_history", session: archived.id }).then(answered);
     void daemon.request({ type: "resume_session", session: archived.id }).then(answered);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.runAllTimersAsync();
     expect(answered).not.toHaveBeenCalled();
     expect(daemon.store.getState().sessions.get(archived.id)?.status).toBe("archived");
   });
@@ -2548,6 +2538,13 @@ describe("the fixture daemon's git workflow settings", () => {
 });
 
 describe("the fixture daemon's process ledger", () => {
+  // The trees' ages are measured against the clock when the file is collected, and the daemon judges them against its own
+  // (`PROCESS_ASK_AFTER_MS`), so the clock is held where they were drawn: a slow run does not age one past the line.
+  const drawnAt = Date.now();
+  beforeEach(() => {
+    fakeTimers();
+    vi.setSystemTime(drawnAt);
+  });
   const project = projectOf("p", "c", "Website");
   const other = projectOf("p-other", "c", "Search API");
   const running = sessionOf("running", "c", project.id, "Running", "idle");
@@ -2660,16 +2657,11 @@ describe("the fixture daemon's process ledger", () => {
 
   it("answers the first list and refuses the polls that follow it once a second has passed, when the scenario says so", async () => {
     const error = { code: "internal_error", params: { detail: "no" }, message: "no" };
-    vi.useFakeTimers();
-    try {
-      const daemon = createFixtureDaemon({ ...scenario, processes: { ...scenario.processes, listLater: error } });
-      await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["1:1", "2:1"]);
-      await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["1:1", "2:1"]);
-      vi.advanceTimersByTime(3000);
-      await expect(daemon.request({ type: "list_processes", session_id: running.id })).rejects.toMatchObject({ code: "internal_error" });
-    } finally {
-      vi.useRealTimers();
-    }
+    const daemon = createFixtureDaemon({ ...scenario, processes: { ...scenario.processes, listLater: error } });
+    await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["1:1", "2:1"]);
+    await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["1:1", "2:1"]);
+    vi.advanceTimersByTime(LIST_LATER_AFTER_MS);
+    await expect(daemon.request({ type: "list_processes", session_id: running.id })).rejects.toMatchObject({ code: "internal_error" });
   });
 
   it("refuses the list of just the project the scenario names, leaving the others and the session lists answered", async () => {
@@ -2697,7 +2689,7 @@ describe("the fixture daemon's process ledger", () => {
       const daemon = createFixtureDaemon({ ...scenario, processes });
       const request = "list" in processes ? { type: "list_processes" as const, session_id: running.id } : "stop" in processes ? { type: "stop_processes" as const, ids: ["1:1"] } : { type: "keep_processes" as const, ids: ["1:1"] };
       void daemon.request(request).then(answered, answered);
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await vi.runAllTimersAsync();
       expect(answered).not.toHaveBeenCalled();
     }
   });
@@ -2711,10 +2703,12 @@ describe("the fixture daemon's rate limit reset credits", () => {
       accountQuotas: [quotaOf("codex", "personal", "pro", [quotaWindow("session", 40, 120), quotaWindow("weekly", 100, 3 * 24 * 60)], { reset_credits: credits })],
     }),
   });
-  const rereadDone = () => new Promise((resolve) => setTimeout(resolve, 150));
+  const rereadDone = () => vi.advanceTimersByTimeAsync(RESET_CREDIT_REREAD_MS);
+  const LATER_MS = 3 * RESET_CREDIT_REREAD_MS;
   const reading = (daemon: ReturnType<typeof createFixtureDaemon>) => daemon.store.getState().accountQuotas[0]!;
 
   it("takes the used credit off the held reading at once and reads the quota again after, with the windows full", async () => {
+    fakeTimers();
     const daemon = createFixtureDaemon(withCredits(resetCreditsOf([resetCreditOf("a", 60), resetCreditOf("b", 600)])));
     const fetched = reading(daemon).fetched_at;
     await expect(daemon.request({ type: "use_reset_credit", agent: "codex", account: "personal" })).resolves.toEqual({ type: "reset_credit_used", id: null, outcome: "reset" });
@@ -2735,6 +2729,7 @@ describe("the fixture daemon's rate limit reset credits", () => {
   });
 
   it("spends a credit only on reset: already_redeemed and nothing_to_reset leave the credits and refill nothing", async () => {
+    fakeTimers();
     const credits = resetCreditsOf([resetCreditOf("a", 60), resetCreditOf("b", 600)]);
     for (const outcome of ["already_redeemed", "nothing_to_reset"] as const) {
       const daemon = createFixtureDaemon({ ...withCredits(credits), resetCreditUse: outcome });
@@ -2748,6 +2743,7 @@ describe("the fixture daemon's rate limit reset credits", () => {
   });
 
   it("keeps the count and drops the list where the credit used was not named, and reads again after a refusal", async () => {
+    fakeTimers();
     const unnamed = createFixtureDaemon(withCredits(resetCreditsOf(null, 3)));
     await unnamed.request({ type: "use_reset_credit", agent: "codex", account: "personal" });
     expect(reading(unnamed).reset_credits).toEqual({ available_count: 2, credits: null });
@@ -2769,13 +2765,14 @@ describe("the fixture daemon's rate limit reset credits", () => {
   });
 
   it("reads again later, never, or with a failure that keeps the windows and credits, as the scenario stages", async () => {
+    fakeTimers();
     const credits = resetCreditsOf([resetCreditOf("a", 60), resetCreditOf("b", 600)]);
     const failure = quotaFailure("quota_timed_out", { agent: "Codex" }, "Codex took too long to report its usage.");
-    const later = createFixtureDaemon({ ...withCredits(credits), resetCreditReading: { after: 300 } });
+    const later = createFixtureDaemon({ ...withCredits(credits), resetCreditReading: { after: LATER_MS } });
     await later.request({ type: "use_reset_credit", agent: "codex", account: "personal" });
     await rereadDone();
     expect(reading(later).windows[1]!.used_percent).toBe(100);
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await vi.advanceTimersByTimeAsync(LATER_MS - RESET_CREDIT_REREAD_MS);
     expect(reading(later).windows[1]!.used_percent).toBe(0);
     const never = createFixtureDaemon({ ...withCredits(credits), resetCreditReading: "never" });
     await never.request({ type: "use_reset_credit", agent: "codex", account: "personal" });
@@ -2789,6 +2786,7 @@ describe("the fixture daemon's rate limit reset credits", () => {
   });
 
   it("keeps the reading for nothing_to_reset, drops the credits for no_credit, and answers no_credit where none is held", async () => {
+    fakeTimers();
     const credits = resetCreditsOf([resetCreditOf("a", 60)]);
     const kept = createFixtureDaemon({ ...withCredits(credits), resetCreditUse: "nothing_to_reset" });
     await expect(kept.request({ type: "use_reset_credit", agent: "codex", account: "personal" })).resolves.toMatchObject({ outcome: "nothing_to_reset" });
@@ -2802,6 +2800,7 @@ describe("the fixture daemon's rate limit reset credits", () => {
   });
 
   it("refuses an account that is not a Codex one, a staged failure, and keeps a staged request pending", async () => {
+    fakeTimers();
     const daemon = createFixtureDaemon(withCredits(resetCreditsOf([resetCreditOf("a", 60)])));
     await expect(daemon.request({ type: "use_reset_credit", agent: "codex", account: "work" })).rejects.toMatchObject({ code: "unknown_account" });
     await expect(daemon.request({ type: "use_reset_credit", agent: "claude", account: null })).rejects.toMatchObject({ code: "provider_unsupported", params: { agent: "claude", operation: "reset_credit" } });
@@ -2809,7 +2808,7 @@ describe("the fixture daemon's rate limit reset credits", () => {
     await expect(failing.request({ type: "use_reset_credit", agent: "codex", account: "personal" })).rejects.toMatchObject({ code: "reset_credit_failed" });
     const answered = vi.fn();
     void createFixtureDaemon({ ...withCredits(resetCreditsOf([resetCreditOf("a", 60)])), resetCreditUse: "pending" }).request({ type: "use_reset_credit", agent: "codex", account: "personal" }).then(answered, answered);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.runAllTimersAsync();
     expect(answered).not.toHaveBeenCalled();
   });
 });

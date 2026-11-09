@@ -31,7 +31,7 @@ import { useTerminalReconnect } from "./useTerminalReconnect";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
 
 /** The longest the loading state covers a connected terminal still waiting for its first output. */
-const LOADING_LIMIT_MS = 10_000;
+export const LOADING_LIMIT_MS = 10_000;
 
 interface TerminalPaneProps {
   /** The session whose terminal should be shown, or `undefined` when nothing is selected yet. */

@@ -4,9 +4,17 @@ import { act, lazy, Suspense, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { settleLazyImport } from "../test/lazyImport";
 import { PanelHeader } from "../components/panel/PanelHeader";
 import type { Project } from "../protocol";
 import { PanelStack } from "./PanelStack";
+
+// The moment the panel's code arrives: the test sends it, once the stack has mounted and settled.
+const arrival = vi.hoisted(() => {
+  let release!: () => void;
+  const arrived = new Promise<void>((resolve) => { release = resolve; });
+  return { arrived, release };
+});
 
 // A panel whose code arrives after the stack has mounted and settled, as the Files browser's does.
 vi.mock("./panelRegistry", () => {
@@ -19,7 +27,7 @@ vi.mock("./panelRegistry", () => {
       </>
     );
   };
-  const Loaded = lazy(() => new Promise<{ default: typeof Inner }>((resolve) => setTimeout(() => resolve({ default: Inner }), 20)));
+  const Loaded = lazy(() => arrival.arrived.then(() => ({ default: Inner })));
   return {
     PANEL_ENTRIES: {
       files: {
@@ -68,12 +76,13 @@ it("does not slide in the first panel of a pane that was just shown, however lat
   render("p");
   // The stack has mounted and its effects have run; the code has not arrived.
   expect(container.querySelector("button[data-switching]")).toBeNull();
-  for (let i = 0; i < 20 && !container.querySelector("button[data-switching]"); i++) await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 20))));
+  arrival.release();
+  await settleLazyImport();
   expect(container.querySelector("button[data-switching]")).not.toBeNull();
   expect(container.querySelector("button[data-switching]")!.getAttribute("data-switching")).toBe("false");
   // Another owner slides in, and so does the first one on the way back.
   const flag = async () => {
-    for (let i = 0; i < 20 && !container.querySelector("button[data-switching]"); i++) await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 20))));
+    await settleLazyImport();
     return container.querySelector("button[data-switching]")!.getAttribute("data-switching");
   };
   render("q");

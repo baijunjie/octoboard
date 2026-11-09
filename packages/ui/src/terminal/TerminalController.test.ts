@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { windowAttention } from "../components/announce/windowTestSupport";
 import type { HostFacts } from "../platform/host";
 import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
-import { TerminalController } from "./TerminalController";
+import { RESIZE_SETTLE_MS, TerminalController } from "./TerminalController";
+import { afterQueuedWork, fakeTimers } from "../test/clock";
 
 /** Enough of xterm for the controller: writes are parsed in a later task, in order, as xterm's are,
  * a device-attributes query in the output is answered through `onData`, as xterm answers it, a
@@ -225,7 +226,7 @@ const framesPending = new Set<ReturnType<typeof setTimeout>>();
  * whose callback requests a frame is a chain of timers, and a delay timer that expires in the same
  * stall of the event loop as the first of them fires before the next one is even scheduled. */
 const settle = async () => {
-  do await new Promise((resolve) => setTimeout(resolve));
+  do await afterQueuedWork();
   while (term.parsing || framesPending.size > 0);
 };
 
@@ -634,6 +635,7 @@ describe("telling the daemon the person turned to the terminal", () => {
   });
 
   it("follows a size changed in the window the person works in, and not one changed in the background", async () => {
+    fakeTimers();
     const attend = shown();
     controller.attach("a", url("a"), false);
     const live = lastSocket();
@@ -643,14 +645,14 @@ describe("telling the daemon the person turned to the terminal", () => {
     term.cols = 100;
     term.rows = 30;
     controller.syncSize();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await vi.advanceTimersByTimeAsync(RESIZE_SETTLE_MS);
     expect(live.sent.slice(sent)).toEqual([JSON.stringify({ type: "resize", cols: 100, rows: 30 })]);
 
     attend(true);
     expect(activations(live)).toHaveLength(1);
     term.cols = 120;
     controller.syncSize();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await vi.advanceTimersByTimeAsync(RESIZE_SETTLE_MS);
     // The size first, so the activation applies it rather than the one asked for before.
     expect(live.sent.slice(sent + 2)).toEqual([JSON.stringify({ type: "resize", cols: 120, rows: 30 }), ACTIVATE]);
   });
@@ -903,6 +905,7 @@ describe("holding the input while the process cannot be reached", () => {
   });
 
   it("sends no resize or activation, and answers no query, from the held terminal", async () => {
+    fakeTimers();
     Object.defineProperty(container, "offsetWidth", { configurable: true, value: 800 });
     controller.attach("a", url("a"), false);
     const live = lastSocket();
@@ -913,12 +916,12 @@ describe("holding the input while the process cannot be reached", () => {
     controller.syncSize();
     container.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
     live.receive("\x1b[c");
-    await settle();
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await vi.advanceTimersByTimeAsync(RESIZE_SETTLE_MS);
     expect(live.sent.slice(sent)).toEqual([]);
   });
 
   it("does not send a resize that was waiting to settle", async () => {
+    fakeTimers();
     controller.attach("a", url("a"), false);
     const live = lastSocket();
     live.open();
@@ -926,7 +929,7 @@ describe("holding the input while the process cannot be reached", () => {
     term.cols = 100;
     controller.syncSize();
     controller.holdInput(true);
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await vi.advanceTimersByTimeAsync(RESIZE_SETTLE_MS);
     expect(live.sent.slice(sent)).toEqual([]);
   });
 

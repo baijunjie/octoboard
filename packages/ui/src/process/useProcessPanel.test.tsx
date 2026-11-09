@@ -9,8 +9,9 @@ import type { AsideOwner } from "../layout/asideOwner";
 import type { Event, ProcessTree, ClientRequestBody } from "../protocol";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
-import type { ProcessPolling } from "./processPolling";
+import { POLL_MS, type ProcessPolling } from "./processPolling";
 import { useProcessPanel } from "./useProcessPanel";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const console_ = consoleOf("c", "Main");
@@ -20,7 +21,7 @@ const second = sessionOf("b", console_.id, project.id, "Second", "idle");
 const tree = (id: string, session_id?: string): ProcessTree => ({ id, session_id, command: "dev", cwd: "/app", cwd_missing: false, kept: false, keepable: true, started_at: 0, process_count: 1, memory_bytes: 0, ports: [] });
 
 async function mount(handler: (body: ClientRequestBody) => Promise<Event>, initialSelection?: string) {
-  vi.useFakeTimers();
+  fakeTimers();
   const request = vi.fn(handler);
   const daemon = testDaemon({
     state: { projects: new Map([[project.id, project]]), sessions: new Map([[first.id, first], [second.id, second]]) },
@@ -36,7 +37,7 @@ async function mount(handler: (body: ClientRequestBody) => Promise<Event>, initi
   const root = createRoot(element);
   const render = async () => act(async () => root.render(<TestHost daemon={daemon}><Probe /></TestHost>));
   await render();
-  onTestFinished(() => { act(() => root.unmount()); element.remove(); vi.useRealTimers(); });
+  onTestFinished(() => { act(() => root.unmount()); element.remove(); });
   return {
     daemon,
     request,
@@ -75,7 +76,7 @@ it("does not render again for an unchanged refresh failure, but shows changed di
     }
     return { type: "processes_listed", id: null, trees: [tree("1", first.id)] };
   });
-  const poll = () => act(async () => void vi.advanceTimersByTime(3000));
+  const poll = () => act(async () => void vi.advanceTimersByTime(POLL_MS.live));
   failure = { message: "unavailable", code: "unexpected_error", params: { detail: "offline" }, stack: "trace-a" };
   await poll();
   const renders = panel.renders();
@@ -125,7 +126,7 @@ it("stops polling when inactive, resumes when active, and ignores late answers f
   expect(panel.data().trees?.map((item) => item.id)).toEqual(["console"]);
   await panel.polling("off");
   const calls = panel.request.mock.calls.length;
-  await act(async () => void vi.advanceTimersByTime(9000));
+  await act(async () => void vi.advanceTimersByTime(3 * POLL_MS.live));
   expect(panel.request.mock.calls).toHaveLength(calls);
   await panel.polling("live");
   expect(panel.request.mock.calls).toHaveLength(calls + 1);
@@ -152,13 +153,13 @@ it("polls every 15 seconds in the background and every 3 while live", async () =
   await panel.polling("background");
   const calls = () => panel.request.mock.calls.length;
   const before = calls();
-  await act(async () => void vi.advanceTimersByTime(14000));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.background - 1));
   expect(calls()).toBe(before);
-  await act(async () => void vi.advanceTimersByTime(1000));
+  await act(async () => void vi.advanceTimersByTime(1));
   expect(calls()).toBe(before + 1);
   await panel.polling("live");
   const live = calls();
-  await act(async () => void vi.advanceTimersByTime(3000));
+  await act(async () => void vi.advanceTimersByTime(POLL_MS.live));
   expect(calls()).toBe(live + 1);
 });
 
@@ -169,7 +170,7 @@ it("pauses while the document is hidden and asks at once when it is shown again"
   vi.spyOn(document, "hidden", "get").mockImplementation(() => hidden);
   onTestFinished(() => void vi.restoreAllMocks());
   const before = calls();
-  await act(async () => void vi.advanceTimersByTime(9000));
+  await act(async () => void vi.advanceTimersByTime(3 * POLL_MS.live));
   expect(calls()).toBe(before);
   hidden = false;
   await act(async () => void document.dispatchEvent(new Event("visibilitychange")));

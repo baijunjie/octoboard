@@ -3,8 +3,9 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { fakeTimers } from "../test/clock";
 import { console_ } from "../fixtures/archiveSessions";
-import { ArchiveLayer } from "./ArchiveLayer";
+import { ArchiveLayer, EXIT_FALLBACK_MS } from "./ArchiveLayer";
 
 vi.mock("./ArchiveView", () => ({
   ArchiveView: ({ active }: { active: boolean }) => <section data-region="archive" data-active={active}><button>Archive action</button></section>,
@@ -13,7 +14,7 @@ vi.mock("./ArchiveView", () => ({
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function mount() {
-  vi.useFakeTimers();
+  fakeTimers();
   const reduced = new EventTarget() as MediaQueryList;
   Object.defineProperty(reduced, "matches", { value: false, writable: true });
   vi.stubGlobal("matchMedia", () => reduced);
@@ -27,9 +28,6 @@ function mount() {
     act(() => root.unmount());
     container.remove();
     terminal.remove();
-    act(() => vi.runOnlyPendingTimers());
-    expect(vi.getTimerCount()).toBe(0);
-    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
   show(true);
@@ -57,13 +55,13 @@ it("cancels stale removal when reopened and still finishes an exit whose animati
   const { container, show } = mount();
   const section = container.querySelector("section");
   show(false);
-  act(() => vi.advanceTimersByTime(100));
+  act(() => vi.advanceTimersByTime(EXIT_FALLBACK_MS - 1));
   show(true);
-  act(() => vi.advanceTimersByTime(500));
+  act(() => vi.advanceTimersByTime(EXIT_FALLBACK_MS));
   expect(container.querySelector("section")).toBe(section);
   expect(container.querySelector("[inert]")).toBeNull();
   show(false);
-  act(() => vi.advanceTimersByTime(300));
+  act(() => vi.advanceTimersByTime(EXIT_FALLBACK_MS));
   expect(container.innerHTML).toBe("");
 });
 

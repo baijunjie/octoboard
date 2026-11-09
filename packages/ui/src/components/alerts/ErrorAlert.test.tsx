@@ -20,7 +20,6 @@ function mount(children: React.ReactNode) {
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   });
   act(() => root.render(children));
   return { container, render: (children: React.ReactNode) => act(() => root.render(children)) };

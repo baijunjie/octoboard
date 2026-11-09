@@ -10,8 +10,9 @@ import type { Session, SessionStatus } from "../protocol";
 import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { Rail } from "./Rail";
-import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { enter, leave, mountForTooltip, openTooltip } from "../components/hint/tooltipTestSupport";
 import { BROWSER_HOST } from "../test/hosts";
+import { fakeTimers, runOutTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -84,31 +85,31 @@ const COUNTS: Array<[Case[], string[]]> = [
 ];
 
 it.each(COUNTS)("counts the console's shown statuses for %j", (statuses, words) => {
-  const settle = withFakeTimers();
+  fakeTimers();
   const avatar = avatarOf(statuses);
   enter(avatar);
   expect(openTooltip()).toBeNull();
-  settle();
+  runOutTimers();
   expect(tooltipRows()).toEqual(words);
   expect(openTooltip()!.querySelector("svg")).toBeNull();
   expect(avatar.getAttribute("aria-label")).toBe(`${isolate("Main")}, ${joinPhrases("en", words)}`);
   expect(avatar.getAttribute("aria-describedby")).toBeFalsy();
   leave(avatar);
-  settle();
+  runOutTimers();
   expect(openTooltip()).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
 });
 
 it.each([{ statuses: [] }, { statuses: ["archived"] }] as { statuses: Case[] }[])("tells the bare name with no unarchived sessions ($statuses)", ({ statuses }) => {
-  const settle = withFakeTimers();
+  fakeTimers();
   const avatar = avatarOf(statuses);
   enter(avatar);
-  settle();
+  runOutTimers();
   expect(openTooltip()?.textContent).toBe("Main");
   expect(avatar.getAttribute("aria-label")).toBe("Main");
   expect(avatar.closest('[data-slot="badge-anchor"]')!.children).toHaveLength(1);
   leave(avatar);
-  settle();
+  runOutTimers();
 });
 
 it.each(["working", "starting", "dormant", "background", "delegated", "switching", "reconnecting", "interrupted"] as Case[])("counts %s even without an avatar badge", (status) => {
@@ -117,17 +118,17 @@ it.each(["working", "starting", "dormant", "background", "delegated", "switching
 });
 
 it("includes project sessions, excludes other consoles, and ignores archived project sessions", () => {
-  const settle = withFakeTimers();
+  fakeTimers();
   const avatar = avatarOf(["done"], false, [
     sessionOf("project-work", main.id, "project-1", "Work", "working"),
     sessionOf("other-console", "c-2", "project-2", "Other", "waiting_user"),
     sessionOf("project-archived", main.id, "project-1", "Old", "archived"),
   ]);
   enter(avatar);
-  settle();
+  runOutTimers();
   expect(tooltipRows()).toEqual(["Done 1", "Working 1"]);
   leave(avatar);
-  settle();
+  runOutTimers();
 });
 
 const EVERY_STATUS: Array<[Case, string]> = [
@@ -147,26 +148,26 @@ it.each(EVERY_STATUS)("marks an avatar whose top status is %s with a badge, and 
 });
 
 it("gives the badge no tooltip or name of its own", () => {
-  const settle = withFakeTimers();
+  fakeTimers();
   const avatar = avatarOf(["waiting_user"]);
   const badge = avatar.closest('[data-slot="badge-anchor"]')!.lastElementChild!;
 
   enter(avatar);
-  settle();
+  runOutTimers();
   // Only one tooltip is open at a time, so what shows is whose it is: the avatar's, not the badge's.
   expect(openTooltip()?.textContent).toBe("MainWaiting for you1");
   expect(badge.hasAttribute("aria-label")).toBe(false);
   leave(avatar);
-  settle();
+  runOutTimers();
   expect(vi.getTimerCount()).toBe(0);
 });
 
 it("opens on keyboard focus, and not on hover while the hidden sidebar floats in", () => {
-  const settle = withFakeTimers();
+  fakeTimers();
   const avatar = avatarOf(["waiting_user"], true);
 
   enter(avatar);
-  settle();
+  runOutTimers();
   expect(openTooltip()).toBeNull();
   leave(avatar);
 
@@ -174,11 +175,11 @@ it("opens on keyboard focus, and not on hover while the hidden sidebar floats in
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
     avatar.focus();
   });
-  settle();
+  runOutTimers();
   expect(openTooltip()?.textContent).toBe("MainWaiting for you1");
   expect(avatar.getAttribute("aria-describedby")).toBeFalsy();
 
   act(() => avatar.blur());
-  settle();
+  runOutTimers();
   expect(vi.getTimerCount()).toBe(0);
 });

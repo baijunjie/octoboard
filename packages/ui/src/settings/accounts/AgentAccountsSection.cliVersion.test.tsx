@@ -5,7 +5,8 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { settleFrames } from "../../components/dialog/dialogTestSupport";
+import { framesAsTimers, settleFrames, trackMountRefocus } from "../../components/dialog/dialogTestSupport";
+import { FIRST_WRITE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { isolate } from "../../i18n/isolate";
 import { partSelector } from "../../primitives";
@@ -14,6 +15,7 @@ import { TestHost } from "../../test/TestHost";
 import type { Agent, AgentAvailability, AgentCliStatus, AgentCliUpdate } from "../../protocol";
 import { request, startDaemon } from "./agentAccountsSectionTestState";
 import { buttonNamed, chooseItem, mount, mountAgentVersion, openTabMenu } from "./agentAccountsSectionTestSupport";
+import { fakeTimers } from "../../test/clock";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -111,6 +113,7 @@ it.each([
   ["agent_cli_update_failed", "EACCES: permission denied", /Updating .*Claude Code.* failed\./, "Fix the problem shown in the details, or update it the way you installed it."],
   ["agent_cli_update_timed_out", null, /Updating .*Claude Code.* did not finish within ten minutes/, "Check the install, then try again."],
 ])("names the agent in the alert for an update that ended as %s, with its remedy line and the details apart", async (error, detail, sentence, remedy) => {
+  framesAsTimers("pointer");
   const alertsRoot = createRoot(document.body.appendChild(document.createElement("div")));
   onTestFinished(() => act(() => alertsRoot.unmount()));
   const { update, put } = await mountWith(statusOf());
@@ -127,6 +130,7 @@ it.each([
 });
 
 it("still raises the error alert for an update it asked for when the dialog was closed before the update ended", async () => {
+  framesAsTimers("pointer");
   const { update, put, dialog, store } = await mountWith(statusOf());
   await act(async () => update()!.click());
   await act(async () => buttonNamed(dialog, "Close")!.click());
@@ -183,12 +187,14 @@ it("hands focus held on the mark to the help tip when the failure it shows is go
 });
 
 describe("what is spoken", () => {
+  /** What the row's status region says once its first-write delay has passed. */
   const spoken = async (row: HTMLElement) => {
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+    await act(async () => vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
     return (row.querySelector("[role=status]")?.textContent ?? "").replace(/[\u2066-\u2069]/g, "");
   };
 
   it("is the version for a success, or only that it finished when the version cannot be read", async () => {
+    fakeTimers();
     const first = await mountWith(statusOf({ update: updateOf({}) }));
     first.put(statusOf({ installed_version: "2.1.320", latest_version: "2.1.320", update: updateOf({ state: "succeeded", finished_at: 20 }) }));
     expect(await spoken(first.row()!)).toBe("Updated to version 2.1.320.");
@@ -198,6 +204,7 @@ describe("what is spoken", () => {
   });
 
   it("is the reason for a failure seen from another window, but not for one asked for here, which the alert speaks", async () => {
+    fakeTimers();
     const other = await mountWith(statusOf({ update: updateOf({}) }));
     other.put(statusOf({ update: updateOf({ state: "failed", finished_at: 20, error: "agent_cli_update_timed_out" }) }));
     expect(await spoken(other.row()!)).toContain("did not finish within ten minutes");
@@ -295,9 +302,11 @@ describe("the update mark on an agent's menus", () => {
     };
 
     it.each([["Version", "Agent version"], ["Settings", "Agent settings"]])("give focus back to the tab whose menu opened the %s dialog when it closes", async (entry, title) => {
+      framesAsTimers("pointer");
       const { container } = mount();
       await openTabMenu(container, "Claude Code");
       await chooseItem(entry);
+      await trackMountRefocus()();
       expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe(title);
       await closeDialog();
       expect(document.activeElement).toBe(tabOf(container, "Claude Code"));
@@ -310,8 +319,10 @@ describe("the update mark on an agent's menus", () => {
         return { x: 0, y: 0, left: 0, right, top: 0, bottom: 30, width: right, height: 30, toJSON: () => ({}) };
       });
       onTestFinished(() => { vi.restoreAllMocks(); });
+      framesAsTimers("pointer");
       const { container } = mount();
       const trigger = await openFromActions(container, "Version");
+      await trackMountRefocus()();
       act(() => setInteractionModality("pointer"));
       await closeDialog();
       expect(document.activeElement).toBe(trigger);
@@ -320,6 +331,7 @@ describe("the update mark on an agent's menus", () => {
     });
 
     it("close when the agent leaves the list, and hand focus to the section's tab with the ring, the tab and its button being gone", async () => {
+      framesAsTimers("pointer");
       const { container, entry, setSettings } = mount();
       await openTabMenu(container, "Claude Code");
       await chooseItem("Settings");
@@ -331,6 +343,7 @@ describe("the update mark on an agent's menus", () => {
     });
 
     it("do not come back when the agent is added again", async () => {
+      framesAsTimers("pointer");
       const { container, setSettings } = mount();
       await openTabMenu(container, "Claude Code");
       await chooseItem("Settings");
@@ -341,6 +354,7 @@ describe("the update mark on an agent's menus", () => {
     });
 
     it("close for the Version one when its CLI is no longer installed, handing focus to the tab whose menu opened it with the ring", async () => {
+      framesAsTimers("pointer");
       const { container, set } = mount();
       await openTabMenu(container, "Claude Code");
       await chooseItem("Version");

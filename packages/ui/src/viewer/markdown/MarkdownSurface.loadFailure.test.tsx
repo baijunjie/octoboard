@@ -6,6 +6,7 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { ThemeProvider } from "../../preferences/theme";
 import type { ViewerSubject } from "../content";
 import { FileViewer } from "../FileViewer";
+import { LAZY_IMPORT_TIMEOUT_MS, settleLazyImport } from "../../test/lazyImport";
 import { ViewerHost } from "../viewerTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -68,18 +69,14 @@ it("shows the source when the document renderer fails to load, and the document 
         </ViewerHost>,
       ),
     );
-  // The renderer is imported on first use, which takes longer than a few ticks on a loaded machine.
-  const settleUntil = async (done: () => boolean) => {
-    for (let i = 0; i < 1000 && !done(); i += 1) await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
-  };
   const sentence = "Shown as source because the document view could not be drawn.";
   show("docs/a.md");
-  await settleUntil(() => document.body.textContent!.includes(sentence));
-  expect(document.body.textContent).toContain(sentence);
+  await settleLazyImport();
+  // The renderer is imported on first use, which takes longer than a tick on a loaded machine.
+  await vi.waitFor(() => expect(document.body.textContent).toContain(sentence), { timeout: LAZY_IMPORT_TIMEOUT_MS });
   expect(document.querySelector("[data-renderer]")?.textContent).toContain("# Title");
   expect(document.querySelector("[role=region] h1")).toBeNull();
   show("docs/b.md");
-  await settleUntil(() => document.querySelector("[role=region] h1") !== null);
-  expect(document.querySelector("[role=region] h1")?.textContent).toBe("Title");
+  await vi.waitFor(() => expect(document.querySelector("[role=region] h1")?.textContent).toBe("Title"), { timeout: LAZY_IMPORT_TIMEOUT_MS });
   expect(document.body.textContent).not.toContain(sentence);
 });

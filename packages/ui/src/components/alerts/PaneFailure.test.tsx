@@ -6,6 +6,7 @@ import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "./errorAlerts";
 import { mountForTooltip } from "../hint/tooltipTestSupport";
 import { PaneFailure } from "./PaneFailure";
+import { fakeTimers, runOutTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -69,6 +70,8 @@ it("keeps the application's own remedy under the line, outside the announcement,
 /** Mounts a failure with every element measuring `scrollHeight` tall in a `clientHeight` box, since jsdom has no
  * layout and the scroller's region follows those, and returns the scroller. */
 async function scroller(sizes: { scrollHeight: number; clientHeight: number }): Promise<HTMLElement> {
+  // Before anything mounts: the frame HeroUI writes the fade's state from is armed on the faked clock.
+  fakeTimers();
   const restore = (["scrollHeight", "clientHeight"] as const).map((key) => {
     const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
     Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => sizes[key] });
@@ -77,7 +80,8 @@ async function scroller(sizes: { scrollHeight: number; clientHeight: number }): 
   onTestFinished(() => restore.forEach((undo) => undo()));
   const container = mountForTooltip(<PaneFailure title="Could not list the files" message="Permission denied" announce={false} onRetry={() => {}} />);
   // HeroUI writes the fade's state on the next frame.
-  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  await act(async () => {});
+  runOutTimers();
   return container.querySelector<HTMLElement>("[data-slot=scroll-shadow]")!;
 }
 

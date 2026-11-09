@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { ChangeBodiesError, type ChangeBodies } from "../content";
 import { highlightCacheKey } from "./cacheKey";
 import { EXPANSION_STEP, Expansion, type ExpansionStatus, type HunkExpander, type SeparatorLabels } from "./expansion";
+import { afterQueuedWork } from "../../test/clock";
 
 const labels: SeparatorLabels = {
   unmodified: (count) => `${count} hidden`,
@@ -48,9 +49,12 @@ const key = (target: HTMLElement, name: string, shiftKey = false) => {
   target.dispatchEvent(event);
   return event;
 };
+// Lets the promises the code under test is chained on run: a timer comes after every microtask, so no wait on the clock is
+// involved, and a read that has not answered is not waited for.
+const settle = afterQueuedWork;
 const press = async (element: HTMLElement) => {
   element.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
-  await new Promise((resolve) => setTimeout(resolve));
+  await settle();
 };
 
 beforeEach(() => {
@@ -139,7 +143,7 @@ it.each(["Enter", " "])("reveals the whole gap on %j pressed on the separator's 
   const label = control("[data-separator-content]");
   label.focus();
   expect(key(label, name).defaultPrevented).toBe(true);
-  await new Promise((resolve) => setTimeout(resolve));
+  await settle();
   expect(expanded).toEqual([[1, "both", Number.POSITIVE_INFINITY]]);
 });
 
@@ -151,7 +155,7 @@ it("shows the loading state at the separator while the bodies are read, and expa
   expect(host.shadowRoot!.querySelector("[data-unmodified-lines]")!.textContent).toBe("loading");
   expect(load).toHaveBeenCalledTimes(1);
   arrive({ old: "a", new: "b" });
-  await new Promise((resolve) => setTimeout(resolve));
+  await settle();
   expect(host.shadowRoot!.querySelector("[data-unmodified-lines]")!.textContent).toBe("53 hidden");
   expect(expanded).toEqual([[1, "up", EXPANSION_STEP]]);
 });
@@ -273,7 +277,7 @@ it("moves Shift+Tab from the first control to the code region", () => {
 it("gives focus back after a redraw to the same control, or the nearest one", async () => {
   const root = host.shadowRoot!;
   key(control("[data-expand-down]"), "Enter");
-  await new Promise((resolve) => setTimeout(resolve));
+  await settle();
   root.innerHTML = separator("gutter") + separator("content");
   expansion.attach(host, expander);
   expect(root.activeElement).toBe(control("[data-expand-down]"));
@@ -287,7 +291,7 @@ it("gives focus back after the label revealed its whole gap to the next gap's co
   const label = control("[data-separator-content]");
   label.focus();
   key(label, "Enter");
-  await new Promise((resolve) => setTimeout(resolve));
+  await settle();
   root.innerHTML = separator("gutter", 2) + separator("content", 2);
   expansion.attach(host, expander);
   expect(root.activeElement).toBe(control("[data-expand-up]"));
@@ -297,7 +301,7 @@ it("gives focus back after the label revealed its whole gap to the next gap's co
   region.tabIndex = 0;
   region.append(host);
   key(control("[data-separator-content]"), "Enter");
-  await new Promise((resolve) => setTimeout(resolve));
+  await settle();
   root.innerHTML = "";
   expansion.attach(host, expander);
   expect(document.activeElement).toBe(region);

@@ -27,7 +27,7 @@ import { useGitReview } from "./git/useGitReview";
 /** How long the header's Refresh icon spins at least, so a refresh that settles at once still reads
  * as having happened: half a turn of the slow spin (2 s per turn). The icon looks the same every
  * half turn, so stopping there does not visibly jump. */
-const MIN_SPIN_MS = 1000;
+export const MIN_SPIN_MS = 1000;
 
 /**
  * A project's browser, the content of the Files panel (`panels/panelRegistry.tsx`) in the right pane

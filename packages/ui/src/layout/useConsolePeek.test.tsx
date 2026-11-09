@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { fakeTimers } from "../test/clock";
 import { PANE_EDGE_DWELL_MS } from "./paneOverlay";
 import { CONSOLE_PEEK_DWELL_MS, type ConsolePeek, useConsolePeek } from "./useConsolePeek";
 
@@ -11,10 +12,9 @@ import { CONSOLE_PEEK_DWELL_MS, type ConsolePeek, useConsolePeek } from "./useCo
 let root: Root | undefined;
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  fakeTimers();
   // Registered first, so it runs after the unmounts that `mount` registers.
   onTestFinished(() => {
-    vi.useRealTimers();
     root = undefined;
   });
 });
@@ -56,7 +56,7 @@ it("does not float the sidebar in when the pointer leaves the avatar before the 
   act(() => peek().hoverConsole("c-1"));
   wait(CONSOLE_PEEK_DWELL_MS - 1);
   act(() => peek().leaveConsole());
-  wait(500);
+  wait(CONSOLE_PEEK_DWELL_MS);
   expect(control.reveal).not.toHaveBeenCalled();
   expect(control.leave).toHaveBeenCalledTimes(1);
 });
@@ -99,7 +99,7 @@ it("does nothing where the sidebar cannot float: docked, or mobile", () => {
 it("shows only the last of two avatars the pointer crossed within the dwell, revealing once", () => {
   const { control, peek } = mount();
   act(() => peek().hoverConsole("c-1"));
-  wait(50);
+  wait(CONSOLE_PEEK_DWELL_MS / 2);
   act(() => peek().leaveConsole());
   act(() => peek().hoverConsole("c-2"));
   wait(CONSOLE_PEEK_DWELL_MS);
@@ -143,9 +143,9 @@ it("cancels a pending dwell when the toggle floats the sidebar in", () => {
 it("reveals the current console after resting on blank rail space, without resetting on each move", () => {
   const { control, peek } = mount();
   act(() => peek().hoverRail());
-  wait(80);
+  wait(PANE_EDGE_DWELL_MS / 2);
   act(() => peek().hoverRail());
-  wait(PANE_EDGE_DWELL_MS - 81);
+  wait(PANE_EDGE_DWELL_MS / 2 - 1);
   expect(control.reveal).not.toHaveBeenCalled();
   wait(1);
   expect(control.reveal).toHaveBeenCalledOnce();
@@ -169,7 +169,7 @@ it("cancels blank-rail dwell on a control or when floating becomes unavailable",
 it("lets an avatar keep its own preview after leaving blank rail space", () => {
   const { control, peek } = mount();
   act(() => peek().hoverRail());
-  wait(100);
+  wait(PANE_EDGE_DWELL_MS - 1);
   act(() => peek().hoverConsole("c-2"));
   wait(CONSOLE_PEEK_DWELL_MS);
   expect(control.reveal).toHaveBeenCalledOnce();

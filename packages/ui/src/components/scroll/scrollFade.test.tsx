@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished } from "vitest";
+import { beforeEach, expect, it, onTestFinished } from "vitest";
 
 import { FadedScroller, useScrollFade } from "./scrollFade";
+import { fakeTimers, runOutTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// Before anything mounts: the frame HeroUI's overflow watch reports from is armed on the faked clock.
+beforeEach(() => void fakeTimers());
 
 /** The width of the content, which each test moves to say the surface started or stopped scrolling
  * sideways, its height, for whether it has anything to scroll at all, and the thickness of the
@@ -165,7 +169,8 @@ it("counts the end border into the strip, and not the start one", () => {
 
 /** Lets HeroUI's overflow watch see a change: its observer runs, then the frame it reports from. */
 async function settle(): Promise<void> {
-  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  await act(async () => {});
+  runOutTimers();
 }
 
 // A scroll timeline that goes inactive keeps its animation at the progress it had last, so content

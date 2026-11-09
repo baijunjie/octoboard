@@ -5,6 +5,7 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { pageOf } from "../fixtures/builders";
 import { press } from "../components/alerts/detailsTestSupport";
 import { errorAlerts } from "../components/alerts/errorAlerts";
@@ -18,6 +19,7 @@ import { withReportScrollBridge } from "../website-preview/scrollBridge";
 import { PageDocumentTransform } from "./pageDocumentTransform";
 import { ReportPanel } from "./ReportPanel";
 import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -265,14 +267,16 @@ it("marks a failed refresh of the listed pages at the panel title with its reaso
 });
 
 it("says a failed refresh of the listed pages once through the panel's status region", async () => {
+  fakeTimers();
   const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack", id: null });
   const container = await renderListed(request);
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(announcement(container)).toBe("Could not load the pages of this session");
   expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
 });
 
 it("does not say the listing failure again when pages arrive after the whole card announced it, and says a new failure", async () => {
+  fakeTimers();
   const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockRejectedValueOnce(new Error("Daemon busy"));
   const store = createStateStore({ connectionState: "open" });
   const container = await renderWith(request, store);
@@ -280,15 +284,20 @@ it("does not say the listing failure again when pages arrive after the whole car
   expect(container.querySelector(MARK)).toBeNull();
   await act(async () => store.setState({ pages: new Map([["console-session", [pageOf("page-0", "console-session", "<p>Page 0</p>", 0)]]]) }));
   expect(container.querySelector(MARK)).not.toBeNull();
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(announcement(container)).toBe("");
   // A failure after that, with the pages in hand, is a new one.
   await act(async () => store.setState({ snapshotEpoch: store.getState().snapshotEpoch + 1 }));
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(announcement(container)).toBe("Could not load the pages of this session");
 });
 
+/** Fake time the retried listing stays out for: past the status region's waits, so what it says of the earlier failure
+ * has been said before the listing answers. */
+const LISTING_OUT_MS = FIRST_WRITE_DELAY_MS;
+
 it("hands focus on from the mark to a header control when the listing succeeds and the mark goes", async () => {
+  fakeTimers();
   let answer!: (event: { type: "ack"; id: null }) => void;
   const request = vi
     .fn()
@@ -300,7 +309,7 @@ it("hands focus on from the mark to a header control when the listing succeeds a
   act(() => popoverRetry().focus());
   await act(async () => popoverRetry().click());
   // The mark stays while the listing is out, and focus is on it when the listing answers.
-  await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+  await act(() => vi.advanceTimersByTimeAsync(LISTING_OUT_MS));
   act(() => mark.focus());
   expect(document.activeElement).toBe(mark);
   await act(async () => answer({ type: "ack", id: null }));
@@ -323,6 +332,7 @@ it("keeps focus on the header's button when the first listing arrives and the pa
 });
 
 it("keeps the mark while Try again's listing is out and across a second failure, which is not said again", async () => {
+  fakeTimers();
   let finish!: (error: Error) => void;
   const request = vi
     .fn()
@@ -330,7 +340,7 @@ it("keeps the mark while Try again's listing is out and across a second failure,
     .mockReturnValueOnce(new Promise((_, reject) => void (finish = reject)));
   const container = await renderListed(request);
   const mark = container.querySelector<HTMLButtonElement>(MARK)!;
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   press(mark);
   await act(async () => popoverRetry().click());
   expect(request).toHaveBeenCalledTimes(2);

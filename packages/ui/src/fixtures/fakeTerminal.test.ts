@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
+import { fakeTimers } from "../test/clock";
 import type { TerminalRow } from "../terminal/links/terminalLines";
 import { brokenUrlsAt, linkSegmentsIn } from "../terminal/links/terminalLinks";
-import { installFakeTerminal, isWide, terminalFixtureUrl, type TerminalScript } from "./fakeTerminal";
+import { FIRST_DRAW_MS, installFakeTerminal, isWide, terminalFixtureUrl, type TerminalScript } from "./fakeTerminal";
 
 const original = window.WebSocket;
-afterEach(() => { window.WebSocket = original; vi.useRealTimers(); });
+afterEach(() => { window.WebSocket = original; });
 
 it("renders supplied session output without creating a real socket", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const real = vi.fn();
   window.WebSocket = real as unknown as typeof WebSocket;
   installFakeTerminal({ strict: true, output: (session) => `sample:${session}` });
@@ -28,7 +29,7 @@ it("rejects every non-fixture socket in strict mode", () => {
 });
 
 it("preserves the gallery's default terminal output", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   installFakeTerminal();
   const socket = new WebSocket(terminalFixtureUrl("output", "gallery-session"));
   let output = "";
@@ -40,7 +41,7 @@ it("preserves the gallery's default terminal output", async () => {
 });
 
 it("draws the default sample with mouse reporting turned on for the mouse behaviour", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   installFakeTerminal();
   const socket = new WebSocket(terminalFixtureUrl("mouse", "gallery-session"));
   let output = "";
@@ -76,7 +77,7 @@ const CLEAR = "\x1b[H\x1b[2J\x1b[3J";
 
 it("lays the program-broken address out against the reported width", async () => {
   const cols = 56;
-  vi.useFakeTimers();
+  fakeTimers();
   installFakeTerminal();
   const socket = new WebSocket(terminalFixtureUrl("output", "gallery-session"));
   let output = "";
@@ -96,7 +97,7 @@ it("lays the program-broken address out against the reported width", async () =>
 it("joins an address the program broke short of the last column", async () => {
   const tail = "account&theme=light&lang=zh-Hans";
   const whole = `http://localhost:5219/gallery-frame.html?scenario=dialog-new-session-auto-select-${tail}`;
-  vi.useFakeTimers();
+  fakeTimers();
   for (const cols of [40, 56, 72, 100]) {
     installFakeTerminal();
     const socket = new WebSocket(terminalFixtureUrl("output", "gallery-session"));
@@ -134,7 +135,7 @@ it("joins an address the program broke short of the last column", async () => {
 });
 
 it("redraws at the new width when the terminal resizes after the output is on screen", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   installFakeTerminal();
   const socket = new WebSocket(terminalFixtureUrl("output", "gallery-session"));
   const messages: string[] = [];
@@ -151,7 +152,7 @@ it("redraws at the new width when the terminal resizes after the output is on sc
 });
 
 it("writes supplied output once and leaves a resize to the terminal's own reflow", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   installFakeTerminal({ output: () => "supplied" });
   const socket = new WebSocket(terminalFixtureUrl("output", "demo-session"));
   const messages: string[] = [];
@@ -164,7 +165,7 @@ it("writes supplied output once and leaves a resize to the terminal's own reflow
 });
 
 it("draws an exited shell's last screen and then closes", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   installFakeTerminal();
   const socket = new WebSocket(terminalFixtureUrl("exited", "shell-1"));
   let output = "";
@@ -177,7 +178,7 @@ it("draws an exited shell's last screen and then closes", async () => {
 });
 
 it("draws a shell at its prompt and leaves the socket open", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   installFakeTerminal();
   const socket = new WebSocket(terminalFixtureUrl("shell", "shell-1"));
   let output = "";
@@ -191,7 +192,7 @@ it("draws a shell at its prompt and leaves the socket open", async () => {
 });
 
 it("draws a fresh prompt in the folder a shell was started in, with the home directory abbreviated", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   installFakeTerminal();
   const socket = new WebSocket(terminalFixtureUrl("shell", "shell-1", "/Users/dev/code/website/src/ui"));
   let output = "";
@@ -203,7 +204,7 @@ it("draws a fresh prompt in the folder a shell was started in, with the home dir
 });
 
 it("leaves a session the supplied output declines to the sample of its URL's behaviour", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   installFakeTerminal({ output: (session) => (session === "known" ? "supplied" : undefined) });
   const drawn = async (behaviour: "shell" | "output", session: string) => {
     const socket = new WebSocket(terminalFixtureUrl(behaviour, session));
@@ -227,60 +228,62 @@ function openScripted(script: TerminalScript, cols = 60) {
   return { socket, messages };
 }
 
+const TICK_MS = 100;
 const counting: TerminalScript = {
   screen: (cols, step) => `screen ${cols} ${step}`,
   tick: (cols, step) => `tick ${cols} ${step}`,
-  interval: 100,
+  interval: TICK_MS,
 };
 
 it("draws a script's screen and then its ticks at the interval", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const { socket, messages } = openScripted(counting);
-  await vi.advanceTimersByTimeAsync(20);
+  await vi.advanceTimersByTimeAsync(FIRST_DRAW_MS);
   expect(messages).toEqual(["screen 60 0"]);
-  await vi.advanceTimersByTimeAsync(250);
+  await vi.advanceTimersByTimeAsync(2 * TICK_MS);
   expect(messages).toEqual(["screen 60 0", "tick 60 1", "tick 60 2"]);
   socket.close();
 });
 
 it("draws a script without a tick once and never again", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const { socket, messages } = openScripted({ screen: () => "still" });
-  await vi.advanceTimersByTimeAsync(5000);
+  await vi.advanceTimersByTimeAsync(FIRST_DRAW_MS);
   expect(messages).toEqual(["still"]);
+  expect(vi.getTimerCount()).toBe(0);
   socket.close();
 });
 
 it("redraws a script at the new width and the step it has reached", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const { socket, messages } = openScripted(counting);
-  await vi.advanceTimersByTimeAsync(120);
+  await vi.advanceTimersByTimeAsync(FIRST_DRAW_MS + TICK_MS);
   socket.send(JSON.stringify({ type: "resize", cols: 40, rows: 24 }));
   expect(messages.at(-1)).toBe(`${CLEAR}screen 40 1`);
-  await vi.advanceTimersByTimeAsync(100);
+  await vi.advanceTimersByTimeAsync(TICK_MS);
   expect(messages.at(-1)).toBe("tick 40 2");
   socket.close();
 });
 
 it("stops ticking when the socket closes", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const { socket, messages } = openScripted(counting);
-  await vi.advanceTimersByTimeAsync(220);
+  await vi.advanceTimersByTimeAsync(FIRST_DRAW_MS + 2 * TICK_MS);
   socket.close();
   const count = messages.length;
-  await vi.advanceTimersByTimeAsync(1000);
+  await vi.advanceTimersByTimeAsync(10 * TICK_MS);
   expect(messages).toHaveLength(count);
 });
 
 it("does not tick while the page is hidden and resumes when it shows", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const { socket, messages } = openScripted(counting);
-  await vi.advanceTimersByTimeAsync(20);
+  await vi.advanceTimersByTimeAsync(FIRST_DRAW_MS);
   const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
-  await vi.advanceTimersByTimeAsync(1000);
+  await vi.advanceTimersByTimeAsync(10 * TICK_MS);
   expect(messages).toEqual(["screen 60 0"]);
   hidden.mockReturnValue(false);
-  await vi.advanceTimersByTimeAsync(100);
+  await vi.advanceTimersByTimeAsync(TICK_MS);
   expect(messages).toEqual(["screen 60 0", "tick 60 1"]);
   hidden.mockRestore();
   socket.close();

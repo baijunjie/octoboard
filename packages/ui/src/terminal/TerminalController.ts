@@ -38,7 +38,7 @@ import { watchUserInput } from "./xtermInternals";
 import { XTERM_THEMES } from "./xtermThemes";
 
 /** How long the terminal's size must hold still before `syncSize` reports it to the daemon. */
-const RESIZE_SETTLE_MS = 120;
+export const RESIZE_SETTLE_MS = 120;
 
 /** The rows of scrollback the terminal keeps, and asks the daemon's first paint to fill. */
 const SCROLLBACK_ROWS = 10_000;

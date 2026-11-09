@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 import { createRoot } from "react-dom/client";
 import { act, type ReactNode } from "react";
-import { afterEach, expect, it } from "vitest";
+import { expect, it } from "vitest";
 
 import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "./errorAlerts";
 import { alertFailure, errorAlertOf, raiseError } from "./raiseError";
 import { errorNotification } from "../../store";
-
-afterEach(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
 
 const queued = () => errorAlerts.getSnapshot()[0];
 

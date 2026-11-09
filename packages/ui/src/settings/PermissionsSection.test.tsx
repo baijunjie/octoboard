@@ -3,7 +3,7 @@
 import "../input/focusGuard";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { windowAttention } from "../components/announce/windowTestSupport";
@@ -12,10 +12,9 @@ import type { MacosPermissionsCapability, MacosPermissionsStatus, PlatformAdapte
 import { PlatformProvider } from "../platform/react";
 import { PermissionsSection } from "./PermissionsSection";
 import { BROWSER_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-afterEach(() => act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }));
 
 const BOTH_GRANTED = { screenRecording: true, accessibility: true } satisfies MacosPermissionsStatus;
 const SCREEN_RECORDING_MISSING = { screenRecording: false, accessibility: true } satisfies MacosPermissionsStatus;
@@ -229,8 +228,7 @@ const elapse = (ms: number) => act(() => vi.advanceTimersByTime(ms));
 // the section, they would go unsaid, so they are said a moment later, from one region.
 it("says where every permission stands a moment after the section appears, from one region of its own", async () => {
   windowAttention();
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { container } = await mount({ statuses: [SCREEN_RECORDING_MISSING] });
   expect(statuses(container)).toEqual([""]);
   expect(container.querySelector('[role="status"]')!.className).toContain("sr-only");
@@ -245,8 +243,7 @@ it("says where every permission stands a moment after the section appears, from 
 // as the window comes back would lose.
 it("says a grant picked up on the way back from System Settings a moment after the user is back, once", async () => {
   const attend = windowAttention();
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { container } = await mount({ statuses: [SCREEN_RECORDING_MISSING, BOTH_GRANTED] });
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
   attend(false);
@@ -264,8 +261,7 @@ it("says a grant picked up on the way back from System Settings a moment after t
 // Each permission has its own sentence per state, so the refused guidance reaches the status region too.
 it("says every permission's own sentence for not granted and for refused", async () => {
   windowAttention();
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { container } = await mount({ statuses: [BOTH_MISSING] });
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
   expect(statuses(container)).toEqual(["Screen Recording is not granted. Accessibility is not granted."]);
@@ -286,8 +282,7 @@ it("says every permission's own sentence for not granted and for refused", async
 it("holds what it has to say while the window is not attended", async () => {
   const attend = windowAttention();
   attend(false);
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { container } = await mount({ statuses: [SCREEN_RECORDING_MISSING] });
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS * 2);
   expect(statuses(container)).toEqual([""]);
@@ -302,8 +297,7 @@ it.each([
   ["a shell that cannot be asked", { unreadable: true }],
 ])("says nothing from its status region for %s", async (_name, options) => {
   windowAttention();
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { container } = await mount(options);
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
   expect(statuses(container)).toEqual([""]);
@@ -311,8 +305,7 @@ it.each([
 
 it("says only the latest of readings that follow one another within the wait, and nothing for a reading that changes nothing", async () => {
   const attend = windowAttention();
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { container, refocus } = await mount({ statuses: [SCREEN_RECORDING_MISSING, BOTH_GRANTED, SCREEN_RECORDING_MISSING, BOTH_GRANTED] });
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
   const region = container.querySelector('[role="status"]')!;

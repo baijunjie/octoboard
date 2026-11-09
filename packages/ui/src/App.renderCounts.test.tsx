@@ -7,12 +7,12 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { fakeTimers } from "./test/clock";
 import { App } from "./App";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "./components/announce/StatusAnnouncer";
 import { byLabel, fakeDaemon, row, stubWindow } from "./appTestSupport";
 import { consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./fixtures/builders";
 import { isolate } from "./i18n/isolate";
-import { defaultStack } from "./panels/stackState";
-import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
 import type { Event, ClientRequestBody } from "./protocol";
 import { applyDaemonEvent, DaemonProvider, type Daemon } from "./store";
@@ -94,21 +94,16 @@ const elsewhere = sessionOf("s-elsewhere", second.id, undefined, "Triage", "idle
  * sidebar's view change. */
 function mountApp() {
   renders.clear();
-  vi.useFakeTimers({ now: Date.UTC(2026, 9, 28, 12) });
+  fakeTimers({ now: Date.UTC(2026, 9, 28, 12) });
   stubWindow();
   const daemon: Daemon = fakeDaemon(snapshotState({ consoles: [main, second], projects: [site, api], sessions: [fix, plan, old, elsewhere] }), (body: ClientRequestBody) =>
     body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null });
-  let stacks!: ReturnType<typeof usePanelStacks>;
-  function StackReset() { stacks = usePanelStacks(); return null; }
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}><ThemeProvider><DaemonProvider value={daemon}><StackReset /><App /></DaemonProvider></ThemeProvider></PlatformProvider>));
+  act(() => root.render(<PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}><ThemeProvider><DaemonProvider value={daemon}><App /></DaemonProvider></ThemeProvider></PlatformProvider>));
   onTestFinished(async () => {
-    act(() => { stacks.setStack("project", defaultStack("project")); stacks.setStack("report", defaultStack("report")); root.unmount(); });
+    act(() => { root.unmount(); });
     container.remove();
-    await act(async () => { await vi.runOnlyPendingTimersAsync(); });
-    expect(vi.getTimerCount()).toBe(0);
-    vi.useRealTimers();
   });
   return daemon;
 }
@@ -117,7 +112,7 @@ function mountApp() {
 async function rendersOf(step: () => unknown): Promise<Record<Counted, number>> {
   const before = new Map(renders);
   await act(async () => { await step(); });
-  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS); });
   return Object.fromEntries((["App", ...CHILDREN] as const).map((name) => [name, (renders.get(name) ?? 0) - (before.get(name) ?? 0)])) as Record<Counted, number>;
 }
 

@@ -7,6 +7,7 @@ import {
   installPreviewScrollBridge,
   withReportScrollBridge,
 } from "./scrollBridge";
+import { afterQueuedWork } from "../test/clock";
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -327,6 +328,9 @@ describe("preview touch drag handoff", () => {
   });
 });
 
+// Mutation observers run as microtasks, which a timer set afterwards comes after: an order, not a stretch of time.
+const mutationsObserved = afterQueuedWork;
+
 // A preview window with the bridge installed and one injected report iframe inside it.
 async function liveReport() {
   const preview = document.createElement("iframe");
@@ -342,7 +346,7 @@ async function liveReport() {
   const frame = child.document.createElement("iframe");
   frame.srcdoc = withReportScrollBridge(reportDocument());
   wrapper.appendChild(frame);
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await mutationsObserved();
   return { child, wrapper, frame, send, cleanup };
 }
 
@@ -452,7 +456,7 @@ describe("sample report relay", () => {
     const { child, frame, send, wrapper, cleanup } = await liveReport();
     const injected = frame.srcdoc;
     expect(injected).toContain("data-website-preview-scroll-bridge");
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await mutationsObserved();
     expect(frame.srcdoc).toBe(injected);
     const message = (source: Window, deltaY: unknown = 10) =>
       child.dispatchEvent(
@@ -471,7 +475,7 @@ describe("sample report relay", () => {
       "/",
     );
     frame.srcdoc = reportDocument();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await mutationsObserved();
     expect(frame.srcdoc).not.toContain("data-website-preview-scroll-bridge");
     message(frame.contentWindow!);
     expect(send).toHaveBeenCalledTimes(1);
@@ -483,7 +487,7 @@ describe("sample report relay", () => {
     const replacement = child.document.createElement("iframe");
     replacement.srcdoc = reportDocument();
     wrapper.appendChild(replacement);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await mutationsObserved();
     expect(replacement.srcdoc).not.toContain(
       "data-website-preview-scroll-bridge",
     );

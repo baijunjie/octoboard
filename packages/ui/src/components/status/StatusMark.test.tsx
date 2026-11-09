@@ -5,7 +5,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { StatusMark } from "./StatusMark";
 import { HOVER_CLOSE_DELAY_MS, HOVER_OPEN_DELAY_MS } from "../hint/Hint";
-import { enter, leave, mountForTooltip, openTooltip, pointer, press as pointerPress, tap, withFakeTimers } from "../hint/tooltipTestSupport";
+import { enter, leave, mountForTooltip, openTooltip, pointer, press as pointerPress, tap } from "../hint/tooltipTestSupport";
+import { fakeTimers, runOutTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -95,7 +96,7 @@ it("draws a visible word after the glyph inside the trigger, named by the label 
 });
 
 it("is the glyph and the word as plain text, with no control and no popover, when there is a word and nothing to open", () => {
-  withFakeTimers();
+  fakeTimers();
   const container = mountForTooltip(<StatusMark label="Website failed" text="Failed" />);
   expect(container.querySelector("button")).toBeNull();
   const mark = container.querySelector('[role="img"]')!;
@@ -125,8 +126,6 @@ it("ends the popover with the actions, which close it as they are pressed", () =
   expect(dialog()).toBeNull();
 });
 
-const frames = () => act(async () => { await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)))); });
-
 function mountHeader() {
   const container = mountForTooltip(
     <>
@@ -144,22 +143,24 @@ function mountHeader() {
   };
 }
 
-it("gives focus to the heading's band when a header mark's popover closes by Escape", async () => {
+it("gives focus to the heading's band when a header mark's popover closes by Escape", () => {
+  fakeTimers();
   const { band, mark } = mountHeader();
   press(mark);
   act(() => void dialog()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-  await frames();
+  runOutTimers();
   expect(document.activeElement).toBe(band);
 });
 
-it("leaves focus on another control that a press outside the popover gave it", async () => {
+it("leaves focus on another control that a press outside the popover gave it", () => {
+  fakeTimers();
   const { band, mark, outside } = mountHeader();
   press(mark);
   expect(dialog()).not.toBeNull();
   act(() => outside.focus());
   press(outside);
   expect(dialog()).toBeNull();
-  await frames();
+  runOutTimers();
   expect(document.activeElement).toBe(outside);
   expect(document.activeElement).not.toBe(band);
 });
@@ -176,7 +177,7 @@ function mountFocused(element: React.ReactElement) {
 }
 
 it("opens on a mouse hover after a delay without moving focus, as a non-modal dialog that takes part in the topmost Escape rule", () => {
-  withFakeTimers();
+  fakeTimers();
   const { container, elsewhere } = mountFocused(<StatusMark label="Failed">Path not found.</StatusMark>);
   enter(mark(container));
   expect(dialog()).toBeNull();
@@ -189,7 +190,7 @@ it("opens on a mouse hover after a delay without moving focus, as a non-modal di
 });
 
 it("carries no tooltip on the mark, hovered or focused", () => {
-  withFakeTimers();
+  fakeTimers();
   const { container } = mountFocused(<StatusMark label="Failed">Path not found.</StatusMark>);
   enter(mark(container));
   hoverDelay();
@@ -198,7 +199,7 @@ it("carries no tooltip on the mark, hovered or focused", () => {
 });
 
 it("does not open for a touch or pen hover", () => {
-  withFakeTimers();
+  fakeTimers();
   const container = mountForTooltip(<StatusMark label="Failed">Path not found.</StatusMark>);
   for (const pointerType of ["touch", "pen"]) {
     const over = new MouseEvent("pointerover", { bubbles: true });
@@ -210,7 +211,7 @@ it("does not open for a touch or pen hover", () => {
 });
 
 it("closes a grace after the pointer leaves the mark, and stays open while it is inside the popover", () => {
-  withFakeTimers();
+  fakeTimers();
   const { container, elsewhere } = mountFocused(<StatusMark label="Failed">Path not found.</StatusMark>);
   enter(mark(container));
   hoverDelay();
@@ -226,7 +227,7 @@ it("closes a grace after the pointer leaves the mark, and stays open while it is
 });
 
 it("does not open if the pointer leaves before the delay", () => {
-  withFakeTimers();
+  fakeTimers();
   const { container } = mountFocused(<StatusMark label="Failed">Path not found.</StatusMark>);
   enter(mark(container));
   leave(mark(container));
@@ -235,7 +236,7 @@ it("does not open if the pointer leaves before the delay", () => {
 });
 
 it("closes a hover-opened popover on Escape without moving focus at any point", () => {
-  withFakeTimers();
+  fakeTimers();
   const { container, elsewhere } = mountFocused(<StatusMark label="Failed">Path not found.</StatusMark>);
   enter(mark(container));
   hoverDelay();
@@ -249,7 +250,7 @@ it("closes a hover-opened popover on Escape without moving focus at any point", 
   expect(dialog()).toBeNull();
   expect(document.activeElement).toBe(elsewhere);
   // Nor through the popover's exit and unmount.
-  act(() => void vi.advanceTimersByTime(500));
+  runOutTimers();
   document.removeEventListener("focusin", watch, true);
   document.removeEventListener("focusout", watch, true);
   expect(document.activeElement).toBe(elsewhere);
@@ -257,7 +258,7 @@ it("closes a hover-opened popover on Escape without moving focus at any point", 
 });
 
 it("closes a hover-opened popover on a press outside it", () => {
-  withFakeTimers();
+  fakeTimers();
   const { container, elsewhere } = mountFocused(<StatusMark label="Failed">Path not found.</StatusMark>);
   enter(mark(container));
   hoverDelay();
@@ -267,7 +268,7 @@ it("closes a hover-opened popover on a press outside it", () => {
 });
 
 it("turns a hover-opened popover into the press-opened one, modal and with focus inside, when the mark is tapped", () => {
-  withFakeTimers();
+  fakeTimers();
   const { container } = mountFocused(<StatusMark label="Failed">Path not found.</StatusMark>);
   enter(mark(container));
   hoverDelay();
@@ -283,7 +284,7 @@ it("turns a hover-opened popover into the press-opened one, modal and with focus
 });
 
 it("does nothing on a mouse click: a closed mark stays closed, a hover-opened popover stays as it is, a pending hover-open still happens", () => {
-  withFakeTimers();
+  fakeTimers();
   const { container, elsewhere } = mountFocused(<StatusMark label="Failed">Path not found.</StatusMark>);
   pointerPress(mark(container), "mouse");
   expect(dialog()).toBeNull();
@@ -298,18 +299,19 @@ it("does nothing on a mouse click: a closed mark stays closed, a hover-opened po
 });
 
 it.each(["touch", "pen"] as const)("opens on a %s press, with focus inside", (pointerType) => {
-  withFakeTimers();
+  fakeTimers();
   mountFocused(<StatusMark label="Failed">Path not found.</StatusMark>);
   pointerPress(mark(document.body), pointerType);
   expect(dialog()?.contains(document.activeElement)).toBe(true);
   expect(openTooltip()).toBeNull();
 });
 
-it("opens on an assistive technology's activation, with focus inside", async () => {
+it("opens on an assistive technology's activation, with focus inside", () => {
+  fakeTimers();
   const container = mountForTooltip(<StatusMark label="Failed">Path not found.</StatusMark>);
   act(() => mark(container).click());
   // react-aria hands focus over once a transition has run for a virtual press.
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+  runOutTimers();
   expect(dialog()?.contains(document.activeElement)).toBe(true);
 });
 
@@ -321,7 +323,7 @@ it("opens on Enter with focus inside", () => {
 });
 
 it("gives a content-less mark the label as its one line, the popover named by its tone, and is valid inside a paragraph", () => {
-  withFakeTimers();
+  fakeTimers();
   const container = mountForTooltip(<p>Before <StatusMark inline label="Failed to read" /></p>);
   const button = mark(container);
   expect(button.closest("p")).not.toBeNull();
@@ -355,8 +357,8 @@ it("draws a bare mark's one line as `line` when given, still named by the tone",
   expect(dialog()?.querySelector("code")?.textContent).toBe("a/b");
 });
 
-it("leaves focus alone when a hover-opened header mark closes", async () => {
-  withFakeTimers();
+it("leaves focus alone when a hover-opened header mark closes", () => {
+  fakeTimers();
   const container = mountForTooltip(
     <>
       <div role="row">
@@ -373,12 +375,12 @@ it("leaves focus alone when a hover-opened header mark closes", async () => {
   leave(container.querySelector("[role=row] button")!);
   graceDelay();
   expect(dialog()).toBeNull();
-  await act(async () => void vi.advanceTimersByTime(100));
+  runOutTimers();
   expect(document.activeElement).toBe(outside);
 });
 
 it("opens a note the way it opens a danger or warning mark, as a popover on the same button", () => {
-  withFakeTimers();
+  fakeTimers();
   const container = mountForTooltip(<StatusMark tone="note" label="Large file">Shown without highlighting.</StatusMark>);
   const button = container.querySelector("button[data-status-mark]")!;
   expect(button.getAttribute("aria-label")).toBe("Large file");
@@ -393,8 +395,8 @@ it("draws an inline note as a button inside a paragraph, which is valid there", 
   expect(container.querySelector("p button[data-status-mark]")?.getAttribute("aria-label")).toBe("Large file");
 });
 
-it("keeps focus inside a hover-opened panel that a press focused, within a focus-containing dialog, and hands it back to the earlier holder", async () => {
-  withFakeTimers();
+it("keeps focus inside a hover-opened panel that a press focused, within a focus-containing dialog, and hands it back to the earlier holder", () => {
+  fakeTimers();
   const container = mountForTooltip(
     <FocusScope contain restoreFocus>
       <button data-holder>Holder</button>
@@ -409,16 +411,16 @@ it("keeps focus inside a hover-opened panel that a press focused, within a focus
   expect(panel).not.toBeNull();
   // A mouse press on the panel's text focuses the panel itself.
   act(() => panel.focus());
-  await act(async () => void vi.advanceTimersByTime(100));
+  runOutTimers();
   expect(panel.contains(document.activeElement)).toBe(true);
   act(() => void panel.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-  await act(async () => void vi.advanceTimersByTime(100));
+  runOutTimers();
   expect(dialog()).toBeNull();
   expect(document.activeElement).toBe(holder);
 });
 
 it("does not reopen under a pointer still resting on the mark after Escape, until it has left and come back", () => {
-  withFakeTimers();
+  fakeTimers();
   const { container, elsewhere } = mountFocused(<StatusMark label="Failed">Path not found.</StatusMark>);
   enter(mark(container));
   hoverDelay();
@@ -438,7 +440,7 @@ it("does not reopen under a pointer still resting on the mark after Escape, unti
 });
 
 it("does not reopen under a resting pointer after the actions close a hover-opened popover either", () => {
-  withFakeTimers();
+  fakeTimers();
   const container = mountForTooltip(<StatusMark label="Failed" actions={(close) => <button onClick={close}>Try again</button>}>Path not found.</StatusMark>);
   enter(mark(container));
   hoverDelay();
@@ -451,8 +453,8 @@ it("does not reopen under a resting pointer after the actions close a hover-open
   expect(dialog()).toBeNull();
 });
 
-it("gives focus back to the mark when a popover turned from hover to press closes, as for a press from scratch", async () => {
-  withFakeTimers();
+it("gives focus back to the mark when a popover turned from hover to press closes, as for a press from scratch", () => {
+  fakeTimers();
   const { container } = mountFocused(<StatusMark label="Failed">Path not found.</StatusMark>);
   enter(mark(container));
   hoverDelay();
@@ -460,13 +462,13 @@ it("gives focus back to the mark when a popover turned from hover to press close
   act(() => mark(container).focus());
   pointerPress(mark(container), "touch");
   act(() => void dialog()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-  await act(async () => void vi.advanceTimersByTime(100));
+  runOutTimers();
   expect(dialog()).toBeNull();
   expect(document.activeElement).toBe(mark(container));
 });
 
-it("gives focus to the heading's band when a header mark's popover turned from hover to press closes", async () => {
-  withFakeTimers();
+it("gives focus to the heading's band when a header mark's popover turned from hover to press closes", () => {
+  fakeTimers();
   const container = mountForTooltip(
     <div role="row">
       <div data-section-heading tabIndex={-1}>Changes</div>
@@ -478,12 +480,12 @@ it("gives focus to the heading's band when a header mark's popover turned from h
   hoverDelay();
   pointerPress(mark(container), "touch");
   act(() => void dialog()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-  await act(async () => void vi.advanceTimersByTime(100));
+  runOutTimers();
   expect(document.activeElement).toBe(band);
 });
 
 it("leaves a hover-opened popover's Escape to a terminal or a text field holding text, where focus is", () => {
-  withFakeTimers();
+  fakeTimers();
   const container = mountForTooltip(
     <>
       <StatusMark label="Failed">Path not found.</StatusMark>
@@ -512,7 +514,7 @@ it("leaves a hover-opened popover's Escape to a terminal or a text field holding
 });
 
 it("leaves Escape alone while an input method is composing", () => {
-  withFakeTimers();
+  fakeTimers();
   const { container, elsewhere } = mountFocused(<StatusMark label="Failed">Path not found.</StatusMark>);
   enter(mark(container));
   hoverDelay();
@@ -532,7 +534,8 @@ function fakeOverflow(scrollHeight: number, clientHeight: number): void {
   }
 }
 
-it.each([[1000, true], [100, false]])("keeps the actions outside the faded scroller the body is in, a region named like the popover only while it overflows (%i tall)", async (scrollHeight, overflows) => {
+it.each([[1000, true], [100, false]])("keeps the actions outside the faded scroller the body is in, a region named like the popover only while it overflows (%i tall)", (scrollHeight, overflows) => {
+  fakeTimers();
   fakeOverflow(scrollHeight, 100);
   const button = mountForTooltip(
     <StatusMark label="Failed" actions={() => <button type="button">Try again</button>}>
@@ -541,7 +544,7 @@ it.each([[1000, true], [100, false]])("keeps the actions outside the faded scrol
   ).querySelector("button")!;
   press(button);
   // HeroUI writes the fade's state on the next frame.
-  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  runOutTimers();
   const scroller = dialog()!.querySelector<HTMLElement>("[data-slot=scroll-shadow]")!;
   expect(scroller.textContent).toBe("Path not found.");
   const again = [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Try again")!;

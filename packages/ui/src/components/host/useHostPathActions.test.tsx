@@ -25,7 +25,6 @@ async function refused(type: "open_project_path" | "reveal_project_path", error:
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   });
   act(() => root.render(<DaemonProvider value={daemon}><Subject /></DaemonProvider>));
   await act(async () => hostAction(type, { project: "p1", path: "src/a.ts" }));

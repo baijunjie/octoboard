@@ -11,6 +11,7 @@ import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 import { ErrorAlerts } from "../../shell/ErrorAlerts";
 import { DirectoryPicker, pickerStart } from "./DirectoryPicker";
 import { CodedError } from "../../errors/codedError";
+import { fakeTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -37,8 +38,7 @@ it("opens with focus in the path field", async () => {
 });
 
 it("shows a listing failure in an Alert with its reason and Try again, and opens no error alert dialog", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const request = vi.fn().mockRejectedValueOnce(new Error("Permission denied")).mockResolvedValue({ type: "dir_listing", id: null, path: "/home", entries: [] });
   const daemon = testDaemon({ request });
   const container = document.body.appendChild(document.createElement("div"));
@@ -46,7 +46,6 @@ it("shows a listing failure in an Alert with its reason and Try again, and opens
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   });
   await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" onPick={() => {}} onClose={() => {}} /><ErrorAlerts daemon={daemon} /></DaemonProvider>));
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
@@ -66,8 +65,7 @@ it("shows a listing failure in an Alert with its reason and Try again, and opens
 });
 
 it("reports a failed Try again in the error alert dialog and leaves the first-listing Alert as it was, focus on Try again", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
   onTestFinished(() => report.mockRestore());
   const request = vi.fn().mockRejectedValue(new Error("Permission denied"));
@@ -94,8 +92,7 @@ it("reports a failed Try again in the error alert dialog and leaves the first-li
 });
 
 it("reports a failed Go before any listing in the error alert dialog, and the first-listing Alert stays", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
   onTestFinished(() => report.mockRestore());
   const request = vi.fn().mockRejectedValue(new Error("Permission denied"));
@@ -116,8 +113,7 @@ it("reports a failed Go before any listing in the error alert dialog, and the fi
 });
 
 it("keeps Try again where it is, pending and focused, while its listing is out", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   let finish!: (error: Error) => void;
   const request = vi
     .fn()

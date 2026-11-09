@@ -6,7 +6,7 @@ import type { FixtureContext, Handlers } from "./fixtureContext";
 import { servedLabel } from "./fixtureProviders";
 
 /** How long an update runs before it ends, for the window to show it running first. */
-const UPDATE_DURATION_MS = 600;
+export const UPDATE_DURATION_MS = 600;
 
 /** Each registered agent's installed version and how it was installed, as a machine that has them all current has them;
  * a provider served beyond these is treated as one more installed through its own installer. */

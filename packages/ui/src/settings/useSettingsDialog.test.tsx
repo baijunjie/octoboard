@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { setFocusAfterModalLoss } from "../components/focus/modalFocus";
+import { framesAsTimers, settleFrames, withModality } from "../components/dialog/dialogTestSupport";
+import { MODAL_CLOSE_SETTLE_MS, setFocusAfterModalLoss } from "../components/focus/modalFocus";
 import { browserHost } from "../platform/host";
 import { PlatformProvider } from "../platform/react";
 import type { PlatformAdapter, UpdaterCapability } from "../platform";
@@ -14,6 +14,7 @@ import { useSettingsDialog } from "./useSettingsDialog";
 import { bindingFor, restoreAllBindings, setBinding } from "../shortcuts/store";
 import { eventKey, type Binding } from "../shortcuts/binding";
 import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -41,16 +42,13 @@ it("hands focus to the terminal when Settings closes with nothing open under it"
   expect(focusTerminal).toHaveBeenCalledOnce();
 });
 
-const frame = () => act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
-
 /** Runs the timers a closing modal's exit transition and React Aria's focus restore are given, after which the window's
  * fallback for focus left on the body runs. Needs `vi.useFakeTimers()`. */
-const settle = () => act(() => { vi.advanceTimersByTime(450); });
+const settle = () => act(() => { vi.runOnlyPendingTimers(); });
 
 /** Registers, as the window does, where focus left on the body goes: here a stand-in for the sidebar's selected row. */
 function registerFallback() {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   const row = document.body.appendChild(document.createElement("button"));
   const fallback = vi.fn(() => row.focus());
   const unregister = setFocusAfterModalLoss(fallback);
@@ -77,7 +75,7 @@ it("hands focus that neither the terminal nor the modal's restore took to the wi
   const hook = mount(false, () => {});
   act(() => hook().openSettingsAt("accounts"));
   act(() => hook().closeSettings());
-  act(() => { vi.advanceTimersByTime(20); });
+  act(() => { vi.advanceTimersByTime(MODAL_CLOSE_SETTLE_MS - 1); });
   expect(fallback).not.toHaveBeenCalled();
   settle();
   expect(fallback).toHaveBeenCalledOnce();
@@ -125,7 +123,7 @@ it("does not take a press that came before Settings was asked for as its opener"
   onTestFinished(() => earlier.remove());
   act(() => earlier.click());
   // The press is over: Settings is then asked for with no press, as from the native menu.
-  act(() => { vi.advanceTimersByTime(20); });
+  act(() => { vi.runOnlyPendingTimers(); });
   act(() => hook().openSettingsAt("accounts"));
   act(() => hook().closeSettings());
   settle();
@@ -144,6 +142,7 @@ it("leaves focus on the selected session's terminal, whatever control opened Set
 });
 
 it("hands focus back to a dialog open under Settings, a frame after the modal's own restore, when that left it on the body", async () => {
+  framesAsTimers("pointer");
   const dialog = document.body.appendChild(document.createElement("div"));
   dialog.setAttribute("role", "dialog");
   dialog.tabIndex = -1;
@@ -153,12 +152,13 @@ it("hands focus back to a dialog open under Settings, a frame after the modal's 
   act(() => hook().openSettingsAt("accounts"));
   act(() => hook().closeSettings());
   expect(document.activeElement).toBe(document.body);
-  await frame();
+  await settleFrames();
   expect(focusTerminal).not.toHaveBeenCalled();
   expect(document.activeElement).toBe(dialog);
 });
 
 it("hands focus to the control a dialog under Settings opens on, rather than the dialog, when the restore left it on the body", async () => {
+  framesAsTimers("pointer");
   const dialog = document.body.appendChild(document.createElement("div"));
   dialog.setAttribute("role", "dialog");
   dialog.tabIndex = -1;
@@ -168,11 +168,12 @@ it("hands focus to the control a dialog under Settings opens on, rather than the
   const hook = mount(true, () => {});
   act(() => hook().openSettingsAt("accounts"));
   act(() => hook().closeSettings());
-  await frame();
+  await settleFrames();
   expect(document.activeElement).toBe(field);
 });
 
 it("hands focus back to the control in the dialog under Settings whose press opened Settings, though the press gave it none", async () => {
+  framesAsTimers("pointer");
   const dialog = document.body.appendChild(document.createElement("div"));
   dialog.setAttribute("role", "dialog");
   dialog.tabIndex = -1;
@@ -182,11 +183,12 @@ it("hands focus back to the control in the dialog under Settings whose press ope
   const hook = mount(true, () => {});
   const control = pressToOpen(hook, dialog);
   act(() => hook().closeSettings());
-  await frame();
+  await settleFrames();
   expect(document.activeElement).toBe(control);
 });
 
 it("leaves alone a control the modal's restore has put focus on inside the dialog under Settings", async () => {
+  framesAsTimers("pointer");
   const dialog = document.body.appendChild(document.createElement("div"));
   dialog.setAttribute("role", "dialog");
   dialog.tabIndex = -1;
@@ -196,7 +198,7 @@ it("leaves alone a control the modal's restore has put focus on inside the dialo
   act(() => hook().openSettingsAt("accounts"));
   act(() => hook().closeSettings());
   opener.focus();
-  await frame();
+  await settleFrames();
   expect(document.activeElement).toBe(opener);
 });
 
@@ -309,9 +311,7 @@ describe("the Settings shortcut where there is no native menu", () => {
   });
 
   it("shows the focus ring on what Settings focuses once the key opens it, and not when it does nothing", () => {
-    const before = getInteractionModality();
-    onTestFinished(() => act(() => setInteractionModality(before as Parameters<typeof setInteractionModality>[0])));
-    act(() => setInteractionModality("pointer"));
+    withModality("pointer");
     const blocked = mount(true, () => {}, WINDOWS);
     press(comma, WINDOWS_HOST);
     expect(blocked().settingsOpen).toBe(false);

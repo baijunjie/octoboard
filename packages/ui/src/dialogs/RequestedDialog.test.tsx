@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { act, StrictMode } from "react";
 import { setInteractionModality } from "react-aria";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import type { RequestHandler } from "../requests";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
-import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { enter, leave, mountForTooltip, openTooltip } from "../components/hint/tooltipTestSupport";
 import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
@@ -17,6 +17,7 @@ import type { DialogRequest } from "./dialogRequest";
 import { RequestedDialog } from "./RequestedDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
+import { fakeTimers, runOutTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -54,14 +55,13 @@ function agentIcon(): HTMLElement {
 }
 
 function hoverAgentIcon(): string | undefined {
-  const settle = withFakeTimers();
+  fakeTimers();
   enter(agentIcon());
-  settle();
+  runOutTimers();
   const text = openTooltip()?.textContent ?? undefined;
   leave(agentIcon());
-  settle();
+  runOutTimers();
   expect(openTooltip()).toBeNull();
-  expect(vi.getTimerCount()).toBe(0);
   return text;
 }
 
@@ -112,11 +112,11 @@ it.each([
 ])("hands the glyph's tooltip over to the agent icon's after a pause of $pause ms: at once $opensAtOnce", ({ pause, opensAtOnce }) => {
   const listed = sessionOf("s-2", console_.id, project.id, "Stopped", "interrupted", { bound_to: owner.id });
   mount({ kind: "archive-session", session: owner }, [owner, listed]);
-  const settle = withFakeTimers();
+  fakeTimers();
   const glyph = document.body.querySelector("[role=alertdialog] li")!.children[0];
 
   enter(glyph);
-  settle();
+  runOutTimers();
   expect(openTooltip()?.textContent).toBe("Interrupted");
   // As a real pointer does, it leaves the glyph before it reaches the icon.
   leave(glyph);
@@ -124,13 +124,12 @@ it.each([
   enter(agentIcon());
 
   expect(openTooltip()?.textContent ?? null).toBe(opensAtOnce ? "Claude Code, Default" : null);
-  settle();
+  runOutTimers();
   expect(openTooltip()?.textContent).toBe("Claude Code, Default");
 
   leave(agentIcon());
-  settle();
+  runOutTimers();
   expect(openTooltip()).toBeNull();
-  expect(vi.getTimerCount()).toBe(0);
 });
 
 
@@ -425,7 +424,6 @@ it("reports a refused unused deletion without offering an unguarded confirmation
   // The alert names the session it could not delete.
   expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ session: unused.id })]);
   expect(onClose).toHaveBeenCalledOnce();
-  act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
 });
 
 it("checks the native records of archived children as well as their owner", async () => {
@@ -899,7 +897,7 @@ it("says in a project's removal that its project processes could not be listed, 
 });
 
 it("announces the failed project process list once the dialog's focus has settled, not as it mounts", async () => {
-  const settle = withFakeTimers();
+  fakeTimers();
   mount({ kind: "delete-project", project }, [], [], {
     request: async (body) => { if (body.type === "list_processes") throw new Error("gone"); return { type: "ack", id: null }; },
   });
@@ -908,7 +906,7 @@ it("announces the failed project process list once the dialog's focus has settle
   expect(group.querySelector("[role=alert]")).toBeNull();
   await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(group.querySelector("[role=alert]")?.textContent).toContain("Could not list the project processes");
-  settle();
+  runOutTimers();
 });
 
 it.each<[string, DialogRequest]>([
@@ -1035,8 +1033,7 @@ const statusText = () => [...document.body.querySelectorAll('[role="status"]')].
 const passTime = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 
 it("keeps focus on the Trash option when a retry of the check ends in a lost connection", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   let release!: () => void;
   const answered = new Promise<void>((resolve) => { release = resolve; });
   let asked = 0;
@@ -1062,15 +1059,14 @@ it("keeps focus on the Trash option when a retry of the check ends in a lost con
   expect(document.activeElement).toBe(checkbox());
   expect(unknownMark()).not.toBeNull();
   // The plain mark's sentence is spoken once the delay after that focus move has passed.
-  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 50);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS);
   expect(statusText()).toContain("may be moved to the");
   await act(async () => unknownMark()!.click());
   expect(markRetry()).toBeUndefined();
 });
 
 it("speaks the missing-Git sentence once the delay after a focus move has passed, and again after a retry fails in the same words", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   let release!: () => void;
   let asked = 0;
   mount({ kind: "delete-project", project }, [], [], {
@@ -1084,10 +1080,10 @@ it("speaks the missing-Git sentence once the delay after a focus move has passed
   });
   checkAll();
   await passTime(0);
-  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(unknownMark()).not.toBeNull();
   expect(statusText()).toBe("");
-  await passTime(200);
+  await passTime(1);
   expect(statusText()).toContain("may be moved to the");
   // The retry empties the region while it is out, and writes the same words again once the delay has passed.
   await act(async () => unknownMark()!.click());
@@ -1095,15 +1091,14 @@ it("speaks the missing-Git sentence once the delay after a focus move has passed
   expect(statusText()).toBe("");
   await act(async () => release());
   await passTime(0);
-  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(statusText()).toBe("");
-  await passTime(200);
+  await passTime(1);
   expect(statusText()).toContain("may be moved to the");
 });
 
 it("speaks the sentence of a lookup that failed for another reason once the delay after ticking the Trash option has passed", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   mount({ kind: "delete-project", project }, [], [], {
     request: async (body) => {
       if (body.type === "inspect_project_removal") throw new Error("inspection failed");
@@ -1112,10 +1107,10 @@ it("speaks the sentence of a lookup that failed for another reason once the dela
   });
   checkAll();
   await passTime(0);
-  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(unknownMark()).not.toBeNull();
   expect(statusText()).toBe("");
-  await passTime(200);
+  await passTime(1);
   expect(statusText()).toContain("may be moved to the");
   // Unticked, the mark and what was spoken go.
   checkAll();
@@ -1187,26 +1182,22 @@ it("asks again what goes along once a project's removal with its folder is refus
       return { type: "ack", id: null };
     },
   });
-  try {
-    checkAll();
-    await act(async () => {});
-    expect(listed()).toEqual([]);
-    await submitDialog();
-    expect(sent(daemon, "delete_project")).toEqual([expect.objectContaining({ trash_directory: true, inspection: "token-1" })]);
-    expect(errorAlerts.getSnapshot()).toHaveLength(1);
-    expect(sent(daemon, "inspect_project_removal")).toHaveLength(2);
-    // Confirm waits on the new answer.
-    await submitDialog();
-    expect(sent(daemon, "delete_project")).toHaveLength(1);
-    await act(async () => second.resolve());
-    expect(listed()).toEqual(["/r-feature on branch feature"]);
-    await submitDialog();
-    const deletes = sent(daemon, "delete_project");
-    expect(deletes).toHaveLength(2);
-    expect(deletes[1]).toEqual({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: true });
-  } finally {
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  }
+  checkAll();
+  await act(async () => {});
+  expect(listed()).toEqual([]);
+  await submitDialog();
+  expect(sent(daemon, "delete_project")).toEqual([expect.objectContaining({ trash_directory: true, inspection: "token-1" })]);
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  expect(sent(daemon, "inspect_project_removal")).toHaveLength(2);
+  // Confirm waits on the new answer.
+  await submitDialog();
+  expect(sent(daemon, "delete_project")).toHaveLength(1);
+  await act(async () => second.resolve());
+  expect(listed()).toEqual(["/r-feature on branch feature"]);
+  await submitDialog();
+  const deletes = sent(daemon, "delete_project");
+  expect(deletes).toHaveLength(2);
+  expect(deletes[1]).toEqual({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: true });
 });
 
 /** The mark after the Trash option's label that says what else may go, when the lookup failed. */
@@ -1457,19 +1448,15 @@ it("releases nothing when the unbind confirmation is cancelled", () => {
 
 it("keeps the unbind confirmation open when the release fails unexpectedly", async () => {
   const onClose = vi.fn();
-  try {
-    const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
-      onClose,
-      request: async () => { throw new CodedError("internal error", "internal_error", {}); },
-    });
-    await submitDialog();
-    expect(onClose).not.toHaveBeenCalled();
-    expect(daemon.request).toHaveBeenCalledOnce();
-    expect(document.querySelector("[role=alertdialog]")).not.toBeNull();
-    expect(errorAlerts.getSnapshot()).toHaveLength(1);
-  } finally {
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  }
+  const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
+    onClose,
+    request: async () => { throw new CodedError("internal error", "internal_error", {}); },
+  });
+  await submitDialog();
+  expect(onClose).not.toHaveBeenCalled();
+  expect(daemon.request).toHaveBeenCalledOnce();
+  expect(document.querySelector("[role=alertdialog]")).not.toBeNull();
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
 });
 
 it("closes the unbind confirmation silently when the daemon refuses with session_not_bound", async () => {
@@ -1487,25 +1474,21 @@ it("closes the unbind confirmation silently when the daemon refuses with session
 it("shows session_binding_changed and keeps the unbind confirmation open, naming the new owner once the store has it", async () => {
   const onClose = vi.fn();
   const newOwner = sessionOf("s-new-owner", console_.id, undefined, "Other hub", "idle", { kind: "console" });
-  try {
-    const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, newOwner, unbindable], [], {
-      onClose,
-      request: async () => { throw new CodedError("raw daemon text", "session_binding_changed", { session: unbindable.id }); },
-    });
-    await submitDialog();
-    expect(onClose).not.toHaveBeenCalled();
-    const [alert] = errorAlerts.getSnapshot();
-    expect(alert.error).toMatchObject({ code: "session_binding_changed" });
-    expect(alert.title).toBe("Could not unbind the session");
-    expect(alert.classification).toEqual({ kind: "actionable", recovery: "ownerMoved" });
-    await act(async () => {
-      daemon.store.setState({ sessions: new Map([unbindOwner, newOwner, { ...unbindable, bound_to: newOwner.id }].map((s) => [s.id, s])) });
-    });
-    expect(document.querySelector("[role=alertdialog]")!.textContent).toContain("Other hub");
-    expect(onClose).not.toHaveBeenCalled();
-  } finally {
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  }
+  const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, newOwner, unbindable], [], {
+    onClose,
+    request: async () => { throw new CodedError("raw daemon text", "session_binding_changed", { session: unbindable.id }); },
+  });
+  await submitDialog();
+  expect(onClose).not.toHaveBeenCalled();
+  const [alert] = errorAlerts.getSnapshot();
+  expect(alert.error).toMatchObject({ code: "session_binding_changed" });
+  expect(alert.title).toBe("Could not unbind the session");
+  expect(alert.classification).toEqual({ kind: "actionable", recovery: "ownerMoved" });
+  await act(async () => {
+    daemon.store.setState({ sessions: new Map([unbindOwner, newOwner, { ...unbindable, bound_to: newOwner.id }].map((s) => [s.id, s])) });
+  });
+  expect(document.querySelector("[role=alertdialog]")!.textContent).toContain("Other hub");
+  expect(onClose).not.toHaveBeenCalled();
 });
 
 it("closes the unbind confirmation silently on session_binding_changed when the store shows the session unbound", async () => {
@@ -1527,21 +1510,17 @@ it.each([
   ["session_owner_changing", { session: unbindable.id, owner: unbindOwner.id }],
 ])("reports a %s refusal in the error alert and keeps the unbind confirmation open", async (code, params) => {
   const onClose = vi.fn();
-  try {
-    mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
-      onClose,
-      request: async () => { throw new CodedError("raw daemon text", code, params); },
-    });
-    await submitDialog();
-    expect(onClose).not.toHaveBeenCalled();
-    expect(document.querySelector("[role=alertdialog]")).not.toBeNull();
-    const [alert] = errorAlerts.getSnapshot();
-    expect(alert.error).toMatchObject({ code, params });
-    expect(alert.title).toBe("Could not unbind the session");
-    expect(alert.classification).toEqual({ kind: "actionable", recovery: code === "session_changing" ? "wait" : "ownerChanging" });
-  } finally {
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  }
+  mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
+    onClose,
+    request: async () => { throw new CodedError("raw daemon text", code, params); },
+  });
+  await submitDialog();
+  expect(onClose).not.toHaveBeenCalled();
+  expect(document.querySelector("[role=alertdialog]")).not.toBeNull();
+  const [alert] = errorAlerts.getSnapshot();
+  expect(alert.error).toMatchObject({ code, params });
+  expect(alert.title).toBe("Could not unbind the session");
+  expect(alert.classification).toEqual({ kind: "actionable", recovery: code === "session_changing" ? "wait" : "ownerChanging" });
 });
 
 it.each([
@@ -1612,16 +1591,12 @@ it("closes once its own deletion fails over an archive emptied meanwhile", async
       ? new Promise<never>((_, reject) => { refuse = reject; })
       : { type: "session_records_inspected", id: null, presence: "absent" },
   });
-  try {
-    await act(async () => {});
-    await submitDialog();
-    act(() => daemon.store.setState({ sessions: new Map() }));
-    expect(onClose).not.toHaveBeenCalled();
-    await act(async () => refuse(new CodedError("project not found", "project_not_found", {})));
-    expect(onClose).toHaveBeenCalledOnce();
-    // The failure is still told, though the confirmation it came from has closed.
-    expect(errorAlerts.getSnapshot()).toHaveLength(1);
-  } finally {
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  }
+  await act(async () => {});
+  await submitDialog();
+  act(() => daemon.store.setState({ sessions: new Map() }));
+  expect(onClose).not.toHaveBeenCalled();
+  await act(async () => refuse(new CodedError("project not found", "project_not_found", {})));
+  expect(onClose).toHaveBeenCalledOnce();
+  // The failure is still told, though the confirmation it came from has closed.
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
 });

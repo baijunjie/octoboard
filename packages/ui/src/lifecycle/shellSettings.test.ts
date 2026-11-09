@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
+import { afterQueuedWork } from "../test/clock";
 import { shellSettingsFromQuery } from "./shellSettings";
 
 const query = (value: unknown) => `?port=1&settings=${encodeURIComponent(typeof value === "string" ? value : JSON.stringify(value))}`;
@@ -179,15 +180,18 @@ describe("the migration of what the page kept in localStorage", () => {
     expect(localStorage.getItem(PREFERENCE_KEYS.showMenuBarIcon)).toBeNull();
     expect(toBackground).toHaveBeenCalledExactlyOnceWith(true);
     expect(toIcon).toHaveBeenCalledExactlyOnceWith(false);
+    // `connectShellSettings` already took the legacy values, so a second migration finds nothing left to push.
     await migrateLegacyShellSettings();
     expect(toBackground).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the legacy keys when a push fails", async () => {
-    const { connectShellSettings, migrateLegacyShellSettings } = await load(NOT_STORED, LEGACY);
-    connectShellSettings({ runInBackground: () => Promise.reject(new Error("refused")), showMenuBarIcon: () => Promise.resolve() });
-    await migrateLegacyShellSettings();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    const { connectShellSettings } = await load(NOT_STORED, LEGACY);
+    const refused = vi.fn(() => Promise.reject(new Error("refused")));
+    connectShellSettings({ runInBackground: refused, showMenuBarIcon: () => Promise.resolve() });
+    await vi.waitFor(() => expect(refused).toHaveBeenCalled());
+    // The rejected push settles on promise chains alone.
+    await afterQueuedWork();
     expect(localStorage.getItem(PREFERENCE_KEYS.runInBackground)).toBe("true");
     expect(localStorage.getItem(PREFERENCE_KEYS.showMenuBarIcon)).toBe("false");
   });

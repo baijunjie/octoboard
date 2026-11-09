@@ -72,7 +72,7 @@ const OUTCOME_NOTICE: Partial<Record<ResetCreditOutcome, "quota.resetCredits.not
 
 /** How long the dialog waits for the reading the daemon takes after a use before it stops: as long as a reading may
  * take (`PROBE_TIMEOUT` in the daemon). */
-const READING_WAIT_MS = 60_000;
+export const READING_WAIT_MS = 60_000;
 
 /** Where the dialog stands: asking; waiting for the reading that follows a use that worked (`frozen` is the reading the
  * meters keep showing meanwhile, `baseline` the one held when the use was answered, which the next reading must be newer

@@ -11,6 +11,7 @@ import { buttons, optionElements, pickerNamed } from "../test/dom";
 import { testDaemon } from "../test/testDaemon";
 import { trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { SessionDialog } from "./SessionDialog";
+export { LOCATE_DELAY_MS } from "./useResumeTarget";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

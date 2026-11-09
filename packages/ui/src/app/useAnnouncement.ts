@@ -7,7 +7,7 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 
 /** How long the result of a batch of account switches or of a model change stays in the status region once it can be
  * heard, after the focus-move wait that `AttendedStatusAnnouncer` adds. */
-const ANNOUNCEMENT_MS = 10_000;
+export const ANNOUNCEMENT_MS = 10_000;
 
 /**
  * What the window says once a batch of account switches or a model change is done, for assistive technology.

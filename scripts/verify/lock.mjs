@@ -20,7 +20,7 @@ import { localValue } from "../lib/env.mjs";
 
 const GIB = 1024 ** 3;
 // A slot directory is made before its owner file is written; one without an owner for this long is orphaned.
-const NO_OWNER_GRACE_MS = 10_000;
+export const NO_OWNER_GRACE_MS = 10_000;
 
 // A fixed path rather than `os.tmpdir()`, which follows `$TMPDIR` and would give a run with another
 // `$TMPDIR` slots of its own; the user id keeps one user's slots from blocking another's.

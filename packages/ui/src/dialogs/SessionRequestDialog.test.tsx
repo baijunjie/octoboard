@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, onTestFinished } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
+import { FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { CodedError } from "../errors/codedError";
 import { setLanguage } from "../i18n/language";
 import { accountOf, consoleOf, projectOf, sessionOf, snapshotState } from "../fixtures/builders";
@@ -9,6 +10,7 @@ import { CODE } from "../errors/codes";
 import type { SessionRequest, TrustPrompt } from "../store";
 import { press } from "../components/alerts/detailsTestSupport";
 import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -308,6 +310,7 @@ it.each([
 });
 
 it("says a sharing change that ends unfinished while the dialog is open once, and not one it opened with", async () => {
+  fakeTimers();
   const held = sessionOf("s-held", "c-1", "p-1", "Old work", "archived", { account_id: "a-half" });
   const { store } = mountPendingQuestionDialog({
     ...snapshotState({ sessions: [held] }),
@@ -315,24 +318,26 @@ it("says a sharing change that ends unfinished while the dialog is open once, an
     settings: settingsWith([{ ...halfCodex, share_default_config_incomplete: false }]),
     sessionRequests: [reopening],
   }, ack);
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(incompleteMark()).toBeNull();
   expect(statusTexts()).toEqual([]);
   await act(async () => store.setState((s) => ({ settings: { ...s.settings, accounts: [halfCodex] } })));
   expect(incompleteMark()).not.toBeNull();
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(statusTexts().map((text) => text?.replace(/[\u2066-\u2069]/g, ""))).toEqual(["The last sharing change of Half did not finish."]);
 });
 
 it("does not say an unfinished sharing change the dialog opened with", async () => {
+  fakeTimers();
   const held = sessionOf("s-held", "c-1", "p-1", "Old work", "archived", { account_id: "a-half" });
   mountPendingQuestionDialog({ ...snapshotState({ sessions: [held] }), ...names, settings: settingsWith([halfCodex]), sessionRequests: [reopening] }, ack);
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(incompleteMark()).not.toBeNull();
   expect(statusTexts()).toEqual([]);
 });
 
 it("does not say an unfinished sharing change of the request that comes up after the first is answered", async () => {
+  fakeTimers();
   const held = sessionOf("s-held", "c-1", "p-1", "Old work", "archived", { account_id: "a-one" });
   const other = sessionOf("s-other", "c-1", "p-1", "Other work", "archived", { account_id: "a-half" });
   const first: SessionRequest = { ...reopening, requestId: "r-first", requestedAt: 1 };
@@ -345,7 +350,7 @@ it("does not say an unfinished sharing change of the request that comes up after
   }, ack);
   expect(incompleteMark()).toBeNull();
   await act(async () => store.setState({ sessionRequests: [second] }));
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(incompleteMark()).not.toBeNull();
   expect(statusTexts()).toEqual([]);
 });
@@ -517,12 +522,13 @@ it("a switch marks an unfinished sharing change of the account its form is on, i
 });
 
 it("a switch says an unfinished sharing change of its account once when it appears after the dialog opened", async () => {
+  fakeTimers();
   const { store } = mountWith(switching, owned, [claudeAccounts[0], { ...half, share_default_config_incomplete: false }]);
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(incompleteMark()).toBeNull();
   await act(async () => store.setState((s) => ({ settings: { ...s.settings, accounts: [claudeAccounts[0], half] as never } })));
   expect(incompleteMark()).not.toBeNull();
-  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(() => vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS));
   expect(statusTexts().map((text) => text?.replace(/[\u2066-\u2069]/g, ""))).toEqual(["The last sharing change of Two did not finish."]);
 });
 

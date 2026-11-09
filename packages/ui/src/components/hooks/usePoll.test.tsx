@@ -3,9 +3,10 @@
 import "../../input/focusGuard";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 import { startPolling, usePolled } from "./usePoll";
+import { fakeTimers } from "../../test/clock";
 
 const POLL_MS = { live: 3000, background: 15000 };
 type Pace = keyof typeof POLL_MS | "off";
@@ -17,7 +18,13 @@ afterEach(() => {
 });
 
 async function mount(fetch: (key: string) => Promise<number[]>, options?: { stopsOnFirstFailure?: boolean }) {
-  vi.useFakeTimers();
+  // A poll re-arms itself for ever: unmounting is what leaves no timer running.
+  fakeTimers({
+    beforeDrain: () => {
+      root.unmount();
+      element.remove();
+    },
+  });
   const ask = vi.fn(fetch);
   let pace: Pace = "live";
   let data!: ReturnType<typeof usePolled<number[]>>;
@@ -31,7 +38,6 @@ async function mount(fetch: (key: string) => Promise<number[]>, options?: { stop
   const root = createRoot(element);
   const render = async () => act(async () => root.render(<Probe />));
   await render();
-  onTestFinished(() => { act(() => root.unmount()); element.remove(); vi.useRealTimers(); });
   return {
     ask,
     data: () => data,
@@ -97,11 +103,13 @@ it("keeps the last answer after a failure, publishes an unchanged failure once, 
   expect(poll.data().value).toEqual([1]);
 });
 
-it("keeps asking after a first failure, unless it stops there until retried", async () => {
+it("keeps asking after a first failure", async () => {
   const keeps = await mount(async () => { throw new Error("offline"); });
   await keeps.advance(POLL_MS.live);
   expect(keeps.ask).toHaveBeenCalledTimes(2);
+});
 
+it("stops after a first failure, when asked to, until retried", async () => {
   const stops = await mount(async () => { throw new Error("offline"); }, { stopsOnFirstFailure: true });
   await stops.advance(POLL_MS.live * 3);
   expect(stops.ask).toHaveBeenCalledTimes(1);
@@ -119,7 +127,8 @@ it("revises the answer at once and asks again", async () => {
 
 /** Starts polling with a `run` the test counts, the caller's own reads given by `own`. */
 function poll(own?: { at: number; busy: boolean }, catchUpAfter?: number) {
-  vi.useFakeTimers();
+  // A poll re-arms itself for ever: stopping it is what leaves no timer running.
+  fakeTimers({ beforeDrain: () => stop() });
   let runs = 0;
   const stop = startPolling(() => ({
     pace: 10_000,
@@ -127,7 +136,6 @@ function poll(own?: { at: number; busy: boolean }, catchUpAfter?: number) {
     ...(own && { busy: () => own.busy, lastAt: () => own.at }),
     catchUpAfter,
   }));
-  onTestFinished(() => { stop(); vi.useRealTimers(); });
   return { runs: () => runs, advance: (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms))) };
 }
 
@@ -171,8 +179,7 @@ it("reads a poll that fell due while the document was hidden once it is shown ag
 });
 
 it("keeps polling after a read that throws before it returns a promise", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers({ beforeDrain: () => stop() });
   let calls = 0;
   const stop = startPolling(() => ({
     pace: 1000,
@@ -181,7 +188,6 @@ it("keeps polling after a read that throws before it returns a promise", async (
       if (calls === 1) throw new Error("not sent");
     },
   }));
-  onTestFinished(stop);
   expect(calls).toBe(1);
   await vi.advanceTimersByTimeAsync(1000);
   expect(calls).toBe(2);

@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { sessionOf } from "./fixtures/builders";
 import { PROTOCOL_GENERATION, type Event } from "./protocol";
-import { DaemonClient } from "./daemon-client";
+import {
+  BROADCAST_FLUSH_FALLBACK_MS, DaemonClient, HEARTBEAT_INTERVAL_MS, HEARTBEAT_TICK_MS, HEARTBEAT_TIMEOUT_MS, MAX_RECONNECT_ATTEMPTS,
+  QUEUED_REQUEST_TIMEOUT_MS, RECONNECT_BASE_DELAY_MS,
+} from "./daemon-client";
 import { CodedError } from "./errors/codedError";
 import { setLanguage } from "./i18n/language";
+import { fakeTimers } from "./test/clock";
 
 class FakeSocket extends EventTarget {
   static OPEN = 1;
@@ -29,20 +33,33 @@ class FakeSocket extends EventTarget {
   }
 }
 
+/** The wait before automatic reconnect attempt number `attempt` (counting from 0). */
+const backoff = (attempt: number) => RECONNECT_BASE_DELAY_MS * 2 ** attempt;
+/** Fake time that outlasts every automatic reconnect: the waits of attempts 0 up to and including the one past the budget. */
+const PAST_ANY_RETRY_MS = Array.from({ length: MAX_RECONNECT_ATTEMPTS + 1 }, (_, attempt) => backoff(attempt)).reduce((sum, wait) => sum + wait, 0);
+
 let frame: (() => void) | undefined;
+const clients: DaemonClient[] = [];
+
+/** A client that is closed when the test ends, so that no reconnect timer is left to open a socket after the stubs are gone. */
+function newClient(): DaemonClient {
+  const client = new DaemonClient("ws://test");
+  clients.push(client);
+  return client;
+}
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  // Registered before `fakeTimers`, so it runs after its run-out: the timers still pending meet the fakes, not a real socket.
+  onTestFinished(() => {
+    FakeSocket.all = [];
+    vi.unstubAllGlobals();
+    frame = undefined;
+  });
+  fakeTimers({ beforeDrain: () => clients.splice(0).forEach((client) => client.close()) });
+  // After `fakeTimers`, which fakes the frame functions too.
   vi.stubGlobal("WebSocket", FakeSocket);
   vi.stubGlobal("requestAnimationFrame", (callback: () => void) => ((frame = callback), 1));
   vi.stubGlobal("cancelAnimationFrame", () => (frame = undefined));
-});
-
-afterEach(() => {
-  FakeSocket.all = [];
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
-  frame = undefined;
 });
 
 const upserted = (id: string): Event => ({ type: "session_upserted", session: sessionOf(id, "c", "p", id, "working") });
@@ -58,7 +75,7 @@ const greet = (socket: FakeSocket) => {
 };
 
 it("delivers the broadcasts that arrive between two frames as one batch, in arrival order", () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const batches: Event[][] = [];
   const single: string[] = [];
   client.onEvents((events) => batches.push(events));
@@ -74,11 +91,11 @@ it("delivers the broadcasts that arrive between two frames as one batch, in arri
 });
 
 it("delivers queued broadcasts without a frame once the fallback timer fires, as in a hidden window", () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const batches: Event[][] = [];
   client.onEvents((events) => batches.push(events));
   FakeSocket.last.receive(upserted("a"));
-  vi.advanceTimersByTime(250);
+  vi.advanceTimersByTime(BROADCAST_FLUSH_FALLBACK_MS);
   expect(batches).toHaveLength(1);
   // The frame that was scheduled is cancelled with the delivery, so nothing arrives twice.
   frame?.();
@@ -86,7 +103,7 @@ it("delivers queued broadcasts without a frame once the fallback timer fires, as
 });
 
 it("answers a request at once, behind the broadcasts that arrived before its reply", async () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const order: string[] = [];
   FakeSocket.last.receive(hello());
   frame!();
@@ -102,7 +119,7 @@ it("answers a request at once, behind the broadcasts that arrived before its rep
 it("fails a request the reconnect cut off in the UI's language, as a closed connection", async () => {
   setLanguage("zh-Hans");
   try {
-    const client = new DaemonClient("ws://test");
+    const client = newClient();
     const reply = client.request({ type: "shutdown" });
     client.reconnect();
     const error = await reply.catch((cause: unknown) => cause);
@@ -117,7 +134,7 @@ it("fails a request the reconnect cut off in the UI's language, as a closed conn
 });
 
 it("keeps waiting for a request queued while connecting once the socket opens and its hello arrives, and sends it", async () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const socket = FakeSocket.last;
   socket.readyState = 0;
   let settled: unknown;
@@ -131,7 +148,7 @@ it("keeps waiting for a request queued while connecting once the socket opens an
   expect(socket.sent).toEqual([]);
   socket.receive(hello());
   const id = (JSON.parse(socket.sent[0]) as { id: string }).id;
-  vi.advanceTimersByTime(10_000);
+  vi.advanceTimersByTime(QUEUED_REQUEST_TIMEOUT_MS * 2);
   await Promise.resolve();
   expect(settled).toBeUndefined();
   socket.receive({ type: "ack", id });
@@ -140,32 +157,32 @@ it("keeps waiting for a request queued while connecting once the socket opens an
 });
 
 it("spends the reconnect budget on a daemon that accepts the socket and closes it before any snapshot", () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const states: string[] = [];
   client.onConnectionChange((state) => states.push(state));
-  for (const delay of [500, 1000]) {
+  for (let attempt = 0; attempt < MAX_RECONNECT_ATTEMPTS; attempt += 1) {
     open(FakeSocket.last);
     drop(FakeSocket.last);
     expect(states.at(-1)).toBe("reconnecting");
-    vi.advanceTimersByTime(delay);
+    vi.advanceTimersByTime(backoff(attempt));
   }
   open(FakeSocket.last);
   drop(FakeSocket.last);
   expect(states.at(-1)).toBe("closed");
   // Nothing is retried on its own once the budget is spent.
   const last = FakeSocket.last;
-  vi.advanceTimersByTime(60_000);
+  vi.advanceTimersByTime(PAST_ANY_RETRY_MS);
   expect(FakeSocket.last).toBe(last);
 });
 
 it("gives a connection that delivered its snapshot the whole budget again when it drops", () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const states: string[] = [];
   client.onConnectionChange((state) => states.push(state));
   // One attempt is spent on a socket that closed before its snapshot.
   open(FakeSocket.last);
   drop(FakeSocket.last);
-  vi.advanceTimersByTime(500);
+  vi.advanceTimersByTime(backoff(0));
   // The next one works, then drops.
   open(FakeSocket.last);
   greet(FakeSocket.last);
@@ -173,17 +190,17 @@ it("gives a connection that delivered its snapshot the whole budget again when i
   drop(FakeSocket.last);
   expect(states.at(-1)).toBe("reconnecting");
   // Both automatic attempts are available again.
-  vi.advanceTimersByTime(500);
+  vi.advanceTimersByTime(backoff(0));
   drop(FakeSocket.last);
   expect(states.at(-1)).toBe("reconnecting");
-  vi.advanceTimersByTime(1000);
+  vi.advanceTimersByTime(backoff(1));
   open(FakeSocket.last);
   greet(FakeSocket.last);
   expect(states.at(-1)).toBe("open");
 });
 
 it("reads a hello of its own generation and goes on to the snapshot", () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const states: string[] = [];
   const received: string[] = [];
   client.onConnectionChange((state) => states.push(state));
@@ -196,7 +213,7 @@ it("reads a hello of its own generation and goes on to the snapshot", () => {
 });
 
 it("closes for good on a hello of another generation, after handing the hello on, and never reconnects", async () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const states: string[] = [];
   const received: Event[] = [];
   client.onConnectionChange((state) => states.push(state));
@@ -211,7 +228,7 @@ it("closes for good on a hello of another generation, after handing the hello on
   expect(close).toHaveBeenCalled();
   expect(states.at(-1)).toBe("incompatible");
   drop(socket);
-  vi.advanceTimersByTime(10_000);
+  vi.advanceTimersByTime(PAST_ANY_RETRY_MS);
   client.reconnect();
   expect(FakeSocket.all).toHaveLength(1);
   expect(states.at(-1)).toBe("incompatible");
@@ -220,7 +237,7 @@ it("closes for good on a hello of another generation, after handing the hello on
 });
 
 it("takes a snapshot with no hello before it as a daemon of another generation", () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const states: string[] = [];
   const received: string[] = [];
   client.onConnectionChange((state) => states.push(state));
@@ -233,20 +250,20 @@ it("takes a snapshot with no hello before it as a daemon of another generation",
 });
 
 it("expects a hello again on every new connection", () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const states: string[] = [];
   client.onConnectionChange((state) => states.push(state));
   open(FakeSocket.last);
   greet(FakeSocket.last);
   drop(FakeSocket.last);
-  vi.advanceTimersByTime(500);
+  vi.advanceTimersByTime(backoff(0));
   open(FakeSocket.last);
   FakeSocket.last.receive(snapshot);
   expect(states.at(-1)).toBe("incompatible");
 });
 
 it("rejects a reply of another type than its request is answered with as an unexpected reply", async () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   FakeSocket.last.receive(hello());
   const reply = client.request({ type: "list_all_processes" });
   const id = (JSON.parse(FakeSocket.last.sent[0]) as { id: string }).id;
@@ -257,7 +274,7 @@ it("rejects a reply of another type than its request is answered with as an unex
 });
 
 it("fails a request made after close at once, as a closed connection", async () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const socket = FakeSocket.last;
   drop(socket);
   // A reconnect was scheduled before the window closed the client for good.
@@ -270,12 +287,12 @@ it("fails a request made after close at once, as a closed connection", async () 
 });
 
 it("reports a Retry as reconnecting until the socket opens with its hello", () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const states: string[] = [];
   client.onConnectionChange((state) => states.push(state));
-  for (const delay of [500, 1000]) {
+  for (let attempt = 0; attempt < MAX_RECONNECT_ATTEMPTS; attempt += 1) {
     drop(FakeSocket.last);
-    vi.advanceTimersByTime(delay);
+    vi.advanceTimersByTime(backoff(attempt));
   }
   drop(FakeSocket.last);
   expect(states.at(-1)).toBe("closed");
@@ -288,7 +305,7 @@ it("reports a Retry as reconnecting until the socket opens with its hello", () =
 });
 
 it("gives every request its own id, across reconnects", () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   FakeSocket.last.receive(hello());
   void client.request({ type: "shutdown" }).catch(() => {});
   client.reconnect();
@@ -307,7 +324,7 @@ const pings = (socket: FakeSocket) =>
     .map((request) => request.id);
 
 it("pings an open connection and keeps it while the daemon answers, without passing the answers on", () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const states: string[] = [];
   client.onConnectionChange((state) => states.push(state));
   const socket = FakeSocket.last;
@@ -315,11 +332,11 @@ it("pings an open connection and keeps it while the daemon answers, without pass
   const heard: Event[] = [];
   client.onEvent((event) => heard.push(event));
   for (let beat = 0; beat < 8; beat += 1) {
-    vi.advanceTimersByTime(15_000);
+    vi.advanceTimersByTime(HEARTBEAT_INTERVAL_MS);
     const id = pings(socket).at(-1)!;
     socket.receive({ type: "ack", id });
   }
-  vi.advanceTimersByTime(250);
+  vi.advanceTimersByTime(HEARTBEAT_TICK_MS);
   expect(pings(socket)).toHaveLength(8);
   expect(new Set(pings(socket)).size).toBe(8);
   expect(heard.filter((event) => event.type === "ack")).toEqual([]);
@@ -328,16 +345,16 @@ it("pings an open connection and keeps it while the daemon answers, without pass
 });
 
 it("takes a connection that falls silent for the heartbeat timeout as lost, with no close from its socket", async () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const states: string[] = [];
   client.onConnectionChange((state) => states.push(state));
   const socket = FakeSocket.last;
   const closed = vi.spyOn(socket, "close");
   greet(socket);
   const reply = client.request({ type: "shutdown" }).catch((cause: unknown) => cause);
-  vi.advanceTimersByTime(40_000);
+  vi.advanceTimersByTime(HEARTBEAT_TIMEOUT_MS - HEARTBEAT_TICK_MS);
   expect(states.at(-1)).toBe("open");
-  vi.advanceTimersByTime(5_000);
+  vi.advanceTimersByTime(HEARTBEAT_TICK_MS);
   expect(states.at(-1)).toBe("reconnecting");
   expect(closed).toHaveBeenCalled();
   expect(await reply).toMatchObject({ code: "connection_closed" });
@@ -345,27 +362,27 @@ it("takes a connection that falls silent for the heartbeat timeout as lost, with
   drop(socket);
   expect(states.filter((state) => state === "reconnecting")).toHaveLength(1);
   // The lost-connection path reconnects once, and the new connection reads the state again.
-  vi.advanceTimersByTime(5_000);
+  vi.advanceTimersByTime(HEARTBEAT_TICK_MS);
   expect(FakeSocket.all).toHaveLength(2);
   greet(FakeSocket.last);
   expect(states.at(-1)).toBe("open");
 });
 
 it("measures the silence afresh after the page's timers were held back", () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const states: string[] = [];
   client.onConnectionChange((state) => states.push(state));
   greet(FakeSocket.last);
   // A machine asleep for a minute: the clock moves on while no timer runs.
-  vi.setSystemTime(Date.now() + 60_000);
-  vi.advanceTimersByTime(5_000);
+  vi.setSystemTime(Date.now() + HEARTBEAT_TIMEOUT_MS + HEARTBEAT_TICK_MS);
+  vi.advanceTimersByTime(HEARTBEAT_TICK_MS);
   expect(states.at(-1)).toBe("open");
-  vi.advanceTimersByTime(45_000);
+  vi.advanceTimersByTime(HEARTBEAT_TIMEOUT_MS);
   expect(states.at(-1)).toBe("reconnecting");
 });
 
 it("fails a request at once when the reconnects after a heartbeat loss are spent and the dead socket never closed", async () => {
-  const client = new DaemonClient("ws://test");
+  const client = newClient();
   const states: string[] = [];
   client.onConnectionChange((state) => states.push(state));
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -373,8 +390,8 @@ it("fails a request at once when the reconnects after a heartbeat loss are spent
     socket.close = () => (socket.readyState = FakeSocket.CLOSING);
     // Greeted but never sent its snapshot, so the connection never earns its reconnect budget back.
     socket.receive(hello());
-    vi.advanceTimersByTime(45_000);
-    vi.advanceTimersByTime(2_000);
+    vi.advanceTimersByTime(HEARTBEAT_TIMEOUT_MS);
+    vi.advanceTimersByTime(backoff(MAX_RECONNECT_ATTEMPTS));
   }
   expect(states.at(-1)).toBe("closed");
   const error = await client.request({ type: "shutdown" }).catch((cause: unknown) => cause);

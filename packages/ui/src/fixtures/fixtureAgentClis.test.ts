@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Agent, AgentAvailability } from "../protocol";
 import { agentCliStatusesOf, agentCliStatusOf, agentCliUpdateOf, snapshotState } from "./builders";
 import type { State } from "../store";
+import { fakeTimers } from "../test/clock";
 import type { Fixture } from "./fixture";
+import { UPDATE_DURATION_MS } from "./fixtureAgentClis";
 import { createFixtureDaemon } from "./fixtureDaemon";
 
 const available = (agent: Agent, availability: AgentAvailability["availability"]): [Agent, AgentAvailability] => [agent, { agent, availability, default_account_dir: null }];
@@ -17,7 +19,6 @@ function daemonWith(fixture: Partial<Fixture> = {}, state: Partial<State> = inst
   return { daemon, status };
 }
 
-afterEach(() => vi.useRealTimers());
 
 describe("the fixture daemon's agent CLI statuses", () => {
   it("starts with an up-to-date status for each installed agent and none for an agent that is not", () => {
@@ -44,19 +45,19 @@ describe("the fixture daemon's update of an agent CLI", () => {
   const stateWith = (...statuses: ReturnType<typeof agentCliStatusOf>[]) => ({ ...installed(), agentCliStatuses: agentCliStatusesOf(statuses) });
 
   it("marks the update running, then leaves the CLI at its latest version", async () => {
-    vi.useFakeTimers();
+    fakeTimers();
     const { daemon, status } = daemonWith({}, stateWith(outdated));
     await daemon.request(update);
     expect(status()).toMatchObject({ installed_version: "2.1.319", update: { state: "running", finished_at: null } });
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(UPDATE_DURATION_MS);
     expect(status()).toMatchObject({ installed_version: "2.1.320", latest_version: "2.1.320", update: { state: "succeeded", error: null, detail: null, finished_at: expect.any(Number) } });
   });
 
   it("ends as the scenario says when it fails, the CLI as it was", async () => {
-    vi.useFakeTimers();
+    fakeTimers();
     const { daemon, status } = daemonWith({ agentCliUpdateFailure: { error: "agent_cli_update_failed", detail: "EACCES" } }, stateWith(outdated));
     await daemon.request(update);
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(UPDATE_DURATION_MS);
     expect(status()).toMatchObject({ installed_version: "2.1.319", update: { state: "failed", error: "agent_cli_update_failed", detail: "EACCES" } });
   });
 

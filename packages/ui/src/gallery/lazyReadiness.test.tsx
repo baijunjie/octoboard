@@ -1,13 +1,20 @@
 // @vitest-environment jsdom
 import React, { act, Suspense, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { retryableLazy } from "../components/hooks/retryableLazy";
 import { observeLazyReadiness, trackSuspenseFallback } from "../components/hooks/lazyReadiness";
 import { useDialogAction } from "../components/dialog/dialogHooks";
 import { RendererBoundary } from "../viewer/code/codeRenderer";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// The budgets `settle` is given are armed on the fake clock, and each test resolves its deferreds by hand: what a test
+// sees depends on what it resolved, never on how long the machine took between arming a budget and resolving.
+beforeEach(() => {
+  fakeTimers();
+});
 
 function deferred<T>() {
   let resolve!: (value: T) => void, reject!: (error: unknown) => void;
@@ -59,13 +66,12 @@ it("waits for delayed lazy content and its committed nested child in otherwise i
 });
 
 it("fails explicitly within the budget if a visible lazy module never loads", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  const budget = 50;
   const Lazy = retryableLazy(() => new Promise<{ default: () => null }>(() => {})).Component;
   const { tracking } = await setup(() => <Suspense fallback={trackSuspenseFallback(null)}><Lazy /></Suspense>);
-  const result = tracking.settle(async () => {}, 50).catch((error: Error) => error.message);
-  await vi.advanceTimersByTimeAsync(50);
-  expect(await result).toBe("Lazy content did not settle within 50ms (1 Suspense boundaries pending)");
+  const result = tracking.settle(async () => {}, budget).catch((error: Error) => error.message);
+  await vi.advanceTimersByTimeAsync(budget);
+  expect(await result).toBe(`Lazy content did not settle within ${budget}ms (1 Suspense boundaries pending)`);
 });
 
 it("discards a suspended view that closes, including a later rejection of its abandoned import", async () => {

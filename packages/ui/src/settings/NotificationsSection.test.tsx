@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import type { NotificationCapability, PlatformAdapter } from "../platform";
 import { errorAlerts } from "../components/alerts/errorAlerts";
@@ -31,8 +31,6 @@ async function mount(notifications: NotificationCapability, host: HostFacts = BR
   const buttons = () => [...container.querySelectorAll("button")].map((button) => button.textContent);
   return { container, buttons };
 }
-
-afterEach(() => act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }));
 
 const base = {
   ensurePermission: vi.fn(() => Promise.resolve(true)),

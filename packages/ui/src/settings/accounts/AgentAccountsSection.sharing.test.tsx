@@ -7,9 +7,11 @@ import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { press } from "../../components/hint/tooltipTestSupport";
+import { FIRST_WRITE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { TEST_AGENT_PROVIDER, TEST_PROVIDERS } from "../../test/testProviders";
 import { account, accountSharing, request, settings } from "./agentAccountsSectionTestState";
 import { buttonNamed, mount, mountSettings, openSettingsOf, sharingSwitches } from "./agentAccountsSectionTestSupport";
+import { fakeTimers } from "../../test/clock";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -286,15 +288,14 @@ describe("the phases of a running change", () => {
 describe("the announcement of the phases", () => {
   it("keeps what was said when the entries phase starts, and speaks again for the other phases", async () => {
     const sharingIn = (phase: "waiting" | "stopping" | "changing" | "resuming"): AccountSharing => ({ account: "codex-work", progress: { share: true, phase, done: 0, total: 3 } });
-    vi.useFakeTimers();
-    onTestFinished(() => { vi.useRealTimers(); });
+    fakeTimers();
     accountSharing.set("codex-work", sharingIn("stopping"));
     const { container, setSharing } = await mountSettings("Codex");
-    act(() => { vi.advanceTimersByTime(300); });
+    act(() => { vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS); });
     const said = () => [...container.querySelectorAll('[role="status"]')].map((node) => node.textContent).find((text) => text?.startsWith("Turning sharing on"));
     expect(said()).toBe("Turning sharing on. Ending idle sessions…");
     setSharing("codex-work", sharingIn("changing"));
-    act(() => { vi.advanceTimersByTime(300); });
+    act(() => { vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS); });
     expect(said()).toBe("Turning sharing on. Ending idle sessions…");
     setSharing("codex-work", sharingIn("resuming"));
     expect(said()).toBe("Turning sharing on. Resuming sessions…");
@@ -305,11 +306,10 @@ describe("the announcement of the phases", () => {
     setLanguage("zh-Hans");
     onTestFinished(() => { act(() => setLanguage(before)); });
     accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase: "stopping", done: 0, total: 3 } });
-    vi.useFakeTimers();
-    onTestFinished(() => { vi.useRealTimers(); });
+    fakeTimers();
     const { container: section } = mount("Codex");
     const container = await openSettingsOf(section, "codex-work", "设置");
-    act(() => { vi.advanceTimersByTime(300); });
+    act(() => { vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS); });
     const said = [...container.querySelectorAll('[role="status"]')].map((node) => node.textContent).find((text) => text?.startsWith("正在开启共享"));
     expect(said).toBe("正在开启共享。正在结束空闲会话…");
     expect(said).not.toContain(". ");
@@ -423,9 +423,9 @@ describe("a change that did not finish", () => {
     settings.accounts[1]!.share_default_config = share;
     settings.accounts[1]!.share_default_config_incomplete = true;
   };
-  /** What the row's status region says once it has had its first write delay (`StatusAnnouncer`). */
+  /** What the row's status region says once it has had its first write delay (`StatusAnnouncer`). Needs `fakeTimers()`. */
   const spoken = async (container: HTMLElement) => {
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+    await act(async () => vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
     return [...container.querySelectorAll("[role=status]")].map((node) => node.textContent).join("");
   };
 
@@ -604,6 +604,7 @@ describe("a change that did not finish", () => {
   });
 
   it("speaks a failure that follows a change it saw run, and not one restated by an unrelated update", async () => {
+    fakeTimers();
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure() });
     const { container, setSharing } = await mountSettings("Codex");
@@ -618,6 +619,7 @@ describe("a change that did not finish", () => {
   });
 
   it("keeps the mark as lasting state for a change asked for here, and leaves the announcing to the error alert dialog", async () => {
+    fakeTimers();
     const { container, setAccount, setSharing } = await mountSettings("Codex");
     let fail!: (error: Error) => void;
     request.mockReturnValueOnce(new Promise((_, reject) => void (fail = reject)));
@@ -635,6 +637,7 @@ describe("a change that did not finish", () => {
   });
 
   it("speaks a change another window starts and ends unfinished, though an earlier change was asked for here", async () => {
+    fakeTimers();
     const { container, setAccount, setSharing } = await mountSettings("Codex");
     let fail!: (error: Error) => void;
     request.mockReturnValueOnce(new Promise((_, reject) => void (fail = reject)));

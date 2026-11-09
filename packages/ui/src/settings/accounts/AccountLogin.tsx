@@ -13,7 +13,7 @@ import { dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore } fro
 /** How long a login that succeeded is kept, for its status region to be announced, before it clears itself: unbroken
  * time with the window attended, started over each time the user comes back, so it is not gone before they are back
  * to hear it. Longer than `AFTER_FOCUS_MOVE_DELAY_MS`, which the announcement waits first. */
-const SUCCESS_SHOWN_MS = 6000;
+export const SUCCESS_SHOWN_MS = 6000;
 
 /** The login of an account (`null` for an agent's default account) when it has succeeded, read from the store as it is
  * now: what the account's `AccountLoginAnnouncer` is given. */

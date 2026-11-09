@@ -16,6 +16,7 @@ import type { Overrides } from "../shortcuts/store";
 import { APP_BEHAVIOR_SWITCHES } from "./booleanSettings";
 import { ImportResult } from "./ImportResult";
 import { documentSettings, openTab, settingGroupsOf, settingLinesAcrossGroups, settingLinesOf } from "./testSupport";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -169,10 +170,7 @@ it("lists the totals as items of their own in every language, with the dot betwe
 });
 
 it("announces a failure to apply the settings once focus has settled, with its title and description only", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    vi.useRealTimers();
-  });
+  fakeTimers();
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
   const settings_error = { code: "path_not_found", params: { path: "/Users/dev/missing" }, message: "no" };
   const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_error, settings_applied: null, accounts: null }} />);

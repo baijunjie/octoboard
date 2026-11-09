@@ -118,11 +118,11 @@ function maskImage(fade: number, { start, end, rtl, width }: Clipped): string | 
  * edge it runs to, then a rapid return to rest before the next pause and run while the pointer stays. The two pauses are
  * named for the run rather than for the text, whose beginning is the far edge of a label clipped at
  * its start. */
-const MARQUEE_SPEED = 60; // px per second
-const MARQUEE_RETURN_DURATION = 200; // ms
-const MARQUEE_INITIAL_DELAY = 600; // ms
-const MARQUEE_PAUSE_REST = 3000; // ms
-const MARQUEE_PAUSE_FAR = 3000;
+export const MARQUEE_SPEED = 60; // px per second
+export const MARQUEE_RETURN_DURATION = 200; // ms
+export const MARQUEE_INITIAL_DELAY = 600; // ms
+export const MARQUEE_PAUSE_REST = 3000; // ms
+export const MARQUEE_PAUSE_FAR = 3000;
 
 /** The label itself, unless a single-label control explicitly owns its hover region. */
 function marqueeScope(element: HTMLElement): HTMLElement {

@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { fakeTimers } from "../../test/clock";
 import type { PlatformAdapter } from "../../platform";
 import type { AccountLogin } from "../../protocol";
 import { trackAccountLogin } from "../../store";
@@ -73,17 +74,12 @@ it("opens nothing for a login whose own CLI opens the page, and does not keep wa
 
 function announcer() {
   const attend = windowAttention();
-  vi.useFakeTimers();
+  fakeTimers();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    try {
-      expect(vi.getTimerCount()).toBe(0);
-    } finally {
-      vi.useRealTimers();
-    }
   });
   const show = (value: AccountLogin | undefined) => act(() => root.render(<AccountLoginAnnouncer login={value} name="Work" />));
   const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
@@ -96,7 +92,7 @@ it("keeps one empty status region through a login, and says nothing for a state 
   show(undefined);
   const region = container.querySelector('[role="status"]');
   show(login({ status: "failed" }));
-  advance(10_000);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 2);
   expect(said()).toBe("");
   expect(container.querySelector('[role="status"]')).toBe(region);
 });
@@ -104,7 +100,7 @@ it("keeps one empty status region through a login, and says nothing for a state 
 it("stays silent for a success already there when it mounts, and names the next one", () => {
   const { show, advance, said } = announcer();
   show(login({ status: "succeeded" }));
-  advance(10_000);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 2);
   expect(said()).toBe("");
   show(undefined);
   show(login({ status: "succeeded" }));
@@ -116,7 +112,7 @@ it("names the account a focus move's delay after the login succeeded, once, and 
   const { container, show, advance, said } = announcer();
   show(undefined);
   const region = container.querySelector('[role="status"]');
-  advance(1000);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS);
   show(login({ status: "succeeded" }));
   advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(said()).toBe("");
@@ -138,7 +134,7 @@ it("holds a success that came while the window was not attended until the user i
   show(undefined);
   attend(false);
   show(login({ status: "succeeded" }));
-  advance(10_000);
+  advance(AFTER_FOCUS_MOVE_DELAY_MS * 2);
   expect(said()).toBe("");
   attend(true);
   advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);

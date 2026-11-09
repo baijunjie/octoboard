@@ -16,8 +16,8 @@ import { itemKeySelector, partSelector, Tab, TabList, TabListContainer, useKeybo
 /** How long after keyboard focus arrives to wait for the scroll that reveals the tab to begin, and how long a
  * scroll has to be quiet before it counts as over. A tooltip is closed by a scroll under it, so one opened
  * before the reveal would be gone at once. */
-const REVEAL_START_MS = 64;
-const REVEAL_QUIET_MS = 100;
+export const REVEAL_START_MS = 64;
+export const REVEAL_QUIET_MS = 100;
 
 /** The actions button the strip (the `root` it is looked for in) gives `agent`'s tab, for a caller that hands focus to
  * it. */

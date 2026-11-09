@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { errorAlerts } from "../alerts/errorAlerts";
 import { useAfterErrorAlert } from "./useAfterErrorAlert";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-afterEach(() => { act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }); });
 
 function mountHook(): { after: ReturnType<typeof useAfterErrorAlert>; unmount: () => void } {
   const container = document.body.appendChild(document.createElement("div"));

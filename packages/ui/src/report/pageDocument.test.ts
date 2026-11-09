@@ -10,6 +10,7 @@ import {
   SUBMIT_MESSAGE_SOURCE,
   SWITCH_MESSAGE_SOURCE,
 } from "./pageDocument";
+import { afterQueuedWork } from "../test/clock";
 
 const NONCE = "0123456789abcdef";
 
@@ -26,6 +27,10 @@ async function render(html: string, isHistory = false, options: PageDocumentOpti
   await new Promise((resolve) => window.addEventListener("load", resolve));
   return { document: window.document, messages, window };
 }
+
+// jsdom delivers a posted message from a 0 ms timer of its own, set when the page posts it, so a timer set after the page
+// acted fires after the delivery: the order of two timers, not a stretch of time anything depends on.
+const delivered = afterQueuedWork;
 
 describe("the report page's default inset", () => {
   // jsdom does not resolve `:where` in its cascade, so this checks the rule's shape rather than the
@@ -89,7 +94,7 @@ describe("the report page's sanitizer", () => {
     const page = "<form><input name=\"who\" value=\"Ada\"><button name=\"choice\" value=\"yes\">Yes</button></form>";
     const live = await render(page);
     live.document.querySelector("button")!.click();
-    await new Promise((resolve) => setTimeout(resolve));
+    await delivered();
     expect(live.messages).toEqual([
       {
         source: SUBMIT_MESSAGE_SOURCE,
@@ -105,7 +110,7 @@ describe("the report page's sanitizer", () => {
     history.document
       .querySelector("form")!
       .dispatchEvent(new history.window.Event("submit", { bubbles: true, cancelable: true }));
-    await new Promise((resolve) => setTimeout(resolve));
+    await delivered();
     expect(history.messages).toEqual([]);
   });
 });
@@ -124,7 +129,7 @@ describe("the report page's key relay", () => {
     const { window, messages } = await render("<p>x</p>", false, { historyKeys });
     expect(press(window, { code: "BracketLeft", metaKey: true }).defaultPrevented).toBe(true);
     expect(press(window, { code: "BracketRight", metaKey: true }).defaultPrevented).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve));
+    await delivered();
     expect(messages).toEqual([
       { source: HISTORY_MESSAGE_SOURCE, backward: true },
       { source: HISTORY_MESSAGE_SOURCE, backward: false },
@@ -135,7 +140,7 @@ describe("the report page's key relay", () => {
     const { window, messages } = await render("<p>x</p>", false, { historyKeys: { back: key("KeyJ", { metaKey: true, shiftKey: true }), forward: key("KeyK", { metaKey: true, shiftKey: true }) } });
     expect(press(window, { code: "KeyJ", metaKey: true, shiftKey: true }).defaultPrevented).toBe(true);
     expect(press(window, { code: "BracketLeft", metaKey: true }).defaultPrevented).toBe(false);
-    await new Promise((resolve) => setTimeout(resolve));
+    await delivered();
     expect(messages).toEqual([{ source: HISTORY_MESSAGE_SOURCE, backward: true }]);
   });
 
@@ -152,7 +157,7 @@ describe("the report page's key relay", () => {
     }
     const elsewhere = await render("<p>x</p>");
     expect(press(elsewhere.window, { code: "BracketLeft", metaKey: true }).defaultPrevented).toBe(false);
-    await new Promise((resolve) => setTimeout(resolve));
+    await delivered();
     expect(messages).toEqual([]);
     expect(elsewhere.messages).toEqual([]);
   });
@@ -161,7 +166,7 @@ describe("the report page's key relay", () => {
     const { window, messages } = await render("<p>x</p>", false, { switchKeys });
     expect(press(window, { code: "Tab", ctrlKey: true }).defaultPrevented).toBe(true);
     expect(press(window, { code: "Tab", ctrlKey: true, shiftKey: true }).defaultPrevented).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve));
+    await delivered();
     expect(messages).toEqual([
       { source: SWITCH_MESSAGE_SOURCE, backward: false },
       { source: SWITCH_MESSAGE_SOURCE, backward: true },
@@ -172,7 +177,7 @@ describe("the report page's key relay", () => {
     const { window, messages } = await render("<p>x</p>", false, { switchKeys });
     expect(press(window, { code: "Tab", ctrlKey: true }).defaultPrevented).toBe(true);
     expect(press(window, { code: "Tab", ctrlKey: true, repeat: true }).defaultPrevented).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve));
+    await delivered();
     expect(messages).toEqual([{ source: SWITCH_MESSAGE_SOURCE, backward: false }]);
   });
 
@@ -190,7 +195,7 @@ describe("the report page's key relay", () => {
     }
     const elsewhere = await render("<p>x</p>", false, { historyKeys });
     expect(press(elsewhere.window, { code: "Tab", ctrlKey: true }).defaultPrevented).toBe(false);
-    await new Promise((resolve) => setTimeout(resolve));
+    await delivered();
     expect(messages).toEqual([]);
     expect(elsewhere.messages).toEqual([]);
   });

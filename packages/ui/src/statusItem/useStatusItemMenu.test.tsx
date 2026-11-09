@@ -18,6 +18,7 @@ import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { UpdatesProvider, useUpdateStore } from "../updates/UpdatesProvider";
 import { useUpdateMenuLabel } from "../updates/useUpdateMenuLabel";
 import type { UpdateStore } from "../updates/updateStore";
+import { fakeTimers } from "../test/clock";
 
 const withIcons = vi.hoisted(() => vi.fn(async (draft: StatusItemMenuDraft, _appearance: "light" | "dark") => ({ ...draft, icons: {} })));
 vi.mock("./statusItemIcons", () => ({ withIcons }));
@@ -176,8 +177,7 @@ it("shows each submenu's current-console default account and follows console swi
 });
 
 it("pushes the menu again when a held window's reset time passes, drawing it full", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const start = Date.UTC(2026, 9, 19, 12);
   vi.setSystemTime(start);
   const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
@@ -202,8 +202,7 @@ it("pushes the menu again when a held window's reset time passes, drawing it ful
 });
 
 it("pushes the menu again at each whole minute of a reading's age, so the age in its header stays current", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const start = Date.UTC(2026, 9, 19, 12);
   vi.setSystemTime(start);
   const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());

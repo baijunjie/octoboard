@@ -11,9 +11,12 @@ import { isolate } from "../i18n/isolate";
 import type { Session } from "../protocol";
 import { accountOf, type ProjectExtra, projectOf, sessionOf } from "../fixtures/builders";
 import type { Daemon, State } from "../store";
-import { parentConsole, project, renderDialog, hub1, buttons, optionElements, choose } from "./sessionDialogTestSupport";
+import { LOCATE_DELAY_MS, parentConsole, project, renderDialog, hub1, buttons, optionElements, choose } from "./sessionDialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
+import { fakeTimers } from "../test/clock";
+import { settleFrames } from "../components/dialog/dialogTestSupport";
+import { focusAfterLoss, MODAL_CLOSE_SETTLE_MS, setFocusAfterModalLoss } from "../components/focus/modalFocus";
 
 
 vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
@@ -68,7 +71,7 @@ function answerRequests(daemon: Daemon, locate: Locate, other?: (body: { type: s
   }) as never);
 }
 
-const settle = async () => act(async () => { await vi.advanceTimersByTimeAsync(300); });
+const settle = async () => act(async () => { await vi.advanceTimersByTimeAsync(LOCATE_DELAY_MS); });
 const locateRequests = (daemon: Daemon) => vi.mocked(daemon.request).mock.calls.filter(([body]) => body.type === "locate_conversation_to_resume").map(([body]) => body);
 const requestsOf = (daemon: Daemon, type: string) => vi.mocked(daemon.request).mock.calls.filter(([body]) => body.type === type).map(([body]) => body);
 const openButton = () => buttons().find((button) => button.textContent === "Open")!;
@@ -83,8 +86,7 @@ const claudeAccounts: Partial<State> = {
  * with the lookup of the conversation answered by `locate` (an Agent record in Claude Code's default
  * account unless given). Timers are faked, as the lookup waits for the typing to rest. */
 function renderForResume(projectOverride: ProjectExtra | null = {}, locate: Locate = record("claude", null), initial: Partial<State> = {}, sessions: Session[] = [hub1]) {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   const rendered = renderDialog(sessions, initial, {}, { kind: "choose" }, projectOverride);
   onTestFinished(() => { act(() => rendered.root.unmount()); rendered.container.remove(); });
   answerRequests(rendered.daemon, locate);
@@ -156,7 +158,6 @@ function mountAlertHost(daemon: Daemon): () => Promise<void> {
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   });
   return async () => {
     const acknowledge = [...document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')].find((button) => button.textContent === "OK");
@@ -193,10 +194,12 @@ it.each([
   expect(document.activeElement).toBe(field);
 });
 
-// A refusal that asks the daemon again leaves nothing to submit while the alert is up, so the Open button the busy
-// dialog gave focus to is disabled when the alert is acknowledged and cannot take focus back; focus goes back to the
+// A refusal that asks the daemon again leaves nothing to submit while the alert is up, so the Open button that held
+// focus while the dialog was busy is disabled when the alert is acknowledged and cannot take focus back; focus goes back to the
 // field wherever it next comes back into the dialog.
 it("returns focus to the field after a refusal that asks again leaves Open disabled when the alert is acknowledged", async () => {
+  // The disabled Open cannot receive restored focus, so the host needs the window's fallback.
+  onTestFinished(setFocusAfterModalLoss(() => focusAfterLoss(() => {})));
   const { daemon } = renderForResume();
   let asked = 0;
   answerRequests(daemon, () => (asked++ === 0 ? Promise.resolve(record("claude", null)) : new Promise(() => {})) as never, () => Promise.reject(
@@ -207,12 +210,16 @@ it("returns focus to the field after a refusal that asks again leaves Open disab
   typeResumeId(UUID);
   await settle();
   const field = resumeField()!;
+  act(() => openButton().focus());
   await submit();
   await act(async () => {});
   expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof CodedError && alert.error.code === "conversation_in_session")).toBe(true);
   expect(openDisabled()).toBe(true);
   expect(document.activeElement?.closest('[role="alertdialog"]')).not.toBeNull();
   await acknowledge();
+  await settleFrames();
+  act(() => void vi.advanceTimersByTime(MODAL_CLOSE_SETTLE_MS));
+  await settleFrames();
   expect(document.activeElement).toBe(field);
 });
 
@@ -580,7 +587,6 @@ it("shows the daemon's reason in the dialog when resuming an interrupted session
   await settle();
   await submit("Resume");
   expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof CodedError && alert.error.code === "unknown_session")).toBe(true);
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   expect(onOpened).not.toHaveBeenCalled();
   expect(onClose).not.toHaveBeenCalled();
 });
@@ -649,7 +655,6 @@ it("keeps the dialog open with the reason when the reopen is refused, without re
   await submit("Reopen");
   // As any refused action of a dialog: the reason goes to the acknowledgement queue.
   expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof CodedError && alert.error.code === "conversation_unresumable")).toBe(true);
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   expect(requestsOf(daemon, "rename_session")).toEqual([]);
   expect(onOpened).not.toHaveBeenCalled();
   expect(onClose).not.toHaveBeenCalled();
@@ -700,7 +705,6 @@ it("reports the open-time refusal of a conversation held elsewhere in the error 
   await settle();
   await submit();
   expect(errorAlerts.getSnapshot().some((alert) => alert.error instanceof CodedError && alert.error.code === "conversation_outside_project")).toBe(true);
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   expect(resumeAlert()).toBeNull();
 });
 

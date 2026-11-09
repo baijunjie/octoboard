@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 
 import { createBrowseLane } from "./lane";
+import { afterQueuedWork } from "../test/clock";
 
 /** A request the test answers itself. */
 function deferred() {
@@ -8,7 +9,8 @@ function deferred() {
   const promise = new Promise<string>((done) => (resolve = done));
   return { promise, resolve };
 }
-const settle = () => new Promise((resolve) => setTimeout(resolve));
+// A timer comes after every microtask the lane's promise chains are on: an order, not a stretch of time.
+const settle = afterQueuedWork;
 
 it("has at most its places out, sending the next in order as one settles", async () => {
   const lane = createBrowseLane(2);

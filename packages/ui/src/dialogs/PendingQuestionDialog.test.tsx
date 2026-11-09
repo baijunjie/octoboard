@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { afterEach, describe, expect, it, onTestFinished } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { focusAfterLoss, setFocusAfterModalLoss } from "../components/focus/modalFocus";
+import { focusAfterLoss, MODAL_CLOSE_SETTLE_MS, setFocusAfterModalLoss } from "../components/focus/modalFocus";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import { Dialog } from "../components/dialog/Dialog";
-import { framesAsTimers, openable, settleFrames } from "../components/dialog/dialogTestSupport";
+import { framesAsTimers, openable, settleFrames, trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { ErrorAlerts } from "../shell/ErrorAlerts";
 import { OpensAnotherDialog } from "../components/dialog/nestedDialogTestSupport";
 import { mountPendingQuestionDialog } from "./pendingQuestionTestSupport";
 import { TextInput } from "../components/form/TextInput";
+import { fakeTimersKeepingFrames } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -88,8 +89,9 @@ describe.each([{ strict: false }, { strict: true }])("raised over another dialog
       const name = document.querySelector('input[aria-label="Name"]')!;
       name.dispatchEvent(Object.assign(new Event("transitionrun", { bubbles: true }), { propertyName: "translate" }));
       act(() => dialog.store.setState(state));
+      const pastMountRefocus = trackMountRefocus();
       await settleFrames();
-      await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+      await pastMountRefocus();
       await settleFrames();
       questionHoldsFocus();
     });
@@ -107,7 +109,6 @@ describe.each([{ strict: false }, { strict: true }])("raised over another dialog
 // alert goes on top, the question waiting under it. A dialog that a press opens, and that opens another from an effect as
 // it mounts, mounts that one in the commit of a question raised in the press's task: the question goes on top.
 describe.each([{ strict: false }, { strict: true }])("(StrictMode: $strict)", ({ strict }) => {
-  afterEach(() => { act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }); });
 
   describe.each(questions)("%s", (_question, state, replaced) => {
     it("raised in the same task as an error alert waits under it, then takes focus once it is acknowledged", async () => {
@@ -118,6 +119,7 @@ describe.each([{ strict: false }, { strict: true }])("(StrictMode: $strict)", ({
         dialog.store.setState(state);
         errorAlerts.report({ message: "Refused" });
       });
+      const pastMountRefocus = trackMountRefocus();
       await settleFrames();
       const [question, alert] = Array.from(document.querySelectorAll<HTMLElement>('[role="alertdialog"]'));
       expect(alert.textContent).toContain("Refused");
@@ -125,10 +127,12 @@ describe.each([{ strict: false }, { strict: true }])("(StrictMode: $strict)", ({
       expect(document.activeElement).toBe(alert);
       expect(question.closest('[aria-hidden="true"], [inert]')).not.toBeNull();
       // Read before acknowledged, past react-aria's half-second refocus of a dialog that mounted with focus outside it.
-      await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+      await pastMountRefocus();
+      // The fallback that follows the alert's close waits MODAL_CLOSE_SETTLE_MS from the acknowledgement.
+      fakeTimersKeepingFrames();
       act(() => errorAlerts.acknowledge());
       await settleFrames();
-      await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
+      act(() => void vi.advanceTimersByTime(MODAL_CLOSE_SETTLE_MS));
       await settleFrames();
       questionHoldsFocus();
     });
@@ -174,14 +178,16 @@ describe.each([{ strict: false }, { strict: true }])("(StrictMode: $strict)", ({
 // on `<body>`. It goes where that dialog's opening focus would have gone, as after an alert acknowledged there.
 describe.each([{ strict: false }, { strict: true }])("closed over a dialog its press opened in the same task (StrictMode: $strict)", ({ strict }) => {
   const formDialog = <Dialog title="Open session" onClose={() => {}} submitLabel="Open" onSubmit={() => {}}><TextInput label="Name" value="" onChange={() => {}} autoFocus /></Dialog>;
-  const closeQuestion = async (store: { setState: (state: Partial<State>) => void }) => {
+  const closeQuestion = async (store: { setState: (state: Partial<State>) => void }, pastMountRefocus: () => Promise<void>) => {
     // Read before answered, past react-aria's half-second refocus of a dialog that mounted with focus outside it.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+    await pastMountRefocus();
+    // The fallback that follows the question's close waits MODAL_CLOSE_SETTLE_MS from the Escape.
+    fakeTimersKeepingFrames();
     act(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
     // A refused session request leaves once the daemon says so.
     act(() => store.setState({ trustPrompts: [], sessionRequests: [] }));
     await settleFrames();
-    await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
+    act(() => void vi.advanceTimersByTime(MODAL_CLOSE_SETTLE_MS));
     await settleFrames();
   };
 
@@ -196,9 +202,10 @@ describe.each([{ strict: false }, { strict: true }])("closed over a dialog its p
         open();
         dialog.store.setState(state);
       });
+      const pastMountRefocus = trackMountRefocus();
       await settleFrames();
       questionHoldsFocus();
-      await closeQuestion(dialog.store);
+      await closeQuestion(dialog.store, pastMountRefocus);
       expect(dialog.onScreen()).toBe(false);
       expect(document.activeElement).toBe(document.querySelector('[role="dialog"] input'));
     });
@@ -211,9 +218,10 @@ describe.each([{ strict: false }, { strict: true }])("closed over a dialog its p
       const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Cancel")!;
       act(() => cancel.focus());
       act(() => dialog.store.setState(state));
+      const pastMountRefocus = trackMountRefocus();
       await settleFrames();
       questionHoldsFocus();
-      await closeQuestion(dialog.store);
+      await closeQuestion(dialog.store, pastMountRefocus);
       expect(dialog.onScreen()).toBe(false);
       expect(document.activeElement).toBe(cancel);
     });

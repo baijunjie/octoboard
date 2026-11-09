@@ -26,7 +26,6 @@ const hub = sessionOf("s-hub", parent.id, undefined, "Hub", "idle");
 const raised = () => errorAlerts.getSnapshot().map((alert) => alert.error);
 
 function mount(initial: Partial<State> = {}) {
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   const daemon = testDaemon({
     state: initial,
     request: vi.fn(async () => ({ type: "session_opened", id: null, session: sessionOf("s-new", parent.id, project.id, "", "idle") })) as Daemon["request"],

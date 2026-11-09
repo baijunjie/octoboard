@@ -15,14 +15,22 @@ import { ChangeBodiesError, type ViewerChangeSide, type ViewerContent, type View
 import { diffLayout } from "./code/diffLayout";
 import { FileViewer } from "./FileViewer";
 import type { ViewerNavigation } from "./viewerNavigation";
+import { framesAsTimers, settleFrames } from "../components/dialog/dialogTestSupport";
 import { detailsButton } from "../components/alerts/detailsTestSupport";
 import { enter, leave, openTooltip, press, tap } from "../components/hint/tooltipTestSupport";
 import { markNames, ViewerHost } from "./viewerTestSupport";
 import { rawFailureText } from "../errors/errorText";
+import { LAZY_IMPORT_TIMEOUT_MS, settleLazyImport } from "../test/lazyImport";
 import { viewerErrorText } from "./viewerError";
 import { wordWrap } from "./code/wordWrap";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// Preference reload tests reset the module registry. Lazy Markdown must share the host's real error queue and
+// error class identity; Vitest retains these factories' real exports across resetModules().
+vi.mock("../components/alerts/errorAlerts", async (importOriginal) => importOriginal());
+vi.mock("../errors/actionableError", async (importOriginal) => importOriginal());
 
 // The rendering library does not run under jsdom; a stand-in shows the text it is handed, which is
 // what these tests look at, and reports it drawn as soon as it is mounted unless `drawing.held`.
@@ -102,8 +110,6 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root.unmount());
-  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  vi.useRealTimers();
   container.remove();
 });
 
@@ -140,13 +146,6 @@ it.each(["error", "conflict", "change"] as const)("does not repeat the header pa
   // A screen state: shown on the screen and nowhere else.
   expect(errorAlerts.getSnapshot()).toEqual([]);
 });
-
-// The code surface draws through a lazily imported renderer. The import settles several microtask
-// hops after the first render that needs it (the module load, then two `.then`s), so a bare `await`
-// does not reach it; a timer does. Until it lands the tree shows a fallback, so a test that reads the
-// code surface waits here, inside `act`, leaving React no retry to make on its own. It stays out of
-// `show`, since tests under fake timers would never see a real timer fire.
-const settled = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
 
 const dialog = () => document.querySelector<HTMLElement>("[role=dialog]");
 // The view controls are icon buttons named for what pressing does, so a control is found by the name
@@ -206,13 +205,14 @@ it.each([
 });
 
 it("gives focus back to what had it when the viewer closes", async () => {
+  framesAsTimers("pointer");
   show(undefined);
   const opener = document.querySelector<HTMLButtonElement>("button")!;
   act(() => opener.focus());
   show(binary);
   expect(dialog()?.contains(document.activeElement)).toBe(true);
   show(undefined);
-  await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+  await settleFrames();
   expect(document.activeElement).toBe(opener);
 });
 
@@ -231,7 +231,8 @@ it("shows an SVG through an image, and as text when it cannot be decoded, never 
   expect(image.length).toBe(1);
 
   act(() => image[0].dispatchEvent(new Event("error")));
-  await settled();
+  // Its text is shown by the lazily loaded renderer.
+  await settleLazyImport();
   expect(markNames(dialog()!)).toEqual(["This image cannot be displayed, so its text is shown instead."]);
   expect(document.querySelector("img")).toBeNull();
   expect(document.querySelector("[data-renderer]")?.textContent).toBe(svg);
@@ -265,7 +266,7 @@ it("shows a read failure the viewer opened with in the empty-state shape, withou
 });
 
 it("announces a read failure that arrives as the viewer opens after the dialog's focus move, title and reason only", () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const loading: ViewerSubject = { ...failed, content: { state: "loading" } };
   show(loading);
   expect(dialog()?.querySelector('[data-slot="empty-state"]')).toBeNull();
@@ -282,7 +283,7 @@ it("announces a read failure that arrives as the viewer opens after the dialog's
 });
 
 it("announces at once a read failure that arrives after moving to another file", () => {
-  vi.useFakeTimers();
+  fakeTimers();
   show(binary);
   show({ ...failed, content: { state: "loading" } });
   show(failed);
@@ -315,14 +316,14 @@ it("shows it is loading until the renderer has drawn the code", async () => {
   drawing.held = true;
   try {
     show(code);
-    await settled();
+    await settleLazyImport();
     expect(document.querySelector("[data-renderer]")).not.toBeNull();
     expect(loading()).not.toBeNull();
   } finally {
     drawing.held = false;
   }
   show({ ...code, key: "u", path: "src/u.ts" });
-  await settled();
+  await settleLazyImport();
   expect(loading()).toBeNull();
 });
 
@@ -336,18 +337,19 @@ it.each([
     path: "src/c.ts",
     content: { state: "change", change: { old: offered ? side : { state: "absent" }, new: side, patch } },
   });
-  await settled();
+  await settleLazyImport();
   expect(layoutToggles().length > 0).toBe(offered);
 });
 
 // git writes a type change as a removal and an addition; the viewer draws them as one diff, framed
 // once and with the layout choice, like any change.
-it("draws a type change as one diff with the layout choice", () => {
+it("draws a type change as one diff with the layout choice", async () => {
   const file: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
   const link: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "symlink" };
   const patch =
     "diff --git a/src/c.ts b/src/c.ts\ndeleted file mode 100644\n@@ -1 +0,0 @@\n-a\ndiff --git a/src/c.ts b/src/c.ts\nnew file mode 120000\n@@ -0,0 +1 @@\n+b\n";
   show({ key: "tc", path: "src/c.ts", content: { state: "change", change: { old: file, new: link, patch } } });
+  await settleLazyImport();
   expect(dialog()?.querySelectorAll("[data-layout]")).toHaveLength(1);
   expect(dialog()?.querySelectorAll("[role=region]")).toHaveLength(1);
   expect(layoutToggles()).toHaveLength(1);
@@ -362,8 +364,7 @@ it("shows the content of a change with no lines to draw", async () => {
   const loadBodies = async () => ({ old: "kept\n", new: "kept\n" });
   const patch = "diff --git a/f b/g\nsimilarity index 100%\nrename from f\nrename to g\n";
   show({ key: "r", path: "g", content: { state: "change", change: { old: side("f"), new: side("g"), patch, loadBodies } } });
-  await settled();
-  expect(markNames(dialog()!)).toEqual(["Renamed without changes to its content."]);
+  await vi.waitFor(() => expect(markNames(dialog()!)).toEqual(["Renamed without changes to its content."]));
   expect(dialog()?.textContent).toContain("kept");
 });
 
@@ -373,8 +374,7 @@ it("shows no content for a change whose bodies differ from what its patch says",
   const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
   const loadBodies = async () => ({ old: "cleaned\n", new: "raw\n" });
   show({ key: "c", path: "f", content: { state: "change", change: { old: side("f"), new: side("f"), patch: "", loadBodies } } });
-  await settled();
-  expect(dialog()?.textContent).toContain("No differences");
+  await vi.waitFor(() => expect(dialog()?.textContent).toContain("No differences"));
   expect(dialog()?.textContent).not.toContain("raw");
 });
 
@@ -382,8 +382,7 @@ it("falls back to saying nothing changed when that content cannot be read", asyn
   const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", "git failed"));
   show({ key: "e", path: "f", content: { state: "change", change: { old: side("f"), new: side("f"), patch: "", loadBodies } } });
-  await settled();
-  expect(markNames(dialog()!)).toEqual([`Could not show this file's content. ${isolate("git failed")}`]);
+  await vi.waitFor(() => expect(markNames(dialog()!)).toEqual([`Could not show this file's content. ${isolate("git failed")}`]));
   expect(dialog()?.textContent).toContain("No differences");
 });
 
@@ -398,8 +397,7 @@ it.each([
   const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
   const loadBodies = () => Promise.reject(failure());
   show({ key: "internal", path: "f", content: { state: "change", change: { old: side("f"), new: side("f"), patch: "", loadBodies } } });
-  await settled();
-  expect(markNames(dialog()!)).toEqual(["Could not show this file's content."]);
+  await vi.waitFor(() => expect(markNames(dialog()!)).toEqual(["Could not show this file's content."]));
   tap(dialog()!.querySelector("[data-status-mark]")!, "Enter");
   const popover = document.querySelector("[data-status-mark-popover] [role=dialog]");
   expect(popover?.getAttribute("aria-label")).toBe("Warning");
@@ -414,8 +412,7 @@ it.each([false, true])("does not repeat the path when unchanged content fails to
   const message = viewerErrorText(t, "en", new CodedError("gone", "file_not_found", { path }), path, NO_RECORDS);
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message));
   show({ key: "missing-content", path, content: { state: "change", change: { old: side(renamed ? "src/old.ts" : path), new: side(path), patch: "", loadBodies } } });
-  await settled();
-  expect(markNames(dialog()!)).toEqual([`Could not show this file's content. ${isolate(message)}`]);
+  await vi.waitFor(() => expect(markNames(dialog()!)).toEqual([`Could not show this file's content. ${isolate(message)}`]));
   expect(dialog()?.textContent?.match(/src\/gone\.ts/g)).toHaveLength(1);
 });
 
@@ -425,8 +422,7 @@ it("sets a path in the cause of a failed read of the unchanged content as a chip
   const message = viewerErrorText(t, "en", new CodedError("gone", failure.code, failure.params), "f", NO_RECORDS);
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message, undefined, failure));
   show({ key: "chip", path: "f", content: { state: "change", change: { old: side, new: side, patch: "", loadBodies } } });
-  await settled();
-  expect(markNames(dialog()!)).toEqual([`Could not show this file's content. ${isolate(message)}`]);
+  await vi.waitFor(() => expect(markNames(dialog()!)).toEqual([`Could not show this file's content. ${isolate(message)}`]));
   tap(dialog()!.querySelector("[data-status-mark]")!, "Enter");
   const popover = document.querySelector("[data-status-mark-popover] [role=dialog]");
   expect(popover?.querySelector("[data-inline-reference]")?.textContent).toBe("src/other.ts");
@@ -438,7 +434,7 @@ it("does not repeat the path in an expansion failure", async () => {
   const message = viewerErrorText(t, "en", new CodedError("gone", "file_not_found", { path }), path, NO_RECORDS);
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message));
   show({ key: "missing-lines", path, content: { state: "change", change: { old: side, new: side, patch: "@@ -1 +1 @@\n-a\n+b\n", loadBodies } } });
-  await settled();
+  await settleLazyImport();
   await act(async () => dialog()!.querySelector<HTMLButtonElement>("[data-report=read-failed]")!.click());
   expect(markNames(dialog()!)).toEqual([`Could not read the unmodified lines. ${isolate(message)}`]);
   expect(dialog()?.textContent?.match(/src\/gone\.ts/g)).toHaveLength(1);
@@ -452,7 +448,7 @@ it("offers no expansion to a joined removal and addition", async () => {
     "diff --git a/f b/f\ndeleted file mode 100644\n@@ -1 +0,0 @@\n-a\ndiff --git a/f/g b/f/g\nnew file mode 100644\n@@ -0,0 +1 @@\n+b\n";
   const loadBodies = async () => ({ old: "a\n", new: "b\n" });
   show({ key: "nested", path: "f/g", content: { state: "change", change: { old: file("f"), new: file("f/g"), patch, loadBodies } } });
-  await settled();
+  await settleLazyImport();
   expect(dialog()?.querySelector("[data-expandable]")?.getAttribute("data-expandable")).toBe("false");
 });
 
@@ -462,7 +458,7 @@ it("offers expansion to a rename below its own path drawn from one section", asy
   const patch = "diff --git a/f b/f/g\nindex 1111111..2222222 100644\n--- a/f\n+++ b/f/g\n@@ -1 +1 @@\n-a\n+b\n";
   const loadBodies = async () => ({ old: "a\n", new: "b\n" });
   show({ key: "nested-one", path: "f/g", content: { state: "change", change: { old: file("f"), new: file("f/g"), patch, loadBodies } } });
-  await settled();
+  await settleLazyImport();
   expect(dialog()?.querySelector("[data-expandable]")?.getAttribute("data-expandable")).toBe("true");
   expect(layoutToggles()).toHaveLength(1);
 });
@@ -504,7 +500,7 @@ it("draws a one-sided diff unified even when split was chosen for another", asyn
   });
   const layout = () => dialog()?.querySelector("[data-layout]")?.getAttribute("data-layout");
   show(change("@@ -1 +1 @@\n-a\n+b\n", side));
-  await settled();
+  await settleLazyImport();
   act(() => {
     controlNamed("Show split diff")[0].click();
   });
@@ -528,7 +524,7 @@ it("offers expansion only to a change that can be expanded, and says why one did
   });
   const expandable = () => dialog()?.querySelector("[data-expandable]")?.getAttribute("data-expandable");
   show(change("plain", false));
-  await settled();
+  await settleLazyImport();
   expect(expandable()).toBe("false");
   show(change("expandable", true));
   expect(expandable()).toBe("true");
@@ -557,7 +553,7 @@ it("shows the raw patch when the diff cannot be rendered", async () => {
       path: "src/c.ts",
       content: { state: "change", change: { old: side, new: side, patch: "@@ -1,3 +1,3 @@ unrenderable\n a\n+b\n" } },
     });
-    await settled();
+    await settleLazyImport();
     expect(markNames(dialog()!)).toEqual(["Shown as a plain patch because the diff could not be rendered."]);
     expect(dialog()?.querySelector("pre")?.textContent).toContain("unrenderable");
   } finally {
@@ -574,7 +570,7 @@ it("says a rendering failure once, as a status, with a mark that holds the same 
       path: "src/c.ts",
       content: { state: "change", change: { old: side, new: side, patch: "@@ -1,3 +1,3 @@ unrenderable\n a\n+b\n" } },
     });
-    await settled();
+    await settleLazyImport();
     const sentence = "Shown as a plain patch because the diff could not be rendered.";
     expect(markNames(dialog()!)).toEqual([sentence]);
     expect(dialog()!.querySelector('[data-slot="alert-root"]')).toBeNull();
@@ -587,7 +583,7 @@ it("says a rendering failure once, as a status, with a mark that holds the same 
 const statuses = () => [...dialog()!.querySelectorAll("[role=status]")].map((status) => status.textContent);
 
 it("announces a conflict's read failure once, as an alert on its pane, with the delay of any read failure", () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const conflict = (content: Partial<Extract<ViewerContent, { state: "conflict" }>>): ViewerSubject => ({
     key: "k",
     path: "src/gone.ts",
@@ -606,7 +602,7 @@ it("announces a conflict's read failure once, as an alert on its pane, with the 
 });
 
 it("speaks a notice that appears after the first paint once, and empties its region once it has been read", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const svg = "<svg xmlns='http://www.w3.org/2000/svg'/>";
   const image: ViewerSubject = { key: "s", path: "logo.svg", content: { state: "file", body: { kind: "image", mediaType: "image/svg+xml", url: "data:image/svg+xml,x", size: 3, text: svg } } };
   show(image);
@@ -621,7 +617,7 @@ it("speaks a notice that appears after the first paint once, and empties its reg
 });
 
 it("empties the unchanged note's region once it has been read", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
   const loadBodies = async () => ({ old: "kept\n", new: "kept\n" });
   const patch = "diff --git a/f b/g\nsimilarity index 100%\nrename from f\nrename to g\n";
@@ -638,7 +634,7 @@ it("puts each side's image notice beside that side's heading, and a single image
   const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file", body: { kind: "image", mediaType: "image/svg+xml", url: `data:image/svg+xml,${path}`, size: 3, text: svg } });
   show({ key: "i", path: "logo.svg", content: { state: "change", change: { old: side("a"), new: side("b"), patch: "Binary files differ" } } });
   act(() => void document.querySelectorAll("img")[0].dispatchEvent(new Event("error")));
-  await settled();
+  await settleLazyImport();
   const sections = dialog()!.querySelectorAll("section");
   expect(markNames(sections[0])).toEqual(["This image cannot be displayed, so its text is shown instead."]);
   expect(markNames(sections[1])).toEqual([]);
@@ -649,7 +645,7 @@ it("stands the marks after the path, outside the path's own fade", async () => {
   const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", "git failed"));
   show({ key: "order", path: "f", content: { state: "change", change: { old: side("f"), new: side("f"), patch: "", loadBodies } } });
-  await settled();
+  await settleLazyImport();
   const detail = dialog()!.querySelector("[data-viewer-description]")!;
   const mark = detail.querySelector("[data-status-mark]")!;
   const pathText = [...detail.querySelectorAll("[dir=ltr]")].find((element) => element.textContent === "f")!;
@@ -663,16 +659,16 @@ it("orders the marks failed, then warned, then notes, whichever came first", asy
   const loadBodies = async () => ({ old: "a\n", new: "b\n" });
   const patch = "@@ -1 +1 @@\n-a\n\\ No newline at end of file\n+b\n";
   show({ key: "marks", path: "f", content: { state: "change", change: { old: side, new: side, patch, loadBodies } } });
-  await settled();
+  await settleLazyImport();
   expect(markNames(dialog()!)).toEqual(["The old version has no newline at its end."]);
   act(() => void dialog()!.querySelector<HTMLButtonElement>("[data-report=failed]")!.click());
   expect(markNames(dialog()!)).toEqual([`Could not read the unmodified lines. ${isolate("No luck.")}`, "The old version has no newline at its end."]);
 });
 
 it("says a lost connection in neutral text, not as a failure", () => {
-  vi.useFakeTimers();
+  fakeTimers();
   show({ key: "d", path: "src/d.ts", content: { state: "disconnected", what: "file" } });
-  act(() => void vi.advanceTimersByTime(1600));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(document.querySelector("[role=alert]")).toBeNull();
   expect(dialog()?.textContent).not.toContain("Could not open this file");
   // The stand-in is hidden from screen readers, so the status region says the whole state, not
@@ -795,7 +791,7 @@ it("shows no stage tag for an untracked, conflicted or compared change, and the 
 });
 
 it("says a conflict's kind on the status badge's tooltip and after the heading's name, with no mark of its own", () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const body = { kind: "text", text: "x\n", size: 2 } as const;
   show({ key: "c", path: "src/m.ts", content: { state: "conflict", conflict: "Both sides modified this file.", body } });
   expect(markNames(dialog()!)).toEqual([]);
@@ -911,7 +907,7 @@ it("has no status chip for a file, and none for a loading change whose caller gi
 it("opens later diffs in the layout last chosen, and stores it", async () => {
   const layout = () => dialog()?.querySelector("[data-layout]")?.getAttribute("data-layout");
   show(modified("src/a.ts"));
-  await settled();
+  await settleLazyImport();
   expect(layout()).toBe("unified");
   act(() => {
     controlNamed("Show split diff")[0].click();
@@ -929,8 +925,11 @@ it("reports a user-triggered external Markdown link failure", async () => {
   const cause = new Error("Browser launch failed");
   const links = { open: vi.fn(async () => { throw cause; }) };
   show({ key: "document-link", path: "README.md", content: { state: "file", body: { kind: "text", text: "[Documentation](https://example.com/docs)", size: 48 } } }, undefined, { links, notifications: { error, notice: vi.fn() } });
-  // A cold document renderer can take longer to load than a fixed polling budget allows.
-  await act(async () => { await import("./markdown/MarkdownDocument"); });
+  // The link is the document's own once its renderer is in; a cold import can take seconds.
+  await vi.waitFor(async () => {
+    await settleLazyImport();
+    expect(document.querySelector('[role=region] a[target=_blank][href="https://example.com/docs"]')).not.toBeNull();
+  }, { timeout: LAZY_IMPORT_TIMEOUT_MS });
   await act(async () => document.querySelector<HTMLAnchorElement>('a[href="https://example.com/docs"]')!.click());
   expect(links.open).toHaveBeenCalledExactlyOnceWith("https://example.com/docs");
   expect(error).toHaveBeenCalledExactlyOnceWith("The link did not open in a browser. Its address is shown below.");
@@ -951,14 +950,14 @@ it("reads the stored layout, and falls back to unified for anything else", async
 // loading and the lost connection are said from a status region that is mounted empty, says its
 // first text after the dialog's own focus announcement, and stays while the content changes.
 it("says loading and a lost connection from one status region that stays mounted", () => {
-  vi.useFakeTimers();
+  fakeTimers();
   show({ key: "l", path: "src/l.ts", content: { state: "loading" } });
   const region = dialog()!.querySelector("div[role=status]:not([aria-hidden])")!;
   expect(region.textContent).toBe("");
   expect(dialog()!.querySelectorAll("div[role=status]:not([aria-hidden])")).toHaveLength(1);
-  act(() => void vi.advanceTimersByTime(1400));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
   expect(region.textContent).toBe("");
-  act(() => void vi.advanceTimersByTime(200));
+  act(() => void vi.advanceTimersByTime(1));
   expect(region.textContent).toBe("Loading…");
 
   show({ key: "d", path: "src/l.ts", content: { state: "disconnected", what: "file" } });
@@ -971,10 +970,10 @@ it("says loading and a lost connection from one status region that stays mounted
 });
 
 it("says nothing for a loading that ends before the first text is written", () => {
-  vi.useFakeTimers();
+  fakeTimers();
   show({ key: "q", path: "src/q.ts", content: { state: "loading" } });
   show({ key: "q", path: "src/q.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } });
-  act(() => void vi.advanceTimersByTime(1600));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(dialog()!.querySelector("div[role=status]:not([aria-hidden])")!.textContent).toBe("");
 });
 
@@ -984,7 +983,7 @@ it("wraps nothing by default, then wraps files and diffs alike once chosen, and 
   const wrapped = () => dialog()?.querySelector("[data-renderer]")?.getAttribute("data-wrap");
   const toggle = () => wrapToggles()[0];
   show({ key: "w", path: "src/w.ts", content: { state: "file", body: { kind: "text", text: "a\n", size: 2 } } });
-  await settled();
+  await settleLazyImport();
   expect(wrapped()).toBe("false");
   expect(toggle().getAttribute("aria-pressed")).toBe("false");
   expect(toggle().closest("[data-viewer-description]")).not.toBeNull();
@@ -994,7 +993,7 @@ it("wraps nothing by default, then wraps files and diffs alike once chosen, and 
   expect(toggle().getAttribute("aria-label")).toBe("Do not wrap lines");
   expect(localStorage.getItem(PREFERENCE_KEYS.wordWrap)).toBe("true");
   show(modified("src/b.ts"));
-  await settled();
+  await settleLazyImport();
   expect(wrapped()).toBe("true");
   expect(toggle().getAttribute("aria-pressed")).toBe("true");
 });
@@ -1038,8 +1037,7 @@ it.each([
     if (oldFails) images[0].dispatchEvent(new Event("error"));
     if (newFails) images[1].dispatchEvent(new Event("error"));
   });
-  await settled();
-  expect(wrapToggles()).toHaveLength(expected);
+  await vi.waitFor(() => expect(wrapToggles()).toHaveLength(expected));
 });
 
 it("offers no wrap choice where there is no code", () => {
@@ -1069,7 +1067,7 @@ const textFile = (path: string, text: string, host?: ViewerSubject["host"]): Vie
 it("offers File manager and Default application last in the controls, on a subject with a place on the host", async () => {
   const request = vi.fn(async () => ({ type: "ack", id: null }) as never);
   show(textFile("src/a.ts", "x", { project: "p", worktree: "w", path: "src/a.ts" }), undefined, { clipboard: { writeText: async () => {} }, request });
-  await settled();
+  await settleLazyImport();
   const group = dialog()!.querySelector("[data-viewer-last-details]")!.nextElementSibling!;
   const labels = [...group.querySelectorAll("button")].map((b) => b.getAttribute("aria-label"));
   expect(labels.slice(-2)).toEqual(["Open in file manager", "Open in default application"]);
@@ -1084,26 +1082,26 @@ it("offers File manager and Default application last in the controls, on a subje
 it("sends no worktree for a file of the project's own directory, and offers the buttons for nothing without a host path", async () => {
   const request = vi.fn(async () => ({ type: "ack", id: null }) as never);
   show(textFile("a.ts", "x", { project: "p", path: "a.ts" }), undefined, { request });
-  await settled();
+  await settleLazyImport();
   act(() => button("Open in default application").click());
   expect(request).toHaveBeenCalledWith({ type: "open_project_path", project: "p", path: "a.ts" });
   show(textFile("b.ts", "x"), undefined, { request });
-  await settled();
+  await settleLazyImport();
   expect(document.querySelector('button[aria-label="Open in file manager"]')).toBeNull();
   expect(document.querySelector('button[aria-label="Open in default application"]')).toBeNull();
 });
 
 it("hands a line to the code it shows, and opens a Markdown file's source at one", async () => {
   show(textFile("a.ts", "one\ntwo"), undefined, {}, 2);
-  await settled();
+  await settleLazyImport();
   expect(dialog()!.querySelector("[data-line-asked]")?.getAttribute("data-line-asked")).toBe("2");
   // The document has no lines, so a line asks for the source, whatever the saved choice is.
   localStorage.clear();
   show(textFile("README.md", "# Title\ntext"), undefined, {}, 2);
-  await settled();
+  await settleLazyImport();
   expect(dialog()!.querySelector("[data-line-asked]")?.getAttribute("data-line-asked")).toBe("2");
   show(textFile("NOTES.md", "# Title\ntext"));
-  await settled();
+  await settleLazyImport();
   expect(dialog()!.querySelector("[data-line-asked]")).toBeNull();
 });
 
@@ -1111,12 +1109,12 @@ it("brings a line into view once for each file and line asked for, however often
   scrolls.toLine.mockClear();
   const subject = textFile("a.ts", "one\ntwo\nthree");
   show(subject, undefined, {}, 2);
-  await settled();
+  await settleLazyImport();
   show(subject, undefined, {}, 2);
   act(() => wordWrap.set(true));
-  await settled();
+  await settleLazyImport();
   expect(scrolls.toLine.mock.calls.map(([, line]) => line)).toEqual([2]);
   show(subject, undefined, {}, 3);
-  await settled();
+  await settleLazyImport();
   expect(scrolls.toLine.mock.calls.map(([, line]) => line)).toEqual([2, 3]);
 });

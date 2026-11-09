@@ -4,6 +4,26 @@ import type React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
+import { waitOnRealClock } from "../../test/clock";
+
+/** How long react-aria ignores a mouse's hover after a touch press, taking it for the emulated mouse
+ * events iOS sends after a tap. Taken from react-aria 3.52, `useHover`
+ * (`setGlobalIgnoreEmulatedMouseEvents`); recheck it on an upgrade. */
+const TOUCH_HOVER_SUPPRESS_MS = 500;
+
+/** How long react-aria keeps its tooltips warm after one closes, opening the next with no delay.
+ * Taken from react-stately 3.50, `useTooltipTriggerState` (`TOOLTIP_COOLDOWN`), which no tooltip
+ * here lengthens with a longer `closeDelay`; recheck it on an upgrade. */
+const TOOLTIP_COOLDOWN_MS = 500;
+
+/** react-stately 3.50 `useTooltipTriggerState`'s default `TOOLTIP_DELAY`, used for control tooltips when HeroUI's CSS
+ * delay is missing under jsdom. Recheck it on an upgrade. */
+export const CONTROL_TOOLTIP_DELAY_MS = 1500;
+
+/** Closes an open tooltip while its trigger is still mounted, arming react-stately's global warm-up cooldown. */
+export function closeOpenTooltip(): void {
+  if (openTooltip()) act(() => void document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+}
 
 /**
  * A pointer event of a real mouse. React raises `onPointerEnter` / `onPointerLeave` from
@@ -50,8 +70,22 @@ export function press(element: Element, pointerType: "mouse" | "touch" | "pen" =
     element.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, detail: 1 }));
   });
   if (pointerType !== "touch") return;
-  if (vi.isFakeTimers()) act(() => void vi.advanceTimersByTime(600));
-  else onTestFinished(() => new Promise((resolve) => setTimeout(resolve, 600)));
+  if (vi.isFakeTimers()) act(() => void vi.advanceTimersByTime(TOUCH_HOVER_SUPPRESS_MS));
+  else onTestFinished(() => waitOnRealClock(TOUCH_HOVER_SUPPRESS_MS));
+}
+
+/**
+ * Waits, on the real clock, until react-aria's tooltips are cold again, for a test that counts on a
+ * tooltip still waiting out its delay. Call it first, before faking any timers.
+ *
+ * The warm-up is a window-wide singleton the test cannot reset or fake: closing any tooltip leaves
+ * it set for `TOOLTIP_COOLDOWN_MS` on whichever clock was real when it closed, during which the next
+ * tooltip opens at once. Without this wait such a test passes alone and fails after any test that
+ * closed a tooltip.
+ */
+export async function tooltipsCooledDown(): Promise<void> {
+  if (vi.isFakeTimers()) throw new Error("tooltipsCooledDown waits on the real clock: call it before vi.useFakeTimers()");
+  await act(() => waitOnRealClock(TOOLTIP_COOLDOWN_MS));
 }
 
 /** A click with no pointer behind it, which react-aria reads as a virtual press: what assistive
@@ -81,29 +115,19 @@ export function openTooltip(): Element | null {
 /**
  * Renders `element` into a container of its own and returns that container. The root is unmounted
  * when the test ends, not merely taken out of the document: the unmount runs the effect cleanups,
- * which is what stops a tooltip's delay still counting down after the test.
+ * which is what stops a tooltip's delay still counting down after the test. An open tooltip is closed first: unmount
+ * alone leaves react-stately's global warm-up set without arming its cooldown.
  */
 export function mountForTooltip(element: React.ReactElement): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
+    closeOpenTooltip();
     act(() => root.unmount());
     container.remove();
   });
   act(() => root.render(element));
   return container;
-}
-
-/**
- * Fake timers for the length of the test, so a tooltip's delay can be run out and nothing can be
- * left counting down. Returns the call that runs the pending timers out.
- */
-export function withFakeTimers(): () => void {
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    vi.useRealTimers();
-  });
-  return () => act(() => void vi.runOnlyPendingTimers());
 }
 
 /** The mounted indicator's outermost element — the tooltip's trigger where it has one — which is

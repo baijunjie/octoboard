@@ -2,13 +2,14 @@
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
-import { enter, leave, openTooltip, withFakeTimers } from "../../components/hint/tooltipTestSupport";
+import { enter, leave, openTooltip, tooltipsCooledDown } from "../../components/hint/tooltipTestSupport";
 import { isolate } from "../../i18n/isolate";
 import type { ChangeEntry, ChangeSide } from "../../protocol";
 import type { StatusKey } from "../../viewer/statusMarks";
 import { change, changeViewFixture, mountRows, rowOf } from "../browserTestSupport";
 import { ChangeList } from "./ChangeList";
 import { changeItems } from "./changes";
+import { fakeTimers, runOutTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -29,7 +30,7 @@ const cases: { status: StatusKey; letter: string; word: string; name: string; en
 ];
 
 function render(layout: "flat" | "tree", entries: ChangeEntry[] = cases.map((c) => c.entry)) {
-  const settle = withFakeTimers();
+  fakeTimers();
   const container = mountRows(
     <ChangeList
       items={changeItems(entries)}
@@ -42,8 +43,8 @@ function render(layout: "flat" | "tree", entries: ChangeEntry[] = cases.map((c) 
     { clipboard: { writeText: async () => {} } },
   );
   // The list's status region delays its first write by one timer.
-  settle();
-  return { container, settle };
+  runOutTimers();
+  return { container };
 }
 const letterOf = (row: HTMLElement) => row.querySelector<HTMLElement>("[data-variant=soft]")!;
 const press = (element: HTMLElement, key: string) =>
@@ -52,20 +53,22 @@ const press = (element: HTMLElement, key: string) =>
     element.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
   });
 
-it.each(["flat", "tree"] as const)("%s: names every status a change can have from its letter after the delay, and goes with the pointer", (layout) => {
-  const { container, settle } = render(layout);
+it.each(["flat", "tree"] as const)("%s: names every status a change can have from its letter after the delay, and goes with the pointer", async (layout) => {
+  // Each tooltip is expected to wait out its delay, which one that closed a moment ago would skip.
+  await tooltipsCooledDown();
+  const { container } = render(layout);
   expect(openTooltip()).toBeNull();
   for (const { letter, word, name } of cases) {
     const chip = letterOf(rowOf(container, name));
     expect(chip.textContent).toBe(letter);
     enter(chip);
     expect(openTooltip()).toBeNull();
-    settle();
+    runOutTimers();
     expect(openTooltip()?.textContent).toBe(word);
     leave(chip);
     expect(openTooltip()).toBeNull();
     // Out of the cooldown that lets the next tooltip open at once.
-    settle();
+    runOutTimers();
   }
   expect(vi.getTimerCount()).toBe(0);
 });
@@ -82,23 +85,23 @@ it("keeps the name and the detail in one fading line, and the line counts and th
 });
 
 it.each(["flat", "tree"] as const)("%s: opens nothing from the file name or from the detail", (layout) => {
-  const { container, settle } = render(layout);
+  const { container } = render(layout);
   const row = rowOf(container, "renamed.ts");
   const regions = [...row.querySelectorAll<HTMLElement>("[dir=auto]")];
   // The name, and the rename's origin beside it.
   expect(regions.length).toBeGreaterThanOrEqual(2);
   for (const region of regions) {
     enter(region);
-    settle();
+    runOutTimers();
     expect(openTooltip()).toBeNull();
     leave(region);
   }
-  settle();
+  runOutTimers();
   expect(vi.getTimerCount()).toBe(0);
 });
 
 it.each(["flat", "tree"] as const)("%s: leaves the row's name as it was, and the chip out of the accessibility tree", (layout) => {
-  const { container, settle } = render(layout);
+  const { container } = render(layout);
   const row = rowOf(container, "modified.ts");
   const chip = letterOf(row);
   const name = row.getAttribute("aria-label");
@@ -108,19 +111,19 @@ it.each(["flat", "tree"] as const)("%s: leaves the row's name as it was, and the
   expect(chip.hasAttribute("role")).toBe(false);
 
   enter(chip);
-  settle();
+  runOutTimers();
   expect(openTooltip()).not.toBeNull();
   // Neither the row nor the chip is linked to the tooltip: it is for the pointer alone.
   expect(row.getAttribute("aria-label")).toBe(name);
   expect(row.hasAttribute("aria-describedby")).toBe(false);
   expect(chip.hasAttribute("aria-describedby")).toBe(false);
   leave(chip);
-  settle();
+  runOutTimers();
   expect(vi.getTimerCount()).toBe(0);
 });
 
 it.each(["flat", "tree"] as const)("%s: adds no stop to a focused row's arrow keys: the actions button, and back", (layout) => {
-  const { container, settle } = render(layout);
+  const { container } = render(layout);
   const row = rowOf(container, "modified.ts");
   const actions = row.querySelector<HTMLButtonElement>("button[aria-haspopup]")!;
   // The only focusable thing in the row besides the row itself.
@@ -131,28 +134,28 @@ it.each(["flat", "tree"] as const)("%s: adds no stop to a focused row's arrow ke
   press(actions, "ArrowLeft");
   expect(document.activeElement).toBe(row);
   expect(openTooltip()).toBeNull();
-  settle();
+  runOutTimers();
   expect(vi.getTimerCount()).toBe(0);
 });
 
 it.each(["flat", "tree"] as const)("%s: goes when the list is scrolled, and is not opened again until the pointer has left and come back", (layout) => {
-  const { container, settle } = render(layout);
+  const { container } = render(layout);
   const chip = letterOf(rowOf(container, "modified.ts"));
   enter(chip);
-  settle();
+  runOutTimers();
   expect(openTooltip()).not.toBeNull();
 
   act(() => void container.querySelector("[role=grid], [role=treegrid]")!.dispatchEvent(new Event("scroll")));
   expect(openTooltip()).toBeNull();
-  settle();
+  runOutTimers();
   expect(openTooltip()).toBeNull();
 
   leave(chip);
   enter(chip);
-  settle();
+  runOutTimers();
   expect(openTooltip()?.textContent).toBe("Modified");
   leave(chip);
-  settle();
+  runOutTimers();
   expect(vi.getTimerCount()).toBe(0);
 });
 

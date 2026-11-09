@@ -8,7 +8,8 @@ import type { AccountQuota, Event, ClientRequestBody, ResetCredit, ResetCreditOu
 import type { Daemon } from "../store";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
-import { ResetCreditsLine, UseResetCreditDialog, useResetFocusReturn } from "./ResetCredits";
+import { READING_WAIT_MS, ResetCreditsLine, UseResetCreditDialog, useResetFocusReturn } from "./ResetCredits";
+import { afterQueuedWork, fakeTimers, flushPromises } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -17,12 +18,12 @@ const DAY = 24 * 60 * 60_000;
 const language = currentLanguage();
 
 beforeEach(() => {
-  vi.useFakeTimers({ toFake: ["Date"] });
-  vi.setSystemTime(NOW);
+  // Only `Date` is faked here, so the dates are the same on every run and the rest of the clock stays real. A test that
+  // also needs the timers installs the whole clock with `withTimers`, which replaces this one.
+  fakeTimers({ now: NOW, toFake: ["Date"] });
   act(() => setLanguage("en"));
 });
 afterEach(() => {
-  vi.useRealTimers();
   act(() => setLanguage(language));
 });
 
@@ -58,7 +59,6 @@ const mount = (daemon: Daemon, ui: React.ReactElement) => mountHost(ui, { daemon
 
 const press = (element: Element) => act(() => (element as HTMLElement).click());
 const used = (outcome: ResetCreditOutcome) => (_body: ClientRequestBody) => Promise.resolve({ type: "reset_credit_used", id: null, outcome } as Event);
-const flush = () => act(async () => { await Promise.resolve(); });
 
 it("shows the count and when the first credit expires, beside an action that asks to use it", () => {
   const { daemon } = fakeDaemon(quotaOf(undefined), used("reset"));
@@ -107,7 +107,7 @@ it("names the credit, its expiry and what using it does, and uses it on confirma
   expect(request).not.toHaveBeenCalled();
 
   press(submit());
-  await flush();
+  await flushPromises();
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "use_reset_credit", agent: "codex", account: null });
   // A use that worked is told in the dialog, which stays open for the meters to fill; no notice, no closing yet.
   expect(showNotice).not.toHaveBeenCalled();
@@ -129,7 +129,7 @@ it("keeps the meters as they were until the reading after the use arrives, then 
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={() => {}} />);
   expect(meterValues()).toEqual(["60"]);
   press(submit());
-  await flush();
+  await flushPromises();
   // A broadcast that is not a newer reading changes nothing.
   act(() => store.setState({ accountQuotas: [{ ...quotaOf({ available_count: 1, credits: [credit()] }) }] }));
   expect(meterValues()).toEqual(["60"]);
@@ -147,10 +147,7 @@ const spoken = () => {
   act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   return document.body.querySelector("[role=alertdialog] [role=status]")!.textContent;
 };
-const withTimers = () => {
-  vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
-  vi.setSystemTime(NOW);
-};
+const withTimers = () => void fakeTimers({ now: NOW });
 const readingAt = (fetched_at: number, used_percent = 0) => ({ ...quotaOf(undefined), fetched_at, windows: [{ kind: "session" as const, label: null, used_percent, resets_at: NOW + DAY, window_minutes: 300 }] });
 
 it("says the use worked, then the new values once the reading arrives, and hides the visible line from screen readers", async () => {
@@ -159,7 +156,7 @@ it("says the use worked, then the new values once the reading arrives, and hides
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={() => {}} />);
   expect(spoken()).toBe("");
   press(submit());
-  await flush();
+  await flushPromises();
   expect(spoken()).toBe("Usage of ⁨Codex Work⁩ has been reset.");
   const hidden = Array.from(document.body.querySelectorAll("[role=alertdialog] [aria-hidden=true]"), (node) => node.textContent);
   expect(hidden).toContain("Updating usage…");
@@ -184,7 +181,7 @@ it("keeps asking from the reading at the press while the request runs, though a 
   const { daemon, store } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), () => new Promise<Event>((resolve) => { settle = resolve; }));
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={() => {}} />);
   press(submit());
-  await flush();
+  await flushPromises();
   // The daemon takes the used credit out of the held reading before it replies.
   act(() => store.setState({ accountQuotas: [quotaOf(undefined)] }));
   expect(dialogText()).toContain("One usage limit reset will be used on");
@@ -193,7 +190,7 @@ it("keeps asking from the reading at the press while the request runs, though a 
   expect(submit().getAttribute("aria-busy")).toBe("true");
   expect(spoken()).toBe("");
   settle({ type: "reset_credit_used", id: null, outcome: "reset" } as Event);
-  await flush();
+  await flushPromises();
   expect(spoken()).toBe("Usage of ⁨Codex Work⁩ has been reset.");
 });
 
@@ -201,7 +198,7 @@ it("goes back to the live reading when the request fails", async () => {
   const { daemon, store } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), () => Promise.reject(new Error("refused")));
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={() => {}} />);
   press(submit());
-  await flush();
+  await flushPromises();
   act(() => store.setState({ accountQuotas: [quotaOf(undefined)] }));
   expect(dialogText()).toContain("has no usage limit resets available.");
   expect(submit().disabled).toBe(true);
@@ -212,7 +209,7 @@ it("begins every write after the use with that the reset worked, with the usage 
   const { daemon, store } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), used("reset"));
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={() => {}} />);
   press(submit());
-  await flush();
+  await flushPromises();
   act(() => store.setState({ accountQuotas: [readingAt(NOW + 1000)] }));
   expect(spoken()).toMatch(/^Usage of ⁨Codex Work⁩ has been reset\. Usage updated\. 5h 100% remaining/);
 });
@@ -222,7 +219,7 @@ it("begins the write for a reading that failed with that the reset worked", asyn
   const { daemon, store } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), used("reset"));
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={() => {}} />);
   press(submit());
-  await flush();
+  await flushPromises();
   act(() => store.setState({ accountQuotas: [{ ...quotaOf(undefined), unavailable: { code: "quota_timed_out", params: { agent: "Codex" }, message: "late" } }] }));
   expect(spoken()).toBe("Usage of ⁨Codex Work⁩ has been reset. Usage could not be updated yet.");
 });
@@ -232,11 +229,11 @@ it("takes the baseline for the reading after the use from the store when the rep
   const { daemon, store } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), () => new Promise<Event>((resolve) => { settle = resolve; }));
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={() => {}} />);
   press(submit());
-  await flush();
+  await flushPromises();
   // A reading lands and the reply follows within the same turn, before the dialog has rendered with it.
   store.setState({ accountQuotas: [readingAt(NOW + 500, 40)] });
   settle({ type: "reset_credit_used", id: null, outcome: "reset" } as Event);
-  await flush();
+  await flushPromises();
   expect(dialogText()).toContain("Updating usage…");
   act(() => store.setState({ accountQuotas: [readingAt(NOW + 1000)] }));
   expect(dialogText()).toContain("Usage updated.");
@@ -247,10 +244,10 @@ it("stays updated when the wait for the reading would have run out after it arri
   const { daemon, store } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), used("reset"));
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={() => {}} />);
   press(submit());
-  await flush();
+  await flushPromises();
   act(() => store.setState({ accountQuotas: [readingAt(NOW + 1000)] }));
   expect(dialogText()).toContain("Usage updated.");
-  act(() => void vi.advanceTimersByTime(61_000));
+  act(() => void vi.advanceTimersByTime(READING_WAIT_MS));
   expect(dialogText()).toContain("Usage updated.");
   expect(dialogText()).not.toContain("could not be updated");
   expect(meterValues()).toEqual(["100"]);
@@ -261,11 +258,11 @@ it("does not take a reading that landed while the use was running for the one af
   const { daemon, store } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), () => new Promise<Event>((resolve) => { settle = resolve; }));
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={() => {}} />);
   press(submit());
-  await flush();
+  await flushPromises();
   // A probe that began before the use and ended during it.
   act(() => store.setState({ accountQuotas: [readingAt(NOW + 500, 40)] }));
   settle({ type: "reset_credit_used", id: null, outcome: "reset" } as Event);
-  await flush();
+  await flushPromises();
   expect(dialogText()).toContain("Updating usage…");
   expect(meterValues()).toEqual(["60"]);
   act(() => store.setState({ accountQuotas: [readingAt(NOW + 1000)] }));
@@ -277,21 +274,20 @@ it("keeps the old values, marked out of date, when the reading after the use fai
   const { daemon, store } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), used("reset"));
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={() => {}} />);
   press(submit());
-  await flush();
+  await flushPromises();
   act(() => store.setState({ accountQuotas: [{ ...quotaOf(undefined), unavailable: { code: "quota_timed_out", params: { agent: "Codex" }, message: "late" } }] }));
   expect(meterValues()).toEqual(["60"]);
   expect(dialogText()).toContain("Usage could not be updated yet.");
 });
 
 it("stops waiting for the reading after a minute and leaves the meters as last read", async () => {
-  vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
-  vi.setSystemTime(NOW);
+  withTimers();
   const { daemon } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), used("reset"));
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={() => {}} />);
   press(submit());
-  await flush();
+  await flushPromises();
   expect(dialogText()).toContain("Updating usage…");
-  act(() => void vi.advanceTimersByTime(60_000));
+  act(() => void vi.advanceTimersByTime(READING_WAIT_MS));
   expect(dialogText()).toContain("Usage could not be updated yet.");
   expect(meterValues()).toEqual(["60"]);
 });
@@ -302,7 +298,7 @@ it("holds the confirm button while the request runs, so a second press sends not
   const onClose = vi.fn();
   mount(daemon, <UseResetCreditDialog agent="codex" account="codex-work" accountName="Codex Work" onClose={onClose} />);
   press(submit());
-  await flush();
+  await flushPromises();
   expect(submit().textContent).toBe("Use reset");
   expect(submit().getAttribute("aria-busy")).toBe("true");
   press(submit());
@@ -311,7 +307,7 @@ it("holds the confirm button while the request runs, so a second press sends not
   expect(request).toHaveBeenCalledWith({ type: "use_reset_credit", agent: "codex", account: "codex-work" });
   expect(onClose).not.toHaveBeenCalled();
   settle({ type: "reset_credit_used", id: null, outcome: "reset" } as Event);
-  await flush();
+  await flushPromises();
   expect(onClose).not.toHaveBeenCalled();
   expect(footerButtons()).toEqual(["Done"]);
 });
@@ -324,7 +320,7 @@ it.each([
   const onClose = vi.fn();
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={onClose} />);
   press(submit());
-  await flush();
+  await flushPromises();
   expect(showNotice.mock.calls[0][0]).toContain(words);
   expect(onClose).toHaveBeenCalledOnce();
 });
@@ -334,7 +330,7 @@ it("stays open when the request fails, for another try", async () => {
   const onClose = vi.fn();
   mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={onClose} />);
   press(submit());
-  await flush();
+  await flushPromises();
   expect(onClose).not.toHaveBeenCalled();
   expect(submit().disabled).toBe(false);
 });
@@ -354,7 +350,7 @@ it("holds confirm and says none is left once the reading shows no reset", () => 
   expect(submit().disabled).toBe(true);
 });
 
-const twoFrames = () => act(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0)))));
+const twoFrames = () => act(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => void afterQueuedWork().then(resolve)))));
 
 function ClosesOnPress({ restore }: { restore: () => void }): React.ReactElement {
   const handBack = useResetFocusReturn(restore);

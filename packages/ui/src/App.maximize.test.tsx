@@ -10,14 +10,13 @@ import { PanelHeader } from "./components/panel/PanelHeader";
 import { mountForTooltip } from "./components/hint/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 import { isolate } from "./i18n/isolate";
-import { defaultStack } from "./panels/stackState";
-import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
 import type { Project } from "./protocol";
 import { DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { BROWSER_HOST } from "./test/hosts";
+import { fakeTimers } from "./test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -53,24 +52,7 @@ vi.mock("./terminal/TerminalController", () => ({
 }));
 
 function mountApp() {
-  // The panel stacks outlive a test's window: they go back as a fresh client has them.
-  let stacks!: ReturnType<typeof usePanelStacks>;
-  function StackReset() {
-    stacks = usePanelStacks();
-    return null;
-  }
   stubWindow();
-  onTestFinished(() => {
-    act(() => {
-      stacks.setStack("project", defaultStack("project"));
-      stacks.setStack("report", defaultStack("report"));
-    });
-    try {
-      localStorage.clear();
-    } catch {
-      // No storage: nothing was kept.
-    }
-  });
   const console_ = consoleOf("c-max", "Main");
   const project = projectOf("p-site", console_.id, "Website");
   const sessions = [sessionOf("s-site", console_.id, project.id, "Fix header", "idle"), sessionOf("s-console", console_.id, undefined, "Plan release", "idle"), sessionOf("s-old", console_.id, project.id, "Old work", "archived")];
@@ -80,7 +62,7 @@ function mountApp() {
   });
   mountForTooltip(
     <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
-      <ThemeProvider><DaemonProvider value={daemon}><StackReset /><App /></DaemonProvider></ThemeProvider>
+      <ThemeProvider><DaemonProvider value={daemon}><App /></DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
   return daemon;
@@ -183,13 +165,12 @@ it("restores the layout and uncovers the agent terminal when the maximized panel
 });
 
 it("floats Files in from its toggle beside the maximized Terminal panel, and docks it on a press", async () => {
+  fakeTimers();
   mountApp();
   await maximizeTerminal();
   await pressElement(toggle("Hide files panel"));
-  vi.useFakeTimers();
   document.documentElement.style.setProperty("--peek-gap", "8px");
   onTestFinished(() => {
-    vi.useRealTimers();
     document.documentElement.style.removeProperty("--peek-gap");
   });
   const button = toggle("Show files panel")!;
@@ -197,7 +178,6 @@ it("floats Files in from its toggle beside the maximized Terminal panel, and doc
   await act(async () => {
     button.dispatchEvent(pointer("pointerover"));
     button.dispatchEvent(pointer("pointerenter"));
-    await vi.advanceTimersByTimeAsync(300);
   });
   // The card floats in a pane of its own, the maximized panel staying where it is.
   const floating = document.querySelector<HTMLElement>("[data-pane=aside]");
@@ -280,11 +260,7 @@ const said = (text: string) => Array.from(document.querySelectorAll("[role=statu
 /** The App mounted with its timers faked before anything arms one, the window attended, and the project's session
  * selected with the Terminal panel maximized over the agent area. Returns what changes the selected session. */
 async function maximizedWithOpenSession() {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-  onTestFinished(() => {
-    act(() => void vi.runOnlyPendingTimers());
-    vi.useRealTimers();
-  });
+  fakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   windowAttention();
   const daemon = mountApp();
   await maximizeTerminal();

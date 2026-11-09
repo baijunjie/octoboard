@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UpdaterError, type AvailableUpdate, type UpdateChannel, type UpdaterCapability, type UpdateProgress } from "../platform";
 import { effectiveUpdateChannel } from "./updateChannel";
 import { CHECK_INTERVAL_MS, createUpdateStore, FIRST_CHECK_DELAY_MS, type UpdateFailure } from "./updateStore";
+import { fakeTimers } from "../test/clock";
 
 const FOUND: AvailableUpdate = { version: "0.2.0", notes: "Fixes." };
 
@@ -406,8 +407,7 @@ describe("restarting", () => {
 });
 
 describe("the schedule", () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  beforeEach(() => fakeTimers());
 
   it("checks shortly after it starts and then on every interval, until stopped", async () => {
     const { store, checks } = setup();

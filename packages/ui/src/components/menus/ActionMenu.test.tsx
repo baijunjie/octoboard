@@ -10,9 +10,12 @@ import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../alerts/errorAlerts";
 import { detailsButton } from "../alerts/detailsTestSupport";
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
+import { closeOpenTooltip, tooltipsCooledDown } from "../hint/tooltipTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 import { ActionMenu } from "./ActionMenu";
+import { SUBMENU_HOVER_DELAY_MS } from "./menuTestSupport";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanelContext } from "./menuEntries";
+import { fakeTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -35,6 +38,7 @@ async function openMenu(items: ActionMenuEntry[]): Promise<void> {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   unmount = () => {
+    closeOpenTooltip();
     act(() => root.unmount());
     container.remove();
   };
@@ -132,8 +136,7 @@ it("loads a submenu on open and retries its failed load without closing", async 
   const load = vi.fn().mockRejectedValueOnce(new Error("repository unavailable")).mockResolvedValueOnce([
     { label: "feature", icon: Trash2, onClick: () => {} },
   ]);
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   await openMenu([{ label: "Switch branch", icon: Trash2, items: [], loadItems: load }]);
   expect(load).not.toHaveBeenCalled();
   // The last input was a pointer, so the ring is shown only if the handoff sets the modality.
@@ -267,11 +270,12 @@ describe("a panel entry", () => {
   it("is entered with the arrow key after a hover opened it", async () => {
     vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
     onTestFinished(() => void vi.unstubAllGlobals());
+    fakeTimers();
     await openMenu(panel);
     await act(async () => {
       item().dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
       item().dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerType: "mouse" }));
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await vi.advanceTimersByTimeAsync(SUBMENU_HOVER_DELAY_MS);
     });
     expect(document.querySelector("[role=listbox]")).not.toBeNull();
     expect(seen.autoFocus).toBe(false);
@@ -400,9 +404,9 @@ describe("Escape with a label's tooltip open", () => {
   });
 
   it("closes the menu while the tooltip is still waiting to show", async () => {
-    // A tooltip closed by an earlier test leaves react-aria's tooltips warm, showing the next one at
-    // once, for half a second.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+    await tooltipsCooledDown();
+    // The tooltip's delay stays pending on the fake clock while the menu is open and closed.
+    fakeTimers();
     await openMenu([
       { label: "Plain", icon: Trash2, onClick: () => {} },
       { label: "Long", content: <Hovered text="Long" immediate={false} />, icon: Trash2, onClick: () => {} },

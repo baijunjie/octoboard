@@ -5,8 +5,11 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { acknowledgeAllAlerts } from "../../test/alertQueue";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { ErrorAlertBody } from "../../components/dialog/ErrorAlertBody";
+import { framesAsTimers, settleFrames, trackMountRefocus } from "../../components/dialog/dialogTestSupport";
+import { REVEAL_QUIET_MS, REVEAL_START_MS } from "../../components/tabs/AgentTabList";
 import { CodedError } from "../../errors/codedError";
 import { partSelector } from "../../primitives";
 import { isolate } from "../../i18n/isolate";
@@ -17,6 +20,7 @@ import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
 import { account, availability, consoles, projects, request, sectionEntry, sessions, settings, startDaemon } from "./agentAccountsSectionTestState";
 import { animate, buttonNamed, chooseItem, menuItem, mount, mountAgentSettings, openDetailsOf, openMcpOf, openSettingsOf, openTabMenu, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
+import { fakeTimers, runPendingTimers } from "../../test/clock";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -24,8 +28,6 @@ vi.mock("../../components/text/MarkedPath", async () => ({ MarkedPath: (await im
 vi.mock("../useSectionRefocus", async (importOriginal) => (await import("./agentAccountsSectionTestState")).sectionRefocusStandIn(await importOriginal()));
 vi.mock("../../components/form/OptionSelect", async () => ({ OptionSelect: (await import("./agentAccountsSectionTestState")).OptionSelectStandIn }));
 
-/** Waits out React Aria's focus restore after a dialog closes and what runs in the frames after it. */
-const frames = () => act(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 0)))));
 
 /** The approval selector in the agent's settings dialog. */
 function approvalOf(container: HTMLElement): HTMLSelectElement {
@@ -57,18 +59,19 @@ it("separates permission timing from custom permissions that retain saved permis
 });
 
 it("says the permission approval once, as a row in the agent's settings dialog with its help, not in the tab, a column or the details or account settings dialogs", async () => {
+  framesAsTimers("pointer");
   const { container: panel, section: container } = await mountAgentSettings("Codex");
   expect(panel.textContent?.match(/Permission approval/g)).toHaveLength(1);
   expect(panel.textContent).toContain("Applies to every \u2068Codex\u2069 account");
   expect(panel.querySelectorAll('button[aria-label="About permission approval"]')).toHaveLength(1);
   expect(container.querySelector('[role="tabpanel"]')!.textContent).not.toContain("Permission approval");
   await act(async () => buttonNamed(panel, t("common.close"))!.click());
-  await frames();
+  await settleFrames();
   const dialog = await openDetailsOf(container, "codex-work");
   expect(dialog.querySelector("select")).toBeNull();
   expect(dialog.textContent).not.toContain("Permission approval");
   await act(async () => buttonNamed(dialog, t("common.close"))!.click());
-  await frames();
+  await settleFrames();
   const settingsDialog = await openSettingsOf(container, "codex-work");
   expect(settingsDialog.querySelector("select")).toBeNull();
   expect(settingsDialog.textContent).not.toContain("Permission approval");
@@ -121,7 +124,7 @@ it("keeps the stored value and reports a failed save", async () => {
   await act(async () => {});
   expect(select.value).toBe("inherit");
   expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not save the permission approval"]);
-  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  acknowledgeAllAlerts();
   expect(select.disabled).toBe(false);
 });
 
@@ -145,7 +148,6 @@ it("words a denied save of the permission approval for the application's data fo
   const text = queuedAlertText();
   expect(text).toContain("data folder is writable");
   expect(text).not.toContain("choose another accessible folder");
-  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
 });
 
 it("words a denied save of Bypass permissions, made from its confirmation, for the application's data folder too", async () => {
@@ -157,7 +159,6 @@ it("words a denied save of Bypass permissions, made from its confirmation, for t
   const text = queuedAlertText();
   expect(text).toContain("data folder is writable");
   expect(text).not.toContain("choose another accessible folder");
-  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
 });
 
 it("keeps the trigger available while saving and prevents another option selection until answered", async () => {
@@ -293,31 +294,29 @@ function notInstalledTab(container: HTMLElement) {
 }
 
 it("shows what the not-installed icon means in a tooltip when its tab takes keyboard focus", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
   act(() => setInteractionModality("keyboard"));
   act(() => tab.focus());
-  act(() => void vi.advanceTimersByTime(70));
+  act(() => void vi.advanceTimersByTime(REVEAL_START_MS));
   expect(document.querySelector("[role=tooltip]")?.textContent).toContain("Codex is not installed");
   act(() => tab.blur());
   expect(document.querySelector("[role=tooltip]")).toBeNull();
 });
 
 it("does not show the not-installed tooltip for a tab focused by a press", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
   act(() => setInteractionModality("pointer"));
   act(() => tab.focus());
-  act(() => void vi.advanceTimersByTime(200));
+  act(() => void vi.advanceTimersByTime(REVEAL_START_MS + REVEAL_QUIET_MS));
   expect(document.querySelector("[role=tooltip]")).toBeNull();
   act(() => setInteractionModality("keyboard"));
-  act(() => void vi.advanceTimersByTime(200));
+  act(() => void vi.advanceTimersByTime(REVEAL_START_MS + REVEAL_QUIET_MS));
   expect(document.querySelector("[role=tooltip]")).toBeNull();
 });
 
@@ -329,8 +328,7 @@ function pointTo(tab: HTMLElement, on: boolean) {
 }
 
 it("opens the not-installed tooltip again as keyboard focus arrives after a key closed the one the pointer opened", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
@@ -341,20 +339,19 @@ it("opens the not-installed tooltip again as keyboard focus arrives after a key 
   expect(document.querySelector("[role=tooltip]")).toBeNull();
   act(() => setInteractionModality("keyboard"));
   act(() => tab.focus());
-  act(() => void vi.advanceTimersByTime(70));
+  act(() => void vi.advanceTimersByTime(REVEAL_START_MS));
   expect(document.querySelector("[role=tooltip]")).not.toBeNull();
 });
 
 it("keeps the not-installed tooltip closed on a blur while the pointer stays on the tab after a key closed it", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
   pointTo(tab, true);
   act(() => setInteractionModality("keyboard"));
   act(() => tab.focus());
-  act(() => void vi.advanceTimersByTime(70));
+  act(() => void vi.advanceTimersByTime(REVEAL_START_MS));
   expect(document.querySelector("[role=tooltip]")).not.toBeNull();
   act(() => void document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   expect(document.querySelector("[role=tooltip]")).toBeNull();
@@ -364,8 +361,7 @@ it("keeps the not-installed tooltip closed on a blur while the pointer stays on 
 });
 
 it("holds the not-installed tooltip back while the scroll that reveals a focused tab goes on, and opens it once that stops", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
@@ -373,49 +369,46 @@ it("holds the not-installed tooltip back while the scroll that reveals a focused
   act(() => setInteractionModality("keyboard"));
   act(() => tab.focus());
   expect(document.querySelector("[role=tooltip]")).toBeNull();
-  act(() => void vi.advanceTimersByTime(50));
+  act(() => void vi.advanceTimersByTime(REVEAL_START_MS - 1));
   scroll();
-  act(() => void vi.advanceTimersByTime(90));
+  act(() => void vi.advanceTimersByTime(REVEAL_QUIET_MS - 1));
   scroll();
-  act(() => void vi.advanceTimersByTime(90));
+  act(() => void vi.advanceTimersByTime(REVEAL_QUIET_MS - 1));
   expect(document.querySelector("[role=tooltip]")).toBeNull();
-  act(() => void vi.advanceTimersByTime(20));
+  act(() => void vi.advanceTimersByTime(1));
   expect(document.querySelector("[role=tooltip]")).not.toBeNull();
 });
 
 it("opens the not-installed tooltip within a moment of keyboard focus when nothing scrolls", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   act(() => setInteractionModality("keyboard"));
   act(() => notInstalledTab(container).focus());
-  act(() => void vi.advanceTimersByTime(70));
+  act(() => void vi.advanceTimersByTime(REVEAL_START_MS));
   expect(document.querySelector("[role=tooltip]")).not.toBeNull();
 });
 
 it("cancels the not-installed tooltip's pending open when a key or a press comes before the scroll has settled", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
   act(() => setInteractionModality("keyboard"));
   act(() => tab.focus());
   act(() => void document.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true })));
-  act(() => void vi.advanceTimersByTime(300));
+  act(() => void vi.advanceTimersByTime(REVEAL_START_MS + REVEAL_QUIET_MS));
   expect(document.querySelector("[role=tooltip]")).toBeNull();
   act(() => tab.blur());
   act(() => setInteractionModality("keyboard"));
   act(() => tab.focus());
   act(() => void document.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })));
-  act(() => void vi.advanceTimersByTime(300));
+  act(() => void vi.advanceTimersByTime(REVEAL_START_MS + REVEAL_QUIET_MS));
   expect(document.querySelector("[role=tooltip]")).toBeNull();
 });
 
 it("keeps a cancelled not-installed tooltip away when the pointer crosses the tab while it keeps focus", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
@@ -424,13 +417,12 @@ it("keeps a cancelled not-installed tooltip away when the pointer crosses the ta
   act(() => void document.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true })));
   pointTo(tab, true);
   pointTo(tab, false);
-  act(() => void vi.advanceTimersByTime(300));
+  act(() => void vi.advanceTimersByTime(REVEAL_START_MS + REVEAL_QUIET_MS));
   expect(document.querySelector("[role=tooltip]")).toBeNull();
 });
 
 it("shows the not-installed tooltip on hover again once a cancelled one's tab has lost focus", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
@@ -439,7 +431,7 @@ it("shows the not-installed tooltip on hover again once a cancelled one's tab ha
   act(() => void document.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true })));
   act(() => tab.blur());
   pointTo(tab, true);
-  act(() => void vi.advanceTimersByTime(3000));
+  runPendingTimers();
   expect(document.querySelector("[role=tooltip]")).not.toBeNull();
 });
 
@@ -526,11 +518,12 @@ it("closes its Add agent dialog when Settings asks for anything else", () => {
 });
 
 it("shows the agent tab of an account Settings was asked about and opens its settings, not its details, on the sharing switch", async () => {
+  framesAsTimers("pointer");
   const { container, showSharingOf } = mount("Claude Code");
   const switchOf = () => document.body.querySelector('[data-sharing-account="codex-work"] input[role="switch"]');
   expect(switchOf()).toBeNull();
   showSharingOf("codex-work");
-  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
+  await settleFrames();
   expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Codex");
   expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("Account settings");
   expect(switchOf()).not.toBeNull();
@@ -538,30 +531,33 @@ it("shows the agent tab of an account Settings was asked about and opens its set
 });
 
 it("shows the focus ring on the sharing switch even after a pointer press opened Settings", async () => {
+  framesAsTimers("pointer");
   const { showSharingOf } = mount("Claude Code");
   act(() => setInteractionModality("pointer"));
   showSharingOf("codex-work");
-  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
+  await settleFrames();
   expect(document.activeElement).toBe(document.body.querySelector('[data-sharing-account="codex-work"] input[role="switch"]'));
   expect(getInteractionModality()).toBe("keyboard");
 });
 
 it("opens no settings for an account whose agent is not in the list, focusing the section's tab", async () => {
+  framesAsTimers("pointer");
   settings.added_agents = ["claude", "grok"];
   const { container, showSharingOf, setSettings } = mount("Claude Code");
   const entry = document.body.lastElementChild as HTMLElement;
   showSharingOf("codex-work");
-  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
+  await settleFrames();
   expect(document.activeElement).toBe(entry);
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   // The agent comes back into the list afterwards: nothing opens by itself.
   setSettings({ added_agents: ["claude", "codex", "grok"] });
   selectTab(container, "Codex");
-  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
+  await settleFrames();
   expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
 it("gives focus back to the row's actions button after its details, settings or connectors and MCP close, in a language whose button name is not English", async () => {
+  framesAsTimers("pointer");
   const before = currentLanguage();
   setLanguage("zh-Hans");
   onTestFinished(() => { act(() => setLanguage(before)); });
@@ -570,17 +566,20 @@ it("gives focus back to the row's actions button after its details, settings or 
   expect(trigger.getAttribute("aria-label")).not.toContain("Actions for");
   for (const open of [() => openSettingsOf(container, "codex-work", t("settings.accounts.settingsItem")), () => openDetailsOf(container, "codex-work", t("settings.accounts.detailsItem")), () => openMcpOf(container, "codex-work", t("settings.accounts.mcp.title"))]) {
     const dialog = await open();
+    await trackMountRefocus()();
     await act(async () => buttonNamed(dialog, t("common.close"))!.click());
-    await frames();
+    await settleFrames();
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   }
 });
 
 it("opens the details of an account from the first entry of its actions menu, read-only, gives focus back to the menu's button on closing, and closes with the account", async () => {
+  framesAsTimers("pointer");
   const { container, setSettings, store } = mount("Codex");
   const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>('button[aria-label^="Actions for"]')!;
   const dialog = await openDetailsOf(container, "codex-work");
+  await trackMountRefocus()();
   expect(dialog.textContent).toContain("codex-work");
   expect(dialog.querySelector("h2")?.textContent).toBe("Account details");
   // The body leads with the account's name.
@@ -594,7 +593,7 @@ it("opens the details of an account from the first entry of its actions menu, re
   // No footer: the header's close button closes it.
   expect(buttonNamed(dialog, "Close")).toBe(dialog.querySelector('button[aria-label="Close"]'));
   await act(async () => buttonNamed(dialog, "Close")!.click());
-  await frames();
+  await settleFrames();
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(document.activeElement).toBe(trigger);
   await openDetailsOf(container, "codex-work");
@@ -604,9 +603,11 @@ it("opens the details of an account from the first entry of its actions menu, re
 });
 
 it("opens the settings of an account from the second entry of its actions menu, with its name first and only its switches after, and closes with the account", async () => {
+  framesAsTimers("pointer");
   const { container, setSettings, store } = mount("Codex");
   const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>('button[aria-label^="Actions for"]')!;
   const dialog = await openSettingsOf(container, "codex-work");
+  await trackMountRefocus()();
   expect(dialog.querySelector("h2")?.textContent).toBe("Account settings");
   expect(dialog.querySelector("[data-slot=modal-body]")?.textContent).toMatch(/^codex-work/);
   expect([...dialog.querySelectorAll('input[role="switch"]')].map((input) => input.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, ""))).toEqual([
@@ -616,7 +617,7 @@ it("opens the settings of an account from the second entry of its actions menu, 
   expect(dialog.textContent).not.toContain("/home/dev/.codex-work");
   expect(dialog.textContent).not.toContain("Usage");
   await act(async () => buttonNamed(dialog, "Close")!.click());
-  await frames();
+  await settleFrames();
   expect(document.activeElement).toBe(trigger);
   await openSettingsOf(container, "codex-work");
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
@@ -625,13 +626,15 @@ it("opens the settings of an account from the second entry of its actions menu, 
 });
 
 it("opens an account's connectors and MCP from its actions menu, gives focus back to the menu's button on closing, and closes with the account", async () => {
+  framesAsTimers("pointer");
   const { container, setSettings, store } = mount("Codex");
   const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>('button[aria-label^="Actions for"]')!;
   const dialog = await openMcpOf(container, "codex-work");
+  await trackMountRefocus()();
   expect(dialog.querySelector("h2")?.textContent).toBe("Connectors and MCP");
   expect(dialog.querySelector("[data-slot=modal-body]")?.textContent).toMatch(/^codex-work/);
   await act(async () => buttonNamed(dialog, "Close")!.click());
-  await frames();
+  await settleFrames();
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(document.activeElement).toBe(trigger);
   await openMcpOf(container, "codex-work");
@@ -641,10 +644,11 @@ it("opens an account's connectors and MCP from its actions menu, gives focus bac
 });
 
 it("focuses the section's tab when the account to show is unknown", async () => {
+  framesAsTimers("pointer");
   const { showSharingOf } = mount("Claude Code");
   const entry = document.body.lastElementChild as HTMLElement;
   showSharingOf("nobody");
-  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
+  await settleFrames();
   expect(document.activeElement).toBe(entry);
 });
 
@@ -706,7 +710,6 @@ it("reports a refused reorder", async () => {
   await chooseItem("Move earlier");
   await act(async () => {});
   expect(errorAlerts.getSnapshot()).toHaveLength(1);
-  errorAlerts.acknowledge();
 });
 
 it("offers the same entries in an actions button of each tab, named for its agent", async () => {
@@ -802,6 +805,7 @@ it("names what still uses the agent when removing it, and says it keeps its sett
 });
 
 it.each(["agent", "account"] as const)("puts focus on the section's entry once a removed %s's confirmation closes, not where it stood when the menu opened", async (removed) => {
+  framesAsTimers("pointer");
   // Another section's entry holds focus, as an accessibility press that selected this section leaves it.
   const elsewhere = document.body.appendChild(document.createElement("button"));
   elsewhere.textContent = "General";
@@ -824,14 +828,14 @@ it.each(["agent", "account"] as const)("puts focus on the section's entry once a
     await chooseItem("Remove");
   }
   // The menu has tried to give focus back to where it stood, which the confirmation refused.
-  await frames();
+  await settleFrames();
   const confirm = buttonNamed(document.querySelector('[role="alertdialog"]')!, "Remove")!;
   act(() => confirm.focus());
   await act(async () => confirm.click());
   expect(request).toHaveBeenCalledExactlyOnceWith(removed === "agent" ? { type: "remove_agent", agent: "grok" } : { type: "delete_account", account: "claude-work", trash_directory: false });
   if (removed === "agent") setSettings({ added_agents: ["claude", "codex"] });
   else setSettings({ accounts: store.getState().settings.accounts.filter((held) => held.id !== "claude-work") });
-  await frames();
+  await settleFrames();
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   expect(document.activeElement).toBe(sectionEntry.current);
 });

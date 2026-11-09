@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
-import { enter, leave, openTooltip } from "../../components/hint/tooltipTestSupport";
+import { enter, leave, openTooltip, tooltipsCooledDown } from "../../components/hint/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 import { isolate } from "../../i18n/isolate";
 import type { BranchInfo } from "../../protocol";
 import { BranchSelect } from "./BranchSelect";
 import { mountRows } from "../browserTestSupport";
+import { fakeTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -85,12 +86,10 @@ it("draws no badge on the trigger once a branch is chosen", () => {
   expect(container.querySelector("[role=img]")).toBeNull();
 });
 
-it("shows the responsible session in a tooltip after the delay while the pointer is on the ring, and not over the rest of the row", () => {
-  // Fake timers, to show that nothing is left counting down once the tooltip has gone.
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    vi.useRealTimers();
-  });
+it("shows the responsible session in a tooltip after the delay while the pointer is on the ring, and not over the rest of the row", async () => {
+  // The tooltip delay is counted on fake timers, which also show that nothing is left counting down once the tooltip has gone.
+  await tooltipsCooledDown();
+  fakeTimers();
   const settle = () => act(() => void vi.runOnlyPendingTimers());
   open();
   expect(openTooltip()).toBeNull();

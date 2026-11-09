@@ -8,7 +8,7 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { CodedError } from "../errors/codedError";
 import { MIXED_RESULT, REVIEW } from "../fixtures/configurationReview";
 import { press as pressElement } from "../components/alerts/detailsTestSupport";
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
@@ -19,8 +19,9 @@ import type { Event, GitWorkflowSettings, ClientRequestBody } from "../protocol"
 import { bindingFor, shortcutOverrides } from "../shortcuts/store";
 import { sessionOrderPreference } from "../store";
 import { markdownStyle } from "../viewer/markdown/markdownStyle";
-import { ImportConfigurationDialog } from "./ImportConfigurationDialog";
+import { FOCUS_GRACE_MS, ImportConfigurationDialog } from "./ImportConfigurationDialog";
 import { agentSettingLinesOf, cardTitled, mountDialog, openTab, press, settingGroupsOf, settingLinesAcrossGroups, settingLinesOf } from "./testSupport";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -362,6 +363,7 @@ it("reads the preview again when a setting moves while a refresh is in flight, h
 });
 
 it("shows a refresh that fails as an Alert in the review with its own Try again, and reads again on it", async () => {
+  fakeTimers();
   let inspections = 0;
   const mounted = await reviewing({
     reply: (body) => {
@@ -389,7 +391,7 @@ it("shows a refresh that fails as an Alert in the review with its own Try again,
   expect(text()).not.toContain("Could not read the file again");
   expect(importButton().getAttribute("aria-disabled")).toBeNull();
   // The file's new reading is said once focus has settled.
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, AFTER_FOCUS_MOVE_DELAY_MS + 150)); });
+  await act(async () => void (await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS)));
   expect(Array.from(document.body.querySelectorAll("[role=status]")).map((region) => region.textContent)).toContain("The file was read again because settings changed.");
 });
 
@@ -1287,10 +1289,9 @@ it("can be dismissed while the open dialog has not answered", async () => {
 });
 
 it("announces which choice was applied to how many, so two presses with the same count are told apart", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   await reviewing();
-  await act(async () => void (await vi.advanceTimersByTimeAsync(200)));
+  await act(async () => void (await vi.advanceTimersByTimeAsync(FIRST_WRITE_DELAY_MS)));
   const announced = () => document.body.querySelector("[role=status]")?.textContent;
   await press("Default clone directory (2)");
   const first = announced();
@@ -1363,15 +1364,14 @@ it("cannot be dismissed while the import is running", async () => {
 });
 
 it("takes the window regaining focus, with no file chosen, as the picker dismissed, so the step can be tried again", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const mounted = mount({ unanswered: true });
   const choose = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Choose file")!;
   await press("Choose file");
   expect(choose().hasAttribute("data-pending")).toBe(true);
   await act(async () => {
     window.dispatchEvent(new Event("focus"));
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(FOCUS_GRACE_MS);
   });
   expect(choose().hasAttribute("data-pending")).toBe(false);
   await press("Choose file");
@@ -1379,18 +1379,19 @@ it("takes the window regaining focus, with no file chosen, as the picker dismiss
 });
 
 it("ignores the answer of a picker it gave up on once a newer one has been opened", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const answers: ((file: { name: string; text: string }) => void)[] = [];
   const mounted = mountDialog((onClose) => <ImportConfigurationDialog onClose={onClose} />, reply, {
     save: vi.fn(),
     open: vi.fn(() => new Promise<{ name: string; text: string }>((resolve) => answers.push(resolve))),
   });
+  const choose = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Choose file")!;
   await press("Choose file");
   await act(async () => {
     window.dispatchEvent(new Event("focus"));
-    await vi.advanceTimersByTimeAsync(600);
+    await vi.advanceTimersByTimeAsync(FOCUS_GRACE_MS);
   });
+  expect(choose().hasAttribute("data-pending")).toBe(false);
   await press("Choose file");
   // The first picker answers late, while the second is the one being waited for.
   await act(async () => answers[0]({ name: "late.json", text: JSON.stringify(DOCUMENT) }));

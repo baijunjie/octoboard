@@ -3,19 +3,23 @@ import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { fakeTimers } from "../../test/clock";
 import { errorAlerts } from "../alerts/errorAlerts";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { DaemonProvider } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
-import { framesAsTimers, settleFrames } from "./dialogTestSupport";
+import { framesAsTimers, settleFrames, trackMountRefocus, withModality } from "./dialogTestSupport";
 import { Checkbox } from "../../primitives";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Renders a confirmation and takes it down when the test finishes. */
 function mount(props: { errorTitle?: string; onConfirm?: () => Promise<void>; destructive?: boolean; typeToConfirm?: string; hideCancel?: boolean; confirmDisabled?: boolean; subject?: React.ReactNode; message?: string }): void {
+  // A previous test's script click leaves virtual modality, which defers react-aria's opening focus to a frame.
+  withModality("pointer");
+  fakeTimers();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -92,8 +96,9 @@ it("puts focus on Confirm of a confirmation raised over another dialog without a
   name.dispatchEvent(Object.assign(new Event("transitionrun", { bubbles: true }), { propertyName: "translate" }));
   onTestFinished(() => { name.dispatchEvent(Object.assign(new Event("transitionend", { bubbles: true }), { propertyName: "translate" })); });
   await act(async () => document.querySelector<HTMLButtonElement>('[role="dialog"] button[type="submit"]')!.click());
+  const pastMountRefocus = trackMountRefocus();
   await settleFrames();
-  await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+  await pastMountRefocus();
   await settleFrames();
   const confirmation = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
   expect(confirmation.closest('[aria-hidden="true"], [inert]')).toBeNull();
@@ -122,7 +127,6 @@ it("titles the alert of a rejected confirmation with the failure title it was gi
   mount({ errorTitle: "Could not archive the session", onConfirm: () => Promise.reject(new Error("refused")) });
   await act(async () => document.querySelector<HTMLButtonElement>("button[type=submit]")!.click());
   expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not archive the session"]);
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
 });
 
 it("keeps the space between the subject and the message in the message's own text node, and none without a subject", () => {

@@ -12,7 +12,7 @@ export const COLUMN_EASE_CLASS = "sidebar-docked:transition-[width] sidebar-dock
 
 /** A little past the ease, so a transition that never reports its end (a backgrounded tab, a
  * browser that skips the event) cannot leave the column mid-gesture. */
-const SPAN_END_SLACK_MS = 50;
+export const SPAN_END_SLACK_MS = 50;
 
 /** Matches the floating card's fade and its pointer-settle guard. */
 export const PANE_INSET_MS = 240;

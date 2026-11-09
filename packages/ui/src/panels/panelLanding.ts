@@ -4,7 +4,7 @@ import type { PanelKind } from "../layout/panelKind";
 import { panelId } from "./stackState";
 
 /** How long a request waits, from the moment it is made, for the panel's card to show up and fill in with a control. */
-const LANDING_MS = 3000;
+export const LANDING_MS = 3000;
 
 /** Sends focus into the `kind` panel, where F6 would land in it, once its card is on screen and has a control to take
  * it: a panel the user opened deliberately, docked or floating, whose card may not be rendered yet (the console it

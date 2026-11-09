@@ -7,6 +7,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { providerModelDisplay } from "../agents/providers";
 import { press } from "../components/alerts/detailsTestSupport";
+import { firstWriteDelayPassed } from "../components/announce/statusAnnouncerTestSupport";
 import { CodedError } from "../errors/codedError";
 import { isolate } from "../i18n/isolate";
 import { DaemonProvider, type Daemon } from "../store";
@@ -17,8 +18,9 @@ import { EffortPicker, LaunchSettingsFields, ModelPicker, type LaunchModels } fr
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** Longer than `StatusAnnouncer`'s first write delay. */
-const PAST_FIRST_WRITE = 150;
+/** How long a wait on a condition may take before the test gives up on it, with room for a cold run to transform the
+ * modules the component loads on first use. */
+const UNTIL_SHOWN = { timeout: 15_000 };
 
 function mount(unavailable?: import("../protocol").ModelsUnavailable | Error) {
   const request = vi.fn(async (body: { type: string }) => {
@@ -47,21 +49,19 @@ function mount(unavailable?: import("../protocol").ModelsUnavailable | Error) {
   /** The status regions assistive technology can reach, with what each says. */
   const exposedStatuses = () =>
     [...container.querySelectorAll('[role="status"]')].filter((region) => !region.closest("[hidden], [inert], [aria-hidden='true']")).map((region) => region.textContent);
-  const wait = (ms: number) => act(() => new Promise((resolve) => setTimeout(resolve, ms)));
-  return { toggle, exposedStatuses, wait, request, container };
+  return { toggle, exposedStatuses, request, container };
 }
 
 // The list is asked for again on each opening and its refusal is shown again. The status region is mounted
 // anew with each opening and writes after its delay, so the refusal is said once; the same answer writes
 // nothing new.
 it("says the model list's failure again each time the section is opened, once, after the region is there", async () => {
-  const { toggle, exposedStatuses, wait, request } = mount();
+  const { toggle, exposedStatuses, request } = mount();
   toggle();
   expect(exposedStatuses()).toEqual([""]);
-  await wait(PAST_FIRST_WRITE);
+  await vi.waitFor(() => expect(exposedStatuses()).toEqual(["Something unexpected went wrong."]), UNTIL_SHOWN);
   // A thrown error is a failure the application has no words for: the region says the generic sentence,
   // and the error's own message stays in the mark's popover.
-  expect(exposedStatuses()).toEqual(["Something unexpected went wrong."]);
   expect(document.body.textContent).not.toContain("Fixture has no models");
 
   toggle();
@@ -74,7 +74,7 @@ it("says the model list's failure again each time the section is opened, once, a
   const observer = new MutationObserver(() => writes.push(region.textContent ?? ""));
   observer.observe(region, { childList: true, characterData: true, subtree: true });
   onTestFinished(() => observer.disconnect());
-  await wait(PAST_FIRST_WRITE * 2);
+  await firstWriteDelayPassed();
   expect(exposedStatuses()).toEqual(["Something unexpected went wrong."]);
   expect(writes).toEqual(["Something unexpected went wrong."]);
   expect(request).toHaveBeenCalledTimes(2);
@@ -82,9 +82,11 @@ it("says the model list's failure again each time the section is opened, once, a
 
 it("shows why there is no list as a warning mark after the Model field's label, its popover holding the sentence and the diagnostics, and announces only the sentence once", async () => {
   const detail = "error: models unavailable\n    /tmp/مراجعة";
-  const { toggle, exposedStatuses, wait, container } = mount({ code: "models_command_failed", params: { agent: "Codex", detail }, message: "fallback" });
+  const { toggle, exposedStatuses, container } = mount({ code: "models_command_failed", params: { agent: "Codex", detail }, message: "fallback" });
   toggle();
-  await wait(PAST_FIRST_WRITE);
+  // The mark waits on a module loaded on first use, which a cold run transforms first: wait for it, not for a time.
+  await vi.waitFor(() => expect(modelMark(container)).not.toBeNull(), UNTIL_SHOWN);
+  await firstWriteDelayPassed();
   // No Alert under the field, and no loose text: the failure is the mark and its popover.
   expect(container.querySelector('[data-slot="alert-root"]')).toBeNull();
   expect(container.querySelector("pre")).toBeNull();
@@ -123,10 +125,9 @@ const modelMark = (container: HTMLElement) => container.querySelector<HTMLElemen
 
 it("retains request-refusal metadata for rich model descriptions in the mark's popover while keeping status announcements plain", async () => {
   const failure = new CodedError("Plain model request failure", "unknown_account", { account: "missing-account" });
-  const { toggle, exposedStatuses, wait, container } = mount(failure);
+  const { toggle, exposedStatuses, container } = mount(failure);
   toggle();
-  await wait(PAST_FIRST_WRITE);
-  expect(exposedStatuses()).toEqual([`Unknown account ${isolate("missing-account")}.`]);
+  await vi.waitFor(() => expect(exposedStatuses()).toEqual([`Unknown account ${isolate("missing-account")}.`]), UNTIL_SHOWN);
   press(modelMark(container)!);
   expect(document.querySelector("[data-status-mark-popover] code")?.textContent).toBe("missing-account");
 });
@@ -298,7 +299,7 @@ it.each([
     ),
   );
   await render(null);
-  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  await act(async () => { await Promise.allSettled(request.mock.results.map((result) => result.value)); });
   const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
   const blurWhenDisabled = (name: string) => {
     if (name === "disabled" && document.activeElement === trigger) trigger.blur();
@@ -341,16 +342,23 @@ type Reply = "list" | "refuse" | "hang";
 function mountAsking(replies: Record<"claude" | "codex", Reply[]>) {
   const asked = { claude: 0, codex: 0 };
   const unexpected: string[] = [];
-  const request = vi.fn(async (body: { type: string; agent?: "claude" | "codex" }) => {
-    if (body.type !== "list_agent_models") return { type: "ack", id: null };
+  // The asks that come back, one way or the other, for `settle` to wait on.
+  const answered: Promise<unknown>[] = [];
+  const request = vi.fn((body: { type: string; agent?: "claude" | "codex" }): Promise<unknown> => {
+    if (body.type !== "list_agent_models") return Promise.resolve({ type: "ack", id: null });
     const reply = replies[body.agent!][asked[body.agent!]++];
+    if (reply === "hang") return new Promise<never>(() => {});
+    let answer: Promise<unknown>;
     if (reply === undefined) {
       unexpected.push(body.agent!);
-      throw new Error(`Unexpected ask for ${body.agent}`);
+      answer = Promise.reject(new Error(`Unexpected ask for ${body.agent}`));
+    } else if (reply === "refuse") {
+      answer = Promise.reject(new Error("Refused"));
+    } else {
+      answer = Promise.resolve({ type: "agent_models", id: null, agent: body.agent, account: null, models: [{ id: `${body.agent}-model`, name: `${body.agent} model`, efforts: [] }], unavailable: null });
     }
-    if (reply === "hang") return new Promise<never>(() => {});
-    if (reply === "refuse") throw new Error("Refused");
-    return { type: "agent_models", id: null, agent: body.agent, account: null, models: [{ id: `${body.agent}-model`, name: `${body.agent} model`, efforts: [] }], unavailable: null };
+    answered.push(answer);
+    return answer;
   });
   const daemon = testDaemon({ request: request as Daemon["request"], showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
@@ -371,7 +379,7 @@ function mountAsking(replies: Record<"claude" | "codex", Reply[]>) {
       </DaemonProvider>,
     ),
   );
-  const settle = () => act(async () => {});
+  const settle = () => act(async () => { await Promise.allSettled(answered); });
   const trigger = () => container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
   const options = () => [...container.querySelectorAll("option")].map((option) => option.value);
   return { render, settle, trigger, options, container, request, marks };

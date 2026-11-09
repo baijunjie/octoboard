@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { afterFrames } from "./afterFrames";
+import { fakeTimers } from "../../test/clock";
 
-beforeEach(() => vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] }));
-afterEach(() => vi.useRealTimers());
+beforeEach(() => {
+  fakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });
+});
 
 const frame = () => vi.advanceTimersToNextFrame();
 

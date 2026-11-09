@@ -5,7 +5,7 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { DetailsButton } from "../components/alerts/DetailsButton";
 import { HOVER_CLOSE_DELAY_MS } from "../components/hint/hintPopover";
-import { activate, enter, leave, press, mountForTooltip, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { activate, enter, leave, press, mountForTooltip } from "../components/hint/tooltipTestSupport";
 import { CodedError } from "../errors/codedError";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import { setLanguage } from "../i18n/language";
@@ -14,6 +14,7 @@ import type { ProcessCount } from "../protocol";
 import { DaemonProvider, type Daemon } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { RailProcessesEntry } from "./RailProcessesEntry";
+import { fakeTimers } from "../test/clock";
 
 // The entry hands its rows to the panel entry as the content it renders, so the panel entry renders again only when
 // the entry's rows (or another of its props) change.
@@ -41,7 +42,7 @@ beforeEach(() => {
 });
 
 async function mount(initial: ProcessCount[]) {
-  withFakeTimers();
+  fakeTimers();
   const onOpen = vi.fn(() => true);
   const answer: { counts: ProcessCount[]; failing: boolean; failure?: Error } = { counts: initial, failing: false };
   const request = vi.fn(async (body: { type: string }) => {

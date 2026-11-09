@@ -8,8 +8,9 @@ import { sessionOf } from "../fixtures/builders";
 import type { ExitCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { SessionStatus, ShellTerminal } from "../protocol";
-import { quitHolders, useAppExit, type HandoverCheck } from "./useAppExit";
+import { HANDOVER_CHECK_TIMEOUT_MS, quitHolders, useAppExit, type HandoverCheck } from "./useAppExit";
 import { BROWSER_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -242,11 +243,10 @@ describe("restarting", () => {
     });
 
     it("warns when the daemon does not answer in time, and when there is no check to ask", async () => {
-      vi.useFakeTimers();
-      onTestFinished(() => void vi.useRealTimers());
+      fakeTimers();
       const slow = mount([sessionOf("i", "c", "p", "I", "idle")], { handover: "never" });
       const pending = act(async () => slow.hook().requestRestart("0.2.0", "0.3.0"));
-      await act(async () => vi.advanceTimersByTimeAsync(2000));
+      await act(async () => vi.advanceTimersByTimeAsync(HANDOVER_CHECK_TIMEOUT_MS));
       await pending;
       expect(slow.hook()).toMatchObject({ exitConfirmOpen: true, exitRestartDetail: { uncertain: true } });
       const none = mount([sessionOf("i", "c", "p", "I", "idle")], { withoutCheck: true });

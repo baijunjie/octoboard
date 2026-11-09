@@ -23,7 +23,7 @@ import { createSettingsReplies, keepProviderSettingsInEffect } from "./fixtureSe
 
 /** How long after the app subscribes to notifications the scenario's own are raised, for the stack to be
  * on screen to receive them. */
-const NOTIFICATION_DELAY_MS = 300;
+export const NOTIFICATION_DELAY_MS = 300;
 
 /** The daemon the gallery runs a scenario over: `scenarioNotificationsRaised` settles once the scenario's own
  * notifications have been handed to the stack, which the page waits for before it calls itself ready. It never settles

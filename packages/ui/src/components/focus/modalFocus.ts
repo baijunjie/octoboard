@@ -41,7 +41,7 @@ export function focusAfterLoss(focusTerminal: () => void): void {
 let modalLossFallback: (() => void) | undefined;
 let modalLossTimer: ReturnType<typeof setTimeout> | undefined;
 /** Long enough for a closing modal's exit transition and react-aria's focus restore, a frame after it unmounts. */
-const MODAL_CLOSE_SETTLE_MS = 400;
+export const MODAL_CLOSE_SETTLE_MS = 400;
 
 /** Registers where focus goes when a modal that came up unasked (an error alert, a pending question), or Settings with
  * no dialog under it, closes and leaves it on `<body>` (see `focusAfterModalCloses`); the window passes `focusAfterLoss`

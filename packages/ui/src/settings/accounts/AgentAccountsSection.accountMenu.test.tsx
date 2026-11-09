@@ -11,31 +11,21 @@ import { framesAsTimers, settleFrames, trackMountRefocus } from "../../component
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { windowAttention } from "../../components/announce/windowTestSupport";
 import { SettingsDialog } from "../SettingsDialog";
+import { MAX_FRAMES_TO_WAIT_FOR_CLOSE } from "./AgentAccountsSection";
+import { SUCCESS_SHOWN_MS } from "./AccountLogin";
 import { TestHost } from "../../test/TestHost";
 import { registerSettingsLauncher } from "../settingsLauncher";
 import { accountLogins, request, sessions, settings, startDaemon } from "./agentAccountsSectionTestState";
 import { buttonNamed, chooseItem, mount, openDetailsOf, openMcpOf, openSettingsOf, openTabMenu, rowOf } from "./agentAccountsSectionTestSupport";
 import { matchesWidthQuery } from "../../test/viewport";
 import { TEST_PROVIDERS } from "../../test/testProviders";
+import { fakeTimers } from "../../test/clock";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
 vi.mock("../../components/text/MarkedPath", async () => ({ MarkedPath: (await import("./agentAccountsSectionTestState")).MarkedPathStandIn }));
 vi.mock("../useSectionRefocus", async (importOriginal) => (await import("./agentAccountsSectionTestState")).sectionRefocusStandIn(await importOriginal()));
 vi.mock("../../components/form/OptionSelect", async () => ({ OptionSelect: (await import("./agentAccountsSectionTestState")).OptionSelectStandIn }));
-
-/** Fakes the timers for one test, checking once its root is unmounted that it left none running. Call it before
- * `mount`, so that its check runs after the unmount. */
-function fakeTimers() {
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    try {
-      expect(vi.getTimerCount()).toBe(0);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-}
 
 describe("an account's actions menu", () => {
   // The account's name is isolated in the label, and the tabs' own hidden menus are named alike.
@@ -150,8 +140,7 @@ describe("an account's actions menu", () => {
   });
 
   it("announces the login's progress from one region whose first text waits for the modal's own focus move", () => {
-    vi.useFakeTimers();
-    onTestFinished(() => void vi.useRealTimers());
+    fakeTimers();
     accountLogins.push({ agent: "claude", account: "claude-work", status: "starting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
     const { set } = mount();
     const dialog = document.querySelector('[role="dialog"]')!;
@@ -223,6 +212,7 @@ describe("an account's actions menu", () => {
   });
 
   it("keeps focus on Log in again when a login opened from the account's menu fails, the menu's focus not coming back over it", async () => {
+    framesAsTimers("pointer");
     const { container, set } = mount();
     await openAccountMenu(container, 1);
     await chooseItem("Log in");
@@ -230,7 +220,7 @@ describe("an account's actions menu", () => {
       failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } }] });
     await act(async () => {});
     // The running form's unmounting would hand the menu's focus back a turn later, were the swap not seen.
-    await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 20))));
+    await settleFrames();
     const dialog = document.querySelector('[role="alertdialog"]')!;
     expect(document.activeElement).toBe(buttonNamed(dialog, "Log in again"));
   });
@@ -286,7 +276,7 @@ describe("an account's actions menu", () => {
     expect(region.classList.contains("sr-only")).toBe(true);
     expect(region.textContent?.replace(/[\u2068\u2069]/g, "")).toBe("claude-work: logged in.");
     expect([...container.querySelectorAll('[role="status"]:not(:empty)')]).toEqual([region]);
-    act(() => vi.advanceTimersByTime(6000));
+    act(() => vi.advanceTimersByTime(SUCCESS_SHOWN_MS));
     expect(store.getState().accountLogins).toEqual([]);
     expect(region.textContent).toBe("");
   });
@@ -303,7 +293,7 @@ describe("an account's actions menu", () => {
     expect(said()).toBe("claude-work: logged in.");
     // The row clears the shown login after a while; closing the dialog and running out what is pending ends the test
     // clean.
-    act(() => vi.advanceTimersByTime(6000));
+    act(() => vi.advanceTimersByTime(SUCCESS_SHOWN_MS));
     expect(store.getState().accountLogins).toEqual([]);
     act(() => buttonNamed(dialog, "Close")!.click());
     act(() => vi.runOnlyPendingTimers());
@@ -317,7 +307,7 @@ describe("an account's actions menu", () => {
     const region = rowOf(container, "claude-work").querySelector('[role="status"]')!;
     attend(false);
     set({ accountLogins: [{ agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null }] });
-    act(() => vi.advanceTimersByTime(60_000));
+    act(() => vi.advanceTimersByTime(SUCCESS_SHOWN_MS + AFTER_FOCUS_MOVE_DELAY_MS));
     expect(region.textContent).toBe("");
     expect(store.getState().accountLogins).toHaveLength(1);
     attend(true);
@@ -325,7 +315,7 @@ describe("an account's actions menu", () => {
     expect(region.textContent).toBe("");
     act(() => vi.advanceTimersByTime(1));
     expect(region.textContent?.replace(/[\u2068\u2069]/g, "")).toBe("claude-work: logged in.");
-    act(() => vi.advanceTimersByTime(6000));
+    act(() => vi.advanceTimersByTime(SUCCESS_SHOWN_MS));
     expect(store.getState().accountLogins).toEqual([]);
   });
 
@@ -629,7 +619,7 @@ describe("an account's actions menu", () => {
       if (body.type === "delete_account" && refusing) return Promise.reject(new CodedError("refused", code, { path: "/a", detail: "x" }));
       return Promise.resolve({});
     }) as never);
-    const { container } = mount();
+    const { container, unmount } = mount();
     await openRemoval(container);
     await trackMountRefocus()();
     await act(async () => trashOption().click());
@@ -649,14 +639,15 @@ describe("an account's actions menu", () => {
     // Focus goes back to Remove, which is still held (not disabled) while the question is out.
     await settleFrames();
     expect(document.activeElement).toBe(remove);
-    vi.useFakeTimers();
-    onTestFinished(() => { vi.useRealTimers(); });
+    // The clock is faked only from here, after the section mounted; the section is unmounted first at the end, so that
+    // what is left to run out is what the unmount armed.
+    fakeTimers({ beforeDrain: unmount });
     await act(async () => release());
     expect(removeDialog().textContent).toContain("The directory is your home folder");
     expect(removeHeld()).toBe(true);
     // Remove is disabled now, so focus is handed to Cancel rather than left on <body>.
     expect(document.activeElement).toBe(buttonNamed(removeDialog(), "Cancel"));
-    await act(async () => { vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS + 1); });
+    await act(async () => { vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS); });
     expect(removeDialog().querySelector('[role="alert"]')?.textContent).toContain("The directory is your home folder");
   });
 
@@ -819,6 +810,7 @@ it.each([false, true])("keeps an active login for navigation requesting Add agen
 });
 
 it("lets Manage accounts recovery dismiss a stale editor and focus the real Settings section", async () => {
+  framesAsTimers("pointer");
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
@@ -837,7 +829,6 @@ it("lets Manage accounts recovery dismiss a stale editor and focus the real Sett
     unregister();
     act(() => {
       root.unmount();
-      while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
     });
     container.remove();
   });
@@ -857,9 +848,7 @@ it("lets Manage accounts recovery dismiss a stale editor and focus the real Sett
   await act(async () => buttonNamed(document, "Save")!.click());
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Manage accounts");
   act(() => buttonNamed(document, "Manage accounts")!.click());
-  await act(async () => {
-    for (let frame = 0; frame < 4; frame++) await new Promise((resolve) => requestAnimationFrame(resolve));
-  });
+  await settleFrames();
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
   const selected = document.querySelector('[role="tab"][aria-selected="true"]');
@@ -868,6 +857,7 @@ it("lets Manage accounts recovery dismiss a stale editor and focus the real Sett
 });
 
 it("drops a focus handoff still waiting when the section unmounts, so the next section's row keeps focus", async () => {
+  framesAsTimers("pointer");
   const first = mount();
   const dialog = await openDetailsOf(first.container, "claude-work");
   // The dialog's close starts the handoff to the row's menu button, which waits for a frame.
@@ -875,9 +865,8 @@ it("drops a focus handoff still waiting when the section unmounts, so the next s
   first.unmount();
   const second = mount();
   const trigger = rowOf(second.container, "claude-work").querySelector<HTMLElement>("[data-row-actions] button")!;
-  // A waiting handoff looks its target up in the whole document and gives up after 30 frames.
-  await act(async () => {
-    for (let frame = 0; frame < 40; frame++) await new Promise((resolve) => requestAnimationFrame(resolve));
-  });
+  // A waiting handoff looks its target up in the whole document and gives up after `MAX_FRAMES_TO_WAIT_FOR_CLOSE`
+  // frames, so run more than that.
+  await settleFrames(MAX_FRAMES_TO_WAIT_FOR_CLOSE + 1);
   expect(document.activeElement).not.toBe(trigger);
 });

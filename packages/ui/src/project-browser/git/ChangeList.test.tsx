@@ -2,6 +2,7 @@
 import React, { act, useState } from "react";
 import { expect, it, vi } from "vitest";
 
+import { FIRST_WRITE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { isolate } from "../../i18n/isolate";
 import { ChangeList } from "./ChangeList";
 import { changeRowOffset } from "./changeListLayout";
@@ -11,6 +12,7 @@ import type { ChangeViewState } from "./changeView";
 import { changeItems, commitItems, commitKey, commitScope, directoryKey, sectionKey } from "./changes";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
 import { ROW_HEIGHT } from "../treeRow";
+import { fakeTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -71,18 +73,14 @@ it("says so when no file name matches", () => {
 });
 
 it("announces that nothing matches, and only when something is typed", () => {
-  vi.useFakeTimers();
-  try {
-    const statusText = (container: HTMLElement) => container.querySelector("[role=status]")?.textContent;
-    const typed = render({ filter: "zzz" });
-    act(() => void vi.advanceTimersByTime(200));
-    expect(statusText(typed.container)).toBe("No matching changes");
-    const empty = render({ filter: "" }, []);
-    act(() => void vi.advanceTimersByTime(200));
-    expect(statusText(empty.container)).toBe("");
-  } finally {
-    vi.useRealTimers();
-  }
+  fakeTimers();
+  const statusText = (container: HTMLElement) => container.querySelector("[role=status]")?.textContent;
+  const typed = render({ filter: "zzz" });
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
+  expect(statusText(typed.container)).toBe("No matching changes");
+  const empty = render({ filter: "" }, []);
+  act(() => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
+  expect(statusText(empty.container)).toBe("");
 });
 
 /** A list that folds its own sections: what the Git mode holds for them is kept here, so a press on

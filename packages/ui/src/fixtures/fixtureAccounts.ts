@@ -78,9 +78,13 @@ const NO_REREAD_REFUSALS = new Set([
   "shell_environment_timeout",
 ]);
 
+/** How long after a sign-in starts the CLI has handed back its page to authorize on. */
+export const LOGIN_WAITING_MS = 50;
+/** How long after that a scenario's staged outcome ends the sign-in. */
+export const LOGIN_ENDS_MS = 300;
 /** How long after answering a use of a reset credit the fixture daemon reads the account's quota again, unless the scenario
  * says otherwise (`resetCreditReading`): after the reply has reached the window, as the real daemon's read does. */
-const RESET_CREDIT_REREAD_MS = 100;
+export const RESET_CREDIT_REREAD_MS = 100;
 
 /** What the CLI said when a login the scenario ends as `failed` did not go through. */
 const LOGIN_FAILURE_DETAIL = [
@@ -366,8 +370,8 @@ export function createAccountReplies({ scenario, store, fail }: FixtureContext):
           publish(outcome === "failed"
             ? { status: "failed", failure: { code: "login_failed", params: { agent: servedLabel(body.agent), detail: LOGIN_FAILURE_DETAIL }, message: `${servedLabel(body.agent)} reported: ${LOGIN_FAILURE_DETAIL}` } }
             : { status: outcome });
-        }, 300);
-      }, 50);
+        }, LOGIN_ENDS_MS);
+      }, LOGIN_WAITING_MS);
       return { type: "ack", id: null };
     },
     cancel_account_login: (body) => {

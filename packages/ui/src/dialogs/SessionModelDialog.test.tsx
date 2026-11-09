@@ -10,6 +10,7 @@ import { buttons, optionElements } from "../test/dom";
 import { testDaemon } from "../test/testDaemon";
 import { framesAsTimers, trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { SessionModelDialog } from "./SessionModelDialog";
+import { flushPromises } from "../test/clock";
 
 vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
@@ -55,7 +56,7 @@ async function mount(session: Session, models: "pending" | "unavailable" | "empt
     container.remove();
   });
   await pastMountRefocus();
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  await flushPromises();
   return { request, onClose, onChangeModel, store };
 }
 

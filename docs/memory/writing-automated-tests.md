@@ -119,34 +119,32 @@ positive tests".
   it goes through `act`.
 - A root is not the only thing a test arms. Whatever it set going it also stops or awaits before it ends — a
   module-level singleton's own queue and timers, such as HeroUI's toast queue, which a later unmount cannot reach.
-- react-aria's tooltip warm-up is such a singleton, with no way to reset it: showing any tooltip sets one flag for the
-  whole window, and closing it leaves the flag set for 500 ms (`TOOLTIP_COOLDOWN` in react-stately 3.50.0's
-  `useTooltipTriggerState`), during which the next tooltip opens with no delay. So a test that counts on a tooltip
-  still waiting out its delay starts cold itself — waits 600 ms of real time first, before faking any timers, as the
-  "still waiting to show" case in `packages/ui/src/components/menus/ActionMenu.test.tsx` does — or it passes alone and fails
-  after any test that closed a tooltip. A test that fakes timers and shows a tooltip runs them out before restoring
-  real ones, as `finish` in `packages/ui/src/components/hint/AnchoredTooltip.test.tsx` does, or the flag stays set for the
-  rest of the file.
-- A timer armed before `vi.useFakeTimers()` stays on the real clock, and advancing the fake one never fires it. The
+- react-aria's tooltip warm-up is such a singleton, and no test can reset or fake it: showing any tooltip sets one
+  flag for the whole window; closing it arms a 500 ms cooldown on whichever clock was real at the time, during which
+  the next tooltip opens with no delay; and unmounting while a tooltip is open leaves the flag set with no cooldown
+  armed at all, so no wait clears it. So a test that counts on a tooltip still waiting out its delay — including one
+  asserting that no tooltip is up yet right after a hover — first calls `tooltipsCooledDown()`
+  (`packages/ui/src/components/hint/tooltipTestSupport.ts`), before faking the clock, or it passes alone and fails after
+  any test that showed a tooltip. And a test that can leave a tooltip open closes it before unmounting, as
+  `mountForTooltip` there does; a root mounted some other way calls `closeOpenTooltip()` first in its teardown.
+- A timer armed before the clock is faked stays on the real clock, and advancing the fake one never fires it. The
   window's status region (`StatusAnnouncer`) arms its first-write delay (`FIRST_WRITE_DELAY_MS`) when it mounts and
   writes nothing until it has passed, so a test that mounts `App`, or any component holding a status region, and only
-  then fakes timers to drive an announcement sees the region stay empty whenever less than that delay passed in real
-  time: it passes under the full suite's load and fails alone. Fake the clock before mounting, or wait the delay out
-  on the real clock inside `act` before faking, as `firstWriteDelayPassed` in
-  `packages/ui/src/App.projectActions.test.tsx` does.
-- Settling HeroUI's toast queue in a test that has queued a toast: fake the timers for that test (restored with
-  `onTestFinished`), run `toast.clear()` and `vi.runOnlyPendingTimers()` together inside one `act`, and assert after
-  the unmount that `toast.getQueue().visibleToasts` is empty. The assertion is the load-bearing half rather than the
-  fake timers: faking alone moves the queue's exits onto a virtual clock that `vi.useRealTimers()` then discards,
-  which hides the leak instead of settling it. An empty `visibleToasts` covers the queue's own timers too, because
+  then fakes the clock to drive an announcement sees the region stay empty whenever less than that delay passed in
+  real time: it passes under the full suite's load and fails alone. Fake the clock before mounting; only a test that
+  has to mount on the real clock waits the delay out with `firstWriteDelayPassed()`
+  (`packages/ui/src/components/announce/statusAnnouncerTestSupport.ts`) before faking.
+- Settling HeroUI's toast queue in a test that has queued a toast: under `fakeTimers()`, run `toast.clear()` and
+  `vi.runOnlyPendingTimers()` together inside one `act`, and assert after the unmount that
+  `toast.getQueue().visibleToasts` is empty. An empty `visibleToasts` covers the queue's own timers too, because
   `close()` parks one per toast and a toast leaves `visibleToasts` only inside that timer's callback. Two near-misses
   to turn down: the queue's exported `destroy()`, advertised for HMR and test teardown, clears those timers but
   leaves every toast in `visibleToasts`; and having the test's `matchMedia` stub answer `true` to
   `(prefers-reduced-motion: reduce)` takes a synchronous close path needing no timers at all, but stops exercising
   the path the app runs.
-- A test that fakes timers can show it left none pending only by asserting `vi.getTimerCount()` is 0 itself. The
-  instrumented run this class of leak is hunted with wraps `globalThis.setTimeout`, which `vi.useFakeTimers()`
-  replaces, so it reports nothing pending for such a test whether or not that test ever ran its timers.
+- The instrumented run this class of leak is hunted with wraps `globalThis.setTimeout`, which a fake clock replaces,
+  so it reports nothing pending for a test on a fake clock whether or not that test ran its timers; such a test is
+  covered only by `fakeTimers()`'s teardown, which fails on any timer left.
 
 The symptom names the wrong file, so do not start from the one it is reported against: the crash is attributed to
 whichever file was running when the stray work fired, it does not reproduce when that file is run alone, and the
@@ -154,6 +152,24 @@ count varies run to run because it is a race. Look instead for a test anywhere i
 running, and judge the fix over repeated full runs — one such leak showed up about 3 times in 18 — never over a
 single clean one. A "not wrapped in act" warning out of a file that passes is the audible half of the same leak and
 is tracked down the same way, not shrugged at.
+
+## A jsdom test resets the window-wide state it changed
+
+Applies to the `packages/ui` component tests (`vitest` under jsdom). State a test changes outside what it mounted
+survives into the next test, which then passes alone and fails after it (`--sequence.shuffle=true` finds these).
+Besides the error-alert queue and the window preferences, which the shared teardown resets (`docs/structure/ui.md`,
+"Shared entry points"):
+
+- react-aria's interaction modality is window-wide: a virtual click (`element.click()`) leaves it at `virtual`, under
+  which a dialog puts its opening focus off a frame. A test whose outcome depends on the modality sets it with
+  `withModality(...)` (`packages/ui/src/components/dialog/dialogTestSupport.ts`), called before `fakeTimers()`.
+- A `createPersistedPreference` value is kept in module memory, so `localStorage.clear()` does not reset it. A test
+  that changes one resets it in its teardown; a new window preference the app's tests can change is added to
+  `resetAppPreferences` (`packages/ui/src/appTestSupport.tsx`).
+- After `vi.resetModules()`, a module imported afterwards — a lazily loaded chunk included — gets fresh copies of what
+  it imports, so a singleton or an error class the test file imported statically is no longer the one the code uses.
+  Keep such a module shared with a `vi.mock(path, async (importOriginal) => importOriginal())` factory, whose exports
+  Vitest keeps across `vi.resetModules()`.
 
 ## Settle a lazily imported surface before reading it, and never take a clean whole-file run as evidence
 
@@ -163,10 +179,10 @@ Applies to the `packages/ui` component tests (`vitest` under jsdom) that render 
 - A test that renders such a surface and then asserts synchronously reads the `Suspense` fallback rather than what
   the renderer draws, so it passes or fails on whether the node it happens to look at sits outside the boundary;
   React also retries the suspended render on its own afterwards, outside `act`.
-- Settle the import after the first render that needs it, inside `act`, around a **real** `setTimeout(resolve, 0)`:
-  it lands several microtask hops after that render, so a bare `await` does not reach it. A test under
-  `vi.useFakeTimers()` therefore cannot settle this way and has to assert only on what sits outside the boundary,
-  and for the same reason the settle must not be folded into a shared render helper that such tests also call.
+- Settle the import with `await settleLazyImport()` (`packages/ui/src/test/lazyImport.ts`) after the first render that
+  needs it: the import lands several microtask hops after that render, so a bare `await` does not reach it. The
+  settle needs the real clock, so a test on a fake clock asserts only on what sits outside the boundary, and the
+  settle is not folded into a shared render helper that such tests also call.
 - A `lazy` object caches its resolution for the module's lifetime, so only the **first** test in a file that renders
   that object ever suspends; every later one is rescued by it and passes on file order alone. A clean whole-file run
   therefore says nothing — check a test of this kind by running it on its own (`vitest run <file> -t "<name>"`), which
@@ -185,7 +201,24 @@ alone and fails under the full suite's load.
 
 Call `trackMountRefocus()` (`packages/ui/src/components/dialog/dialogTestSupport.ts`) right after the mount, and await what it
 returns before the first step whose focus the test asserts — immediately after the mount is simplest. Skip the await
-in a test on `vi.useFakeTimers()`, where it would never resolve.
+in a test on a fake clock, where it would never resolve.
+
+- Under a fake clock, assert the dialog's opening focus before anything runs the timers out, a mount helper
+  included: running them fires the refocus, which moves focus left on `<body>` to the dialog, so "focus is on the
+  dialog" then passes whether or not the opening focus went there.
+- `fakeTimers()` fakes animation frames too, as sinon's 16 ms frames (`FAKE_FRAME_MS`), so a frame never runs ahead
+  of a 0 ms timer and a `requestAnimationFrame` stub installed earlier is replaced. A test on `framesAsTimers()` that
+  also fakes the clock does so with `fakeTimersKeepingFrames()` (`packages/ui/src/test/clock.ts`).
+
+## Inject the load proof's delay as a busy wait, never as a timer
+
+Applies to the run under load that "Tests that depend on time" in `.claude/skills/agent-unit-test/SKILL.md` asks of a
+`packages/ui` test (vitest). A shape that has worked: the file run alone, three copies of it run at once with
+`--sequence.shuffle=true --maxWorkers=4`, and a run with real time injected just before the assertion.
+
+- Inject that time as a busy loop or `Atomics.wait` on a `SharedArrayBuffer`. A `setTimeout` injected into a test on
+  a fake clock never fires, so the test hangs instead of showing anything about load.
+- Write `--sequence.shuffle=true`, not the bare flag, when file filters follow it.
 
 ## A jsdom test cannot tell where focus ends after a session is selected
 

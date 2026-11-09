@@ -51,7 +51,7 @@ export const AGENT_STRIP_HEIGHT = 45;
 type AccountView = "details" | "settings" | "mcp";
 
 /** How many animation frames (about half a second) `handFocusOnceClosed` waits for a closing dialog to go. */
-const MAX_FRAMES_TO_WAIT_FOR_CLOSE = 30;
+export const MAX_FRAMES_TO_WAIT_FOR_CLOSE = 30;
 
 /**
  * Puts focus on what `find` returns once the dialog that was open over the section has gone, for a dialog whose own

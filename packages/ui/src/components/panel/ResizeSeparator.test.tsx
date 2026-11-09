@@ -6,6 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { ResizeSeparator } from "./ResizeSeparator";
 import { enter, leave, openTooltip } from "../hint/tooltipTestSupport";
+import { fakeTimers } from "../../test/clock";
 
 /** The elements a tooltip has been placed against. */
 const anchored: Element[] = [];
@@ -76,8 +77,7 @@ it.each([
   ["vertical", { clientX: 10, clientY: 0 }, { clientX: 50, clientY: 90 }],
   ["horizontal", { clientX: 0, clientY: 10 }, { clientX: 90, clientY: 50 }],
 ] as const)("%s: a drag along its axis changes the value without committing, and commits once at the end", (orientation, from, to) => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { separator, onChange, onCommit, pointer } = mount(orientation);
   pointer("pointerdown", { button: 0, pointerId: 1, ...from });
   expect(separator.setPointerCapture).toHaveBeenCalledWith(1);
@@ -92,8 +92,7 @@ it.each([
 });
 
 it("coalesces high-rate moves and applies the last pending position before committing", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { pointer, onChange, onCommit } = mount("vertical");
   pointer("pointerdown", { button: 0, pointerId: 1, clientX: 10 });
   for (let clientX = 11; clientX <= 90; clientX++) pointer("pointermove", { pointerId: 1, clientX });
@@ -149,8 +148,7 @@ it.each([
 });
 
 it("shows its tooltip once the mouse has rested on the handle, without naming the separator a second time", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { separator } = mount("vertical", -1, "ltr", { appearance: "grip", tooltip: "Resize panel" });
   expect(separator.getAttribute("aria-label")).toBe("Resize");
   expect(separator.hasAttribute("aria-describedby")).toBe(false);
@@ -168,8 +166,7 @@ it("shows its tooltip once the mouse has rested on the handle, without naming th
 });
 
 it("has no tooltip unless it is given one", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { separator } = mount("vertical");
   enter(separator);
   act(() => void vi.runOnlyPendingTimers());
@@ -177,8 +174,7 @@ it("has no tooltip unless it is given one", () => {
 });
 
 it("opens a horizontal grip's tooltip above it", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { separator } = mount("horizontal", 1, "ltr", { appearance: "grip", tooltip: "Resize panel" });
   enter(separator);
   act(() => void vi.runOnlyPendingTimers());
@@ -187,8 +183,7 @@ it("opens a horizontal grip's tooltip above it", () => {
 });
 
 it("can face a vertical grip's tooltip toward the pane on its start side", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const { separator } = mount("vertical", 1, "ltr", { appearance: "grip", tooltip: "Resize panel", tooltipPlacement: "start" });
   enter(separator);
   act(() => void vi.runOnlyPendingTimers());

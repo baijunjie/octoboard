@@ -160,31 +160,23 @@ it.each(["issueAddress", "openExternal"] as const)("keeps %s recovery specific t
 });
 
 it("keeps different recovery metadata and daemon details as separate queued failures", () => {
-  try {
-    errorAlerts.report({ message: "same", error: new CodedError("same", "session_locked", { session: "a" }) });
-    errorAlerts.report({ message: "same", error: new CodedError("same", "session_locked", { session: "b" }) });
-    errorAlerts.report({ message: "same", recovery: "clipboard" });
-    errorAlerts.report({ message: "same", recovery: "clipboard" });
-    expect(errorAlerts.getSnapshot()).toHaveLength(3);
-  } finally {
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  }
+  errorAlerts.report({ message: "same", error: new CodedError("same", "session_locked", { session: "a" }) });
+  errorAlerts.report({ message: "same", error: new CodedError("same", "session_locked", { session: "b" }) });
+  errorAlerts.report({ message: "same", recovery: "clipboard" });
+  errorAlerts.report({ message: "same", recovery: "clipboard" });
+  expect(errorAlerts.getSnapshot()).toHaveLength(3);
 });
 
 it("does not collapse distinct original exceptions behind the same failure summary", () => {
-  try {
-    errorAlerts.report({ message: "Rendering failed", error: new Error("worker init failed") });
-    errorAlerts.report({ message: "Rendering failed", error: { message: "grammar failed" } });
-    errorAlerts.report({ message: "Rendering failed", error: "module load reason" });
-    errorAlerts.report({ message: "Rendering failed", error: { message: "grammar failed" } });
-    expect(errorAlerts.getSnapshot()).toHaveLength(3);
-    const cyclic = { message: "cyclic failure", cause: undefined as unknown };
-    cyclic.cause = cyclic;
-    errorAlerts.report({ message: "Rendering failed", error: cyclic });
-    expect(errorAlerts.getSnapshot()).toHaveLength(4);
-  } finally {
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  }
+  errorAlerts.report({ message: "Rendering failed", error: new Error("worker init failed") });
+  errorAlerts.report({ message: "Rendering failed", error: { message: "grammar failed" } });
+  errorAlerts.report({ message: "Rendering failed", error: "module load reason" });
+  errorAlerts.report({ message: "Rendering failed", error: { message: "grammar failed" } });
+  expect(errorAlerts.getSnapshot()).toHaveLength(3);
+  const cyclic = { message: "cyclic failure", cause: undefined as unknown };
+  cyclic.cause = cyclic;
+  errorAlerts.report({ message: "Rendering failed", error: cyclic });
+  expect(errorAlerts.getSnapshot()).toHaveLength(4);
 });
 
 it("gives a denied read its own remedy over the writing one its operating-system signature names", () => {

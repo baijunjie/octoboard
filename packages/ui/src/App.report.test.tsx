@@ -9,14 +9,13 @@ import { stubWindow } from "./appTestSupport";
 import { PanelHeader } from "./components/panel/PanelHeader";
 import { mountForTooltip } from "./components/hint/tooltipTestSupport";
 import { consoleOf, pageOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
-import { defaultStack } from "./panels/stackState";
-import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
 import type { Event, Project } from "./protocol";
 import { applyDaemonEvent, DaemonProvider, type Daemon } from "./store";
 import { testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { BROWSER_HOST } from "./test/hosts";
+import { fakeTimers } from "./test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -47,27 +46,7 @@ vi.mock("./terminal/TerminalController", () => ({
 }));
 
 function mountApp(narrow = false) {
-  // The panel stacks and the closed Report panels outlive a test's window. Each session's closed
-  // Report panel is reset through the setter of the hook that has that session's panel.
-  const SESSIONS = ["s-one", "s-two", "s-none"];
-  const stacks: Record<string, ReturnType<typeof usePanelStacks>> = {};
-  function StackReset({ session }: { session?: string }) {
-    stacks[session ?? "plain"] = usePanelStacks(session);
-    return null;
-  }
   stubWindow(narrow ? 390 : 1400);
-  onTestFinished(() => {
-    act(() => {
-      for (const session of SESSIONS) stacks[session].setStack("project", { ...defaultStack("project"), open: ["report", "files"] });
-      stacks.plain.setStack("project", defaultStack("project"));
-      stacks.plain.setStack("report", defaultStack("report"));
-    });
-    try {
-      localStorage.clear();
-    } catch {
-      // No storage: nothing was kept.
-    }
-  });
   const console_ = consoleOf("c-rep", "Main");
   const project = projectOf("p-site", console_.id, "Website");
   const sessions = [
@@ -83,7 +62,7 @@ function mountApp(narrow = false) {
   });
   mountForTooltip(
     <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
-      <ThemeProvider><DaemonProvider value={daemon}><StackReset />{SESSIONS.map((session) => <StackReset key={session} session={session} />)}<App /></DaemonProvider></ThemeProvider>
+      <ThemeProvider><DaemonProvider value={daemon}><App /></DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
   /** What the daemon broadcasts, as the window receives it. */
@@ -254,10 +233,9 @@ it("clears a failed listing once the store holds a list, so a later snapshot doe
 });
 
 it("takes back the card a hovered Report toggle floated in when the last page is deleted, handing focus on", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   document.documentElement.style.setProperty("--peek-gap", "8px");
   onTestFinished(() => {
-    vi.useRealTimers();
     document.documentElement.style.removeProperty("--peek-gap");
   });
   const { push, receive } = mountApp();
@@ -272,14 +250,12 @@ it("takes back the card a hovered Report toggle floated in when the last page is
   await act(async () => {
     button.dispatchEvent(pointer("pointerover"));
     button.dispatchEvent(pointer("pointerenter"));
-    await vi.advanceTimersByTimeAsync(300);
   });
   expect(reportCard()).not.toBeNull();
   act(() => reportCard()!.querySelector<HTMLElement>("[data-in-report]")!.focus());
   act(() => setInteractionModality("pointer"));
 
   await receive({ type: "pages_deleted", session_id: "s-one", pages: ["page-1"] });
-  await act(async () => void (await vi.advanceTimersByTimeAsync(500)));
   expect(reportCard()).toBeNull();
   // The card's focus was handed on, with the ring (the mocked terminal cannot take it itself).
   expect(getInteractionModality()).toBe("keyboard");

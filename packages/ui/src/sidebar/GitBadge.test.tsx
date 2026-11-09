@@ -3,7 +3,7 @@ import React, { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { expectIndependentMarquees, stubMarquee } from "../components/motion/marqueeTestSupport";
-import { enter, leave, mountForTooltip, openPopover, openTooltip, press, tap, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { closeOpenTooltip, enter, leave, mountForTooltip, openPopover, openTooltip, press, tap } from "../components/hint/tooltipTestSupport";
 import { consoleOf, gitStatusOf, projectOf, sessionOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { GitStatus } from "../protocol";
@@ -16,6 +16,7 @@ import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { Sidebar } from "./Sidebar";
 import type { SidebarHandlers } from "./types";
+import { fakeTimers, runOutTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -56,6 +57,8 @@ const handlers = () =>
   ({ onFocus: vi.fn(), onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSetPinned: vi.fn(), onSwitchConsoleSession: vi.fn() }) as unknown as SidebarHandlers;
 
 function mountOver(status: GitStatus, view: React.ReactElement): HTMLElement {
+  // stubMarquee installs its clock before mounting so its pending-timer checks share that clock.
+  if (!vi.isFakeTimers()) fakeTimers();
   return mountForTooltip(
     <TestHost daemon={daemonWith(status)}>{view}</TestHost>,
   );
@@ -118,10 +121,9 @@ const ALL_STATES: Array<[string, Partial<GitStatus>, string, string]> = [
 /** Puts the pointer on `element`, runs the delay out and reads which tooltip is up; then takes it
  * off and shows nothing is left counting. */
 function hoverAndRead(element: Element): string | undefined {
-  const settle = withFakeTimers();
   enter(element);
   expect(openTooltip()).toBeNull();
-  settle();
+  runOutTimers();
   expect(document.querySelectorAll('[role="tooltip"]').length).toBeLessThanOrEqual(1);
   const tooltip = openTooltip();
   const text = tooltip?.textContent ?? undefined;
@@ -132,7 +134,7 @@ function hoverAndRead(element: Element): string | undefined {
     expect(branch?.querySelector("code")).not.toBeNull();
   }
   leave(element);
-  settle();
+  runOutTimers();
   expect(openTooltip()).toBeNull();
   expect(vi.getTimerCount()).toBe(0);
   return text;
@@ -279,6 +281,7 @@ const retrySessions = [...sessions, hub, sessionOf("web-bound", main.id, web.id,
  * a daemon where both projects' last check found no Git and whose re-checks the test answers, oldest first, with
  * `answer`. */
 function mountRetrying(view: (project: typeof web) => React.ReactElement) {
+  fakeTimers();
   const answers: Array<(reply: unknown) => void> = [];
   const request = vi.fn((body: { type: string }) =>
     body.type === "refresh_project_git_status" ? new Promise((resolve) => answers.push(resolve)) : Promise.resolve({ type: "ack", id: null }),
@@ -299,7 +302,10 @@ function mountRetrying(view: (project: typeof web) => React.ReactElement) {
   }
   const container = mountForTooltip(<TestHost daemon={daemon}><Shown /></TestHost>);
   const answer = (status: GitStatus | null) => act(async () => answers.shift()!({ type: "project_git_rechecked", id: null, status }));
-  return { container, request, answer, show: (project: typeof web) => act(() => show(project)), hide: () => act(() => hide()) };
+  return { container, request, answer, show: (project: typeof web) => act(() => show(project)), hide: () => act(() => {
+    closeOpenTooltip();
+    hide();
+  }) };
 }
 
 /** Presses the Git-missing mark's Try again, then has the check start, which takes the mark away. */
@@ -329,7 +335,6 @@ const RETRY_PLACEMENTS = [
 
 for (const placement of RETRY_PLACEMENTS) {
   it(`speaks a Try again that finds no Git again once its answer is in and focus has settled, outside any row's button, on ${placement.name}`, async () => {
-    withFakeTimers();
     const { container, answer } = mountRetrying(placement.view);
     advance(FIRST_WRITE_DELAY_MS);
     await tryAgain(container);
@@ -348,7 +353,6 @@ for (const placement of RETRY_PLACEMENTS) {
 }
 
 it("speaks a Try again that fails again in the same words again, each one after focus has settled", async () => {
-  withFakeTimers();
   const { container, answer } = mountRetrying(RETRY_PLACEMENTS[0].view);
   advance(FIRST_WRITE_DELAY_MS);
   for (const spoken of ["Git check failed", "Git check failed\u00A0", "Git check failed"]) {
@@ -364,7 +368,6 @@ it("speaks a Try again that fails again in the same words again, each one after 
 });
 
 it("holds a Try again's announcement while the window is not attended, and speaks it once the user is back and focus has settled", async () => {
-  withFakeTimers();
   const attend = windowAttention();
   const { container, answer } = mountRetrying(RETRY_PLACEMENTS[0].view);
   advance(FIRST_WRITE_DELAY_MS);
@@ -381,7 +384,6 @@ it("holds a Try again's announcement while the window is not attended, and speak
 });
 
 it("schedules nothing for a Try again answered after its placement went away", async () => {
-  withFakeTimers();
   const { container, answer, hide } = mountRetrying(RETRY_PLACEMENTS[1].view);
   advance(FIRST_WRITE_DELAY_MS);
   await tryAgain(container);
@@ -392,7 +394,6 @@ it("schedules nothing for a Try again answered after its placement went away", a
 });
 
 it("says nothing for a Try again that finds Git, nor for a sweep that finds none, nor for an answer that came too late", async () => {
-  withFakeTimers();
   const { container, answer } = mountRetrying(RETRY_PLACEMENTS[1].view);
   advance(FIRST_WRITE_DELAY_MS);
   // A sweep's check that finds no Git again: no request, so nothing to answer.
@@ -416,7 +417,6 @@ it("says nothing for a Try again that finds Git, nor for a sweep that finds none
 });
 
 it("speaks a Try again only for the project it asked about, in a focus view reused for the next project", async () => {
-  withFakeTimers();
   const { container, answer, show } = mountRetrying(RETRY_PLACEMENTS[1].view);
   advance(FIRST_WRITE_DELAY_MS);
   // The answer arrives once another project is shown.
@@ -509,6 +509,7 @@ it.each(PLACEMENTS)("runs only the hovered project name or branch in $name, leav
 });
 
 it("opens the badge's tooltip content in a popover on a tap only where the caller leaves it on", () => {
+  fakeTimers();
   const status = gitStatusOf(web.id, { branch: "feature/x" });
   const alone = mountForTooltip(<GitBadge status={status} touchPopover />);
   press(alone.querySelector<HTMLElement>('[role="img"]')!);

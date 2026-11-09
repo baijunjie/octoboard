@@ -5,6 +5,7 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 import { ActionableError } from "../errors/actionableError";
 import type { Translate } from "../i18n/catalog";
 import { osc52ClipboardText, programCopyHandler } from "./osc52";
+import { afterQueuedWork } from "../test/clock";
 
 describe("osc52ClipboardText", () => {
   it("decodes the base64 text as UTF-8, whichever selections it names", () => {
@@ -30,7 +31,8 @@ describe("programCopyHandler", () => {
   afterEach(() => { report.mockRestore(); });
   const copyWith = async (writeText: (text: string) => Promise<void>) => {
     programCopyHandler({ writeText }, () => ({ t }))!("text");
-    await new Promise((resolve) => setTimeout(resolve));
+    // A timer comes after every microtask the handler's clipboard promise is chained on.
+    await afterQueuedWork();
     return report;
   };
 

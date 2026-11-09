@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
 
-import { landInPanel } from "./panelLanding";
+import { LANDING_MS, landInPanel } from "./panelLanding";
+import { fakeTimers } from "../test/clock";
 
 afterEach(() => {
-  vi.useRealTimers();
   document.body.replaceChildren();
 });
 
@@ -15,28 +15,28 @@ function card(): HTMLElement {
 }
 
 it("lands in a control that fills in after the card, within the deadline", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   landInPanel("processes");
   const element = card();
-  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(LANDING_MS - 1000);
   const control = element.appendChild(document.createElement("button"));
   await vi.advanceTimersByTimeAsync(0);
   expect(document.activeElement).toBe(control);
 });
 
 it("gives up on a control that fills in only after the deadline, whether or not the card was there", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   landInPanel("processes");
   const element = card();
   await vi.advanceTimersByTimeAsync(0);
-  await vi.advanceTimersByTimeAsync(3500);
+  await vi.advanceTimersByTimeAsync(LANDING_MS + 500);
   element.appendChild(document.createElement("button"));
   await vi.advanceTimersByTimeAsync(0);
   expect(document.activeElement).toBe(document.body);
 });
 
 it("stops waiting when the returned canceller is called", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   const cancel = landInPanel("processes");
   cancel();
   card().appendChild(document.createElement("button"));

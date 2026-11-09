@@ -3,15 +3,17 @@ import { act, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { FAKE_FRAME_MS, fakeTimers } from "../test/clock";
+import { PANE_INSET_MS, SPAN_END_SLACK_MS } from "./paneDockMotion";
 import { AsidePane } from "./AsidePane";
 import type { PanePeek } from "./usePaneToggles";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function mount(reduce = false) {
-  vi.useFakeTimers();
+  fakeTimers();
   vi.stubGlobal("matchMedia", () => ({ matches: reduce }));
-  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => setTimeout(() => callback(0), 16));
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => setTimeout(() => callback(0), FAKE_FRAME_MS));
   vi.stubGlobal("cancelAnimationFrame", clearTimeout);
   document.documentElement.style.setProperty("--peek-gap", "8px");
   const container = document.body.appendChild(document.createElement("div"));
@@ -34,8 +36,6 @@ function mount(reduce = false) {
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    expect(vi.getTimerCount()).toBe(0);
-    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
   render(true);
@@ -66,7 +66,7 @@ it("floats an open panel over the terminal's area in a window too narrow to dock
   const pane = test.pane()!;
   const input = pane.querySelector("input")!;
   act(() => input.focus());
-  test.advance(32);
+  test.advance(2 * FAKE_FRAME_MS);
   test.render(true, false, undefined, true, "files");
   expect(test.pane()).toBe(pane);
   expect(pane.className).toContain("absolute inset-y-0 end-0");
@@ -82,7 +82,7 @@ it("floats an open panel over the terminal's area in a window too narrow to dock
   expect(pane.className).toContain("opacity-0");
   expect(pane.classList.contains("transition-none")).toBe(true);
   expect(pane.dataset.cardMotion).toBe("preparing");
-  test.advance(32);
+  test.advance(2 * FAKE_FRAME_MS);
   expect(pane.className).toContain("opacity-100");
   expect(pane.dataset.cardMotion).toBe("shown");
   expect(pane.className).toContain("duration-240 ease-[cubic-bezier(0.2,0,0,1)]");
@@ -93,19 +93,19 @@ it("floats an open panel over the terminal's area in a window too narrow to dock
   test.render(true, false, undefined, true, "terminal");
   expect(pane.className).toContain("opacity-0");
   expect(pane.classList.contains("transition-none")).toBe(true);
-  test.advance(32);
+  test.advance(2 * FAKE_FRAME_MS);
   expect(pane.className).toContain("opacity-100");
 
   test.render(true);
   expect(pane.className).toContain("h-full shrink");
   expect(test.mounted).toHaveBeenCalledTimes(1);
-  test.advance(300);
+  test.advance(PANE_INSET_MS + SPAN_END_SLACK_MS);
 });
 
 it("fades a floating panel down and away as it closes, out of reach meanwhile, and is not rendered once it has gone", () => {
   const test = mount();
   test.render(true, false, undefined, true, "files");
-  test.advance(32);
+  test.advance(2 * FAKE_FRAME_MS);
   test.render(false, false, undefined, true);
   const pane = test.pane()!;
   expect(pane.className).toContain("absolute inset-y-0 end-0");
@@ -114,7 +114,7 @@ it("fades a floating panel down and away as it closes, out of reach meanwhile, a
   expect(pane.hasAttribute("inert")).toBe(true);
   expect(pane.dataset.cardMotion).toBe("away");
   expect(pane.hasAttribute("data-floating-panel")).toBe(false);
-  test.advance(300);
+  test.advance(PANE_INSET_MS + SPAN_END_SLACK_MS);
   expect(test.pane()).toBeNull();
 });
 
@@ -132,7 +132,7 @@ it("updates the column floor without replacing its content or rewriting its chos
   const pane = test.pane()!;
   const input = pane.querySelector("input")!;
   act(() => input.focus());
-  test.advance(32);
+  test.advance(2 * FAKE_FRAME_MS);
   for (const min of [336, 320]) {
     test.render(true, false, min);
     expect(test.pane()).toBe(pane);
@@ -151,7 +151,7 @@ it("pads the cards by the panel gap on all four sides and paints nothing in it, 
   expect(test.pane()!.className).toContain("ps-(--panel-grip-gap) pe-(--peek-gap) py-(--peek-gap)");
   expect(test.pane()!.className).not.toMatch(painted);
   test.floatIn();
-  test.advance(32);
+  test.advance(2 * FAKE_FRAME_MS);
   expect(test.pane()!.className).toContain("ps-(--panel-grip-gap) pe-(--peek-gap) py-(--peek-gap)");
   expect(test.pane()!.className).not.toMatch(painted);
 });
@@ -165,7 +165,7 @@ it("floats in fading up like the sidebar's card, over the terminal without takin
   // It starts below its place and clear, without a transition, and is then let to rise.
   expect(pane.className).toContain("opacity-0 invisible");
   expect(pane.classList.contains("transition-none")).toBe(true);
-  test.advance(32);
+  test.advance(2 * FAKE_FRAME_MS);
   expect(pane.className).toContain("opacity-100");
   expect(pane.className).toContain("duration-240");
   expect(pane.classList.contains("transition-none")).toBe(false);
@@ -174,10 +174,10 @@ it("floats in fading up like the sidebar's card, over the terminal without takin
 it("fades away as it came, and is not rendered once it has gone", () => {
   const test = mount();
   test.floatIn();
-  test.advance(32);
+  test.advance(2 * FAKE_FRAME_MS);
   test.render(false, false);
   expect(test.pane()!.className).toContain("opacity-0 invisible");
-  test.advance(300);
+  test.advance(PANE_INSET_MS + SPAN_END_SLACK_MS);
   expect(test.pane()).toBeNull();
 });
 
@@ -194,7 +194,7 @@ it("floats in and goes at once under reduced motion", () => {
 it("docks at once on a press, with no transition", () => {
   const test = mount();
   test.floatIn();
-  test.advance(32);
+  test.advance(2 * FAKE_FRAME_MS);
   test.render(true);
   expect(test.pane()!.className).not.toMatch(/transition|duration|translate|opacity|invisible|fixed/);
 });
@@ -202,7 +202,7 @@ it("docks at once on a press, with no transition", () => {
 it("keeps a floating pane up while the pointer is on it", () => {
   const test = mount();
   test.floatIn();
-  test.advance(32);
+  test.advance(2 * FAKE_FRAME_MS);
   const pane = test.pane()!;
   act(() => void pane.dispatchEvent(new MouseEvent("pointerover", { bubbles: true })));
   expect(test.peek.keep).toHaveBeenCalled();

@@ -5,6 +5,7 @@ import { CodedError } from "../../errors/codedError";
 import { request, settings } from "./agentAccountsSectionTestState";
 import { chooseItem, mount, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
+import { framesAsTimers, settleFrames } from "../../components/dialog/dialogTestSupport";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -44,12 +45,13 @@ describe("account order in Settings", () => {
   });
 
   it("moves the default account from its menu and rolls back a refused write", async () => {
+    framesAsTimers("pointer");
     let reject!: (error: Error) => void;
     const { container } = mount();
     request.mockImplementationOnce(() => new Promise((_, failed) => { reject = failed; }));
     const trigger = await menu(container, "default:claude");
     await chooseItem("Move later");
-    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    await settleFrames();
     expect(document.activeElement).toBe(trigger);
     expect(request).toHaveBeenCalledExactlyOnceWith({ type: "reorder_accounts", agent: "claude", accounts: ["claude-work", null] });
     expect(rows(container)).toEqual(["claude-work", "default:claude"]);
@@ -59,7 +61,6 @@ describe("account order in Settings", () => {
     await act(async () => reject(new CodedError("changed", "account_order_invalid", {})));
     expect(rows(container)).toEqual(["default:claude", "claude-work"]);
     expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not reorder the accounts"]);
-    errorAlerts.acknowledge();
   });
 
   it("drags by the grip and keeps the optimistic order when the reply precedes the broadcast", async () => {

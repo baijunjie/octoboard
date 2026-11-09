@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { AccountQuota, QuotaWindow } from "../protocol";
 import { mountHost } from "../test/mountHost";
 import { AccountNameLine, AccountQuotaSummary, QuotaPlan } from "./AccountQuotaSummary";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -14,11 +15,8 @@ const MINUTE = 60_000;
 const NOW = Date.UTC(2026, 9, 18, 12, 0, 0);
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  fakeTimers();
   vi.setSystemTime(NOW);
-});
-afterEach(() => {
-  vi.useRealTimers();
 });
 
 const windows: QuotaWindow[] = [

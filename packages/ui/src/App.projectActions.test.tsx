@@ -12,6 +12,7 @@ import { stubWindow } from "./appTestSupport";
 import { setProjectBrowserMode } from "./project-browser/browserPreferences";
 import { useProjectBrowserState } from "./project-browser/browserState";
 import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "./components/announce/StatusAnnouncer";
+import { ANNOUNCEMENT_MS } from "./app/useAnnouncement";
 import { mountForTooltip } from "./components/hint/tooltipTestSupport";
 import { windowAttention } from "./components/announce/windowTestSupport";
 import { accountOf, consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
@@ -24,13 +25,11 @@ import { testDaemon, withEmptyReplies } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { FileViewer } from "./viewer/FileViewer";
 import { BROWSER_HOST } from "./test/hosts";
+import { fakeTimers } from "./test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
 vi.setConfig({ testTimeout: 20_000 });
-
-/** Waits out, on the real clock, the first write delay the window's status region armed when the app mounted. */
-const firstWriteDelayPassed = () => act(async () => new Promise((resolve) => setTimeout(resolve, FIRST_WRITE_DELAY_MS + 50)));
 
 vi.mock("react-aria", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-aria")>();
@@ -61,9 +60,6 @@ vi.mock("./terminal/TerminalController", () => ({
 
 function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Promise<void> }, withSession = false, links?: PlatformAdapter["links"]) {
   stubWindow(narrow ? 390 : 1400);
-  onTestFinished(() => {
-    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
-  });
   const console_ = consoleOf("c-actions", "Main");
   const projects = [projectOf("p-actions", console_.id, "Website"), projectOf("p-other", console_.id, "API")];
   const sessions = withSession ? [sessionOf("s-archive", console_.id, "p-actions", "Fix bug", "idle")] : [];
@@ -160,10 +156,9 @@ it.each([false, true])("has no toggle for the pane itself, only a panel's, which
 });
 
 it("floats the hidden pane in while the pointer rests on a toggle, and docks it when the toggle is pressed", async () => {
-  vi.useFakeTimers();
+  fakeTimers();
   document.documentElement.style.setProperty("--peek-gap", "8px");
   onTestFinished(() => {
-    vi.useRealTimers();
     document.documentElement.style.removeProperty("--peek-gap");
   });
   const { container, project } = mountApp();
@@ -177,7 +172,6 @@ it("floats the hidden pane in while the pointer rests on a toggle, and docks it 
   await act(async () => {
     button.dispatchEvent(pointer("pointerover"));
     button.dispatchEvent(pointer("pointerenter"));
-    await vi.advanceTimersByTimeAsync(300);
   });
   expect(container.querySelector(`[data-browser="${project.id}"]`)).not.toBeNull();
   expect(asidePane().classList.contains("fixed")).toBe(true);
@@ -615,6 +609,8 @@ it("opens the project repository through the platform and reports an opening fai
 
 /** Opens Change model on the idle session `s-archive`, which the daemon lists two models for, and picks Sonnet. */
 async function pickSonnetInChangeModel(answer: (body: { type: string }) => unknown) {
+  // The status region's waits are on the clock from before the window mounts and arms them.
+  fakeTimers();
   const mounted = mountApp(false, undefined, true);
   vi.mocked(mounted.daemon.request).mockImplementation((async (body: { type: string; agent?: string }) => {
     if (body.type === "list_agent_models") {
@@ -631,12 +627,8 @@ async function pickSonnetInChangeModel(answer: (body: { type: string }) => unkno
     button.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.textContent === "Model"))!;
   await act(async () => model.click());
   await act(async () => Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find((option) => option.textContent === "Sonnet")!.click());
-  // The window's status region armed its first write delay (`StatusAnnouncer`) on the real clock when the app
-  // mounted; until it has passed, the region writes nothing, however far the faked clock below is advanced.
-  await firstWriteDelayPassed();
-  // From here only the announcement's waits are timed by the test.
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-  onTestFinished(() => { vi.useRealTimers(); });
+  // The status region writes nothing until its first write delay (`StatusAnnouncer`) has passed.
+  await passTime(FIRST_WRITE_DELAY_MS);
   await act(async () => Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Change model")!.click());
   return mounted;
 }
@@ -651,7 +643,7 @@ it("sends only the edited values when a model is changed, and announces the rest
     { type: "set_session_model", session: "s-archive", model: "sonnet", terminal_appearance: expect.stringMatching(/^(light|dark)$/) },
   ]]);
   expect(said()).toBeUndefined();
-  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS);
   expect(said()).toContain("restarted with its new model settings");
   expect(errorAlerts.getSnapshot()).toEqual([]);
 });
@@ -659,9 +651,9 @@ it("sends only the edited values when a model is changed, and announces the rest
 it("announces values recorded for the next resume after the focus move", async () => {
   windowAttention();
   await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "recorded" }));
-  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(said()).toBeUndefined();
-  await passTime(200);
+  await passTime(1);
   expect(said()).toContain("will use its new model settings when it is resumed");
 });
 
@@ -675,7 +667,7 @@ it("names the session by its title at the time of the reply", async () => {
     sessions: new Map(state.sessions).set("s-archive", { ...state.sessions.get("s-archive")!, title: "Renamed" }),
   })));
   await act(async () => reply());
-  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS);
   expect(said()).toContain("Renamed");
 });
 
@@ -686,9 +678,9 @@ it("holds an announcement while the window is not attended, then says it after t
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS * 3);
   expect(said()).toBeUndefined();
   attend(true);
-  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(said()).toBeUndefined();
-  await passTime(200);
+  await passTime(1);
   expect(said()).toContain("will use its new model settings when it is resumed");
 });
 
@@ -699,13 +691,15 @@ it("holds an announcement while a modal is open over the window", async () => {
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS * 3);
   expect(said()).toBeUndefined();
   await act(async () => errorAlerts.acknowledge());
-  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS);
   expect(said()).toContain("will use its new model settings when it is resumed");
   expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
 it("announces a batch of account switches once its last switch is done", async () => {
   windowAttention();
+  // The status region's waits are on the clock from before the window mounts and arms them.
+  fakeTimers();
   const { daemon } = mountApp(false, undefined, true);
   await act(async () => daemon.store.setState((state) => ({ settings: { ...state.settings, accounts: [accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work")] } })));
   await press(`Actions for session ${isolate("Fix bug")}`);
@@ -713,23 +707,20 @@ it("announces a batch of account switches once its last switch is done", async (
   const work = Array.from(document.querySelectorAll<HTMLElement>("[role=menuitemradio], [role=menuitem]")).find((item) => controlName(item) === "Work");
   expect(work).toBeDefined();
   await act(async () => work!.click());
-  // The window's status region armed its first write delay on the real clock when the app mounted; it runs out first.
-  await firstWriteDelayPassed();
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-  onTestFinished(() => { vi.useRealTimers(); });
+  await passTime(FIRST_WRITE_DELAY_MS);
   await act(async () => Array.from(document.querySelectorAll<HTMLButtonElement>("[role=alertdialog] button, [role=dialog] button")).find((button) => button.textContent === "Switch")!.click());
   expect(sentOf(daemon, "switch_session_account")).toEqual([[
     { type: "switch_session_account", session: "s-archive", account: "a-work", terminal_appearance: expect.stringMatching(/^(light|dark)$/) },
   ]]);
   expect(said()).toBeUndefined();
-  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS);
   expect(said()).toBe(`1 session switched to ${isolate("Work")}`);
 });
 
 it("announces nothing when the session had the model settings already", async () => {
   windowAttention();
   await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "unchanged" }));
-  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS);
   expect(document.querySelector('[role="status"]:not(:empty)')).toBeNull();
   expect(errorAlerts.getSnapshot()).toEqual([]);
 });
@@ -784,11 +775,11 @@ it("keeps a reply unheard and unexpired while a FileViewer covers the status reg
   const status = Array.from(app.querySelectorAll('[role="status"]')).at(-1)!;
   expect(status.closest('[inert], [aria-hidden="true"]')).not.toBeNull();
   await act(async () => reply());
-  await passTime(20_000);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + ANNOUNCEMENT_MS);
   expect(status.textContent).toBe("");
   await act(async () => close());
-  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(status.textContent).toBe("");
-  await passTime(200);
+  await passTime(1);
   expect(status.textContent).toContain("will use its new model settings when it is resumed");
 });

@@ -3,12 +3,13 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { fakeTimers } from "../test/clock";
 import type { ConnectionState } from "../daemon-client";
 import { Dialog } from "../components/dialog/Dialog";
 import { useRegionCycle } from "../layout/useRegionCycle";
 import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
-import { ConnectionBanner } from "./ConnectionBanner";
+import { ANNOUNCEMENT_DELAY_MS, ConnectionBanner } from "./ConnectionBanner";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -74,18 +75,13 @@ it("keeps the banner's Retry out of what an open dialog hides from the rest of t
 });
 
 function announcementBanner(state: ConnectionState) {
-  vi.useFakeTimers();
+  fakeTimers();
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    try {
-      expect(vi.getTimerCount()).toBe(0);
-    } finally {
-      vi.useRealTimers();
-    }
   });
   const render = (next: ConnectionState) => act(() => root.render(
     <ConnectionBanner state={next} onRetry={() => {}} focusTerminal={() => {}} />,
@@ -100,7 +96,7 @@ it.each(["reconnecting", "closed"] as const)("defers an initial %s status in an 
   const region = container.querySelector('[role="status"]');
   expect(region).not.toBe(null);
   expect(region!.textContent).toBe("");
-  advance(100);
+  advance(ANNOUNCEMENT_DELAY_MS);
   expect(container.querySelector('[role="status"]')).toBe(region);
   expect(region!.textContent).toBe(state === "closed"
     ? "Disconnected from the daemon." : "Disconnected from the daemon. Reconnecting…");
@@ -114,18 +110,18 @@ it("announces each outage in the same region and updates it when automatic retri
   const { container, render, advance } = announcementBanner("open");
   const region = container.querySelector('[role="status"]');
   expect(region).not.toBe(null);
-  advance(1000);
+  advance(ANNOUNCEMENT_DELAY_MS);
   expect(region!.textContent).toBe("");
   render("reconnecting");
   expect(region!.textContent).toBe("");
-  advance(100);
+  advance(ANNOUNCEMENT_DELAY_MS);
   expect(region!.textContent).toBe("Disconnected from the daemon. Reconnecting…");
   render("closed");
   expect(region!.textContent).toBe("Disconnected from the daemon.");
   render("open");
   expect(region!.textContent).toBe("");
   render("closed");
-  advance(100);
+  advance(ANNOUNCEMENT_DELAY_MS);
   expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
   expect(container.querySelector('[role="status"]')).toBe(region);
   expect(region!.textContent).toBe("Disconnected from the daemon.");
@@ -133,14 +129,14 @@ it("announces each outage in the same region and updates it when automatic retri
 
 it("keeps a quickly recovered drop silent after a long healthy connection", () => {
   const { container, render, advance } = announcementBanner("open");
-  advance(1000);
+  advance(ANNOUNCEMENT_DELAY_MS);
   const region = container.querySelector('[role="status"]');
   render("reconnecting");
   expect(region).not.toBe(null);
   expect(region!.textContent).toBe("");
-  advance(50);
+  advance(ANNOUNCEMENT_DELAY_MS / 2);
   render("open");
-  advance(1000);
+  advance(ANNOUNCEMENT_DELAY_MS);
   expect(region!.textContent).toBe("");
 });
 

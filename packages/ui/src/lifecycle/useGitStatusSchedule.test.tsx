@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { ClientRequestBody, Console, Project } from "../protocol";
 import type { Daemon } from "../store";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { hasNewProjectId, useGitStatusSchedule } from "./useGitStatusSchedule";
+import { fakeTimers } from "../test/clock";
 
 describe("hasNewProjectId", () => {
   it("is false when every current id is already known", () => {
@@ -68,12 +69,8 @@ const REFRESH_INTERVAL_MS = 5 * 60_000;
 describe("useGitStatusSchedule", () => {
   beforeEach(() => {
     request.mockClear();
-    vi.useFakeTimers();
+    fakeTimers();
     daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 0, consoles: consolesOf("c1"), projects: projectsOf("p1") }, request });
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   it("sends one request on mount and none again on a re-render with unchanged inputs", () => {
@@ -151,7 +148,7 @@ describe("useGitStatusSchedule", () => {
 describe("all-console scheduling", () => {
   beforeEach(() => {
     request.mockClear();
-    vi.useFakeTimers();
+    fakeTimers();
     daemon = testDaemon({ state: {
       connectionState: "open", snapshotEpoch: 0, consoles: consolesOf("c1", "c2"),
       projects: new Map([
@@ -160,8 +157,6 @@ describe("all-console scheduling", () => {
       ]),
     }, request });
   });
-
-  afterEach(() => vi.useRealTimers());
 
   const requestedConsoles = () => request.mock.calls.map(([body]) => (body as { console: string }).console);
 

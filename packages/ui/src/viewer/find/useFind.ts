@@ -15,7 +15,7 @@ import { setKeyboardModality } from "../../primitives";
 
 /** How long the query rests before the search runs, so typing in a large file is not a search per
  * key; and how long a burst of changes to the drawn text rests before the search runs again. */
-const SETTLE_MS = 150;
+export const SETTLE_MS = 150;
 
 interface FindResult {
   ranges: Range[];

@@ -13,7 +13,9 @@ import { TestHost } from "../../test/TestHost";
 import { testDaemon } from "../../test/testDaemon";
 import type { TermStatus } from "../TerminalController";
 import { MAX_AUTO_RECONNECT_ATTEMPTS } from "../reconnectPolicy";
+import { PAST_ANY_RETRY_MS } from "../reconnectTestSupport";
 import { ShellTerminalView, type ShellTerminalViewHandle } from "./ShellTerminalView";
+import { fakeTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -80,16 +82,13 @@ const roots: Root[] = [];
 let attention: ReturnType<typeof windowAttention>;
 beforeEach(() => {
   attention = windowAttention();
-  vi.useFakeTimers();
+  fakeTimers();
   // Every automatic attempt follows the last at once, so a test spends them without waiting out the backoff.
   daemon = testDaemon({ state: { connectionState: "open" }, terminalReconnectDelay: () => 0 });
 });
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
-  act(() => void vi.runOnlyPendingTimers());
-  expect(vi.getTimerCount()).toBe(0);
-  vi.useRealTimers();
 });
 
 function mount(shown = true, record: ShellTerminal = terminal) {
@@ -184,26 +183,25 @@ it("reports no focus when it did not land in the view", () => {
   expect(ref.current!.focus()).toBe(false);
 });
 
-const FIRST_WRITE_MS = AFTER_FOCUS_MOVE_DELAY_MS;
 const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 const regions = (container: HTMLElement) => Array.from(container.querySelectorAll<HTMLElement>("[role=status]:not([data-slot=spinner])"));
 const spoken = (container: HTMLElement) => regions(container).map((region) => region.textContent).filter(Boolean);
 
-it("mounts an exited shell's status empty and writes the sentence after the first write delay, keeping Close reachable", () => {
+it("mounts an exited shell's status empty and writes the sentence after the focus-move delay, keeping Close reachable", () => {
   const { container } = mount(true, { ...terminal, state: "exited" });
   expect(regions(container).every((region) => region.textContent === "")).toBe(true);
   const close = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Close terminal")!;
   expect(close.closest("[aria-hidden=true]")).toBeNull();
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(spoken(container)).toEqual(["The shell has exited"]);
 });
 
-it("mounts the trouble status empty and writes it after the first write delay, then follows later changes in place", () => {
+it("mounts the trouble status empty and writes it after the focus-move delay, then follows later changes in place", () => {
   const { container } = mount();
   const before = regions(container);
   FakeController.last.settle("closed");
   expect(spoken(container)).toEqual([]);
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(spoken(container)).toEqual(["Reconnecting the terminal…"]);
   expect(regions(container)).toEqual(before);
   FakeController.last.settle("open");
@@ -213,7 +211,7 @@ it("mounts the trouble status empty and writes it after the first write delay, t
 it("announces nothing from a tab that is not shown", () => {
   const { container } = mount(false, { ...terminal, state: "exited" });
   FakeController.last.settle("closed");
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(spoken(container)).toEqual([]);
   expect(container.querySelector("button")).toBeNull();
 });
@@ -223,7 +221,7 @@ it("mounts empty status regions as an exited tab is shown, and writes after the 
   expect(regions(container)).toEqual([]);
   show(true);
   expect(regions(container).every((region) => region.textContent === "")).toBe(true);
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS - 1));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
   expect(spoken(container)).toEqual([]);
   act(() => void vi.advanceTimersByTime(1));
   expect(spoken(container)).toEqual(["The shell has exited"]);
@@ -238,7 +236,7 @@ it("mounts empty status regions as a troubled tab is shown", () => {
   FakeController.last.settle("closed");
   show(true);
   expect(spoken(container)).toEqual([]);
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(spoken(container)).toEqual(["Reconnecting the terminal…"]);
 });
 
@@ -264,7 +262,7 @@ it("reconnects a running shell whose socket closed, without moving focus", () =>
 it("does not reconnect an exited shell", () => {
   mount(true, { ...terminal, state: "exited" });
   FakeController.last.settle("closed");
-  act(() => void vi.advanceTimersByTime(60_000));
+  act(() => void vi.advanceTimersByTime(PAST_ANY_RETRY_MS));
   expect(FakeController.last.attaches).toEqual([false]);
 });
 
@@ -273,7 +271,7 @@ it("stops retrying after the automatic attempts, and the user's Reconnect starts
   giveUp();
   const attaches = FakeController.last.attaches.length;
   expect(attaches).toBe(1 + MAX_AUTO_RECONNECT_ATTEMPTS);
-  act(() => void vi.advanceTimersByTime(60_000));
+  act(() => void vi.advanceTimersByTime(PAST_ANY_RETRY_MS));
   expect(FakeController.last.attaches.length).toBe(attaches);
   expect(spoken(container)).toEqual(["Terminal disconnected"]);
   act(() => reconnectOf(container)!.click());
@@ -367,10 +365,10 @@ it("names the terminal's input in the UI language, and follows a language change
 
 it("says the recovered display only when the flag turns on while the tab is shown, not on first sight", () => {
   const { container, update } = mount(true, { ...terminal, screen_inexact: false });
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(spoken(container)).toEqual([]);
   update({ ...terminal, screen_inexact: true });
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(spoken(container)).toEqual(["Recovered terminal display"]);
   // A redraw with the flag still on does not say it again.
   update({ ...terminal, screen_inexact: true, title: "renamed" });
@@ -381,12 +379,12 @@ it("says the recovered display only when the flag turns on while the tab is show
 
 it("says nothing for a flag already on as the view opens, as its tab is shown later, or from a hidden tab", () => {
   const first = mount(true, { ...terminal, screen_inexact: true });
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(spoken(first.container)).toEqual([]);
   const hidden = mount(false, { ...terminal, screen_inexact: false });
   hidden.update({ ...terminal, screen_inexact: true });
   hidden.show(true);
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(spoken(hidden.container)).toEqual([]);
 });
 
@@ -412,7 +410,7 @@ it("covers a shell opened pending, attaches nothing, holds its input and keeps i
   expect(inertRoot(container).hasAttribute("inert")).toBe(true);
   expect(container.querySelector("button")).toBeNull();
   expect(container.textContent).not.toContain("The shell has exited");
-  act(() => void vi.advanceTimersByTime(600_000));
+  act(() => void vi.advanceTimersByTime(PAST_ANY_RETRY_MS));
   expect(FakeController.last.attaches).toEqual([]);
 });
 
@@ -426,7 +424,7 @@ it("covers an open shell at once and spends no retry while the socket drops, lan
   expect(ref.current!.focus()).toBe(true);
   expect(document.activeElement).toBe(shellRegion(container));
   giveUp();
-  act(() => void vi.advanceTimersByTime(600_000));
+  act(() => void vi.advanceTimersByTime(PAST_ANY_RETRY_MS));
   expect(FakeController.last.attaches).toEqual([false]);
   expect(reconnectOf(container)).toBeUndefined();
   expect(shellRegion(container)!.textContent).toBe(`${SHELL_TITLE}${SHELL_BODY}`);
@@ -520,7 +518,7 @@ it("attaches once in the background with a fresh budget when pending clears, eve
   const { container, update } = mount();
   giveUp();
   update(pendingShell);
-  act(() => void vi.advanceTimersByTime(600_000));
+  act(() => void vi.advanceTimersByTime(PAST_ANY_RETRY_MS));
   update(terminal);
   expect(FakeController.last.attaches).toHaveLength(MAX_AUTO_RECONNECT_ATTEMPTS + 1 + 1);
   expect(FakeController.last.attaches.at(-1)).toBe(false);
@@ -567,24 +565,24 @@ it("does not say the sentence while the cover holds focus, which reads the same 
   act(() => FakeController.last.term.textarea.focus());
   update(pendingShell);
   expect(document.activeElement).toBe(shellRegion(container));
-  act(() => void vi.advanceTimersByTime(60_000));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(sentenceSpoken(container)).toHaveLength(0);
   // Opened pending, with focus landed on the cover before the delay ends.
   const opened = mount(true, pendingShell);
   act(() => opened.ref.current!.focus());
   expect(document.activeElement).toBe(shellRegion(opened.container));
-  act(() => void vi.advanceTimersByTime(60_000));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(sentenceSpoken(opened.container)).toHaveLength(0);
 });
 
 it("says the sentence once on entering pending while shown, and not again for retries or renames", () => {
   const { container, update } = mount();
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   update(pendingShell);
   expect(sentenceSpoken(container)).toHaveLength(1);
   update({ ...pendingShell, title: "renamed" });
   FakeController.last.settle("closed");
-  act(() => void vi.advanceTimersByTime(60_000));
+  act(() => void vi.advanceTimersByTime(PAST_ANY_RETRY_MS));
   update({ ...pendingShell, title: "again", busy: true });
   expect(sentenceSpoken(container)).toHaveLength(1);
   expect(spoken(container)).toEqual([SHELL_SENTENCE]);
@@ -592,18 +590,18 @@ it("says the sentence once on entering pending while shown, and not again for re
 
 it("says it after the focus delay for a shell opened pending or shown later, and never for a hidden one", () => {
   const opened = mount(true, pendingShell);
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS - 1));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
   expect(sentenceSpoken(opened.container)).toHaveLength(0);
   act(() => void vi.advanceTimersByTime(1));
   expect(sentenceSpoken(opened.container)).toHaveLength(1);
 
   const hidden = mount(false);
   hidden.update(pendingShell);
-  act(() => void vi.advanceTimersByTime(60_000));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(regions(hidden.container)).toEqual([]);
   hidden.show(true);
   expect(sentenceSpoken(hidden.container)).toHaveLength(0);
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(sentenceSpoken(hidden.container)).toHaveLength(1);
 });
 
@@ -611,7 +609,7 @@ const RECOVERED = "Recovered terminal display";
 
 it("holds the recovered display's sentence until the cover has gone", () => {
   const { container, update } = mount(true, { ...terminal, holder_link: "pending", screen_inexact: false });
-  act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS * 2));
+  act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS * 2));
   update({ ...pendingShell, screen_inexact: true });
   expect(spoken(container)).toEqual([SHELL_SENTENCE]);
   update({ ...terminal, screen_inexact: true });

@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { press } from "../components/alerts/detailsTestSupport";
+import { FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { LanguageProvider } from "../i18n/react";
 import type { AvailableUpdate, PlatformAdapter, UpdaterCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
@@ -14,6 +15,7 @@ import type { UpdateStore } from "../updates/updateStore";
 import { UpdatesProvider, useUpdates } from "../updates/UpdatesProvider";
 import { UpdatesSetting } from "./UpdatesSetting";
 import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -62,9 +64,10 @@ const updaterOf = (check: UpdaterCapability["check"], install: UpdaterCapability
 const textOf = (element: Element) => (element.textContent ?? "").replace(/[⁦-⁩]/g, "");
 const button = (container: HTMLElement, name: string) => Array.from(container.querySelectorAll("button")).find((candidate) => candidate.textContent === name);
 
-/** What the setting's status region says, once it has had its first write delay (`StatusAnnouncer`). */
+/** What the setting's status region says, once it has had its first write delay (`StatusAnnouncer`). Needs
+ * `fakeTimers()`, called before the setting mounts. */
 async function spoken(container: HTMLElement): Promise<string> {
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+  await act(async () => vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
   return textOf(container.querySelector("[role=status]")!);
 }
 
@@ -116,6 +119,7 @@ it("hands focus to the Check for updates button when the mark that holds it goes
 });
 
 it("leaves a check pressed here to the error alert dialog: the mark appears without being spoken", async () => {
+  fakeTimers();
   const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => { throw new Error("offline"); }) });
   await act(async () => void button(container, "Check for updates")!.click());
   expect(failedMark(container)).not.toBeNull();
@@ -124,6 +128,7 @@ it("leaves a check pressed here to the error alert dialog: the mark appears with
 });
 
 it("speaks an automatic check that does not finish, though an earlier check was pressed here", async () => {
+  fakeTimers();
   let fail = false;
   const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => { if (fail) throw new Error("offline"); return undefined; }) });
   await act(async () => void button(container, "Check for updates")!.click());
@@ -202,6 +207,7 @@ it("keeps the install button enabled while a check runs, so focus on it is not d
 });
 
 it("speaks the result of a check pressed here", async () => {
+  fakeTimers();
   const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND) });
   expect(await spoken(container)).toBe("");
   await act(async () => button(container, "Check for updates")!.click());
@@ -209,6 +215,7 @@ it("speaks the result of a check pressed here", async () => {
 });
 
 it("says nothing of an update found before Settings opened, until the user acts on it", async () => {
+  fakeTimers();
   let finish: () => void = () => {};
   const install = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
   const { container, store, open } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND, install) }, { opened: false });
@@ -223,6 +230,7 @@ it("says nothing of an update found before Settings opened, until the user acts 
 });
 
 it("speaks the result of a check that starts while Settings is open, an automatic one included", async () => {
+  fakeTimers();
   const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => undefined) });
   await act(async () => {});
   expect(await spoken(container)).toBe("");
@@ -298,6 +306,7 @@ it("keeps focus on the one button, now Download and install, once a check presse
 });
 
 it("speaks an install that finishes while Settings is open, though the notice started it before", async () => {
+  fakeTimers();
   let finish: () => void = () => {};
   const install = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
   const { container, store, open } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND, install) }, { opened: false });
@@ -311,6 +320,7 @@ it("speaks an install that finishes while Settings is open, though the notice st
 });
 
 it("speaks the result of a check that was already running when Settings opened", async () => {
+  fakeTimers();
   let settle: (found: AvailableUpdate | undefined) => void = () => {};
   const { container, store, open } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(() => new Promise((resolve) => (settle = resolve))) }, { opened: false });
   await act(async () => {});

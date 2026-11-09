@@ -5,12 +5,12 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { CodedError } from "../errors/codedError";
-import { errorAlerts } from "../components/alerts/errorAlerts";
 import { PlatformProvider } from "../platform/react";
 import { ErrorAlerts } from "../shell/ErrorAlerts";
 import { type TrustPrompt } from "../store";
 import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
 import { BROWSER_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -94,9 +94,6 @@ it.each(["trust_directory_too_broad", "trust_directory_unreachable"])("a folder 
 // A folder that could not be checked in time is a refusal of the trust dialog's own, whose alert
 // says what the dialog offers instead: going on without the folder, or trying again later.
 it("a folder that could not be checked in time is refused with the trust dialog's own remedy", async () => {
-  const clear = () => act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
-  clear();
-  onTestFinished(clear);
   const refused = new CodedError("refused", "trust_directory_unreachable", { path: prompt.path });
   mount([prompt], () => Promise.reject(refused));
   await tick();
@@ -162,10 +159,7 @@ it("warns under the folder option only while it is ticked", async () => {
 // The Alert is no ancestor or sibling a screen reader meets by itself, so the checkbox is described by it while it
 // shows, and it is spoken once after the tick, held back while the checkbox's own new state is spoken.
 it("describes the folder option by its warning while ticked and speaks it once after the tick", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    vi.useRealTimers();
-  });
+  fakeTimers();
   mount([prompt]);
   const box = checkbox()!;
   expect(box.getAttribute("aria-describedby")!.split(" ")).toHaveLength(1);

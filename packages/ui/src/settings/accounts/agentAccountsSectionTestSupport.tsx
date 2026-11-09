@@ -3,11 +3,9 @@
 // left behind after it; each file still declares the five `vi.mock` calls that state module has the stand-ins for.
 import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, beforeEach, onTestFinished, vi } from "vitest";
 
-import { errorAlerts } from "../../components/alerts/errorAlerts";
 import type { Account, AccountSharing, Settings } from "../../protocol";
 import type { State } from "../../store";
 import { TestHost } from "../../test/TestHost";
@@ -30,6 +28,7 @@ import {
   settings,
   startDaemon,
 } from "./agentAccountsSectionTestState";
+import { withModality } from "../../components/dialog/dialogTestSupport";
 import { SettingsFocusContext } from "../useSectionRefocus";
 
 // jsdom has no Web Animations, and without them the list motion drops a departing row's copy at once, so a
@@ -38,14 +37,12 @@ export const animate = vi.fn(() => ({ cancel: vi.fn(), effect: { getComputedTimi
 beforeEach(() => {
   const globals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
   const actEnvironment = globals.IS_REACT_ACT_ENVIRONMENT;
-  const modality = getInteractionModality();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   onTestFinished(() => {
-    // The getter can return the initial null state, which the setter accepts at runtime.
-    act(() => Reflect.apply(setInteractionModality, undefined, [modality]));
     if (actEnvironment === undefined) delete globals.IS_REACT_ACT_ENVIRONMENT;
     else globals.IS_REACT_ACT_ENVIRONMENT = actEnvironment;
   });
+  withModality(getInteractionModality());
   HTMLElement.prototype.animate = animate as unknown as typeof HTMLElement.prototype.animate;
   animate.mockClear();
   request.mockReset().mockResolvedValue({});
@@ -57,6 +54,7 @@ beforeEach(() => {
   settings.accounts = [account("claude-work", "claude"), account("codex-work", "codex"), account("grok-work", "grok")];
   settings.provider_settings = {};
   settings.agent_tags = {};
+  settings.versions = {};
   accountQuotas.length = 0;
   accountLogins.length = 0;
   accountSharing.clear();
@@ -66,7 +64,6 @@ beforeEach(() => {
   cliStatuses.clear();
 });
 afterEach(() => {
-  act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
 });
 

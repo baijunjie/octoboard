@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { fakeTimers } from "../test/clock";
 import { useHeldWhileHidden } from "./useHeldWhileHidden";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -17,16 +18,9 @@ function Probe({ sentence, hidden, stillDue }: Props): string {
 /** Mounts the probe on a fake clock started before the hook arms its timer; whatever is still pending is run out
  * and counted before the real clock comes back. */
 function setup(initial: Props) {
-  vi.useFakeTimers();
   const host = document.body.appendChild(document.createElement("div"));
   const root = createRoot(host);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    host.remove();
-    act(() => void vi.runOnlyPendingTimers());
-    expect(vi.getTimerCount()).toBe(0);
-    vi.useRealTimers();
-  });
+  fakeTimers({ beforeDrain: () => { root.unmount(); host.remove(); } });
   const render = (props: Props) => act(() => root.render(<Probe {...props} />));
   const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
   render(initial);

@@ -7,11 +7,12 @@ import { mountHost } from "../../test/mountHost";
 import { testDaemon } from "../../test/testDaemon";
 import { errorAlerts } from "../alerts/errorAlerts";
 import { ErrorAlerts } from "../../shell/ErrorAlerts";
-import { focusAfterLoss, setFocusAfterModalLoss } from "../focus/modalFocus";
-import { framesAsTimers, settleFrames } from "./dialogTestSupport";
+import { focusAfterLoss, MODAL_CLOSE_SETTLE_MS, setFocusAfterModalLoss } from "../focus/modalFocus";
+import { framesAsTimers, settleFrames, trackMountRefocus } from "./dialogTestSupport";
 import { Dialog } from "./Dialog";
 import { useDirectoryBrowse } from "./DirectoryPicker";
 import { BROWSER_HOST } from "../../test/hosts";
+import { fakeTimersKeepingFrames } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -122,7 +123,6 @@ it("lets the error alert take focus after a native failure and returns to the su
   onTestFinished(setFocusAfterModalLoss(() => focusAfterLoss(() => {})));
   const { result, pick, platform, daemon } = setup();
   mountHost(<><Dialog title="Edit project" onClose={() => {}} footer={null}><Field /></Dialog><ErrorAlerts daemon={daemon} /></>, { daemon, platform });
-  onTestFinished(() => act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }));
   await settleFrames();
   const outer = document.querySelector<HTMLElement>('[role="dialog"]')!;
   const input = outer.querySelector("input")!;
@@ -130,11 +130,15 @@ it("lets the error alert take focus after a native failure and returns to the su
   pick.mockImplementation(() => { input.blur(); return result.promise; });
   await act(async () => [...outer.querySelectorAll("button")].find((button) => button.textContent === "Browse")!.click());
   await act(async () => result.reject(new Error("Picker failed")));
+  const pastMountRefocus = trackMountRefocus();
   expect(document.querySelector('[role="alertdialog"]')?.contains(document.activeElement)).toBe(true);
   // Outlast react-aria's mount-time focus correction before acknowledging, as a person reading the alert does.
-  await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+  await pastMountRefocus();
+  // The fallback that follows the alert's close waits MODAL_CLOSE_SETTLE_MS from the acknowledgement.
+  fakeTimersKeepingFrames();
   await act(async () => errorAlerts.acknowledge());
   await settleFrames();
-  await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
+  act(() => void vi.advanceTimersByTime(MODAL_CLOSE_SETTLE_MS));
+  await settleFrames();
   expect(outer.contains(document.activeElement)).toBe(true);
 });

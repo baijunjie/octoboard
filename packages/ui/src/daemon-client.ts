@@ -8,24 +8,24 @@ type BatchListener = (events: Event[]) => void;
 type PendingReply = { resolve: (event: Event) => void; reject: (error: Error) => void };
 type QueuedRequest = { payload: string; timer: ReturnType<typeof setTimeout> };
 
-const MAX_RECONNECT_ATTEMPTS = 2;
-const RECONNECT_BASE_DELAY_MS = 500;
+export const MAX_RECONNECT_ATTEMPTS = 2;
+export const RECONNECT_BASE_DELAY_MS = 500;
 /** How long a request may sit queued (socket not open yet, or a reconnect in flight) before giving
  * up on it. Without this, a caller awaiting a request made right as the connection drops — most
  * importantly `shutdown` during the quit flow — would hang forever once the reconnect budget above
  * is spent and no further `close` event ever arrives to reject it. */
-const QUEUED_REQUEST_TIMEOUT_MS = 5000;
+export const QUEUED_REQUEST_TIMEOUT_MS = 5000;
 /** How long a queued broadcast may wait for an animation frame before it is delivered anyway. A
  * hidden window gets no frames, and its state must not fall behind for as long as it stays hidden. */
-const BROADCAST_FLUSH_FALLBACK_MS = 250;
+export const BROADCAST_FLUSH_FALLBACK_MS = 250;
 /** The heartbeat (see "The heartbeat" in `apps/daemon/PROTOCOL.md`): a `ping` request goes out every
  * `HEARTBEAT_INTERVAL_MS`, and a connection that has delivered no frame at all for `HEARTBEAT_TIMEOUT_MS` is lost. A
  * connection can die with no close on either side — a network path dropping, a machine sleeping — and nothing else
  * would notice it. The check runs on a finer tick than the pings so that a dead connection is found close to the
  * timeout, not up to an interval after it. */
-const HEARTBEAT_INTERVAL_MS = 15_000;
-const HEARTBEAT_TIMEOUT_MS = 45_000;
-const HEARTBEAT_TICK_MS = 5_000;
+export const HEARTBEAT_INTERVAL_MS = 15_000;
+export const HEARTBEAT_TIMEOUT_MS = 45_000;
+export const HEARTBEAT_TICK_MS = 5_000;
 /** A tick that comes this late means the page's timers were held back (a hidden page, a sleeping machine), not that
  * the daemon fell silent: the silence is measured afresh from then on. */
 const HEARTBEAT_SUSPENDED_GAP_MS = 3 * HEARTBEAT_TICK_MS;

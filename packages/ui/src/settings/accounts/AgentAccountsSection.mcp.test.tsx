@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import type { AccountMcpInventory, LocalMcpServer, McpServerAuthOutcome } from "../../protocol";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
-import { trackMountRefocus } from "../../components/dialog/dialogTestSupport";
+import { framesHeld, trackMountRefocus } from "../../components/dialog/dialogTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { windowAttention } from "../../components/announce/windowTestSupport";
 import { press } from "../../components/hint/tooltipTestSupport";
@@ -13,6 +13,7 @@ import { CodedError } from "../../errors/codedError";
 import { isolate } from "../../i18n/isolate";
 import { readMcpInventory, request } from "./agentAccountsSectionTestState";
 import { buttonNamed, mount, openMcpOf } from "./agentAccountsSectionTestSupport";
+import { fakeTimers } from "../../test/clock";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -432,13 +433,12 @@ it("hands focus on Cancel to the row's Sign in when the sign-in ends", async () 
 
 it("announces a sign-in that succeeded, a focus move's delay after it", async () => {
   windowAttention();
+  fakeTimers();
   const dialog = await openWithServers([serverOf()]);
   const auth = nextAuth();
   press(buttonNamed(dialog, `Sign in to ${isolate("jira")}`)!);
   nextReading();
-  // The status region's first-write delay was armed on the real clock as it mounted (writing-automated-tests.md).
-  await act(() => new Promise((resolve) => setTimeout(resolve, FIRST_WRITE_DELAY_MS)));
-  fakeTimers();
+  await act(async () => vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
   await auth.end({ status: "succeeded", detail: null });
   await act(async () => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
   expect(dialog.textContent).not.toContain("Signed in to");
@@ -446,22 +446,13 @@ it("announces a sign-in that succeeded, a focus move's delay after it", async ()
   expect(dialog.textContent).toContain(`Signed in to ${isolate("jira")}.`);
 });
 
-/** Fakes the clock for the rest of the test. */
-function fakeTimers() {
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    vi.runOnlyPendingTimers();
-    vi.useRealTimers();
-  });
-}
-
 const alertRole = (dialog: HTMLElement) => dialog.querySelector("[role=alert]");
 
 it("announces a first failure that answers right after the dialog opened a focus move's delay later, and a later one at once", async () => {
   const reading = nextReading();
+  fakeTimers();
   const { container } = mount();
   const dialog = await openMcpOf(container, "claude-work");
-  fakeTimers();
   await reading.fail(CONNECTION_CLOSED());
   expect(dialog.textContent).toContain("Could not read connectors and MCP servers");
   expect(alertRole(dialog)).toBeNull();
@@ -515,12 +506,14 @@ it("hands focus on a server's button to the Alert's Try again when the rereading
 it("leaves focus on the page alone when a reading answers with nothing removed from under it", async () => {
   const first = nextReading();
   const { container } = mount();
-  const mountRefocusSettled = trackMountRefocus();
   const dialog = await openMcpOf(container, "claude-work");
+  const mountRefocusSettled = trackMountRefocus();
   await first.answer(inventoryOf());
   await mountRefocusSettled();
   const second = nextReading();
   press(buttonNamed(dialog, "Refresh connectors and MCP servers")!);
+  // The dialog's focus containment would take focus back a frame after the blur, whatever the reading did.
+  framesHeld();
   act(() => (document.activeElement as HTMLElement | null)?.blur());
   const before = document.activeElement;
   await second.fail(CONNECTION_CLOSED());

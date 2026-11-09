@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react";
 /** How often the clock advances. The relative times it feeds change at minute granularity and read
  * "now" for the first minute, so a 30 s tick leaves no text more than 30 s behind the clock while
  * waking the page only twice a minute. */
-const TICK_MS = 30_000;
+export const TICK_MS = 30_000;
 
 const listeners = new Set<() => void>();
 let ticker: ReturnType<typeof setInterval> | undefined;

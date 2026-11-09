@@ -2,13 +2,19 @@
 
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished } from "vitest";
+import { beforeEach, expect, it, onTestFinished } from "vitest";
 
 import type { SwipeToward } from "../layout/paneSwipe";
 import { useSwipe } from "../layout/useSwipe";
+import { settleInAct } from "./clockTestSupport";
+import { fakeTimers } from "../test/clock";
 import { createUi } from "./interact";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+beforeEach(() => {
+  fakeTimers();
+});
 
 /** The window's swipe gesture over a page jsdom gives no layout: the terminal is whatever sits under the finger. */
 function mount(rtl: boolean) {
@@ -34,8 +40,8 @@ function mount(rtl: boolean) {
 it("swipe sends the gesture towards the edge it names", async () => {
   const swipes = mount(false);
   const ui = createUi(document, "en");
-  await ui.swipe("end");
-  await ui.swipe("start");
+  await settleInAct(ui.swipe("end"));
+  await settleInAct(ui.swipe("start"));
   expect(swipes).toEqual(["end", "start"]);
 });
 
@@ -45,7 +51,7 @@ it("swipe names the edge in the reading direction, so the finger goes the other 
   const record = (event: Event) => moves.push((event as unknown as { changedTouches: { clientX: number }[] }).changedTouches[0]!.clientX);
   window.addEventListener("touchmove", record, true);
   onTestFinished(() => window.removeEventListener("touchmove", record, true));
-  await createUi(document, "ar").swipe("end");
+  await settleInAct(createUi(document, "ar").swipe("end"));
   expect(swipes).toEqual(["end"]);
   expect(moves[moves.length - 1]!).toBeLessThan(moves[0]!);
 });

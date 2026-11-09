@@ -3,17 +3,18 @@ import { act, StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { acknowledgeAllAlerts } from "../test/alertQueue";
 import { errorAlertOf, raiseError } from "../components/alerts/raiseError";
 import { appConfig } from "../appConfig";
 import { CodedError } from "../errors/codedError";
 import { ActionableError } from "../errors/actionableError";
 import { PlatformProvider } from "../platform/react";
 import type { PlatformAdapter } from "../platform";
-import { focusAfterLoss, setFocusAfterModalLoss } from "../components/focus/modalFocus";
+import { focusAfterLoss, MODAL_CLOSE_SETTLE_MS, setFocusAfterModalLoss } from "../components/focus/modalFocus";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { Dialog } from "../components/dialog/Dialog";
-import { framesAsTimers, openable, settleFrames } from "../components/dialog/dialogTestSupport";
+import { framesAsTimers, openable, settleFrames, trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { OpensAnotherDialog } from "../components/dialog/nestedDialogTestSupport";
 import { ErrorAlerts } from "./ErrorAlerts";
 import { issueUrl } from "../components/alerts/useIssueReport";
@@ -25,6 +26,7 @@ import { issueReportUrl, recordNames } from "../errors/issueReport";
 import { registerSettingsLauncher } from "../settings/settingsLauncher";
 import { registerSessionModelLauncher } from "../dialogs/sessionModelLauncher";
 import { BROWSER_HOST } from "../test/hosts";
+import { fakeTimers } from "../test/clock";
 
 vi.mock("../errors/issueReport", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../errors/issueReport")>();
@@ -33,7 +35,7 @@ vi.mock("../errors/issueReport", async (importOriginal) => {
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-afterEach(() => { vi.clearAllMocks(); act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }); });
+afterEach(() => { vi.clearAllMocks(); });
 
 function mount(child?: React.ReactNode, platform: PlatformAdapter = { kind: "browser", host: BROWSER_HOST }, daemon?: Daemon, strict = false): void {
   const container = document.body.appendChild(document.createElement("div"));
@@ -63,10 +65,11 @@ it("keeps errors across host mounting, deduplicates queued copies and acknowledg
 });
 
 it("stays above an open form until acknowledged and leaves the form available for retry", async () => {
+  framesAsTimers();
   const close = vi.fn();
   mount(<Dialog title="Edit project" onClose={close} submitLabel="Save" onSubmit={() => {}}><input aria-label="Name" defaultValue="Kept" /></Dialog>);
   act(() => errorAlerts.report({ message: "Save failed" }));
-  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  await settleFrames();
   const alert = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
   expect(alert).not.toBeNull();
   expect(alert.querySelector('[aria-label="Close"]')).toBeNull();
@@ -362,8 +365,7 @@ it("offers the footer action for a batch only when every failure shares that rec
 });
 
 it("hands focus to the window's fallback when acknowledging the last alert leaves it on the page body", async () => {
-  vi.useFakeTimers();
-  onTestFinished(() => { vi.useRealTimers(); });
+  fakeTimers();
   mount();
   const fallback = vi.fn();
   onTestFinished(setFocusAfterModalLoss(fallback));
@@ -371,7 +373,7 @@ it("hands focus to the window's fallback when acknowledging the last alert leave
   expect(document.querySelector('[role="alertdialog"] p')).toBeNull();
   act(() => errorAlerts.acknowledge());
   (document.activeElement as HTMLElement | null)?.blur();
-  await act(async () => { vi.advanceTimersByTime(500); });
+  await act(async () => { vi.advanceTimersByTime(MODAL_CLOSE_SETTLE_MS); });
   expect(fallback).toHaveBeenCalledOnce();
 });
 
@@ -393,6 +395,9 @@ function mountOverVirtuallyOpenedDialog(strict: boolean, deferred = false): () =
   mount(element, undefined, undefined, strict);
   return open;
 }
+
+/** How long `waitFor` waits for a timer that runs on the real clock: only a bound, the wait ends when the state appears. */
+const REAL_TIMER_WAIT_MS = 5000;
 
 const alertHoldsFocus = (message: string) => {
   const alert = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
@@ -444,8 +449,9 @@ describe.each([{ strict: false }, { strict: true }])("over a dialog opened witho
     const name = document.querySelector('input[aria-label="Name"]')!;
     name.dispatchEvent(Object.assign(new Event("transitionrun", { bubbles: true }), { propertyName: "translate" }));
     act(() => errorAlerts.report({ message: "Refused", recovery: "accountNotSignedIn" }));
+    const mountRefocused = trackMountRefocus();
     await settleFrames();
-    await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+    await mountRefocused();
     await settleFrames();
     alertHoldsFocus("Refused");
   });
@@ -494,18 +500,20 @@ describe.each([{ strict: false }, { strict: true }])("acknowledged over a dialog
       open();
       errorAlerts.report({ message: "Refused" });
     });
+    const mountRefocused = trackMountRefocus();
     await settleFrames();
     expect(document.activeElement).toBe(alertdialogWith("Refused"));
     // A person reads the alert before acknowledging it. Acknowledging within half a second of the dialog's mount would
     // race react-aria's `useDialog`, which then focuses the dialog itself if it finds focus on `<body>`, as it is in the
     // moment between the alert closing and the fallback running.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+    await mountRefocused();
     act(() => errorAlerts.acknowledge());
     await settleFrames();
-    await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
-    await settleFrames();
-    expect(landing()).not.toBeNull();
-    expect(document.activeElement).toBe(landing());
+    // The window's fallback runs once the closing alert has settled, on a timer of its own.
+    await vi.waitFor(() => {
+      expect(landing()).not.toBeNull();
+      expect(document.activeElement).toBe(landing());
+    }, { timeout: REAL_TIMER_WAIT_MS });
   });
 
   it("returns focus to the control that had it when the alert came after the dialog settled", async () => {
@@ -518,8 +526,7 @@ describe.each([{ strict: false }, { strict: true }])("acknowledged over a dialog
     await settleFrames();
     act(() => errorAlerts.acknowledge());
     await settleFrames();
-    await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
-    expect(document.activeElement).toBe(cancel);
+    await vi.waitFor(() => expect(document.activeElement).toBe(cancel), { timeout: REAL_TIMER_WAIT_MS });
   });
 });
 
@@ -643,7 +650,7 @@ it("puts a wrapped error's message ahead of a stack that has only frames, and a 
   jsc.stack = "runBatch@http://localhost/app.js:10:5\nasync@[native code]";
   const { details } = await failedBatch({ a: jsc });
   expect(details!.textContent).toContain("Boom happened\nrunBatch@http://localhost/app.js:10:5");
-  while (errorAlerts.getSnapshot().length) act(() => errorAlerts.acknowledge());
+  acknowledgeAllAlerts();
   const coded = new CodedError("Something internal", "internal_error", { detail: "no sentence for this" });
   const { details: codedDetails } = await failedBatch({ b: coded });
   expect(codedDetails?.textContent ?? "").not.toContain("@http");
@@ -693,7 +700,7 @@ it.each([
 it("still treats a conversation move with cause other as unexpected, and an os error in its detail as the disk's", async () => {
   const other = new CodedError("raw", "relocation_failed", { path: "/t", stage: "copy", cause: "other", detail: "odd" });
   expect((await failedBatch({ a: other })).visible).toContain("Report issue");
-  while (errorAlerts.getSnapshot().length) act(() => errorAlerts.acknowledge());
+  acknowledgeAllAlerts();
   const full = new CodedError("raw", "relocation_failed", { path: "/t", stage: "copy", cause: "other", detail: "No space left on device (os error 28)" });
   const { visible } = await failedBatch({ b: full });
   expect(visible).toContain("Free space on the disk");

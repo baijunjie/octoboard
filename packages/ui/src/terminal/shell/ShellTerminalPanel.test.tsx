@@ -1,16 +1,15 @@
 // @vitest-environment jsdom
 import { act, useEffect, useImperativeHandle } from "react";
 import { createRoot } from "react-dom/client";
-import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
-import { afterEach, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { setGitModeWorktree } from "../../project-browser/gitModeWorktree";
 import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { presence, stubListMotion } from "../../components/motion/listMotionTestSupport";
 import { tap, press as pressMark } from "../../components/hint/tooltipTestSupport";
-import { framesAsTimers, settleFrames, trackMountRefocus } from "../../components/dialog/dialogTestSupport";
+import { framesAsTimers, settleFrames, trackMountRefocus, withModality } from "../../components/dialog/dialogTestSupport";
 import { isolate } from "../../i18n/isolate";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { PanelFrameProvider, type PanelFrame } from "../../components/panel/PanelHeader";
@@ -19,7 +18,7 @@ import type { Event, Project, ClientRequestBody, ShellTerminal } from "../../pro
 import { applyDaemonEvent, createStateStore, DaemonProvider, seedShellTerminal } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
 import { ShellTerminalPanel } from "./ShellTerminalPanel";
-import { startShellTerminal, takeShellTerminalFocus } from "./shellTerminals";
+import { activePreference, startShellTerminal, takeShellTerminalFocus } from "./shellTerminals";
 import { BROWSER_HOST } from "../../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -44,11 +43,15 @@ const shell = (id: string, created: number, extra: Partial<ShellTerminal> = {}):
 });
 
 let cleanup: (() => void) | undefined;
+// A touch press also persists in touchInput's lastInput; script clicks do not replace it. Start each test with the
+// desktop input these focus-ring assertions exercise, independently of a preceding test's touch interaction.
+beforeEach(() => pointerModality());
 afterEach(() => {
   cleanup?.();
   cleanup = undefined;
   focused.length = 0;
   mountedViews.length = 0;
+  activePreference.set({});
   localStorage.clear();
   setGitModeWorktree("p", undefined);
   while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
@@ -232,7 +235,6 @@ it("starts a terminal in the project's own directory for an empty place, not in 
 it("words a refused start in a folder as that folder being gone, and a refused start elsewhere by its own code", async () => {
   const gone = new CodedError("not a folder", "path_not_a_directory", { path: "/w/src" });
   const daemon = testDaemon({ request: vi.fn(async () => { throw gone; }) });
-  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
   await startShellTerminal(daemon, "p", { place: { path: "src" } });
   // The same failure without the folder's remedy is a second alert rather than a copy of the first.
   await startShellTerminal(daemon, "p", { place: {} });
@@ -340,10 +342,8 @@ const remove = (panel: ReturnType<typeof mount>, id: string) =>
 
 /** Puts the interaction in the pointer's modality, as a press just before the change under test leaves it. */
 function pointerModality() {
-  const before = getInteractionModality();
   document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
-  act(() => setInteractionModality("pointer"));
-  onTestFinished(() => act(() => Reflect.apply(setInteractionModality, undefined, [before])));
+  withModality("pointer");
 }
 
 it.each([true, false])("focuses New terminal after the last tab goes with canMaximize=%s", async (canMaximize) => {
@@ -388,6 +388,7 @@ it("hands focus to the New terminal button when the last tab goes while it holds
 });
 
 it("leaves focus alone when a tab goes while the header's menu, not that tab's, holds it", async () => {
+  framesAsTimers("pointer");
   const panel = mount([shell("a", 1), shell("b", 2)]);
   const header = panel.container.querySelector<HTMLElement>("button[aria-label^='Actions for terminal']:not([hidden])")!;
   act(() => header.focus());
@@ -396,19 +397,20 @@ it("leaves focus alone when a tab goes while the header's menu, not that tab's, 
   const menu = document.activeElement!.closest("[role=menu]")!;
   pointerModality();
   remove(panel, "a");
-  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await settleFrames();
   expect(document.activeElement?.closest("[role=menu]")).toBe(menu);
   expect(getInteractionModality()).toBe("pointer");
 });
 
 it("leaves focus where the user put it after the tab that held it has gone", async () => {
+  framesAsTimers("pointer");
   const panel = mount([shell("a", 1), shell("b", 2)]);
   act(() => panel.tabs()[0].focus());
   const elsewhere = document.body.appendChild(document.createElement("button"));
   onTestFinished(() => elsewhere.remove());
   remove(panel, "a");
   act(() => elsewhere.focus());
-  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await settleFrames();
   expect(document.activeElement).toBe(elsewhere);
 });
 
@@ -471,12 +473,13 @@ it("hands focus to the shown terminal when the shown tab, busy, closed from its 
 // Where focus goes back to after Cancel is the dialog's own return, which needs a browser (the gallery's
 // shell-panel-tab-menu-focused); here only that the panel moves it nowhere itself.
 it("hands nothing on when the close of a busy tab is declined", async () => {
+  framesAsTimers("pointer");
   const panel = mount([shell("a", 1, { busy: true }), shell("b", 2)]);
   await closeFromContextMenu(panel.tabs()[0]);
   act(() => dialogButton("Cancel").focus());
   await act(async () => dialogButton("Cancel").click());
   await vi.waitFor(() => expect(document.querySelector("[role=alertdialog]")).toBeNull());
-  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  await settleFrames();
   expect(document.activeElement).not.toBe(panel.tabs()[1]);
   // The click's own modality: no handoff asked for the focus ring.
   expect(getInteractionModality()).toBe("virtual");
@@ -486,6 +489,7 @@ it("hands nothing on when the close of a busy tab is declined", async () => {
 // jsdom runs no restore of focus as a dialog closes, so the test puts focus back where React Aria would: on the
 // shown terminal that held it when the close mark was pressed.
 it("leaves focus where the confirmation put it back, with no ring, when the daemon refuses a busy tab's close", async () => {
+  framesAsTimers("pointer");
   const panel = mount([shell("a", 1, { busy: true }), shell("b", 2)]);
   panel.request.mockImplementation(async (body: ClientRequestBody): Promise<Event> => {
     if (body.type === "close_shell_terminal") throw new Error("refused");
@@ -500,10 +504,7 @@ it("leaves focus where the confirmation put it back, with no ring, when the daem
   act(() => dialogButton("Close terminal").click());
   expect(document.querySelector("[role=alertdialog]")).toBeNull();
   act(() => view.focus());
-  await act(async () => {
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-  });
+  await settleFrames();
   expect(panel.request).toHaveBeenCalledWith({ type: "close_shell_terminal", shell_terminal: "a" });
   expect(document.activeElement).toBe(view);
   expect(getInteractionModality()).not.toBe("keyboard");

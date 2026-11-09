@@ -9,7 +9,8 @@ import { mountForTooltip } from "./components/hint/tooltipTestSupport";
 import { consolePreference } from "./store";
 import { isolate } from "./i18n/isolate";
 import { defaultStack } from "./panels/stackState";
-import { usePanelStacks } from "./panels/usePanelStacks";
+import { closedReportsPreference, stacksPreference } from "./panels/usePanelStacks";
+import { visibility } from "./layout/panelVisibility";
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import type { Event, ClientRequestBody } from "./protocol";
@@ -19,6 +20,17 @@ import { testDaemon } from "./test/testDaemon";
 import { matchesWidthQuery } from "./test/viewport";
 import { partSelector } from "./primitives";
 import { BROWSER_HOST } from "./test/hosts";
+
+/** Clearing localStorage alone leaves the window preferences held in module memory unchanged. */
+export function resetAppPreferences(): void {
+  act(() => {
+    stacksPreference.set({ project: defaultStack("project"), report: defaultStack("report") });
+    closedReportsPreference.set([]);
+    consolePreference.set(undefined);
+    visibility.sidebar.set(true);
+    visibility.aside.set(true);
+  });
+}
 
 const CSS_VARS = { "--rail-width": "48px", "--breakpoint-tablet": "768px", "--breakpoint-phone": "390px" };
 
@@ -39,6 +51,7 @@ export function stubWindow(width = 1400): void {
     else Reflect.deleteProperty(document.documentElement, "clientWidth");
     vi.unstubAllGlobals();
     for (const key of Object.keys(CSS_VARS)) document.documentElement.style.removeProperty(key);
+    resetAppPreferences();
     try {
       localStorage.clear();
     } catch {
@@ -57,21 +70,11 @@ export function fakeDaemon(state: Partial<State>, answer: (body: ClientRequestBo
 }
 
 /** Mounts the whole window over `daemon` until the test ends, inside `wrap` where given (a provider the window needs
- * above it). The panel stacks and the current console it leaves are put back, as they outlive the mount. */
+ * above it). Call `stubWindow` first to reset the preferences the window leaves behind. */
 export function mountApp(daemon: Daemon, { platform = { kind: "browser", host: BROWSER_HOST }, wrap = (app) => app }: { platform?: PlatformAdapter; wrap?: (app: React.ReactElement) => React.ReactElement } = {}): HTMLElement {
-  let stacks!: ReturnType<typeof usePanelStacks>;
-  function StackReset() {
-    stacks = usePanelStacks();
-    return null;
-  }
-  onTestFinished(() => act(() => {
-    stacks.setStack("project", defaultStack("project"));
-    stacks.setStack("report", defaultStack("report"));
-    consolePreference.set(undefined);
-  }));
   return mountForTooltip(
     <PlatformProvider value={platform}>
-      <ThemeProvider><DaemonProvider value={daemon}><DaemonHostAnnouncement /><StackReset />{wrap(<App />)}</DaemonProvider></ThemeProvider>
+      <ThemeProvider><DaemonProvider value={daemon}><DaemonHostAnnouncement />{wrap(<App />)}</DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
 }

@@ -58,7 +58,7 @@ const INHERIT: ProjectAccount = { kind: "inherit" };
 
 /** How long the path or URL must stay unchanged before the daemon is asked about it; a repository
  * is asked about later, since each ask reaches over the network. */
-const DETECT_DELAY_MS = { local: 400, git: 800 };
+export const DETECT_DELAY_MS = { local: 400, git: 800 };
 
 /** The refusals of a directory's check that say the path entered is wrong, where any other says the check could not run. */
 const LOCATION_PROBLEMS: ReadonlySet<string> = new Set(["path_not_found", "path_not_a_directory"]);

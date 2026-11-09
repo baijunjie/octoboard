@@ -1,19 +1,16 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { useNow } from "./useNow";
+import { TICK_MS, useNow } from "./useNow";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  fakeTimers();
   vi.setSystemTime(1_000_000);
-});
-
-afterEach(() => {
-  vi.useRealTimers();
 });
 
 function Probe(): null {
@@ -33,8 +30,8 @@ function mount() {
 it("moves its value on the clock's tick", () => {
   mount();
   expect(seen.at(-1)).toBe(1_000_000);
-  act(() => void vi.advanceTimersByTime(30_000));
-  expect(seen.at(-1)).toBe(1_030_000);
+  act(() => void vi.advanceTimersByTime(TICK_MS));
+  expect(seen.at(-1)).toBe(1_000_000 + TICK_MS);
 });
 
 it("runs one timer for every component using it, until the last unmounts", () => {

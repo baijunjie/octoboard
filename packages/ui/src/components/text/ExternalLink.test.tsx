@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { ErrorAlerts } from "../../shell/ErrorAlerts";
 import { errorAlerts } from "../alerts/errorAlerts";
@@ -12,8 +12,6 @@ import { BROWSER_HOST } from "../../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const URL = "https://example.com/guide";
-
-afterEach(() => act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }));
 
 function mount(element: React.ReactNode, platform: PlatformAdapter = { kind: "browser", host: BROWSER_HOST }): HTMLAnchorElement {
   const container = document.body.appendChild(document.createElement("div"));

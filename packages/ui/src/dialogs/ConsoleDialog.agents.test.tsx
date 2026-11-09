@@ -169,12 +169,10 @@ it("restores Manage accounts after virtual activation followed by a pointer back
     backdrop.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, button: 0 }));
     backdrop.click();
   });
-  await act(async () => {
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+  await vi.waitFor(() => {
+    expect(document.querySelector('[role="dialog"][aria-label="Settings"]')).toBeNull();
+    expect(document.activeElement).toBe(opener);
   });
-  expect(document.querySelector('[role="dialog"][aria-label="Settings"]')).toBeNull();
-  expect(document.activeElement).toBe(opener);
 });
 
 it("lists only the agents that may be picked, and the accounts of those", () => {

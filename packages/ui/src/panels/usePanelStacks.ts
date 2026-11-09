@@ -14,7 +14,7 @@ function legacyHidden(): boolean {
   }
 }
 
-const stacksPreference = createPersistedPreference<PanelStacks>(
+export const stacksPreference = createPersistedPreference<PanelStacks>(
   PREFERENCE_KEYS.panelStacks,
   (raw) => parseStacks(raw, raw === null && legacyHidden()),
   serializeStacks,
@@ -26,7 +26,7 @@ const MAX_CLOSED_REPORTS = 200;
 
 /** The project sessions whose Report panel the user closed, as ids, oldest first. A session not in
  * it has the panel open (the default, as it is for a console session). */
-const closedReportsPreference = createPersistedPreference<readonly string[]>(
+export const closedReportsPreference = createPersistedPreference<readonly string[]>(
   PREFERENCE_KEYS.closedReportPanels,
   (raw) => {
     try {

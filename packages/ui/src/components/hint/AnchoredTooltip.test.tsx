@@ -3,6 +3,7 @@ import React, { act, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { fakeTimers } from "../../test/clock";
 import { AnchoredTooltip } from "./AnchoredTooltip";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -24,10 +25,7 @@ function Anchored({ hovered }: { hovered: boolean }): React.ReactElement {
  * The app's tooltip delay is counted on faked timers, which `settle` runs out; `finish` takes the
  * pointer off and shows that nothing is left counting. */
 function mount(): { container: HTMLElement; hover: (hovered: boolean) => void; settle: () => void; finish: () => void } {
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    vi.useRealTimers();
-  });
+  fakeTimers();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -40,7 +38,6 @@ function mount(): { container: HTMLElement; hover: (hovered: boolean) => void; s
   const finish = () => {
     hover(false);
     settle();
-    expect(vi.getTimerCount()).toBe(0);
   };
   return { container, hover, settle, finish };
 }

@@ -2,7 +2,7 @@
 
 import React, { act } from "react";
 import { useHover } from "react-aria";
-import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { change, changeViewFixture, mountRows } from "../project-browser/browserTestSupport";
 import { ChangeList } from "../project-browser/git/ChangeList";
@@ -25,9 +25,12 @@ import { GitBadge } from "../sidebar/GitBadge";
 import { ProjectFilterSummary } from "../sidebar/ProjectFilter";
 import { RailQuotaEntry } from "../shell/RailQuotaEntry";
 import { DaemonProvider } from "../store";
+import { TitleStatusBadge } from "../viewer/headerParts";
 import { testDaemon } from "../test/testDaemon";
 import { accountOf, gitStatusOf, sessionOf } from "./builders";
-import { createUi } from "./interact";
+import { settleInAct } from "./clockTestSupport";
+import { fakeTimers } from "../test/clock";
+import { createUi, POLL_MS, TIMEOUT_MS, TOOLTIP_DELAY_MS, TOOLTIP_SHOW_MS } from "./interact";
 import { FIXTURE_PROVIDERS } from "./fixtureProviders";
 import { Button } from "../primitives";
 
@@ -44,14 +47,13 @@ function agentTooltip(account: string, launch?: Launch): React.ReactElement {
 }
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  fakeTimers();
   // jsdom does not load the app's styles, so supply its global tooltip delay for HeroUI.
   document.documentElement.style.setProperty("--tooltip-delay", "0.5s");
   onTestFinished(() => {
     document.documentElement.style.removeProperty("--tooltip-delay");
   });
 });
-afterEach(() => vi.useRealTimers());
 
 /** The placements the hover steps reach, built from the real glyph: the top bar, a session row with
  * a status glyph and an agent mark that has a tooltip of its own, a row with a status glyph only, a
@@ -121,26 +123,6 @@ function mountWindow(): void {
   );
 }
 
-/** Runs `hover` to the end, advancing the timers it waits on. */
-async function settled(hover: Promise<void>): Promise<void> {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(3000);
-    await hover;
-  });
-}
-
-/** Runs `hover` to the end without `act`, so that what the pointer opened is on the page while the
- * step is still running, as in a browser: a step that looks at the tooltip it opened needs that. */
-async function settledLive(hover: Promise<void>): Promise<void> {
-  const done = hover.then(
-    () => undefined,
-    (error: unknown) => error,
-  );
-  await vi.advanceTimersByTimeAsync(3000);
-  const error = await done;
-  if (error) throw error;
-}
-
 /** Takes the pointer off what is hovered and runs out the timers left, as the tests of the glyph do,
  * so that the test shows none still pending. */
 function release(target: Element): void {
@@ -162,21 +144,21 @@ const row = (title: string) => (name: string) => name.startsWith(title);
 
 it("hoverTopBarStatus puts the tooltip of the top bar's glyph up", async () => {
   mountWindow();
-  await settled(createUi(document, "en").hoverTopBarStatus());
+  await settleInAct(createUi(document, "en").hoverTopBarStatus());
   expect(openTooltip()?.textContent).toBe("Archived");
   release(document.querySelector("[data-region=topbar] [role=img]")!);
 });
 
 it("hoverRowStatus puts up the status of the row it names", async () => {
   mountWindow();
-  await settled(createUi(document, "en").hoverRowStatus(row("Write the migration")));
+  await settleInAct(createUi(document, "en").hoverRowStatus(row("Write the migration")));
   expect(openTooltip()?.textContent).toBe("Waiting for you");
   release(glyphOf("Write the migration"));
 });
 
 it("hoverRowStatus takes the glyph, not the agent mark's tooltip beside it", async () => {
   mountWindow();
-  await settled(createUi(document, "en").hoverRowStatus(row("Fix the layout")));
+  await settleInAct(createUi(document, "en").hoverRowStatus(row("Fix the layout")));
   expect(openTooltip()?.textContent).toBe("Working");
   release(glyphOf("Fix the layout"));
 });
@@ -190,20 +172,19 @@ it("hoverRowStatus fails for a row whose glyph has no tooltip rather than hover 
 it("hoverRowStatus fails for a row that is not there", async () => {
   mountWindow();
   const done = expect(createUi(document, "en").hoverRowStatus("Nothing")).rejects.toThrow(/No session row/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
 });
 
 it("hoverStatusMarker puts up the status of the chip it names", async () => {
   mountWindow();
-  await settledLive(createUi(document, "en").hoverStatusMarker((name) => name.startsWith("Hub 2")));
+  await settleInAct(createUi(document, "en").hoverStatusMarker((name) => name.startsWith("Hub 2")));
   expect(openTooltip()?.textContent).toBe("Working");
   release(document.querySelector('[aria-label^="Hub 2"] [role=presentation]')!);
 });
 
 it("hoverStatusMarker takes the marker, not the trigger before it", async () => {
   mountWindow();
-  await settledLive(createUi(document, "en").hoverStatusMarker((name) => name.startsWith("Website")));
+  await settleInAct(createUi(document, "en").hoverStatusMarker((name) => name.startsWith("Website")));
   expect(openTooltip()?.textContent).toBe("Awaiting instructions");
   release(Array.from(document.querySelectorAll('[aria-label^="Website"] [role=presentation]')).at(-1)!);
 });
@@ -211,8 +192,7 @@ it("hoverStatusMarker takes the marker, not the trigger before it", async () => 
 it("hoverStatusMarker fails for a control with no marker rather than hover another tooltip", async () => {
   mountWindow();
   const done = expect(createUi(document, "en").hoverStatusMarker((name) => name.startsWith("Docs"))).rejects.toThrow(/No row or chip/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
   expect(openTooltip()).toBeNull();
 });
 
@@ -221,14 +201,13 @@ it("hoverStatusMarker fails where the last tooltip is not a marker's", async () 
   const done = expect(createUi(document, "en").hoverStatusMarker((name) => name.startsWith("Fix the layout"))).rejects.toThrow(
     /has no status marker.*Claude Code/,
   );
-  await vi.advanceTimersByTimeAsync(3000);
-  await done;
+  await settleInAct(done);
   release(Array.from(document.querySelectorAll('[aria-label^="Fix the layout"] [role=presentation]')).at(-1)!);
 });
 
 it("hoverCalloutStatus puts up the status of the callout's session it names", async () => {
   mountWindow();
-  await settledLive(createUi(document, "en").hoverCalloutStatus("Tidy the changelog"));
+  await settleInAct(createUi(document, "en").hoverCalloutStatus("Tidy the changelog"));
   expect(openTooltip()?.textContent).toBe("Interrupted");
   release(document.querySelector("[role=alertdialog] li")!.firstElementChild!);
 });
@@ -236,22 +215,20 @@ it("hoverCalloutStatus puts up the status of the callout's session it names", as
 it("hoverCalloutStatus fails for a session whose glyph has no tooltip", async () => {
   mountWindow();
   const done = expect(createUi(document, "en").hoverCalloutStatus("Bare glyph")).rejects.toThrow(/has no tooltip: its last tooltip is none/);
-  await vi.advanceTimersByTimeAsync(3000);
-  await done;
+  await settleInAct(done);
   expect(openTooltip()).toBeNull();
 });
 
 it("hoverCalloutStatus fails for a session that is not listed", async () => {
   mountWindow();
   const done = expect(createUi(document, "en").hoverCalloutStatus("Nothing")).rejects.toThrow(/callout list/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
   expect(openTooltip()).toBeNull();
 });
 
 it("hoverCalloutAgent puts up the agent and account of the callout's session it names", async () => {
   mountWindow();
-  await settledLive(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Claude Code", "Work"));
+  await settleInAct(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Claude Code", "Work"));
   expect(openTooltip()?.textContent).toBe("Claude Code, Work");
   release(document.querySelector("[role=alertdialog] li")!.children[1]);
 });
@@ -261,29 +238,27 @@ it("hoverCalloutAgent fails where the tooltip is not the one it was told", async
   const done = expect(createUi(document, "en").hoverCalloutAgent("Tidy the changelog", "Claude Code", "Home")).rejects.toThrow(
     /has no tooltip "Claude Code, Home": its last tooltip is "Claude Code, Work"/,
   );
-  await vi.advanceTimersByTimeAsync(3000);
-  await done;
+  await settleInAct(done);
   release(document.querySelector("[role=alertdialog] li")!.children[1]);
 });
 
 it("hoverCalloutAgent fails for an agent icon with no tooltip", async () => {
   mountWindow();
   const done = expect(createUi(document, "en").hoverCalloutAgent("Bare glyph", "Claude Code", "Work")).rejects.toThrow(/with an agent icon to hover/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
   expect(openTooltip()).toBeNull();
 });
 
 it("hoverSessionAgent puts up the agent and the account, model and effort listed for the card it names", async () => {
   mountWindow();
-  await settledLive(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code", { account: "Work", model: "Opus 5.5", effort: "high" }));
+  await settleInAct(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code", { account: "Work", model: "Opus 5.5", effort: "high" }));
   expect(openTooltip()?.querySelector("dl")?.textContent).toBe("AccountWorkModelOpus 5.5Efforthigh");
   release(document.querySelector('[aria-label^="Card"] [role=presentation]')!);
 });
 
 it("hoverSessionAgent fails where the tooltip is not the one it was told", async () => {
   mountWindow();
-  await expect(settledLive(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code", { account: "Home", model: "Opus 5.5", effort: "high" }))).rejects.toThrow(
+  await expect(settleInAct(createUi(document, "en").hoverSessionAgent(row("Card"), "Claude Code", { account: "Home", model: "Opus 5.5", effort: "high" }))).rejects.toThrow(
     /has no tooltip "Claude Code \| Account: Home \| Model: Opus 5.5 \| Effort: high": its last tooltip is "Claude Code \| Account: Work \| Model: Opus 5.5 \| Effort: high"/,
   );
   release(document.querySelector('[aria-label^="Card"] [role=presentation]')!);
@@ -292,8 +267,7 @@ it("hoverSessionAgent fails where the tooltip is not the one it was told", async
 it("hoverSessionAgent fails for a card with no agent mark", async () => {
   mountWindow();
   const done = expect(createUi(document, "en").hoverSessionAgent(row("Docs"), "Claude Code", { account: "Work", model: "Opus 5.5", effort: "high" })).rejects.toThrow(/with an agent mark to hover/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
   expect(openTooltip()).toBeNull();
 });
 
@@ -319,7 +293,7 @@ const letterOf = (name: string): Element => document.querySelector(`[aria-label*
 
 it.each(["flat", "tree"] as const)("hoverChangeStatus puts up the word of the status of the %s row's letter", async (layout) => {
   mountChanges(layout);
-  await settledLive(createUi(document, "en").hoverChangeStatus(changeRow("gone.ts"), "deleted"));
+  await settleInAct(createUi(document, "en").hoverChangeStatus(changeRow("gone.ts"), "deleted"));
   expect(openTooltip()?.textContent).toBe("Deleted");
   release(letterOf("gone.ts"));
 });
@@ -327,22 +301,20 @@ it.each(["flat", "tree"] as const)("hoverChangeStatus puts up the word of the st
 it("hoverChangeStatus fails where the tooltip that opens is another status's", async () => {
   mountChanges("flat");
   const done = expect(createUi(document, "en").hoverChangeStatus(changeRow("kept.ts"), "deleted")).rejects.toThrow(/for deleted \(Deleted\): "Modified" is up/);
-  await vi.advanceTimersByTimeAsync(3000);
-  await done;
+  await settleInAct(done);
   release(letterOf("kept.ts"));
 });
 
 it("hoverChangeStatus fails for a row that is not there", async () => {
   mountChanges("flat");
   const done = expect(createUi(document, "en").hoverChangeStatus(changeRow("nothing.ts"), "modified")).rejects.toThrow(/No change row/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
   expect(openTooltip()).toBeNull();
 });
 
 it("hoverTitledControl puts up the tooltip of the control it names", async () => {
   mountWindow();
-  await settledLive(createUi(document, "en").hoverTitledControl((name) => name.startsWith("Operations")));
+  await settleInAct(createUi(document, "en").hoverTitledControl((name) => name.startsWith("Operations")));
   expect(openTooltip()?.textContent).toBe("Operations, a session is working");
   release(document.querySelector('[aria-label^="Operations"]')!);
 });
@@ -350,16 +322,45 @@ it("hoverTitledControl puts up the tooltip of the control it names", async () =>
 it("hoverTitledControl fails for a control whose tooltip stays shut under the pointer", async () => {
   mountWindow();
   const done = expect(createUi(document, "en").hoverTitledControl("Billing")).rejects.toThrow(/has no tooltip of its name: its last tooltip is none/);
-  await vi.advanceTimersByTimeAsync(3000);
-  await done;
+  await settleInAct(done);
   expect(openTooltip()).toBeNull();
 });
 
 it("hoverTitledControl fails for a control that is not there", async () => {
   mountWindow();
   const done = expect(createUi(document, "en").hoverTitledControl("Nothing")).rejects.toThrow(/Nothing to hover/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
+});
+
+/** A control whose tooltip the test puts in the page itself, `after` ms from now, as a loaded page opens one later than
+ * the hover step's fixed wait. */
+function mountProbe(tooltip: string, after: number): void {
+  mountForTooltip(<div role="button" aria-label="Probe">Probe</div>);
+  const timer = setTimeout(() => {
+    const shown = document.body.appendChild(document.createElement("div"));
+    shown.setAttribute("role", "tooltip");
+    shown.textContent = tooltip;
+  }, after);
+  onTestFinished(() => {
+    clearTimeout(timer);
+    document.querySelector("[role=tooltip]")?.remove();
+  });
+}
+
+it("a hover step waits for the tooltip it expects past the time a tooltip is given to open", async () => {
+  mountProbe("Probe", TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS + POLL_MS);
+  const started = Date.now();
+  await settleInAct(createUi(document, "en").hoverTitledControl("Probe"));
+  expect(openTooltip()?.textContent).toBe("Probe");
+  expect(Date.now() - started).toBeGreaterThan(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
+});
+
+it("a hover step fails, naming the last tooltip, only once its patience has run out", async () => {
+  mountProbe("Other", 0);
+  const started = Date.now();
+  const done = expect(createUi(document, "en").hoverTitledControl("Probe")).rejects.toThrow(/has no tooltip of its name: its last tooltip is "Other"/);
+  await settleInAct(done);
+  expect(Date.now() - started).toBeGreaterThanOrEqual(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS + TIMEOUT_MS);
 });
 
 /** The rail's quota entry over a daemon with Claude Code available, the panel a resting pointer floats in. */
@@ -377,7 +378,7 @@ function mountQuotaEntry(): void {
 
 it("hoverPanel floats in the panel of the control it names", async () => {
   mountQuotaEntry();
-  await settledLive(createUi(document, "en").hoverPanel("Account usage", "Account usage"));
+  await settleInAct(createUi(document, "en").hoverPanel("Account usage", "Account usage"));
   expect(document.querySelector('[role="dialog"][aria-label="Account usage"]')).not.toBeNull();
   release(document.querySelector('[aria-label="Account usage"]')!);
 });
@@ -385,16 +386,14 @@ it("hoverPanel floats in the panel of the control it names", async () => {
 it("hoverPanel fails for a control whose hover floats in no such panel", async () => {
   mountQuotaEntry();
   const done = expect(createUi(document, "en").hoverPanel("Account usage", "Nothing")).rejects.toThrow(/floated in no dialog matching Nothing/);
-  await vi.advanceTimersByTimeAsync(8000);
-  await done;
+  await settleInAct(done);
   release(document.querySelector('[aria-label="Account usage"]')!);
 });
 
 it("hoverPanel fails for a control that is not there", async () => {
   mountQuotaEntry();
   const done = expect(createUi(document, "en").hoverPanel("Nothing", "Account usage")).rejects.toThrow(/Nothing to hover/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
 });
 
 /** A status mark with a reason, as a row of the file tree draws it. */
@@ -408,7 +407,7 @@ function mountStatusMark(): void {
 it("hoverStatusMark opens the popover of the mark it names without moving focus", async () => {
   mountStatusMark();
   const mark = document.querySelector<HTMLElement>('[aria-label="Could not list this folder"]')!;
-  await settledLive(createUi(document, "en").hoverStatusMark("Could not list this folder"));
+  await settleInAct(createUi(document, "en").hoverStatusMark("Could not list this folder"));
   const popover = document.querySelector("[data-status-mark-popover]");
   expect(popover?.textContent).toBe("Permission denied.");
   expect(popover?.querySelector("[role=dialog]")?.getAttribute("aria-modal")).toBe("false");
@@ -420,7 +419,7 @@ it("hoverStatusMark opens the popover of the mark it names without moving focus"
 it("hoverStatusMark opens a help tip's popover as it does a mark's", async () => {
   mountForTooltip(<HelpTip label="About Billing">Billing is charged monthly.</HelpTip>);
   const tip = document.querySelector<HTMLElement>('[aria-label="About Billing"]')!;
-  await settledLive(createUi(document, "en").hoverStatusMark("About Billing"));
+  await settleInAct(createUi(document, "en").hoverStatusMark("About Billing"));
   const popover = document.querySelector('[role="dialog"]');
   expect(popover?.textContent).toBe("Billing is charged monthly.");
   expect(popover?.getAttribute("aria-modal")).toBe("false");
@@ -431,7 +430,7 @@ it("hoverStatusMark opens a help tip's popover as it does a mark's", async () =>
 it("hoverStatusMark opens the popover of a bare mark, whose one line is its name", async () => {
   mountForTooltip(<StatusMark tone="note" label="Shown as source because it is large." />);
   const mark = document.querySelector<HTMLElement>('[aria-label="Shown as source because it is large."]')!;
-  await settledLive(createUi(document, "en").hoverStatusMark("Shown as source because it is large."));
+  await settleInAct(createUi(document, "en").hoverStatusMark("Shown as source because it is large."));
   expect(document.querySelector("[data-status-mark-popover]")?.textContent).toBe("Shown as source because it is large.");
   release(mark);
 });
@@ -439,8 +438,7 @@ it("hoverStatusMark opens the popover of a bare mark, whose one line is its name
 it("hoverStatusMark fails for a mark that is not there", async () => {
   mountStatusMark();
   const done = expect(createUi(document, "en").hoverStatusMark("Nothing")).rejects.toThrow(/Nothing to hover/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
 });
 
 it("hoverStatusMark waits for the popover of the mark it names, not for one that is already up", async () => {
@@ -453,8 +451,8 @@ it("hoverStatusMark waits for the popover of the mark it names, not for one that
     </>,
   );
   const ui = createUi(document, "en");
-  await settledLive(ui.hoverStatusMark("First"));
-  await settledLive(ui.hoverStatusMark("Second"));
+  await settleInAct(ui.hoverStatusMark("First"));
+  await settleInAct(ui.hoverStatusMark("Second"));
   const second = document.querySelector<HTMLElement>('[aria-label="Second"]')!;
   const popovers = [...document.querySelectorAll("[data-status-mark-popover]")];
   expect(popovers.map((popover) => popover.textContent)).toContain("Two.");
@@ -473,16 +471,15 @@ it("hoverStatusMark fails for a control that opens nothing while another mark's 
     </>,
   );
   const ui = createUi(document, "en");
-  await settledLive(ui.hoverStatusMark("First"));
+  await settleInAct(ui.hoverStatusMark("First"));
   const done = expect(ui.hoverStatusMark("Plain")).rejects.toThrow(/opened no popover/);
-  await vi.advanceTimersByTimeAsync(8000);
-  await done;
+  await settleInAct(done);
   release(document.querySelector('[aria-label="First"]')!);
 });
 
 it("touchPressStatusMark opens the press form of the mark it names", async () => {
   mountStatusMark();
-  await settledLive(createUi(document, "en").touchPressStatusMark("Could not list this folder"));
+  await settleInAct(createUi(document, "en").touchPressStatusMark("Could not list this folder"));
   const popover = document.querySelector("[data-status-mark-popover]");
   expect(popover?.textContent).toBe("Permission denied.");
   expect(popover?.querySelector("[aria-modal=false]")).toBeNull();
@@ -492,15 +489,52 @@ it("touchPressStatusMark opens the press form of the mark it names", async () =>
 it("touchPressStatusMark fails for a control that opens no popover", async () => {
   mountForTooltip(<button type="button">Plain</button>);
   const done = expect(createUi(document, "en").touchPressStatusMark("Plain")).rejects.toThrow(/opened no popover/);
-  await vi.advanceTimersByTimeAsync(8000);
-  await done;
+  await settleInAct(done);
 });
 
 it("hoverStatusMark fails for a control whose hover opens no status mark popover", async () => {
   mountForTooltip(<button type="button">Plain</button>);
   const done = expect(createUi(document, "en").hoverStatusMark("Plain")).rejects.toThrow(/opened no popover/);
-  await vi.advanceTimersByTimeAsync(8000);
-  await done;
+  await settleInAct(done);
+});
+
+/** A viewer's title as the file viewer draws it for a conflicted path: the heading's name is one string that repeats the
+ * badge's tooltip as the detail, and the drawn badge, which opens that tooltip, is hidden from assistive technology. */
+function mountConflictTitle(headingName: string): void {
+  mountForTooltip(
+    <div role="dialog" aria-labelledby="viewer-title">
+      <h2 id="viewer-title">
+        <span className="sr-only">{headingName}</span>
+        <span aria-hidden="true">
+          c.ts
+          <TitleStatusBadge status="conflicted" label="Conflicted" tooltip="Both modified" />
+        </span>
+      </h2>
+    </div>,
+  );
+}
+
+it("hoverTitleStatus puts up the tooltip its dialog's heading repeats as the detail of its name", async () => {
+  mountConflictTitle("c.ts: Conflicted. Both modified");
+  await settleInAct(createUi(document, "en").hoverTitleStatus("conflicted"));
+  expect(document.querySelector("[role=tooltip]")?.textContent).toBe("Both modified");
+  release(document.querySelector("[role=dialog] [data-variant]")!);
+});
+
+it("hoverTitleStatus fails where the tooltip is not the open dialog's subject", async () => {
+  mountConflictTitle("c.ts: Conflicted. Deleted by them");
+  const done = expect(createUi(document, "en").hoverTitleStatus("conflicted")).rejects.toThrow(
+    /Conflicted chip opened no tooltip that its heading repeats as the detail of its name: its last tooltip is "Both modified"/,
+  );
+  await settleInAct(done);
+  release(document.querySelector("[role=dialog] [data-variant]")!);
+});
+
+it("hoverTitleStatus fails for a title with no chip reading the status", async () => {
+  mountConflictTitle("c.ts: Conflicted. Both modified");
+  const done = expect(createUi(document, "en").hoverTitleStatus("deleted")).rejects.toThrow(/title has no status chip reading Deleted/);
+  await settleInAct(done);
+  expect(document.querySelector("[role=tooltip]")).toBeNull();
 });
 
 const branchStatus = gitStatusOf("p-1", { ahead: 3, behind: 2 });
@@ -534,7 +568,7 @@ it("hoverGitBadge puts the pointer on the line of a row's badge and puts up the 
   const badge = document.querySelector("[role=button] [role=presentation]")!;
   const seen: Element[] = [];
   document.addEventListener("pointerover", (event) => seen.push(event.target as Element), { capture: true });
-  await settledLive(createUi(document, "en").hoverGitBadge(branchStatus, "line", (name) => name.startsWith("Website")));
+  await settleInAct(createUi(document, "en").hoverGitBadge(branchStatus, "line", (name) => name.startsWith("Website")));
   expect(openTooltip()?.textContent).toBe(tooltipSentenceOf(branchStatus));
   // The row's badge holds its parts in a box of their own, which is not itself one of them.
   expect(seen[0]).toBe(badge.querySelector("[dir=ltr]"));
@@ -548,7 +582,7 @@ it.each(["idle", "checking", "pulling", "pushing"] as const)("hoverGitBadge puts
     mountFocusBadge(status);
     const badge = document.querySelector("[role=img]")!;
     document.addEventListener("pointerover", (event) => targets.push(event.target as Element), { capture: true, once: true });
-    await settledLive(createUi(document, "en").hoverGitBadge(status, over));
+    await settleInAct(createUi(document, "en").hoverGitBadge(status, over));
     expect(openTooltip()?.textContent).toBe(tooltipSentenceOf(status));
     release(badge);
     document.body.replaceChildren();
@@ -562,7 +596,7 @@ it.each(["idle", "checking", "pulling", "pushing"] as const)("hoverGitBadge puts
 it.each(["checking", "pulling", "pushing"] as const)("hoverGitBadge takes the badge of the %s glyph the status draws", async (activity) => {
   const status = gitStatusOf("p-1", { activity, error: "fetch failed" });
   mountFocusBadge(status);
-  await settledLive(createUi(document, "en").hoverGitBadge(status, "glyph"));
+  await settleInAct(createUi(document, "en").hoverGitBadge(status, "glyph"));
   expect(openTooltip()?.textContent).toBe(tooltipSentenceOf(status));
   release(document.querySelector("[role=img]")!);
 });
@@ -591,7 +625,7 @@ it("hoverGitBadge fails for the glyph of a failed check, which is the failure ma
 it("hoverGitBadge puts up the sentence of a failed check from its branch line, not the failure mark", async () => {
   const failed = gitStatusOf("p-1", { ahead: 3, error: "fetch failed" });
   mountProjectRow(failed);
-  await settledLive(createUi(document, "en").hoverGitBadge(failed, "line", (name) => name.startsWith("Website")));
+  await settleInAct(createUi(document, "en").hoverGitBadge(failed, "line", (name) => name.startsWith("Website")));
   expect(openTooltip()?.textContent).toBe(tooltipSentenceOf(failed));
   release(document.querySelector("[role=button] [role=presentation]")!);
 });
@@ -614,7 +648,7 @@ function mountFailedRow(status: typeof branchStatus): void {
 it("openGitFailure opens the press form of the failure mark of a row", async () => {
   const failed = gitStatusOf("p-1", { error: "fatal: unable to access 'origin'" });
   mountFailedRow(failed);
-  await settledLive(createUi(document, "en").openGitFailure((name) => name.startsWith("Website")));
+  await settleInAct(createUi(document, "en").openGitFailure((name) => name.startsWith("Website")));
   const popover = document.querySelector("[data-status-mark-popover]");
   expect(popover?.textContent).toContain("fatal: unable to access 'origin'");
   expect(popover?.querySelector("[aria-modal=false]")).toBeNull();
@@ -624,15 +658,13 @@ it("openGitFailure opens the press form of the failure mark of a row", async () 
 it("openGitFailure fails while the next check runs, when the spinning glyph takes the mark's place", async () => {
   mountFocusBadge(gitStatusOf("p-1", { activity: "checking", error: "fetch failed" }));
   const done = expect(createUi(document, "en").openGitFailure()).rejects.toThrow(/No git failure mark in the sidebar/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
 });
 
 it("openGitFailure fails for a badge whose check did not fail", async () => {
   mountFocusBadge(branchStatus);
   const done = expect(createUi(document, "en").openGitFailure()).rejects.toThrow(/No git failure mark in the sidebar/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
 });
 
 it("hoverGitBadge fails for a header badge that says so in text and has no tooltip", async () => {
@@ -654,8 +686,7 @@ it("hoverGitBadge fails for a row that does not name the sentence of the status 
 it("hoverGitBadge fails where there is no such row", async () => {
   mountProjectRow(branchStatus);
   const done = expect(createUi(document, "en").hoverGitBadge(branchStatus, "glyph", (name) => name.startsWith("Nothing"))).rejects.toThrow(/No sidebar row/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
 });
 
 it("hoverGitBadge says a row's badge has no tooltip rather than hover the status marker beside it", async () => {
@@ -670,11 +701,11 @@ it("hoverGitBadge says a row's badge has no tooltip rather than hover the status
 it.each(["flat", "tree"] as const)("pressChangeStatus dismisses the %s tooltip without a pointerleave", async (layout) => {
   mountChanges(layout);
   const ui = createUi(document, "en");
-  await settledLive(ui.hoverChangeStatus(changeRow("gone.ts"), "deleted"));
+  await settleInAct(ui.hoverChangeStatus(changeRow("gone.ts"), "deleted"));
   const events: string[] = [];
   const chip = letterOf("gone.ts");
   for (const event of ["pointerdown", "pointerup", "pointerleave", "click"]) chip.addEventListener(event, () => events.push(event));
-  await settledLive(ui.pressChangeStatus(changeRow("gone.ts")));
+  await settleInAct(ui.pressChangeStatus(changeRow("gone.ts")));
   expect(events).toEqual(["pointerdown", "pointerup", "click"]);
   expect(document.querySelector("[data-anchored-tooltip]")).toBeNull();
   release(chip);
@@ -693,7 +724,7 @@ function mountCard(context?: { tokens: number; window?: number; used_percent?: n
 
 it("hoverSessionContext puts up the tooltip of the card's context size", async () => {
   mountCard({ tokens: 1500, window: 475000, used_percent: 40 });
-  await settledLive(createUi(document, "en").hoverSessionContext((name) => name.startsWith("Add idempotency keys")));
+  await settleInAct(createUi(document, "en").hoverSessionContext((name) => name.startsWith("Add idempotency keys")));
   expect(openTooltip()!.textContent).toBe(`Context window${isolate("1.5K")} / ${isolate("475K")}${isolate("40%")} used${isolate("473.5K")} left`);
   release(document.querySelector("[role=img]")!);
 });
@@ -701,8 +732,7 @@ it("hoverSessionContext puts up the tooltip of the card's context size", async (
 it("hoverSessionContext fails for a card whose context size is hidden", async () => {
   mountCard({ tokens: 0 });
   const done = expect(createUi(document, "en").hoverSessionContext((name) => name.startsWith("Add idempotency keys"))).rejects.toThrow(/with a context size to hover/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
   runOut();
 });
 
@@ -725,31 +755,29 @@ function mountTimedRow(session: { started_at: number; ended_at?: number | null }
 
 it("hoverSessionDates puts up the creation date of a session that is not archived", async () => {
   mountTimedRow({ started_at: Date.now() - 3 * 60 * 60_000 });
-  await settledLive(createUi(document, "en").hoverSessionDates((name) => name.startsWith("Add idempotency keys"), false));
+  await settleInAct(createUi(document, "en").hoverSessionDates((name) => name.startsWith("Add idempotency keys"), false));
   expect(Array.from(openTooltip()!.querySelectorAll("span"), (line) => line.textContent)).toEqual([expect.stringMatching(/^Created /)]);
   closeTimed();
 });
 
 it("hoverSessionDates puts up the archive date above the creation date of an archived session", async () => {
   mountTimedRow({ started_at: Date.now() - 3 * 60 * 60_000, ended_at: Date.now() - 60_000 });
-  await settledLive(createUi(document, "en").hoverSessionDates((name) => name.startsWith("Add idempotency keys"), true));
+  await settleInAct(createUi(document, "en").hoverSessionDates((name) => name.startsWith("Add idempotency keys"), true));
   expect(Array.from(openTooltip()!.querySelectorAll("span"), (line) => line.textContent)).toEqual([expect.stringMatching(/^Archived /), expect.stringMatching(/^Created /)]);
   closeTimed();
 });
 
 it("hoverSessionDates fails where the tooltip lacks the lines it was told", async () => {
   mountTimedRow({ started_at: Date.now() - 3 * 60 * 60_000 });
-  const done = expect(createUi(document, "en").hoverSessionDates((name) => name.startsWith("Add idempotency keys"), true)).rejects.toThrow(/lines starting "Archived", "Created"/);
-  await vi.advanceTimersByTimeAsync(3000);
-  await done;
+  const done = expect(createUi(document, "en").hoverSessionDates((name) => name.startsWith("Add idempotency keys"), true)).rejects.toThrow(/lines shaped "Archived …", "Created …"/);
+  await settleInAct(done);
   closeTimed();
 });
 
 it("hoverSessionDates fails for a row with no relative time", async () => {
   mountCard({ tokens: 1500 });
   const done = expect(createUi(document, "en").hoverSessionDates((name) => name.startsWith("Add idempotency keys"), false)).rejects.toThrow(/with a relative time to hover/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
   runOut();
 });
 
@@ -766,7 +794,7 @@ function mountFilter(clipped: boolean): void {
 
 it("hoverFilterConditions puts up the tokens of the clipped filter", async () => {
   mountFilter(true);
-  await settledLive(createUi(document, "en").hoverFilterConditions());
+  await settleInAct(createUi(document, "en").hoverFilterConditions());
   expect(Array.from(openTooltip()!.querySelectorAll("[data-list-motion]"), (chip) => chip.textContent)).toEqual(["site", "docs", "customer-facing"]);
   release(document.querySelector("[role=group]")!.parentElement!);
 });
@@ -774,8 +802,7 @@ it("hoverFilterConditions puts up the tokens of the clipped filter", async () =>
 it("hoverFilterConditions fails for a filter that fits the heading's line", async () => {
   mountFilter(false);
   const done = expect(createUi(document, "en").hoverFilterConditions()).rejects.toThrow(/fit the heading's line/);
-  await vi.advanceTimersByTimeAsync(9000);
-  await done;
+  await settleInAct(done);
   runOut();
 });
 
@@ -802,7 +829,7 @@ function mountTabs(): void {
 
 it("hoverAnchored puts up the tooltip of the control it names", async () => {
   mountTabs();
-  await settledLive(createUi(document, "en").hoverAnchored("Codex (not installed)", "Codex is not installed."));
+  await settleInAct(createUi(document, "en").hoverAnchored("Codex (not installed)", "Codex is not installed."));
   expect(openTooltip()?.textContent).toBe("Codex is not installed.");
   release(document.querySelector('[aria-label="Codex (not installed)"]')!);
 });
@@ -810,8 +837,7 @@ it("hoverAnchored puts up the tooltip of the control it names", async () => {
 it("hoverAnchored fails for a control with no tooltip", async () => {
   mountTabs();
   const done = expect(createUi(document, "en").hoverAnchored("Claude Code", "Codex is not installed.")).rejects.toThrow(/has no tooltip "Codex is not installed\.": its anchored tooltip is none/);
-  await vi.advanceTimersByTimeAsync(9000);
-  await done;
+  await settleInAct(done);
   expect(openTooltip()).toBeNull();
 });
 
@@ -820,8 +846,7 @@ it("hoverAnchored fails where the tooltip that opens is not the one named", asyn
   const done = expect(createUi(document, "en").hoverAnchored("Codex (not installed)", "Grok is not installed.")).rejects.toThrow(
     /has no tooltip "Grok is not installed\.": its anchored tooltip is "Codex is not installed\."/,
   );
-  await vi.advanceTimersByTimeAsync(3000);
-  await done;
+  await settleInAct(done);
   release(document.querySelector('[aria-label="Codex (not installed)"]')!);
 });
 
@@ -839,7 +864,7 @@ function FieldWithTip({ tip }: { tip?: string }): React.ReactElement {
 
 it("hoverField puts up the tooltip of the text field it names", async () => {
   mountForTooltip(<FieldWithTip tip="/Users/dev/Projects" />);
-  await settledLive(createUi(document, "en").hoverField("Directory", "/Users/dev/Projects"));
+  await settleInAct(createUi(document, "en").hoverField("Directory", "/Users/dev/Projects"));
   expect(openTooltip()?.textContent).toBe("/Users/dev/Projects");
   release(document.querySelector("input")!);
 });
@@ -849,8 +874,7 @@ it("hoverField fails for a text field with no tooltip", async () => {
   const done = expect(createUi(document, "en").hoverField("Directory", "/Users/dev/Projects")).rejects.toThrow(
     /has no tooltip "\/Users\/dev\/Projects": its anchored tooltip is none/,
   );
-  await vi.advanceTimersByTimeAsync(9000);
-  await done;
+  await settleInAct(done);
   expect(openTooltip()).toBeNull();
 });
 
@@ -872,14 +896,14 @@ function ItemWithLabelTip({ tip, disabled }: { tip: string; disabled?: boolean }
 
 it("hoverMenuLabel puts up the tooltip of a menu item's label content", async () => {
   mountForTooltip(<ItemWithLabelTip tip="feature/a-long-branch-name" />);
-  await settledLive(createUi(document, "en").hoverMenuLabel("feature/a-long-branch", "feature/a-long-branch-name"));
+  await settleInAct(createUi(document, "en").hoverMenuLabel("feature/a-long-branch", "feature/a-long-branch-name"));
   expect(openTooltip()?.textContent).toBe("feature/a-long-branch-name");
   release(document.querySelector("[data-slot=label] > *")!);
 });
 
 it("hoverMenuLabel reaches the label of a disabled menu item too", async () => {
   mountForTooltip(<ItemWithLabelTip tip="feature/a-long-branch-name" disabled />);
-  await settledLive(createUi(document, "en").hoverMenuLabel("feature/a-long-branch", "feature/a-long-branch-name"));
+  await settleInAct(createUi(document, "en").hoverMenuLabel("feature/a-long-branch", "feature/a-long-branch-name"));
   expect(openTooltip()?.textContent).toBe("feature/a-long-branch-name");
   release(document.querySelector("[data-slot=label] > *")!);
 });
@@ -889,8 +913,7 @@ it("hoverMenuLabel fails where the tooltip that opens is not the one named", asy
   const done = expect(createUi(document, "en").hoverMenuLabel("feature/a-long-branch", "main")).rejects.toThrow(
     /has no tooltip "main": its anchored tooltip is "feature\/a-long-branch-name"/,
   );
-  await vi.advanceTimersByTimeAsync(3000);
-  await done;
+  await settleInAct(done);
   release(document.querySelector("[data-slot=label] > *")!);
 });
 
@@ -916,7 +939,7 @@ function ItemWithLineTip({ tip }: { tip: string }): React.ReactElement {
 
 it("hoverMenuLabel with a line points at that line inside the label", async () => {
   mountForTooltip(<ItemWithLineTip tip="bb1cf4cb-37e3-4ea1-9907" />);
-  await settledLive(createUi(document, "en").hoverMenuLabel((name) => name.startsWith("Copy session ID"), "bb1cf4cb-37e3-4ea1-9907", "bb1cf4cb-37e3-4ea1"));
+  await settleInAct(createUi(document, "en").hoverMenuLabel((name) => name.startsWith("Copy session ID"), "bb1cf4cb-37e3-4ea1-9907", "bb1cf4cb-37e3-4ea1"));
   expect(openTooltip()?.textContent).toBe("bb1cf4cb-37e3-4ea1-9907");
   release(document.querySelector("[data-slot=label] span span:last-child")!);
 });
@@ -926,8 +949,7 @@ it("hoverMenuLabel without a line leaves a tooltip on the second line shut", asy
   const done = expect(createUi(document, "en").hoverMenuLabel((name) => name.startsWith("Copy session ID"), "bb1cf4cb-37e3-4ea1-9907")).rejects.toThrow(
     /its anchored tooltip is none/,
   );
-  await vi.advanceTimersByTimeAsync(9000);
-  await done;
+  await settleInAct(done);
 });
 
 it("hoverMenuLabel fails where no line of the label reads the one named", async () => {
@@ -935,13 +957,12 @@ it("hoverMenuLabel fails where no line of the label reads the one named", async 
   const done = expect(createUi(document, "en").hoverMenuLabel((name) => name.startsWith("Copy session ID"), "x", "no such line")).rejects.toThrow(
     /that reads no such line/,
   );
-  await vi.advanceTimersByTimeAsync(9000);
-  await done;
+  await settleInAct(done);
 });
 
 it("touchPress opens a help tip's explanation in the popover a finger gets", async () => {
   mountWindow();
-  await settled(createUi(document, "en").touchPress("About Billing"));
+  await settleInAct(createUi(document, "en").touchPress("About Billing"));
   expect(openPopover()?.textContent).toBe("Billing is charged monthly.");
   expect(openTooltip()).toBeNull();
 });
@@ -949,13 +970,12 @@ it("touchPress opens a help tip's explanation in the popover a finger gets", asy
 it("touchPress fails for a control whose touch press opens no popover", async () => {
   mountWindow();
   const done = expect(createUi(document, "en").touchPress("Billing")).rejects.toThrow(/opened no popover/);
-  await vi.advanceTimersByTimeAsync(6000);
-  await done;
+  await settleInAct(done);
 });
 
 it("tapTopBarStatus opens the top bar glyph's text in a popover", async () => {
   mountWindow();
-  await settled(createUi(document, "en").tapTopBarStatus());
+  await settleInAct(createUi(document, "en").tapTopBarStatus());
   expect(openPopover()?.textContent).toBe("Archived");
   expect(openTooltip()).toBeNull();
 });

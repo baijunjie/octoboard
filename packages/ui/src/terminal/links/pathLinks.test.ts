@@ -4,6 +4,7 @@ import { expect, it, vi } from "vitest";
 import { BROWSER_HOST } from "../../test/hosts";
 import { foundPathMatches, installPathLinks, type PathAnswer, PathLinkCache, pathCandidates, pathMatchesIn } from "./pathLinks";
 import type { TerminalRow } from "./terminalLines";
+import { fakeTimers } from "../../test/clock";
 
 const paths = (text: string) => pathCandidates(text).map((candidate) => candidate.path);
 
@@ -312,6 +313,7 @@ it("drops an answer that arrives after the cache was cleared", async () => {
 });
 
 it("keeps what it knew when a probe fails, and takes a path it knew nothing of for no path", async () => {
+  fakeTimers();
   let fail = false;
   const probe = vi.fn(async (asked: string[]): Promise<PathAnswer[]> => {
     if (fail) throw new Error("down");
@@ -332,7 +334,8 @@ it("keeps what it knew when a probe fails, and takes a path it knew nothing of f
   expect(links.kind("/new")).toBeUndefined();
   // The failed answer counts as fresh: neither is asked about again at once.
   links.want(["/known", "/new"]);
-  await new Promise((resolve) => setTimeout(resolve, 5));
+  // Runs the batch timer that asking again set, so that nothing more asked is nothing it would still ask.
+  await vi.advanceTimersByTimeAsync(0);
   expect(probe).toHaveBeenCalledTimes(2);
 });
 
@@ -349,13 +352,15 @@ it("does not ask about a path that left the screen before the batch went", async
 });
 
 it("sends at most 64 paths a request and two requests at a time", async () => {
+  fakeTimers();
   const answers: (() => void)[] = [];
   const probe = vi.fn((asked: string[]) => new Promise<PathAnswer[]>((resolve) => { answers.push(() => resolve(asked.map((): PathAnswer => ({ kind: "none" })))); }));
   const links = new PathLinkCache(probe, vi.fn(), () => 0, 0);
   links.want(Array.from({ length: 64 * 3 }, (_, i) => `/p${i}`));
   await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(2));
   expect(probe.mock.calls.map(([asked]) => asked.length)).toEqual([64, 64]);
-  await new Promise((resolve) => setTimeout(resolve, 5));
+  // Runs the batch timer that asking again set, so that nothing more asked is nothing it would still ask.
+  await vi.advanceTimersByTimeAsync(0);
   expect(probe).toHaveBeenCalledTimes(2);
   answers[0]();
   await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(3));

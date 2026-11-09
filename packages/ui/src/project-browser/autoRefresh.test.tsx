@@ -15,6 +15,7 @@ import { AUTO_REFRESH_MS } from "./autoRefresh";
 import { useDirectoryListings } from "./files/useDirectoryListings";
 import { useBranchList } from "./git/useBranchList";
 import { useChangeList, type ChangeList } from "./git/useChangeList";
+import { fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -93,7 +94,7 @@ const setVisibility = (state: DocumentVisibilityState) => {
 };
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  fakeTimers();
   visibility = "visible";
   Object.defineProperty(document, "visibilityState", { configurable: true, get: () => visibility });
 });
@@ -105,7 +106,6 @@ afterEach(async () => {
   pending = [];
   roots = [];
   document.body.replaceChildren();
-  vi.useRealTimers();
 });
 
 for (const { name, type, use } of hooks) {

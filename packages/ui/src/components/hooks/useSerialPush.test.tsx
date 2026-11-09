@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { useSerialPush } from "./useSerialPush";
 
@@ -23,8 +23,6 @@ function mount(): (send: () => Promise<unknown>) => void {
   return push;
 }
 
-const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-
 it("starts a push only when the one before it has settled, so the shell sees them in order", async () => {
   const push = mount();
   const seen: string[] = [];
@@ -34,11 +32,10 @@ it("starts a push only when the one before it has settled, so the shell sees the
     return new Promise<void>((resolve) => { settleFirst = resolve; }).then(() => { seen.push("first settled"); });
   });
   push(async () => { seen.push("second sent"); });
-  await flush();
-  expect(seen).toEqual(["first sent"]);
+  // A second push sent ahead of its turn would have been sent by the time the first one was.
+  await vi.waitFor(() => expect(seen).toEqual(["first sent"]));
   settleFirst();
-  await flush();
-  expect(seen).toEqual(["first sent", "first settled", "second sent"]);
+  await vi.waitFor(() => expect(seen).toEqual(["first sent", "first settled", "second sent"]));
 });
 
 it("keeps sending after a push that rejects", async () => {
@@ -46,8 +43,7 @@ it("keeps sending after a push that rejects", async () => {
   const seen: string[] = [];
   push(() => Promise.reject(new Error("refused")));
   push(async () => { seen.push("second"); });
-  await flush();
-  expect(seen).toEqual(["second"]);
+  await vi.waitFor(() => expect(seen).toEqual(["second"]));
 });
 
 it("keeps sending after a push that throws as it is sent", async () => {
@@ -55,6 +51,5 @@ it("keeps sending after a push that throws as it is sent", async () => {
   const seen: string[] = [];
   push(() => { throw new Error("broken"); });
   push(async () => { seen.push("second"); });
-  await flush();
-  expect(seen).toEqual(["second"]);
+  await vi.waitFor(() => expect(seen).toEqual(["second"]));
 });

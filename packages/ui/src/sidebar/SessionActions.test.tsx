@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import type { RequestHandler } from "../requests";
-import { enter, openTooltip, press, withFakeTimers } from "../components/hint/tooltipTestSupport";
+import { enter, openTooltip, press } from "../components/hint/tooltipTestSupport";
 import { sessionOf } from "../fixtures/builders";
 import type { Session } from "../protocol";
 import { ariaBinding } from "../shortcuts/binding";
@@ -15,6 +15,7 @@ import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { SessionActions } from "./SessionActions";
 import type { SidebarHandlers } from "./types";
+import { fakeTimers, runOutTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -84,7 +85,7 @@ it.each([false, true])("hides removal shortcuts on a locked session, conversatio
 });
 
 it.each([true, false])("gives the Copy session ID row's ID its full text as a tooltip only while it is clipped, clipped=%s", async (clipped) => {
-  const settle = withFakeTimers();
+  fakeTimers();
   // jsdom lays nothing out, so the overflow every label measures is stubbed.
   for (const [name, value] of [["scrollWidth", clipped ? 300 : 100], ["clientWidth", 100]] as const) {
     const own = Object.getOwnPropertyDescriptor(Element.prototype, name)!;
@@ -99,7 +100,7 @@ it.each([true, false])("gives the Copy session ID row's ID its full text as a to
   const id = [...item.querySelectorAll<HTMLElement>("[dir=ltr]")].find((el) => el.textContent === session.id)!;
 
   enter(id);
-  settle();
+  runOutTimers();
   const tooltip = openTooltip();
   if (clipped) {
     // The bare ID, laid out left to right like the label under a right-to-left language too.

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "./components/alerts/errorAlerts";
 import { t } from "./i18n/language";
@@ -9,10 +9,9 @@ import type { ExitCapability, PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import { DaemonFailedScreen, NoAddressMessage, StartupScreen } from "./StartupScreen";
 import { BROWSER_HOST } from "./test/hosts";
+import { fakeTimers } from "./test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-afterEach(() => { act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }); });
 
 const DIAGNOSTIC = "Error: listen EADDRINUSE: address already in use 127.0.0.1:4580";
 
@@ -96,10 +95,11 @@ it("keeps no danger tone on the page outside a glyph or an Alert", () => {
 });
 
 it("opens no error dialog over the page and announces the failure from the page itself, after the first paint", async () => {
+  fakeTimers();
   const container = mount();
   expect(errorAlerts.getSnapshot()).toEqual([]);
   expect(container.querySelector('[role="alert"]')).toBeNull();
-  await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+  await act(async () => { await vi.advanceTimersToNextTimerAsync(); });
   const announced = container.querySelector('[role="alert"]')!;
   expect(announced.querySelector("h1")?.textContent).toBe(t("startup.daemonFailed.title"));
   expect(announced.textContent).toContain(t("startup.daemonFailed.description"));

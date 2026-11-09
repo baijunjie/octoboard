@@ -3,10 +3,21 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterAll, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { FadeOverflow } from "./FadeOverflow";
+import { FadeOverflow, MARQUEE_INITIAL_DELAY, MARQUEE_PAUSE_FAR, MARQUEE_PAUSE_REST, MARQUEE_RETURN_DURATION } from "./FadeOverflow";
 import { stubListMotion } from "../motion/listMotionTestSupport";
+import { MOVING_AFTER_MS, marqueeRoundMs, marqueeRunMs } from "../motion/marqueeTestSupport";
+import { FAKE_FRAME_MS, fakeTimers, runOutTimers, runPendingTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+/** How much text a clipped label has past its box in these tests, which is how far the marquee runs. */
+const OVERFLOW = 200;
+
+/** How far from rest a label that is moving has come, in px, for a test to take it as moving. */
+const MOVED_PX = 20;
+
+/** Frames a test steps through one by one while the marquee runs. */
+const FRAMES_OBSERVED = 30;
 
 // Records every observer, including the one the marquee uses to notice a row's hover chrome
 // changing a label's width after the pointer has already entered. A native observer would never
@@ -137,14 +148,16 @@ function mount(
   settle: () => void;
   finish: () => void;
 } {
-  vi.useFakeTimers();
-  onTestFinished(() => {
-    vi.useRealTimers();
+  fakeTimers({
+    beforeDrain: () => {
+      root.unmount();
+      container.remove();
+    },
   });
   // How much text there is past the box. The box width is mutable: a resize that keeps the text
   // clipped is what has to shorten the fade, and the first measurement is taken before the first
   // paint, so no frame has to be run for it.
-  let overflow = clipped ? 200 : 0;
+  let overflow = clipped ? OVERFLOW : 0;
   let boxWidth = clientWidth;
   const written: number[] = [];
   stubGeometry(
@@ -154,13 +167,9 @@ function mount(
   );
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
   act(() => root.render(<FadeOverflow {...props} />));
   const label = container.firstElementChild!;
-  const settle = () => act(() => void vi.runOnlyPendingTimers());
+  const settle = runPendingTimers;
   return {
     container,
     unmount: () => act(() => root.unmount()),
@@ -185,9 +194,7 @@ function mount(
         label.dispatchEvent(new MouseEvent("pointerleave"));
       });
       // Let the tooltip's cooldown and any pending measurement finish.
-      act(() => void vi.advanceTimersByTime(5000));
-      settle();
-      expect(vi.getTimerCount()).toBe(0);
+      runOutTimers();
     },
   };
 }
@@ -289,9 +296,9 @@ it("runs a label clipped at its start back toward its beginning, against the pin
 
   enter();
   // Past the pause the label rests in, then frame by frame, with the pin measuring all the while.
-  act(() => void vi.advanceTimersByTime(1200));
+  act(() => void vi.advanceTimersByTime(MOVING_AFTER_MS));
   written.length = 0;
-  for (let i = 0; i < 30; i++) act(() => void vi.advanceTimersByTime(16));
+  for (let i = 0; i < FRAMES_OBSERVED; i++) act(() => void vi.advanceTimersByTime(FAKE_FRAME_MS));
 
   // Every write moves it further back toward its beginning: while the marquee owns the position
   // the pin stands aside, rather than putting the label back at its end between steps.
@@ -307,35 +314,39 @@ it("runs a label clipped at its start back toward its beginning, against the pin
 
 it.each(["end", "start"] as const)("holds the far edge for three seconds and returns rapidly (%s clipping)", (clip) => {
   const { label, written, enter, finish } = mount({ clip, children: "a long label" }, true);
-  const rest = clip === "start" ? 200 : 0;
-  const far = clip === "start" ? 0 : 200;
+  const rest = clip === "start" ? OVERFLOW : 0;
+  const far = clip === "start" ? 0 : OVERFLOW;
   enter();
-  act(() => void vi.advanceTimersByTime(592));
+  act(() => void vi.advanceTimersByTime(MARQUEE_INITIAL_DELAY - FAKE_FRAME_MS / 2));
   expect(label.scrollLeft).toBe(rest);
-  act(() => void vi.advanceTimersByTime(96));
+  act(() => void vi.advanceTimersByTime(MOVING_AFTER_MS - MARQUEE_INITIAL_DELAY + FAKE_FRAME_MS / 2));
   expect(Math.abs(label.scrollLeft - rest)).toBeGreaterThan(1);
-  // Follow individual frames to detect arrival independently of the initial hover pause.
+  // Follow individual frames to detect arrival independently of the initial hover pause. The run takes
+  // `marqueeRunMs`; two frames more allow for the one the run starts a frame late and the one it ends on.
   let elapsed = 0;
-  while (Math.abs(label.scrollLeft - far) > 0.5 && elapsed < 5000) {
-    act(() => void vi.advanceTimersByTime(16));
-    elapsed += 16;
+  while (Math.abs(label.scrollLeft - far) > 0.5 && elapsed < marqueeRunMs(OVERFLOW) + 2 * FAKE_FRAME_MS) {
+    act(() => void vi.advanceTimersByTime(FAKE_FRAME_MS));
+    elapsed += FAKE_FRAME_MS;
   }
-  expect(elapsed).toBeLessThan(5000);
+  expect(Math.abs(label.scrollLeft - far)).toBeLessThanOrEqual(0.5);
   const arrival = label.scrollLeft;
   written.length = 0;
-  act(() => void vi.advanceTimersByTime(2992));
+  act(() => void vi.advanceTimersByTime(MARQUEE_PAUSE_FAR - FAKE_FRAME_MS / 2));
   expect(label.scrollLeft).toBe(arrival);
   expect(written).toEqual([]);
-  act(() => void vi.advanceTimersByTime(112));
-  expect(Math.abs(label.scrollLeft - rest)).toBeGreaterThan(20);
-  act(() => void vi.advanceTimersByTime(160));
+  // Half the return has run: the label is still well away from rest.
+  act(() => void vi.advanceTimersByTime(MARQUEE_RETURN_DURATION / 2 + FAKE_FRAME_MS / 2));
+  expect(Math.abs(label.scrollLeft - rest)).toBeGreaterThan(MOVED_PX);
+  act(() => void vi.advanceTimersByTime(MARQUEE_RETURN_DURATION));
   expect(written.some((position) => Math.abs(position - rest) < 0.5)).toBe(true);
   expect(Math.abs(label.scrollLeft - rest)).toBeLessThan(5);
   written.length = 0;
-  act(() => void vi.advanceTimersByTime(2800));
+  // The pause at rest began when the return arrived, less than a return ago, so this stays inside it.
+  act(() => void vi.advanceTimersByTime(MARQUEE_PAUSE_REST - MARQUEE_RETURN_DURATION));
   expect(label.scrollLeft).toBe(rest);
-  act(() => void vi.advanceTimersByTime(700));
-  expect(Math.abs(label.scrollLeft - rest)).toBeGreaterThan(20);
+  // Past its end, and then long enough for the next run to have covered `MOVED_PX` with a margin.
+  act(() => void vi.advanceTimersByTime(MARQUEE_RETURN_DURATION + marqueeRunMs(MOVED_PX) * 2));
+  expect(Math.abs(label.scrollLeft - rest)).toBeGreaterThan(MOVED_PX);
   expect(written.every((position, i) => i === 0 || (clip === "start" ? position <= written[i - 1]! : position >= written[i - 1]!))).toBe(true);
   act(() => void label.dispatchEvent(new MouseEvent("pointerleave")));
   expect(label.scrollLeft).toBe(rest);
@@ -345,15 +356,15 @@ it.each(["end", "start"] as const)("holds the far edge for three seconds and ret
 it("hands a start-clipped label back to the pin when its text comes to fit under the pointer", () => {
   const { label, enter, settle, finish, overflowBy } = mount({ clip: "start", titleWhenClipped: "a/very/long/path", children: "a/very/long/path" }, true);
   enter();
-  act(() => void vi.advanceTimersByTime(1200));
+  act(() => void vi.advanceTimersByTime(MOVING_AFTER_MS));
 
   // The text comes to fit while the pointer stays — a shorter name, or room enough for this one —
   // so the marquee has nothing to run and gives the position up.
   overflowBy(0);
-  act(() => void vi.advanceTimersByTime(20000));
+  act(() => void vi.advanceTimersByTime(marqueeRoundMs(OVERFLOW)));
 
   // Long again, and it is held at its end once more rather than left showing its beginning.
-  overflowBy(200);
+  overflowBy(OVERFLOW);
   act(() => void label.dispatchEvent(new Event("scroll")));
   settle();
   expect(label.scrollLeft).toBe(200);
@@ -370,14 +381,14 @@ it("leaves a start-clipped label alone where the system asks for no motion", () 
   // would only be motion where none is wanted, and a fight with the pin over where the text that
   // grew under the pointer now rests.
   enter();
-  act(() => void vi.advanceTimersByTime(3000));
+  act(() => void vi.advanceTimersByTime(MOVING_AFTER_MS));
   overflowBy(400);
   act(() => void label.dispatchEvent(new Event("scroll")));
   settle();
   expect(label.scrollLeft).toBe(400);
   written.length = 0;
   act(() => void label.dispatchEvent(new MouseEvent("pointerleave")));
-  act(() => void vi.advanceTimersByTime(3000));
+  act(() => void vi.advanceTimersByTime(MARQUEE_RETURN_DURATION * 2));
   settle();
   expect(written).toEqual([]);
   expect(label.scrollLeft).toBe(400);
@@ -388,13 +399,13 @@ it("stops a running marquee at the label's rest when the preference turns to red
   const motion = stubListMotion();
   const { label, written, enter, finish } = mount({ clip: "end", children: "a long label" }, true);
   enter();
-  act(() => void vi.advanceTimersByTime(1200));
+  act(() => void vi.advanceTimersByTime(MOVING_AFTER_MS));
   expect(label.scrollLeft).toBeGreaterThan(0);
 
   motion.reduce();
   expect(label.scrollLeft).toBe(0);
   written.length = 0;
-  act(() => void vi.advanceTimersByTime(5000));
+  act(() => void vi.advanceTimersByTime(marqueeRoundMs(OVERFLOW)));
   expect(written).toEqual([]);
   expect(label.scrollLeft).toBe(0);
   finish();
@@ -422,8 +433,7 @@ it("shortens the fade when a clipped label gets narrower and keeps the full ramp
 });
 
 it("runs both labels of a hovered row, including one that overflows only after the hover chrome grows", () => {
-  vi.useFakeTimers();
-  onTestFinished(() => void vi.useRealTimers());
+  fakeTimers();
   const overflow = new WeakMap<Element, number>();
   stubGeometry(
     (element) => 100 + (overflow.get(element) ?? 0),
@@ -454,34 +464,32 @@ it("runs both labels of a hovered row, including one that overflows only after t
     ),
   );
   const [name, branch] = Array.from(scope.children) as HTMLElement[];
-  overflow.set(branch, 200);
+  overflow.set(branch, OVERFLOW);
 
   act(() => void scope.dispatchEvent(new MouseEvent("pointerenter")));
-  act(() => void vi.advanceTimersByTime(900));
+  act(() => void vi.advanceTimersByTime(MOVING_AFTER_MS));
   expect(branch.scrollLeft).toBeGreaterThan(5);
   expect(name.scrollLeft).toBe(0);
 
   // The hover chrome has taken the name's room. It starts without the pointer having to leave.
-  overflow.set(name, 200);
+  overflow.set(name, OVERFLOW);
   act(() => void fireResize(name));
-  act(() => void vi.advanceTimersByTime(900));
+  act(() => void vi.advanceTimersByTime(MOVING_AFTER_MS));
   expect(name.scrollLeft).toBeGreaterThan(5);
   expect(branch.scrollLeft).toBeGreaterThan(5);
 
   // A frame in which the branch happens to fit must not retire it for the rest of the hover.
   overflow.set(branch, 0);
   act(() => void fireResize(branch));
-  act(() => void vi.advanceTimersByTime(500));
+  runPendingTimers();
   expect(branch.scrollLeft).toBeLessThan(1);
-  overflow.set(branch, 200);
+  overflow.set(branch, OVERFLOW);
   act(() => void fireResize(branch));
-  act(() => void vi.advanceTimersByTime(900));
+  act(() => void vi.advanceTimersByTime(MOVING_AFTER_MS));
   expect(branch.scrollLeft).toBeGreaterThan(5);
 
   act(() => void scope.dispatchEvent(new MouseEvent("pointerleave")));
-  act(() => void vi.advanceTimersByTime(5000));
-  act(() => void vi.runOnlyPendingTimers());
-  expect(vi.getTimerCount()).toBe(0);
+  runOutTimers();
 });
 
 

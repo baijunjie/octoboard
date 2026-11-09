@@ -15,6 +15,7 @@ import { FileViewer } from "../FileViewer";
 import { markdownView } from "./markdownView";
 import type { MarkdownLocation } from "./markdownLocation";
 import { openableAddress } from "./MarkdownDocument";
+import { LAZY_IMPORT_TIMEOUT_MS, settleLazyImport } from "../../test/lazyImport";
 import { ViewerHost } from "../viewerTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -100,7 +101,7 @@ async function open(
       </ViewerHost>,
     ),
   );
-  for (let i = 0; i < 5; i += 1) await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  await settleLazyImport();
   return document.querySelector<HTMLElement>("[role=dialog]")!;
 }
 
@@ -406,18 +407,9 @@ it("does not open a path the listing says is a directory", async () => {
   expect(region().textContent).toContain("folder");
 });
 
-/** Waits for the formula renderer, loaded on demand, to have drawn: by the clock rather than a
- * number of turns, since the load takes longer under a loaded machine than any count allows. */
-async function drawn(done: () => boolean): Promise<void> {
-  const deadline = Date.now() + 10_000;
-  while (!done() && Date.now() < deadline) {
-    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
-  }
-}
-
 it("keeps a formula left to right inside a right-to-left paragraph, and a math fence as code", async () => {
   await open(markdownFile("docs/math.md", "مرحبا $E=mc^2$ بالعالم\n\n```math\nx\n```\n"));
-  await drawn(() => region().querySelector(".katex") !== null);
+  await vi.waitFor(() => expect(region().querySelector(".katex")).not.toBeNull(), { timeout: LAZY_IMPORT_TIMEOUT_MS });
   const formula = region().querySelector(".katex")?.parentElement;
   expect(formula?.getAttribute("dir")).toBe("ltr");
   expect(formula?.className).toContain("[unicode-bidi:isolate]");
@@ -429,7 +421,7 @@ it("keeps a formula left to right inside a right-to-left paragraph, and a math f
 it("leaves a price as text and draws a formula, without a link from an untrusted command", async () => {
   await open(markdownFile("docs/math.md", "It costs $20 and $30, and $100/2$ of it, and $E=mc^2$.\n\n$$\\href{https://example.com}{x}$$\n"));
   expect(region().textContent).toContain("$20 and $30");
-  await drawn(() => region().querySelectorAll(".katex").length >= 2);
+  await vi.waitFor(() => expect(region().querySelectorAll(".katex").length).toBeGreaterThanOrEqual(2), { timeout: LAZY_IMPORT_TIMEOUT_MS });
   expect(region().querySelectorAll(".katex").length).toBeGreaterThanOrEqual(2);
   expect(region().querySelector("math")).not.toBeNull();
   expect(region().querySelector(".katex a, .katex img")).toBeNull();
@@ -470,9 +462,7 @@ it("shows a project image and does not fetch one that leaves the project", async
       };
     }),
   });
-  for (let i = 0; i < 20 && region().querySelector('img[alt="chart"]') === null; i += 1) {
-    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
-  }
+  await vi.waitFor(() => expect(region().querySelector('img[alt="chart"]')).not.toBeNull(), { timeout: LAZY_IMPORT_TIMEOUT_MS });
   const image = region().querySelector('img[alt="chart"]');
   expect(image?.getAttribute("alt")).toBe("chart");
   expect(image?.getAttribute("src")?.startsWith("data:image/png")).toBe(true);
