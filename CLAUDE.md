@@ -172,8 +172,10 @@ the earlier steps do not run them separately (the related tests a step runs to c
   baselines: by the user's explicit workflow choice, routine development completion and local merges do not run
   the full checks. Before a local merge only, once the branch is aligned with its target branch and right before
   merging, run the quick check, `pnpm verify --quick`, and do not merge until it passes; it runs at no other point,
-  neither at commits nor at development completion. Skip it when the branch's changes are only files that the
-  build, type checking, and tests never read. The full checks, builds and full test suites included, run only before
+  neither at commits nor at development completion. When it fails only on tests that look intermittent (unrelated
+  to the branch's changes), rerun just the failed test files on their own; if they pass, the quick check counts as
+  passed, without rerunning the whole quick check (by the user's instruction). Skip it when the branch's changes are
+  only files that the build, type checking, and tests never read. The full checks, builds and full test suites included, run only before
   pushing. Checks used specifically to establish a changed rule while implementing it remain appropriate; neither
   they nor the quick check replace push verification.
 - Before committing, the `pre-commit` hook runs `scripts/hooks/format-staged.mjs` (the same as `pnpm format:staged`):
