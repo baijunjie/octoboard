@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import type { Project } from "../protocol";
+import type { ClientRequestBody, Console, Project } from "../protocol";
 import type { Daemon } from "../store";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
@@ -33,27 +33,33 @@ describe("hasNewProjectId", () => {
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
+const request = vi.fn((_body: ClientRequestBody) => Promise.resolve({ type: "ack", id: null }) as Promise<never>);
 
 let daemon: Daemon;
+const consolesOf = (...ids: string[]) => new Map(ids.map((id) => [id, { id } as Console]));
 const projectsOf = (...ids: string[]) => new Map(ids.map((id) => [id, { id, console_id: "c1" } as Project]));
 
-function Host({ consoleId }: { consoleId: string | undefined }) {
-  useGitStatusSchedule(consoleId);
+function Host() {
+  useGitStatusSchedule();
   return null;
 }
 
-function mount(consoleId: string | undefined) {
+function mount() {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  const render = (id: string | undefined) => act(() => root.render(<TestHost daemon={daemon}><Host consoleId={id} /></TestHost>));
-  render(consoleId);
+  const render = () => act(() => root.render(<TestHost daemon={daemon}><Host /></TestHost>));
+  render();
+  let mounted = true;
+  const unmount = () => {
+    if (!mounted) return;
+    mounted = false;
+    act(() => root.unmount());
+    container.remove();
+  };
+  onTestFinished(unmount);
   return {
     rerender: render,
-    unmount: () => {
-      act(() => root.unmount());
-      container.remove();
-    },
+    unmount,
   };
 }
 
@@ -63,7 +69,7 @@ describe("useGitStatusSchedule", () => {
   beforeEach(() => {
     request.mockClear();
     vi.useFakeTimers();
-    daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 0, projects: projectsOf("p1") }, request });
+    daemon = testDaemon({ state: { connectionState: "open", snapshotEpoch: 0, consoles: consolesOf("c1"), projects: projectsOf("p1") }, request });
   });
 
   afterEach(() => {
@@ -71,18 +77,18 @@ describe("useGitStatusSchedule", () => {
   });
 
   it("sends one request on mount and none again on a re-render with unchanged inputs", () => {
-    const host = mount("c1");
+    const host = mount();
     expect(request).toHaveBeenCalledTimes(1);
 
-    host.rerender("c1");
-    host.rerender("c1");
+    host.rerender();
+    host.rerender();
     expect(request).toHaveBeenCalledTimes(1);
 
     host.unmount();
   });
 
   it("fires the interval once per period, rather than a re-render restarting it", () => {
-    const host = mount("c1");
+    const host = mount();
     expect(request).toHaveBeenCalledTimes(1);
 
     // Advance partway through the period before the re-renders below, so a restart would tick at
@@ -93,8 +99,8 @@ describe("useGitStatusSchedule", () => {
     act(() => vi.advanceTimersByTime(2 * 60_000));
 
     // Re-renders that change nothing must not tear the effect down and recreate the interval.
-    host.rerender("c1");
-    host.rerender("c1");
+    host.rerender();
+    host.rerender();
 
     act(() => vi.advanceTimersByTime(REFRESH_INTERVAL_MS - 2 * 60_000 - 1));
     expect(request).toHaveBeenCalledTimes(1);
@@ -106,8 +112,8 @@ describe("useGitStatusSchedule", () => {
     host.unmount();
   });
 
-  it("refreshes once more when a project appears in the shown console, without resetting the interval", () => {
-    const host = mount("c1");
+  it("refreshes once more when a project appears in a console, without resetting the interval", () => {
+    const host = mount();
     expect(request).toHaveBeenCalledTimes(1);
 
     // As above, perturb partway through the period rather than at t = 0, so a restarted interval
@@ -115,7 +121,7 @@ describe("useGitStatusSchedule", () => {
     act(() => vi.advanceTimersByTime(2 * 60_000));
 
     act(() => daemon.store.setState({ projects: projectsOf("p1", "p2") }));
-    host.rerender("c1");
+    host.rerender();
     expect(request).toHaveBeenCalledTimes(2);
 
     act(() => vi.advanceTimersByTime(REFRESH_INTERVAL_MS - 2 * 60_000 - 1));
@@ -130,13 +136,96 @@ describe("useGitStatusSchedule", () => {
   });
 
   it("sends nothing for a console with no project list change and no elapsed interval", () => {
-    const host = mount("c1");
+    const host = mount();
     request.mockClear();
 
-    host.rerender("c1");
+    host.rerender();
     act(() => vi.advanceTimersByTime(REFRESH_INTERVAL_MS - 1));
     expect(request).not.toHaveBeenCalled();
 
     host.unmount();
+  });
+});
+
+
+describe("all-console scheduling", () => {
+  beforeEach(() => {
+    request.mockClear();
+    vi.useFakeTimers();
+    daemon = testDaemon({ state: {
+      connectionState: "open", snapshotEpoch: 0, consoles: consolesOf("c1", "c2"),
+      projects: new Map([
+        ["p1", { id: "p1", console_id: "c1" } as Project],
+        ["p2", { id: "p2", console_id: "c2" } as Project],
+      ]),
+    }, request });
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  const requestedConsoles = () => request.mock.calls.map(([body]) => (body as { console: string }).console);
+
+  it("refreshes every console on mount and every five minutes, and stops on unmount", () => {
+    const host = mount();
+    expect(requestedConsoles()).toEqual(["c1", "c2"]);
+    request.mockClear();
+    act(() => vi.advanceTimersByTime(REFRESH_INTERVAL_MS));
+    expect(requestedConsoles()).toEqual(["c1", "c2"]);
+    host.unmount();
+    request.mockClear();
+    act(() => vi.advanceTimersByTime(REFRESH_INTERVAL_MS));
+    expect(request).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("refreshes a new or moved project in its destination console without shifting the clock", () => {
+    mount();
+    act(() => vi.advanceTimersByTime(2 * 60_000));
+    request.mockClear();
+    act(() => daemon.store.setState({ projects: new Map([
+      ...daemon.store.getState().projects,
+      ["p3", { id: "p3", console_id: "c2" } as Project],
+    ]) }));
+    expect(requestedConsoles()).toEqual(["c2"]);
+    request.mockClear();
+    act(() => daemon.store.setState({ projects: new Map([
+      ...daemon.store.getState().projects,
+      ["p1", { id: "p1", console_id: "c2" } as Project],
+    ]) }));
+    expect(requestedConsoles()).toEqual(["c2"]);
+    request.mockClear();
+    act(() => vi.advanceTimersByTime(REFRESH_INTERVAL_MS - 2 * 60_000));
+    expect(requestedConsoles()).toEqual(["c1", "c2"]);
+  });
+
+  it("checks a newly added console immediately and drops a removed console from later rounds", () => {
+    mount();
+    request.mockClear();
+    act(() => daemon.store.setState({ consoles: consolesOf("c1", "c3") }));
+    expect(requestedConsoles()).toEqual(["c3"]);
+    request.mockClear();
+    act(() => vi.advanceTimersByTime(REFRESH_INTERVAL_MS));
+    expect(requestedConsoles()).toEqual(["c1", "c3"]);
+  });
+
+  it("pauses while disconnected and refreshes all consoles once on reconnect or a new snapshot", () => {
+    act(() => daemon.store.setState({ connectionState: "connecting" }));
+    mount();
+    act(() => vi.advanceTimersByTime(REFRESH_INTERVAL_MS));
+    expect(request).not.toHaveBeenCalled();
+    act(() => daemon.store.setState({ connectionState: "open", snapshotEpoch: 1 }));
+    expect(requestedConsoles()).toEqual(["c1", "c2"]);
+    request.mockClear();
+    act(() => daemon.store.setState({ snapshotEpoch: 2, projects: new Map([
+      ...daemon.store.getState().projects,
+      ["p3", { id: "p3", console_id: "c2" } as Project],
+    ]) }));
+    expect(requestedConsoles()).toEqual(["c1", "c2"]);
+    request.mockClear();
+    act(() => daemon.store.setState({ connectionState: "connecting" }));
+    act(() => vi.advanceTimersByTime(REFRESH_INTERVAL_MS));
+    expect(request).not.toHaveBeenCalled();
+    act(() => daemon.store.setState({ connectionState: "open" }));
+    expect(requestedConsoles()).toEqual(["c1", "c2"]);
   });
 });

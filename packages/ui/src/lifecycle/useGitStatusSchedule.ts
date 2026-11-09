@@ -1,78 +1,59 @@
-import { useEffect, useRef } from "react";
-import { useShallow } from "zustand/react/shallow";
+import { useEffect, useMemo, useRef } from "react";
 
-import { useDaemon, useDaemonStore } from "../store";
+import { useDaemon, useDaemonStore, type State } from "../store";
 
-/** How often the current console's projects are re-checked. A constant, not a setting. */
+/** How often every console's projects are re-checked. A constant, not a setting. */
 const REFRESH_INTERVAL_MS = 5 * 60_000;
 
-/** Whether `current` holds an id `known` does not — the signal that a project newly appeared in
- * the current console. Pure, so it is tested on its own rather than through the hook; a plain count
- * comparison would miss a project removed and another added in the same tick, since the count
- * does not change. */
+/** A count comparison would miss a project replaced by another in the same tick. */
 export function hasNewProjectId(known: ReadonlySet<string>, current: readonly string[]): boolean {
   return current.some((id) => !known.has(id));
 }
 
-/**
- * Keeps the current console's git statuses current: sends `refresh_git_status` for `consoleId` as
- * soon as it is current, again every `REFRESH_INTERVAL_MS` for as long as it stays current, and once
- * more on a `snapshotEpoch` bump, since the daemon may have restarted and lost the statuses it
- * was holding in memory. Sends nothing while no console is current (`consoleId` undefined) or the
- * control connection is down; switching consoles drops the previous one's interval instead of
- * running several at once.
- *
- * The interval is driven only by `consoleId`, `connectionState` and `snapshotEpoch`: a project
- * being added to or removed from the current console must not restart the 5-minute clock, so that
- * roster change is handled by the second effect below instead, which refreshes without touching
- * the timer.
- */
-export function useGitStatusSchedule(consoleId: string | undefined): void {
-  const { request } = useDaemon();
+function projectRoster({ consoles, projects }: Pick<State, "consoles" | "projects">): Map<string, Set<string>> {
+  const roster = new Map(Array.from(consoles.keys(), (id) => [id, new Set<string>()]));
+  for (const project of projects.values()) roster.get(project.console_id)?.add(project.id);
+  return roster;
+}
+
+/** Keeps every console current while connected, independently of sidebar selection. Roster
+ * changes refresh their affected consoles without restarting the five-minute clock. */
+export function useGitStatusSchedule(): void {
+  const { request, store } = useDaemon();
   const connectionState = useDaemonStore((s) => s.connectionState);
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
-  const projectIds = useDaemonStore(
-    useShallow((s) =>
-      consoleId
-        ? Array.from(s.projects.values())
-          .filter((p) => p.console_id === consoleId)
-          .map((p) => p.id)
-        : [],
-    ),
-  );
+  const consoles = useDaemonStore((s) => s.consoles);
+  const projects = useDaemonStore((s) => s.projects);
+  const roster = useMemo(() => projectRoster({ consoles, projects }), [consoles, projects]);
+  const knownRoster = useRef<Map<string, Set<string>>>(new Map());
 
   useEffect(() => {
-    if (!consoleId || connectionState !== "open") return;
-    const sweep = () =>
-      request({ type: "refresh_git_status", console: consoleId }).catch(() => {
-        // A sweep's failure (offline, an unknown console after a race, anything else) is not the
-        // user's problem to act on: it is background upkeep nobody asked for, and the next sweep —
-        // on this timer, or the roster-change effect below — retries on its own.
-      });
-    void sweep();
-    const interval = setInterval(() => void sweep(), REFRESH_INTERVAL_MS);
+    if (connectionState !== "open") return;
+    // A reconnect or snapshot already refreshes everything; roster changes in that same render
+    // must not request the newly arrived projects a second time.
+    knownRoster.current = projectRoster(store.getState());
+    const sweep = () => {
+      for (const consoleId of store.getState().consoles.keys()) {
+        void request({ type: "refresh_git_status", console: consoleId }).catch(() => {
+          // Background upkeep retries on its next sweep; a failed console must not stop the rest.
+        });
+      }
+    };
+    sweep();
+    const interval = setInterval(sweep, REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [consoleId, connectionState, snapshotEpoch, request]);
+  }, [connectionState, snapshotEpoch, request, store]);
 
-  // A project appearing in the current console — added, or moved in from another console — gets
-  // checked right away rather than waiting for the next sweep. `knownIds` tracks the roster this
-  // hook has already seen for the *current* console; switching consoles resyncs it without
-  // sending a refresh of its own, since the effect above already sends a full one for the switch.
-  const lastConsoleId = useRef<string | undefined>(undefined);
-  const knownIds = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!consoleId || connectionState !== "open") return;
-    if (lastConsoleId.current !== consoleId) {
-      lastConsoleId.current = consoleId;
-      knownIds.current = new Set(projectIds);
-      return;
+    if (connectionState !== "open") return;
+    for (const [consoleId, ids] of roster) {
+      const known = knownRoster.current.get(consoleId);
+      if (!known || hasNewProjectId(known, Array.from(ids))) {
+        void request({ type: "refresh_git_status", console: consoleId }).catch(() => {
+          // Same retry policy as the periodic sweep.
+        });
+      }
     }
-    const added = hasNewProjectId(knownIds.current, projectIds);
-    knownIds.current = new Set(projectIds);
-    if (added) {
-      void request({ type: "refresh_git_status", console: consoleId }).catch(() => {
-        // Same reasoning as the periodic sweep above: nothing the user can act on.
-      });
-    }
-  }, [consoleId, connectionState, projectIds, request]);
+    knownRoster.current = roster;
+  }, [connectionState, roster, request]);
 }

@@ -12,8 +12,8 @@
 //!   than [`LAUNCH_MAX_AGE`] whose `PATH` directories all still exist, and retakes one in the
 //!   background, stale-while-revalidate, so the next launch sees the latest configuration.
 //! - A caller driven on someone else's schedule ([`Cache::scheduled`]) — the git-status sweep
-//!   `refresh_git_status` runs every five minutes for as long as a console stays shown — is served
-//!   a capture younger than [`SCHEDULED_MAX_AGE`], and a *failed* attempt is remembered for as long
+//!   `refresh_git_status` runs every five minutes across all consoles while a client is connected —
+//!   is served a capture younger than [`SCHEDULED_MAX_AGE`], and a *failed* attempt is remembered for as long
 //!   too: ten projects in one sweep hitting a wedged rc file would otherwise serialize behind this
 //!   module's one-shell-at-a-time nature for ten attempts' worth of the snapshot timeout instead of
 //!   one.

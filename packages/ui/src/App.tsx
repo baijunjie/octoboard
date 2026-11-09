@@ -113,7 +113,7 @@ export function App(): React.ReactElement {
   const asideProject = asideOwner?.kind === "project" ? projects.get(asideOwner.project) : undefined;
   const hasAside = asideOwner !== undefined;
   const sidebarView = useSidebarView(consoleList);
-  useGitStatusSchedule(sidebarView.currentConsole?.id);
+  useGitStatusSchedule();
   useInterfaceLanguageSync();
 
   const currentConsole = sidebarView.currentConsole;

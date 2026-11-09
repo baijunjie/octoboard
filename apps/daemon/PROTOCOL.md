@@ -2496,7 +2496,7 @@ broadcasts.
 - **Nothing is fetched**: no step here goes to the remote. The `GitStatus` records the daemon holds are used only to
   pick which projects are worth visiting, so this pass is **not scoped to one console** the way
   `refresh_git_status` is: every project the daemon currently holds a status for is visited, including projects of
-  consoles a client showed earlier in this daemon's life. A project with no status yet has never been checked and is
+  consoles that are not currently shown. A project with no status yet has never been checked and is
   skipped — nothing is known to fast-forward it to.
 - The **one-minute floor** on checks does not apply, since nothing contacts the remote, and the pass counts as no
   check of its own, so it never holds the next `refresh_git_status` off a project. The rule that a project is never
@@ -3589,7 +3589,7 @@ directory.
   `squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while the resolved `development` is not `in_place`. A project's
   `git_status` is its `GitStatus` as the daemon holds it in memory (see `GitStatus` above), read without going to the
   remote or running `git`: `null` while the daemon holds none for the project (nothing has checked it since the daemon
-  started, or its console has not been the current one), else `{ repository, branch, detached, upstream, ahead, behind,
+  started, for example while no client has connected), else `{ repository, branch, detached, upstream, ahead, behind,
   activity, error, checked_seconds_ago }`, `activity` including `pushing` while a push runs. `error` has any credential
   in a URL it names removed, as `remote_url` has. `checked_seconds_ago` is how long ago the last check completed (a
   project with no repository or no remote has checks too), counted on the wall clock so a sleep of the machine is part

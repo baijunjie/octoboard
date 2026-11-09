@@ -1,8 +1,8 @@
 # Project git status
 
 A project whose directory is a git repository carries its **current branch and how far that branch is from its
-upstream** in the sidebar. Octoboard checks those projects against their remotes by itself, on an interval, for the
-current console, and checks one project at once when asked to with **Pull current branch**. What a check does beyond
+upstream** in the sidebar. Octoboard checks those projects against their remotes by itself, on an interval, across
+all consoles, and checks one project at once when asked to with **Pull current branch**. What a check does beyond
 reporting depends on one setting, **Automatically pull repositories**, described in "Automatically pulling
 repositories" below, and on whether the check was asked for by hand. Pushing the current branch is not a check
 (see "Pushing the current branch" in `docs/product/project-git-actions.md`). Between checks, the branch and the
@@ -123,21 +123,21 @@ about another project than the placement now shows, as when focus mode moves to 
 
 ## When a project is checked
 
-**Only the projects of the current console** — the one the sidebar shows, see "The console switcher" in
-`docs/product/console-switcher.md` — are checked, and they are checked:
+**The projects of every console** are checked, whichever console the sidebar shows:
 
-- as soon as that console becomes the current one;
-- every five minutes for as long as it stays current;
-- again once the connection to the daemon has been established, including after it was lost and came back (see
+- as soon as the application's window connects to the daemon, including after a lost connection comes back (see
   "Losing the daemon connection" in `docs/product/application-lifecycle.md`);
-- when a project appears in that console — added, or moved in from another one — which checks it without waiting
-  for the next round;
-- and when the user chooses **Pull current branch** for it (see "Pulling one project by hand" below).
+- every five minutes while the window remains connected;
+- again when the daemon sends a fresh snapshot, since a restarted daemon may have lost the statuses it held;
+- when a console is added, or a project appears in a console — added, or moved in from another one — which checks
+  that console's projects without waiting for the next round;
+- and when the user chooses **Pull current branch** for one project (see "Pulling one project by hand" below).
 
-A console that is not current has none of its projects checked, including one the floating sidebar is only
-previewing (see "Previewing a console from the rail" in `docs/product/console-switcher.md`); switching to it checks
-them.
-Nothing is checked while no client is connected either: the schedule belongs to the application's window, not to the
+Switching or previewing consoles does not change which projects are checked or restart the five-minute clock.
+Adding, moving or removing a project does not restart that clock either. A removed console is left out of later
+rounds.
+
+No periodic checks run while no client is connected: the schedule belongs to the application's window, not to the
 daemon. Turning **Automatically pull repositories** on is not a check and is not limited this way; see "Turning the
 switch on" below.
 
@@ -214,7 +214,7 @@ project's **`git_status`**: the status the daemon holds for it, the one the badg
 check, fetches nothing and runs no `git`, unless the call asks for a refresh (below).
 
 `git_status` is `null` while the daemon holds no status for the project: nothing has checked it or re-read its refs
-since the daemon started, for instance because its console has not been the current one. Otherwise it is:
+since the daemon started, for instance before any client has connected. Otherwise it is:
 
 | Field | Contents |
 |---|---|
@@ -427,9 +427,8 @@ Turning the switch on takes effect at once: the branches already known to be beh
 there and then, instead of waiting for the next check. Setting the switch to the value it already has does nothing.
 
 This pass **never goes to the remote** — nothing is fetched. The statuses Octoboard is already holding only pick which
-projects are worth visiting, so, unlike a check, it is **not limited to the current console**: every
-project that has a status at all is visited — including projects of consoles that were current earlier since the
-daemon started, and projects whose status came only from a local re-read (see "Following changes to the repository's
+projects are worth visiting: every project that has a status at all is visited, across all consoles, including
+projects whose status came only from a local re-read (see "Following changes to the repository's
 refs" above). A project with no status is not visited — nothing is known to fast-forward it to.
 
 Before anything moves, each project's repository is read again — locally, still no network — and the same rule applied
@@ -444,8 +443,7 @@ its turn is skipped and left to that check, which reads the switch itself.
 
 The badge shows the pull in flight exactly as during a check, and a fast-forward `git` refuses records its
 message for the badge the same way. A failure the last check left stays on the badge: it stands for that check
-against the remote, which a local fast-forward says nothing about. An error this pass records for a project of a
-console that is current in no window therefore stays on it until that console is current again and its projects are
-checked, since a status is dropped only when the project or its console is deleted.
+against the remote, which a local fast-forward says nothing about. An error this pass records stays until a later
+check succeeds, whichever console is current. A status is dropped only when the project or its console is deleted.
 
 Turning the switch **off** undoes nothing and triggers nothing: branches already fast-forwarded stay where they are.

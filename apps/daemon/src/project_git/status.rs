@@ -34,12 +34,9 @@ use crate::state::{AppState, GitCheckClaim, OwedCheck};
 /// The floor between the end of one check of a project and the start of its next, on top of the
 /// in-flight guard above — a guard that does nothing here, since the daemon owns no timer and each
 /// client drives its own 5-minute `refresh_git_status` interval on its own phase. Several windows
-/// open on the same console therefore do not overlap their sweeps, they interleave them, and
-/// without this floor N clients turn one `git fetch` per project every 5 minutes into up to N. 60
-/// seconds is short enough that the check a console switch asks for still reflects the remote from
-/// within the last minute even when another client's sweep just finished the same project, so the
-/// switch-triggered check `PROTOCOL.md` promises is not defeated, and long enough that no number of
-/// 5-minute pollers can multiply the work.
+/// therefore interleave their sweeps, and without this floor N clients turn one `git fetch` per
+/// project every 5 minutes into up to N. The one-minute floor keeps background checks reasonably
+/// fresh while preventing 5-minute pollers from multiplying the work.
 const GIT_CHECK_MIN_INTERVAL: Duration = Duration::from_secs(60);
 
 /// How long a check runs before its project's badge swaps to the in-flight icon. A check that
