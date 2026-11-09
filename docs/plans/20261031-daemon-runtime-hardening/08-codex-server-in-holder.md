@@ -19,19 +19,19 @@
 >   terminal delivery, and no `--remote`.
 > - A server that does not come up leaves no companion in the holder; the terminal starts unbound, as the ordinary
 >   launch.
-> - The same on Windows, the loopback port read from the server's output by the holder and the token reaching the
->   terminal.
+> - The same on Windows, where `octoboardd restart` is not supported and a planned stop followed by a start takes its
+>   place, the loopback port read from the server's output by the holder and the token reaching the terminal.
 
 ## Technical design
 
 ### The holder runs the server as the terminal's companion
 
-- [ ] A **companion** is a process a holder starts for a terminal before the terminal, under the terminal's id (the id
+- [x] A **companion** is a process a holder starts for a terminal before the terminal, under the terminal's id (the id
       `IssueLaunch` reserves), ends once the terminal has exited, and whose death ends the terminal. The holder knows
       nothing of Codex: the daemon sends the command line, environment and working directory, how the companion
       listens and how its readiness shows, and the holder reports the endpoint. The terminal id ties the launch's key,
       its companion and its terminal together.
-- [ ] Protocol, under the module's compatibility rule (new fields `serde(default)`, new message types ignored by a
+- [x] Protocol, under the module's compatibility rule (new fields `serde(default)`, new message types ignored by a
       receiver that does not know them, enums with a `serde(other)` variant):
   - `FromHolder::Welcome` gains `companions: bool` (false from builds that predate it): the holder runs companions.
     A daemon sends none of the frames below to a holder whose welcome says false.
@@ -60,13 +60,13 @@
     exited }`, so every welcome tells the next daemon where the server listens and whether it still runs.
   - `FromHolder::CompanionEnded { id }`: the companion of terminal `id` exited by itself, neither on an `EndCompanion`
     nor after its terminal's exit.
-- [ ] How the holder starts a companion: as a plain child with no PTY, standard input closed, output piped and read to
+- [x] How the holder starts a companion: as a plain child with no PTY, standard input closed, output piped and read to
       its end only for `PortAfter` and discarded otherwise; leading a session of its own (`Reach::Session`: on Windows
       a job of its own nested in the launch's) inside the launch's containment opened as the terminal's is
       (`Containment::join_launch`), and in the holder's own crash table, so the holder's own crash ends it as it ends
       its programs. The start and its readiness wait run off the runtime, as a spawn does; the daemon waits for the
       answer or the end of the connection, as for a spawn.
-- [ ] Lifetime, enforced by the holder whether or not a daemon is linked:
+- [x] Lifetime, enforced by the holder whether or not a daemon is linked:
   - Once a terminal's exit is published, its companion is ended: a polite request to its process group, a short grace,
     then a kill and a sweep of what it left, and its endpoint directory removed. A terminal the holder ends or
     releases ends its companion the same way.
@@ -78,12 +78,12 @@
     on `RevokeLaunch` or `EndCompanion`, and after a bind deadline in any case; it is never listed in a welcome.
   - A companion awaiting its terminal counts as something to serve: the holder's exit rule treats it as a pending
     spawn. A draining holder refuses `OpenEndpoint` and `StartCompanion` as it refuses a spawn.
-- [ ] The welcome is the truth for companions as for terminals: a daemon rebuilds a transport only from what the
+- [x] The welcome is the truth for companions as for terminals: a daemon rebuilds a transport only from what the
       welcome lists, and a companion listed `exited: true` is a server that is gone.
 
 ### The daemon: where a private server runs
 
-- [ ] A provider-neutral host interface beside `PrivateServer`, with two implementations that the launch chooses by
+- [x] A provider-neutral host interface beside `PrivateServer`, with two implementations that the launch chooses by
       where the terminal will run:
   - `ServerHost`: `open_endpoint(kind) -> ServerEndpoint`, `start(command, ready, within) -> (RunningServer, port)`,
     `end()` (the server opened under this host, before the terminal binds), `companion() -> bool` (whether the
@@ -98,35 +98,35 @@
   - The **held host** is the launch's `Issued` credentials: the frames above over the holder link, under the
     launch's terminal id. Its `RunningServer` reads `exited` from `CompanionEnded`, from the welcome, and from the
     link being lost for good (the holder gone); a link that is only pending leaves it unknown and running.
-- [ ] `PrivateServer::start` takes the host; the Codex plan builds its `app-server --listen …` arguments from the
+- [x] `PrivateServer::start` takes the host; the Codex plan builds its `app-server --listen …` arguments from the
       endpoint the host opened (the socket path, or the SHA-256 of the token) and its readiness from the platform
       (`SocketExists`, or `PortAfter("listening on: ws://127.0.0.1:")`); a resume's two starts go through `end` and a
       fresh `open_endpoint` between them, as today's second server does.
-- [ ] `Helpers` says which host a launch has: the local host when the terminals run in the daemon, the held host
+- [x] `Helpers` says which host a launch has: the local host when the terminals run in the daemon, the held host
       when the holder's welcome advertises companions, none for a holder that does not. A plan with a private server
       and no host is launched the ordinary way, as a server that fails to come up is today.
-- [ ] Launch flow: issue the launch's credentials; plan; where the plan has a private server and a host, start the
+- [x] Launch flow: issue the launch's credentials; plan; where the plan has a private server and a host, start the
       server through the host and take the terminal arguments and environment it gives; spawn the terminal with
       `companion: true`. A start that fails ends what it opened through the host, then the ordinary spawn follows
       with `companion: false`. A refused spawn fails the launch as any spawn failure does.
-- [ ] The daemon's crash table never holds a held companion, as it never holds a held terminal.
+- [x] The daemon's crash table never holds a held companion, as it never holds a held terminal.
 
 ### The daemon: the Codex transport over a server it does not own
 
-- [ ] The transport holds a `RunningServer` and an endpoint instead of a child: its exit watch polls `exited`, its
+- [x] The transport holds a `RunningServer` and an endpoint instead of a child: its exit watch polls `exited`, its
       `send` reads it to hold a message when the server is gone, and `stop` ends the server only when the local host
       runs it; with the held host `stop` only marks the transport stopping and withdraws what the session was told,
       since the server is the holder's and ends with the terminal. Nothing else of the queue logic changes.
-- [ ] Two constructors: `start` (the launch, as today, through the host) and `adopt(endpoint, server, launch id,
+- [x] Two constructors: `start` (the launch, as today, through the host) and `adopt(endpoint, server, launch id,
       known thread)` for a terminal taken over. `adopt` opens no server; with a known thread it identifies the
       conversation at once, without one it opens the thread watch (a thread the user starts after the restart) and
       leaves earlier conversations to the loaded-threads discovery `send` already does.
-- [ ] Octoboard's messages in Codex's queue are known by their id, not by memory: the outbox already names each
+- [x] Octoboard's messages in Codex's queue are known by their id, not by memory: the outbox already names each
       message `<launch id>:<ticket>`, so a queued item whose `clientUserMessageId` starts with the launch id and a colon
       is Octoboard's, whichever daemon run queued it. The outbox's ticket counter is seeded from the clock at daemon
       start, so a launch's ids never repeat across runs. The transport keeps `added` for the run's own bookkeeping
       (a refused message is forgotten) and asks the prefix for anything it did not add itself.
-- [ ] A message already in the queue under its own id is started where it waits, never added again: `send` looks the
+- [x] A message already in the queue under its own id is started where it waits, never added again: `send` looks the
       id up in the queue before adding, for an id that carries the launch's prefix or that this run held at start,
       whether or not this run remembers adding it. What is lost with a daemon and
       what it costs:
@@ -142,7 +142,7 @@
     turn, so nothing is started twice;
   - the held-message notice: told again by the successor after its own 30 s; a notice the predecessor broadcast is
     not withdrawn by it, as events are not persisted.
-- [ ] Messages in flight at a handover: the outbox seals and saves what is queued (milestone 03); a request already
+- [x] Messages in flight at a handover: the outbox seals and saves what is queued (milestone 03); a request already
       sent to the server completes or fails within its own 5 s, independent of the holder link, and the uncertain
       rules stand. Nothing of this milestone writes into the terminal during a planned stop: a message the server
       declines (nothing of it reached it) falls back to the terminal only while the handover barrier is down; one
@@ -153,89 +153,93 @@
 
 ### Adoption: re-linking to the server
 
-- [ ] The holders' client carries the welcome's companion: `FoundTerminal` gains the found server (its endpoint and a
+- [x] The holders' client carries the welcome's companion: `FoundTerminal` gains the found server (its endpoint and a
       `RunningServer` over the link), and the link routes `CompanionEnded` by terminal id to it, for terminals it
       spawned and terminals it adopted alike.
-- [ ] Every adopted launch goes through the provider: `rebuild_launch` takes what the adoption knows (the adoption
+- [x] Every adopted launch goes through the provider: `rebuild_launch` takes what the adoption knows (the adoption
       record where there is one, the launch id, the session record's agent session id, the found server) and
       `RebuiltLaunch` gains an optional transport. Codex rebuilds its transport with `adopt` when a server was found
       whose endpoint is complete (a loopback endpoint without a port is treated as no server, logged); the other
       providers return none.
-- [ ] The adopted session is built with that transport and registered as today: `register_live` attaches the events,
+- [x] The adopted session is built with that transport and registered as today: `register_live` attaches the events,
       so a server already gone fires `server_gone` on attach and the terminal is terminated, an idempotent step where
       the holder ended it already and the welcome lists the terminal exited too.
-- [ ] A terminal whose meta names a Codex launch but whose welcome lists no companion is adopted without a
+- [x] A terminal whose meta names a Codex launch but whose welcome lists no companion is adopted without a
       transport, as today. This covers every terminal an older holder runs (it never ran a server) and the terminals
       of a daemon between the private server's arrival and this milestone, whose server was the daemon's own: after
       an orderly exit that server died with the daemon and the terminal with it, so the holder lists it exited and it
       goes through the exit path; after a kill the server was orphaned and still serves the terminal, the session
       falls back to terminal delivery, and the server is swept with the launch by the process ledger when the launch
       ends. Unreleased builds only; no rule is added for them.
-- [ ] A planned stop and a crash change nothing for a companion: it is the holder's, and the next daemon finds it in
+- [x] A planned stop and a crash change nothing for a companion: it is the holder's, and the next daemon finds it in
       the welcome. `handover_check` stays as it is: a holder in the compatible range interrupts no Codex session on
       its account, since in a holder without companions the daemon launched no server.
 
 ### Windows
 
-- [ ] The holder starts the companion with no console of its own to lose (`CREATE_NO_WINDOW`, as a session leader),
+- [x] The holder starts the companion with no console of its own to lose (`CREATE_NO_WINDOW`, as a session leader),
       its output piped, and reads the port after the prefix from that pipe; the daemon never sees the companion's
       output.
 - [ ] Jobs: the companion joins the launch's job and a job of its own nested in it, as the terminal does, so the
       launch's processes are listed as today and the holder's end closes them. Where the holder itself could not break
       away from the daemon's job, the companion ends with that job as the terminals do, a stated limit of milestone
       02.
-- [ ] The token is the holder's: made at `OpenEndpoint`, given to the daemon in the answer, put in the terminal's
+- [x] The token is the holder's: made at `OpenEndpoint`, given to the daemon in the answer, put in the terminal's
       environment by the daemon through the spawn, and listed in every welcome. It crosses the holder link, which is
       authenticated by the holder's secret from an owner-only registry file and carries the launch keys and MCP
       tokens already; the server still receives only its SHA-256.
 
 ### Security of reaching the server directly
 
-- [ ] The daemon connects to the companion's endpoint itself, not through the holder: on macOS and Linux a socket in
+- [x] The daemon connects to the companion's endpoint itself, not through the holder: on macOS and Linux a socket in
       a directory only the user can enter, as today, now made and removed by the holder (a holder killed outright
-      leaves the directory, as a killed daemon did); on Windows the loopback port guarded by the token above. The
-      direct connection keeps working while the holder link is down, so a message is queued through a pending holder
-      too.
+      leaves the directory, as a killed daemon did); on Windows the loopback port guarded by the token above.
+- [ ] The direct connection keeps working while the holder link is down, so a message is queued through a pending
+      holder too.
 
 ## Implementation plan
 
-- [ ] Holder side: the companion in the holder's protocol and server (a companion module beside the terminal's; the
+- [x] Holder side: the companion in the holder's protocol and server (a companion module beside the terminal's; the
       terminal binds its companion at spawn and ends it at exit; the link's end, revoke and drain rules; the welcome's
-      capability and per-terminal companion). Verified with the holder test harness: a companion started before its
-      terminal and listed in the welcome with its endpoint; ended once the terminal exits; its death ending the
-      terminal with no daemon linked and announced to a linked one; an unbound companion ended with the link, on
-      revoke and on `EndCompanion`; a spawn expecting a dead companion refused; a resume's second endpoint elsewhere;
-      the port read after the prefix; a start that never becomes ready failing and leaving nothing; a draining holder
-      refusing one; the protocol's compatibility tests covering the new fields and `Unknown` variants.
-- [ ] Holders' client: the welcome's capability on `Issued`, the companion requests and their answers over the link,
-      the client-side `RunningServer` and the routing of `CompanionEnded` and of a link lost for good, the found
-      server on `FoundTerminal`. Verified against the in-process test holders: a launch in an old-welcome holder told
-      it has no host; an adopted terminal carrying its companion and marked exited by the frame; a held companion
-      ended over the link before its terminal binds.
-- [ ] The daemon's host interface and the transport over it: `ServerHost` and `RunningServer` with the local host
-      moved out of the Codex transport; the transport's `start` through the host and its `adopt`; message ownership
-      by id prefix, the queue lookup by id before an add, the outbox's clock-seeded tickets. Verified by the existing
-      transport tests passing unchanged in behavior, plus: a transport adopted with a known thread queues without a
-      watch; one adopted without a thread identifies the conversation from the loaded threads and takes a thread
-      started later; one adopted to an exited server reports it gone on attach; queued messages of an earlier run are
-      Octoboard's by their prefix and are started after a cancel; a message found in the queue under its id is
-      started in place and not added again; stopping a transport over a held server leaves the server running; a
-      resume restarts the server through a fake host.
-- [ ] The launch through the held host: `Helpers` choosing the host, the launch starting the server through it,
-      `companion: true` on the spawn, the fallback ending what it opened. Verified with the test holders: a launch in a
-      holder with companions starts the server there and the terminal attaches to it; a launch in a holder without
-      them is the ordinary launch; a failed server start leaves no companion and spawns an unbound terminal.
-- [ ] Adoption: `FoundTerminal`'s server through `rebuild_launch` into the adopted session's transport. Verified with
-      a fake app server behind the endpoint a test holder's welcome lists: an adopted Codex session's message goes
-      through the queue with the thread taken from the store; an adopted terminal whose companion exited goes
-      through the exit path.
-- [ ] Documentation: the holder's README ("How it works" gains the companion, its lifetime and its place in the
-      welcome), the product docs of the private app server's lifetime and endpoint, of messages through Codex's
-      queue across a restart, and of what a holder runs, and the daemon structure doc.
-- [ ] Manual verification of the completion criteria on macOS with the built application, then on the Windows VM
-      (the holder detached and under the desktop application, the port read from the pipe, the installer meeting no
-      file in use), including a Codex session's hooks, MCP tools and queue delivery after a `kill -9` and after an
-      update restart.
+      capability and per-terminal companion). Covered by the holder test harness (`holder::server::tests`,
+      `holder::protocol::tests`, run at push): a companion started before its terminal and listed in the welcome with
+      its endpoint; ended once the terminal exits; its death ending the terminal with no daemon linked and announced to
+      a linked one; an unbound companion ended with the link, on revoke and on `EndCompanion`; a spawn expecting a dead
+      companion refused; a resume's second endpoint elsewhere; the port read after the prefix; a start that never
+      becomes ready failing and leaving nothing; a draining holder refusing one; the protocol's compatibility tests
+      covering the new fields and `Unknown` variants.
+- [x] Holders' client: the welcome's capability on `Issued`, the companion requests and their answers over the link, the
+      client-side `RunningServer` and the routing of `CompanionEnded` and of a link lost for good, the found server on
+      `FoundTerminal`. Covered by the in-process test holders (`holder::client::companion_tests`,
+      `holder::client::tests`, run at push): a launch in an old-welcome holder told it has no host; an adopted terminal
+      carrying its companion and marked exited by the frame; a held companion ended over the link before its terminal
+      binds.
+- [x] The daemon's host interface and the transport over it: `ServerHost` and `RunningServer` with the local host moved
+      out of the Codex transport; the transport's `start` through the host and its `adopt`; message ownership by id
+      prefix, the queue lookup by id before an add, the outbox's clock-seeded tickets. Covered by the existing transport
+      tests unchanged in behavior (`adapter::codex::transport::tests`, `terminal::server_host::tests`,
+      `messaging::outbox::tests`, run at push), plus: a transport adopted with a known thread queues without a watch;
+      one adopted without a thread identifies the conversation from the loaded threads and takes a thread started later;
+      one adopted to an exited server reports it gone on attach; queued messages of an earlier run are Octoboard's by
+      their prefix and are started after a cancel; a message found in the queue under its id is started in place and not
+      added again; stopping a transport over a held server leaves the server running; a resume restarts the server
+      through a fake host.
+- [x] The launch through the held host: `Helpers` choosing the host, the launch starting the server through it,
+      `companion: true` on the spawn, the fallback ending what it opened. Covered with the test holders
+      (`terminal::backend::tests`, run at push): a launch in a holder with companions starts the server there and the
+      terminal attaches to it; a launch in a holder without them is the ordinary launch; a failed server start leaves no
+      companion and spawns an unbound terminal.
+- [x] Adoption: `FoundTerminal`'s server through `rebuild_launch` into the adopted session's transport. Covered with a
+      fake app server (`coordinator::adopt::tests`, run at push) behind the endpoint a test holder's welcome lists: an
+      adopted Codex session's message goes through the queue with the thread taken from the store; an adopted terminal
+      whose companion exited goes through the exit path.
+- [x] Documentation: the holder's README ("How it works" gains the companion, its lifetime and its place in the
+      welcome), the product docs of the private app server's lifetime and endpoint, of messages through Codex's queue
+      across a restart, and of what a holder runs, and the daemon structure doc.
+- [x] Manual verification of the completion criteria on macOS with the built application, including a Codex session's
+      hooks, MCP tools and queue delivery after a `kill -9` and after an update restart.
+- [ ] The same on the Windows VM (the holder detached and under the desktop application, the port read from the pipe,
+      the installer meeting no file in use).
 
 ## Decisions made without the user
 
@@ -261,6 +265,18 @@
   transport tests run on it.
 - Old holders get the ordinary launch for Codex; neither a flag in the meta nor a rule in `handover_check` is added
   for the unreleased builds whose daemon-owned server sat behind a held terminal.
+- **Choices left to the implementer by the design**: unbound companion bind deadline 120 s, companion stop grace
+  2 s, the terminal's end 3 s after its companion dies, companion exit poll 100 ms; a spawn over a link other than
+  the one that opened the companion is refused; the holder ends terminals and companions in parallel when asked to
+  end; the holder does not exit while a companion's end is under way.
+
+## Known gaps
+
+- No test drives `session::term::launch` end to end with a holder (its parts are tested
+  separately); the 120 s bind deadline has no test override; the generation refusal of a spawn has no direct test
+  (the takeover test cannot tell it from the missing-companion refusal); an end that comes while a companion is
+  still starting waits for its readiness wait (up to 15 s) before the process is ended, the holder staying up
+  meanwhile; Windows paths have unit tests only for the refused socket endpoint.
 
 ## Notes for the developer
 
@@ -281,10 +297,8 @@
     holder whose welcome advertises companions.
   - The holder has to run a `Command` as a plain child with pipes, which the terminal spawn does not need today: an
     accessor for that is the one new seam in the platform's terminal command type.
-  - Nothing in this session could be compiled: compile both crates, clippy with `-D warnings` and the Windows
-    cross-check before trusting any of the signatures above.
   - In-process test holders share the test's pid, so ending a holder by its process is not covered by unit tests
-    (milestone 04's note); the companion tests end things through the link.
+    (a holder's process is the test's own); the companion tests end things through the link.
   - Codex's `clientUserMessageId` is opaque to Codex; the prefix rule relies on the outbox naming messages
     `<launch id>:<ticket>` and on nothing else queuing ids of that shape.
   - The product docs state that the server is ended when the terminal exits and the terminal when the server exits;
@@ -297,30 +311,30 @@
 
 ## Mid-task handoff
 
-- **Where it stands**: every implementation item (holder, holders' client, host and transport, launch, adoption) and
-  the documentation item are written and committed on `hold/codex-server-in-holder`, with their unit tests, and
-  passed a change check by reading. No checkbox is ticked: by the user's constraint for this round nothing was
-  compiled or run (the machine ran out of memory under cargo), so no item is verified.
-- **To continue**: compile both crates, clippy with `-D warnings` and `pnpm check:windows`; fix what they find; run
-  the test filters `holder::protocol::tests`, `holder::server::tests`, `holder::client::companion_tests`,
-  `holder::client::tests`, `platform::proc::server::tests`, `platform::term::tests::a_plain_command`,
-  `terminal::server_host::tests`, `terminal::backend::tests`, `messaging::outbox::tests`, `restart_outbox`,
-  `adapter::codex::transport::tests`, `coordinator::adopt::tests`; then the manual verification item. Tick each item
-  as it is verified.
-- **Changes made against the design while implementing** (the sections above are already updated): `StartCompanion`
-  carries the launch's containment; `CompanionStarted.pid` is optional; the host and endpoint types are the
-  daemon's own (`terminal::server_host`), not the protocol's; the queue lookup before an add runs for ids with the
-  launch's prefix or held at start only; the outbox is seeded from the clock outside tests only;
-  `CodexTransport::adopt` with no known thread connects and opens the watch on a thread of its own, off the start;
-  the restart outbox keeps each message's ticket; a message the server declines after the handover barrier rose is
-  kept for the next daemon instead of written into the terminal.
-- **Choices left to the implementer by the design**: unbound companion bind deadline 120 s, companion stop grace
-  2 s, the terminal's end 3 s after its companion dies, companion exit poll 100 ms; a spawn over a link other than
-  the one that opened the companion is refused; the holder ends terminals and companions in parallel when asked to
-  end; the holder does not exit while a companion's end is under way.
-- **Known gaps**: no test drives `session::term::launch` end to end with a holder (its parts are tested
-  separately); the 120 s bind deadline has no test override; the generation refusal of a spawn has no direct test
-  (the takeover test cannot tell it from the missing-companion refusal); an end that comes while a companion is
-  still starting waits for its readiness wait (up to 15 s) before the process is ended, the holder staying up
-  meanwhile; Windows paths have unit tests only for the refused socket endpoint.
+**State.** Everything is implemented. On 2026-11-10, on macOS, with real Codex 0.166.0: the server ran as a child of
+the holder in the launch's containment, leading a session of its own, with the terminal attached through `--remote`
+and automatic messages in Codex's queue; after `kill -9` of the daemon, and across `octoboardd restart` and a real
+beta.4 to beta.5 desktop update, the server survived, new messages went into the queue, a message sealed into the
+restart outbox was delivered once by the successor, and after successive cancels each queued id started exactly once;
+exiting Codex ended the server and removed its socket; killing the server with no daemon linked ended the terminal;
+a holder whose welcome did not advertise companions, and a server that did not come up, gave the ordinary launch. On
+the Windows VM, over SSH only: the server and the remote terminal ran under the holder with the port and token path
+working, both in jobs with the holder outside them; the session and MCP delivery survived a daemon kill; the server
+survived a planned stop and a start and took a later queued message; terminal exit ended the server. Evidence, on the
+verification Mac: `/tmp/octoboard-manual-20261110-67e2/REPORT.md`, `/tmp/octoboard-gui-20261110-67e2/REPORT.md` and
+`/tmp/windows-verification-evidence/REPORT.md`. The scripted suites (`holder::protocol::tests`,
+`holder::server::tests`, `holder::client::companion_tests`, `holder::client::tests`, `platform::proc::server::tests`,
+`terminal::server_host::tests`, `terminal::backend::tests`, `messaging::outbox::tests`, `restart_outbox`,
+`adapter::codex::transport::tests`, `coordinator::adopt::tests`) run at push.
 
+**Remaining on macOS, a real run not done on 2026-11-10:** with a Codex session running, make its holder refuse
+links (a relay in front of its address, as the evidence's pending-holder run did) so the session shows pending, send
+the session a message: it goes into Codex's queue over the direct connection.
+
+**Remaining, a real run on Windows from an interactive desktop logon**, blocked on the sign-in password of the VM user
+`bjj`; the VM's working directory `C:\Users\bjj\windows-verification` keeps the source, the build and the isolated data,
+and Codex is signed in there. With the daemon started by the desktop application: the holder detached and running the
+server, the companion in a job of its own nested in the launch's (over SSH it was seen only in a job); messages queued
+before a daemon kill, and before a planned stop and start, started once each after a cancel (over SSH the queued message
+was refused while Codex waited for a command approval, so this was not established); and a real desktop update restart
+over a working Codex session, with the installer meeting no file in use.

@@ -42,32 +42,33 @@
 
 ## Mid-task handoff
 
-- **How far**: everything in this milestone is implemented on branch `linux/background-run`: `--port` on the
-  daemon, `start --port` / `stop` / `status` (`apps/daemon/src/cli/background.rs`), the owner record `daemon.owner`
-  beside `daemon.lock` that the commands find a running daemon by, the example unit
-  `apps/daemon/dist/systemd/octoboardd.service`, and per-launch cgroup v2 groups (`platform/proc/cgroup.rs`, used by
-  the Unix `Containment` and the process ledger). The boxes above stay unticked because the final code has not been
-  compiled: by the user's decision every compile and test, the Linux container runs included, runs together once all
-  milestones are finished.
+- **How far**: everything in this milestone is implemented: `--port` on the daemon, `start --port` / `stop` /
+  `status` (`apps/daemon/src/cli/background.rs`), the owner record `daemon.owner` beside `daemon.lock` that the
+  commands find a running daemon by, the example unit `apps/daemon/dist/systemd/octoboardd.service`, and per-launch
+  cgroup v2 groups (`platform/proc/cgroup.rs`, used by the Unix `Containment` and the process ledger). On 2026-11-10,
+  on macOS, real `octoboardd start --port`, `restart` and `stop` runs found the running daemon through its owner
+  record, kept the port and ended every session on `stop`; `status` was not run there (evidence on the verification Mac:
+  `/tmp/octoboard-manual-20261110-67e2/REPORT.md`, `/tmp/octoboard-gui-20261110-67e2/REPORT.md`). The scripted suites
+  (`instance_lock`, `cli::`, `platform::proc`, `processes::ledger`, the layering tests) run at push; the Windows side
+  of the change builds (a native `cargo build -p octoboardd --target x86_64-pc-windows-msvc` on the Windows VM
+  succeeded on 2026-11-10), and `pnpm check:windows` runs at release.
 - **Already observed on Linux** (Docker, aarch64, before three rounds of review fixes changed the code): start
   detached and surviving the closed login, status, refusal while running, stop leaving no record behind, restart on
   the same port, a taken port failing clearly; with a writable cgroup subtree, a launch's double-forked orphan listed
   and killed with its group; the full daemon suite passing in both a privileged and a plain container apart from four
   `accounts::shared_config` tests that fail only because the container runs as root.
-- **Still to run** (each with `CARGO_BUILD_JOBS=2`, one at a time):
-  - macOS: `cargo clippy -p octoboardd --all-targets -- -D warnings`; `cargo test -p octoboardd` (layering tests,
-    `instance_lock`, `cli::`, `platform::proc`, `processes::ledger` at least).
-  - Windows: `pnpm check:windows` (the Windows `Containment::releases_members`, `run_in_background` and
-    `shutdown_requested` changes are uncompiled).
-  - Linux, plain `docker run --init` container: `cargo clippy -p octoboardd --all-targets -- -D warnings` and
+- **Remaining, each a real run on Linux, blocked on Docker, which is off on the verification Mac** (each with
+  `CARGO_BUILD_JOBS=2`, one at a time):
+  - A plain `docker run --init` container: `cargo clippy -p octoboardd --all-targets -- -D warnings` and
     `cargo test -p octoboardd` (the cgroup tests skip; the ledger's fallback is exercised).
-  - Linux, `--privileged --cgroupns=private` container with cgroup2 mounted read-write: `cargo test -p octoboardd`
+  - A `--privileged --cgroupns=private` container with cgroup2 mounted read-write: `cargo test -p octoboardd`
     (the contract tests `a_launch_s_group_ends_…`, `what_a_launch_s_group_spares_…`,
     `a_leftover_group_is_found_again_and_removed_once_empty` and the ledger test
     `ending_a_launch_removes_its_group_and_spares_what_was_kept`).
-  - Linux end to end with the built binary and a scratch `HOME`: start / status / stop / restart on the same port, an
+  - End to end with the built binary and a scratch `HOME`: start / status / stop / restart on the same port, an
     agent session run through it (a Codex session stops at its sign-in screen with no login), and after `stop` every
-    session interrupted.
+    session interrupted. This settles the command and single-instance items above
+    with the build item.
   - Optional: a container with systemd as PID 1 and a user manager, running the example unit with `Delegate=yes`.
 - **Trade-offs made**: shell terminals get no group (their background jobs outlive them by design); the group kill
   comes after the ledger's polite rounds and is skipped when a table read failed; a process the agent forked before

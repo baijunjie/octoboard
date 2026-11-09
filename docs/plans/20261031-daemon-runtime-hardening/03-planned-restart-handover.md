@@ -3,7 +3,9 @@
 > Goal: an explicit restart of the daemon hands every terminal over to its successor with its exact screen.
 > Completion criteria:
 > - Request a planned restart of a daemon started by hand, not following an application, while sessions write output:
->   - every session keeps running, and its screen is exactly as it was, not marked inexact;
+>   - every session keeps running, and its screen is exactly as it was, not marked inexact, except a screen whose
+>     width changed while a program showed the alternate screen, which is marked inexact by design (see "Design
+>     decisions");
 >   - the output written during the restart appears once;
 >   - the daemon answers the queries in that output.
 > - A plain stop still ends every session, as today.
@@ -13,29 +15,29 @@
 
 ## Technical design
 
-- [ ] A planned-restart request on the daemon's control interface, which makes a planned stop and starts the
+- [x] A planned-restart request on the daemon's control interface, which makes a planned stop and starts the
       successor on the same address. A daemon that follows an application refuses it.
 - [ ] Under systemd the daemon does not start the successor: after its planned stop it exits with an agreed status,
       and the unit's restart rule restarts it on that status, so the successor runs in the unit. A daemon with no
       service manager starts its successor itself.
 - [x] A planned-stop request, which makes the planned stop and starts no successor. The desktop update restart of
       milestone 04 sends it.
-- [ ] A `restart` command beside start, stop and status, which makes the planned-restart request.
+- [x] A `restart` command beside start, stop and status, which makes the planned-restart request.
 - [x] A planned stop:
   - The daemon tells each holder it is handing over.
   - It saves every terminal's screen, including a half-received escape sequence.
   - The holder marks where the handover falls in each tail, which keeps the history before it.
-- [ ] The successor restores each saved screen and replays only the tail written since.
+- [x] The successor restores each saved screen and replays only the tail written since.
 - [x] Query answers produced while replaying a tail are written to the program only after a handover. After a crash
       they would arrive as stray input. A replay never answers a query the holder already answered while no daemon was
       linked (the kinds its welcome lists in `answers_offline`), nor one that is stale.
-- [ ] A handover the successor verifies as exact skips the inexact mark and the one-row redraw that every adoption
+- [x] A handover the successor verifies as exact skips the inexact mark and the one-row redraw that every adoption
       makes in milestone 02; a process already marked inexact is never cleared by a handover.
 
 ## Implementation plan
 
-- [ ] Add the handover message and screen saving, then restore on start.
-- [ ] Add the `restart` command, and route any future server-form update path through it.
+- [x] Add the handover message and screen saving, then restore on start.
+- [x] Add the `restart` command. No server-form update path exists yet; one added later goes through it.
 
 ## Handoff
 
@@ -44,67 +46,22 @@
   still run inside the daemon unit's cgroup, which systemd stops with the main process, until milestone 02's systemd
   parts make each holder a user unit of its own.
 
-## Mid-task handoff
+## Design decisions
 
-**State.** Every technical-design item and both implementation-plan steps are written on `hold/planned-restart`, and
-an independent review's changes on top of them on `hold/planned-restart-review`. It compiles and passes clippy on macOS and the
-Windows cross-check, and the UI side passes; a first full Rust test run proved the ticked boxes, and the Rust tests
-remain to be rerun after the fixes that followed it. The open boxes wait on failed or unreached tests, systemd or
-manual runs. There is no server-form update path yet to route through
-`restart`.
+The first set were made without the user; an independent review then kept some and changed others, and its changes
+were accepted as the decision. Where the review left a choice, the choice is marked (own choice).
 
-**Open against the completion criteria.**
-- "Exact" is not yet unconditional: a saved screen is exact only for the states the checkpoint reproduces (below); the
-  others are saved marked inexact: restored with the tail since the mark, marked, and redrawn (own choice: their content
-  beats a rebuild from the tail). The normal screen behind an alternate one, scrollback included, is now saved: the save
-  reads the hidden grid by swapping the screens through `alacritty_terminal`'s public `swap_alt` and putting the
-  alternate grid back with `grid_mut` (`TerminalSnapshot::normal_behind_alternate`). The one case left out is a width
-  change while the alternate screen is shown, until the program enters it again: the reflow may move the hidden cursor
-  away from the one entering saved, which entering again in the successor cannot rebuild, and reading it would overwrite
-  the live saved cursor; the successor then shows a blank normal screen behind the program. A client's first paint reads
-  the hidden normal screen the same way (`TerminalSnapshot::paint`), under the same width-change limit, so a client
-  attached while the program is on the alternate screen shows it when the program leaves. Milestone 04's exact-screen
-  claim inherits the remaining limits.
+- What a saved screen reproduces exactly: every state the checkpoint below covers, including the normal screen
+  behind an alternate one, scrollback included, which the save reads by swapping the screens through
+  `alacritty_terminal`'s public `swap_alt` and putting the alternate grid back with `grid_mut`
+  (`TerminalSnapshot::normal_behind_alternate`). The one case left out, by design, is a width change while the
+  alternate screen is shown, until the program enters it again: the reflow may move the hidden cursor away from the
+  one entering saved, which entering again in the successor cannot rebuild, and reading it would overwrite the live
+  saved cursor. Such a screen is saved marked inexact, restored with the tail since the mark and redrawn (own choice:
+  its content beats a rebuild from the tail). A client's first paint reads the hidden normal screen the same way
+  (`TerminalSnapshot::paint`), under the same width-change limit. Milestone 04's exact-screen claim inherits it.
 - Lossless handover is bounded by the tail: more than 1 MiB written after the mark (2 MiB with a welcome pin) loses
   exact eligibility. Unconditional no-loss would need a disk-backed post-mark spool with acknowledged offsets.
-- The systemd case stays blocked (see Handoff), and so does service key delivery: a manager-started successor makes a
-  key no client can obtain until the unit's key-delivery TODO is done. Never journal it, put it in `daemon.owner`,
-  argv or the environment.
-
-**To pick it up.**
-1. Compile: `cargo check -p octoboardd --all-targets`, clippy with `-D warnings`, `pnpm check:windows`. Riskiest spots:
-   `holder/server/terminal.rs` (`Terminal::hand_over`, `Handle::block_on` from a blocking thread),
-   `holder/client/link.rs` (`hand_over`, the handed-over frame filter, `Sending`, `Adopted`), `terminal/pty.rs` (the
-   `ToProgram` answer writer and its fence, `hold_client_changes`, `write_reply`, the owed client replies),
-   `terminal/snapshot/{save.rs,unexposed.rs,unended.rs}` (what is left out, the REP re-arm, `blank_normal`),
-   `terminal/fan.rs` (the replay window's split chunk), `state/handover_barrier.rs`, `state/restart_screens.rs`,
-   `messaging/{outbox.rs,restart_outbox.rs}`, `coordinator/planned_stop.rs` (the `wait_unless` closures, the
-   `&dyn Fn` escalation predicate), `state/stop.rs` (`watch::Receiver::wait_for`), `state/process_exit.rs`
-   (`stop_all_sessions_after_handover`'s partition and chained handles), `holder/client/mod.rs` (`end_handed_over`,
-   `take_links_of`, `part_all`, `HeldRelays`' `Weak<Shared>`, `link_pending` taking `&Arc<Self>`),
-   `terminal/shell/mod.rs` (`end_all`'s and `close_all_ending`'s `impl Fn(&ShellProcess)` closures),
-   `cli/installation.rs`, `main.rs` (the stop kinds, the cached restart policy, the successor, `taking_signals` and the
-   fused termination signal, `stop_all_processes_after_planned`).
-2. Tests: `holder::`, `terminal::` (incl. `terminal::snapshot`, `terminal::fan`, `terminal::pty`,
-   `terminal::saved_screen`, `terminal::program_status`, `terminal::shell`), `coordinator::planned_stop`,
-   `coordinator::adopt`, `coordinator::exit_watch`, `coordinator::lifecycle`, `coordinator::projects`,
-   `coordinator::archive_cleanup`, `coordinator::handoff`, `coordinator::account_switch`,
-   `coordinator::model_change`, `coordinator::account_sharing`, `coordinator::processes`, `state::handover_barrier`,
-   `state::stop`, `state::process_exit`, `state::restart_screens`, `messaging::`, `server::`, `session::interrupt`,
-   `cli::`, `instance_lock`, `request_guard`, `protocol::`, `bindings` (the TypeScript `planned_stop` entries were
-   written by hand), `layering_tests`, `platform::proc`.
-3. By hand on macOS (and Linux once built): `octoboardd start --port N`, sessions and a shell terminal writing output
-   (and asking device attributes and the cursor position), `octoboardd restart`: same port and key, every plain screen
-   exact and not marked inexact, an alternate-screen program over a non-blank shell exact too (the shell shown exactly
-   once the program leaves, in the daemon's screen and in every client), marked inexact only after a width change while
-   it was shown, the output written meanwhile shown once, the queries answered once; a session already marked inexact
-   stays so; a plain `stop` still ends everything; `POST /planned-stop` then `start` restores exactly; `POST /restart`
-   and `restart` refused for a daemon started by the application; a restart through a symlink repointed to a new build
-   starts the new build. Windows: `restart` says it is not supported and `POST /restart` answers 409 `no_successor`.
-
-**Decisions, with reasons.** The first set were made without the user; an independent review then kept some and
-changed others, and its changes were accepted as the decision. Where the review left a choice, the choice is marked
-(own choice).
 - `restart` delivers the planned-restart request as `SIGUSR1`, as `stop` delivers its request as a signal: the command
   line never holds the daemon's key. The owner record gains a third token (`application` or `alone`); `restart`
   refuses a daemon that follows an application, and one whose record lacks the token (an older build, which
@@ -208,8 +165,10 @@ changed others, and its changes were accepted as the decision. Where the review 
   submit-key retry, restoring a stashed draft) are outside the barrier, so a stashed draft may not be restored
   across a handover.
 
-**Stop escalation hook.** Written for milestone 04's system end during an update restart (an ordinary stop with
-frozen previews, never a continuation of the restart); not compiled or run either.
+### Stop escalation hook
+
+Written for milestone 04's system end during an update restart (an ordinary stop with frozen previews, never a
+continuation of the restart).
 - Trigger, with no new request: anything that asks for an ordinary stop while a planned stop is asked for or under
   way. The stop asked for only moves from none to planned or ordinary, or from planned to ordinary
   (`state/stop.rs`: `AppState::ordinary_stop_asked`, `planned_stop_asked`, `await_ordinary_stop`). What reaches a
@@ -243,10 +202,10 @@ frozen previews, never a continuation of the restart); not compiled or run eithe
 - Unchanged: an ordinary stop with no planned stop, and a planned stop with no escalation (it now only remembers the
   holders that handed terminals over, were parted from or were left to the next daemon, and parts from them all at
   once).
-- Desktop side (milestone 04's review, `hold/desktop-update-review`, not compiled either): a system end writes the
-  quit record and the `quit` line whatever the update restart noted (`note_session_end`), signals a daemon already in
-  a planned stop at once on Unix instead of sending `POST /shutdown`, and keeps the restart worker from installing or
-  relaunching once it has begun (`exit.rs`, `commit_final_action`).
+- Desktop side (milestone 04): a system end writes the quit record and the `quit` line whatever the update restart
+  noted (`note_session_end`), signals a daemon already in a planned stop at once on Unix instead of sending
+  `POST /shutdown`, and keeps the restart worker from installing or relaunching once it has begun (`exit.rs`,
+  `commit_final_action`).
 - TODO, needs a holder-protocol capability that does not exist: a holder ends every program on its own end with a
   kill, not a polite request, and the output since a terminal's mark is lost with it, so a handed-over terminal's
   preview is its checkpoint (the screen up to the mark). Missing: a request, over the predecessor's link or a link
@@ -265,9 +224,30 @@ frozen previews, never a continuation of the restart); not compiled or run eithe
 - **Reusable capabilities**:
   - The frozen-preview snapshot taken before a controlled stop.
   - The holders from milestone 02.
-- **Development notes**: builds on daemon-side answering of terminal queries, which is planned separately and has to
-  exist first. The `restart` command joins the daemon's command-line start, stop and status commands, which
-  have to exist first; both requests and the planned stop do not wait on them. The systemd case needs the daemon
+- **Development notes**: builds on daemon-side answering of terminal queries (`docs/product/terminal-queries.md`). The
+  `restart` command joins the daemon's command-line start, stop and status commands. The systemd case needs the daemon
   running as a systemd user service, which does not exist yet. A desktop update is milestone 04.
 - **Reference docs**: `docs/product/application-lifecycle.md` ("The daemon on its own"),
   `docs/product/in-app-updates.md`.
+
+## Mid-task handoff
+
+**State.** Everything is implemented, and everything but the systemd case was verified on 2026-11-10. The two TODOs
+under "Stop escalation hook" are stated limits kept as TODOs, not items of this milestone. On macOS, with real builds:
+`octoboardd restart` of a daemon started by hand kept the port, the key and every process; plain screens and a real
+`vim` over a non-blank shell came back exact and unmarked, the shell screen and its scrollback returning once `vim`
+quit, and a width change while `vim` was shown came back marked inexact; 344 lines written during the restart appeared
+once; 68 device-attribute queries got 68 answers; a plain `stop` ended everything; `POST /planned-stop` followed by
+`start` restored exactly; the daemon of the real application refused `restart`. On the Windows VM, over SSH: `restart`
+says it is not supported, `POST /restart` answers 409 `no_successor`, and a planned stop followed by a start restored
+the saved screens while a screen already marked inexact stayed marked. Evidence, on the verification Mac:
+`/tmp/octoboard-manual-20261110-67e2/REPORT.md`, `/tmp/octoboard-gui-20261110-67e2/REPORT.md` (it supersedes the first
+report's alternate-screen failure, fixed since) and `/tmp/windows-verification-evidence/REPORT.md`. The scripted suites
+(`coordinator::planned_stop`, `terminal::snapshot`, `terminal::saved_screen`, `state::restart_screens`,
+`state::handover_barrier`, `messaging::`, `cli::`) run at push.
+
+**Remaining, a real run blocked on the daemon running on Linux as a systemd user service, which does not exist yet**
+(see Handoff): under the systemd user service, `octoboardd restart` with sessions writing output; the daemon exits with
+status 75, the unit starts the successor, and every session survives with its exact screen. It also needs the service
+key delivery, a TODO of the unit: a successor started by the manager makes a key no client can obtain until then. Never
+journal the key, or put it in `daemon.owner`, the arguments or the environment.

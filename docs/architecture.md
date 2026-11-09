@@ -602,8 +602,9 @@ Each has an established solution unless noted; any outstanding manual verificati
   never waits on a client and keeps no channel: each client has its own backlog, sent as its credit window (bytes it has
   acknowledged) allows, and a client that falls more than 4 MiB behind gets a fresh paint without history in place of
   its backlog instead of being dropped (`apps/daemon/PROTOCOL.md`, "`GET /ws/term/:session` — terminal stream"). The
-  size of the daemon's own read buffer (4 KiB to 256 KiB) made no measurable difference to throughput, so output frame
-  size is not worth tuning.
+  512 KiB starting window, the 4 MiB cap and the web client's acknowledgement every 64 KiB are starting values, not yet
+  tuned on WebKit or on a browser over a slow link. The size of the daemon's own read buffer (4 KiB to 256 KiB) made no
+  measurable difference to throughput, so output frame size is not worth tuning.
 
 ## Data model
 

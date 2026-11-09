@@ -48,7 +48,8 @@ changes already broadcast to every client and terminal input already lands in th
 
 ## Milestones
 
-- [01 Size rule](01-size-rule.md)
+- 01 Size rule (closed)
 - 02 Terminal first paint (closed)
-- [03 Terminal stream flow control](03-terminal-stream-flow-control.md)
-- [04 Terminal queries answered by the daemon](04-terminal-queries-answered-by-the-daemon.md)
+- 03 Terminal stream flow control (closed)
+- 04 Terminal queries answered by the daemon (closed)
+- [05 Final confirmation](05-final-confirmation.md)

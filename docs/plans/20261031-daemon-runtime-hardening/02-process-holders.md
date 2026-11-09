@@ -37,12 +37,12 @@
     terminals it runs.
   - Then it sends one tail per terminal.
   - A newer daemon connection takes the holder over from an older one.
-- [ ] Adoption on start:
+- [x] Adoption on start:
   - Terminals are matched with their sessions and shell terminals.
   - Terminals with no record are ended.
   - Sessions with no terminal are interrupted.
   - A shell terminal comes back with the name the user gave it, which the daemon stores by the terminal's id.
-- [ ] A transport failure never ends a holder. An exited holder (no registry file, or its process gone) and one
+- [x] A transport failure never ends a holder. An exited holder (no registry file, or its process gone) and one
       confirmed incompatible (a version out of range, a welcome that cannot be read) take the existing end path. One
       that cannot be connected to yet (refused, timed out, short repeated drops) is pending: its process and registry
       file stay, the link is tried again with a capped growing pause while its verified process runs, requests fail at
@@ -57,24 +57,23 @@
       guess. A late failure clears the claim, and the next start reconciles it against the holder's list.
 - [x] A holder whose build differs from the daemon's receives no new terminals and exits when its last one ends. New
       terminals go to a holder of the current build.
-- [ ] Holders are detached from the daemon:
-  - On macOS, in a session of their own.
-  - On Linux, as a systemd user service that kills only its main process when stopped. The unit delegates its cgroup
-    subtree, and the holder makes a group per launch inside it, falling back to the process ledger where no writable
-    subtree is available. The daemon's unit is ordered to stop before the holders' units, so at a host shutdown the
-    daemon makes its ordinary stop, freezing each preview, while the shells are still running. A daemon not run by a
-    systemd user manager detaches its holders as on macOS, with the process ledger alone.
-  - On Windows, outside the daemon's hidden console and its jobs, as "Process holders on Windows" in
-    `docs/architecture.md` describes.
-  - Either way, a holder outlives the daemon's process group.
+- Holders are detached from the daemon, and a holder outlives the daemon's process group:
+  - [x] On macOS, in a session of their own.
+  - [ ] On Linux, as a systemd user service that kills only its main process when stopped. The unit delegates its
+        cgroup subtree, and the holder makes a group per launch inside it, falling back to the process ledger where no
+        writable subtree is available. The daemon's unit is ordered to stop before the holders' units, so at a host
+        shutdown the daemon makes its ordinary stop, freezing each preview, while the shells are still running. A
+        daemon not run by a systemd user manager detaches its holders as on macOS, with the process ledger alone.
+  - [ ] On Windows, outside the daemon's hidden console and its jobs, as "Process holders on Windows" in
+        `docs/architecture.md` describes.
 - [ ] The daemon's crash hook, which today kills every PTY process when the daemon panics or aborts, no longer
       reaches programs a holder runs. A holder's own crash still ends its programs.
-- [ ] Helpers connect to their holder, not to the daemon:
+- [x] Helpers connect to their holder, not to the daemon:
   - The holder listens on a local address of its own, an HTTP one included, since Claude Code's hooks take a URL.
   - It issues and checks each launch's credentials, and relays helper requests to the connected daemon.
   - While no daemon is connected it keeps the requests and hands them over once one connects, as bounded best-effort
-    buffering: reports past 1024 requests or 16 MiB of bodies drop the oldest. A request its caller waits on fails
-    once a deadline that covers an ordinary restart passes.
+    buffering: reports past 1024 requests or 16 MiB of bodies drop the oldest (the bounds covered by `server::relay`,
+    run at push). A request its caller waits on fails once a deadline that covers an ordinary restart passes.
 - [x] Holders and their helpers run from a copy of their build outside the installation location, removed once that
       build's last holder exits (see the overview).
 - [x] The handshake carries the holder's build, and the daemon adopts only holders from the previous stable release
@@ -84,8 +83,9 @@
 
 - [x] Move PTY ownership behind the holder protocol, with the daemon still ending everything on exit, so behavior is
       unchanged.
-- [ ] Route the helpers through the holder.
-- [ ] Then let holders outlive the daemon, and add adoption and crash recovery.
+- [x] Route the helpers through the holder.
+- [x] Then let holders outlive the daemon, and add adoption and crash recovery, on macOS.
+- [ ] The same on Linux and Windows, with the crash hook (see the open technical-design items).
 - [x] Then add the build check and draining.
 
 ## Handoff
@@ -97,80 +97,14 @@
 - The Windows detach was measured over an OpenSSH session with no desktop logon. Confirm it from a standard user's
   desktop logon, with the daemon started by the desktop application, including the case where breakaway is refused
   and the desktop application is named as the parent.
-- The bundled console host holds a program while its terminal queries go unanswered, and with no daemon connected
-  only the holder answers, the device attributes alone, though the daemon answers the device attributes and the cursor
-  position while no client is attached (`TermFacts::host_waits_on_queries`). Verify on Windows that a long run with
-  no daemon keeps progressing and that recovery goes on without a keystroke and without duplicate or late answers; if
-  an unanswered cursor position still blocks recovery, a shared parsed terminal state with an exact answer is an
-  architecture change to decide. The test harness answered those same two, and still Claude Code drew
-  nothing on the bundled host until the first input reached it; the cause is not known. Find it on the Windows VM.
-  How queries are answered while a holder has no daemon is decided (see "Mid-task handoff"); revisit it if the cause
-  shows a program does not recover once a daemon is linked again.
+- In a test harness that answered the device attributes and the cursor position, Claude Code drew nothing on the
+  bundled console host until the first input reached it; the cause is not known. Find it on the Windows VM from a
+  desktop logon. How queries are answered while a holder has no daemon is decided (see "Design decisions"); revisit
+  it if the cause shows a program does not recover once a daemon is linked again.
 
-## Mid-task handoff
+## Design decisions
 
-**State.** Every technical-design item and every implementation-plan step is written and committed on
-`hold/process-holders`, through six rounds of change check, then merged with `integration/update-survival` and changed
-after an independent review of the decisions (below). It compiles and passes clippy on macOS and the Windows cross-check, the UI suite passes, and a first full
-Rust test run proved the ticked boxes; the Rust tests remain to be rerun after the fixes that followed it. A box is
-ticked only when passing tests cover it (a tick means implemented and verified); the open ones wait on failed or
-unreached tests, Linux, Windows or manual runs. The product docs,
-`docs/architecture.md` ("Process holders", "Process holders on Windows"), `docs/structure/daemon.md`,
-`apps/daemon/src/holder/README.md`, `apps/daemon/PROTOCOL.md` (`screen_inexact`, `holder_link`) and the process
-ledger's README describe the implemented behavior.
-
-**To pick it up.**
-1. Compile: `cargo check -p octoboardd --all-targets`, clippy with `-D warnings`, `pnpm check:windows`. Expect compile
-   errors; the riskiest spots are `holder/client/link.rs` (reconnect, pending links, tails across a reconnect),
-   `holder/client/mod.rs` (pending holders), `holder/server/terminal.rs` (`Handle::block_on` from terminal threads,
-   the offline query recogniser), `terminal/pty.rs` (`move_size` closures handed to the fan) and
-   `platform/proc/windows.rs` (`start_detached`).
-2. Tests: `holder::`, `coordinator::adopt`, `coordinator::launch`, `coordinator::exit_watch`,
-   `coordinator::resume_on_start`, `processes::ledger`, `server::relay`, `server::`, `terminal::`, `session::`,
-   `state::`, `store::` (incl. `store::held_terminals`, `store::schema`), `adapter::`, `session_git_hooks`, `mcp::`,
-   `request_guard`, `loopback`, `log_file`, `cli::`, `protocol::`, `bindings` (the TypeScript changes to
-   `screen_inexact` and `holder_link` were written by hand), `layering_tests`, the `platform::proc` (on Linux the
-   cgroup cases) and `platform::term` contract tests; and `node --test apps/desktop/scripts/release-desktop.test.mjs`.
-   The UI tests of the recovered-display mark (`TitleBar`, `TerminalPane`, `ShellTerminalPanel`, `ShellTerminalView`,
-   the catalog tests) and the gallery quick check for its scenarios run before push.
-3. Verify the completion criteria by hand on macOS with the built app: kill the daemon outright (`kill -9`) with an
-   agent session and a shell terminal running, let the application start it again, and check each criterion (screen
-   rebuilt, repainted, `screen_inexact` and its mark in the title bar and the shell strip; hooks, MCP tools and the git
-   gate working; a hook report made while no daemon ran arriving; a gate call with no daemon failing after 30 s; an
-   unknown terminal ended; a session no holder runs interrupted; an out-of-range holder ended, by faking its version;
-   an in-range holder of another build drained; a holder that refuses connections for a while left running, its
-   sessions shown `holder_link: "pending"` and taken over once it answers; a renamed shell keeping its name). Then the
-   same on the Windows VM, and the Handoff items above. Also check on macOS that a terminal program's privacy consent
-   prompt is still attributed to Octoboard now that programs run under a holder started from the build copy outside
-   the app bundle (`docs/product/macos-privacy-permissions.md`).
-4. Linux: the non-systemd path is the Unix detach used on macOS and needs the Linux build to verify; a held launch
-   joins the cgroup group the daemon made for it, below the holder's own cgroup. The systemd parts (the holder as a
-   systemd user service with `Delegate=yes` and a group per launch, the stop order before the holders' units, and the
-   Linux shutdown criterion) are not started: they wait for the daemon running on Linux as a systemd user service.
-
-**What the merge with `integration/update-survival` changed.**
-- Multi-client 01 (size rule) and 03 (flow control): the fan's rule decides the size; for a held terminal the parsed
-  screen is resized under the fan lock and the PTY after it is released (`PtyCore::move_size`, under `resize_lock`),
-  so a held resize never waits on the holder under the fan lock, and calls that may wait run off the async worker.
-  The repaint nudge goes through `Fan::resize`: it counts as no client's activity, changes no requested size and ends
-  at the size it started from. Held output reaches the fan as a local PTY's does.
-- Multi-client 04 (the daemon answers queries): while a daemon is linked its parser answers, writing through the held
-  backend; replaying a tail answers nothing.
-- Hardening 05 (program status): replaying an adopted terminal's tail rebuilds the records but moves no status, since
-  the previous daemon already acted on that output; an adopted session's exit settles only after the reports relayed
-  during adoption are queued (`AppState::after_adoption`).
-- Linux background run (cgroups): the holder joins the group the daemon made for a launch (`Containment::join_launch`)
-  instead of the tag alone. A holder adopted by a daemon in another cgroup has its launches followed by tag only.
-- Resume-on-start now lists interrupted sessions itself, so adopted sessions, never interrupted, are not resumed.
-- Multi-client 01 follow-up (`TermControl::Activate`, `Registration`, `State::reconcile`): `activate`, the
-  `Registration`'s deadline settle and its leave on drop resize through `move_size` like the rest, and for a held
-  terminal run on a blocking thread (the drop's leave detached, as nothing can wait in a drop). The nudge stays a
-  resize-only step through `Fan::resize` that leaves the display and activity alone; both of its resizes are under
-  `resize_lock`, which every reconcile takes, and it starts and ends at the size the rule last gave the parsed screen
-  (`Fan::screen_size`), not the PTY's, so it also brings a held PTY back after a resize the holder missed while out of
-  reach.
-
-**Decisions made without the user (asleep), with reasons, as revised after an independent review.**
+Made without the user, with reasons, as revised after an independent review.
 - One holder per build is the usual allocation, not an invariant: a start picks one for new terminals and drains the
   others. The link and the helper routes share one loopback TCP listener per holder (a WebSocket `/daemon` link and
   the daemon's helper paths with a per-launch key), found through owner-only registry files under the data
@@ -181,8 +115,8 @@ ledger's README describe the implemented behavior.
   terminals then end with the job, and survival is not guaranteed either when the application is in the same outer
   job. Confirming it from a standard user's desktop logon is a pre-release check.
 - Every adoption is approximate (tail rebuild, `screen_inexact`, one-row resize), whatever the holder's last parting
-  says, since no planned handover exists yet; 03 lets a verified exact handover skip the mark and the redraw and never
-  clears a terminal already marked.
+  says, except a handover that 03 verifies as exact, which skips the mark and the redraw and never clears a terminal
+  already marked.
 - `screen_inexact` is shown as a local note mark ("Recovered terminal display"), not a session status: for an agent
   session right after its title in the title bar (the terminal pane has no title of its own), for a shell terminal in
   the shell panel's strip row after the tab list (a mark inside a tab would nest a button in it), named with the
@@ -194,9 +128,9 @@ ledger's README describe the implemented behavior.
 - **Changed:** while no daemon is linked, the holder answers primary device attributes only, with the daemon's own
   answer, from a bounded streaming recogniser on its output path (it keeps no screen); it answers only queries read
   while unlinked, and says so in its welcome so a linked daemon does not answer them again. Cursor position and other
-  screen-dependent queries keep timing out offline: a stated limit. If the Windows verification shows an unanswered
-  cursor-position query still blocks recovery, an exact answer needs a parsed screen in the holder, an architecture
-  change to report back.
+  screen-dependent queries keep timing out offline: a stated limit. On the Windows VM (over SSH) a program writing 600
+  cursor-position queries through a 46 s outage on the bundled console host kept progressing and recovered once, with
+  no input, so the limit does not block recovery there.
 - The compatible range's floor is `0.0.0` (no stable release exists); the release script refuses a release whose floor
   is not the greatest stable tag below it. The protocol stays compatible within the promised range; the floor moves
   only by the previous-stable rule.
@@ -239,3 +173,46 @@ ledger's README describe the implemented behavior.
 - **Reference docs**: `docs/architecture.md` ("Why the daemon is split out"),
   `docs/product/application-lifecycle.md` ("Starting up", "Crashes and forced termination"),
   `docs/product/background-processes.md`, `docs/product/shell-terminals.md`, `docs/product/launching-agents.md`.
+
+## Mid-task handoff
+
+**State.** Everything is implemented. On 2026-11-10 the macOS items were verified by hand with real builds: the daemon
+killed outright and restarted by hand and by the application, with rebuilt, repainted screens marked inexact and the
+recovered-display mark in the title bar and the shell strip; hooks, MCP tools and the git gate through the holder's
+relay, a hook report made with no daemon arriving, a gate call with no daemon failing after 30 s; an unknown terminal
+ended; a session no holder runs interrupted; an out-of-range holder ended; an in-range holder of another build drained;
+a holder refusing links, and one dropping them repeatedly, left running and shown pending, then taken over; a renamed
+shell keeping its name. On the Windows VM, over SSH only: crash adoption with the renamed shell, hooks and MCP after
+adoption, offline report buffering, the holder outside the daemon's job, and the unanswered cursor-position run above.
+Evidence, on the verification Mac: `/tmp/octoboard-manual-20261110-67e2/REPORT.md` and
+`/tmp/octoboard-gui-20261110-67e2/REPORT.md` (macOS), `/tmp/windows-verification-evidence/REPORT.md` (Windows). The
+scripted suites (`holder::`, `coordinator::adopt`, `coordinator::resume_on_start`, `server::relay`,
+`store::held_terminals`, the `platform::proc` contract tests and the UI tests of the recovered-display mark) run at
+push.
+
+**Remaining, each a real run:**
+1. The crash hook, on macOS (not run on 2026-11-10; no test covers a held program's absence from the crash cleanup):
+   with an agent session and a shell running under a holder, `kill -ABRT` the daemon, whose abort handler runs the
+   crash cleanup: the held programs keep running and the next daemon adopts them. Then `kill -ABRT` the holder: its
+   programs end.
+2. The macOS privacy prompt (`docs/product/macos-privacy-permissions.md`): from the packaged application, with holders
+   running from the build copy outside the bundle, make a program in a held terminal raise a fresh consent prompt (a
+   permission the verification application has not been granted or denied, such as screen recording through
+   `CGRequestScreenCaptureAccess`), and check that the prompt names Octoboard. On 2026-11-10 a held program's
+   responsible process was the application, but macOS raised no prompt, which proves nothing about its attribution.
+3. Windows, from an interactive desktop logon, blocked on the sign-in password of the VM user `bjj`. The VM's working
+   directory `C:\Users\bjj\windows-verification` keeps the source, the build and the isolated data. Signed in as a
+   standard user, with the daemon started by the desktop application: the holders run outside the daemon's jobs and
+   survive it, and where breakaway is refused the desktop application is the holder's parent (Handoff); Claude Code
+   on the bundled console host draws before any input (Handoff); a real update over running sessions installs with no
+   Abort/Retry/Ignore prompt (Handoff). Also the completion criteria not yet run on Windows at all (they need no
+   desktop and may run over SSH first): the git gate after adoption, and a gate call with no daemon failing after 30 s;
+   an out-of-range holder ended; an in-range holder of another build drained; an unknown terminal ended; a session no
+   holder runs interrupted; a holder refusing links, or dropping them repeatedly, left running, shown pending and taken
+   over.
+4. Linux without systemd, blocked on Docker, which is off: with the Linux build in a container, the Unix detach, and a
+   held launch joining the cgroup group the daemon made for it below the holder's own cgroup (a writable cgroup v2
+   subtree, as Linux daemon run milestone 01's notes describe).
+5. Linux with systemd, blocked on the daemon running on Linux as a systemd user service, which does not exist yet:
+   the holder as a systemd user service with `Delegate=yes` and a group per launch, the daemon's unit stopping before
+   the holders' units, and the Linux host shutdown criterion.

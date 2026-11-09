@@ -13,8 +13,9 @@ clients at once, and a daemon that can restart without ending the work it carrie
 - **Concurrent writes from several clients overwrite each other** without notice.
 
 The terminal stream's own improvements (an exact first paint on attach, flow control, and terminal queries answered by
-the daemon) and the protocol's compatibility guard are planned separately, not here. This plan relies on the first
-paint and on daemon-side query answering where it says so: a screen rebuilt or restored after a restart reaches
+the daemon; see `docs/product/session-terminal.md`, `docs/product/terminals-on-several-clients.md` and
+`docs/product/terminal-queries.md`) and the protocol's compatibility guard are not part of this plan. It relies on the
+first paint and on daemon-side query answering where it says so: a screen rebuilt or restored after a restart reaches
 clients through the first paint.
 
 ## Key design decisions
@@ -116,14 +117,14 @@ clients through the first paint.
 - 01 Windows holder feasibility (closed)
 - [02 Process holders](02-process-holders.md) — its Linux systemd parts need the daemon running on Linux as a
   systemd user service, which does not exist yet
-- [03 Planned restart handover](03-planned-restart-handover.md) — needs 02, and the daemon-side answering of
-  terminal queries that multi-client terminal milestone 04 brought; its `restart` command sits beside the
+- [03 Planned restart handover](03-planned-restart-handover.md) — needs 02; its `restart` command sits beside the
   command-line `start`, `stop` and `status` of Linux daemon run milestone 01, none of which runs a daemon in the
   background on Windows; its systemd case needs the daemon running on Linux as a systemd user service, which does
   not exist yet
 - [04 Desktop updates keep sessions running](04-desktop-update-handover.md) — needs 03
-- [05 Program status reports](05-program-status-reports.md)
-- [06 Conflict-checked writes](06-conflict-checked-writes.md)
+- 05 Program status reports (closed)
+- 06 Conflict-checked writes (closed)
 - 07 Control-channel heartbeat (closed)
 - [08 Codex app server in the holder](08-codex-server-in-holder.md) — needs 02 and 03, and Codex's private app
   server, which is in place
+- [09 Final confirmation](09-final-confirmation.md)
