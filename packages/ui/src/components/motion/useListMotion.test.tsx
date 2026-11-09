@@ -300,6 +300,17 @@ it("preserves resolved full-span subgrid tracks in a departing visual", () => {
   expect(ghost.style.gridTemplateColumns).toBe("32px 168px");
 });
 
+it("keeps exits through a scroll within a row's own content, as focusing a clicked switch makes", () => {
+  const list = mount(["a", "b"]);
+  const inner = document.createElement("span");
+  list.list.querySelector<HTMLElement>('[data-list-motion="b"]')!.appendChild(inner);
+  list.render(["b"]);
+  act(() => inner.dispatchEvent(new Event("scroll")));
+  expect(list.list.querySelectorAll("[data-list-motion-ghost]")).toHaveLength(1);
+  act(() => list.list.dispatchEvent(new Event("scroll")));
+  expect(list.list.querySelector("[data-list-motion-ghost]")).toBeNull();
+});
+
 it("lifts departing visuals outside shrinking scrollers without losing their scroll position", () => {
   points = { a: [0, 40] };
   const list = mount(["a"], { descendants: true });

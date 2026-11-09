@@ -439,7 +439,14 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     if (keysChanged() || layoutChanged) measure(true);
   });
   mutations?.observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: virtualized ? ["data-list-motion", "style"] : ["data-list-motion"] });
-  const onScroll = () => {
+  // Only the list, or a scroller between it and its rows, moves the rows and exit copies when it scrolls. A scroller
+  // within a row's own content does not: focusing a switch scrolls the clipped wrapper of its hidden input, and a
+  // click on a switch that removes a row focuses the switch after that row's exit copy has started.
+  const onScroll = (event: Event) => {
+    if (event.target instanceof Element && event.target !== list) {
+      const row = event.target.closest(SELECTOR);
+      if (row && row !== list && list.contains(row)) return;
+    }
     if (virtualized) { added.clear(); measure(false); } else for (const key of exits.keys()) clearExit(key);
   };
   list.addEventListener("scroll", onScroll, { passive: true, capture: true });
