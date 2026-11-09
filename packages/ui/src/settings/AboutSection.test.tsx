@@ -42,6 +42,12 @@ it("states the license and the copyright line with the author from the config", 
   expect(text).toContain(appConfig.author.name);
 });
 
+it("places third-party licenses after the license and copyright last", () => {
+  const text = (mount({ kind: "browser", host: BROWSER_HOST }).textContent ?? "").replace(/[\u2066-\u2069]/g, "");
+  expect(text).toMatch(/License.*Third-party licenses.*Copyright/s);
+  expect(text.endsWith(`Copyright© ${appConfig.copyrightYear} ${appConfig.author.name}`)).toBe(true);
+});
+
 it("has no version and no update controls where the platform cannot update itself", () => {
   const text = mount({ kind: "browser", host: BROWSER_HOST }).textContent ?? "";
   expect(text).not.toContain("Version ");
