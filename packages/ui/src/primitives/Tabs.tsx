@@ -62,10 +62,11 @@ export function TabListContainer({ fit, after, reserveScrollButtons, className, 
   children?: React.ReactNode;
 }): React.ReactElement {
   const tabScrollLabels = useTabScrollLabels();
+  const classes = [fit === "content" && CONTENT_CONTAINER_CLASS, className, reserveScrollButtons && RESERVE_SCROLL_BUTTONS_CLASS].filter(Boolean).join(" ");
   return (
     <HeroTabs.ListContainer
       {...props}
-      className={[fit === "content" && CONTENT_CONTAINER_CLASS, className, reserveScrollButtons && RESERVE_SCROLL_BUTTONS_CLASS].filter(Boolean).join(" ") || undefined}
+      className={classes || undefined}
       render={(rendered) => <div {...rendered}>{tabScrollLabels(rendered.children)}{after}</div>}
     />
   );

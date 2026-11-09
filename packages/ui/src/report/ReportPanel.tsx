@@ -324,19 +324,19 @@ function PageFrame({
   const forward = useStableBinding("forward");
   const next = useStableBinding("nextConsoleSession");
   const previous = useStableBinding("previousConsoleSession");
+  // The page relays the window's keys on the clients that have those commands: Back and Forward in the macOS app,
+  // the console-session switch in the desktop app on any system.
+  const history = commandExists("back", platform);
+  const switching = commandExists("nextConsoleSession", platform);
+  const noContextMenu = platform.kind === "tauri";
+  const host = platform.host;
   const srcDoc = useMemo(
-    () => {
-      // The page relays the window's keys on the clients that have those commands: Back and Forward in the macOS app,
-      // the console-session switch in the desktop app on any system.
-      const history = commandExists("back", platform);
-      const switching = commandExists("nextConsoleSession", platform);
-      return transformDocument(composePageDocument(page.html, isHistory, nonce, {
-        noContextMenu: platform.kind === "tauri",
-        historyKeys: history ? { back: eventKey(back, platform.host), forward: eventKey(forward, platform.host) } : undefined,
-        switchKeys: switching ? { next: eventKey(next, platform.host), previous: eventKey(previous, platform.host) } : undefined,
-      }));
-    },
-    [page.html, isHistory, nonce, platform.kind, platform.appMenu, platform.host, back, forward, next, previous, transformDocument],
+    () => transformDocument(composePageDocument(page.html, isHistory, nonce, {
+      noContextMenu,
+      historyKeys: history ? { back: eventKey(back, host), forward: eventKey(forward, host) } : undefined,
+      switchKeys: switching ? { next: eventKey(next, host), previous: eventKey(previous, host) } : undefined,
+    })),
+    [page.html, isHistory, nonce, noContextMenu, history, switching, host, back, forward, next, previous, transformDocument],
   );
 
   useEffect(() => {

@@ -149,6 +149,7 @@ export function Button({ variant, size, type = "button", pending, unavailable, c
   const spinner = pending && <Spinner color="current" size={size === "lg" ? "md" : "sm"} className={size === "xs" ? "size-3" : undefined} />;
   const reasonId = useId();
   const reason = unavailable !== undefined && <span id={reasonId} className="sr-only">{unavailable}</span>;
+  const classes = [size === "xs" && XS_CLASS, unavailable !== undefined && UNAVAILABLE_CLASS, className, placement].filter(Boolean).join(" ");
   return (
     <HeroButton
       {...baseButtonProps({ ...rest, disabled, describedBy: unavailable === undefined ? rest.describedBy : reasonId })}
@@ -163,7 +164,7 @@ export function Button({ variant, size, type = "button", pending, unavailable, c
       aria-current={current ? "true" : undefined}
       aria-haspopup={hasPopup}
       onPress={onPress && ((event) => onPress(toButtonPress(event)))}
-      className={[size === "xs" && XS_CLASS, unavailable !== undefined && UNAVAILABLE_CLASS, className, placement].filter(Boolean).join(" ") || undefined}
+      className={classes || undefined}
     >
       {reason}
       {spinner && rest.iconOnly ? spinner : <>{spinner}{children}</>}

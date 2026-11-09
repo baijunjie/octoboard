@@ -274,6 +274,8 @@ export function ProjectDialog({
     content: <GitWorkflowField value={gitWorkflow} onChange={setGitWorkflow} isDisabled={locked} />,
   };
 
+  const detectionShown = source === "local" && !shown(pathError) && detectionAlert;
+  const directoryDescribedBy = [directoryDescription && directoryDescriptionId, detectionShown && detectionAlertId].filter(Boolean).join(" ");
   return (
     <>
       <Dialog
@@ -313,11 +315,11 @@ export function ProjectDialog({
               placeholder={source === "git" ? defaultCloneDir : t("dialog.project.directoryExample")}
               description={directoryDescription && <span id={directoryDescriptionId}>{directoryDescription}</span>}
               errorMessage={shown(pathError) ?? (locationProblem && <DaemonErrorMessage error={locationProblem} part="summary" />)}
-              describedBy={[directoryDescription && directoryDescriptionId, source === "local" && !shown(pathError) && detectionAlert && detectionAlertId].filter(Boolean).join(" ") || undefined}
+              describedBy={directoryDescribedBy || undefined}
               isDisabled={source === "git" && locked}
               trailing={directoryBrowse.browseButton({ disabled: source === "git" && locked })}
             />
-            {source === "local" && !shown(pathError) && detectionAlert}
+            {detectionShown}
           </div>
         )}
         {!addsParent && (
