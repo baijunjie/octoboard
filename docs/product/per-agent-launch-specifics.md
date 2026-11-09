@@ -144,8 +144,8 @@ The launch conditions that are visible:
   account. A session of the default account is passed nothing and keeps Codex's default store, as `codex` run in a
   terminal does. `codex` run by hand under a non-default account's home does not carry the override and reads the
   default account's keychain entry instead. A token already in the keychain is not moved: a non-default account signs
-  in to the server again, which it can do from its details dialog. Reading the account's MCP servers carries the same
-  override (see "How a Codex account is read" in `docs/product/account-mcp-servers-and-connectors.md`), and so does
+  in to the server again, which it can do from its Connectors and MCP dialog. Reading the account's MCP servers carries
+  the same override (see "How a Codex account is read" in `docs/product/account-mcp-servers-and-connectors.md`), and so does
   signing the account in to or out of a server from Octoboard (see "Signing an account in to and out of an MCP server"
   in the same doc).
 

@@ -14,8 +14,9 @@ import { SettingsDialog } from "../SettingsDialog";
 import { TestHost } from "../../test/TestHost";
 import { registerSettingsLauncher } from "../settingsLauncher";
 import { accountLogins, request, sessions, settings, startDaemon } from "./agentAccountsSectionTestState";
-import { buttonNamed, chooseItem, mount, openDetailsOf, openSettingsOf, openTabMenu, rowOf } from "./agentAccountsSectionTestSupport";
+import { buttonNamed, chooseItem, mount, openDetailsOf, openMcpOf, openSettingsOf, openTabMenu, rowOf } from "./agentAccountsSectionTestSupport";
 import { matchesWidthQuery } from "../../test/viewport";
+import { TEST_PROVIDERS } from "../../test/testProviders";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -50,17 +51,30 @@ describe("an account's actions menu", () => {
 
   const items = () => [...document.querySelectorAll("[role=menuitem]")].map((entry) => entry.textContent);
 
-  it("holds Details, Settings, Edit, Log in and Remove for an owned account, in place of buttons of their own", async () => {
+  it("holds Details, Settings, Connectors and MCP, Edit, Log in and Remove for an owned account, in place of buttons of their own", async () => {
     const { container } = mount();
     expect(buttonNamed(container, "Edit")).toBeUndefined();
+    await openAccountMenu(container, 1);
+    expect(items()).toEqual(["Details", "Settings", "Connectors and MCP", "Edit", "Log in", "Move earlier", "Move later", "Remove"]);
+  });
+
+  it("holds Details, Settings, Connectors and MCP, Rename and Log in for the default account, which has no directory or removal to offer", async () => {
+    const { container } = mount();
+    await openAccountMenu(container, 0);
+    expect(items()).toEqual(["Details", "Settings", "Connectors and MCP", "Rename", "Log in", "Move earlier", "Move later"]);
+  });
+
+  it("leaves out Connectors and MCP for a provider that cannot list an account's servers and connectors", async () => {
+    const { container, set } = mount("Codex");
+    await set({ providers: TEST_PROVIDERS.map((provider) => provider.id === "codex" ? { ...provider, capabilities: { ...provider.capabilities, mcp_inventory: false } } : provider) });
     await openAccountMenu(container, 1);
     expect(items()).toEqual(["Details", "Settings", "Edit", "Log in", "Move earlier", "Move later", "Remove"]);
   });
 
-  it("holds Details, Settings, Rename and Log in for the default account, which has no directory or removal to offer", async () => {
-    const { container } = mount();
-    await openAccountMenu(container, 0);
-    expect(items()).toEqual(["Details", "Settings", "Rename", "Log in", "Move earlier", "Move later"]);
+  it("holds Connectors and MCP for a Grok Build account, whose servers are read", async () => {
+    const { container } = mount("Grok Build");
+    await openAccountMenu(container, 1);
+    expect(items()).toEqual(["Details", "Settings", "Connectors and MCP", "Edit", "Log in", "Move earlier", "Move later", "Remove"]);
   });
 
   it("is offered by the default account and each owned account", () => {
@@ -277,7 +291,7 @@ describe("an account's actions menu", () => {
     expect(region.textContent).toBe("");
   });
 
-  it.each([["details", openDetailsOf], ["settings", openSettingsOf]] as const)("announces a login that succeeded from inside the %s dialog", async (_, open) => {
+  it.each([["details", openDetailsOf], ["settings", openSettingsOf], ["connectors and MCP", openMcpOf]] as const)("announces a login that succeeded from inside the %s dialog", async (_, open) => {
     fakeTimers();
     windowAttention();
     const { container, set, store } = mount();

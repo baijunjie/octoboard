@@ -1,11 +1,11 @@
 # Account MCP servers and connectors
 
-The daemon can read, for one Claude Code or Codex account, which MCP tools the account has: the **platform connectors**
-its platform account holds (claude.ai connectors for Claude Code, ChatGPT Apps for Codex) and the **local MCP servers**
-configured for it, each with its state. This reading is the account's **MCP inventory**. It is taken only when a client
+The daemon can read, for one Claude Code, Codex or Grok Build account, which MCP tools the account has: the **platform
+connectors** its platform account holds (claude.ai connectors for Claude Code, ChatGPT Apps for Codex; Grok Build's cannot
+be listed) and the **local MCP servers** configured for it, each with its state. This reading is the account's **MCP inventory**. It is taken only when a client
 asks for it, through the control request `read_account_mcp_inventory`; the daemon never reads it by itself, and never
-holds or broadcasts it. The window reads and shows it in an account's details dialog (see "The Connectors and MCP
-section" below). For a Codex account the daemon can also sign the account in to, and out of, a local MCP server that
+holds or broadcasts it. The window reads and shows it in a dialog of the account's own (see "The Connectors and MCP
+dialog" below). For a Codex account the daemon can also sign the account in to, and out of, a local MCP server that
 uses OAuth (see "Signing an account in to and out of an MCP server" below).
 
 Accounts differ here even when they share the default configuration (see
@@ -18,10 +18,11 @@ stays the account's own.
 The request names the agent, the account (an account id; none for the agent's default account) and whether to
 refresh (off by default). It is answered with `account_mcp_inventory_read`, carrying the inventory, once the agent's
 CLI has answered. Since the agent connects to every server to report its state, an answer can take seconds, and up to
-a minute (a minute and a quarter for Claude Code, whose sign-in is checked first).
+a minute (a minute and a quarter for Claude Code, whose sign-in is checked first, and for Grok Build, whose listing is
+given 15 seconds before its servers are diagnosed).
 
 - **Which agents can be read** is served to every window with the agents, as the capability `mcp_inventory`: Claude
-  Code and Codex can be read, Grok Build cannot. A request for an agent that cannot be read is answered as
+  Code, Codex and Grok Build can be read. A request for an agent that cannot be read is answered as
   `unsupported_agent` (see "When an MCP inventory cannot be read" below).
 - **Refused** only when the account is not an account of the agent (`unknown_account`). Every other failure is an
   answer: an inventory whose two lists are empty and which says why it could not be read (see "When an MCP inventory
@@ -29,7 +30,7 @@ a minute (a minute and a quarter for Claude Code, whose sign-in is checked first
 - **One reading per account at a time.** A request for an account already being read joins that reading and gets the
   same inventory, whatever refresh either asked for. Readings of different accounts run independently.
 - **Refresh** asks the agent to refetch what it caches rather than report what it holds. Only Codex caches anything
-  here (see "How a Codex account is read" below); for Claude Code it changes nothing.
+  here (see "How a Codex account is read" below); for Claude Code and Grok Build it changes nothing.
 - **Nothing is written.** A reading never writes the account's configuration, MCP servers or sign-ins.
 
 ## What an MCP inventory holds
@@ -37,7 +38,8 @@ a minute (a minute and a quarter for Claude Code, whose sign-in is checked first
 Each inventory names the agent and the account and says when it was read. Then it holds:
 
 - **Platform connectors**, each with the agent's own id for it, its name, its state — connected, not connected or
-  unknown — and, for Codex, the names of the plugins that bring it (always none for Claude Code).
+  unknown — and, for Codex, the names of the plugins that bring it (always none for Claude Code). Grok Build has none to
+  list: its gateway connectors cannot be read from its CLI.
 - **Local MCP servers**, configured by the user or brought by a plugin, each with:
   - its name;
   - its origin: the URL of a remote server, none for a server that is a local command;
@@ -45,10 +47,10 @@ Each inventory names the agent and the account and says when it was read. Then i
   - its sign-in state: signed in, needs sign-in, not needed (a local command, or a server that takes no sign-in) or
     unknown;
   - its runtime state: running, failed or unknown, with the reason it failed when the agent gives one;
-  - how many tools it offers, where the agent reports that (Codex only);
+  - how many tools it offers, where the agent reports that (Codex, and Grok Build for a server that started);
   - whether the account signs in to it with OAuth through the agent's own login command, which Octoboard can run for it
     (see "Signing an account in to and out of an MCP server" below): for Codex see "How a Codex account is read"
-    below; never for Claude Code.
+    below; never for Claude Code or Grok Build.
 
 Every state comes from what the agent itself reports. A state value the agent reports that Octoboard does not know is
 read as unknown; it never fails the reading.
@@ -67,24 +69,38 @@ leaves on:
   `docs/product/per-agent-launch-specifics.md`), so the sign-in states reported are the ones in its own home rather than
   the default account's keychain entries. The default account's app server is given no override.
 
-Codex is asked, after `initialize`:
+First `codex mcp list --json`, run the same way and given 15 seconds, says which servers are turned off, whether in
+the account's configuration or by the plugin that brings them; those are left out of the inventory, as `codex mcp list`
+shows them as disabled while the app server lists them like any other. Only each server's name and whether it is
+enabled are read. A listing that fails or cannot be understood turns no server off, and the reading goes on.
+
+Then the app server is asked, after `initialize`:
 
 - `account/read`: an account Codex reports as signed out — no account while it requires an OpenAI sign-in — reads as
   not signed in. An account that needs no OpenAI sign-in is read as any other.
-- `app/list` and `app/installed` give the platform connectors. Codex's catalogue names every App there is, so an App is
-  listed only when the account can reach it, a plugin brings it, or it is installed. Its state follows whether Codex
-  reports it accessible: accessible is connected, not accessible is not connected, no answer is unknown. An installed
-  Codex that does not answer one of these two methods leaves that part empty rather than failing the reading.
+- `app/installed` gives the platform connectors: every App the account has installed, in the order Codex gives them,
+  which is the order of the Apps in Codex's own Apps settings. An App is connected when Codex reports it turned on and
+  callable (it has a tool the model may use), not connected when it is turned off, and unknown otherwise. An installed
+  Codex that does not answer this method leaves the connectors empty rather than failing the reading.
 - `mcpServerStatus/list` gives the local MCP servers, with their sign-in and runtime states and their tools. The
-  `codex_apps` server is not listed as a server: its Apps are the connectors. A server that needs authentication to
-  start reads as needing sign-in, with its runtime state unknown. An error answer to this method fails the reading.
+  `codex_apps` server is not listed as a server, as its Apps are the connectors; nor is a server Codex reports as
+  disabled. Codex reports a runtime state only for a server a session has started, which a reading has none of; without
+  one, a server whose tools Codex listed is running, as it had to start to give them, one whose tools could not be
+  listed is failed with the reason, and any other is unknown. A server that needs authentication to start reads as
+  needing sign-in, with its runtime state unknown. An error answer to this method fails the reading.
   A server signs in with OAuth exactly when Codex reports its authentication as OAuth (`oAuth`) or as not logged in
   (`notLoggedIn`); a server with a bearer token, one that takes no sign-in, and an authentication status Octoboard does
   not know do not.
 
-At most 1000 Apps and 1000 servers are listed. Codex caches its App catalogue per home for up to an hour, so an App
-connected on the platform's side can be missing from a reading until it is refreshed: with refresh on, Codex is asked
-to refetch the catalogue and the installed Apps.
+When the account has installed Apps, a second app server is then asked `app/read` for them, at most 100 to a request
+and without their tools: it gives each App's name and the plugins that bring it. An App it does not describe, or a
+Codex that does not answer it, keeps the name Codex's tool catalogue carries for it (else its id) and no plugins.
+
+At most 1000 servers are listed, with no further request for more. With refresh on, Codex is asked to refresh the
+installed Apps' tools first; otherwise it reports what it last fetched, so an App connected or disconnected on the
+platform's side can be missing or stale until a reading is refreshed. The reading does not ask `app/list`, Codex's
+catalogue of every App there is: it answers only once Codex has fetched the whole catalogue, page by page, which every
+app server it starts does afresh, and which takes half a minute or more.
 
 ## How a Claude Code account is read
 
@@ -111,6 +127,39 @@ The statuses `claude mcp list` prints map onto the states:
 Claude Code reports no tool count, and has nothing to refetch. No Claude Code server is one Octoboard can sign in to:
 its sign-in is Claude Code's own prompt.
 
+## How a Grok Build account is read
+
+Octoboard runs Grok Build's CLI in the environment of a quota reading (see "How a quota is read" in
+`docs/product/account-quota-readings.md`), with the account's directory as `GROK_HOME` (left as the shell has it for the
+default account), run from the home directory, so a project's own `.grok/config.toml` and `.mcp.json` take no part (a
+`.mcp.json` in the home directory itself would, as the one of the directory it runs from):
+
+1. `grok mcp list --json`, given 15 seconds: the servers configured in the account's `config.toml`, a disabled one
+   left out (the protocol has no disabled state, and listing it would read as configured and usable). A URL gives a
+   remote server's origin; a command gives none. The listing also carries each server's headers and
+   environment variables, which are not read. A listing that exits with a nonzero status or cannot be understood fails
+   the reading.
+2. `grok mcp doctor --json`: starts every enabled server and runs its checks, which takes a few seconds at most for a
+   server that answers. It exits with status 1 when a server fails, with its report on standard output all the same;
+   a report that cannot be understood leaves every state unknown rather than failing the reading. A server the report
+   has and the listing lacks, which Grok takes from other tools' configuration (Claude Code's `~/.claude.json`, a
+   `.mcp.json` in the home directory), is
+   listed after the others.
+
+Neither command talks to a leader process, so one account's reading never reaches another's through Grok's shared
+leader socket. Both create Grok's `docs` and `logs` directories in a home that lacks them.
+
+| What the report says of a server | Its states |
+|---|---|
+| Healthy | running, with the tools it offers; sign-in not needed for a local command, unknown for a remote server |
+| A check failed because the server asked for authentication | needs sign-in, runtime unknown |
+| Any other failed check | failed, with that check's name and what it said; sign-in as above |
+| Not in the report (the report does not give the server's state) | runtime unknown; sign-in as above |
+
+A server of a plugin is not marked as one. No Grok Build server is one
+Octoboard can sign in to: Grok's sign-in is the `/mcps` modal of its terminal interface, and its CLI has no login
+command. A Grok Build configuration with a syntax error reads as no servers, as Grok itself reports.
+
 ## When an MCP inventory cannot be read
 
 An inventory that could not be read carries one reason, from a closed set clients word themselves, optionally with a
@@ -118,10 +167,10 @@ detail (what the agent or the daemon said):
 
 | Reason | When |
 |---|---|
-| `not_signed_in` | The agent says the account is not signed in (see the two sections above) |
+| `not_signed_in` | The agent says the account is not signed in (see "How a Codex account is read" and "How a Claude Code account is read" above) |
 | `cli_missing` | The agent is not available, or its CLI cannot be started |
-| `timed_out` | A run of the agent's CLI did not answer within 60 seconds (15 for `claude auth status`) |
-| `unsupported_agent` | The agent has no way of listing its MCP servers: Grok Build |
+| `timed_out` | A run of the agent's CLI did not answer within 60 seconds (15 for `claude auth status` and `grok mcp list`) |
+| `unsupported_agent` | The agent has no way of listing its MCP servers: none of the supported agents at present |
 | `failed` | Anything else, with a detail saying what: the login shell's environment could not be read, the account's directory does not exist, the CLI failed, or the reading was cut short by the daemon shutting down |
 
 A run of the agent's CLI is stopped as every short run of an agent's CLI is, the daemon's shutdown included (see "How a
@@ -134,7 +183,7 @@ For a local MCP server the account signs in to with OAuth (see "What an MCP inve
 the agent's own command to sign the account in to the server or out of it, through the control requests
 `sign_in_account_mcp_server` and `sign_out_account_mcp_server`. Each names the agent, the account (an account id; none
 for the agent's default account) and the server, by the name the inventory lists it under. Only Codex has such
-commands: a request for another agent is refused with `provider_unsupported` (operation `mcp_sign_in`).
+commands: a request for another agent, Claude Code and Grok Build included, is refused with `provider_unsupported` (operation `mcp_sign_in`).
 
 **How it runs.** For Codex the command is `codex mcp login` or `codex mcp logout`, with the server's name after `--`.
 It runs in the background, with no terminal and no window, in the environment a launch of the account has: the login
@@ -183,27 +232,36 @@ removing it, ends its runs; a removal that moves the directory to the Trash also
 reads during the removal" in `docs/product/removing-accounts.md`). The daemon's exit kills the CLIs still running. The
 runs are held in memory only.
 
-## The Connectors and MCP section
+## The Connectors and MCP dialog
 
-An account's details dialog (see "The account details dialog" in `docs/product/agent-accounts.md`) ends, for an agent
-that can be read, with a **Connectors and MCP** section showing the account's MCP inventory. For an agent that cannot
-be read the section is absent and nothing is read.
+**Connectors and MCP**, an entry of an account's actions menu in Settings' Agent accounts section, with a plug icon,
+right after **Settings** (see "The default account" and "The accounts the user owns" in
+`docs/product/agent-accounts.md`), opens a modal dialog showing the account's MCP inventory. The entry is there only
+for an agent that can be read (see "Requesting an MCP inventory" above); an account of any other agent has no entry,
+and nothing is read for it.
+
+The dialog is titled "Connectors and MCP", whichever account it is opened on. The first line of its body is the
+account's name, with the email it is signed in with under it as in the account details dialog (see "The account
+details dialog" in `docs/product/agent-accounts.md`); its plan, login state, directory and usage are left to that
+dialog. The inventory follows. The dialog has no footer, closes, follows the account, tells of a login that succeeds
+and closes by itself when the account is removed as the account details dialog does, and hands keyboard focus back
+the same way.
 
 **Reading.** The inventory is read, with refresh off, each time the dialog opens; nothing is kept from an earlier
-opening. The section's heading ends with a **Refresh** icon button, which reads it again with refresh on (see
+opening. The account's name line ends with a **Refresh** icon button, which reads it again with refresh on (see
 "Requesting an MCP inventory" above). The dialog makes one reading at a time: a press of Refresh, or of an alert's **Try
 again**, while one runs does nothing, and Try again is unavailable meanwhile. While a reading runs the Refresh button
 shows as pending, announced to assistive technology as busy, and the last answer stays shown; before the first answer
-the section says, beside a spinner, that it is reading the account's connectors and MCP servers. The reading never holds
-the dialog up: the rest of it is shown and usable meanwhile. An answer that arrives after the dialog has closed is
-dropped.
+the dialog says, beside a spinner, that it is reading the account's connectors and MCP servers. The reading never holds
+the dialog up: it stays usable meanwhile. An answer that arrives after the dialog has closed is dropped.
 
-Before the Refresh button, the heading says how long ago the inventory shown was read, as the dialog's Usage heading
-does: "Updated just now" under a minute, otherwise "Updated 3 minutes ago" (in hours or days once it is that old). It is
-absent while nothing has been read and while the last answer is a failure: an inventory that could not be read, or a
-request that was refused or did not reach the daemon.
+Before the Refresh button, the name line says how long ago the inventory shown was read: "Updated just now" under a
+minute, otherwise "Updated 3 minutes ago" (in hours or days once it is that old). It is absent while nothing has been
+read and while the last answer is a failure: an inventory that could not be read, or a request that was refused or did
+not reach the daemon.
 
-**What it shows.** A read inventory is shown as two groups, **Platform connectors** then **Local MCP servers**, each
+**What it shows.** A read inventory is shown as two groups, **Platform connectors** then **Local MCP servers** (an agent
+with no connector platform and no connector, Grok Build, has only the second), each
 entry's name on a line with its state badges after it, and what else is known of it in a muted line under it. A group
 with no entries says there are none ("No platform connectors", "No local MCP servers") in a compact empty row (see "The
 compact row" in `docs/product/empty-states.md`).
@@ -220,16 +278,16 @@ compact row" in `docs/product/empty-states.md`).
   danger status mark reading **Failed**, whose popover says it failed to connect, with the reason the agent gave under
   that where it gave one (see "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`);
   none when the runtime state is unknown. The line under it holds the URL of a remote server, the plugin that brings it,
-  and, for Codex, how many tools it offers. A plugin's name, there and under a connector, is marked as a reference.
+  and how many tools it offers, for an agent that reports that (Codex, and Grok Build). A plugin's name, there and under a connector, is marked as a reference.
 - **A Codex server the account signs in to with OAuth** has, at the end of its name line, a **Sign out** button while
-  it reads as signed in and a **Sign in** button otherwise (see "Signing in and out from the section" below). No other
+  it reads as signed in and a **Sign in** button otherwise (see "Signing in and out from the dialog" below). No other
   entry has either: not a platform connector, a server with a bearer token, a local command, a plugin's server that
   does not sign in with OAuth, nor any Claude Code entry. The name announced for each button names the server.
 - **A Claude Code server that needs sign-in** has a further line under it saying to run `/mcp` in a session of this
   account to sign it in: Octoboard cannot sign Claude Code's servers in itself.
 
 **When it cannot be read.** An inventory that could not be read is shown, in place of the two groups, as an alert in
-the section, red, worded by its reason (see "When an MCP inventory cannot be read" above):
+the dialog, red, worded by its reason (see "When an MCP inventory cannot be read" above):
 
 | Reason | What it says |
 |---|---|
@@ -250,7 +308,7 @@ the alert, or had fallen to the page, goes to the Refresh button. When an answer
 something else — one failure's alert by another's, or the lists by an alert when a further reading fails — focus goes
 to the new alert's Try again, or to Refresh when it has none.
 
-### Signing in and out from the section
+### Signing in and out from the dialog
 
 **Sign in** starts a sign-in of the account to the server, and **Sign out** a sign-out (see "Signing an account in to
 and out of an MCP server" above), at once: Sign out asks for no confirmation, since signing in again undoes it. While

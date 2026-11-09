@@ -197,6 +197,10 @@ async function openAccountDialog(container: ParentNode, id: string, entry: strin
  * `AccountDetailsDialog`, from the actions menu of an account's row and returns the modal it opens. */
 export const openDetailsOf = (container: ParentNode, id: string, entry = "Details") => openAccountDialog(container, id, entry);
 
+/** Chooses the Connectors and MCP entry, which opens the account's `AccountMcpDialog`, from the actions menu of an
+ * account's row and returns the modal it opens. */
+export const openMcpOf = (container: ParentNode, id: string, entry = "Connectors and MCP") => openAccountDialog(container, id, entry);
+
 /** Chooses the Settings entry (`entry` is its word in another language), which opens the account's
  * `AccountSettingsDialog`, from the actions menu of an account's row and returns the modal it opens. */
 export const openSettingsOf = (container: ParentNode, id: string, entry = "Settings") => openAccountDialog(container, id, entry);

@@ -44,9 +44,23 @@ The injection is described in `docs/product/per-agent-launch-specifics.md`'s "Ho
 section; measured message-delivery constraints are in `docs/agent-cli-reference.md`'s "Writing into a running session"
 section.
 
+## A reading of an account is done only once it has run against a real account
+
+Applies to any daemon reading that runs an agent's CLI or app server against an account (a quota, an MCP inventory).
+Tests against a fake CLI prove only the replies you wrote for it, and the real ones can differ in what no fake shows:
+how much is printed and how long it takes. A Codex inventory reading passed every fake-CLI test and failed on a real
+account, because a fresh app server sends several megabytes of unrequested notifications and one listing request
+answers only after tens of seconds — past the output cap, which counts the whole stream rather than each message.
+Before calling such a reading done, run it once against a real account, read-only and with the user's agreement, and
+compare the output size and the elapsed time with the cap and timeout the reading runs under.
+
 ## `--help` is not the authority on what a CLI supports
 
-Whole feature surfaces are missing from it. Claude Code's hook-event list does not appear in `--help` at all and has
+It is still the first place to look: list the CLI's subcommands (`<cli> --help`, then `<cli> <subcommand> --help`)
+before concluding it lacks a capability. Grok Build was once declared to have no MCP support without that look, when
+`grok mcp` was right there.
+
+Beyond that, whole feature surfaces are missing from it. Claude Code's hook-event list does not appear in `--help` at all and has
 to be pulled out of the shipped executable with `strings`; Grok Build ships its authoritative user guide on disk under
 `~/.grok/docs/user-guide/`, where `10-hooks.md` is the hooks specification and `26-config-reference.md` the config key
 table, each tens of kilobytes that `--help` gives no hint of. Read those before concluding a capability is absent —

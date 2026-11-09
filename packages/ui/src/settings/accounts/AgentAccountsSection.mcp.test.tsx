@@ -12,7 +12,7 @@ import { ActionableError } from "../../errors/actionableError";
 import { CodedError } from "../../errors/codedError";
 import { isolate } from "../../i18n/isolate";
 import { readMcpInventory, request } from "./agentAccountsSectionTestState";
-import { buttonNamed, mount, openDetailsOf } from "./agentAccountsSectionTestSupport";
+import { buttonNamed, mount, openMcpOf } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -62,37 +62,41 @@ function nextAuth() {
   };
 }
 
-/** A Codex account's details with `servers` read, ready for a sign-in or sign-out. */
+/** A Codex account's Connectors and MCP dialog with `servers` read, ready for a sign-in or sign-out. */
 async function openWithServers(servers: LocalMcpServer[]) {
   const reading = nextReading();
   const { container } = mount("Codex");
-  const dialog = await openDetailsOf(container, "codex-work");
+  const dialog = await openMcpOf(container, "codex-work");
   await reading.answer(inventoryOf({ agent: "codex", account: "codex-work", servers }));
   return dialog;
 }
 
-/** The dialog's part named by its "Connectors and MCP" heading. */
-const section = (dialog: HTMLElement) => [...dialog.querySelectorAll<HTMLElement>("section[aria-labelledby]")]
-  .find((part) => document.getElementById(part.getAttribute("aria-labelledby")!)?.textContent === "Connectors and MCP");
-
 const CONNECTION_CLOSED = () => new CodedError("The daemon control connection closed.", "connection_closed", {});
 
-it("reads the inventory when a Claude Code account's details open, showing that it reads until the answer", async () => {
+it("reads the inventory when a Claude Code account's Connectors and MCP dialog opens, showing that it reads until the answer", async () => {
   const reading = nextReading();
   const { container } = mount();
-  const dialog = await openDetailsOf(container, "claude-work");
+  const dialog = await openMcpOf(container, "claude-work");
   expect(readMcpInventory.mock.calls).toEqual([[{ type: "read_account_mcp_inventory", agent: "claude", account: "claude-work", refresh: false }]]);
-  expect(section(dialog)!.textContent).toContain("Reading connectors and MCP servers…");
+  expect(dialog.textContent).toContain("Reading connectors and MCP servers…");
   await reading.answer(inventoryOf());
-  expect(section(dialog)!.textContent).toContain("No platform connectors");
-  expect(section(dialog)!.textContent).toContain("No local MCP servers");
-  expect(section(dialog)!.textContent).toContain("Updated just now");
+  expect(dialog.textContent).toContain("No platform connectors");
+  expect(dialog.textContent).toContain("No local MCP servers");
+  expect(dialog.textContent).toContain("Updated just now");
+});
+
+it("names the account in a dialog titled Connectors and MCP, and reads once as it opens", async () => {
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  expect(dialog.querySelector("h2")?.textContent).toBe("Connectors and MCP");
+  expect(dialog.textContent).toContain("claude-work");
+  expect(readMcpInventory).toHaveBeenCalledTimes(1);
 });
 
 it("shows each connector and server with its state, and leads to the platform's connector settings", async () => {
   const reading = nextReading();
   const { container } = mount();
-  const dialog = await openDetailsOf(container, "claude-work");
+  const dialog = await openMcpOf(container, "claude-work");
   await reading.answer(inventoryOf({
     connectors: [
       { id: "claude.ai Gmail", name: "Gmail", state: "connected", plugins: [] },
@@ -104,7 +108,7 @@ it("shows each connector and server with its state, and leads to the platform's 
       { name: "notes", origin: null, plugin: null, sign_in: "not_needed", runtime: "running", runtime_message: null, tool_count: 3, oauth_sign_in: false },
     ],
   }));
-  const text = section(dialog)!.textContent!;
+  const text = dialog.textContent!;
   expect(text).toMatch(/Gmail.*Connected.*Slack.*Not connected/);
   expect(text).toMatch(/linear.*Needs sign-in.*https:\/\/mcp\.linear\.app\/mcp/);
   expect(text).toContain("To sign in, run /mcp in a session of this account.");
@@ -122,7 +126,7 @@ it("shows each connector and server with its state, and leads to the platform's 
 it("leads a Codex account to ChatGPT and gives no session command for a server that needs sign-in", async () => {
   const reading = nextReading();
   const { container } = mount("Codex");
-  const dialog = await openDetailsOf(container, "codex-work");
+  const dialog = await openMcpOf(container, "codex-work");
   await reading.answer(inventoryOf({
     agent: "codex",
     account: "codex-work",
@@ -130,14 +134,36 @@ it("leads a Codex account to ChatGPT and gives no session command for a server t
     servers: [{ name: "jira", origin: "https://jira.example.com/mcp", plugin: null, sign_in: "needs_sign_in", runtime: "unknown", runtime_message: null, tool_count: null, oauth_sign_in: false }],
   }));
   expect(dialog.querySelector("a[data-external-link]")!.getAttribute("href")).toBe("https://chatgpt.com/plugins");
-  expect(section(dialog)!.textContent).toContain("From plugins github and devtools");
-  expect(section(dialog)!.textContent).not.toContain("To sign in");
+  expect(dialog.textContent).toContain("From plugins github and devtools");
+  expect(dialog.textContent).not.toContain("To sign in");
+});
+
+it("shows a Grok Build account's servers with no connector group, connector link or sign-in action", async () => {
+  const reading = nextReading();
+  const { container } = mount("Grok Build");
+  const dialog = await openMcpOf(container, "grok-work");
+  await reading.answer(inventoryOf({
+    agent: "grok",
+    account: "grok-work",
+    servers: [
+      serverOf({ name: "notes", origin: null, sign_in: "not_needed", runtime: "running", tool_count: 2, oauth_sign_in: false }),
+      serverOf({ name: "linear", origin: "https://mcp.linear.app/mcp", sign_in: "needs_sign_in", oauth_sign_in: false }),
+    ],
+  }));
+  const text = dialog.textContent!;
+  expect(text).toMatch(/notes.*Running.*2 tools/);
+  expect(text).toMatch(/linear.*Needs sign-in.*https:\/\/mcp\.linear\.app\/mcp/);
+  expect(text).not.toContain("Platform connectors");
+  expect(text).not.toContain("No platform connectors");
+  expect(dialog.querySelector("a[data-external-link]")).toBeNull();
+  expect(buttonNamed(dialog, "Sign in")).toBeUndefined();
+  expect(buttonNamed(dialog, "Sign out")).toBeUndefined();
 });
 
 it("rereads with the refresh flag, keeping the last reading while it runs and ignoring presses until it answers", async () => {
   const first = nextReading();
   const { container } = mount();
-  const dialog = await openDetailsOf(container, "claude-work");
+  const dialog = await openMcpOf(container, "claude-work");
   await first.answer(inventoryOf({ connectors: [{ id: "a", name: "Gmail", state: "connected", plugins: [] }] }));
   const second = nextReading();
   const refresh = buttonNamed(dialog, "Refresh connectors and MCP servers")!;
@@ -145,10 +171,10 @@ it("rereads with the refresh flag, keeping the last reading while it runs and ig
   press(refresh);
   expect(readMcpInventory.mock.calls.slice(1)).toEqual([[{ type: "read_account_mcp_inventory", agent: "claude", account: "claude-work", refresh: true }]]);
   expect(refresh.getAttribute("aria-busy")).toBe("true");
-  expect(section(dialog)!.textContent).toContain("Gmail");
+  expect(dialog.textContent).toContain("Gmail");
   await second.answer(inventoryOf({ connectors: [{ id: "b", name: "Drive", state: "connected", plugins: [] }] }));
-  expect(section(dialog)!.textContent).toContain("Drive");
-  expect(section(dialog)!.textContent).not.toContain("Gmail");
+  expect(dialog.textContent).toContain("Drive");
+  expect(dialog.textContent).not.toContain("Gmail");
   expect(refresh.getAttribute("aria-busy")).toBeNull();
 });
 
@@ -161,17 +187,17 @@ it.each<[AccountMcpInventory["unavailable"] & object, string, string, boolean]>(
 ])("words a reading that failed as %j, offering Try again where it can change the answer", async (unavailable, title, line, retries) => {
   const reading = nextReading();
   const { container } = mount();
-  const dialog = await openDetailsOf(container, "claude-work");
+  const dialog = await openMcpOf(container, "claude-work");
   await reading.answer(inventoryOf({ unavailable }));
-  const text = section(dialog)!.textContent!;
+  const text = dialog.textContent!;
   expect(text).toContain(title);
   expect(text).toContain(line);
   expect(text).not.toContain("Updated");
-  expect(!!buttonNamed(section(dialog)!, "Try again")).toBe(retries);
-  expect(!!buttonNamed(section(dialog)!, "Details")).toBe(unavailable.detail !== null);
+  expect(!!buttonNamed(dialog, "Try again")).toBe(retries);
+  expect(!!buttonNamed(dialog, "Details")).toBe(unavailable.detail !== null);
   if (retries) {
     nextReading();
-    press(buttonNamed(section(dialog)!, "Try again")!);
+    press(buttonNamed(dialog, "Try again")!);
     expect(readMcpInventory.mock.calls.at(-1)![0].refresh).toBe(true);
   }
 });
@@ -179,10 +205,10 @@ it.each<[AccountMcpInventory["unavailable"] & object, string, string, boolean]>(
 it("hands focus to Refresh when Try again brings the inventory in place of the failure", async () => {
   const reading = nextReading();
   const { container } = mount();
-  const dialog = await openDetailsOf(container, "claude-work");
+  const dialog = await openMcpOf(container, "claude-work");
   await reading.answer(inventoryOf({ unavailable: { reason: "timed_out", detail: null } }));
   const retry = nextReading();
-  const tryAgain = buttonNamed(section(dialog)!, "Try again")!;
+  const tryAgain = buttonNamed(dialog, "Try again")!;
   act(() => tryAgain.focus());
   press(tryAgain);
   await retry.answer(inventoryOf());
@@ -192,17 +218,10 @@ it("hands focus to Refresh when Try again brings the inventory in place of the f
 it("shows a refused reading as a failure with Try again", async () => {
   const reading = nextReading();
   const { container } = mount();
-  const dialog = await openDetailsOf(container, "claude-work");
+  const dialog = await openMcpOf(container, "claude-work");
   await reading.fail(CONNECTION_CLOSED());
-  expect(section(dialog)!.textContent).toContain("Could not read connectors and MCP servers");
-  expect(buttonNamed(section(dialog)!, "Try again")).toBeDefined();
-});
-
-it("has no such section, and reads nothing, for a provider that cannot list them", async () => {
-  const { container } = mount("Grok Build");
-  const dialog = await openDetailsOf(container, "grok-work");
-  expect(section(dialog)).toBeUndefined();
-  expect(readMcpInventory).not.toHaveBeenCalled();
+  expect(dialog.textContent).toContain("Could not read connectors and MCP servers");
+  expect(buttonNamed(dialog, "Try again")).toBeDefined();
 });
 
 it("offers Sign in or Sign out only for a server the agent signs in to with OAuth", async () => {
@@ -212,7 +231,7 @@ it("offers Sign in or Sign out only for a server the agent signs in to with OAut
     serverOf({ name: "bearer", sign_in: "needs_sign_in", oauth_sign_in: false }),
     serverOf({ name: "notes", sign_in: "not_needed", oauth_sign_in: false }),
   ]);
-  const names = [...section(dialog)!.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"));
+  const names = [...dialog.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"));
   expect(names).toContain(`Sign in to ${isolate("jira")}`);
   expect(names).toContain(`Sign out of ${isolate("wiki")}`);
   expect(names.filter((name) => /^Sign (in|out)/.test(name ?? ""))).toHaveLength(2);
@@ -221,13 +240,13 @@ it("offers Sign in or Sign out only for a server the agent signs in to with OAut
 it("offers no sign-in on a platform connector or on a Claude Code server", async () => {
   const reading = nextReading();
   const { container } = mount();
-  const dialog = await openDetailsOf(container, "claude-work");
+  const dialog = await openMcpOf(container, "claude-work");
   await reading.answer(inventoryOf({
     connectors: [{ id: "a", name: "Gmail", state: "not_connected", plugins: [] }],
     servers: [serverOf({ oauth_sign_in: false })],
   }));
-  expect(buttonNamed(section(dialog)!, `Sign in to ${isolate("jira")}`)).toBeUndefined();
-  expect([...section(dialog)!.querySelectorAll("button")].map((button) => button.textContent)).not.toContain("Sign in");
+  expect(buttonNamed(dialog, `Sign in to ${isolate("jira")}`)).toBeUndefined();
+  expect([...dialog.querySelectorAll("button")].map((button) => button.textContent)).not.toContain("Sign in");
 });
 
 it("signs in, showing the wait for the browser with Cancel until it ends, then reads the inventory again", async () => {
@@ -235,7 +254,7 @@ it("signs in, showing the wait for the browser with Cancel until it ends, then r
   const auth = nextAuth();
   press(buttonNamed(dialog, `Sign in to ${isolate("jira")}`)!);
   expect(request.mock.calls.at(-1)![0]).toEqual({ type: "sign_in_account_mcp_server", agent: "codex", account: "codex-work", server: "jira" });
-  const text = () => section(dialog)!.textContent!;
+  const text = () => dialog.textContent!;
   expect(text()).toContain("Waiting for the sign-in in your browser…");
   expect(buttonNamed(dialog, `Sign in to ${isolate("jira")}`)!.getAttribute("aria-busy")).toBe("true");
   expect(buttonNamed(dialog, `Cancel signing in to ${isolate("jira")}`)).toBeDefined();
@@ -281,7 +300,7 @@ it("sends the cancel of a sign-in and shows nothing once it answers as cancelled
   expect(request.mock.calls.at(-1)![0]).toEqual({ type: "cancel_account_mcp_sign_in", agent: "codex", account: "codex-work", server: "jira" });
   const rereads = readMcpInventory.mock.calls.length;
   await auth.end({ status: "cancelled", detail: null });
-  expect(section(dialog)!.textContent).not.toContain("Waiting for the sign-in");
+  expect(dialog.textContent).not.toContain("Waiting for the sign-in");
   expect(buttonNamed(dialog, `Sign in to ${isolate("jira")}`)!.getAttribute("aria-busy")).toBeNull();
   expect(readMcpInventory.mock.calls.length).toBe(rereads);
   expect(errorAlerts.getSnapshot()).toEqual([]);
@@ -328,7 +347,7 @@ it("signs out with the control pending until the answer, then reads again", asyn
   press(buttonNamed(dialog, `Sign out of ${isolate("jira")}`)!);
   expect(request.mock.calls.at(-1)![0]).toEqual({ type: "sign_out_account_mcp_server", agent: "codex", account: "codex-work", server: "jira" });
   expect(buttonNamed(dialog, `Sign out of ${isolate("jira")}`)!.getAttribute("aria-busy")).toBe("true");
-  expect(section(dialog)!.textContent).not.toContain("Waiting for the sign-in");
+  expect(dialog.textContent).not.toContain("Waiting for the sign-in");
   expect(buttonNamed(dialog, `Cancel signing in to ${isolate("jira")}`)).toBeUndefined();
   const reread = nextReading();
   await auth.end({ status: "succeeded", detail: null });
@@ -422,9 +441,9 @@ it("announces a sign-in that succeeded, a focus move's delay after it", async ()
   fakeTimers();
   await auth.end({ status: "succeeded", detail: null });
   await act(async () => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
-  expect(section(dialog)!.textContent).not.toContain("Signed in to");
+  expect(dialog.textContent).not.toContain("Signed in to");
   await act(async () => vi.advanceTimersByTime(1));
-  expect(section(dialog)!.textContent).toContain(`Signed in to ${isolate("jira")}.`);
+  expect(dialog.textContent).toContain(`Signed in to ${isolate("jira")}.`);
 });
 
 /** Fakes the clock for the rest of the test. */
@@ -436,20 +455,20 @@ function fakeTimers() {
   });
 }
 
-const alertRole = (dialog: HTMLElement) => section(dialog)!.querySelector("[role=alert]");
+const alertRole = (dialog: HTMLElement) => dialog.querySelector("[role=alert]");
 
 it("announces a first failure that answers right after the dialog opened a focus move's delay later, and a later one at once", async () => {
   const reading = nextReading();
   const { container } = mount();
-  const dialog = await openDetailsOf(container, "claude-work");
+  const dialog = await openMcpOf(container, "claude-work");
   fakeTimers();
   await reading.fail(CONNECTION_CLOSED());
-  expect(section(dialog)!.textContent).toContain("Could not read connectors and MCP servers");
+  expect(dialog.textContent).toContain("Could not read connectors and MCP servers");
   expect(alertRole(dialog)).toBeNull();
   await act(async () => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(alertRole(dialog)).not.toBeNull();
   const retry = nextReading();
-  press(buttonNamed(section(dialog)!, "Try again")!);
+  press(buttonNamed(dialog, "Try again")!);
   await retry.answer(inventoryOf({ unavailable: { reason: "timed_out", detail: null } }));
   expect(alertRole(dialog)).not.toBeNull();
 });
@@ -457,24 +476,24 @@ it("announces a first failure that answers right after the dialog opened a focus
 it("hands focus to the new Alert's Try again when one failure's Alert replaces another's", async () => {
   const reading = nextReading();
   const { container } = mount();
-  const dialog = await openDetailsOf(container, "claude-work");
+  const dialog = await openMcpOf(container, "claude-work");
   await reading.fail(CONNECTION_CLOSED());
   const retry = nextReading();
-  const tryAgain = buttonNamed(section(dialog)!, "Try again")!;
+  const tryAgain = buttonNamed(dialog, "Try again")!;
   act(() => tryAgain.focus());
   press(tryAgain);
   await retry.answer(inventoryOf({ unavailable: { reason: "timed_out", detail: null } }));
-  expect(section(dialog)!.textContent).toContain("Reading timed out");
-  expect(document.activeElement).toBe(buttonNamed(section(dialog)!, "Try again"));
+  expect(dialog.textContent).toContain("Reading timed out");
+  expect(document.activeElement).toBe(buttonNamed(dialog, "Try again"));
 });
 
 it("hands focus to Refresh when an Alert with no Try again replaces the one that held it", async () => {
   const reading = nextReading();
   const { container } = mount();
-  const dialog = await openDetailsOf(container, "claude-work");
+  const dialog = await openMcpOf(container, "claude-work");
   await reading.fail(CONNECTION_CLOSED());
   const retry = nextReading();
-  const tryAgain = buttonNamed(section(dialog)!, "Try again")!;
+  const tryAgain = buttonNamed(dialog, "Try again")!;
   act(() => tryAgain.focus());
   press(tryAgain);
   await retry.answer(inventoryOf({ unavailable: { reason: "unsupported_agent", detail: null } }));
@@ -490,14 +509,14 @@ it("hands focus on a server's button to the Alert's Try again when the rereading
   const reread = nextReading();
   await auth.end({ status: "succeeded", detail: null });
   await reread.fail(CONNECTION_CLOSED());
-  expect(document.activeElement).toBe(buttonNamed(section(dialog)!, "Try again"));
+  expect(document.activeElement).toBe(buttonNamed(dialog, "Try again"));
 });
 
 it("leaves focus on the page alone when a reading answers with nothing removed from under it", async () => {
   const first = nextReading();
   const { container } = mount();
   const mountRefocusSettled = trackMountRefocus();
-  const dialog = await openDetailsOf(container, "claude-work");
+  const dialog = await openMcpOf(container, "claude-work");
   await first.answer(inventoryOf());
   await mountRefocusSettled();
   const second = nextReading();
@@ -506,5 +525,5 @@ it("leaves focus on the page alone when a reading answers with nothing removed f
   const before = document.activeElement;
   await second.fail(CONNECTION_CLOSED());
   expect(document.activeElement).toBe(before);
-  expect(document.activeElement).not.toBe(buttonNamed(section(dialog)!, "Try again"));
+  expect(document.activeElement).not.toBe(buttonNamed(dialog, "Try again"));
 });

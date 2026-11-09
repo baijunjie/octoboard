@@ -86,7 +86,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         reset_credits: false,
         per_session_trust: true,
         config_sharing: true,
-        mcp_inventory: false,
+        mcp_inventory: true,
         delivery: DeliveryQuirks {
             confirms_by_reported_prompt: false,
             holds_report_for_completion_notice: false,

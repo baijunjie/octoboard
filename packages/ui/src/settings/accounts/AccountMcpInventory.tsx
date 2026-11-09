@@ -25,8 +25,8 @@ import type { Agent, ConnectorState, LocalMcpServer, McpInventoryUnavailable, Pl
 import { providerConnectorPlatform, providerMcpSessionSignIn } from "../../providers/registry";
 import type { McpInventoryState } from "./useAccountMcpInventory";
 
-/** The section's heading aside: when the inventory shown was read (not while the last answer is a failure), then the
- * Refresh button, pending while a reading runs. */
+/** The aside at the end of the account's name line: when the inventory shown was read (not while the last answer is a
+ * failure), then the Refresh button, pending while a reading runs. */
 export function McpInventoryAside({ state, refreshButton }: { state: McpInventoryState; refreshButton: React.Ref<HTMLButtonElement> }): React.ReactElement {
   const t = useT();
   const inventory = state.answer && "inventory" in state.answer ? state.answer.inventory : undefined;
@@ -46,10 +46,11 @@ export function McpInventoryAside({ state, refreshButton }: { state: McpInventor
  * The account's platform connectors and local MCP servers, as the agent reports them: a reading line until the first
  * answer, the failure in an Alert when the inventory could not be read, otherwise the two groups. Each entry shows its
  * name and state; a failed server's mark holds what the agent said. The platform group leads to the platform's own
- * connector settings, since a connector belongs to the platform account the account is signed in with.
+ * connector settings, since a connector belongs to the platform account the account is signed in with; an agent with no
+ * connector platform and no connector to show (Grok Build) has no such group.
  *
  * When a failure goes (Try again answered with the inventory), focus that fell to the page with it, or was already
- * there, goes to the section's Refresh button (`refreshButton`, the aside's). When an answer replaces what held focus
+ * there, goes to the Refresh button (`refreshButton`, the aside's). When an answer replaces what held focus
  * by something else — one failure's Alert by another's, the lists by a failure's Alert after a sign-in's rereading —
  * focus goes to the new Alert's Try again, else to Refresh. A sign-in or sign-out that succeeds is announced.
  */
@@ -100,7 +101,7 @@ function McpInventoryBody({ agent, state }: { agent: Agent; state: McpInventoryS
   if (inventory.unavailable) return <UnavailableAlert agent={agent} unavailable={inventory.unavailable} state={state} />;
   return (
     <div className="flex flex-col gap-3">
-      <ConnectorGroup agent={agent} connectors={inventory.connectors} />
+      {(providerConnectorPlatform(agent) || inventory.connectors.length > 0) && <ConnectorGroup agent={agent} connectors={inventory.connectors} />}
       <ServerGroup agent={agent} servers={inventory.servers} state={state} />
     </div>
   );
@@ -132,9 +133,9 @@ function UnavailableAlert({ agent, unavailable, state }: { agent: Agent; unavail
   );
 }
 
-/** A group's heading, standing under the section's own. */
+/** A group's heading, standing under the dialog's title. */
 function GroupHeading({ id, children }: { id: string; children: React.ReactNode }): React.ReactElement {
-  return <h4 id={id} className="text-xs font-medium text-app-muted">{children}</h4>;
+  return <h3 id={id} className="text-xs font-medium text-app-muted">{children}</h3>;
 }
 
 const CONNECTOR_STATE: Record<ConnectorState, { key: "settings.accounts.mcp.connector.connected" | "settings.accounts.mcp.connector.notConnected" | "settings.accounts.mcp.state.unknown"; color: "success" | "default" }> = {

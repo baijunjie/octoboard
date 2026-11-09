@@ -15,7 +15,9 @@ use tokio::sync::OnceCell;
 
 use super::choice::agent_is_available;
 use super::quotas::ShellSource;
+use crate::adapter::account_cli::{NotRun, QueryFailure};
 use crate::adapter::provider;
+use crate::processes::subprocess::BoundedFailure;
 use crate::protocol::{
     AccountMcpInventory, AgentId, LocalMcpServer, McpInventoryFailure, McpInventoryUnavailable,
     PlatformConnector,
@@ -44,6 +46,45 @@ pub(crate) trait McpInventoryReader: Send + Sync {
         timeout: Duration,
         cancel: &AtomicBool,
     ) -> Result<Listing, McpInventoryUnavailable>;
+}
+
+/// The unavailability for a query that was not started: a missing or refused binary is
+/// `cli_missing`, anything else `failed`.
+pub(crate) fn not_run_unavailable(refused: &NotRun) -> McpInventoryUnavailable {
+    let reason = match refused {
+        NotRun::BinaryNotFound(_) | NotRun::BinaryRefused(_) => McpInventoryFailure::CliMissing,
+        NotRun::DirMissing(_) => McpInventoryFailure::Failed,
+    };
+    McpInventoryUnavailable::new(reason, Some(refused.detail()))
+}
+
+/// The unavailability for a query of an agent CLI that produced no output: a timeout is
+/// `timed_out`, any other stop `failed` with its words.
+pub(crate) fn query_unavailable(failure: QueryFailure) -> McpInventoryUnavailable {
+    match failure {
+        QueryFailure::NotRun(refused) => not_run_unavailable(&refused),
+        QueryFailure::Bounded(BoundedFailure::TimedOut(_)) => {
+            McpInventoryUnavailable::new(McpInventoryFailure::TimedOut, None)
+        }
+        QueryFailure::Bounded(other) => {
+            McpInventoryUnavailable::new(McpInventoryFailure::Failed, Some(other.to_string()))
+        }
+    }
+}
+
+/// The last line of a query's stderr, else `fallback`.
+pub(crate) fn stderr_detail(output: &std::process::Output, fallback: &str) -> String {
+    let last = crate::adapter::account_cli::last_stderr_line(output);
+    if last.is_empty() {
+        fallback.to_string()
+    } else {
+        last
+    }
+}
+
+/// The serde default of an `enabled` flag a CLI's listing may leave out: on.
+pub(crate) fn enabled_by_default() -> bool {
+    true
 }
 
 /// Which reading: the agent, the account's id (`None` for the default account) and the account's

@@ -1626,7 +1626,10 @@ to the row (or focus mode's header). No sentence of error text is written into t
 
 A mark placed after a line of text is centred on that line by construction: the box holding it is one line of that
 text's own size and line height (`MarkLineBox`, `h-[1lh]` under the text's size class), the mark centred in it, so it
-follows the text's first line when the text wraps or changes size. Never align it by a fixed pixel height, a `min-h`, or
+follows the text's first line when the text wraps or changes size. The same holds for a control or an aside at the end
+of a line that heads more lines below it (a dialog's account name with its email under it, and Refresh at the name
+line's end): it sits in a `MarkLineBox` of the first line's size, so it stays on that line, centred, however many lines
+follow; a control taller than the line overflows the box evenly and stays centred on it. Never align it by a fixed pixel height, a `min-h`, or
 the height of the box around the text, which need not be the height of its line (a checkbox's content box is taller than
 its label's line, its text at the top).
 

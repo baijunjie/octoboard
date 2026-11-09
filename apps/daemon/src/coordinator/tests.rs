@@ -305,7 +305,7 @@ async fn reading_an_mcp_inventory_refuses_only_an_unknown_account_and_carries_ev
 
     // An agent with no way of listing answers as unsupported.
     let Some(Event::AccountMcpInventoryRead { inventory, .. }) =
-        handle(&state, None, read(AgentId::GROK, None))
+        handle(&state, None, read(AgentId::TEST, None))
             .await
             .unwrap()
     else {

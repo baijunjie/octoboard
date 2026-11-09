@@ -1,0 +1,171 @@
+{
+  "sources": [
+    {
+      "path": "~/.grok/config.toml",
+      "status": {
+        "status": "found",
+        "server_count": 7
+      }
+    },
+    {
+      "path": "~/.claude.json",
+      "status": {
+        "status": "not_found"
+      }
+    },
+    {
+      "path": ".mcp.json",
+      "status": {
+        "status": "not_found"
+      }
+    }
+  ],
+  "servers": [
+    {
+      "name": "stdio-missing",
+      "transport": "stdio",
+      "target": "/nonexistent/mcp-server --x",
+      "source": "config",
+      "checks": [
+        {
+          "label": "command not found",
+          "passed": false,
+          "detail": "/nonexistent/mcp-server",
+          "hint": "verify the binary exists and is in PATH"
+        }
+      ],
+      "healthy": false
+    },
+    {
+      "name": "stdio-env",
+      "transport": "stdio",
+      "target": "/nonexistent/env",
+      "source": "config",
+      "checks": [
+        {
+          "label": "command not found",
+          "passed": false,
+          "detail": "/nonexistent/env",
+          "hint": "verify the binary exists and is in PATH"
+        }
+      ],
+      "healthy": false
+    },
+    {
+      "name": "remote-hdr",
+      "transport": "http",
+      "target": "http://127.0.0.1:9/mcp2",
+      "source": "config",
+      "checks": [
+        {
+          "label": "server started",
+          "passed": true,
+          "detail": "0.0s"
+        },
+        {
+          "label": "handshake failed",
+          "passed": false,
+          "detail": "Send message error Transport [rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<xai_grok_mcp::mcp_http_client::McpHttpClient<reqwest::async_impl::client::Client>>>] error: Client error: error sending request for url (http://127.0.0.1:9/mcp2), when send discover request",
+          "hint": "check server logs"
+        }
+      ],
+      "healthy": false
+    },
+    {
+      "name": "remote-local",
+      "transport": "http",
+      "target": "http://127.0.0.1:9/mcp",
+      "source": "config",
+      "checks": [
+        {
+          "label": "server started",
+          "passed": true,
+          "detail": "0.0s"
+        },
+        {
+          "label": "handshake failed",
+          "passed": false,
+          "detail": "Send message error Transport [rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<xai_grok_mcp::mcp_http_client::McpHttpClient<reqwest::async_impl::client::Client>>>] error: Client error: error sending request for url (http://127.0.0.1:9/mcp), when send discover request",
+          "hint": "check server logs"
+        }
+      ],
+      "healthy": false
+    },
+    {
+      "name": "false-cmd",
+      "transport": "stdio",
+      "target": "/usr/bin/false",
+      "source": "config",
+      "checks": [
+        {
+          "label": "command found",
+          "passed": true,
+          "detail": "/usr/bin/false"
+        },
+        {
+          "label": "server started",
+          "passed": true,
+          "detail": "0.0s"
+        },
+        {
+          "label": "handshake failed",
+          "passed": false,
+          "detail": "connection closed: initialize response",
+          "hint": "check server logs"
+        }
+      ],
+      "healthy": false
+    },
+    {
+      "name": "oauthish",
+      "transport": "http",
+      "target": "http://127.0.0.1:18765/mcp",
+      "source": "config",
+      "checks": [
+        {
+          "label": "server started",
+          "passed": true,
+          "detail": "0.0s"
+        },
+        {
+          "label": "handshake failed",
+          "passed": false,
+          "detail": "Send message error Transport [rmcp::transport::worker::WorkerTransport<rmcp::transport::streamable_http_client::StreamableHttpClientWorker<xai_grok_mcp::mcp_http_client::McpHttpClient<reqwest::async_impl::client::Client>>>] error: Auth required, when send initialize request",
+          "hint": "check server logs"
+        }
+      ],
+      "healthy": false
+    },
+    {
+      "name": "okstdio",
+      "transport": "stdio",
+      "target": "/usr/bin/python3 /x/mcp_ok.py",
+      "source": "config",
+      "checks": [
+        {
+          "label": "command found",
+          "passed": true,
+          "detail": "/usr/bin/python3"
+        },
+        {
+          "label": "server started",
+          "passed": true,
+          "detail": "0.0s"
+        },
+        {
+          "label": "handshake OK",
+          "passed": true,
+          "detail": "protocol 2025-03-26"
+        },
+        {
+          "label": "2 tools discovered",
+          "passed": true,
+          "detail": ""
+        }
+      ],
+      "healthy": true
+    }
+  ],
+  "healthy_count": 1,
+  "failing_count": 6
+}

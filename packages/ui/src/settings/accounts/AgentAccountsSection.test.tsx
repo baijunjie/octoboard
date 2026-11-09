@@ -16,7 +16,7 @@ import { TestHost } from "../../test/TestHost";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
 import { account, availability, consoles, projects, request, sectionEntry, sessions, settings, startDaemon } from "./agentAccountsSectionTestState";
-import { animate, buttonNamed, chooseItem, menuItem, mount, mountAgentSettings, openDetailsOf, openSettingsOf, openTabMenu, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
+import { animate, buttonNamed, chooseItem, menuItem, mount, mountAgentSettings, openDetailsOf, openMcpOf, openSettingsOf, openTabMenu, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -561,14 +561,14 @@ it("opens no settings for an account whose agent is not in the list, focusing th
   expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
-it("gives focus back to the row's actions button after its details or settings close, in a language whose button name is not English", async () => {
+it("gives focus back to the row's actions button after its details, settings or connectors and MCP close, in a language whose button name is not English", async () => {
   const before = currentLanguage();
   setLanguage("zh-Hans");
   onTestFinished(() => { act(() => setLanguage(before)); });
   const { container } = mount("Codex");
   const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>("[data-row-actions] button")!;
   expect(trigger.getAttribute("aria-label")).not.toContain("Actions for");
-  for (const open of [() => openSettingsOf(container, "codex-work", t("settings.accounts.settingsItem")), () => openDetailsOf(container, "codex-work", t("settings.accounts.detailsItem"))]) {
+  for (const open of [() => openSettingsOf(container, "codex-work", t("settings.accounts.settingsItem")), () => openDetailsOf(container, "codex-work", t("settings.accounts.detailsItem")), () => openMcpOf(container, "codex-work", t("settings.accounts.mcp.title"))]) {
     const dialog = await open();
     await act(async () => buttonNamed(dialog, t("common.close"))!.click());
     await frames();
@@ -619,6 +619,22 @@ it("opens the settings of an account from the second entry of its actions menu, 
   await frames();
   expect(document.activeElement).toBe(trigger);
   await openSettingsOf(container, "codex-work");
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  setSettings({ accounts: store.getState().settings.accounts.filter((held) => held.id !== "codex-work") });
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+});
+
+it("opens an account's connectors and MCP from its actions menu, gives focus back to the menu's button on closing, and closes with the account", async () => {
+  const { container, setSettings, store } = mount("Codex");
+  const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>('button[aria-label^="Actions for"]')!;
+  const dialog = await openMcpOf(container, "codex-work");
+  expect(dialog.querySelector("h2")?.textContent).toBe("Connectors and MCP");
+  expect(dialog.querySelector("[data-slot=modal-body]")?.textContent).toMatch(/^codex-work/);
+  await act(async () => buttonNamed(dialog, "Close")!.click());
+  await frames();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+  await openMcpOf(container, "codex-work");
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   setSettings({ accounts: store.getState().settings.accounts.filter((held) => held.id !== "codex-work") });
   expect(document.querySelector('[role="dialog"]')).toBeNull();

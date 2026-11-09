@@ -11,7 +11,7 @@ import type { Account, AccountLogin, AccountQuota, AccountSharing, Agent, AgentA
 
 export const request = vi.fn((_body: ClientRequestBody): Promise<object> => Promise.resolve({}));
 /** The answer to an account's MCP inventory reading, kept apart from `request` so that the tests stubbing every other
- * request need not answer it: by default a reading that never answers, which leaves the details dialog reading. */
+ * request need not answer it: by default a reading that never answers, which leaves the Connectors and MCP dialog reading. */
 export const readMcpInventory = vi.fn((_body: Extract<ClientRequestBody, { type: "read_account_mcp_inventory" }>): Promise<object> => new Promise(() => {}));
 export const showNotice = vi.fn();
 export const settings: Settings = { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex", "grok"], default_clone_dir: "/home/dev/Projects" };

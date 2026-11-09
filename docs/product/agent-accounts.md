@@ -190,8 +190,10 @@ says in its popover (see "The help tip" in `docs/product/labels-and-tooltips.md`
 configuration directory, which new sessions use when no account is chosen and whose configuration other accounts can
 share. Its directory cannot be edited, and the default account cannot be removed, but it can be turned off like any
 other account (see "Turning an account off" below). It has no sharing switch: its directory is the one other accounts
-share. Its actions menu holds **Details**, **Settings**, **Rename**, **Log in**, **Move earlier** and **Move later**
-(see "The account details dialog" and "The account settings dialog" below); where else **Log in** appears is in
+share. Its actions menu holds **Details**, **Settings**, **Connectors and MCP** (for an agent whose accounts' MCP
+servers can be read), **Rename**, **Log in**, **Move earlier** and **Move later** (see "The account details dialog" and
+"The account settings dialog" below, and "The Connectors and MCP dialog" in
+`docs/product/account-mcp-servers-and-connectors.md`); where else **Log in** appears is in
 "Where Log in appears" in `docs/product/logging-accounts-in.md`.
 
 **Rename** opens a dialog, titled for the default account of that agent, with a single name field holding the name the
@@ -216,8 +218,9 @@ settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-
 ## The accounts the user owns
 
 The accounts the user owns each have their name, directory and an actions menu holding **Details**, **Settings**,
-**Edit**, **Log in**, **Move earlier** and **Move later** and, set apart, **Remove** (see
-`docs/product/removing-accounts.md`); where else **Log in** appears is
+**Connectors and MCP** (for an agent whose accounts' MCP servers can be read; see "The Connectors and MCP dialog" in
+`docs/product/account-mcp-servers-and-connectors.md`), **Edit**, **Log in**, **Move earlier** and **Move later** and,
+set apart, **Remove** (see `docs/product/removing-accounts.md`); where else **Log in** appears is
 in "Where Log in appears" in `docs/product/logging-accounts-in.md`. Both kinds of directory are shown as in "How paths
 are shown" in `docs/product/settings.md`.
 
@@ -283,11 +286,10 @@ and settles which usable account is taken when none ranks (see "Which account a 
 ## The account details dialog
 
 **Details**, the first entry of an account's actions menu, with an info icon, opens a modal dialog of what is known
-about that one account, read-only but for redeeming a usage limit reset, reading its connectors and MCP servers again
-and, for a Codex account, signing it in to and out of its MCP servers that use OAuth. It is titled "Account details",
-whichever account it is opened on. The first line of its body is the account's name, followed by its plan badge, its
-login state — the badge as in the table, or, while that is not known, "Checking…" while the first reading is on its way
-and "Unknown" otherwise — and the "Usage unavailable" mark when its reading failed with nothing read before. Whether the
+about that one account, read-only but for redeeming a usage limit reset. It is titled "Account details", whichever
+account it is opened on. The first line of its body is the account's name, followed by its plan badge, its login state
+— the badge as in the table, or, while that is not known, "Checking…" while the first reading is on its way and
+"Unknown" otherwise — and the "Usage unavailable" mark when its reading failed with nothing read before. Whether the
 account is turned off is not shown here. Under that line, when the account's reading carries one, is the email it is
 signed in with (see "The account's sign-in email" in `docs/product/account-quota-readings.md`), muted, on a line of its
 own, wrapping within the dialog when it is too long for one line. The next line is the account's directory; for the
@@ -300,18 +302,15 @@ while the first reading is on its way, says for an account that is not logged in
 in to use it, and holds a dash when there is no reading to show otherwise. How windows are named and drawn is in "How an
 account's quota is shown" in `docs/product/account-quotas.md`. Under the meters, a Codex account holding a usage limit
 reset shows how many it holds with when the next expires, and a **Redeem reset** button, which opens the confirmation
-that redeems one over this dialog (see "Where resets are shown" in `docs/product/usage-limit-resets.md`). Last, for a
-Claude Code or Codex account, comes **Connectors and MCP**: the account's platform connectors and local MCP servers with
-their states, read as the dialog opens and again from the section's Refresh button, with a link to the platform's
-connector settings and, for a Codex server that uses OAuth, Sign in or Sign out (see "The Connectors and MCP section" in
-`docs/product/account-mcp-servers-and-connectors.md`).
+that redeems one over this dialog (see "Where resets are shown" in `docs/product/usage-limit-resets.md`).
 
-Besides the Redeem reset button and the controls of the Connectors and MCP section, the dialog holds no control but its
-close button: no switch, which are in the account settings dialog (below), and no **Log in** button (see "Where Log in
-appears" in `docs/product/logging-accounts-in.md`). It has no footer: it closes on its close button, on Escape and on a
-press outside it. It follows the account as it changes, from any window, tells assistive technology, naming the account,
-when a login of the account succeeds while it is open, and closes by itself when the account is removed. However it
-closes, keyboard focus then goes, its focus ring showing, back to the account's actions menu button in the table, or,
+Besides the Redeem reset button, the dialog holds no control but its close button: no switch, which are in the account
+settings dialog (below), and no **Log in** button (see "Where Log in appears" in `docs/product/logging-accounts-in.md`).
+The account's connectors and MCP servers are not in it either: they have a dialog of their own (see "The Connectors and
+MCP dialog" in `docs/product/account-mcp-servers-and-connectors.md`). It has no footer: it closes on its close button,
+on Escape and on a press outside it. It follows the account as it changes, from any window, tells assistive
+technology, naming the account, when a login of the account succeeds while it is open, and closes by itself when the
+account is removed. However it closes, keyboard focus then goes, its focus ring showing, back to the account's actions menu button in the table, or,
 when the account's row has gone with the account, to the Agent accounts tab in Settings' list of sections.
 
 ## The account settings dialog

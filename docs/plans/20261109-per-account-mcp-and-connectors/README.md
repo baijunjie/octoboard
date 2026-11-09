@@ -58,13 +58,11 @@ agent manages locally, and keeps the local tokens of non-default Codex accounts 
 ## Milestones
 
 1. 01 — Separate MCP credentials for non-default Codex accounts (closed)
-2. [02 — Reading an account's MCP servers and connectors](02-reading-account-mcp-inventory.md)
+2. 02 — Reading an account's MCP servers and connectors (closed)
 3. 03 — MCP servers and connectors in the account details dialog (closed)
 4. [04 — Signing a Codex account in and out of an MCP server](04-codex-mcp-sign-in.md)
 
 ## Open
 
-- Grok Build: whether it has per-account MCP servers or connectors worth showing; until settled, its accounts show no
-  such section.
 - Sharing the `mcpServers` definitions of Claude Code's `.claude.json` between accounts, which today are not shared
   because that file also holds the account's identity. Not part of this plan.

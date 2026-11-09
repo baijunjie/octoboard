@@ -1,0 +1,65 @@
+[
+  {
+    "command": "/nonexistent/mcp-server",
+    "args": [
+      "--x"
+    ],
+    "enabled": true,
+    "name": "stdio-missing",
+    "scope": "user"
+  },
+  {
+    "command": "/nonexistent/other",
+    "args": [],
+    "enabled": false,
+    "name": "stdio-off",
+    "scope": "user"
+  },
+  {
+    "url": "http://127.0.0.1:9/mcp",
+    "enabled": true,
+    "name": "remote-local",
+    "scope": "user"
+  },
+  {
+    "url": "http://127.0.0.1:9/mcp2",
+    "headers": {
+      "Authorization": "Bearer not-a-real-token"
+    },
+    "enabled": true,
+    "name": "remote-hdr",
+    "scope": "user"
+  },
+  {
+    "command": "/nonexistent/env",
+    "args": [],
+    "env": {
+      "API_KEY": "not-a-real-key"
+    },
+    "enabled": true,
+    "name": "stdio-env",
+    "scope": "user"
+  },
+  {
+    "command": "/usr/bin/python3",
+    "args": [
+      "/x/mcp_ok.py"
+    ],
+    "enabled": true,
+    "name": "okstdio",
+    "scope": "user"
+  },
+  {
+    "url": "http://127.0.0.1:18765/mcp",
+    "enabled": true,
+    "name": "oauthish",
+    "scope": "user"
+  },
+  {
+    "command": "/usr/bin/false",
+    "args": [],
+    "enabled": true,
+    "name": "false-cmd",
+    "scope": "user"
+  }
+]

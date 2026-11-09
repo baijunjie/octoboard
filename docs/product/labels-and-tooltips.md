@@ -114,8 +114,8 @@ application buttons below. These are:
 - the report panel's previous-page and next-page buttons;
 - a right pane panel's Close panel button and the Report and Terminal panels' Maximize panel / Restore panel size (see
   "A panel's header" in `docs/product/right-pane-panels.md`);
-- the Refresh button at the end of the Connectors and MCP section's heading in an account's details dialog (see "The
-  Connectors and MCP section" in `docs/product/account-mcp-servers-and-connectors.md`);
+- the Refresh button at the end of the account's name line in an account's Connectors and MCP dialog (see "The
+  Connectors and MCP dialog" in `docs/product/account-mcp-servers-and-connectors.md`);
 - the project pane's Refresh and Collapse all folders buttons (see `docs/product/project-pane.md`), and the file
   viewer's Previous file and Next file buttons (see `docs/product/file-viewer.md`);
 - the copy buttons — the file viewer's Copy path, the Git mode's Copy worktree path on the change list's line naming

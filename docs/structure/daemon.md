@@ -138,8 +138,9 @@ and records tests replay.
   when ended early, the `Line`s it says, and `SigningIn`, the count under the account's directory that refuses a
   change of its sharing), `mcp_inventory.rs` (an account's MCP servers and platform connectors read through the
   agent's CLI: the `McpInventoryReader` interface, and one reading per account at a time with later requests joining
-  it, keyed by the account's directory too; Codex's reader is `adapter/codex/mcp_inventory.rs`, Claude Code's
-  `adapter/claude/mcp_inventory.rs`), `mcp_sign_in.rs` (signing an account in to and out of an MCP server through the
+  it, keyed by the account's directory too, and the helpers the readers share to map a failed query to an
+  unavailability; Codex's reader is `adapter/codex/mcp_inventory.rs`, Claude Code's `adapter/claude/mcp_inventory.rs`,
+  Grok's `adapter/grok/mcp_inventory.rs`), `mcp_sign_in.rs` (signing an account in to and out of an MCP server through the
   agent's own commands: the `McpServerAuth` interface, the runs held in `McpServerAuths`, one per account and server,
   and `request`, which starts or joins one; Codex's is `adapter/codex/mcp_auth.rs`), `quotas/` (plan quota read from the agent's CLI, poller, judgement, kicks, reset credits; `probe.rs`
   the `QuotaProbe` interface with the conversation it runs, `reset_credit.rs` the `ResetCredits` interface), `login/`
@@ -310,9 +311,9 @@ and records tests replay.
   `reset_credit.rs` (`ResetCredits`), `threads.rs` (its `ThreadRegistry`), `unarchive.rs` (its unarchiving of a rollout),
   `app_server.rs` (the app-server start and handshake the account-level uses of `codex app-server` share: the quota
   probe, reset credit, login and MCP inventory reading, which starts it with `CODEX_INVENTORY_APP_SERVER_ARGS`, Apps
-  and plugins left on), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`); Codex and Claude
-  Code also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server, Claude Code's over
-  `claude auth status` and `claude mcp list`), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script, and `account_cli.rs` the account
+  and plugins left on), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`); Codex, Claude
+  Code and Grok also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server, Claude Code's over
+  `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`, servers only), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script, and `account_cli.rs` the account
   directories, commands and short queries (running an agent CLI as an account) (`codex/claude_mcp.rs` only translates a
   compatibility source's MCP servers into Codex's launch overrides). The instruction file, tool-name prefix, ask-question tool and detection markers are read from the
   descriptors by `session_tools/`, `coordinator/console_workdir.rs` and `agents/detect.rs`.

@@ -1,4 +1,4 @@
-import { ArrowUp, ArrowDown, Bot, Info, LogIn, Pencil, Settings2, Trash2, UserPlus, type LucideIcon } from "lucide-react";
+import { ArrowUp, ArrowDown, Bot, Info, LogIn, Pencil, Plug, Settings2, Trash2, UserPlus, type LucideIcon } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
 
 import { defaultAccountName, isAgentUnavailable } from "../../agents/agents";
@@ -21,6 +21,7 @@ import { ProviderName } from "../../components/text/ProviderName";
 import { ringForAutomaticFocus } from "../../input/touchInput";
 import { AccountDetailsDialog } from "./AccountDetailsDialog";
 import { AccountDialog } from "./AccountDialog";
+import { AccountMcpDialog } from "./AccountMcpDialog";
 import { AccountSettingsDialog } from "./AccountSettingsDialog";
 import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
 import type { ReturnLoginFocus } from "./AccountLoginButton";
@@ -36,6 +37,7 @@ import { RemoveAgentDialog } from "./RemoveAgentDialog";
 import { hasCliUpdate } from "./cliVersion";
 import { useAgentList } from "./useAgentList";
 import { useAccountOrder } from "./useAccountOrder";
+import { useReadsMcpInventory } from "./useAccountMcpInventory";
 import { DaemonSwitchSetting } from "../DaemonSwitchSetting";
 import { LeadRows, SettingsLead } from "../SettingsLead";
 import { SettingsFocusContext, useSectionRefocus } from "../useSectionRefocus";
@@ -45,8 +47,8 @@ import { SettingsFocusContext, useSectionRefocus } from "../useSectionRefocus";
  * Settings dialog clears its fade and the scroll padding for focus moves for this much. */
 export const AGENT_STRIP_HEIGHT = 45;
 
-/** Which of an account's two dialogs is open: its read-only details, or its switches. */
-type AccountView = "details" | "settings";
+/** Which of an account's dialogs is open: its read-only details, its switches, or its connectors and MCP servers. */
+type AccountView = "details" | "settings" | "mcp";
 
 /** How many animation frames (about half a second) `handFocusOnceClosed` waits for a closing dialog to go. */
 const MAX_FRAMES_TO_WAIT_FOR_CLOSE = 30;
@@ -91,7 +93,8 @@ function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; 
 /** Every added agent's accounts, with one tab for each in the order of the list (the first agent's
  * open). A tab holds a table with the agent's accounts in their saved order, each a row
  * (name, plan and email, usage, status, the Disable switch) with an actions menu whose first
- * entries open the account's details and its settings, each in a modal. The agent's own settings, which apply to all
+ * entries open the account's details and its settings and, for a provider that can list them, its connectors and
+ * MCP servers, each in a modal. The agent's own settings, which apply to all
  * its accounts (Tags and the rows its descriptor declares), are in a modal opened by the Settings entry of the
  * tab's actions menu, and the version of its CLI, with the update, is in another opened by the Version entry (none for
  * an agent that is not installed); while an update is available the tab's actions button carries a badge and the
@@ -124,8 +127,8 @@ export function AgentAccountsSection(): React.ReactElement {
   // tab's actions button or the tab's own context menu. Closing hands focus back to that control, as a menu that a
   // pointer opened leaves focus elsewhere.
   const [agentDialog, setAgentDialog] = useState<{ view: "settings" | "version"; agent: Agent; from: "actions" | "tab" }>();
-  // The account whose details or settings are in the modal, whichever `view` names; `focusSharing` puts focus on the
-  // sharing switch of its settings as they open.
+  // The account whose details, settings or connectors and MCP are in the modal, whichever `view` names; `focusSharing`
+  // puts focus on the sharing switch of its settings as they open.
   const [accountDialog, setAccountDialog] = useState<{ view: AccountView; agent: Agent; account: string | null; focusSharing?: boolean; fromRow?: boolean }>();
   // The account whose login is in the modal; `start` is whether opening it starts the login, which it does not for one
   // found running when the section opened. `returnFocus` is the Log in button's, when one opened it.
@@ -265,9 +268,9 @@ export function AgentAccountsSection(): React.ReactElement {
       else returnToSectionTab();
     };
     const key = `${open.view}:${open.account ?? `default:${open.agent}`}`;
-    return open.view === "details"
-      ? <AccountDetailsDialog key={key} agent={open.agent} account={open.account} onClose={closeAccountDialog} />
-      : <AccountSettingsDialog key={key} agent={open.agent} account={open.account} focusSharing={open.focusSharing} onClose={closeAccountDialog} />;
+    if (open.view === "details") return <AccountDetailsDialog key={key} agent={open.agent} account={open.account} onClose={closeAccountDialog} />;
+    if (open.view === "mcp") return <AccountMcpDialog key={key} agent={open.agent} account={open.account} onClose={closeAccountDialog} />;
+    return <AccountSettingsDialog key={key} agent={open.agent} account={open.account} focusSharing={open.focusSharing} onClose={closeAccountDialog} />;
   };
 
   return (
@@ -426,6 +429,7 @@ function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, o
   const logins = useDaemonStore((s) => s.accountLogins);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const defaultName = defaultAccountName(t, defaultNames, agent);
+  const readsMcp = useReadsMcpInventory(agent);
   const { stopDrag } = order;
   useEffect(() => stopDrag, [stopDrag]);
   // What an account's menu holds. The default account is not a record: it can be named, not edited or removed. A
@@ -436,16 +440,19 @@ function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, o
     const login = { label: t("settings.accounts.login"), icon: LogIn, disabled: loginIsActive(accountLoginOf(logins, agent, account?.id ?? null)), onClick: () => onLogin(agent, account?.id ?? null, () => handOff(() => rowActionsTrigger(row))) };
     const details = { label: t("settings.accounts.detailsItem"), icon: Info, onClick: () => onOpenAccount("details", account?.id ?? null) };
     const settings = { label: t("settings.accounts.settingsItem"), icon: Settings2, onClick: () => onOpenAccount("settings", account?.id ?? null) };
+    // Only for a provider that can list an account's connectors and MCP servers.
+    const mcp: ActionMenuEntry[] = readsMcp ? [{ label: t("settings.accounts.mcp.title"), icon: Plug, onClick: () => onOpenAccount("mcp", account?.id ?? null) }] : [];
     const index = order.ids.indexOf(account?.id ?? null);
     const moves: ActionMenuEntry[] = [
       "separator",
       { label: t("settings.accounts.moveEarlier"), icon: ArrowUp, disabled: order.busy || index <= 0, onClick: () => order.move(account?.id ?? null, -1) },
       { label: t("settings.accounts.moveLater"), icon: ArrowDown, disabled: order.busy || index >= order.ids.length - 1, onClick: () => order.move(account?.id ?? null, 1) },
     ];
-    if (!account) return [details, settings, { label: t("settings.accounts.renameDefault"), icon: Pencil, onClick: () => onRenameDefault(agent) }, login, ...moves];
+    if (!account) return [details, settings, ...mcp, { label: t("settings.accounts.renameDefault"), icon: Pencil, onClick: () => onRenameDefault(agent) }, login, ...moves];
     return [
       details,
       settings,
+      ...mcp,
       { label: t("common.edit"), icon: Pencil, onClick: () => onEdit(account) },
       login,
       ...moves,

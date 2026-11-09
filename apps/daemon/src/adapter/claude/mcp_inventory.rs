@@ -11,9 +11,10 @@ use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use super::login::{logged_in, STATUS_OUTPUT_LIMIT, STATUS_TIMEOUT};
-use crate::accounts::mcp_inventory::{Listing, McpInventoryReader};
-use crate::adapter::account_cli::{self, QueryFailure};
-use crate::processes::subprocess::BoundedFailure;
+use crate::accounts::mcp_inventory::{
+    query_unavailable, stderr_detail, Listing, McpInventoryReader,
+};
+use crate::adapter::account_cli;
 use crate::protocol::{
     AgentId, ConnectorState, LocalMcpServer, McpInventoryFailure, McpInventoryUnavailable,
     McpRuntimeState, McpSignInState, PlatformConnector,
@@ -46,7 +47,7 @@ impl McpInventoryReader for ClaudeMcpInventory {
                 limit,
                 Some(cancel),
             )
-            .map_err(failure_of)
+            .map_err(query_unavailable)
         };
         // `auth status` exits 1 when signed out, with its answer on stdout all the same.
         let status = run(
@@ -62,7 +63,10 @@ impl McpInventoryReader for ClaudeMcpInventory {
             None => {
                 return Err(unavailable(
                     McpInventoryFailure::Failed,
-                    Some(detail_of(&status, "`claude auth status` gave no answer")),
+                    Some(stderr_detail(
+                        &status,
+                        "`claude auth status` gave no answer",
+                    )),
                 ));
             }
         }
@@ -70,7 +74,7 @@ impl McpInventoryReader for ClaudeMcpInventory {
         if !list.status.success() {
             return Err(unavailable(
                 McpInventoryFailure::Failed,
-                Some(detail_of(&list, "`claude mcp list` failed")),
+                Some(stderr_detail(&list, "`claude mcp list` failed")),
             ));
         }
         Ok(parse_list(&String::from_utf8_lossy(&list.stdout)))
@@ -79,34 +83,6 @@ impl McpInventoryReader for ClaudeMcpInventory {
 
 fn unavailable(reason: McpInventoryFailure, detail: Option<String>) -> McpInventoryUnavailable {
     McpInventoryUnavailable::new(reason, detail)
-}
-
-/// The last line of stderr, else `fallback`.
-fn detail_of(output: &std::process::Output, fallback: &str) -> String {
-    let last = account_cli::last_stderr_line(output);
-    if last.is_empty() {
-        fallback.to_string()
-    } else {
-        last
-    }
-}
-
-fn failure_of(failure: QueryFailure) -> McpInventoryUnavailable {
-    match failure {
-        QueryFailure::NotRun(
-            refused @ (account_cli::NotRun::BinaryNotFound(_)
-            | account_cli::NotRun::BinaryRefused(_)),
-        ) => unavailable(McpInventoryFailure::CliMissing, Some(refused.detail())),
-        QueryFailure::NotRun(refused) => {
-            unavailable(McpInventoryFailure::Failed, Some(refused.detail()))
-        }
-        QueryFailure::Bounded(BoundedFailure::TimedOut(_)) => {
-            unavailable(McpInventoryFailure::TimedOut, None)
-        }
-        QueryFailure::Bounded(other) => {
-            unavailable(McpInventoryFailure::Failed, Some(other.to_string()))
-        }
-    }
 }
 
 /// What a line of `claude mcp list` says of its server.
