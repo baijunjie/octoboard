@@ -353,8 +353,8 @@ fn document_console(
         accounts: PerAgent::from_fn(|agent| {
             account_ref(accounts, agent, console.accounts.get(agent).as_deref())
         }),
-        launch: console.launch.clone(),
-        project_session_launch: console.project_session_launch.clone(),
+        launch: super::exported_launches(console.launch.clone()),
+        project_session_launch: super::exported_launches(console.project_session_launch.clone()),
         console_session_prompt: console.console_session_prompt.clone(),
         projects: projects
             .into_iter()
@@ -397,7 +397,7 @@ fn document_project(
         pinned: project.pinned,
         tags: project.tags,
         description: project.description,
-        launch: project.launch,
+        launch: super::exported_launches(project.launch),
         git_workflow: project.git_workflow,
     }
 }

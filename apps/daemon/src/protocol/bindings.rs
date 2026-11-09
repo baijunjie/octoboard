@@ -74,8 +74,8 @@ impl<T: TS + 'static> TS for Change<T> {
     }
 }
 
-/// A model and effort in a create request, where either may be left out; `Launch` is the record,
-/// which always carries both.
+/// Launch settings in a create request, where model, effort and compatibility may be left out;
+/// `Launch` is the record, which always carries all three.
 pub struct LaunchRequest;
 
 impl TS for LaunchRequest {
@@ -83,7 +83,8 @@ impl TS for LaunchRequest {
     type OptionInnerType = Self;
 
     fn name(_: &Config) -> String {
-        "{ model?: string, effort?: string }".to_string()
+        "{ model?: string, effort?: string, compatibility?: { [key in string]: boolean } }"
+            .to_string()
     }
 
     fn inline(cfg: &Config) -> String {

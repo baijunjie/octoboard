@@ -67,13 +67,24 @@ fn per_agent(paths: &mut Paths, value: &Value, prefix: &str) {
     }
 }
 
-/// The paths of a launch pair kept once per agent, `prefix.<agent>.model` and `.effort`.
+/// The paths of a launch pair kept once per agent, `prefix.<agent>.model` and `.effort`, and of
+/// each compatibility switch the agent lets a launch hold,
+/// `prefix.<agent>.compatibility.<setting>`.
 fn per_agent_launch(paths: &mut Paths, value: &Value, prefix: &str) {
     for agent in AgentId::ALL {
         let name = agent.wire_name();
         for launch in LAUNCH_FIELDS {
             let path = format!("{prefix}.{name}.{launch}");
             field(paths, value, &path, &[prefix, name, launch]);
+        }
+        for setting in agent.descriptor().overridable_settings() {
+            let path = format!("{prefix}.{name}.compatibility.{}", setting.id);
+            field(
+                paths,
+                value,
+                &path,
+                &[prefix, name, "compatibility", setting.id],
+            );
         }
     }
 }

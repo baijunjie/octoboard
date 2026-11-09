@@ -119,6 +119,7 @@ async fn a_model_change_is_checked_and_an_interrupted_session_only_records_it() 
             &state,
             id,
             LaunchEdit {
+                compatibility: Default::default(),
                 model: model.map(|model| Some(model.to_string())),
                 effort: None,
             },
@@ -175,6 +176,7 @@ async fn a_set_session_model_request_is_answered_with_its_outcome() {
         ))
         .unwrap();
     let ask = || RequestBody::SetSessionModel {
+        compatibility: Default::default(),
         session: "s".to_string(),
         model: Some(Some("opus".to_string())),
         effort: None,
@@ -215,6 +217,7 @@ async fn an_unchanged_model_no_longer_in_the_catalogue_is_not_revalidated() {
         &state,
         "s",
         LaunchEdit {
+            compatibility: Default::default(),
             model: Some(Some(" retired-model ".to_string())),
             effort: None,
         },
@@ -231,6 +234,7 @@ async fn an_unchanged_model_no_longer_in_the_catalogue_is_not_revalidated() {
         &state,
         "s",
         LaunchEdit {
+            compatibility: Default::default(),
             model: Some(Some("sonnet".to_string())),
             effort: None,
         },
@@ -265,6 +269,7 @@ async fn an_interrupted_session_archived_during_model_validation_is_not_changed(
         &state,
         "s",
         LaunchEdit {
+            compatibility: Default::default(),
             model: Some(Some("sonnet".to_string())),
             effort: None,
         },
@@ -313,6 +318,7 @@ async fn a_model_change_whose_relaunch_does_not_come_up_keeps_the_model_it_had()
         &state,
         "s",
         LaunchEdit {
+            compatibility: Default::default(),
             model: Some(Some("opus".to_string())),
             effort: None,
         },
@@ -356,6 +362,7 @@ async fn a_model_change_carries_what_the_process_started_over_to_the_relaunch() 
         &state,
         "s",
         LaunchEdit {
+            compatibility: Default::default(),
             model: Some(Some("opus".to_string())),
             effort: None,
         },
@@ -434,6 +441,7 @@ async fn a_model_change_tells_the_session_which_trees_it_ended() {
             &state,
             "s",
             LaunchEdit {
+                compatibility: Default::default(),
                 model: Some(Some("opus".to_string())),
                 effort: None,
             },
@@ -505,6 +513,7 @@ async fn a_model_change_that_fails_keeps_what_the_process_started_under_its_proj
         &state,
         "s",
         LaunchEdit {
+            compatibility: Default::default(),
             model: Some(Some("opus".to_string())),
             effort: None,
         },
@@ -544,6 +553,7 @@ async fn a_console_session_whose_model_change_fails_stops_what_its_process_start
         &state,
         "hub",
         LaunchEdit {
+            compatibility: Default::default(),
             model: Some(Some("opus".to_string())),
             effort: None,
         },
@@ -559,4 +569,236 @@ async fn a_console_session_whose_model_change_fails_stops_what_its_process_start
         crate::test_support::stops_running(&state, child).await,
         "kept running past the failed model change"
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_only_session_changes_hold_either_boolean() {
+    let (state, dir) = console_with_project_and_accounts("compatibility-session-edit");
+    state
+        .store
+        .insert_session(&project_session(
+            "s",
+            AgentId::CODEX,
+            SessionStatus::Interrupted,
+        ))
+        .unwrap();
+    let audit = rusqlite::Connection::open(dir.join("octoboard.db")).unwrap();
+    audit
+        .execute_batch(
+            "CREATE TABLE launch_writes (id TEXT);
+         CREATE TRIGGER launch_writes AFTER UPDATE OF
+             model, effort, model_override, effort_override, compatibility ON sessions
+         BEGIN INSERT INTO launch_writes VALUES (NEW.id); END;",
+        )
+        .unwrap();
+    for (prior, value) in [(None, Some(true)), (Some(true), Some(false))] {
+        let held = prior
+            .map(|v| ("claude_compatibility".into(), v))
+            .into_iter()
+            .collect();
+        state.store.set_session_compatibility("s", &held).unwrap();
+        audit.execute("DELETE FROM launch_writes", []).unwrap();
+        let expected = ModelChange::Recorded;
+        let outcome = set_session_model_with(
+            &state,
+            "s",
+            LaunchEdit {
+                compatibility: [("claude_compatibility".into(), value)].into(),
+                ..LaunchEdit::default()
+            },
+            ModelAsker::User,
+            None,
+            shell_env(&dir),
+            no_launch,
+        )
+        .await
+        .unwrap();
+        assert_eq!(outcome, expected);
+        let writes: i64 = audit
+            .query_row("SELECT COUNT(*) FROM launch_writes", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(writes, 1);
+        let session = state.session_record("s").unwrap();
+        assert_eq!(
+            session.compatibility.get("claude_compatibility").copied(),
+            value
+        );
+        assert!(session.model.is_none() && session.effort.is_none());
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_only_unchanged_session_switch_does_not_restart() {
+    let (state, dir) = console_with_project_and_accounts("compatibility-session-edit");
+    state
+        .store
+        .insert_session(&project_session(
+            "s",
+            AgentId::CODEX,
+            SessionStatus::Interrupted,
+        ))
+        .unwrap();
+    state
+        .store
+        .set_session_compatibility("s", &[("claude_compatibility".into(), true)].into())
+        .unwrap();
+    let value = Some(true);
+    let expected = ModelChange::Unchanged;
+    let outcome = set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            compatibility: [("claude_compatibility".into(), value)].into(),
+            ..LaunchEdit::default()
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        no_launch,
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome, expected);
+    let session = state.session_record("s").unwrap();
+    assert_eq!(
+        session.compatibility.get("claude_compatibility").copied(),
+        value
+    );
+    assert!(session.model.is_none() && session.effort.is_none());
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_only_session_switch_can_return_to_following() {
+    let (state, dir) = console_with_project_and_accounts("compatibility-session-edit");
+    state
+        .store
+        .insert_session(&project_session(
+            "s",
+            AgentId::CODEX,
+            SessionStatus::Interrupted,
+        ))
+        .unwrap();
+    state
+        .store
+        .set_session_compatibility("s", &[("claude_compatibility".into(), false)].into())
+        .unwrap();
+    let value = None;
+    let expected = ModelChange::Recorded;
+    let outcome = set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            compatibility: [("claude_compatibility".into(), value)].into(),
+            ..LaunchEdit::default()
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        no_launch,
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome, expected);
+    let session = state.session_record("s").unwrap();
+    assert_eq!(
+        session.compatibility.get("claude_compatibility").copied(),
+        value
+    );
+    assert!(session.model.is_none() && session.effort.is_none());
+}
+
+#[tokio::test]
+async fn compatibility_invalid_session_changes_are_refused_without_partial_writes() {
+    let (state, dir) = console_with_project_and_accounts("compatibility-invalid-session-edit");
+    state
+        .store
+        .insert_session(&project_session(
+            "s",
+            AgentId::CODEX,
+            SessionStatus::Interrupted,
+        ))
+        .unwrap();
+    for setting in ["unknown_switch", "approval_reviewer"] {
+        let err = set_session_model_with(
+            &state,
+            "s",
+            LaunchEdit {
+                compatibility: [
+                    ("claude_compatibility".into(), Some(true)),
+                    (setting.into(), Some(false)),
+                ]
+                .into(),
+                ..LaunchEdit::default()
+            },
+            ModelAsker::User,
+            None,
+            shell_env(&dir),
+            no_launch,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(code_of(&err), error_code::UNREADABLE_REQUEST);
+        assert!(state.session_record("s").unwrap().compatibility.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn compatibility_only_change_relaunches_running_session_and_failure_restores_switches() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (state, dir) = console_with_project_and_accounts("compatibility-relaunch-failure");
+    let mut project = state.store.require_project("project-1").unwrap();
+    project.path = dir.to_string_lossy().into_owned();
+    state.store.update_project(&project).unwrap();
+    let mut session = project_session("s", AgentId::CODEX, SessionStatus::Idle);
+    session
+        .compatibility
+        .insert("claude_compatibility".into(), false);
+    state.store.insert_session(&session).unwrap();
+    let live = crate::test_support::idle_stand_in_of("s", AgentId::CODEX);
+    state.register_live(live.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, live.clone());
+    let audit = rusqlite::Connection::open(dir.join("octoboard.db")).unwrap();
+    audit
+        .execute_batch(
+            "CREATE TABLE launch_writes (id TEXT);
+         CREATE TRIGGER launch_writes AFTER UPDATE OF
+             model, effort, model_override, effort_override, compatibility ON sessions
+         BEGIN INSERT INTO launch_writes VALUES (NEW.id); END;",
+        )
+        .unwrap();
+    let called = Arc::new(AtomicBool::new(false));
+    let seen = called.clone();
+    let err = set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            compatibility: [("claude_compatibility".into(), Some(true))].into(),
+            ..LaunchEdit::default()
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        move |request| {
+            assert!(request.settings.switch("claude_compatibility"));
+            seen.store(true, Ordering::SeqCst);
+            Err(anyhow::anyhow!("fixture launch refusal"))
+        },
+    )
+    .await
+    .unwrap_err();
+    tokio::time::pause();
+    tokio::time::advance(crate::test_support::PATIENCE).await;
+    assert!(
+        called.load(Ordering::SeqCst),
+        "compatibility alone must relaunch: {err:#}"
+    );
+    assert_eq!(
+        state.session_record("s").unwrap().compatibility,
+        session.compatibility
+    );
+    assert!(!state.is_changing_model("s"));
+    let writes: i64 = audit
+        .query_row("SELECT COUNT(*) FROM launch_writes", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(writes, 2, "one change and one rollback");
 }

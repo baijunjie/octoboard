@@ -143,7 +143,16 @@ it("keeps the default agent, accounts and session instructions notes visible, an
   expect(text).toContain("Sessions in this console use the account selected here for their agent, unless the project or session specifies another.");
   expect(text).toContain("take precedence over them where the two conflict.");
   expect(text).not.toContain("Each agent has its own models");
-  expect(buttons().some((b) => b.getAttribute("aria-label")?.startsWith("About"))).toBe(false);
+  const aboutButtons = buttons().filter((button) => button.getAttribute("aria-label")?.startsWith("About"));
+  for (const group of ["Console sessions", "Project sessions"]) {
+    for (const setting of ["Model", "Reasoning effort"]) {
+      const trigger = groupPicker(group, setting);
+      const cell = trigger.closest('[data-slot="select"]')!.parentElement!;
+      const headingId = trigger.getAttribute("aria-labelledby")!.split(" ").find((id) => document.getElementById(id)?.textContent === setting)!;
+      const rowHeading = document.getElementById(headingId)!.closest("div")!;
+      expect(aboutButtons.some((button) => cell.contains(button) || rowHeading.contains(button))).toBe(false);
+    }
+  }
 });
 
 it("moves the Advanced tabs that come and go, none as the section opens, and hands focus on from a tab that goes", async () => {

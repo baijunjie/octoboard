@@ -1,9 +1,10 @@
 // The per-agent settings of a console or a project as its dialog holds them: one `PerAgent` value
-// per kind of setting, each `null` while unset. The rules for putting an edit on the wire are the
-// same for both and live here. A project's accounts are the exception, three-state rather than a
-// string, and are held and diffed apart.
+// per kind of setting, strings `null` while unset and compatibility maps holding only explicit values. The rules for
+// putting an edit on the wire are the same for both and live here. A project's accounts are the exception, three-state
+// rather than a string, and are held and diffed apart.
 
 import type { Agent, ClientRequestBody, Launch, LaunchChange, PerAgent, ProjectAccount } from "../protocol";
+import { changedCompatibility, withCompatibility } from "./launchCompatibility";
 
 /** One agent's model and reasoning effort in a new record: a field left out, or blank, is the agent's own default. */
 type LaunchSetting = NonNullable<NonNullable<Extract<ClientRequestBody, { type: "create_console" }>["launch"]>[Agent]>;
@@ -19,10 +20,10 @@ export function readAccounts(source: PerAgent<string | null> | undefined, served
   return everyAgent(served, (agent) => source?.[agent] ?? null);
 }
 
-/** What a dialog holds for each agent's model and effort, taken from the stored record's `source`:
- * `null` where it holds none. */
+/** What a dialog holds for each agent's model and effort, taken from the stored record's `source`,
+ * with empty compatibility maps and `null` strings where it holds none. */
 export function readLaunch(source: PerAgent<Launch> | undefined, served: readonly Agent[]): PerAgent<Launch> {
-  return everyAgent(served, (agent) => ({ model: source?.[agent]?.model ?? null, effort: source?.[agent]?.effort ?? null }));
+  return everyAgent(served, (agent) => ({ model: source?.[agent]?.model ?? null, effort: source?.[agent]?.effort ?? null, compatibility: source?.[agent]?.compatibility ?? {} }));
 }
 
 /** `values` with `agent`'s entry set to `value`: how a dialog puts one agent's account back to what the record holds. */
@@ -30,10 +31,23 @@ export function withAgent<T>(values: PerAgent<T>, agent: Agent, value: T): PerAg
   return { ...values, [agent]: value };
 }
 
-/** `values` with `agent`'s launch `key` set to `value`, the agent's other field as it was: how a dialog puts one launch
- * setting back to what the record holds. */
-export function withLaunchField(values: PerAgent<Launch>, agent: Agent, key: keyof Launch, value: string | null): PerAgent<Launch> {
-  return withAgent(values, agent, { ...values[agent]!, [key]: value });
+/** A launch field edit, keeping each key paired with its permitted value. */
+export type LaunchFieldEdit = [key: "model" | "effort", value: string | null] | [key: `compatibility.${string}`, value: boolean | null];
+
+/** `values` with one agent's launch field changed, leaving its other fields intact. */
+export function withLaunchField(values: PerAgent<Launch>, agent: Agent, ...[key, value]: LaunchFieldEdit): PerAgent<Launch> {
+  const own = values[agent]!;
+  if (key.startsWith("compatibility.")) {
+    return withAgent(values, agent, { ...own, compatibility: withCompatibility(own.compatibility, key.slice("compatibility.".length), typeof value === "boolean" ? value : null) });
+  }
+  return withAgent(values, agent, { ...own, [key]: value });
+}
+
+/** Restore the launch field named by a record-version path from the latest stored launch. */
+export function restoreLaunchField(values: PerAgent<Launch>, agent: Agent, source: Launch | undefined, key: string, setting: string): PerAgent<Launch> {
+  if (key === "compatibility") return withLaunchField(values, agent, `compatibility.${setting}`, source?.compatibility[setting] ?? null);
+  if (key === "model" || key === "effort") return withLaunchField(values, agent, key, source?.[key] ?? null);
+  return values;
 }
 
 /** The agents' entries of `current` that differ from `initial`, what the dialog opened with, as
@@ -97,13 +111,15 @@ export function changedLaunch(
   mode: "create" | "update",
   current: PerAgent<Launch>,
   initial: PerAgent<Launch>,
-): Partial<PerAgent<LaunchChange>> | undefined {
+): Partial<PerAgent<LaunchChange | LaunchSetting>> | undefined {
   return changedPerAgent(current, initial, (now, before) => {
     const change: LaunchChange = {};
     for (const key of ["model", "effort"] as const) {
       if (now[key] === before[key]) continue;
       if (mode === "update" || now[key]) change[key] = now[key];
     }
+    const compatibility = changedCompatibility(now.compatibility, before.compatibility);
+    if (Object.keys(compatibility).length > 0) change.compatibility = compatibility;
     return Object.keys(change).length > 0 ? change : undefined;
   });
 }
@@ -140,4 +156,10 @@ export function changedProjectAccounts(
     if (now.kind !== "inherit") return now;
     return mode === "update" ? null : undefined;
   });
+}
+
+/** The scalar held at a launch field-version path. */
+export function launchFieldValue(launch: Launch | undefined, key: string, setting?: string): string | boolean | null {
+  if (key === "compatibility") return launch?.compatibility[setting ?? ""] ?? null;
+  return launch?.[key as "model" | "effort"] ?? null;
 }

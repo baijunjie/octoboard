@@ -20,7 +20,7 @@ use crate::session::term;
 use crate::state::AppState;
 use crate::text::trimmed_or_none;
 
-use super::launch::{checked_launch_overrides, relaunch_session_with, LaunchEdit};
+use super::launch::{checked_launch_overrides, relaunch_session_with, LaunchEdit, LaunchOverrides};
 use super::lifecycle::trash_agent_records_with;
 use crate::accounts::choice::{account_dir, agent_can_open};
 
@@ -408,8 +408,8 @@ pub(crate) async fn resume_session_with_launch(
         )
         .await?;
     }
-    if let Some((model, effort)) = &overrides {
-        state.set_session_launch_overrides(id, model, effort)?;
+    if let Some(overrides) = &overrides {
+        overrides.record(state, id)?;
     }
     let relaunched = relaunch_session_with(
         state,
@@ -425,11 +425,16 @@ pub(crate) async fn resume_session_with_launch(
     if relaunched.is_err() && overrides.is_some() {
         // A resume that fails leaves the session as it was, the model and effort included.
         let before = &target.session;
-        if let Err(revert) = state.set_session_launch_overrides(id, &before.model, &before.effort) {
+        let put_back = LaunchOverrides {
+            model: before.model.clone(),
+            effort: before.effort.clone(),
+            compatibility: before.compatibility.clone(),
+        };
+        if let Err(revert) = put_back.record(state, id) {
             tracing::warn!(
                 session = %id,
                 %revert,
-                "putting the session's model and effort back failed"
+                "putting the session's model, effort and compatibility switches back failed"
             );
         }
     }

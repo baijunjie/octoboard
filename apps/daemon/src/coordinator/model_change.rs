@@ -1,12 +1,14 @@
 //! Changing the model and effort of a session, restarting it where the agent cannot change them
 //! in place.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use anyhow::Result;
 
-use crate::agents::launch_settings::normalize_session_launch_setting;
+use crate::agents::launch_settings::{
+    apply_compatibility, check_compatibility, normalize_session_launch_setting,
+};
 use crate::env_shell;
 use crate::messaging::texts;
 use crate::protocol::{error_code, CodedError, Session, SessionStatus, TerminalAppearance};
@@ -36,19 +38,24 @@ pub(crate) enum ModelChange {
 }
 
 /// Changes the model and reasoning effort of a session that is not archived, as the user asks from
-/// the window: see [`set_session_model_with`]. `model` and `effort` are as `open_session` takes
-/// them, each absent to keep what the session has.
+/// the window: see [`set_session_model_with`]. `model`, `effort` and `compatibility` are as
+/// `open_session` takes them, each absent to keep what the session has.
 pub async fn set_session_model(
     state: &Arc<AppState>,
     id: &str,
     model: Option<Option<String>>,
     effort: Option<Option<String>>,
+    compatibility: BTreeMap<String, Option<bool>>,
     terminal_appearance: Option<TerminalAppearance>,
 ) -> Result<ModelChange> {
     set_session_model_with(
         state,
         id,
-        LaunchEdit { model, effort },
+        LaunchEdit {
+            model,
+            effort,
+            compatibility,
+        },
         ModelAsker::User,
         terminal_appearance,
         env_shell::launch_snapshot,
@@ -115,9 +122,10 @@ pub(crate) async fn set_session_model_with(
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<ModelChange> {
-    if edit.model.is_none() && edit.effort.is_none() {
+    if edit.model.is_none() && edit.effort.is_none() && edit.compatibility.is_empty() {
         return Err(field_required("model"));
     }
+    let compatibility = edit.compatibility;
     let (model, effort) = (
         normalize_session_launch_setting(edit.model),
         normalize_session_launch_setting(edit.effort),
@@ -132,7 +140,13 @@ pub(crate) async fn set_session_model_with(
         refuse_if_archived(session)?;
         let model = model.clone().or_else(|| session.model.clone());
         let effort = effort.clone().or_else(|| session.effort.clone());
-        Ok(((&model, &effort) != (&session.model, &session.effort)).then_some((model, effort)))
+        check_compatibility(session.agent, &compatibility)?;
+        let mut held = session.compatibility.clone();
+        apply_compatibility(&mut held, &compatibility);
+        Ok(
+            ((&model, &effort, &held) != (&session.model, &session.effort, &session.compatibility))
+                .then_some((model, effort, held)),
+        )
     };
     if changed(&state.session_record(id)?)?.is_none() && !state.is_changing_model(id) {
         return Ok(ModelChange::Unchanged);
@@ -141,7 +155,7 @@ pub(crate) async fn set_session_model_with(
     // resumes, switches or deletes the session while its process is down or being watched.
     let claim = state.begin_switch(id)?;
     let before = state.session_record(id)?;
-    let Some((model, effort)) = changed(&before)? else {
+    let Some((model, effort, compatibility)) = changed(&before)? else {
         return Ok(ModelChange::Unchanged);
     };
     if state.status_for_model_change(&before) == SessionStatus::Starting {
@@ -178,10 +192,13 @@ pub(crate) async fn set_session_model_with(
         return Err(session_archived(id));
     }
     if current.status.has_no_process() {
-        if !state
-            .store
-            .set_session_launch_overrides_unless_archived(id, &model, &effort, None)?
-        {
+        if !state.store.set_session_launch_unless_archived(
+            id,
+            &model,
+            &effort,
+            &compatibility,
+            None,
+        )? {
             return Err(session_archived(id));
         }
         state.publish_session_by_id(id);
@@ -254,10 +271,11 @@ pub(crate) async fn set_session_model_with(
 
             let ended = texts::processes_ended_by_restart(&ended_trees);
             let boundary = serde_json::to_string(&boundary)?;
-            if !state.store.set_session_launch_overrides_unless_archived(
+            if !state.store.set_session_launch_unless_archived(
                 id,
                 &model,
                 &effort,
+                &compatibility,
                 Some(&boundary),
             )? {
                 return Err(session_archived(id));
@@ -277,7 +295,7 @@ pub(crate) async fn set_session_model_with(
             )
             .await
             {
-                restart::put_back_model_and_effort(state, &before);
+                restart::put_back_launch_overrides(state, &before);
                 return Err(err);
             }
             if !came_up_under_claim(state, id).await {
@@ -290,7 +308,7 @@ pub(crate) async fn set_session_model_with(
                         "the relaunched process was not recorded as ended"
                     );
                 }
-                restart::put_back_model_and_effort(state, &before);
+                restart::put_back_launch_overrides(state, &before);
                 return Err(CodedError::raised(
                     error_code::MODEL_CHANGE_DID_NOT_COME_UP,
                     "the session ended as soon as it was relaunched with the new model, so it \

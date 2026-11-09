@@ -24,7 +24,7 @@ export const text = (body: string): FileContent => ({ size: new TextEncoder().en
 
 const LOCAL_HOST: Host = { id: "local", name: "This Mac", kind: "local", ssh_config: null };
 
-const NO_LAUNCH: Launch = { model: null, effort: null };
+const NO_LAUNCH: Launch = { model: null, effort: null, compatibility: {} };
 
 /** One group per agent with the settings an extra names laid over the ones it has. */
 function layered<T extends object>(base: PerAgent<T>, over: Partial<PerAgent<Partial<T>>> = {}): PerAgent<T> {
@@ -39,12 +39,14 @@ const forEachAgent = (paths: (agent: Agent) => string[]): string[] => FIXTURE_AG
  * daemon versions. */
 export const CONSOLE_VERSIONS = versionsOf([
   "name", "default_agent", "project_session_agent", "icon", "console_session_prompt",
+  ...FIXTURE_PROVIDERS.flatMap(({ id, settings }) => settings.filter((setting) => setting.compatibility_with !== null).flatMap((setting) => [`launch.${id}.compatibility.${setting.id}`, `project_session_launch.${id}.compatibility.${setting.id}`])),
   ...forEachAgent((agent) => [`accounts.${agent}`, `launch.${agent}.model`, `launch.${agent}.effort`, `project_session_launch.${agent}.model`, `project_session_launch.${agent}.effort`]),
 ]);
 export const PROJECT_VERSIONS = versionsOf([
   "name", "default_agent", "pinned", "tags", "description",
   ...forEachAgent((agent) => [`accounts.${agent}`, `launch.${agent}.model`, `launch.${agent}.effort`]),
   ...GIT_WORKFLOW_ITEM_KEYS.map((item) => `git_workflow.${item}`),
+  ...FIXTURE_PROVIDERS.flatMap(({ id, settings }) => settings.filter((setting) => setting.compatibility_with !== null).map((setting) => `launch.${id}.compatibility.${setting.id}`)),
 ]);
 export const ACCOUNT_VERSIONS = versionsOf(["name", "config_dir", "disabled", "share_default_config"]);
 export const SETTINGS_VERSIONS = versionsOf([
@@ -178,6 +180,7 @@ export function sessionOf(
     title,
     status,
     has_conversation: true,
+    compatibility: {},
     pinned: false,
     locked: false,
     started_at: minutesAgo(90),

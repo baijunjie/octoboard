@@ -1,10 +1,15 @@
 //! The sessions table: inserting a session, the column-scoped writers, launch overrides, colour,
 //! deletion and the reads.
 
+use std::collections::BTreeMap;
+
 use super::Result;
 use rusqlite::{params, Connection, OptionalExtension, Row};
 
-use super::rows::{agent_from_row, enum_from_row, enum_from_row_opt, enum_from_text, enum_to_text};
+use super::rows::{
+    agent_from_row, compatibility_from_text, compatibility_to_text, enum_from_row,
+    enum_from_row_opt, enum_from_text, enum_to_text,
+};
 use super::Store;
 use crate::protocol::{
     CodedError, ConsoleSessionColour, Origin, RecordTitles, Role, Session, SessionKind,
@@ -72,7 +77,7 @@ pub(super) const SESSION_COLUMNS: &str =
                                ordinal, account_id, config_dir, pinned, started_at, ended_at,
                                role, terminal_title, model, effort, model_override,
                                effort_override, context, record_title, record_prompt, locked,
-                               observed_model, observed_effort, last_turn_abnormal";
+                               observed_model, observed_effort, last_turn_abnormal, compatibility";
 
 impl Store {
     /// Inserts a session that is not a console session, or a console session whose colour and
@@ -666,22 +671,63 @@ impl Store {
         Ok(())
     }
 
-    /// Replaces the session's model and effort overrides, each as `Session::model` states it: absent
-    /// inherits, `Some(None)` leaves the choice to the agent, a value pins it. Nothing else writes
-    /// these columns.
+    /// Replaces the session's model and effort overrides, each as `Session::model` states it:
+    /// absent inherits, `Some(None)` leaves the choice to the agent, a value pins it.
+    #[cfg(test)]
     pub fn set_session_launch_overrides(
         &self,
         id: &str,
         model: &Option<Option<String>>,
         effort: &Option<Option<String>>,
     ) -> Result<()> {
-        self.write_session_launch_overrides(id, model, effort, false, None)
+        self.write_session_launch_overrides(id, model, effort, None, false, None)
             .map(drop)
+    }
+
+    /// Replaces all held launch values together, keeping observations unchanged.
+    pub(crate) fn set_session_launch(
+        &self,
+        id: &str,
+        model: &Option<Option<String>>,
+        effort: &Option<Option<String>>,
+        compatibility: &BTreeMap<String, bool>,
+    ) -> Result<()> {
+        self.write_session_launch_overrides(id, model, effort, Some(compatibility), false, None)
+            .map(drop)
+    }
+
+    /// Replaces every held launch value only while the session is not archived, recording the
+    /// observation boundary and clearing observations together when `boundary` is given.
+    pub(crate) fn set_session_launch_unless_archived(
+        &self,
+        id: &str,
+        model: &Option<Option<String>>,
+        effort: &Option<Option<String>>,
+        compatibility: &BTreeMap<String, bool>,
+        boundary: Option<&str>,
+    ) -> Result<bool> {
+        self.write_session_launch_overrides(id, model, effort, Some(compatibility), true, boundary)
+    }
+
+    /// Replaces the compatibility switches the session holds its own value for, the whole map as
+    /// `Session::compatibility` states it.
+    #[cfg(test)]
+    pub fn set_session_compatibility(
+        &self,
+        id: &str,
+        compatibility: &BTreeMap<String, bool>,
+    ) -> Result<()> {
+        self.lock().execute(
+            "UPDATE sessions SET compatibility = ?2 WHERE id = ?1",
+            params![id, compatibility_to_text(compatibility)],
+        )?;
+        Ok(())
     }
 
     /// Records a session's model choice only while the user has not archived it. With `boundary`, a
     /// model change's observation boundary (`records::collector::ObservedBoundary`), it also stores
     /// that and clears the observed model and effort, in the same write.
+    #[cfg(test)]
     pub(crate) fn set_session_launch_overrides_unless_archived(
         &self,
         id: &str,
@@ -689,7 +735,7 @@ impl Store {
         effort: &Option<Option<String>>,
         boundary: Option<&str>,
     ) -> Result<bool> {
-        self.write_session_launch_overrides(id, model, effort, true, boundary)
+        self.write_session_launch_overrides(id, model, effort, None, true, boundary)
     }
 
     fn write_session_launch_overrides(
@@ -697,6 +743,7 @@ impl Store {
         id: &str,
         model: &Option<Option<String>>,
         effort: &Option<Option<String>>,
+        compatibility: Option<&BTreeMap<String, bool>>,
         unless_archived: bool,
         boundary: Option<&str>,
     ) -> Result<bool> {
@@ -704,7 +751,8 @@ impl Store {
             "UPDATE sessions SET model = ?2, effort = ?3, model_override = ?4, effort_override = ?5,
                 observed_boundary = COALESCE(?7, observed_boundary),
                 observed_model = CASE WHEN ?7 IS NULL THEN observed_model ELSE NULL END,
-                observed_effort = CASE WHEN ?7 IS NULL THEN observed_effort ELSE NULL END
+                observed_effort = CASE WHEN ?7 IS NULL THEN observed_effort ELSE NULL END,
+                compatibility = CASE WHEN ?9 THEN ?10 ELSE compatibility END
              WHERE id = ?1 AND (?6 = 0 OR status != ?8)",
             params![
                 id,
@@ -715,6 +763,8 @@ impl Store {
                 unless_archived,
                 boundary,
                 enum_to_text(&SessionStatus::Archived),
+                compatibility.is_some(),
+                compatibility.and_then(compatibility_to_text),
             ],
         )? > 0)
     }
@@ -949,9 +999,9 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
              status, has_conversation, bound_to, colour, ordinal, account_id, config_dir, pinned,
              started_at, ended_at, role, terminal_title, model, effort, model_override,
              effort_override, context, record_title, record_prompt, locked, observed_model, observed_effort,
-             last_turn_abnormal)
+             last_turn_abnormal, compatibility)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32)",
+                 ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33)",
         params![
             session.id,
             enum_to_text(&session.agent),
@@ -985,6 +1035,7 @@ fn insert_session_row(conn: &Connection, session: &Session) -> Result<()> {
             session.observed_model,
             session.observed_effort,
             session.paused,
+            compatibility_to_text(&session.compatibility),
         ],
     )?;
     Ok(())
@@ -1037,13 +1088,16 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Option<Session>> {
             .and_then(|text| serde_json::from_str(&text).ok()),
         model: row.get::<_, bool>(23)?.then(|| row.get(21)).transpose()?,
         effort: row.get::<_, bool>(24)?.then(|| row.get(22)).transpose()?,
+        compatibility: agent
+            .descriptor()
+            .known_compatibility(compatibility_from_text(row.get(32)?)),
     }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{error_code, error_parts};
+    use crate::protocol::{error_code, error_parts, AgentId};
 
     use crate::store::test_support::*;
 
@@ -2140,5 +2194,195 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))
             .unwrap();
         assert_eq!(stored, 2);
+    }
+
+    #[test]
+    fn compatibility_held_session_switches_survive_reopening() {
+        let path = temp_db("compatibility-session-storage");
+        let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        let mut record =
+            crate::test_support::bare_session("s", crate::protocol::SessionKind::Console);
+        record.agent = AgentId::CODEX;
+        record
+            .compatibility
+            .insert("claude_compatibility".into(), false);
+        store.insert_session(&record).unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store.require_session("s").unwrap().compatibility,
+            record.compatibility
+        );
+    }
+
+    #[test]
+    fn compatibility_session_switches_can_return_to_following() {
+        let path = temp_db("compatibility-session-storage");
+        let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        let mut record =
+            crate::test_support::bare_session("s", crate::protocol::SessionKind::Console);
+        record.agent = AgentId::CODEX;
+        record
+            .compatibility
+            .insert("claude_compatibility".into(), false);
+        store.insert_session(&record).unwrap();
+        record.compatibility.clear();
+        store
+            .set_session_launch("s", &record.model, &record.effort, &record.compatibility)
+            .unwrap();
+        assert!(store.require_session("s").unwrap().compatibility.is_empty());
+    }
+
+    #[test]
+    fn compatibility_session_storage_ignores_unknown_and_non_overridable_entries() {
+        let path = temp_db("compatibility-session-storage");
+        let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        let mut record =
+            crate::test_support::bare_session("s", crate::protocol::SessionKind::Console);
+        record.agent = AgentId::CODEX;
+        record.compatibility = [
+            ("claude_compatibility".into(), false),
+            ("future_switch".into(), true),
+            ("approval_reviewer".into(), true),
+        ]
+        .into();
+        store.insert_session(&record).unwrap();
+        assert_eq!(
+            store.require_session("s").unwrap().compatibility,
+            [("claude_compatibility".to_string(), false)].into()
+        );
+    }
+    #[test]
+    fn archived_session_refuses_every_field_of_a_guarded_launch_write() {
+        let path = temp_db("guarded-launch-archived");
+        let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        store.insert_project(&project(false)).unwrap();
+        let mut record = session(None);
+        record.agent = AgentId::CODEX;
+        record.status = SessionStatus::Archived;
+        record
+            .compatibility
+            .insert("claude_compatibility".into(), true);
+        store.insert_session(&record).unwrap();
+        store
+            .lock()
+            .execute_batch(
+                "UPDATE sessions SET observed_boundary = 'before';
+             CREATE TEMP TABLE launch_writes (id TEXT);
+             CREATE TEMP TRIGGER launch_writes AFTER UPDATE ON sessions
+             BEGIN INSERT INTO launch_writes VALUES (NEW.id); END;",
+            )
+            .unwrap();
+        let before = serde_json::to_value(store.require_session(&record.id).unwrap()).unwrap();
+        assert!(!store
+            .set_session_launch_unless_archived(
+                &record.id,
+                &Some(Some("changed".into())),
+                &Some(None),
+                &BTreeMap::new(),
+                Some("after"),
+            )
+            .unwrap());
+        assert_eq!(
+            serde_json::to_value(store.require_session(&record.id).unwrap()).unwrap(),
+            before
+        );
+        assert_eq!(
+            store.observed_boundary(&record.id).unwrap().as_deref(),
+            Some("before")
+        );
+        let count: i64 = store
+            .lock()
+            .query_row("SELECT COUNT(*) FROM launch_writes", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn guarded_launch_write_updates_switches_and_observation_boundary_together() {
+        let path = temp_db("guarded-launch-boundary");
+        let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        store.insert_project(&project(false)).unwrap();
+        let mut record = session(None);
+        record.agent = AgentId::CODEX;
+        record.status = SessionStatus::Interrupted;
+        record
+            .compatibility
+            .insert("claude_compatibility".into(), true);
+        record.observed_model = Some("observed-model".into());
+        record.observed_effort = Some("observed-effort".into());
+        store.insert_session(&record).unwrap();
+        store
+            .lock()
+            .execute_batch(
+                "CREATE TEMP TABLE launch_writes (id TEXT);
+             CREATE TEMP TRIGGER launch_writes AFTER UPDATE ON sessions
+             BEGIN INSERT INTO launch_writes VALUES (NEW.id); END;",
+            )
+            .unwrap();
+        let model = Some(Some("changed".into()));
+        let effort = Some(None);
+        assert!(store
+            .set_session_launch_unless_archived(
+                &record.id,
+                &model,
+                &effort,
+                &BTreeMap::new(),
+                Some("after"),
+            )
+            .unwrap());
+        let after = store.require_session(&record.id).unwrap();
+        assert_eq!(after.model, model);
+        assert_eq!(after.effort, effort);
+        assert!(after.compatibility.is_empty());
+        assert!(after.observed_model.is_none() && after.observed_effort.is_none());
+        assert_eq!(
+            store.observed_boundary(&record.id).unwrap().as_deref(),
+            Some("after")
+        );
+        let count: i64 = store
+            .lock()
+            .query_row("SELECT COUNT(*) FROM launch_writes", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn model_only_fixture_writes_preserve_held_compatibility_switches() {
+        let path = temp_db("model-only-preserves-compatibility");
+        let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        store.insert_project(&project(false)).unwrap();
+        let mut record = session(None);
+        record.agent = AgentId::CODEX;
+        record.status = SessionStatus::Interrupted;
+        record
+            .compatibility
+            .insert("claude_compatibility".into(), true);
+        store.insert_session(&record).unwrap();
+        store
+            .set_session_launch_overrides(&record.id, &Some(Some("first".into())), &None)
+            .unwrap();
+        assert_eq!(
+            store.require_session(&record.id).unwrap().compatibility,
+            record.compatibility
+        );
+        assert!(store
+            .set_session_launch_overrides_unless_archived(
+                &record.id,
+                &Some(Some("second".into())),
+                &Some(None),
+                Some("boundary"),
+            )
+            .unwrap());
+        assert_eq!(
+            store.require_session(&record.id).unwrap().compatibility,
+            record.compatibility
+        );
     }
 }

@@ -2,6 +2,8 @@
 //! [`PerAgent`], a launch's model and effort, and [`Change`], an update request's value for one
 //! agent's setting. The agents themselves are the provider registry's (`crate::providers`).
 
+use std::collections::BTreeMap;
+
 use serde::de::{IgnoredAny, MapAccess, Visitor};
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -125,12 +127,18 @@ impl<'de, T: Deserialize<'de> + Default> Deserialize<'de> for PerAgent<T> {
 }
 
 /// The model and reasoning effort an agent's sessions are launched with, in the agent's own
-/// spelling. `null` leaves the choice to the agent.
+/// spelling, and the compatibility switches the level holds. `null` leaves the choice to the
+/// agent.
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Launch {
     pub model: Option<String>,
     pub effort: Option<String>,
+    /// The compatibility switches (provider settings declaring `compatibility_with`) this level
+    /// holds its own value for, by setting id: only the values it holds, so a switch left out
+    /// follows the level behind it, down to the agent's value in `Settings::provider_settings`.
+    #[serde(default)]
+    pub compatibility: BTreeMap<String, bool>,
 }
 
 /// One agent's value in an update request: the key absent, an explicit `null`, or a value.
@@ -165,8 +173,9 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Change<T> {
     }
 }
 
-/// A change to one agent's model and effort: each absent for "leave it alone", `null` or a
-/// blank string for the agent's own default.
+/// A change to one agent's launch settings: absent fields leave their values alone. A model or
+/// effort of `null` or a blank string uses the agent's own default; compatibility entries follow
+/// the level behind on `null` and hold their own boolean otherwise.
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Default, Deserialize)]
 pub struct LaunchChange {
@@ -176,11 +185,16 @@ pub struct LaunchChange {
     #[serde(default, deserialize_with = "present_option")]
     #[cfg_attr(test, ts(optional))]
     pub effort: Present<String>,
+    /// Per compatibility switch: absent leaves it alone, `null` goes back to following the level
+    /// behind, a boolean holds the level's own value.
+    #[serde(default)]
+    #[cfg_attr(test, ts(optional, as = "Option<BTreeMap<String, Option<bool>>>"))]
+    pub compatibility: BTreeMap<String, Option<bool>>,
 }
 
 impl LaunchChange {
-    /// Whether the change touches neither field.
+    /// Whether the change touches none of the fields.
     pub fn is_keep(&self) -> bool {
-        self.model.is_none() && self.effort.is_none()
+        self.model.is_none() && self.effort.is_none() && self.compatibility.is_empty()
     }
 }

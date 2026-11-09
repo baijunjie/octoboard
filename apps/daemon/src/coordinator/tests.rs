@@ -376,6 +376,7 @@ async fn an_effort_given_alone_is_checked_against_the_model_it_inherits_from_the
 
     // A project given only an effort the console's model does not take.
     let effort_only = |effort: &str| LaunchChange {
+        compatibility: Default::default(),
         model: None,
         effort: Some(Some(effort.to_string())),
     };
@@ -408,6 +409,7 @@ async fn an_effort_given_alone_is_checked_against_the_model_it_inherits_from_the
                     launch: PerAgent::default().with(
                         AgentId::CLAUDE,
                         Launch {
+                            compatibility: Default::default(),
                             model: None,
                             effort: Some(effort.to_string()),
                         },
@@ -446,6 +448,7 @@ async fn an_effort_given_alone_is_checked_against_the_model_it_inherits_from_the
     changes.project_launch.insert(
         AgentId::CLAUDE,
         LaunchChange {
+            compatibility: Default::default(),
             model: Some(Some("unlisted".to_string())),
             effort: None,
         },

@@ -71,10 +71,10 @@ pub struct NewProjectSettings {
     pub git_workflow: GitWorkflowOverride,
 }
 
-/// Checks the models and efforts a new project is given against what each agent offers, unless
-/// `check` is false. Runs once the directory or repository is known to be usable and before
-/// anything is cloned or stored, since asking an agent can take a while and a refusal must leave
-/// nothing behind.
+/// Checks a new project's models and efforts against what each agent offers, unless `check` is
+/// false, and always checks that held compatibility switches belong to their agent. Runs once the
+/// directory or repository is known to be usable and before anything is cloned or stored, since
+/// asking an agent can take a while and a refusal must leave nothing behind.
 async fn check_new_project_launch(
     state: &Arc<AppState>,
     console: &Console,
@@ -82,6 +82,9 @@ async fn check_new_project_launch(
     accounts: &PerAgent<ProjectAccount>,
     check: bool,
 ) -> Result<()> {
+    for (agent, launch) in settings.launch.iter() {
+        launch_settings::check_compatibility(agent, &launch.compatibility)?;
+    }
     if !check {
         return Ok(());
     }
@@ -364,6 +367,9 @@ pub async fn update_project_checked(
             format!("`tags` and `{other}` cannot both be given"),
             &[("first", "tags"), ("second", other)],
         ));
+    }
+    for (agent, change) in &changes.launch {
+        launch_settings::check_compatibility(*agent, &change.compatibility)?;
     }
     let name = changes
         .name

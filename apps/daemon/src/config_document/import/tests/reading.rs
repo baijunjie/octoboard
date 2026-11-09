@@ -100,6 +100,7 @@ fn an_agent_left_out_of_a_per_agent_entry_reads_as_unset() {
         })
     };
     let launch = Launch {
+        compatibility: Default::default(),
         model: Some("grok-4".to_string()),
         effort: None,
     };

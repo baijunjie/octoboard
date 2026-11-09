@@ -1,3 +1,4 @@
+import type { LaunchOverrides } from "../agents/agentLaunchSettings";
 import { choiceGroups, type AccountChoice } from "../accounts/choiceEntries";
 import { settledInitialChoice } from "../accounts/openingChoice";
 import type { Translate } from "../i18n/catalog";
@@ -16,7 +17,7 @@ export function openSessionRequest(t: Translate, { console: parentConsole, proje
   resumeId?: string;
   choice: AccountChoice;
   title?: string;
-  overrides?: { model?: string | null; effort?: string | null };
+  overrides?: LaunchOverrides;
   /** The window's resolved appearance, sent as `terminal_appearance`. */
   appearance: "light" | "dark";
 }): OpenSessionRequest {

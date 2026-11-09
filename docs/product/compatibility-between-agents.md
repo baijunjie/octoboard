@@ -3,8 +3,10 @@
 What a session's launch is given while one of its agent's compatibility switches is on, so that the session loads
 another agent's configuration as well as its own: Claude compatibility for Codex and Grok Build, Codex compatibility
 for Claude Code and Grok Build. The switches themselves, their defaults and who may read them are in "Claude
-compatibility" and "Codex compatibility" in `docs/product/per-agent-settings.md`; the rest of each agent's launch is in
-`docs/product/per-agent-launch-specifics.md`.
+compatibility" and "Codex compatibility" in `docs/product/per-agent-settings.md`; whether a switch is on for a given
+launch — the session's own value, else its project's or its console's, else the agent-level one — is in "Which value a
+launch uses" in `docs/product/compatibility-switches-in-launch-settings.md`, and "on" below means on as resolved there.
+The rest of each agent's launch is in `docs/product/per-agent-launch-specifics.md`.
 
 What a switch gives is worked out afresh on every launch, a resume and an account switch included, from the files as
 they are then; a running process keeps what it was started with. Nothing is written into any of Claude Code's, Codex's

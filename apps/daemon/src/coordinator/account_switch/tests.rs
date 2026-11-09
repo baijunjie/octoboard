@@ -1053,3 +1053,43 @@ async fn a_console_session_whose_switch_fails_stops_what_its_process_started() {
         "kept running past the failed switch"
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_account_switch_reads_session_switches_into_its_launch() {
+    use std::sync::Mutex;
+    let (state, dir) = console_with_project_and_accounts("compatibility-account-switch");
+    let mut project = state.store.require_project("project-1").unwrap();
+    project.path = dir.to_string_lossy().into_owned();
+    project.launch[AgentId::CODEX]
+        .compatibility
+        .insert("claude_compatibility".into(), false);
+    state.store.update_project(&project).unwrap();
+    std::fs::create_dir_all(dir.join("codex-a")).unwrap();
+    let mut session = project_session("s", AgentId::CODEX, SessionStatus::Interrupted);
+    session
+        .compatibility
+        .insert("claude_compatibility".into(), true);
+    state.store.insert_session(&session).unwrap();
+    let observed = Arc::new(Mutex::new(None));
+    let seen = observed.clone();
+    let result = switch_session_account_with(
+        &state,
+        "s",
+        Some(Some("codex-a".into())),
+        None,
+        None,
+        LaunchEdit::default(),
+        || Ok(HashMap::new()),
+        move |request| {
+            *seen.lock().unwrap() = Some(request.settings.switch("claude_compatibility"));
+            Err(anyhow::anyhow!("fixture stops before creating a process"))
+        },
+    )
+    .await;
+    assert!(result.is_err());
+    assert_eq!(*observed.lock().unwrap(), Some(true));
+    assert_eq!(
+        state.session_record("s").unwrap().compatibility,
+        session.compatibility
+    );
+}

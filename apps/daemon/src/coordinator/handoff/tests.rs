@@ -122,6 +122,7 @@ impl Fixture {
         handoff_session_with(
             &self.state,
             Handoff {
+                compatibility: Default::default(),
                 session: session.to_string(),
                 agent,
                 account: None,
@@ -225,6 +226,7 @@ async fn a_handoff_to_codex_keeps_mcp_tokens_in_a_non_default_accounts_home_only
         handoff_session_with(
             &fixture.state,
             Handoff {
+                compatibility: Default::default(),
                 session: "original".to_string(),
                 agent: AgentId::CODEX,
                 account: Some(account.map(str::to_string)),
@@ -859,6 +861,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
     let err = handoff_session_with(
         &fixture.state,
         Handoff {
+            compatibility: Default::default(),
             session: "with-branch".to_string(),
             agent: AgentId::CODEX,
             account: Some(Some("claude-account".to_string())),
@@ -883,6 +886,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
         let err = handoff_session_with(
             &fixture.state,
             Handoff {
+                compatibility: Default::default(),
                 session: "with-branch".to_string(),
                 agent: AgentId::CODEX,
                 account: None,
@@ -944,6 +948,7 @@ async fn a_start_that_fails_moves_nothing_and_removes_the_package() {
     let err = handoff_session_with(
         &fixture.state,
         Handoff {
+            compatibility: Default::default(),
             session: "original".to_string(),
             agent: AgentId::CODEX,
             account: None,
@@ -1129,6 +1134,7 @@ async fn messages_for_the_original_during_a_failed_handoff_reach_the_original() 
     let err = handoff_session_with(
         &fixture.state,
         Handoff {
+            compatibility: Default::default(),
             session: "original".to_string(),
             agent: AgentId::CODEX,
             account: None,
@@ -1222,6 +1228,7 @@ async fn a_session_that_is_no_longer_the_askers_is_refused() {
     let err = handoff_session_with(
         &fixture.state,
         Handoff {
+            compatibility: Default::default(),
             session: "owned".to_string(),
             agent: AgentId::CODEX,
             account: None,

@@ -1,5 +1,7 @@
 // What the fixture daemon answers for the sessions: opening, resuming, archiving and deleting them, handing one off,
 // switching its account or model, and the small changes to one (pin, lock, colour, title).
+import { applyCompatibility } from "../agents/launchCompatibility";
+import { sameValue } from "../values/sameValue";
 import { isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents/agents";
 import { servedLabel } from "./fixtureProviders";
 import { type Agent, type ConsoleSessionColour, type Session, type SessionRecordPresence } from "../protocol";
@@ -129,16 +131,17 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       const current = store.getState();
       const session = current.sessions.get(body.session);
       if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
-      if (body.model === undefined && body.effort === undefined) return fail({ code: "field_required", params: { field: "model" }, message: "model is required" });
+      if (body.model === undefined && body.effort === undefined && body.compatibility === undefined) return fail({ code: "field_required", params: { field: "model" }, message: "model is required" });
       if (session.status === "archived") return fail({ code: "session_archived", params: { session: body.session }, message: "An archived session cannot change its model" });
       if (session.status === "starting" || session.switching_account) return fail({ code: "session_already_starting", params: { session: body.session }, message: "this session is already being started" });
       refuseIfSharingChanges(session.account_id);
       // A value left out keeps what the session has; a blank one leaves the choice to the agent.
       const chosen = (value: string | null | undefined, kept: string | null | undefined) => (value === undefined ? kept : value?.trim() || null);
       const [model, effort] = [chosen(body.model, session.model), chosen(body.effort, session.effort)];
-      if (model === session.model && effort === session.effort) return { type: "session_model_set", id: null, session: session.id, outcome: "unchanged" };
+      const compatibility = applyCompatibility(session.compatibility, body.compatibility);
+      if (model === session.model && effort === session.effort && sameValue(compatibility, session.compatibility)) return { type: "session_model_set", id: null, session: session.id, outcome: "unchanged" };
       if (session.status === "interrupted") {
-        applyDaemonEvent(store, { type: "session_upserted", session: { ...session, model, effort } });
+        applyDaemonEvent(store, { type: "session_upserted", session: { ...session, model, effort, compatibility } });
         return { type: "session_model_set", id: null, session: session.id, outcome: "recorded" };
       }
       // The daemon shows the session starting from the moment the restart is decided; once the process is down the
@@ -155,7 +158,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
         applyDaemonEvent(store, { type: "session_upserted", session: interrupted ? { ...forgotten, status: "interrupted" } : session });
         return fail(reply);
       }
-      applyDaemonEvent(store, { type: "session_upserted", session: { ...forgotten, status: "idle", model, effort } });
+      applyDaemonEvent(store, { type: "session_upserted", session: { ...forgotten, status: "idle", model, effort, compatibility } });
       return { type: "session_model_set", id: null, session: session.id, outcome: "restarted", continued: true };
     },
     handoff_session: (body) => {
@@ -209,6 +212,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
         ended_at: null,
         ...(body.model !== undefined && { model: body.model }),
         ...(body.effort !== undefined && { effort: body.effort }),
+        compatibility: applyCompatibility({}, body.compatibility),
       };
       const sessions = new Map(current.sessions);
       for (const owned of current.sessions.values()) if (owned.bound_to === session.id) sessions.set(owned.id, { ...owned, bound_to: received.id });
@@ -303,6 +307,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
         ended_at: null,
         ...(body.model !== undefined && { model: body.model }),
         ...(body.effort !== undefined && { effort: body.effort }),
+        compatibility: applyCompatibility({}, body.compatibility),
       };
       store.setState({ sessions: new Map(current.sessions).set(session.id, session) });
       return { type: "session_opened", id: null, session };

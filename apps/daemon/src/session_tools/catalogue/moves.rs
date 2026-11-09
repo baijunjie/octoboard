@@ -3,7 +3,7 @@
 
 use serde_json::json;
 
-use super::schemas::{agent_enum, object_schema, NAMING_LANGUAGE};
+use super::schemas::{agent_enum, compatibility_schema, object_schema, NAMING_LANGUAGE};
 use super::ToolDef;
 
 /// How an owner moves the responsibility for git branches between sessions, without the user: the
@@ -109,28 +109,29 @@ pub(super) const TRANSFER_PROCESSES: ToolDef = ToolDef {
 /// archived.
 pub(super) const HANDOFF_SESSION: ToolDef = ToolDef {
     name: "handoff_session",
-    description: "Hand one of your sessions (`yours: true`) off to a new session of another \
-                  agent, to carry its work on, for instance when its account has run out of \
-                  quota. The conversation does not move, because the agents' records cannot \
-                  resume one another: the new session reads a package built from the original's \
-                  conversation (every user message and reply, without tool output), its latest \
-                  todo list and the files it changed. What moves is what only Octoboard holds: \
-                  the branches the original is responsible for and the sessions it owns now \
-                  belong to the new session, which reports to you like the original did, and the \
-                  original is archived. The user is asked first, and may change the agent, the \
-                  account, the model and the reasoning effort you chose, so read what the result \
+    description:
+        "Hand one of your sessions (`yours: true`) off to a new session of another agent, \
+                  to carry its work on, for instance when its account has run out of quota. The \
+                  conversation does not move, because the agents' records cannot resume one \
+                  another: the new session reads a package built from the original's conversation \
+                  (every user message and reply, without tool output), its latest todo list and \
+                  the files it changed. What moves is what only Octoboard holds: the branches the \
+                  original is responsible for and the sessions it owns now belong to the new \
+                  session, which reports to you like the original did, and the original is \
+                  archived. The user is asked first, and may change the agent, the account, model, \
+                  reasoning effort and compatibility switches you chose, so read what the result \
                   says was done; the call waits for their answer, for several minutes at most — \
-                  unless the user has chosen to have handoffs approved \
-                  automatically, in which case the call does not wait. A refusal, or no answer in \
-                  time, comes back as an error and changes nothing. Refused, changing nothing, \
-                  while the session is in the middle of a turn, and for the agent the session \
-                  already runs on (switching it to another account of that agent keeps the \
-                  conversation). An account whose quota is used up, or that is not logged in, is \
-                  refused only once the user has approved (they can pick another in the form), or \
-                  at once when handoffs are approved without asking. Returns the new session's id, \
-                  its agent, account and, where set, model and effort, the branches that moved and \
-                  the sessions it now owns. Pass `account` only when the user asked for a \
-                  particular one.",
+                  unless the user has chosen to have handoffs approved automatically, in which \
+                  case the call does not wait. A refusal, or no answer in time, comes back as an \
+                  error and changes nothing. Refused, changing nothing, while the session is in \
+                  the middle of a turn, and for the agent the session already runs on (switching \
+                  it to another account of that agent keeps the conversation). An account whose \
+                  quota is used up, or that is not logged in, is refused only once the user has \
+                  approved (they can pick another in the form), or at once when handoffs are \
+                  approved without asking. Returns the new session's id, its agent, account and, \
+                  where set, model, effort and held `compatibility` switches, the branches that \
+                  moved and the sessions it now owns. Pass `account` only when the user asked for \
+                  a particular one.",
     schema: || {
         object_schema(
             json!({
@@ -177,6 +178,10 @@ pub(super) const HANDOFF_SESSION: ToolDef = ToolDef {
                                     (else its console) sets for sessions; a project session \
                                     reads it in `get_project`'s `effective.launch`.",
                 },
+                "compatibility": compatibility_schema(
+                    "this session",
+                    "the project's, else the console's, else the application-wide value",
+                ),
                 "note": {
                     "type": "string",
                     "description": "What to tell the new session beyond the package, in natural \
@@ -235,28 +240,29 @@ pub(super) const SWITCH_SESSION_ACCOUNT: ToolDef = ToolDef {
 /// conversation and its account, as the user's Change model does, without approval.
 pub(super) const SET_SESSION_MODEL: ToolDef = ToolDef {
     name: "set_session_model",
-    description: "Change the model or reasoning effort of one of your sessions (`yours: true`), \
-                  which then become the session's own. It stays on its agent and its account, \
-                  so no approval is needed. A running session is restarted to take them: its \
-                  process is ended and relaunched resuming its conversation, which cuts off a \
-                  turn in progress. It is not sent a message for this: it comes back awaiting \
-                  instructions, so send it the next step with `instruct_session` — except where \
-                  the result's `note` says it was sent a prompt to continue its task (a turn the \
-                  restart cut off or a usage limit had stopped), which you must not repeat. The \
-                  call waits a few seconds for the relaunch to come up; should the call be cut \
-                  off before then, the change still runs to its end and its outcome is written \
-                  into your session. An interrupted session is not started: it takes the new \
-                  values when it is next resumed. Values it already has succeed, changing \
-                  nothing, unless a change of its model is under way, which refuses the call. A \
-                  `model` or `effort` the agent does not offer under the session's \
-                  account is refused, changing nothing; `list_agent_models` lists them. Refused \
-                  too for an archived session (`resume_session` takes a model and effort), one \
-                  that is starting or being switched, handed off or otherwise changed, and one \
-                  waiting for the user or `dormant`, which the restart would take its prompt or \
-                  view from — a usage-limit dialog alone is not such a wait: the restart ends \
-                  it, and the turn it stopped is continued. Returns the session, whether it was \
-                  `restarted`, and its own `model` and `effort` (`null` is the agent's own \
-                  default; absent where it follows its project's or console's).",
+    description: "Change the model, reasoning effort or compatibility switches of one of your \
+                  sessions (`yours: true`), which then become the session's own overrides. It \
+                  stays on its agent and its account, so no approval is needed. A running session \
+                  is restarted even for a compatibility-only change: its process is ended and \
+                  relaunched resuming its conversation, which cuts off a turn in progress. It is \
+                  not sent a message for this: it comes back awaiting instructions, so send it the \
+                  next step with `instruct_session` — except where the result's `note` says it was \
+                  sent a prompt to continue its task (a turn the restart cut off or a usage limit \
+                  had stopped), which you must not repeat. The call waits a few seconds for the \
+                  relaunch to come up; should the call be cut off before then, the change still \
+                  runs to its end and its outcome is written into your session. An interrupted \
+                  session is not started: it takes the new values when it is next resumed. Values \
+                  it already has succeed, changing nothing, unless a change of its model is under \
+                  way, which refuses the call. A `model` or `effort` the agent does not offer \
+                  under the session's account is refused, changing nothing; `list_agent_models` \
+                  lists them. Refused too for an archived session (`resume_session` takes launch \
+                  overrides), one that is starting or being switched, handed off or otherwise \
+                  changed, and one waiting for the user or `dormant`, which the restart would take \
+                  its prompt or view from — a usage-limit dialog alone is not such a wait: the \
+                  restart ends it, and the turn it stopped is continued. Returns the session, \
+                  whether it was `restarted`, and its own `model` and `effort` (`null` is the \
+                  agent's own default; absent where it follows its project's or console's), plus \
+                  `compatibility`, the switches it holds its own boolean value for, where any.",
     schema: || {
         object_schema(
             json!({
@@ -277,6 +283,10 @@ pub(super) const SET_SESSION_MODEL: ToolDef = ToolDef {
                                     agent's own default. `list_agent_models` lists the levels \
                                     each model offers. Left out, it keeps the effort it has.",
                 },
+                "compatibility": compatibility_schema(
+                    "this session",
+                    "the project's, else the console's, else the application-wide value",
+                ),
             }),
             &["session"],
         )

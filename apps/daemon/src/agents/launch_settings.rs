@@ -11,7 +11,7 @@
 //! record builds its checks and runs them first, then applies its change to the record as it is
 //! afterwards, rather than holding a copy across the wait.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -30,12 +30,50 @@ pub(crate) fn normalize_launch_setting(text: Option<&str>) -> Option<String> {
     trimmed_or_none(text)
 }
 
-/// Each agent's launch pair as stored.
+/// Each agent's launch pair as stored: blank read as unset, and only the compatibility values of
+/// switches the agent declares overridable kept.
 pub(crate) fn normalized_launches(launches: PerAgent<Launch>) -> PerAgent<Launch> {
-    launches.map(|_, launch| Launch {
+    launches.map(|agent, launch| Launch {
         model: normalize_launch_setting(launch.model.as_deref()),
         effort: normalize_launch_setting(launch.effort.as_deref()),
+        compatibility: agent.descriptor().known_compatibility(launch.compatibility),
     })
+}
+
+/// The `unreadable_request` refusal of a setting choice that cannot be made, saying why.
+pub(crate) fn refused_setting(detail: String) -> anyhow::Error {
+    CodedError::raised(
+        error_code::UNREADABLE_REQUEST,
+        format!("unreadable request: {detail}"),
+        &[("detail", &detail)],
+    )
+}
+
+/// Refuses, with `unreadable_request`, a compatibility entry naming a setting `agent` does not
+/// declare or does not let a launch level hold (`SettingDescriptor::overridable`).
+pub(crate) fn check_compatibility<V>(agent: AgentId, entries: &BTreeMap<String, V>) -> Result<()> {
+    for setting in entries.keys() {
+        if !agent.descriptor().is_overridable(setting) {
+            return Err(refused_setting(format!(
+                "{}'s setting `{setting}` is not a compatibility switch a launch can hold",
+                agent.wire_name()
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// `held` with `change` applied: `Some(value)` holds it, `None` goes back to following.
+pub(crate) fn apply_compatibility(
+    held: &mut BTreeMap<String, bool>,
+    change: &BTreeMap<String, Option<bool>>,
+) {
+    for (setting, value) in change {
+        match value {
+            Some(value) => held.insert(setting.clone(), *value),
+            None => held.remove(setting),
+        };
+    }
 }
 
 /// A session override keeps its presence even when blank means explicitly unset.
@@ -179,6 +217,7 @@ pub fn apply_change(
             *field = value;
         }
     }
+    apply_compatibility(&mut launch.compatibility, &change.compatibility);
     check.effective_model = launch.model.clone();
     check
 }

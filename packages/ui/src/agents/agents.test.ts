@@ -163,15 +163,15 @@ describe("the launch settings a session inherits", () => {
   it("falls through a project's stored retired `best` model to the console's, as the daemon reads it", () => {
     const owner = consoleOf("c", "Console", { project_session_launch: { claude: { model: "sonnet" }, codex: { model: "best" } } });
     const project = projectOf("p", "c", "Project", { launch: { claude: { model: "best", effort: "low" }, codex: { model: "best" } } });
-    expect(projectSessionLaunch(owner, project, "claude", display("claude"))).toEqual({ model: "sonnet", effort: "low" });
-    expect(inheritedSessionLaunch(owner, project, "claude", display("claude"))).toEqual({ model: "sonnet", effort: "low" });
+    expect(projectSessionLaunch(owner, project, "claude", display("claude"))).toEqual({ model: "sonnet", effort: "low", compatibility: {} });
+    expect(inheritedSessionLaunch(owner, project, "claude", display("claude"))).toEqual({ model: "sonnet", effort: "low", compatibility: {} });
     // Another agent's model of that name is a model.
     expect(projectSessionLaunch(owner, project, "codex", display("codex")).model).toBe("best");
   });
 
   it("reads a console's stored `best` as unset for a console session", () => {
     const owner = consoleOf("c", "Console", { launch: { claude: { model: "best", effort: "high" }, codex: { model: "best" } } });
-    expect(inheritedSessionLaunch(owner, undefined, "claude", display("claude"))).toEqual({ model: null, effort: "high" });
+    expect(inheritedSessionLaunch(owner, undefined, "claude", display("claude"))).toEqual({ model: null, effort: "high", compatibility: {} });
     expect(inheritedSessionLaunch(owner, undefined, "codex", display("codex")).model).toBe("best");
   });
 });

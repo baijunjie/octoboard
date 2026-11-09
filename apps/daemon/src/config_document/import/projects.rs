@@ -181,7 +181,7 @@ pub(super) async fn place_project(
                     settings: NewProjectSettings {
                         pinned: project.pinned,
                         accounts: accounts.accounts,
-                        launch: project.launch,
+                        launch: crate::config_document::exported_launches(project.launch),
                         git_workflow: project.git_workflow,
                     },
                     // The document says what the project's default agent is, including none.

@@ -10,8 +10,8 @@ A project carries a name, an optional description (see "The project's descriptio
 an optional default agent, how it was associated, the remote URL of the repository it points at (see "The project's
 remote URL" below), whether the user has pinned it (see "Order of projects and sessions" in
 `docs/product/order-of-projects-and-sessions.md`), any number of tags (see `docs/product/project-tags.md`), and — one
-set per agent — what it says about the account its sessions run under and an optional model and reasoning effort for
-them (see "The project's account, model and reasoning effort" below), and its own git workflow settings, each
+set per agent — what it says about the account its sessions run under and an optional model, reasoning effort and
+compatibility switches for them (see "The project's account, model and reasoning effort" below), and its own git workflow settings, each
 following the application-wide value until the project holds one of its own (see "A project's own git workflow
 settings" in `docs/product/git-workflow-settings.md`). Every project is bound to a host (see "Hosts" below).
 
@@ -219,9 +219,10 @@ the console session associates, which always detect when they give none.
 
 ## The project's account, model and reasoning effort
 
-Besides its default agent, a project may carry **per agent** its own account and its own model and reasoning effort for
-the sessions opened under it. All three are kept one set per agent, because an account belongs to one agent and model
-names and effort levels are each agent's own, and a session reads only the set of its own agent.
+Besides its default agent, a project may carry **per agent** its own account, its own model and reasoning effort and
+its own compatibility switches for the sessions opened under it. All of them are kept one set per agent, because an
+account belongs to one agent and model names, effort levels and switches are each agent's own, and a session reads only
+the set of its own agent.
 
 - **The account** has three states: **inheriting the console's reference** for that agent, which is the state a new
   project is in; **the agent's default account** — pinning nothing, the state described in "Agent config directories" in
@@ -234,10 +235,14 @@ names and effort levels are each agent's own, and a session reads only the set o
 - **The model and the reasoning effort**, each left unset, fall back separately to the console's project session
   value for that agent, else to the agent's own default; the console's console session values never apply. See
   `docs/product/model-and-reasoning-effort.md`.
+- **The compatibility switches** of that agent, each following until the project holds On or Off for it, fall back
+  separately to the console's project session value, else to the agent-level value. See
+  `docs/product/compatibility-switches-in-launch-settings.md`.
 
 The project dialog, both when associating and when editing a project, joins the account picker to the **Default agent**
 field as a single field, the way the session dialog joins its Agent field to one, and holds the same collapsed
-**Advanced** section, its **Launch settings** tab holding the model and effort and its **Git workflow** tab the
+**Advanced** section, its **Launch settings** tab holding the model, effort and compatibility switches and its **Git
+workflow** tab the
 project's own git workflow settings (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md` and
 "Reading and changing them" in `docs/product/git-workflow-settings.md`). All of it but the Git workflow tab belongs to
 the agent the Default agent field currently settles on — the agent picked, or the agent "Same as console" names while
@@ -256,16 +261,16 @@ it; the sessions that would run on it are refused until then.
 
 While a new project on a **parent directory** is set to "Detect from files" the account picker is not shown and the
 Advanced section holds the Git workflow tab alone, since no agent is settled — each repository found is detected on
-its own — and any account, model or effort set before the source changed is not stored. The Advanced section stays open
+its own — and any account, model, effort or switch set before the source changed is not stored. The Advanced section stays open
 or closed as it was when the Default agent field or the source changes.
 
-A project the console session associates takes the accounts, models and efforts its call gives, and otherwise inherits
-its console's account for every agent and leaves every model and effort unset. A parent-directory association gives
+A project the console session associates takes the accounts, models, efforts and switches its call gives, and otherwise
+inherits its console's account for every agent, leaves every model and effort unset and follows for every switch. A parent-directory association gives
 every project it creates the same values the form, or the call, was filled in with.
 
-A changed account applies to sessions opened afterwards; a changed model or effort reaches a project session's next
-launch only when that value is inherited (see `docs/product/model-and-reasoning-effort.md`). Sessions already running
-are unaffected by any of the three.
+A changed account applies to sessions opened afterwards; a changed model, effort or switch reaches a project session's
+next launch only when that value is inherited (see `docs/product/model-and-reasoning-effort.md`). Sessions already
+running are unaffected by any of them.
 
 ## The project's remote URL
 
@@ -305,8 +310,8 @@ a repository with no remote left.
 
 ## Editing a project
 
-Only the name, the description, the default agent, the account, the model and the reasoning effort, the tags and the
-project's own git workflow settings can be changed, besides pinning and unpinning the project. The name is changed from
+Only the name, the description, the default agent, the account, the model, the reasoning effort and the compatibility
+switches, the tags and the project's own git workflow settings can be changed, besides pinning and unpinning the project. The name is changed from
 the project's Rename or Project settings, everything else from Project settings, which opens the project dialog under
 that title (see "Project rows" in `docs/product/sidebar-project-rows.md`). The description field follows the name, and
 the tags field sits between the description and the default agent: typing in it offers the tags already in use that the

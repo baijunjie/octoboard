@@ -457,8 +457,8 @@ pub(crate) async fn switch_session_account_if(
             }
             state.set_session_account(id, target_account.as_deref(), target_dir.as_deref())?;
             drop(copying);
-            if let Some((model, effort)) = &overrides {
-                if let Err(err) = state.set_session_launch_overrides(id, model, effort) {
+            if let Some(overrides) = &overrides {
+                if let Err(err) = overrides.record(state, id) {
                     put_back_on_account(state, &before);
                     return Err(err);
                 }
@@ -660,7 +660,7 @@ fn is_already_starting(err: &anyhow::Error) -> bool {
 /// revert that fails is logged, never allowed to hide the reason the switch failed.
 fn put_back_on_account(state: &Arc<AppState>, before: &Session) {
     // The model and effort a switch recorded for its relaunch go back with the account.
-    restart::put_back_model_and_effort(state, before);
+    restart::put_back_launch_overrides(state, before);
     if let Err(revert) = state.set_session_account(
         &before.id,
         before.account_id.as_deref(),

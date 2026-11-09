@@ -116,6 +116,11 @@ pub(super) fn request_session_schema() -> Value {
          takes its project's, else the console's project session effort (a project session \
          reads its own project's in `get_project`'s `effective.launch`)."
     );
+    schema["properties"]["compatibility"] = super::schemas::compatibility_schema(
+        "this session",
+        "the project's, else the console's, else the application-wide value (a project session \
+         reads its own project's in `get_project`'s `effective.launch`)",
+    );
     schema["properties"]["branches"] = json!({
         "type": "array",
         "items": { "type": "string" },
@@ -172,6 +177,12 @@ fn request_resume_session_schema() -> Value {
                                 offers). A session that holds the conversation keeps its own, \
                                 and the call is refused if this is given.",
             },
+            "compatibility": super::schemas::compatibility_schema(
+                "this session",
+                "the project's, else the console's, else the application-wide value (only when no \
+                 session holds the conversation, which opens a new session; one that holds it \
+                 keeps its own, and the call is refused if a switch is held here)",
+            ),
         }),
         &["conversation"],
     )

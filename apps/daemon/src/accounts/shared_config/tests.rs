@@ -1780,6 +1780,7 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
     let opened = crate::coordinator::open::open_session_with(
         &fixture.state,
         crate::coordinator::open::OpenRequest {
+            compatibility: Default::default(),
             console_id: "console-1".to_string(),
             project_id: Some("project-1".to_string()),
             agent: Some(AgentId::CLAUDE),
@@ -1835,6 +1836,7 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
         crate::coordinator::handoff::handoff_session_with(
             &fixture.state,
             crate::coordinator::handoff::Handoff {
+                compatibility: Default::default(),
                 session: "s".to_string(),
                 agent: AgentId::CODEX,
                 account: None,

@@ -271,7 +271,9 @@ impl AppState {
             .lock()
             .expect("session publication lock poisoned");
         if let Some(console) = self.store.get_console(id)? {
-            self.publish_locked(Event::ConsoleUpserted { console });
+            self.publish_locked(Event::ConsoleUpserted {
+                console: Box::new(console),
+            });
         }
         Ok(())
     }

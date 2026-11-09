@@ -1,5 +1,6 @@
 // The context the fixture daemon's domain modules share: the state they are built over, the shape of the replies they
 // give, and the small helpers more than one of them needs.
+import { applyCompatibility } from "../agents/launchCompatibility";
 import type { ReplyOf } from "../requests";
 import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
@@ -44,10 +45,11 @@ export function changedPerAgent<T, C>(current: PerAgent<T>, changes: Partial<Per
 
 /** One agent's launch settings after a request's change: a field the request leaves out keeps its value, and one it names
  * is trimmed, `null` or blank clearing it. */
-export function changedLaunch(current: Launch, change: LaunchChange): Launch {
+export function changedLaunch(current: Launch, change: Omit<LaunchChange, "compatibility"> & { compatibility?: LaunchChange["compatibility"] }): Launch {
   return {
     model: change.model === undefined ? current.model : trimmedOrNull(change.model),
     effort: change.effort === undefined ? current.effort : trimmedOrNull(change.effort),
+    compatibility: applyCompatibility(current.compatibility, change.compatibility),
   };
 }
 

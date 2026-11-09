@@ -170,10 +170,10 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Hand off a project session with everything that moves",
-    description: "All three lines of Moves to the new session: two branches, three sessions (archived ones counted) and the place under Hub. The Hand off to field opens on Codex, the first other agent, and offers its three accounts in one picker beside the agent. Model and effort follow the project.",
+    description: "All three lines of Moves to the new session: two branches, three sessions (archived ones counted) and the place under Hub. The Hand off to field opens on Codex, the first other agent, and offers its three accounts in one picker beside the agent. Advanced is open, with Model and Reasoning effort on the agent's own setting and, under them, Claude compatibility, the switch Codex has, reading Same as project followed by a grey Off badge.",
     state,
     sessionBranches: coordinatorBranches,
-    steps: openHandoff(coordinator.title),
+    steps: [...openHandoff(coordinator.title), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
   },
   {
     id: "dialog-handoff-console-session",

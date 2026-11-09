@@ -46,15 +46,18 @@ pub(super) fn account_fields(
     Ok((account_id.unwrap_or("default").to_string(), name))
 }
 
-/// Puts the `model` and `effort` the session has of its own into `result`; a session that follows
-/// its project's (else console's) setting has neither field, which is different from a `null`,
-/// an explicit unset.
+/// Puts the `model`, `effort` and `compatibility` switches the session has of its own into
+/// `result`; a session that follows its project's (else console's) setting has none of the fields,
+/// which is different from a `null`, an explicit unset.
 pub(super) fn insert_own_launch(result: &mut Value, session: &Session) {
     if let Some(model) = &session.model {
         result["model"] = json!(model);
     }
     if let Some(effort) = &session.effort {
         result["effort"] = json!(effort);
+    }
+    if !session.compatibility.is_empty() {
+        result["compatibility"] = json!(session.compatibility);
     }
 }
 
@@ -287,6 +290,16 @@ fn without_credentials_in(text: &str) -> String {
 /// they resolve to under the console in `effective`: a project session cannot read the console.
 pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Result<Value> {
     let console = state.store.require_console(&project.console_id)?;
+    let mut effective_compatibility = HashMap::new();
+    for agent in AgentId::ALL {
+        let held = coordinator::launch::project_launch_settings(project, &console, agent);
+        let settings = coordinator::launch::provider_settings_with_compatibility(
+            state,
+            agent,
+            &held.compatibility,
+        )?;
+        effective_compatibility.insert(agent, coordinator::launch::switches_of(agent, &settings));
+    }
     Ok(json!({
         "project": project.id,
         "name": project.name,
@@ -316,7 +329,15 @@ pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Resu
                     .unwrap_or("default"))
             }),
             "launch": per_agent_object(|agent| {
-                json!(coordinator::launch::project_launch_settings(project, &console, agent))
+                let mut launch =
+                    coordinator::launch::project_launch_settings(project, &console, agent);
+                // Every compatibility switch with the value a session launches with, the agent's
+                // own where neither the project nor its console holds one.
+                launch.compatibility = effective_compatibility
+                    .get(&agent)
+                    .cloned()
+                    .unwrap_or_default();
+                json!(launch)
             }),
         },
         "git_workflow": {

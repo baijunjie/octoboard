@@ -14,8 +14,8 @@ A console carries:
 | Default agent for console sessions | the user, required | The agent a console session runs when none is chosen for it. |
 | Default agent for project sessions | the user, optional | The agent a project session runs when neither the session nor its project names one; unset, it is the default agent for console sessions. |
 | Agent default accounts | the user, optional | One per agent: the account that agent's sessions in this console run under, the agent's default account when none is picked; see "Agent config directories" below. |
-| Console session model and reasoning effort | the user, optional | One pair of defaults per agent for the console's console sessions, the agent's own default when unset; session overrides and inheritance are in `docs/product/model-and-reasoning-effort.md`. |
-| Project session model and reasoning effort | the user, optional | One pair per agent for the console's project sessions, each value taken by a project session whose project and own choice leave it unset; the agent's own default when unset. See `docs/product/model-and-reasoning-effort.md`. |
+| Console session model and reasoning effort | the user, optional | One pair of defaults per agent for the console's console sessions, the agent's own default when unset; session overrides and inheritance are in `docs/product/model-and-reasoning-effort.md`. Beside them, the compatibility switches the console holds for its console sessions, each following the agent-level value when unset (see `docs/product/compatibility-switches-in-launch-settings.md`). |
+| Project session model and reasoning effort | the user, optional | One pair per agent for the console's project sessions, each value taken by a project session whose project and own choice leave it unset; the agent's own default when unset. See `docs/product/model-and-reasoning-effort.md`. Beside them, the compatibility switches the console holds for its project sessions, taken in the same way, else the agent-level value (see `docs/product/compatibility-switches-in-launch-settings.md`). |
 | Avatar | the user, optional | A custom image shown in place of the default avatar, in a circle; see "Avatar" below. |
 | Console session instructions | the user, optional | The user's own instructions for the console's console sessions, added after Octoboard's built-in ones and taking precedence over them, short of what a console session does; see "Console session instructions" below. |
 | Working directory | Octoboard | `~/.octoboard/consoles/<console id>/`, created when the console is created; a create that is refused or fails removes it again on a best-effort basis. Not settable and not changeable. |
@@ -226,7 +226,7 @@ project's or the console's reference, not an edit to the account's directory. Re
 that same directory, because the agent keeps the conversation inside it. The user can move the session to another
 account of its agent from its action menu, and an owner can move a session of its own with the `switch_session_account`
 tool; that copies the conversation into the target's directory and reads that account's configuration, while keeping
-explicit model and reasoning effort choices (see `docs/product/switching-session-accounts.md`). A session opened on the
+explicit model, reasoning effort and compatibility switch choices (see `docs/product/switching-session-accounts.md`). A session opened on the
 default account holds no directory and resumes under whatever the user's shell exports at that moment. Codex's or Claude
 Code's permission approval setting is looked up again for each launch; keeping a directory does not freeze that choice
 (see "Approval modes" in `docs/product/per-agent-settings.md`).
@@ -246,18 +246,20 @@ in `docs/product/per-agent-launch-specifics.md`.
 
 The console's action menu item **Console settings** opens the console dialog under that title (see "The console header"
 in `docs/product/sidebar.md`). The name, both default agents, every agent's account, every agent's console session and
-project session model and reasoning effort, the console session instructions and the avatar can be changed. The dialog
-shows the models and reasoning efforts of one agent at a time (see "The Advanced section" in
-`docs/product/model-and-reasoning-effort.md`); those set for another agent are kept and still saved. The default agent
-for project sessions can be put back on Same as console sessions, an account back on the agent's default account, and
-the model and the effort back to unset, the agent's own default. Changing a default agent or an account affects sessions
+project session model, reasoning effort and compatibility switches, the console session instructions and the avatar can
+be changed. The dialog shows the models, reasoning efforts and switches of one agent at a time (see "The Advanced
+section" in `docs/product/model-and-reasoning-effort.md` and "Where the switches are set in the window" in
+`docs/product/compatibility-switches-in-launch-settings.md`); those set for another agent are kept and still saved. The
+default agent for project sessions can be put back on Same as console sessions, an account back on the agent's default
+account, the model and the effort back to unset, the agent's own default, and a switch back to Same as agent setting. Changing a default agent or an account affects sessions
 opened afterwards; a session that already exists keeps the agent and the account and directory it was started with. A
 change to the default agent for console sessions therefore changes the initial choice in the next console-session
 dialog, and a change to the one for project sessions — or to the one for console sessions while project sessions follow
 it — the initial choice in the next session dialog of a project with no default agent of its own, while existing
 sessions keep the agent they were started with (see "Console sessions and project sessions" in
-`docs/product/sessions.md`); a changed model or effort reaches a console session's next launch, or for the project
-session pair a project session's, only when that value is inherited (see `docs/product/model-and-reasoning-effort.md`).
+`docs/product/sessions.md`); a changed model, effort or switch reaches a console session's next launch, or for the
+project session values a project session's, only when that value is inherited (see
+`docs/product/model-and-reasoning-effort.md` and `docs/product/compatibility-switches-in-launch-settings.md`).
 The name cannot be cleared: saving an empty name is rejected.
 
 The console session can change the same settings of its own console except the console session instructions; it can

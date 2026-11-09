@@ -213,7 +213,7 @@ pub enum Event {
         keep_awake_held: bool,
     },
     ConsoleUpserted {
-        console: Console,
+        console: Box<Console>,
     },
     ConsoleDeleted {
         console: String,
@@ -342,6 +342,10 @@ pub enum Event {
         #[serde(skip_serializing_if = "Option::is_none")]
         #[cfg_attr(test, ts(optional))]
         effort: Option<Option<String>>,
+        /// For `handoff`: the compatibility switches the call asked the receiving session to hold,
+        /// by setting id; empty for every other request and where it asked for none.
+        #[serde(default)]
+        compatibility: BTreeMap<String, bool>,
         /// Milliseconds since the epoch, which is what orders several requests oldest first.
         requested_at: i64,
     },

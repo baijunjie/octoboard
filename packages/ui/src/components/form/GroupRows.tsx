@@ -9,11 +9,12 @@ export function GroupRows({ children, stacked }: { children: React.ReactNode; st
 }
 
 /** One row of `GroupRows`. `label` is only the visible name: the control is named for assistive
- * technology by its own label, so this is hidden from it rather than read twice. */
-export function GroupRow({ label, children }: { label: React.ReactNode; children: React.ReactNode }): React.ReactElement {
+ * technology by its own label, so this is hidden from it rather than read twice. `help` stays outside
+ * the hidden name so an interactive help tip remains reachable. */
+export function GroupRow({ label, help, children }: { label: React.ReactNode; help?: React.ReactNode; children: React.ReactNode }): React.ReactElement {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <div aria-hidden="true" className="flex min-w-0 items-center gap-2 text-sm">{label}</div>
+      <div className="flex min-w-0 items-center gap-2 text-sm"><span aria-hidden="true">{label}</span>{help}</div>
       {children}
     </div>
   );

@@ -242,6 +242,23 @@ impl ProviderDescriptor {
         tool.is_some() && tool == self.ask_question_tool
     }
 
+    /// Whether this setting can be held by a launch level.
+    pub fn is_overridable(&self, id: &str) -> bool {
+        self.setting(id).is_some_and(SettingDescriptor::overridable)
+    }
+
+    /// Held values limited to the compatibility switches this provider declares. Stored values
+    /// from another build may name settings this build cannot use.
+    pub fn known_compatibility(&self, mut held: BTreeMap<String, bool>) -> BTreeMap<String, bool> {
+        held.retain(|setting, _| self.is_overridable(setting));
+        held
+    }
+
+    /// The settings a launch level can hold, in descriptor order.
+    pub fn overridable_settings(&self) -> impl Iterator<Item = &'static SettingDescriptor> + '_ {
+        self.settings.iter().filter(|setting| setting.overridable())
+    }
+
     /// The provider's setting with this id.
     pub fn setting(&self, id: &str) -> Option<&'static SettingDescriptor> {
         self.settings.iter().find(|setting| setting.id == id)
@@ -329,6 +346,14 @@ pub enum SettingValue {
 }
 
 impl SettingDescriptor {
+    /// Whether a console, a project or a session can hold its own value for the setting in its
+    /// `Launch::compatibility`, which then wins over the application-wide one for the sessions it
+    /// covers. The one rule everything that stores, validates, shows or exports such a value asks:
+    /// the compatibility switches.
+    pub fn overridable(&self) -> bool {
+        self.compatibility_with.is_some()
+    }
+
     /// Whether `value` is one this setting takes.
     pub fn accepts(&self, value: &SettingValue) -> bool {
         match (&self.kind, value) {
@@ -369,6 +394,17 @@ impl ProviderSettings {
                 .filter_map(|(id, value)| Some((id, value?)))
                 .collect(),
         )
+    }
+
+    /// These settings with the switches in `held` set to their value; an id that is not a switch
+    /// of these settings is not read.
+    pub fn with_switches(mut self, held: &BTreeMap<String, bool>) -> Self {
+        for (id, value) in held {
+            if let Some(known @ SettingValue::Switch(_)) = self.0.get_mut(id) {
+                *known = SettingValue::Switch(*value);
+            }
+        }
+        self
     }
 
     /// The chosen choice of the setting `id`; `None` while it is unset.
@@ -742,6 +778,33 @@ mod tests {
                     "{wire} is also a core code"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn launch_overrides_accept_only_the_declared_compatibility_switches() {
+        for agent in AgentId::ALL {
+            let expected: &[&str] = match agent {
+                AgentId::CLAUDE => &["codex_compatibility"],
+                AgentId::CODEX => &["claude_compatibility"],
+                AgentId::GROK => &["claude_compatibility", "codex_compatibility"],
+                AgentId::TEST => &[],
+                other => panic!("no fixture for {other}"),
+            };
+            let descriptor = agent.descriptor();
+            let actual: Vec<_> = descriptor.overridable_settings().map(|s| s.id).collect();
+            assert_eq!(actual, expected, "{}", agent.wire_name());
+            for setting in descriptor.settings {
+                assert_eq!(
+                    descriptor.is_overridable(setting.id),
+                    expected.contains(&setting.id)
+                );
+                assert_eq!(setting.overridable(), expected.contains(&setting.id));
+                if matches!(setting.kind, SettingKind::Choice { .. }) {
+                    assert!(!descriptor.is_overridable(setting.id));
+                }
+            }
+            assert!(!descriptor.is_overridable("unknown_switch"));
         }
     }
 }

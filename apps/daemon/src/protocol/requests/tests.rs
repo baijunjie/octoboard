@@ -933,6 +933,7 @@ fn creating_a_console_reads_each_agents_account_and_launch_pair() {
     assert_eq!(
         launch[AgentId::CLAUDE],
         Launch {
+            compatibility: Default::default(),
             model: Some("opus".to_string()),
             effort: Some("high".to_string())
         }
@@ -1082,4 +1083,83 @@ fn an_update_settings_may_name_only_one_field() {
         parsed(r#"{"type":"update_settings"}"#),
         (None, None, None, None, None, None, None, None, None)
     );
+}
+
+#[test]
+fn compatibility_launch_changes_keep_clear_and_hold_and_reject_non_booleans() {
+    use crate::protocol::{Launch, LaunchChange};
+    let keep: LaunchChange = serde_json::from_value(serde_json::json!({})).unwrap();
+    assert!(keep.is_keep());
+    for value in [
+        serde_json::json!(true),
+        serde_json::json!(false),
+        serde_json::Value::Null,
+    ] {
+        let change: LaunchChange = serde_json::from_value(
+            serde_json::json!({"compatibility":{"claude_compatibility":value}}),
+        )
+        .unwrap();
+        assert!(!change.is_keep());
+        assert_eq!(
+            change.compatibility["claude_compatibility"],
+            value.as_bool()
+        );
+    }
+    for value in [
+        serde_json::json!(1),
+        serde_json::json!("true"),
+        serde_json::json!([]),
+        serde_json::json!({}),
+    ] {
+        assert!(serde_json::from_value::<LaunchChange>(
+            serde_json::json!({"compatibility":{"claude_compatibility":value}})
+        )
+        .is_err());
+        assert!(serde_json::from_value::<Launch>(
+            serde_json::json!({"compatibility":{"claude_compatibility":value}})
+        )
+        .is_err());
+    }
+    let legacy: Launch =
+        serde_json::from_value(serde_json::json!({"model":null,"effort":null})).unwrap();
+    assert!(legacy.compatibility.is_empty());
+}
+
+#[test]
+fn compatibility_control_session_requests_parse_switches_and_reject_other_value_types() {
+    for base in [
+        serde_json::json!({"type":"open_session","console_id":"c"}),
+        serde_json::json!({"type":"set_session_model","session":"s"}),
+        serde_json::json!({"type":"handoff_session","session":"s","agent":"codex"}),
+        serde_json::json!({"type":"answer_session_request","request_id":"r","approve":true}),
+    ] {
+        for value in [
+            serde_json::json!(true),
+            serde_json::json!(false),
+            serde_json::Value::Null,
+        ] {
+            let mut request = base.clone();
+            request["compatibility"] = serde_json::json!({"claude_compatibility": value});
+            let parsed: crate::protocol::RequestBody = serde_json::from_value(request).unwrap();
+            let held = match parsed {
+                crate::protocol::RequestBody::OpenSession { compatibility, .. }
+                | crate::protocol::RequestBody::SetSessionModel { compatibility, .. }
+                | crate::protocol::RequestBody::HandoffSession { compatibility, .. }
+                | crate::protocol::RequestBody::AnswerSessionRequest { compatibility, .. } => {
+                    compatibility.unwrap()
+                }
+                _ => unreachable!(),
+            };
+            assert_eq!(held["claude_compatibility"], value.as_bool());
+        }
+        for value in [
+            serde_json::json!(1),
+            serde_json::json!("false"),
+            serde_json::json!([]),
+        ] {
+            let mut request = base.clone();
+            request["compatibility"] = serde_json::json!({"claude_compatibility": value});
+            assert!(serde_json::from_value::<crate::protocol::RequestBody>(request).is_err());
+        }
+    }
 }

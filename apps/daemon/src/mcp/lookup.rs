@@ -8,7 +8,7 @@
 //! an id from any console, and a name from the caller's console first, else from all. A session is
 //! read by any caller, but acted on only when it is bound to the caller (`resolve_owned_session`).
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
@@ -271,8 +271,41 @@ pub(super) fn resolve_account(
         .ok_or_else(|| CodedError::unknown_account(wanted))
 }
 
-/// The argument named `key` (`launch`, `project_session_launch`): each agent's model and effort,
-/// either of which may be left out.
+/// The `compatibility` argument of a tool that takes a model and effort: an object of compatibility
+/// switch to `true`, `false` (the level holds that value) or `null` (back to following the level
+/// behind it), empty when absent. A setting the `agent` (when known) does not let a launch level
+/// hold is refused; an agent still to be chosen is checked when the session is opened.
+pub(super) fn compatibility_argument(
+    arguments: &Map<String, Value>,
+    agent: Option<AgentId>,
+) -> Result<BTreeMap<String, Option<bool>>> {
+    let Some(value) = arguments
+        .get("compatibility")
+        .filter(|value| !value.is_null())
+    else {
+        return Ok(BTreeMap::new());
+    };
+    let entries = value.as_object().ok_or_else(|| {
+        anyhow!("`compatibility` must be an object of switch to true, false or null")
+    })?;
+    let change = entries
+        .iter()
+        .map(|(setting, value)| match value {
+            Value::Null => Ok((setting.clone(), None)),
+            Value::Bool(value) => Ok((setting.clone(), Some(*value))),
+            _ => Err(anyhow!(
+                "`compatibility.{setting}` must be true, false or null"
+            )),
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
+    if let Some(agent) = agent {
+        crate::agents::launch_settings::check_compatibility(agent, &change)?;
+    }
+    Ok(change)
+}
+
+/// The argument named `key` (`launch`, `project_session_launch`): each agent's model, effort and
+/// compatibility switches, any of which may be left out.
 pub(super) fn launch_argument(
     arguments: &Map<String, Value>,
     key: &str,
@@ -288,6 +321,7 @@ pub(super) fn launch_argument(
                 LaunchChange {
                     model: present_text(fields, "model")?,
                     effort: present_text(fields, "effort")?,
+                    compatibility: compatibility_argument(fields, Some(agent))?,
                 },
             ))
         })

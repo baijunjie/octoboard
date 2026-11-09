@@ -5,6 +5,7 @@
 //! ([`Edits`]), and what an approval runs is the tool's own operation, handed over as a
 //! [`Perform`] and run once with them.
 
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -27,6 +28,7 @@ pub struct Edits {
     pub account: Option<Option<String>>,
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
+    pub compatibility: BTreeMap<String, Option<bool>>,
 }
 
 /// What an approved switch or handoff did: the session it left running in the asking owner's
@@ -81,6 +83,7 @@ pub(crate) enum Change {
         account: Option<String>,
         model: Option<Option<String>>,
         effort: Option<Option<String>>,
+        compatibility: BTreeMap<String, Option<bool>>,
         perform: Perform,
     },
 }
@@ -92,6 +95,7 @@ pub(super) struct Described {
     pub account: Option<String>,
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
+    pub compatibility: BTreeMap<String, Option<bool>>,
 }
 
 impl Change {
@@ -138,12 +142,14 @@ impl Change {
                 account: account.clone(),
                 model: None,
                 effort: None,
+                compatibility: BTreeMap::new(),
             },
             Change::Handoff {
                 target,
                 account,
                 model,
                 effort,
+                compatibility,
                 ..
             } => Described {
                 action: SessionRequestAction::Handoff,
@@ -151,6 +157,7 @@ impl Change {
                 account: account.clone(),
                 model: model.clone(),
                 effort: effort.clone(),
+                compatibility: compatibility.clone(),
             },
         }
     }

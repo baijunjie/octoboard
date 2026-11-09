@@ -503,6 +503,7 @@ async fn a_checked_console_write_that_waits_for_the_models_conflicts_with_a_rena
             changes.launch.insert(
                 AgentId::CLAUDE,
                 LaunchChange {
+                    compatibility: Default::default(),
                     model: Some(Some("fallback".to_string())),
                     effort: None,
                 },
@@ -523,4 +524,88 @@ async fn a_checked_console_write_that_waits_for_the_models_conflicts_with_a_rena
     let stored = state.store.require_console("console-1").unwrap();
     assert_eq!(stored.name, "Renamed");
     assert_eq!(stored.launch[AgentId::CLAUDE].model, None);
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_each_level_versions_only_its_switch_and_refuses_stale_writes() {
+    let (state, _dir) =
+        crate::test_support::console_with_project_and_accounts("checked-compatibility");
+    for (kind, id_key, id, prefix) in [
+        ("update_project", "project", "project-1", "launch"),
+        ("update_console", "console", "console-1", "launch"),
+        (
+            "update_console",
+            "console",
+            "console-1",
+            "project_session_launch",
+        ),
+    ] {
+        let read = || {
+            if id_key == "project" {
+                read_project(&state).versions
+            } else {
+                read_console(&state).versions
+            }
+        };
+        let before = read();
+        let path = format!("{prefix}.codex.compatibility.claude_compatibility");
+        assert!(before.contains_key(&path));
+        assert!(!before.contains_key(&format!("{prefix}.codex.compatibility.approval_reviewer")));
+        send(&state, json!({"type":kind, id_key:id, prefix:{"codex":{"compatibility":{"claude_compatibility":true}}}, "base_versions":{&path:before[&path]}})).await.unwrap();
+        let after = read();
+        assert!(after[&path] > before[&path]);
+        for (key, value) in &before {
+            if key != &path {
+                assert_eq!(after[key], *value, "{key}");
+            }
+        }
+        let stale = send(&state, json!({"type":kind, id_key:id, "name":"Must not apply", prefix:{"codex":{"compatibility":{"claude_compatibility":false}}}, "base_versions":{&path:before[&path]}})).await;
+        assert_eq!(conflict(stale).0, path);
+        assert_eq!(read(), after);
+        assert_ne!(
+            state.store.require_console("console-1").unwrap().name,
+            "Must not apply"
+        );
+        assert_ne!(
+            state.store.require_project("project-1").unwrap().name,
+            "Must not apply"
+        );
+        send(&state, json!({"type":kind, id_key:id, prefix:{"codex":{"compatibility":{"claude_compatibility":null}}}})).await.unwrap();
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_invalid_control_changes_are_refused_whole() {
+    let (state, _dir) =
+        crate::test_support::console_with_project_and_accounts("invalid-compatibility");
+    for setting in ["future_switch", "approval_reviewer"] {
+        for (kind, key, id, prefix) in [
+            ("update_project", "project", "project-1", "launch"),
+            ("update_console", "console", "console-1", "launch"),
+            (
+                "update_console",
+                "console",
+                "console-1",
+                "project_session_launch",
+            ),
+        ] {
+            let before =
+                serde_json::to_value(state.store.require_project("project-1").unwrap()).unwrap();
+            let hub =
+                serde_json::to_value(state.store.require_console("console-1").unwrap()).unwrap();
+            let err = send(&state, json!({"type":kind,key:id,"name":"Must not apply",prefix:{"codex":{"compatibility":{"claude_compatibility":true,setting:false}}}})).await.unwrap_err();
+            assert_eq!(
+                crate::test_support::code_of(&err),
+                error_code::UNREADABLE_REQUEST
+            );
+            assert_eq!(
+                serde_json::to_value(state.store.require_project("project-1").unwrap()).unwrap(),
+                before
+            );
+            assert_eq!(
+                serde_json::to_value(state.store.require_console("console-1").unwrap()).unwrap(),
+                hub
+            );
+        }
+    }
 }

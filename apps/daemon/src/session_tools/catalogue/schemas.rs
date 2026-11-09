@@ -128,6 +128,10 @@ pub(super) fn open_session_schema(with_project: bool) -> Value {
                  effort{launch_pointer}.",
             ),
         },
+        "compatibility": compatibility_schema(
+            "this session",
+            "the project's, else the console's, else the application-wide value",
+        ),
     });
     if !with_project {
         // Only a project session is ever responsible for a branch; a console session has none to
@@ -168,6 +172,41 @@ pub(super) fn agent_id_list() -> String {
         .map(|agent| format!("`{}`", agent.wire_name()))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// The ids of the compatibility switches a launch level can hold, as an argument's description
+/// lists them: "`codex_compatibility`, `claude_compatibility`".
+fn compatibility_id_list() -> String {
+    let mut ids: Vec<&str> = Vec::new();
+    for agent in AgentId::ALL {
+        for setting in agent.descriptor().overridable_settings() {
+            if !ids.contains(&setting.id) {
+                ids.push(setting.id);
+            }
+        }
+    }
+    ids.iter()
+        .map(|id| format!("`{id}`"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// The `compatibility` argument of a tool that takes a model and effort: which of the agent's
+/// compatibility switches (the settings that make it read another agent's configuration) the
+/// `subject` holds its own value for. `what` says what a `null` entry follows.
+pub(super) fn compatibility_schema(subject: &str, what: &str) -> Value {
+    json!({
+        "type": "object",
+        "description": format!(
+            "The agent's own compatibility switches for {subject}, by setting id ({}; \
+             `get_settings` lists each agent's switches and their values): `true` or `false` \
+             holds that value for {subject}, whatever the application-wide setting says; `null` \
+             goes back to following {what}. Only the agent's own switches are accepted; \
+             a switch left out is left as it is.",
+            compatibility_id_list(),
+        ),
+        "additionalProperties": { "type": ["boolean", "null"] },
+    })
 }
 
 /// The `enum` of an argument that names an agent or is `null`.

@@ -17,6 +17,7 @@ pub(crate) fn project_session(id: &str, agent: AgentId, status: SessionStatus) -
 
 pub(crate) fn bare_session(id: &str, kind: SessionKind) -> Session {
     Session {
+        compatibility: Default::default(),
         id: id.to_string(),
         agent: AgentId::CLAUDE,
         agent_session_id: None,

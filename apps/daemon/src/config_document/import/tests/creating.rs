@@ -362,3 +362,92 @@ async fn a_document_without_a_project_description_imports_a_project_with_none() 
     .unwrap();
     assert_eq!(stored_projects(&state).remove(0).description, None);
 }
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_configuration_drops_unknown_and_non_overridable_launch_entries() {
+    let (state, dir) = app_state("config-compatibility");
+    let repo = directory(&dir, "repo");
+    let mut doc = document(vec![console(
+        "Hub",
+        vec![project("Repo", &repo.to_string_lossy())],
+    )]);
+    doc["consoles"][0]["launch"]["codex"] = json!({
+        "compatibility": {
+            "claude_compatibility": false, "future_switch": true, "approval_reviewer": true
+        }
+    });
+    doc["consoles"][0]["project_session_launch"]["grok"] =
+        json!({"compatibility":{"claude_compatibility":true,"future_switch":false}});
+    doc["consoles"][0]["projects"][0]["launch"]["codex"] = json!({"compatibility":{"claude_compatibility":true,"future_switch":false,"approval_reviewer":false}});
+    let imported = import(&state, &doc, vec![at(0, 0, DirectoryChoice::ExportedPath)])
+        .await
+        .unwrap();
+    assert_eq!(imported[0].projects[0].status, ImportStatus::Created);
+    let exported = export_everything(&state);
+    assert_eq!(
+        exported["consoles"][0]["launch"]["codex"]["compatibility"],
+        json!({"claude_compatibility":false})
+    );
+    assert_eq!(
+        exported["consoles"][0]["project_session_launch"]["grok"]["compatibility"],
+        json!({"claude_compatibility":true})
+    );
+    assert_eq!(
+        exported["consoles"][0]["projects"][0]["launch"]["codex"]["compatibility"],
+        json!({"claude_compatibility":true})
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_configuration_round_trips_all_launch_sets() {
+    let (state, dir) = app_state("config-compatibility");
+    let repo = directory(&dir, "repo");
+    let mut doc = document(vec![console(
+        "Hub",
+        vec![project("Repo", &repo.to_string_lossy())],
+    )]);
+    doc["consoles"][0]["launch"]["codex"] = json!({"compatibility":{"claude_compatibility":false}});
+    doc["consoles"][0]["project_session_launch"]["grok"] =
+        json!({"compatibility":{"claude_compatibility":true}});
+    doc["consoles"][0]["projects"][0]["launch"]["codex"] =
+        json!({"compatibility":{"claude_compatibility":true}});
+    let imported = import(&state, &doc, vec![at(0, 0, DirectoryChoice::ExportedPath)])
+        .await
+        .unwrap();
+    assert_eq!(imported[0].projects[0].status, ImportStatus::Created);
+    let exported = export_everything(&state);
+    let (target, _dir) = app_state("config-compatibility-target");
+    import(
+        &target,
+        &exported,
+        vec![at(0, 0, DirectoryChoice::ExportedPath)],
+    )
+    .await
+    .unwrap();
+    assert_eq!(export_everything(&target)["consoles"], exported["consoles"]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_older_configuration_without_switches_imports_as_follow() {
+    let (state, dir) = app_state("config-compatibility-legacy");
+    let repo = directory(&dir, "repo");
+    let mut doc = document(vec![console(
+        "Hub",
+        vec![project("Repo", &repo.to_string_lossy())],
+    )]);
+    for set in ["launch", "project_session_launch"] {
+        doc["consoles"][0][set] = json!({"codex":{"model":null,"effort":null}});
+    }
+    doc["consoles"][0]["projects"][0]["launch"] = json!({"grok":{"model":null,"effort":null}});
+    import(&state, &doc, vec![at(0, 0, DirectoryChoice::ExportedPath)])
+        .await
+        .unwrap();
+    let hub = state.store.list_consoles().unwrap().remove(0);
+    assert!(hub.launch[AgentId::CODEX].compatibility.is_empty());
+    assert!(hub.project_session_launch[AgentId::CODEX]
+        .compatibility
+        .is_empty());
+    assert!(stored_projects(&state)[0].launch[AgentId::GROK]
+        .compatibility
+        .is_empty());
+}

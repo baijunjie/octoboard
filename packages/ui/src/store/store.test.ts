@@ -334,7 +334,7 @@ it("drops a trust prompt when the daemon could not press its session's confirmat
 
 it("keeps what a session request says it does, and drops it when it closes", () => {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
-  const base = { type: "session_request" as const, session: "s", kind: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1 };
+  const base = { compatibility: {}, type: "session_request" as const, session: "s", kind: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1 };
   const resume: Event = {
     ...base, request_id: "r-1", action: "reopen", target: "t", owner: "o", reopened_owners: ["o"], account: null, conversation: null,
   };
@@ -350,7 +350,7 @@ it("keeps what a session request says it does, and drops it when it closes", () 
 
 it("keeps what a switch and a handoff request carry", () => {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
-  const base = { type: "session_request" as const, session: "s", kind: "project" as const, console: "c", project: "p", agent: "codex" as const, branches: [], requested_at: 1, owner: null, reopened_owners: [], conversation: null, target: "t", account: "a" };
+  const base = { compatibility: {}, type: "session_request" as const, session: "s", kind: "project" as const, console: "c", project: "p", agent: "codex" as const, branches: [], requested_at: 1, owner: null, reopened_owners: [], conversation: null, target: "t", account: "a" };
   client.onEvents!([
     { ...base, request_id: "r-1", action: "switch" },
     { ...base, request_id: "r-2", action: "handoff", account: null, model: "m", effort: null, requested_at: 2 },
@@ -362,7 +362,7 @@ it("keeps what a switch and a handoff request carry", () => {
 
 it("does not offer a session request that lacks what its action needs or has an action it does not know", () => {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
-  const base = { type: "session_request" as const, session: "s", kind: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1, owner: null, reopened_owners: [], target: null, account: null, conversation: null };
+  const base = { compatibility: {}, type: "session_request" as const, session: "s", kind: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1, owner: null, reopened_owners: [], target: null, account: null, conversation: null };
   client.onEvents!([
     { ...base, request_id: "r-1", action: "reopen" },
     { ...base, request_id: "r-2", action: "resume" },
@@ -423,7 +423,7 @@ it.each([
   { type: "project_deleted", project: "p" },
 ] as Event[])("drops what is held for the sessions a $type takes with it, and only theirs", (deletion) => {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
-  const request = { type: "session_request" as const, kind: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1, action: "start" as const, target: null, owner: null, reopened_owners: [], account: null, conversation: null };
+  const request = { compatibility: {}, type: "session_request" as const, kind: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1, action: "start" as const, target: null, owner: null, reopened_owners: [], account: null, conversation: null };
   client.onEvents!(["a", "b"].flatMap((id): Event[] => [
     { type: "session_upserted", session: sessionOf(id, id === "a" ? "c" : "d", id === "a" ? "p" : "q", id, "waiting_user") },
     { type: "page_created", page: pageOf(`${id}-1`, id, "<p>1</p>", 2) },

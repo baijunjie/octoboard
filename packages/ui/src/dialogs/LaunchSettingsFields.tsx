@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 
+import { AgentCompatibilityField, type CompatibilityFieldProps } from "./AgentCompatibilityField";
 import { effortLevels, type LaunchSettingOption, launchSettingOptions, shownModel } from "../agents/agentLaunchSettings";
 import { providerModelDisplay } from "../agents/providers";
 import { FailureBody } from "../components/alerts/errorParts";
@@ -201,6 +202,7 @@ export function LaunchPickers({
   effort,
   onModelChange,
   onEffortChange,
+  compatibility,
   inherit,
   isDisabled,
 }: {
@@ -209,6 +211,7 @@ export function LaunchPickers({
   effort: string | null;
   onModelChange: (value: string | null) => void;
   onEffortChange: (value: string | null) => void;
+  compatibility?: Omit<CompatibilityFieldProps, "agent" | "isDisabled">;
   inherit?: Launch;
   isDisabled?: boolean;
 }): React.ReactElement {
@@ -216,6 +219,7 @@ export function LaunchPickers({
     <>
       <ModelPicker launch={launch} model={model} onChange={onModelChange} inherit={inherit} isDisabled={isDisabled} />
       <EffortPicker launch={launch} model={model} effort={effort} onChange={onEffortChange} inherit={inherit} isDisabled={isDisabled} />
+      {compatibility && <AgentCompatibilityField {...compatibility} agent={launch.agent} isDisabled={isDisabled} />}
     </>
   );
 }
@@ -238,6 +242,7 @@ export function LaunchSettingsFields({
   effort,
   onModelChange,
   onEffortChange,
+  compatibility,
   note,
   inherit,
   isDisabled,
@@ -251,6 +256,7 @@ export function LaunchSettingsFields({
   effort: string | null;
   onModelChange: (value: string | null) => void;
   onEffortChange: (value: string | null) => void;
+  compatibility?: Omit<CompatibilityFieldProps, "agent" | "isDisabled">;
   note?: string;
   inherit?: Launch;
   isDisabled?: boolean;
@@ -290,6 +296,7 @@ export function LaunchSettingsFields({
           effort={effort}
           onModelChange={onModelChange}
           onEffortChange={onEffortChange}
+          compatibility={compatibility}
           inherit={inherit}
           isDisabled={isDisabled}
         />

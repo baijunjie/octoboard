@@ -20,9 +20,9 @@ export function agentPaths(prefix: string, changes: object | undefined): string[
 }
 
 /** The paths of a per-agent change of fields, `<prefix>.<agent>.<field>` for each field set under each agent (a launch
- * setting's model and effort). */
+ * setting's model and effort, or each compatibility switch). */
 export function agentFieldPaths(prefix: string, changes: Record<string, object | undefined> | undefined): string[] {
-  return Object.entries(changes ?? {}).flatMap(([agent, fields]) => Object.keys(fields ?? {}).map((field) => `${prefix}.${agent}.${field}`));
+  return Object.entries(changes ?? {}).flatMap(([agent, fields]) => Object.entries(fields ?? {}).flatMap(([field, value]) => field === "compatibility" ? Object.keys(value as object).map((setting) => `${prefix}.${agent}.compatibility.${setting}`) : [`${prefix}.${agent}.${field}`]));
 }
 
 /** What a `write_conflict` names: the paths whose versions differed and the versions the record reaches. */

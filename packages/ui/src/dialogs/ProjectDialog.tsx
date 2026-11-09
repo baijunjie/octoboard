@@ -1,9 +1,11 @@
 import React, { useId, useMemo, useRef, useState } from "react";
 
+import { settingText } from "../settings/accounts/providerSettingCopy";
+import { applyCompatibility } from "../agents/launchCompatibility";
 import { orderedAccounts } from "../accounts/accountOrder";
 import { accountDisabled } from "../accounts/choiceEntries";
 import { consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accounts/accountInheritance";
-import { changedLaunch, changedProjectAccounts, readLaunch, readProjectAccounts, withAgent, withLaunchField } from "../agents/agentFields";
+import { changedLaunch, changedProjectAccounts, readLaunch, readProjectAccounts, withAgent, restoreLaunchField, launchFieldValue } from "../agents/agentFields";
 import { consoleProjectLaunch, defaultAccountName, projectSessionAgent, servedAgents } from "../agents/agents";
 import { detectionMarkers, providerLabel } from "../agents/providers";
 import { agentIconPickerOptions, AgentIcon } from "../components/icons/AgentIcon";
@@ -17,7 +19,7 @@ import { changedGitWorkflowItems, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkf
 import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import type { Agent, GitWorkflowOverride, Launch, Project, ProjectAccount, ProjectSource } from "../protocol";
+import type { Agent, GitWorkflowOverride, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore, useProviders } from "../store";
 import { useHostPaths } from "../components/hooks/useHostPaths";
 import { ChangedElsewhereAnnouncer } from "../components/announce/ChangedElsewhereAnnouncer";
@@ -137,13 +139,13 @@ export function ProjectDialog({
   // daemon restart) changes nothing of what the form shows.
   const sameAsRead = (path: string) => {
     if (!stored) return true;
-    const [field, member = "", key = ""] = path.split(".");
+    const [field, member = "", key = "", setting = ""] = path.split(".");
     if (field === "name") return stored.name === read.name;
     if (field === "default_agent") return (stored.default_agent ?? "") === (read.default_agent ?? "");
     if (field === "description") return (stored.description ?? "") === read.description;
     if (field === "tags") return sameValue(stored.tags, read.tags);
     if (field === "accounts") return sameValue(stored.accounts?.[member] ?? INHERIT, initialAccounts[member] ?? INHERIT);
-    if (field === "launch") return (stored.launch?.[member]?.[key as keyof Launch] ?? null) === (initialLaunch[member]?.[key as keyof Launch] ?? null);
+    if (field === "launch") return launchFieldValue(stored.launch?.[member], key, setting) === launchFieldValue(initialLaunch[member], key, setting);
     if (field === "git_workflow") {
       return (stored.git_workflow[member as keyof GitWorkflowOverride] ?? null) === (initialGitWorkflow[member as keyof GitWorkflowOverride] ?? null);
     }
@@ -151,25 +153,28 @@ export function ProjectDialog({
   };
   // Whether the user changed `path`'s field from what the form read, which is what makes its replacement worth announcing.
   const editedFromRead = (path: string) => {
-    const [field, member = "", key = ""] = path.split(".");
+    const [field, member = "", key = "", setting = ""] = path.split(".");
     if (field === "name") return name !== read.name;
     if (field === "default_agent") return (defaultAgent === "" || defaultAgent === "detect" ? null : defaultAgent) !== read.default_agent;
     if (field === "description") return description.trim() !== read.description;
     if (field === "tags") return !sameValue(tags, read.tags);
     if (field === "accounts") return !sameValue(accountFields[member] ?? INHERIT, initialAccounts[member] ?? INHERIT);
-    if (field === "launch") return (launch[member]?.[key as keyof Launch] ?? null) !== (initialLaunch[member]?.[key as keyof Launch] ?? null);
+    if (field === "launch") return launchFieldValue(launch[member], key, setting) !== launchFieldValue(initialLaunch[member], key, setting);
     if (field === "git_workflow") return (gitWorkflow[member as keyof GitWorkflowOverride] ?? null) !== (initialGitWorkflow[member as keyof GitWorkflowOverride] ?? null);
     return false;
   };
   // The label of the field a path belongs to, as the dialog shows it.
   const fieldLabel = (path: string) => {
-    const [field, member = "", key = ""] = path.split(".");
+    const [field, member = "", key = "", setting = ""] = path.split(".");
     if (field === "name") return t("common.name");
     if (field === "default_agent") return t("dialog.project.defaultAgent");
     if (field === "description") return t("dialog.project.description");
     if (field === "tags") return t("dialog.project.tags");
     if (field === "accounts") return t("dialog.agentSettings.account", { agent: isolate(providerLabel(t, providers, member)) });
     // Named with its agent, since the form shows one agent's launch settings and a replaced one may be another's.
+    if (field === "launch" && key === "compatibility") {
+      return settingText(t, providers, member, setting, "label") ?? settingText(t, providers, member, setting, "heading") ?? setting;
+    }
     if (field === "launch") return t(key === "effort" ? "dialog.agentSettings.agentEffort" : "dialog.agentSettings.agentModel", { agent: isolate(providerLabel(t, providers, member)) });
     return t("dialog.project.gitWorkflow.title");
   };
@@ -184,7 +189,7 @@ export function ProjectDialog({
     let nextGitWorkflow = gitWorkflow;
     for (const path of paths) {
       // The path names the field, then the agent (or the git workflow item) and, for a launch setting, its key.
-      const [field, member = "", key = ""] = path.split(".");
+      const [field, member = "", key = "", setting = ""] = path.split(".");
       if (field === "name") {
         setName(stored.name);
         nextRead = { ...nextRead, name: stored.name };
@@ -202,9 +207,8 @@ export function ProjectDialog({
         nextInitialAccounts = withAgent(nextInitialAccounts, member, account);
         nextAccounts = withAgent(nextAccounts, member, account);
       } else if (field === "launch") {
-        const value = stored.launch?.[member]?.[key as keyof Launch] ?? null;
-        nextInitialLaunch = withLaunchField(nextInitialLaunch, member, key as keyof Launch, value);
-        nextLaunch = withLaunchField(nextLaunch, member, key as keyof Launch, value);
+        nextInitialLaunch = restoreLaunchField(nextInitialLaunch, member, stored.launch?.[member], key, setting);
+        nextLaunch = restoreLaunchField(nextLaunch, member, stored.launch?.[member], key, setting);
       } else if (field === "git_workflow") {
         const value = stored.git_workflow[member as keyof GitWorkflowOverride] ?? null;
         nextInitialGitWorkflow = { ...nextInitialGitWorkflow, [member]: value };
@@ -538,6 +542,11 @@ export function ProjectDialog({
             isDisabled={locked}
             expanded={advancedExpanded}
             onExpandedChange={setAdvancedExpanded}
+            compatibility={{ value: launch[agent].compatibility,
+              onChange: (changes) => setLaunch({ ...launch, [agent]: { ...launch[agent], compatibility: applyCompatibility(launch[agent].compatibility, changes) } }),
+              inherit: owner ? consoleProjectLaunch(owner, agent).compatibility : undefined,
+              followLabel: "dialog.agentSettings.sameAsConsole",
+            }}
             otherTab={gitWorkflowTab}
           />
         ) : (

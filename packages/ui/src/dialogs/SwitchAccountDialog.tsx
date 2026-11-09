@@ -71,7 +71,7 @@ export function SwitchAccountDialog({
     <ConfirmDialog
       title={t("dialog.switchAccount.title")}
       subject={<Message id="dialog.switchAccount.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference>, account: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />}
-      message={<p>{t(several ? "dialog.switchAccount.messageAll" : session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}</p>}
+      message={<p>{t(several ? "dialog.switchAccount.messageAllLaunch" : session.has_conversation ? "dialog.switchAccount.messageLaunch" : "dialog.switchAccount.messageFreshLaunch")}</p>}
       confirmLabel={t("dialog.switchAccount.confirm")}
       // Nothing left to switch in the chosen scope (its sessions began switching after the dialog opened).
       confirmDisabled={counts[scope] === 0}

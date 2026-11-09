@@ -84,6 +84,9 @@ Where to start, by question:
 - [Compatibility between agents](product/compatibility-between-agents.md) — what a launch is given while a
   compatibility switch is on (Claude compatibility for Codex and Grok Build, Codex compatibility for Claude Code and
   Grok Build): MCP servers, skills and prompts, and instructions, with the trust, naming and left-out rules.
+- [Compatibility switches in launch settings](product/compatibility-switches-in-launch-settings.md) — the
+  compatibility switches a console, a project or a session holds beside its model and effort: the follow / On / Off
+  states, which value a launch uses, the pickers in each dialog, and what sessions may change.
 - [Model and reasoning effort](product/model-and-reasoning-effort.md) — the Advanced section's model and effort pickers
   and what a session shows running.
 - [Agent accounts](product/agent-accounts.md) — Settings' Agent accounts section: added agents, the default account,

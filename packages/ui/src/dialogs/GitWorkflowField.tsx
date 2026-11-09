@@ -5,6 +5,7 @@ import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES, GIT_WORKFLOW_ITEMS } from "../gi
 import { useT } from "../i18n/react";
 import type { GitDelivery, GitDevelopment, GitWorkflowOverride } from "../protocol";
 import { useDaemonStore } from "../store";
+import { FollowSwitchSelect } from "../components/form/FollowSwitchSelect";
 import { GroupRow, GroupRows } from "../components/form/GroupRows";
 import { LabelledGroup } from "../components/form/LabelledGroup";
 import { OptionSelect, type Option } from "../components/form/OptionSelect";
@@ -47,21 +48,11 @@ export function GitWorkflowField({
 
   const flagPicker = (item: "squash_before_delivery" | "rebase_before_delivery" | "revert_gate") => {
     const label = t(GIT_WORKFLOW_ITEMS[item].label);
-    const options: Option<Follow | "on" | "off">[] = [
-      { value: FOLLOW, label: sameAsGlobal, badge: onOff(global[item]), badgeInLabel: true },
-      { value: "on", label: onOff(true) },
-      { value: "off", label: onOff(false) },
-    ];
     return (
       <GroupRow label={label}>
-        <OptionSelect
-          hideLabel
-          label={label}
-          options={options}
-          value={value[item] === null ? FOLLOW : value[item] ? "on" : "off"}
-          onChange={(picked) => onChange({ ...value, [item]: picked === FOLLOW ? null : picked === "on" })}
-          isDisabled={isDisabled}
-        />
+        <FollowSwitchSelect label={label} value={value[item]} inherit={global[item]} followLabel={sameAsGlobal}
+          onLabel={onOff(true)} offLabel={onOff(false)}
+          onChange={(picked) => onChange({ ...value, [item]: picked })} isDisabled={isDisabled} />
       </GroupRow>
     );
   };

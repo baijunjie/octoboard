@@ -1,5 +1,7 @@
 //! What the table files share: the enum text conversion and the readers of provider ids.
 
+use std::collections::BTreeMap;
+
 use anyhow::Result;
 use rusqlite::Row;
 use serde::de::DeserializeOwned;
@@ -12,6 +14,18 @@ use crate::protocol::AgentId;
 pub(super) fn agent_from_row(row: &Row<'_>, index: usize) -> rusqlite::Result<Option<AgentId>> {
     let id: String = row.get(index)?;
     Ok(AgentId::from_wire_name(&id))
+}
+
+/// The compatibility switches a row holds as the JSON object the column stores; `NULL` for none.
+pub(super) fn compatibility_to_text(held: &BTreeMap<String, bool>) -> Option<String> {
+    (!held.is_empty()).then(|| serde_json::to_string(held).unwrap_or_default())
+}
+
+/// The compatibility switches the column holds; a value that is not a JSON object of booleans
+/// holds none.
+pub(super) fn compatibility_from_text(text: Option<String>) -> BTreeMap<String, bool> {
+    text.and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
 }
 
 /// `provider IN (…)` over `column`: the rows of the registered providers.

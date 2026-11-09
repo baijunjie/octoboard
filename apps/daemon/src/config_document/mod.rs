@@ -8,6 +8,7 @@ pub(crate) mod upgrade;
 
 use std::collections::BTreeMap;
 
+use crate::protocol::{Launch, PerAgent};
 use crate::providers::{settings_where, SettingValue};
 
 /// The entries of `choices` (provider id, then setting id) that name a setting a configuration
@@ -22,5 +23,21 @@ pub(crate) fn exported_provider_settings<'a>(
         .map(|(provider, settings)| (provider.clone(), settings.clone()));
     settings_where(choices, |setting, value| {
         setting.exported && setting.accepts(value)
+    })
+}
+
+/// `launches` with the compatibility switches cut down to the ones a configuration document
+/// carries (`SettingDescriptor::exported`) that the agent lets a launch hold. What an export writes
+/// for a project's and a console's launch settings and an import reads: a switch this build does
+/// not know, or one that stays on its machine, is dropped.
+pub(crate) fn exported_launches(launches: PerAgent<Launch>) -> PerAgent<Launch> {
+    launches.map(|agent, mut launch| {
+        launch.compatibility.retain(|setting, _| {
+            agent
+                .descriptor()
+                .setting(setting)
+                .is_some_and(|setting| setting.exported && setting.overridable())
+        });
+        launch
     })
 }

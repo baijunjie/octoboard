@@ -456,6 +456,9 @@ And each record carries what tells sessions apart and what an owner decides on:
   absent when the session follows its project's, else its console's, setting, and `null` when the session leaves the
   value to the agent's own default. They differ from `observed_model` and `observed_effort`, which say what the agent's
   records show.
+- `compatibility`, the compatibility switches the session holds its own value for, each `true` or `false` (see
+  `docs/product/compatibility-switches-in-launch-settings.md`); absent while the session holds none, every switch then
+  following its project's, else its console's, else the agent-level value.
 - `owned_sessions`, how many sessions are bound to it in any status, archived ones included — the count that decides
   whom it can be bound to (see "Who can own a session" in `docs/product/changing-session-owners.md`). A project
   coordinator with a console parent reads `coordinator` in `role` with `owner_kind` `console` (see

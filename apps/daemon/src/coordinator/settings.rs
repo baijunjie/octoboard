@@ -7,9 +7,7 @@ use anyhow::Result;
 
 use crate::accounts::quotas;
 use crate::project_git;
-use crate::protocol::{
-    error_code, AgentId, CodedError, GitWorkflowSettingsChanges, KeepAwakeWhen, GIT_WORKFLOW_ITEMS,
-};
+use crate::protocol::{AgentId, GitWorkflowSettingsChanges, KeepAwakeWhen, GIT_WORKFLOW_ITEMS};
 use crate::providers::{SettingDescriptor, SettingValue};
 use crate::state::{broadcast_settings, AppState, RecordKey, SETTINGS_FIELDS};
 
@@ -22,13 +20,7 @@ fn declared_setting(
     setting: &str,
     value: Option<&SettingValue>,
 ) -> Result<&'static SettingDescriptor> {
-    let refused = |detail: String| {
-        CodedError::raised(
-            error_code::UNREADABLE_REQUEST,
-            format!("unreadable request: {detail}"),
-            &[("detail", &detail)],
-        )
-    };
+    let refused = crate::agents::launch_settings::refused_setting;
     let Some(descriptor) = agent.descriptor().setting(setting) else {
         return Err(refused(format!(
             "{} has no setting `{setting}`",

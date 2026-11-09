@@ -55,6 +55,7 @@ pub fn check_new_console(state: &Arc<AppState>, new: &NewConsole) -> Result<Opti
 pub async fn check_new_console_launch(state: &Arc<AppState>, new: &NewConsole) -> Result<()> {
     for set in [&new.launch, &new.project_session_launch] {
         for (agent, launch) in set.iter() {
+            launch_settings::check_compatibility(agent, &launch.compatibility)?;
             let account = new.accounts.get(agent).clone();
             LaunchCheck::given(
                 agent,
@@ -164,6 +165,11 @@ pub async fn update_console_checked(
     changes: ConsoleChanges,
     base: &BTreeMap<String, u64>,
 ) -> Result<Console> {
+    for set in [&changes.launch, &changes.project_launch] {
+        for (agent, change) in set {
+            launch_settings::check_compatibility(*agent, &change.compatibility)?;
+        }
+    }
     let name = changes
         .name
         .as_deref()

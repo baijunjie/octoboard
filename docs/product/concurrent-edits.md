@@ -14,9 +14,9 @@ Four kinds of record are edited through a form, and each keeps a version for eve
   Prevent sleep holds, the default clone directory, each of the five git workflow settings, each agent's tags and each setting an agent's
   provider declares;
 - **a console**: its name, both default agents, its avatar, its console session instructions, and for each agent its
-  account and its console session and project session model and reasoning effort;
+  account and its console session and project session model, reasoning effort and each compatibility switch;
 - **a project**: its name, default agent, pin, tags, description, its own git workflow settings item by item, and for
-  each agent its account, model and reasoning effort;
+  each agent its account, model, reasoning effort and each compatibility switch;
 - **an account**: its name, its directory, whether it is turned off and whether it shares the default configuration.
 
 A field's version advances whenever the field's value changes, whoever changed it: a form, a single action, an agent's

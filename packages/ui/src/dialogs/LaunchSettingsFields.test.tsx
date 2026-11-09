@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, useLayoutEffect } from "react";
+import { act, useLayoutEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
@@ -13,7 +13,7 @@ import { isolate } from "../i18n/isolate";
 import { DaemonProvider, type Daemon } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { TEST_PROVIDERS } from "../test/testProviders";
-import { LaunchMatrix } from "./ConsoleLaunchFields";
+import { LaunchMatrix as ConsoleLaunchMatrix } from "./ConsoleLaunchFields";
 import { EffortPicker, LaunchSettingsFields, ModelPicker, type LaunchModels } from "./LaunchSettingsFields";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -21,6 +21,11 @@ import { EffortPicker, LaunchSettingsFields, ModelPicker, type LaunchModels } fr
 /** How long a wait on a condition may take before the test gives up on it, with room for a cold run to transform the
  * modules the component loads on first use. */
 const UNTIL_SHOWN = { timeout: 15_000 };
+
+function LaunchMatrix(props: import("react").ComponentProps<typeof ConsoleLaunchMatrix>) {
+  const [daemon] = useState(() => testDaemon({ request: vi.fn() as Daemon["request"], showNotice: vi.fn() }));
+  return <DaemonProvider value={daemon}><ConsoleLaunchMatrix {...props} /></DaemonProvider>;
+}
 
 function mount(unavailable?: import("../protocol").ModelsUnavailable | Error) {
   const request = vi.fn(async (body: { type: string }) => {
@@ -133,7 +138,7 @@ it("retains request-refusal metadata for rich model descriptions in the mark's p
 });
 
 it("directs inherited model and effort badges without selecting or submitting their display values", () => {
-  const inherited = { model: "model/中文-مراجعة", effort: "effort/مراجعة-中文" };
+  const inherited = { compatibility: {}, model: "model/中文-مراجعة", effort: "effort/مراجعة-中文" };
   const changed = vi.fn();
   const launch: LaunchModels = { agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelFailure: undefined };
   const container = document.body.appendChild(document.createElement("div"));
@@ -143,7 +148,7 @@ it("directs inherited model and effort badges without selecting or submitting th
     <ModelPicker launch={launch} model={null} inherit={inherited} onChange={changed} />
     <EffortPicker launch={launch} model={null} effort={null} inherit={inherited} onChange={changed} />
   </>));
-  for (const value of Object.values(inherited)) {
+  for (const value of [inherited.model, inherited.effort]) {
     const badge = [...container.querySelectorAll("button span")].find((node) => node.textContent === value)!;
     expect(badge.getAttribute("dir")).toBe("auto");
     expect(badge.textContent).not.toMatch(/[\u2066-\u2069]/);
@@ -168,7 +173,7 @@ it("takes the effort levels from the default model while neither the pair nor it
   // A model the pair names, or the one its owner names, comes before the default.
   act(() => root.render(<EffortPicker launch={launch} model="opus" effort={null} onChange={() => {}} />));
   expect(levels()).toEqual(["medium"]);
-  act(() => root.render(<EffortPicker launch={launch} model={null} effort={null} inherit={{ model: "opus", effort: null }} onChange={() => {}} />));
+  act(() => root.render(<EffortPicker launch={launch} model={null} effort={null} inherit={{ compatibility: {}, model: "opus", effort: null }} onChange={() => {}} />));
   expect(levels()).toEqual(["medium"]);
 });
 
@@ -178,7 +183,7 @@ it("says the agent's own setting, not Best available, for a default model Claude
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
-  const shown = (launch: LaunchModels, inherit?: { model: string | null; effort: string | null }) => {
+  const shown = (launch: LaunchModels, inherit?: { model: string | null; effort: string | null; compatibility: Record<string, boolean> }) => {
     act(() => root.render(<ModelPicker launch={launch} model={null} inherit={inherit} onChange={() => {}} />));
     return container.querySelector("button")!.textContent;
   };
@@ -189,7 +194,7 @@ it("says the agent's own setting, not Best available, for a default model Claude
   expect(shown(launchOf("opus[1m]", "configured"))).toBe("The agent's own setting, Opus [1m]");
   expect(shown(launchOf("my-gateway-model", "configured"))).toBe("The agent's own setting, my-gateway-model");
   // A project keeps "Same as console" whichever the source.
-  expect(shown(launchOf("fable", "configured"), { model: null, effort: null })).toBe("Same as console, Fable 5.1");
+  expect(shown(launchOf("fable", "configured"), { compatibility: {}, model: null, effort: null })).toBe("Same as console, Fable 5.1");
 });
 
 it("hands focus to the Model trigger when the mark that holds it goes, and leaves other focus alone", async () => {
@@ -219,7 +224,7 @@ it("hands focus to the console's Model trigger when the console matrix's mark th
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
-  const pair = { model: null, effort: null };
+  const pair = { compatibility: {}, model: null, effort: null };
   const render = (modelFailure?: string) => act(async () => root.render(<LaunchMatrix launch={launchOf(modelFailure)} consoleSessions={pair} projectSessions={pair} onConsoleChange={() => {}} onProjectChange={() => {}} />));
   await render("Why");
   const marks = container.querySelectorAll<HTMLElement>("button[data-status-mark][aria-label='Could not load the models']");
@@ -243,7 +248,7 @@ it("turns the focus ring on only when the console matrix's mark hands focus on, 
     act(() => Reflect.apply(setInteractionModality, undefined, [modality]));
   });
   document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
-  const pair = { model: null, effort: null };
+  const pair = { compatibility: {}, model: null, effort: null };
   const render = (shown: boolean, modelFailure?: string) => act(async () => root.render(shown
     ? <LaunchMatrix launch={launchOf(modelFailure)} consoleSessions={pair} projectSessions={pair} onConsoleChange={() => {}} onProjectChange={() => {}} />
     : null));
@@ -469,8 +474,13 @@ it("shows loading inside all four console launch selectors without a note below 
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
-  act(() => root.render(<LaunchMatrix launch={launch} consoleSessions={{ model: null, effort: null }} projectSessions={{ model: null, effort: null }} onConsoleChange={() => {}} onProjectChange={() => {}} />));
-  const triggers = [...container.querySelectorAll<HTMLButtonElement>("[data-slot=select-trigger]")];
+  act(() => root.render(<LaunchMatrix launch={launch} consoleSessions={{ model: null, effort: null, compatibility: {} }} projectSessions={{ model: null, effort: null, compatibility: {} }} onConsoleChange={() => {}} onProjectChange={() => {}} />));
+  const triggers = [...container.querySelectorAll<HTMLButtonElement>("[data-slot=select-trigger]")].filter((trigger) =>
+    trigger.getAttribute("aria-labelledby")?.split(" ").some((id) => {
+      const label = document.getElementById(id)?.textContent;
+      return label === "Model" || label === "Reasoning effort";
+    }),
+  );
   expect(triggers).toHaveLength(4);
   for (const trigger of triggers) {
     expect(trigger.textContent).toBe("Loading…");

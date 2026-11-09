@@ -1563,6 +1563,13 @@ export type Event = {
   model?: string | null,
   effort?: string | null,
   /**
+   * For `handoff`: the compatibility switches the call asked the receiving session to hold,
+   * by setting id; empty for every other request and where it asked for none.
+   */
+  compatibility: {
+    [key in string]: boolean
+  },
+  /**
    * Milliseconds since the epoch, which is what orders several requests oldest first.
    */
   requested_at: number,
@@ -2419,20 +2426,37 @@ export type KeepAwakeWhen = "always" | "working";
 
 /**
  * The model and reasoning effort an agent's sessions are launched with, in the agent's own
- * spelling. `null` leaves the choice to the agent.
+ * spelling, and the compatibility switches the level holds. `null` leaves the choice to the
+ * agent.
  */
 export type Launch = {
   model: string | null,
   effort: string | null,
+  /**
+   * The compatibility switches (provider settings declaring `compatibility_with`) this level
+   * holds its own value for, by setting id: only the values it holds, so a switch left out
+   * follows the level behind it, down to the agent's value in `Settings::provider_settings`.
+   */
+  compatibility: {
+    [key in string]: boolean
+  },
 };
 
 /**
- * A change to one agent's model and effort: each absent for "leave it alone", `null` or a
- * blank string for the agent's own default.
+ * A change to one agent's launch settings: absent fields leave their values alone. A model or
+ * effort of `null` or a blank string uses the agent's own default; compatibility entries follow
+ * the level behind on `null` and hold their own boolean otherwise.
  */
 export type LaunchChange = {
   model?: string | null,
   effort?: string | null,
+  /**
+   * Per compatibility switch: absent leaves it alone, `null` goes back to following the level
+   * behind, a boolean holds the level's own value.
+   */
+  compatibility?: {
+    [key in string]: boolean | null
+  },
 };
 
 /**
@@ -3008,7 +3032,10 @@ export type Request = {
    */
   launch?: Partial<PerAgent<{
     model?: string,
-    effort?: string
+    effort?: string,
+    compatibility?: {
+      [key in string]: boolean
+    }
   }>>,
   /**
    * Each agent's model and reasoning effort for the console's project sessions whose
@@ -3016,7 +3043,10 @@ export type Request = {
    */
   project_session_launch?: Partial<PerAgent<{
     model?: string,
-    effort?: string
+    effort?: string,
+    compatibility?: {
+      [key in string]: boolean
+    }
   }>>,
   icon?: string,
   /**
@@ -3092,7 +3122,10 @@ export type Request = {
    */
   launch?: Partial<PerAgent<{
     model?: string,
-    effort?: string
+    effort?: string,
+    compatibility?: {
+      [key in string]: boolean
+    }
   }>>,
   /**
    * Whether an absent `default_agent` is filled in from the directory's marker files. Absent
@@ -3308,6 +3341,16 @@ export type Request = {
    */
   model?: string | null,
   effort?: string | null,
+  /**
+   * The compatibility switches (provider settings declaring `compatibility_with`) the
+   * session holds its own value for, by setting id, with the rule `effort` has: absent for a
+   * switch leaves what the session has, `true` or `false` holds that value, `null` goes back
+   * to following the project's (else the console's, else the agent's). An unknown setting,
+   * or one a launch cannot hold, is refused with `unreadable_request`.
+   */
+  compatibility?: {
+    [key in string]: boolean | null
+  },
   task?: string,
   title?: string,
   /**
@@ -3377,6 +3420,16 @@ export type Request = {
   model?: string | null,
   effort?: string | null,
   /**
+   * The compatibility switches (provider settings declaring `compatibility_with`) the
+   * session holds its own value for, by setting id, with the rule `effort` has: absent for a
+   * switch leaves what the session has, `true` or `false` holds that value, `null` goes back
+   * to following the project's (else the console's, else the agent's). An unknown setting,
+   * or one a launch cannot hold, is refused with `unreadable_request`.
+   */
+  compatibility?: {
+    [key in string]: boolean | null
+  },
+  /**
    * See `OpenSession::terminal_appearance`.
    */
   terminal_appearance?: TerminalAppearance,
@@ -3388,6 +3441,16 @@ export type Request = {
   account?: string | null,
   model?: string | null,
   effort?: string | null,
+  /**
+   * The compatibility switches (provider settings declaring `compatibility_with`) the
+   * session holds its own value for, by setting id, with the rule `effort` has: absent for a
+   * switch leaves what the session has, `true` or `false` holds that value, `null` goes back
+   * to following the project's (else the console's, else the agent's). An unknown setting,
+   * or one a launch cannot hold, is refused with `unreadable_request`.
+   */
+  compatibility?: {
+    [key in string]: boolean | null
+  },
   /**
    * See `OpenSession::terminal_appearance`. Applied to the receiving session's launch.
    */
@@ -3528,6 +3591,16 @@ export type Request = {
   account?: string | null,
   model?: string | null,
   effort?: string | null,
+  /**
+   * The compatibility switches (provider settings declaring `compatibility_with`) the
+   * session holds its own value for, by setting id, with the rule `effort` has: absent for a
+   * switch leaves what the session has, `true` or `false` holds that value, `null` goes back
+   * to following the project's (else the console's, else the agent's). An unknown setting,
+   * or one a launch cannot hold, is refused with `unreadable_request`.
+   */
+  compatibility?: {
+    [key in string]: boolean | null
+  },
 }
   | {
   "type": "update_settings",
@@ -3812,7 +3885,10 @@ export type RequestBody = {
    */
   launch?: Partial<PerAgent<{
     model?: string,
-    effort?: string
+    effort?: string,
+    compatibility?: {
+      [key in string]: boolean
+    }
   }>>,
   /**
    * Each agent's model and reasoning effort for the console's project sessions whose
@@ -3820,7 +3896,10 @@ export type RequestBody = {
    */
   project_session_launch?: Partial<PerAgent<{
     model?: string,
-    effort?: string
+    effort?: string,
+    compatibility?: {
+      [key in string]: boolean
+    }
   }>>,
   icon?: string,
   /**
@@ -3896,7 +3975,10 @@ export type RequestBody = {
    */
   launch?: Partial<PerAgent<{
     model?: string,
-    effort?: string
+    effort?: string,
+    compatibility?: {
+      [key in string]: boolean
+    }
   }>>,
   /**
    * Whether an absent `default_agent` is filled in from the directory's marker files. Absent
@@ -4112,6 +4194,16 @@ export type RequestBody = {
    */
   model?: string | null,
   effort?: string | null,
+  /**
+   * The compatibility switches (provider settings declaring `compatibility_with`) the
+   * session holds its own value for, by setting id, with the rule `effort` has: absent for a
+   * switch leaves what the session has, `true` or `false` holds that value, `null` goes back
+   * to following the project's (else the console's, else the agent's). An unknown setting,
+   * or one a launch cannot hold, is refused with `unreadable_request`.
+   */
+  compatibility?: {
+    [key in string]: boolean | null
+  },
   task?: string,
   title?: string,
   /**
@@ -4181,6 +4273,16 @@ export type RequestBody = {
   model?: string | null,
   effort?: string | null,
   /**
+   * The compatibility switches (provider settings declaring `compatibility_with`) the
+   * session holds its own value for, by setting id, with the rule `effort` has: absent for a
+   * switch leaves what the session has, `true` or `false` holds that value, `null` goes back
+   * to following the project's (else the console's, else the agent's). An unknown setting,
+   * or one a launch cannot hold, is refused with `unreadable_request`.
+   */
+  compatibility?: {
+    [key in string]: boolean | null
+  },
+  /**
    * See `OpenSession::terminal_appearance`.
    */
   terminal_appearance?: TerminalAppearance,
@@ -4192,6 +4294,16 @@ export type RequestBody = {
   account?: string | null,
   model?: string | null,
   effort?: string | null,
+  /**
+   * The compatibility switches (provider settings declaring `compatibility_with`) the
+   * session holds its own value for, by setting id, with the rule `effort` has: absent for a
+   * switch leaves what the session has, `true` or `false` holds that value, `null` goes back
+   * to following the project's (else the console's, else the agent's). An unknown setting,
+   * or one a launch cannot hold, is refused with `unreadable_request`.
+   */
+  compatibility?: {
+    [key in string]: boolean | null
+  },
   /**
    * See `OpenSession::terminal_appearance`. Applied to the receiving session's launch.
    */
@@ -4332,6 +4444,16 @@ export type RequestBody = {
   account?: string | null,
   model?: string | null,
   effort?: string | null,
+  /**
+   * The compatibility switches (provider settings declaring `compatibility_with`) the
+   * session holds its own value for, by setting id, with the rule `effort` has: absent for a
+   * switch leaves what the session has, `true` or `false` holds that value, `null` goes back
+   * to following the project's (else the console's, else the agent's). An unknown setting,
+   * or one a launch cannot hold, is refused with `unreadable_request`.
+   */
+  compatibility?: {
+    [key in string]: boolean | null
+  },
 }
 | {
   "type": "update_settings",
@@ -4801,6 +4923,14 @@ export type Session = {
    * The reasoning effort override, with the same inheritance rule as `model`.
    */
   effort?: string | null,
+  /**
+   * The compatibility switches (provider settings declaring `compatibility_with`) this session
+   * holds its own value for, by setting id; only what it holds, so one left out follows the
+   * project's, else the console's, else the agent's value, read at every launch like `model`.
+   */
+  compatibility: {
+    [key in string]: boolean
+  },
   /**
    * The user pinned this session to the top of its list. Only `set_session_pinned` changes it,
    * and a pinned session stays pinned across archiving and resuming.

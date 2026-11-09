@@ -576,6 +576,11 @@ pub struct Session {
     )]
     #[cfg_attr(test, ts(optional))]
     pub effort: Option<Option<String>>,
+    /// The compatibility switches (provider settings declaring `compatibility_with`) this session
+    /// holds its own value for, by setting id; only what it holds, so one left out follows the
+    /// project's, else the console's, else the agent's value, read at every launch like `model`.
+    #[serde(default)]
+    pub compatibility: BTreeMap<String, bool>,
     /// The user pinned this session to the top of its list. Only `set_session_pinned` changes it,
     /// and a pinned session stays pinned across archiving and resuming.
     pub pinned: bool,

@@ -96,6 +96,7 @@ const GOAL: &str = "Serve the refund endpoint the shop now calls.";
 /// for none.
 fn asked(console: &str, project: Option<&str>) -> OpenRequest {
     OpenRequest {
+        compatibility: Default::default(),
         console_id: console.to_string(),
         project_id: project.map(str::to_string),
         agent: None,

@@ -173,7 +173,8 @@ with.
 
 The model and reasoning effort resolved for the session are passed on the launch as well (see "The model and reasoning
 effort" below), as is an explicit permission preset or mode chosen for the agent (see
-"Approval modes" in `docs/product/per-agent-settings.md`), and, while one of the agent's compatibility switches is on,
+"Approval modes" in `docs/product/per-agent-settings.md`), and, while one of the agent's compatibility switches is on
+for the session (see "Which value a launch uses" in `docs/product/compatibility-switches-in-launch-settings.md`),
 what has the session load another agent's configuration: Claude Code's for Codex and Grok Build, Codex's for Claude
 Code and Grok Build — MCP servers, skills and a section added to the role description (see "Claude compatibility" and
 "Codex compatibility" in `docs/product/per-agent-settings.md`, and `docs/product/compatibility-between-agents.md`).

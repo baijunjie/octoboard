@@ -1,15 +1,17 @@
 //! Starting the agent process of a recorded session, a relaunch included, and stopping it, the
 //! waits for it to go down, the launch settings a session starts with, and the checks of the
-//! model and effort a session is opened, switched, resumed or changed to.
+//! launch values a session is opened, switched, resumed or changed to.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 
-use crate::agents::launch_settings::{self, normalize_session_launch_setting, LaunchCheck};
+use crate::agents::launch_settings::{
+    self, apply_compatibility, check_compatibility, normalize_session_launch_setting, LaunchCheck,
+};
 use crate::messaging::delivery;
 use crate::messaging::owner_notices;
 use crate::processes::ledger::PendingLaunch;
@@ -17,6 +19,7 @@ use crate::protocol::{
     error_code, AgentId, CodedError, Console, GitWorkflowSettings, Launch, ProcessTree, Project,
     Session, SessionKind, SessionStatus, TerminalAppearance,
 };
+use crate::providers::ProviderSettings;
 use crate::session::dialogs;
 use crate::session::term;
 use crate::session::trust;
@@ -225,12 +228,13 @@ fn readable_model(agent: AgentId, model: &Option<String>) -> Option<String> {
         .filter(|model| !retired.contains(&model.as_str()))
 }
 
-/// The model and reasoning effort a session of `project` launches `agent` with when it chose
-/// neither: for each value independently, the project's own, else its console's project session
-/// value, else `None`, unset: the effort is then the agent's own default, and the model
+/// The model, reasoning effort and compatibility switches a session of `project` launches `agent`
+/// with when it chose none: for each value independently, the project's own, else its console's
+/// project session value, else `None`, unset (a switch then follows the agent's own value): the
+/// effort is then the agent's own default, and the model
 /// [`launch_settings::launch_default_model`]'s (for Claude Code, the best one the account may use
-/// unless Claude Code's own configuration names a model; see [`start_process`]). Each agent has
-/// its own pair, since each has its own model names.
+/// unless Claude Code's own configuration names a model; see [`start_process`]). Each agent has its
+/// own launch settings, since each has its own models, efforts and compatibility switches.
 pub(crate) fn project_launch_settings(
     project: &Project,
     console: &Console,
@@ -238,26 +242,29 @@ pub(crate) fn project_launch_settings(
 ) -> Launch {
     let own = project.launch.get(agent);
     let console_launch = console.project_session_launch.get(agent);
+    let mut compatibility = console_launch.compatibility.clone();
+    compatibility.extend(own.compatibility.clone());
     Launch {
         model: readable_model(agent, &own.model)
             .or_else(|| readable_model(agent, &console_launch.model)),
         effort: own.effort.clone().or_else(|| console_launch.effort.clone()),
+        compatibility,
     }
 }
 
-/// The model and reasoning effort a session of `agent` launches with when it chose neither: a
-/// console session (`project` none) reads its console's console session pair, a project session
-/// its project's with its console's project session pair behind it (see
+/// The model, reasoning effort and held compatibility switches a session of `agent` inherits:
+/// a console session (`project` none) reads its console's console session settings, a project
+/// session its project's with its console's project session settings behind them (see
 /// [`project_launch_settings`]).
 fn inherited_launch(project: Option<&Project>, console: &Console, agent: AgentId) -> Launch {
     match project {
         Some(project) => project_launch_settings(project, console, agent),
-        // A console session's own pair: each agent has its own model names.
         None => {
             let launch = console.launch.get(agent);
             Launch {
                 model: readable_model(agent, &launch.model),
                 effort: launch.effort.clone(),
+                compatibility: launch.compatibility.clone(),
             }
         }
     }
@@ -282,6 +289,64 @@ pub(crate) fn launch_settings(
         },
         session.effort.clone().unwrap_or(inherited.effort),
     ))
+}
+
+/// The compatibility switches `session` is launched with that some level holds a value for: its
+/// own, else its project's, else its console's set for its kind of session (see
+/// [`launch_settings`]); a switch no level holds is the agent's own value, which
+/// [`launch_provider_settings`] adds.
+pub(crate) fn launch_compatibility(
+    state: &Arc<AppState>,
+    session: &Session,
+) -> Result<BTreeMap<String, bool>> {
+    let (project, console) = session_scope(state, session)?;
+    let mut held = inherited_launch(project.as_ref(), &console, session.agent).compatibility;
+    held.extend(session.compatibility.clone());
+    Ok(held)
+}
+
+/// The value each compatibility switch of `session`'s agent has when it is launched, a switch no
+/// level holds taking the agent's own value: what [`launch_provider_settings`] gives the launch,
+/// for a tool to report.
+pub(crate) fn effective_compatibility(
+    state: &Arc<AppState>,
+    session: &Session,
+) -> Result<BTreeMap<String, bool>> {
+    let settings = launch_provider_settings(state, session)?;
+    Ok(switches_of(session.agent, &settings))
+}
+
+/// The value in `settings` of each compatibility switch `agent` declares.
+pub(crate) fn switches_of(agent: AgentId, settings: &ProviderSettings) -> BTreeMap<String, bool> {
+    agent
+        .descriptor()
+        .overridable_settings()
+        .map(|setting| (setting.id.to_string(), settings.switch(setting.id)))
+        .collect()
+}
+
+/// The settings of `session`'s provider as its launch reads them: the application-wide values,
+/// with the compatibility switches some level of the session's chain holds taking their place.
+/// The held values are combined with application-wide values by
+/// [`provider_settings_with_compatibility`].
+pub(crate) fn launch_provider_settings(
+    state: &Arc<AppState>,
+    session: &Session,
+) -> Result<ProviderSettings> {
+    provider_settings_with_compatibility(
+        state,
+        session.agent,
+        &launch_compatibility(state, session)?,
+    )
+}
+
+/// Combines the provider's application-wide settings with the switches held by a launch chain.
+pub(crate) fn provider_settings_with_compatibility(
+    state: &AppState,
+    agent: AgentId,
+    held: &BTreeMap<String, bool>,
+) -> Result<ProviderSettings> {
+    Ok(state.store.provider_settings_of(agent)?.with_switches(held))
 }
 
 /// Which of the values given to [`check_launch_settings`] are held against what the agent offers.
@@ -352,27 +417,47 @@ pub(super) fn session_scope(
     Ok((project, console))
 }
 
-/// The model and reasoning effort a user changed for a switch or a resume, each absent to leave the
-/// session's own override as it is, `Some(None)` for unset (the default model, see
-/// [`launch_settings::launch_default_model`], with Claude Code's own configuration winning).
+/// The model, reasoning effort and compatibility switches a user changed for a switch or a resume,
+/// each absent to leave the session's own override as it is, `Some(None)` for unset (the default
+/// model, see [`launch_settings::launch_default_model`], with Claude Code's own configuration
+/// winning); a switch in `compatibility` is held with `Some(value)` and goes back to following
+/// with `None`.
 #[derive(Default)]
 pub(crate) struct LaunchEdit {
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
+    pub compatibility: BTreeMap<String, Option<bool>>,
 }
 
-/// The model and effort overrides `session` would have with `edit` applied, each value left
-/// unchanged keeping what the session has, refused for a value the agent does not offer under
-/// `account_id`; `None` when there is nothing to change.
+/// The overrides a session has once a [`LaunchEdit`] is applied to it.
+pub(crate) struct LaunchOverrides {
+    pub model: Option<Option<String>>,
+    pub effort: Option<Option<String>>,
+    pub compatibility: BTreeMap<String, bool>,
+}
+
+impl LaunchOverrides {
+    /// Records the overrides as the session's own and tells every client.
+    pub(crate) fn record(&self, state: &AppState, id: &str) -> Result<()> {
+        state.set_session_launch(id, &self.model, &self.effort, &self.compatibility)
+    }
+}
+
+/// The overrides `session` would have with `edit` applied, each value left unchanged keeping what
+/// the session has, refused for a value the agent does not offer under `account_id` or a switch
+/// the agent does not declare; `None` when there is nothing to change.
 pub(super) async fn checked_launch_overrides(
     state: &Arc<AppState>,
     session: &Session,
     account_id: Option<String>,
     edit: LaunchEdit,
-) -> Result<Option<(Option<Option<String>>, Option<Option<String>>)>> {
-    if edit.model.is_none() && edit.effort.is_none() {
+) -> Result<Option<LaunchOverrides>> {
+    if edit.model.is_none() && edit.effort.is_none() && edit.compatibility.is_empty() {
         return Ok(None);
     }
+    check_compatibility(session.agent, &edit.compatibility)?;
+    let mut compatibility = session.compatibility.clone();
+    apply_compatibility(&mut compatibility, &edit.compatibility);
     let (project, console) = session_scope(state, session)?;
     let checked = check_launch_settings(
         state,
@@ -385,7 +470,11 @@ pub(super) async fn checked_launch_overrides(
         SettingsChecked::All,
     )
     .await?;
-    Ok(Some(checked))
+    Ok(Some(LaunchOverrides {
+        model: checked.0,
+        effort: checked.1,
+        compatibility,
+    }))
 }
 
 /// The git workflow settings in force for a project session's project as this launch is assembled,
@@ -476,7 +565,7 @@ pub(super) async fn start_process(
         task: task.map(str::to_string),
         resume_agent_session_id: resume_agent_session_id.map(str::to_string),
         config_dir: session.config_dir.as_ref().map(PathBuf::from),
-        settings: state.store.provider_settings_of(session.agent)?,
+        settings: launch_provider_settings(state, session)?,
         shared_default_dir: sharing.shared_default_dir,
         model,
         effort,

@@ -1641,6 +1641,10 @@ export const en = {
   "dialog.project.gitWorkflow.description":
     "Each item follows the global setting unless you choose a value for this project. A change to the revert gate takes effect at once; any other change reaches only sessions begun after it.",
   "dialog.project.gitWorkflow.sameAsGlobal": "Same as global setting",
+  "dialog.agentSettings.sameAsProject": "Same as project",
+  "dialog.agentSettings.sameAsAgent": "Same as agent setting",
+  "dialog.agentSettings.compatibilityOn": "On",
+  "dialog.agentSettings.compatibilityOff": "Off",
   "dialog.consoleSession.title": "Open console session",
   "dialog.consoleSession.subject": "The session will be opened in the console {console}.",
   "dialog.consoleSession.launchInheritanceNote": "Unchanged values follow the console settings.",
@@ -1742,10 +1746,8 @@ export const en = {
   "dialog.unbindSession.confirm": "Unbind",
   "dialog.switchAccount.title": "Switch account",
   "dialog.switchAccount.subject": "The session {title} will be switched to {account}.",
-  "dialog.switchAccount.message":
-    "Its process restarts under the new account and the conversation continues there. The session reads that account's configuration and keeps its explicit model and reasoning effort settings. A copy of the conversation stays in the current account.",
-  "dialog.switchAccount.messageFresh":
-    "Its process restarts under the new account with a fresh conversation, as nothing has been typed into it yet. The session reads that account's configuration and keeps its explicit model and reasoning effort settings.",
+  "dialog.switchAccount.messageLaunch": "Its process restarts under the new account and the conversation continues there. The session reads that account's configuration and keeps its explicit model, reasoning effort and compatibility settings. A copy of the conversation stays in the current account.",
+  "dialog.switchAccount.messageFreshLaunch": "Its process restarts under the new account with a fresh conversation, as nothing has been typed into it yet. The session reads that account's configuration and keeps its explicit model, reasoning effort and compatibility settings.",
   "dialog.switchAccount.confirm": "Switch",
   "dialog.switchAccount.scopeConsole": "Every session in this console",
   "dialog.switchAccount.scopeLabel": "Sessions to switch",
@@ -1760,8 +1762,7 @@ export const en = {
   },
   "dialog.switchAccount.eligibility":
     "Only {agent} sessions are switched. Archived sessions and sessions already on this account are skipped.",
-  "dialog.switchAccount.messageAll":
-    "Each session's process restarts under the new account. Existing conversations continue there, with a copy kept in each current account. Sessions with no conversation start fresh. Each session reads the new account's configuration and keeps its explicit model and reasoning effort settings.",
+  "dialog.switchAccount.messageAllLaunch": "Each session's process restarts under the new account. Existing conversations continue there, with a copy kept in each current account. Sessions with no conversation start fresh. Each session reads the new account's configuration and keeps its explicit model, reasoning effort and compatibility settings.",
   "dialog.switchAccount.done": {
     one: "{count} session switched to {account}",
     other: "{count} sessions switched to {account}",
@@ -1784,7 +1785,7 @@ export const en = {
   "dialog.incompleteLaunch.confirm": "Start anyway",
   "dialog.incompleteLaunch.viewSettings": "View in Settings",
   "dialog.sessionModel.title": "Change model",
-  "dialog.sessionModel.subject": "The session {title} will run with the model and reasoning effort chosen here.",
+  "dialog.sessionModel.subjectLaunch": "The session {title} will run with the model, reasoning effort and compatibility chosen here.",
   "dialog.sessionModel.restart":
     "It restarts with these settings and keeps its conversation. A turn in progress is interrupted and continues automatically when safe.",
   "dialog.sessionModel.restartFresh": "It restarts with these settings and starts a new conversation because nothing has been typed into it yet.",
@@ -1797,11 +1798,11 @@ export const en = {
   "dialog.sessionModel.blockedTitle": "Cannot change the model",
   "daemon.session_model_session_gone": "The session {title} no longer exists, so its model cannot be changed.",
   "daemon.session_model_session_archived": "The session {title} was archived, so its model cannot be changed. Reopen it to change its model and reasoning effort.",
-  "dialog.sessionModel.note": "A model or reasoning effort you change is kept for this session from now on.",
+  "dialog.sessionModel.noteLaunch": "Changes to the model, reasoning effort or compatibility settings are kept for this session from now on.",
   "dialog.sessionModel.confirm": "Change model",
   "dialog.sessionModel.failedTitle": "Could not change the model",
-  "dialog.sessionModel.done": "{session} restarted with its new model settings",
-  "dialog.sessionModel.doneRecorded": "{session} will use its new model settings when it is resumed",
+  "dialog.sessionModel.doneLaunch": "{session} restarted with its new launch settings",
+  "dialog.sessionModel.doneRecordedLaunch": "{session} will use its new launch settings when it is resumed",
   "dialog.handoff.title": "Hand off session",
   "dialog.handoff.subject": "The session {title} will be handed off.",
   "dialog.handoff.message":
@@ -1993,8 +1994,7 @@ export const en = {
   "dialog.sessionRequest.refuse": "Refuse",
   "dialog.sessionRequest.switch.title": "Switch account?",
   "dialog.sessionRequest.switch.confirm": "Switch account",
-  "dialog.sessionRequest.question.switchAndContinue":
-    "{requester} asks to switch its session {session} to the {agent} account {account}. The session keeps its conversation. A turn in progress is cut off, and continued automatically after the switch where that is safe. You can change the account, model and reasoning effort before you confirm.",
+  "dialog.sessionRequest.question.switchAndContinueLaunch": "{requester} asks to switch its session {session} to the {agent} account {account}. The session keeps its conversation. A turn in progress is cut off, and continued automatically after the switch where that is safe. You can change the account, model, reasoning effort and compatibility before you confirm.",
   "dialog.sessionRequest.switch.account": "Switch to",
   "dialog.sessionRequest.switch.current": "Current",
   "dialog.sessionRequest.switch.archived": "The session is archived, so its account cannot be switched.",
@@ -2004,14 +2004,13 @@ export const en = {
   "dialog.sessionRequest.switch.starting": "The session is still starting, so its account cannot be switched yet.",
   "dialog.sessionRequest.switch.accountGone": "The account asked for no longer exists. Choose another one.",
   "dialog.sessionRequest.switch.alreadyOn": "The session is on {account} already.",
-  "dialog.sessionRequest.switch.launchNote": "A model or reasoning effort you change is kept for this session from now on.",
+  "dialog.sessionRequest.switch.launchNoteLaunch": "Changes to the model, reasoning effort or compatibility settings are kept for this session from now on.",
   "dialog.sessionRequest.handoff.title": "Hand off a session?",
   "dialog.sessionRequest.handoff.presetGone": "The agent or account asked for is no longer available. Choose another one.",
   "dialog.sessionRequest.handoff.agentPlaceholder": "Choose an agent",
   "dialog.sessionRequest.handoff.accountPlaceholder": "Choose an account",
   "dialog.sessionRequest.handoff.confirm": "Hand off session",
-  "dialog.sessionRequest.question.handoff":
-    "{requester} asks to hand off its session {session} to a new {agent} session on the account {account}. The session is archived and the work moves to the new one. You can change the agent, account, model and reasoning effort before you confirm.",
+  "dialog.sessionRequest.question.handoffLaunch": "{requester} asks to hand off its session {session} to a new {agent} session on the account {account}. The session is archived and the work moves to the new one. You can change the agent, account, model, reasoning effort and compatibility before you confirm.",
   "dialog.sessionRequest.reopen.title": "Reopen a session?",
   "dialog.sessionRequest.reopen.confirm": "Reopen session",
   "dialog.sessionRequest.resume.title": "Resume a session?",

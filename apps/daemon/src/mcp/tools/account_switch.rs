@@ -118,6 +118,7 @@ async fn perform(
         LaunchEdit {
             model: edits.model.clone(),
             effort: edits.effort.clone(),
+            compatibility: edits.compatibility.clone(),
         },
         snapshot,
         launch,
@@ -152,6 +153,16 @@ async fn perform(
         note.push_str(&format!(
             " The user set its reasoning effort to {}.",
             setting_text(effort)
+        ));
+    }
+    for (setting, value) in &edits.compatibility {
+        note.push_str(&format!(
+            " The user {} its `{setting}` compatibility switch.",
+            match value {
+                Some(true) => "turned on",
+                Some(false) => "turned off",
+                None => "reset to following",
+            }
         ));
     }
     result["note"] = json!(note);

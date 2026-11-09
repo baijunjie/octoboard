@@ -47,6 +47,7 @@ async fn opening_a_session_is_refused_when_its_resolved_agent_is_unavailable() {
         let err = open_session(
             &state,
             OpenRequest {
+                compatibility: Default::default(),
                 console_id: "console-1".to_string(),
                 project_id: None,
                 agent: chosen,
@@ -115,6 +116,7 @@ fn opening_a_session_is_refused_on_an_account_whose_quota_is_used_up() {
         unavailable: None,
     };
     let request = |account: Option<String>| OpenRequest {
+        compatibility: Default::default(),
         console_id: "console-1".to_string(),
         project_id: None,
         agent: None,
@@ -207,6 +209,7 @@ async fn a_disabled_account_is_skipped_and_refused_for_new_sessions_but_not_for_
         .set_session_account("s", Some("claude-a"), Some(&alt_dir))
         .unwrap();
     let request = |account: Option<Option<String>>| OpenRequest {
+        compatibility: Default::default(),
         console_id: "console-1".to_string(),
         project_id: None,
         agent: None,

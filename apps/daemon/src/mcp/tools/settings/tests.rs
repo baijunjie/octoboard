@@ -1164,3 +1164,215 @@ async fn idle_terminal_cleanup_is_read_and_changed_through_the_tools() {
     assert_eq!(updated["auto_close_idle_shell_terminals"], true);
     assert!(state.store.auto_close_idle_shell_terminals().unwrap());
 }
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_console_views_report_their_two_held_launch_sets() {
+    let (state, _dir) = settings_state("mcp-compatibility-views");
+    let initial = state.store.provider_settings().unwrap();
+    let hub = call(
+        &state,
+        "a",
+        "update_console",
+        &arguments(json!({
+            "launch":{"codex":{"compatibility":{"claude_compatibility":false}}},
+            "project_session_launch":{"codex":{"compatibility":{"claude_compatibility":true}}}
+        })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        hub["launch"]["codex"]["compatibility"],
+        json!({"claude_compatibility":false})
+    );
+    assert_eq!(
+        hub["project_session_launch"]["codex"]["compatibility"],
+        json!({"claude_compatibility":true})
+    );
+    let read = call(&state, "a", "get_console", &Map::new()).await.unwrap();
+    assert_eq!(read["launch"], hub["launch"]);
+    assert_eq!(
+        read["project_session_launch"],
+        hub["project_session_launch"]
+    );
+    assert_eq!(state.store.provider_settings().unwrap(), initial);
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_project_view_resolves_console_and_agent_switches() {
+    let (state, _dir) = settings_state("mcp-compatibility-views");
+    let initial = state.store.provider_settings().unwrap();
+    let _hub = call(
+        &state,
+        "a",
+        "update_console",
+        &arguments(json!({
+            "launch":{"codex":{"compatibility":{"claude_compatibility":false}}},
+            "project_session_launch":{"codex":{"compatibility":{"claude_compatibility":true}}}
+        })),
+    )
+    .await
+    .unwrap();
+    let own = call(&state, "of-a", "get_project", &Map::new())
+        .await
+        .unwrap();
+    assert_eq!(own["launch"]["codex"]["compatibility"], json!({}));
+    assert_eq!(
+        own["effective"]["launch"]["codex"]["compatibility"],
+        json!({"claude_compatibility":true})
+    );
+    assert_eq!(
+        own["effective"]["launch"]["grok"]["compatibility"],
+        json!({"claude_compatibility":false,"codex_compatibility":false})
+    );
+    assert_eq!(state.store.provider_settings().unwrap(), initial);
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_updated_project_views_report_held_and_effective_switches() {
+    let (state, _dir) = settings_state("mcp-compatibility-views");
+    let initial = state.store.provider_settings().unwrap();
+    let _hub = call(
+        &state,
+        "a",
+        "update_console",
+        &arguments(json!({
+            "launch":{"codex":{"compatibility":{"claude_compatibility":false}}},
+            "project_session_launch":{"codex":{"compatibility":{"claude_compatibility":true}}}
+        })),
+    )
+    .await
+    .unwrap();
+    let edited = call(&state, "a", "update_project", &arguments(json!({"project":"project-1","launch":{"codex":{"compatibility":{"claude_compatibility":false}}}}))).await.unwrap();
+    assert_eq!(
+        edited["launch"]["codex"]["compatibility"],
+        json!({"claude_compatibility":false})
+    );
+    assert_eq!(
+        edited["effective"]["launch"]["codex"]["compatibility"],
+        json!({"claude_compatibility":false})
+    );
+    let listed = call(&state, "a", "list_projects", &Map::new())
+        .await
+        .unwrap();
+    let found = listed["projects"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["project"] == "project-1")
+        .unwrap();
+    assert_eq!(found["launch"], edited["launch"]);
+    assert_eq!(state.store.provider_settings().unwrap(), initial);
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_project_view_returns_to_inherited_switches_when_cleared() {
+    let (state, _dir) = settings_state("mcp-compatibility-views");
+    let initial = state.store.provider_settings().unwrap();
+    let _hub = call(
+        &state,
+        "a",
+        "update_console",
+        &arguments(json!({
+            "launch":{"codex":{"compatibility":{"claude_compatibility":false}}},
+            "project_session_launch":{"codex":{"compatibility":{"claude_compatibility":true}}}
+        })),
+    )
+    .await
+    .unwrap();
+    let mut project = state.store.require_project("project-1").unwrap();
+    project.launch[AgentId::CODEX]
+        .compatibility
+        .insert("claude_compatibility".into(), false);
+    state.store.update_project(&project).unwrap();
+    let cleared = call(&state, "a", "update_project", &arguments(json!({"project":"project-1","launch":{"codex":{"compatibility":{"claude_compatibility":null}}}}))).await.unwrap();
+    assert_eq!(cleared["launch"]["codex"]["compatibility"], json!({}));
+    assert_eq!(
+        cleared["effective"]["launch"]["codex"]["compatibility"],
+        json!({"claude_compatibility":true})
+    );
+    assert_eq!(state.store.provider_settings().unwrap(), initial);
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_added_project_reports_held_switches() {
+    let (state, dir) = settings_state("mcp-compatibility-views");
+    let initial = state.store.provider_settings().unwrap();
+    let repo = dir.join("compat-repo");
+    std::fs::create_dir(&repo).unwrap();
+    let added = call(&state, "a", "add_project", &arguments(json!({"source":"local","path":repo.to_string_lossy(),"launch":{"grok":{"compatibility":{"claude_compatibility":true}}}}))).await.unwrap();
+    assert_eq!(
+        added["projects"][0]["launch"]["grok"]["compatibility"],
+        json!({"claude_compatibility":true})
+    );
+    assert_eq!(state.store.provider_settings().unwrap(), initial);
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_mcp_rejects_unknown_choice_and_non_boolean_without_partial_changes() {
+    let (state, _dir) = settings_state("mcp-compatibility-invalid");
+    for entries in [
+        json!({"claude_compatibility":true,"unknown_switch":false}),
+        json!({"approval_reviewer":true}),
+        json!({"claude_compatibility":"true"}),
+    ] {
+        for (tool, args) in [
+            (
+                "update_project",
+                json!({"project":"project-1","name":"Must not apply","launch":{"codex":{"compatibility":entries}}}),
+            ),
+            (
+                "update_console",
+                json!({"name":"Must not apply","launch":{"codex":{"compatibility":entries}}}),
+            ),
+            (
+                "update_console",
+                json!({"name":"Must not apply","project_session_launch":{"codex":{"compatibility":entries}}}),
+            ),
+        ] {
+            let before =
+                serde_json::to_value(state.store.require_project("project-1").unwrap()).unwrap();
+            let hub =
+                serde_json::to_value(state.store.require_console("console-1").unwrap()).unwrap();
+            call(&state, "a", tool, &arguments(args))
+                .await
+                .expect_err("invalid switch refused");
+            assert_eq!(
+                serde_json::to_value(state.store.require_project("project-1").unwrap()).unwrap(),
+                before
+            );
+            assert_eq!(
+                serde_json::to_value(state.store.require_console("console-1").unwrap()).unwrap(),
+                hub
+            );
+        }
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_agent_settings_remain_read_only_and_separate_from_launches() {
+    let (state, _dir) = settings_state("mcp-compatibility-user-settings");
+    let before = call(&state, "a", "get_settings", &Map::new())
+        .await
+        .unwrap();
+    assert_eq!(
+        before["provider_settings"]["codex"]["claude_compatibility"],
+        false
+    );
+    call(&state, "a", "update_project", &arguments(json!({"project":"project-1","launch":{"codex":{"compatibility":{"claude_compatibility":true}}}}))).await.unwrap();
+    let after = call(&state, "a", "get_settings", &Map::new())
+        .await
+        .unwrap();
+    assert_eq!(after["provider_settings"], before["provider_settings"]);
+    call(
+        &state,
+        "a",
+        "update_settings",
+        &arguments(json!({"provider_settings":{"codex":{"claude_compatibility":true}}})),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        state.store.provider_settings().unwrap()["codex"]["claude_compatibility"],
+        Some(crate::providers::SettingValue::Switch(false))
+    );
+}

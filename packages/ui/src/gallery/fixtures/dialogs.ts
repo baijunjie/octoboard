@@ -192,6 +192,19 @@ const inPlaceState = snapshotState({
   settings: accountsState.settings,
 });
 
+// A project whose default agent is Grok Build, holding its own Codex compatibility value (Off) while its Claude
+// compatibility follows the console, whose project sessions hold Claude compatibility On for Grok Build.
+const compatibilityProject = projectOf("p-compatibility", console_.id, "Compat Site", {
+  default_agent: "grok",
+  launch: { grok: { compatibility: { codex_compatibility: false } } },
+});
+const compatibilityState = snapshotState({
+  consoles: [consoleWith(console_, { project_session_launch: { grok: { compatibility: { claude_compatibility: true } } } })],
+  projects: [compatibilityProject],
+  sessions: [],
+  settings: accountsState.settings,
+});
+
 // Detection has settled: the listed agents are not on the machine, the rest are.
 const detected = (missing: Agent[]) =>
   new Map<Agent, AgentAvailability>(
@@ -867,12 +880,12 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
-    state: { ...dialogState, consoles: new Map<string, Console>([...dialogState.consoles, [console_.id, { ...dialogState.consoles.get(console_.id)!, console_session_prompt: SESSION_INSTRUCTIONS }]]) },
+    state: { ...dialogState, consoles: new Map<string, Console>([...dialogState.consoles, [console_.id, consoleWith({ ...dialogState.consoles.get(console_.id)!, console_session_prompt: SESSION_INSTRUCTIONS }, { launch: { claude: { compatibility: { codex_compatibility: true } } } })]]) },
     id: "dialog-edit-console-launch-settings",
     group: "Consoles",
     category: "normal",
     title: "Console settings with avatar, stored launch settings and session instructions",
-    description: "The Claude Code tab holds different values for its two groups: the retired console session model and effort are retained with status badges, while project sessions have Sonnet at Low. The avatar and its remove control are visible. At the foot of Advanced, the Console session instructions field holds the console's own multi-line text, longer than the field is tall, so it scrolls inside the field.",
+    description: "The Claude Code tab holds different values for its two groups: the retired console session model and effort are retained with status badges, while project sessions have Sonnet at Low. Below them, Codex compatibility, Claude Code's one compatibility switch, has a row of its own headed by its name and a \"?\" tip, with a picker in each column: Console sessions reads On, the console's own value with no badge, and Project sessions reads Same as agent setting followed by a grey Off badge. The Codex and Grok Build tabs have their own switch rows (Grok Build's two). The avatar and its remove control are visible. At the foot of Advanced, the Console session instructions field holds the console's own multi-line text, longer than the field is tall, so it scrolls inside the field.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),
@@ -987,7 +1000,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "New session advanced settings",
-    description: "New conversation is selected with Name below the tabs; its placeholder combines the project name and localized session label. Claude Code and its long inherited account name share the joined field; expanded Advanced shows the project's Opus model with the console's Low project session reasoning effort, with Report to still offered above.",
+    description: "New conversation is selected with Name below the tabs; its placeholder combines the project name and localized session label. Claude Code and its long inherited account name share the joined field; expanded Advanced shows the project's Opus model with the console's Low project session reasoning effort, with Report to still offered above. Codex compatibility, the switch Claude Code has, follows under them, reading Same as project followed by a grey Off badge.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
@@ -1016,9 +1029,9 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Session resume, conversation found in an agent's default account",
-    description: "On the Resume conversation tab, once the conversation is found in an agent's record, an empty Name and the Agent and Account field appear under the Session ID: the field is disabled and shows the record's own agent and account (Claude Code, default account), not the project's choice. Advanced is available below and the footer button reads Open. A conversation found in a named account of another agent shows that agent and account in the same disabled field.",
+    description: "On the Resume conversation tab, once the conversation is found in an agent's record, an empty Name and the Agent and Account field appear under the Session ID: the field is disabled and shows the record's own agent and account (Claude Code, default account), not the project's choice. Advanced is open below, with Model and Reasoning effort and, under them, the one compatibility switch of the record's agent, Codex compatibility, following the project; the footer button reads Open. A conversation found in a named account of another agent shows that agent and account in the same disabled field.",
     conversationLocation: { kind: "record", agent: "claude", account: null },
-    steps: resumeLookup,
+    steps: [...resumeLookup, (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
   },
   {
     ...dialogFixture,
@@ -1500,7 +1513,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Stored project account and launch settings",
-    description: "Long selected account and retained model labels fade at the field edge and scroll on hover; the retained model, which the agent no longer lists, keeps a grey Not in the list badge after its name that stays clear of the fade. Advanced is open in a frame whose row of two tabs, Launch settings (selected) and Git workflow, sits above Model and Reasoning effort. Open either picker to inspect the matching option labels.",
+    description: "Long selected account and retained model labels fade at the field edge and scroll on hover; the retained model, which the agent no longer lists, keeps a grey Not in the list badge after its name that stays clear of the fade. Advanced is open in a frame whose row of two tabs, Launch settings (selected) and Git workflow, sits above Model and Reasoning effort, with Codex compatibility, Claude Code's one compatibility switch, below them following the console. Open either picker to inspect the matching option labels.",
     steps: [
       (ui) => projectActions(ui, configured.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
@@ -1514,7 +1527,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project git workflow, some its own",
-    description: "Advanced is open on its Git workflow tab (the tab beside Launch settings), which holds a picker for each setting in the order Where sessions develop, Squash commits before delivery, Rebase before delivery, Delivery, Revert gate (last). Squash commits before delivery reads Off, Delivery reads Merge locally and Revert gate reads Off, the project's own values with no badge; Where sessions develop and Rebase before delivery read Same as global setting, followed by a grey badge with the global value (On a branch of its own and Off). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    description: "Advanced is open on its Git workflow tab (the second of the two tabs, after Launch settings), which holds a picker for each setting in the order Where sessions develop, Squash commits before delivery, Rebase before delivery, Delivery, Revert gate (last). Squash commits before delivery reads Off, Delivery reads Merge locally and Revert gate reads Off, the project's own values with no badge; Where sessions develop and Rebase before delivery read Same as global setting, followed by a grey badge with the global value (On a branch of its own and Off). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
     height: 1200,
     steps: [
       (ui) => projectActions(ui, gitWorkflowProject.name),
@@ -1537,6 +1550,21 @@ export const dialogScenarios: Scenario[] = [
       (ui) => ui.press(ui.t("sidebar.project.edit")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
       (ui) => ui.press(ui.t("dialog.project.gitWorkflow.title")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: compatibilityState,
+    id: "dialog-edit-project-launch-compatibility",
+    group: "Projects",
+    category: "normal",
+    title: "Project launch settings with compatibility switches, one its own",
+    description: "Grok Build is the default agent, so Advanced opens on its Launch settings tab with Model and Reasoning effort followed by one picker for each of the agent's two compatibility switches, Claude compatibility and Codex compatibility, each headed by its name and a \"?\" tip. Claude compatibility reads Same as console followed by a grey badge with the console's value, On; Codex compatibility reads Off, the project's own value, with no badge. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    height: 1100,
+    steps: [
+      (ui) => projectActions(ui, compatibilityProject.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
   },
   {
@@ -1887,7 +1915,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Parent directory source",
-    description: "Default agent is a single field with a \"?\" at the end of its label and the visible line that an agent chosen here applies to every repository; the way Detect from files decides is in the tip. There are no Name and Description fields: both apply to a single project only. Advanced is open in a frame with the same tab row as a single project, but with one tab only, Git workflow (Detect from files offers no model or effort), selected. It holds five pickers in the order Where sessions develop, Squash commits before delivery, Rebase before delivery, Delivery and Revert gate, all reading Same as global setting with a grey badge showing the global value, and the note on how the items follow the global setting. There is no separate Git workflow heading above the pickers, since the tab names it.",
+    description: "Default agent is a single field with a \"?\" at the end of its label and the visible line that an agent chosen here applies to every repository; the way Detect from files decides is in the tip. There are no Name and Description fields: both apply to a single project only. Advanced is open with no frame or tab row, since Detect from files offers no model or effort and the Git workflow is all it holds: five pickers in the order Where sessions develop, Squash commits before delivery, Rebase before delivery, Delivery and Revert gate, all reading Same as global setting with a grey badge showing the global value, and the note on how the items follow the global setting. There is no heading above the pickers.",
     height: 1000,
     steps: [
       consoleActions,

@@ -704,7 +704,7 @@ it("follows the selected session's actual agent and account, account switches an
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
   onTestFinished(() => act(() => root.unmount()));
-  const session: Session = {
+  const session: Session = { compatibility: {},
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
     kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
@@ -750,7 +750,7 @@ it("opens on the tab of the agent whose quota the button shows, each time, and o
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
   onTestFinished(() => act(() => root.unmount()));
-  const session: Session = {
+  const session: Session = { compatibility: {},
     id: "selected", agent: "codex", account_id: null, config_dir: null, console_id: "console", host_id: "local",
     kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
@@ -800,7 +800,7 @@ it("opens the shown agent's list scrolled to the selected session's account, wit
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
   onTestFinished(() => act(() => root.unmount()));
-  const session: Session = {
+  const session: Session = { compatibility: {},
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
     kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
@@ -835,7 +835,7 @@ it("draws the button's window full, and says so, once its reset time passes whil
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
   onTestFinished(() => act(() => root.unmount()));
-  const session: Session = {
+  const session: Session = { compatibility: {},
     id: "selected", agent: "codex", account_id: null, config_dir: null, console_id: "console", host_id: "local",
     kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
@@ -862,7 +862,7 @@ it("hides the mini bar for unread, failed, stale or unavailable quota instead of
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
   onTestFinished(() => act(() => root.unmount()));
-  const session: Session = {
+  const session: Session = { compatibility: {},
     id: "selected", agent: "claude", account_id: "claude-work", console_id: "console", host_id: "local",
     kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, config_dir: null, ended_at: null,
@@ -890,7 +890,7 @@ it("keeps the mini bar of a session whose agent was removed", () => {
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
   onTestFinished(() => act(() => root.unmount()));
-  const session: Session = {
+  const session: Session = { compatibility: {},
     id: "selected", agent: "claude", account_id: "claude-work", console_id: "console", host_id: "local",
     kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, config_dir: null, ended_at: null,
@@ -949,7 +949,7 @@ function mountWithSession(accountId: string | null = "claude-work") {
   const host = container.appendChild(document.createElement("div"));
   const root = createRoot(host);
   onTestFinished(() => act(() => root.unmount()));
-  const session: Session = {
+  const session: Session = { compatibility: {},
     id: "selected", agent: "claude", account_id: accountId, config_dir: null, console_id: "console", host_id: "local",
     kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
@@ -1035,7 +1035,7 @@ it("lists a turned-off account only for the selected session that is still runni
   const root = createRoot(host);
   onTestFinished(() => act(() => root.unmount()));
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: accounts.map((account) => ({ ...account, disabled: true })), disabled_default_accounts: ["claude"] } }));
-  const session: Session = {
+  const session: Session = { compatibility: {},
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
     kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
@@ -1081,7 +1081,7 @@ it("drops the tab of an agent whose accounts are all turned off, bar the one the
   onTestFinished(() => act(() => root.unmount()));
   // Claude Code's accounts are both off; Codex's default account is on.
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...accounts[0]!, disabled: true }, accounts[1]!], disabled_default_accounts: ["claude"] } }));
-  const session: Session = {
+  const session: Session = { compatibility: {},
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
     kind: "console", role: "coordinator", origin: "console", title: "Selected", status: "idle", has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,
@@ -1132,7 +1132,7 @@ function mountOnTurnedOff(status: Session["status"] = "idle") {
   const root = createRoot(host);
   onTestFinished(() => act(() => root.unmount()));
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...accounts[0]!, disabled: true }, accounts[1]!], disabled_default_accounts: ["claude"] } }));
-  const session: Session = {
+  const session: Session = { compatibility: {},
     id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
     kind: "console", role: "coordinator", origin: "console", title: "Selected", status, has_conversation: true,
     pinned: false, locked: false, started_at: NOW, agent_session_id: null, project_id: null, bound_to: null, colour: null, ordinal: null, ended_at: null,

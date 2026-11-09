@@ -1,5 +1,8 @@
 import React, { useLayoutEffect, useState } from "react";
 
+import type { CompatibilityChanges } from "../agents/launchCompatibility";
+import type { LaunchOverrides } from "../agents/agentLaunchSettings";
+import { applyCompatibility, changedCompatibility } from "../agents/launchCompatibility";
 import { accountDisabledUnavailable, incompleteAccount, sharingChangeRuns } from "../accounts/choiceEntries";
 import { handoffBlock, switchEntries, switchEntryBlock } from "../accounts/switchEntries";
 import { providerModelDisplay } from "../agents/providers";
@@ -31,6 +34,7 @@ export interface RequestEdits {
   account?: string | null;
   model?: string | null;
   effort?: string | null;
+  compatibility?: CompatibilityChanges;
 }
 
 /** What a form of a switch or a handoff tells its dialog: the request it is for, the values it ended
@@ -86,7 +90,7 @@ const DEFAULT_ACCOUNT_KEY = "default";
  * so that Confirm is not enabled for a paint before the form has said it must wait. */
 function useReportForm(state: RequestFormState, onReport: OnReport): void {
   const { requestId, unavailable, edits } = state;
-  const key = [requestId, unavailable, edits.agent, edits.account, edits.model, edits.effort].map(String).join("\0");
+  const key = [requestId, unavailable, edits.agent, edits.account, edits.model, edits.effort, JSON.stringify(edits.compatibility)].map(String).join("\0");
   useLayoutEffect(() => onReport(state), [key]);
   useLayoutEffect(() => () => onReport(undefined), []);
 }
@@ -113,7 +117,7 @@ export function SwitchRequestForm({ request, onReport }: { request: SwitchReques
   const switching = useAccountSwitchHeld(session);
   const now = useNow();
   const [account, setAccount] = useState<string | null>(request.account);
-  const [changed, setChanged] = useState<{ model?: string | null; effort?: string | null }>({});
+  const [changed, setChanged] = useState<LaunchOverrides>({});
 
   const entries = session ? switchEntries(session, accounts, t, defaultNames, { quotas, now }, sharing, disabledDefaults, accountOrder) : [];
   const ownChanging = entries.some((entry) => entry.current && entry.changingSharing);
@@ -166,7 +170,7 @@ export function SwitchRequestForm({ request, onReport }: { request: SwitchReques
     };
     return note.detail !== undefined ? { ...option, detail: note.detail, reason: note.reason } : option;
   });
-  const inherited = parentConsole ? inheritedSessionLaunch(parentConsole, project, session.agent, providerModelDisplay(providers, session.agent)) : { model: null, effort: null };
+  const inherited = parentConsole ? inheritedSessionLaunch(parentConsole, project, session.agent, providerModelDisplay(providers, session.agent), session.kind === "project") : { model: null, effort: null, compatibility: {} };
   const { model, effort } = launchWithOverrides(launchWithOverrides(inherited, { model: session.model, effort: session.effort }), changed);
 
   return (
@@ -205,7 +209,12 @@ export function SwitchRequestForm({ request, onReport }: { request: SwitchReques
         effort={effort}
         onModelChange={(value) => setChanged((current) => ({ ...current, model: value }))}
         onEffortChange={(value) => setChanged((current) => ({ ...current, effort: value }))}
-        note={t("dialog.sessionRequest.switch.launchNote")}
+        compatibility={{ value: { ...session.compatibility, ...changed.compatibility },
+          onChange: (compatibility) => setChanged((current) => ({ ...current, compatibility: changedCompatibility(applyCompatibility(session.compatibility, compatibility), session.compatibility) })),
+          inherit: inherited.compatibility,
+          followLabel: session.kind === "project" ? "dialog.agentSettings.sameAsProject" : "dialog.agentSettings.sameAsConsole",
+        }}
+        note={t("dialog.sessionRequest.switch.launchNoteLaunch")}
       />
     </>
   );
@@ -249,7 +258,8 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
     choice: { agent: request.agent, account: request.account },
     model: request.model,
     effort: request.effort,
-  });
+    compatibility: request.compatibility,
+  }, request.kind === "project");
   const sessionBlock = original && handoffBlock(t, original, { switching, ownChanging });
   const accounts = useDaemonStore((state) => state.settings.accounts);
   const sharing = useDaemonStore((state) => state.accountSharing);

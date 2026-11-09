@@ -81,7 +81,7 @@ describe("fixture project writes", () => {
     const daemon = make({ state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [project] }) });
     await daemon.request({ type: "update_project", project: "p", description: "Before" });
     expect(daemon.store.getState().projects.get("p")?.description).toBe(" Before ");
-    await daemon.request({ type: "update_project", project: "p", name: "Existing", description: "", launch: { claude: { model: null } }, default_agent: null, tags: [" One ", "one"] });
+    await daemon.request({ type: "update_project", project: "p", name: "Existing", description: "", launch: { claude: { model: null, compatibility: {} } }, default_agent: null, tags: [" One ", "one"] });
     expect(daemon.store.getState().projects.get("p")).toMatchObject({ name: " Existing ", description: null, launch: { claude: { model: null, effort: "high" }, codex: { model: null, effort: null } }, default_agent: null, tags: ["One"], remote_url: project.remote_url, path: project.path, trust_consent: true });
     await daemon.request({ type: "update_project", project: "p", name: "  Changed مرحبا  " });
     expect(daemon.store.getState().projects.get("p")?.name).toBe("Changed مرحبا");

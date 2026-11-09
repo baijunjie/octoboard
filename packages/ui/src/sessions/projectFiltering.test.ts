@@ -15,7 +15,7 @@ const project = (name: string, tags: string[]): Project => ({
   pinned: false,
   tags,
   accounts: { claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } },
-  launch: { claude: { model: null, effort: null }, codex: { model: null, effort: null }, grok: { model: null, effort: null } },
+  launch: { claude: { compatibility: {}, model: null, effort: null }, codex: { compatibility: {}, model: null, effort: null }, grok: { compatibility: {}, model: null, effort: null } },
   git_workflow: FOLLOWING_GIT_WORKFLOW, default_agent: null, remote_url: null, description: null, versions: {},
 });
 

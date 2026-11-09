@@ -1036,6 +1036,7 @@ async fn adding_a_project_stores_its_settings_and_refuses_a_mismatched_account()
                 .with(
                     AgentId::CLAUDE,
                     Launch {
+                        compatibility: Default::default(),
                         model: Some(" opus ".to_string()),
                         effort: Some("  ".to_string()),
                     },
@@ -1043,6 +1044,7 @@ async fn adding_a_project_stores_its_settings_and_refuses_a_mismatched_account()
                 .with(
                     AgentId::GROK,
                     Launch {
+                        compatibility: Default::default(),
                         model: None,
                         effort: Some("high".to_string()),
                     },
@@ -1416,6 +1418,7 @@ async fn invalid_launch_or_missing_import_directory_creates_nothing() {
                     launch: PerAgent::default().with(
                         AgentId::CLAUDE,
                         Launch {
+                            compatibility: Default::default(),
                             model: Some("sonnet".to_string()),
                             effort: Some("invalid".to_string()),
                         },
@@ -1555,4 +1558,27 @@ async fn a_recheck_is_answered_with_the_status_its_check_ended_with() {
         serde_json::to_value(status).unwrap(),
         "as broadcast"
     );
+}
+
+#[tokio::test]
+async fn skipping_import_model_checks_still_checks_compatibility_switches() {
+    let (state, dir) = crate::test_support::app_state("import-project-launch-check");
+    let console = console(AgentId::CODEX, &dir);
+    crate::test_support::offer_models(&state, AgentId::CODEX, &[("offered", &["low"])]);
+    let mut settings = NewProjectSettings::default();
+    settings.launch[AgentId::CODEX].model = Some("not-offered".into());
+    for (switch, accepted) in [("claude_compatibility", true), ("approval_reviewer", false)] {
+        settings.launch[AgentId::CODEX].compatibility = [(switch.into(), true)].into();
+        let result =
+            check_new_project_launch(&state, &console, &settings, &PerAgent::default(), false)
+                .await;
+        if accepted {
+            result.unwrap();
+        } else {
+            assert_eq!(
+                crate::test_support::code_of(&result.unwrap_err()),
+                error_code::UNREADABLE_REQUEST
+            );
+        }
+    }
 }

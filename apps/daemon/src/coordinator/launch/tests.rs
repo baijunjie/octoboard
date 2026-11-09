@@ -768,3 +768,304 @@ async fn a_late_failure_releases_the_session_after_its_request_was_dropped() {
         "the session was left as it was optimistically shown"
     );
 }
+
+mod compatibility {
+    use super::*;
+    use crate::providers::SettingValue;
+
+    #[test]
+    fn launch_resolution_obeys_every_level_for_each_agent_and_session_kind() {
+        let (state, dir) = crate::test_support::app_state("compatibility-resolution");
+        let key = "claude_compatibility";
+        let mut console = console(AgentId::CODEX, &dir);
+        let mut project = project_of("console-1", "project-1");
+        state.store.insert_console(&console).unwrap();
+        state.store.insert_project(&project).unwrap();
+        // All combinations prove both held values, following, and independence of the two sets.
+        for agent in [AgentId::CODEX, AgentId::GROK] {
+            for global in [false, true] {
+                state
+                    .store
+                    .set_provider_setting(agent, key, Some(&SettingValue::Switch(global)))
+                    .unwrap();
+                for console_value in [None, Some(false), Some(true)] {
+                    for project_value in [None, Some(false), Some(true)] {
+                        for session_value in [None, Some(false), Some(true)] {
+                            console.project_session_launch[agent].compatibility = console_value
+                                .map(|v| (key.to_string(), v))
+                                .into_iter()
+                                .collect();
+                            console.launch[agent].compatibility =
+                                [(key.to_string(), !global)].into();
+                            project.launch[agent].compatibility = project_value
+                                .map(|v| (key.to_string(), v))
+                                .into_iter()
+                                .collect();
+                            state.store.update_console(&console).unwrap();
+                            state.store.update_project(&project).unwrap();
+                            let mut session = bare_session("s", SessionKind::Project);
+                            session.agent = agent;
+                            session.project_id = Some(project.id.clone());
+                            session.compatibility = session_value
+                                .map(|v| (key.to_string(), v))
+                                .into_iter()
+                                .collect();
+                            assert_eq!(
+                                launch_provider_settings(&state, &session)
+                                    .unwrap()
+                                    .switch(key),
+                                session_value
+                                    .or(project_value)
+                                    .or(console_value)
+                                    .unwrap_or(global)
+                            );
+                            session.kind = SessionKind::Console;
+                            session.project_id = None;
+                            assert_eq!(
+                                launch_provider_settings(&state, &session)
+                                    .unwrap()
+                                    .switch(key),
+                                session_value.unwrap_or(!global)
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn compatibility_following_reads_the_current_agent_setting_at_each_launch() {
+        let (state, dir) = crate::test_support::app_state("compatibility-agent-refresh");
+        let mut console = console(AgentId::CODEX, &dir);
+        let mut project = project_of("console-1", "project-1");
+        state.store.insert_console(&console).unwrap();
+        state.store.insert_project(&project).unwrap();
+        let key = "claude_compatibility";
+        for agent in [AgentId::CODEX, AgentId::GROK] {
+            for global in [false, true] {
+                // A fresh launch reads an edited agent value, with no stale resolved value stored.
+                let mut session = bare_session("s", SessionKind::Project);
+                session.agent = agent;
+                session.project_id = Some(project.id.clone());
+                console.project_session_launch[agent].compatibility.clear();
+                project.launch[agent].compatibility.clear();
+                state.store.update_console(&console).unwrap();
+                state.store.update_project(&project).unwrap();
+                state
+                    .store
+                    .set_provider_setting(agent, key, Some(&SettingValue::Switch(!global)))
+                    .unwrap();
+                assert_eq!(
+                    effective_compatibility(&state, &session).unwrap()[key],
+                    !global
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn overrides_do_not_change_choice_settings_or_the_agent_setting() {
+        let (state, dir) = crate::test_support::app_state("compatibility-choices");
+        state
+            .store
+            .insert_console(&console(AgentId::CODEX, &dir))
+            .unwrap();
+        let mut session = bare_session("s", SessionKind::Console);
+        session.agent = AgentId::CODEX;
+        session
+            .compatibility
+            .insert("claude_compatibility".into(), true);
+        state
+            .store
+            .set_provider_setting(
+                AgentId::CODEX,
+                "approval_reviewer",
+                Some(&SettingValue::Choice("full_access".into())),
+            )
+            .unwrap();
+        let before = state.store.provider_settings().unwrap();
+        let resolved = launch_provider_settings(&state, &session).unwrap();
+        assert!(resolved.switch("claude_compatibility"));
+        assert_eq!(
+            resolved.choice("approval_reviewer"),
+            state
+                .store
+                .provider_settings_of(session.agent)
+                .unwrap()
+                .choice("approval_reviewer")
+        );
+        assert_eq!(state.store.provider_settings().unwrap(), before);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn every_relaunch_reads_the_current_chain_into_launch_request_settings() {
+        use std::sync::{Arc, Mutex};
+        let (state, dir) = crate::test_support::app_state("compatibility-relaunch-read");
+        state
+            .store
+            .insert_console(&console(AgentId::CODEX, &dir))
+            .unwrap();
+        let mut project = project_of("console-1", "project-1");
+        project.path = dir.to_string_lossy().into_owned();
+        state.store.insert_project(&project).unwrap();
+        let mut session = bare_session("s", SessionKind::Project);
+        session.agent = AgentId::CODEX;
+        session.project_id = Some(project.id.clone());
+        session.status = SessionStatus::Interrupted;
+        session
+            .compatibility
+            .insert("claude_compatibility".into(), false);
+        state.store.insert_session(&session).unwrap();
+        for (held, inherited) in [
+            (Some(false), true),
+            (None, true),
+            (None, false),
+            (Some(true), false),
+        ] {
+            session.compatibility = held
+                .map(|v| ("claude_compatibility".into(), v))
+                .into_iter()
+                .collect();
+            state
+                .store
+                .set_session_compatibility(&session.id, &session.compatibility)
+                .unwrap();
+            project.launch[AgentId::CODEX]
+                .compatibility
+                .insert("claude_compatibility".into(), inherited);
+            state.store.update_project(&project).unwrap();
+            let observed = Arc::new(Mutex::new(None));
+            let seen = observed.clone();
+            let claim = state.begin_launch("s").unwrap();
+            let result = relaunch_session_with(
+                &state,
+                &claim,
+                "s",
+                None,
+                false,
+                Some(HashMap::new()),
+                None,
+                move |request| {
+                    *seen.lock().unwrap() = Some(request.settings.switch("claude_compatibility"));
+                    Err(anyhow::anyhow!("fixture stops before creating a process"))
+                },
+            )
+            .await;
+            assert!(result.is_err());
+            tokio::time::advance(crate::test_support::PATIENCE).await;
+            assert_eq!(*observed.lock().unwrap(), Some(held.unwrap_or(inherited)));
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn opening_a_session_records_held_switches_and_launches_with_them() {
+        use crate::coordinator::open::open_session_with;
+        use crate::coordinator::test_support::{open_request, state_for_opening};
+        use std::sync::{Arc, Mutex};
+        let (state, _dir) = state_for_opening("compatibility-open");
+        let observed = Arc::new(Mutex::new(None));
+        let seen = observed.clone();
+        let during = state.clone();
+        let mut request = open_request();
+        request.agent = Some(AgentId::CODEX);
+        request
+            .compatibility
+            .insert("claude_compatibility".into(), Some(true));
+        let result = open_session_with(&state, request, move |request| {
+            let recorded = during.session_record(&request.session_id).unwrap();
+            *seen.lock().unwrap() = Some((
+                recorded.compatibility,
+                request.settings.switch("claude_compatibility"),
+            ));
+            Err(anyhow::anyhow!("fixture stops before creating a process"))
+        })
+        .await;
+        assert!(result.is_err());
+        assert_eq!(
+            *observed.lock().unwrap(),
+            Some(([("claude_compatibility".into(), true)].into(), true))
+        );
+    }
+
+    #[test]
+    fn a_hold_for_one_switch_or_agent_does_not_hide_another_switch() {
+        let (state, dir) = crate::test_support::app_state("compatibility-independent");
+        let mut hub = console(AgentId::GROK, &dir);
+        let mut project = project_of("console-1", "project-1");
+        hub.project_session_launch[AgentId::GROK]
+            .compatibility
+            .insert("codex_compatibility".into(), true);
+        project.launch[AgentId::GROK]
+            .compatibility
+            .insert("claude_compatibility".into(), true);
+        project.launch[AgentId::CODEX]
+            .compatibility
+            .insert("claude_compatibility".into(), false);
+        state.store.insert_console(&hub).unwrap();
+        state.store.insert_project(&project).unwrap();
+        let mut session = bare_session("s", SessionKind::Project);
+        session.agent = AgentId::GROK;
+        session.project_id = Some(project.id);
+        session
+            .compatibility
+            .insert("claude_compatibility".into(), false);
+        assert_eq!(
+            effective_compatibility(&state, &session).unwrap(),
+            [
+                ("claude_compatibility".into(), false),
+                ("codex_compatibility".into(), true)
+            ]
+            .into()
+        );
+        session.compatibility.clear();
+        assert!(launch_provider_settings(&state, &session)
+            .unwrap()
+            .switch("claude_compatibility"));
+        session.agent = AgentId::CODEX;
+        assert!(!launch_provider_settings(&state, &session)
+            .unwrap()
+            .switch("claude_compatibility"));
+    }
+}
+
+#[test]
+fn launch_overrides_are_written_and_published_together_once() {
+    let (state, dir) = crate::test_support::app_state("launch-overrides-record");
+    state
+        .store
+        .insert_console(&console(AgentId::CODEX, &dir))
+        .unwrap();
+    let mut session = bare_session("s", SessionKind::Console);
+    session.agent = AgentId::CODEX;
+    state.store.insert_session(&session).unwrap();
+    let audit = rusqlite::Connection::open(dir.join("octoboard.db")).unwrap();
+    audit
+        .execute_batch(
+            "CREATE TABLE launch_writes (id TEXT);
+         CREATE TRIGGER count_launch_writes AFTER UPDATE ON sessions
+         BEGIN INSERT INTO launch_writes VALUES (NEW.id); END;",
+        )
+        .unwrap();
+    let mut events = state.subscribe();
+    let overrides = LaunchOverrides {
+        model: Some(Some("model".into())),
+        effort: Some(None),
+        compatibility: [("claude_compatibility".into(), false)].into(),
+    };
+    overrides.record(&state, "s").unwrap();
+    let count: i64 = audit
+        .query_row("SELECT COUNT(*) FROM launch_writes", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 1);
+    let crate::protocol::Event::SessionUpserted { session } = events.try_recv().unwrap() else {
+        panic!("expected session_upserted");
+    };
+    assert_eq!(session.model, overrides.model);
+    assert_eq!(session.effort, overrides.effort);
+    assert_eq!(session.compatibility, overrides.compatibility);
+    assert!(matches!(
+        events.try_recv(),
+        Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+    ));
+}

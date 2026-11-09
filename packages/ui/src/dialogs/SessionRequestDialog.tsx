@@ -164,7 +164,7 @@ function SessionRequestSentence({ request, incomplete }: { request: SessionReque
     const account = <>{recordAccount(t, accounts, defaultNames, request.agent, request.account)}{incompleteMark}</>;
     return (
       <p ref={sentence} className="[overflow-wrap:anywhere]">
-        <Message id={request.action === "switch" ? "dialog.sessionRequest.question.switchAndContinue" : "dialog.sessionRequest.question.handoff"} params={{ requester, agent, session, account }} />
+        <Message id={request.action === "switch" ? "dialog.sessionRequest.question.switchAndContinueLaunch" : "dialog.sessionRequest.question.handoffLaunch"} params={{ requester, agent, session, account }} />
       </p>
     );
   }

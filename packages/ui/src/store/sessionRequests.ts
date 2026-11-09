@@ -63,6 +63,7 @@ export type SessionRequest = SessionRequestBase & (
     /** The model and effort the call asked for, absent where it left them out. */
     model?: string | null;
     effort?: string | null;
+    compatibility?: Record<string, boolean | null>;
   }
 );
 
@@ -97,7 +98,7 @@ export function sessionRequestOf(event: Extract<Event, { type: "session_request"
       return { ...base, action, target: event.target, account: event.account };
     case "handoff":
       if (event.target === null) return undefined;
-      return { ...base, action, target: event.target, account: event.account, model: event.model, effort: event.effort };
+      return { ...base, action, target: event.target, account: event.account, model: event.model, effort: event.effort, compatibility: event.compatibility };
     default:
       return { ...base, action };
   }

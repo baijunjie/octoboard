@@ -7,7 +7,7 @@ the original's records. Moving a session to another account of the same agent, w
 switching its account instead (see `docs/product/switching-session-accounts.md`).
 
 A handoff is made with the daemon client protocol's `handoff_session` request, which names the session, the receiving
-agent, and optionally the receiving session's account, model and reasoning effort. In the window it is made from a
+agent, and optionally the receiving session's account, model, reasoning effort and compatibility switches. In the window it is made from a
 session's **Hand off** menu item (see "Handing off from the window" below). An owner hands off a session of its own
 with the `handoff_session` tool, once the user approves it unless they have chosen to have handoffs approved without
 asking (see "Handing off from an owner's tool" below). All of them run the same handoff,
@@ -47,7 +47,9 @@ nothing changed, when:
 
 The model and reasoning effort follow the rules for opening a session (see "Which model and reasoning effort a session
 uses" in `docs/product/opening-sessions.md`): left out, they come from the project or console as for any new session of
-that agent. The account follows **Automatically select an account** as for any new session (see "Which account a session
+that agent. So do the compatibility switches: the receiving session holds only those the handoff names, each of its
+agent's other switches following its project or console, then the agent-level value (see "A session's own switches"
+in `docs/product/compatibility-switches-in-launch-settings.md`). The account follows **Automatically select an account** as for any new session (see "Which account a session
 uses" in `docs/product/opening-sessions.md`). While that switch is on, the handoff dialog opens on the receiving agent's
 account whose weekly quota resets soonest, or, when no account of that agent can be used, the one that becomes usable
 soonest (see "Handing off from the window" below); an owner's `handoff_session` that leaves the account out takes the
@@ -114,8 +116,8 @@ Then come the fields:
   whose sharing of the default configuration is being changed is treated the same way while the change runs, and so is
   an account that is not logged in; a turned-off account is left out unless the field ends on it, as in the session
   dialog.
-- The collapsed **Advanced** section — the receiving session's model and reasoning effort, showing what a new session of
-  the chosen agent and account would inherit, as in the session dialog (see "The Advanced section" in
+- The collapsed **Advanced** section — the receiving session's model, reasoning effort and compatibility switches,
+  showing what a new session of the chosen agent and account would inherit, as in the session dialog (see "The Advanced section" in
   `docs/product/model-and-reasoning-effort.md`). Only values the user changed are sent with the request; the rest are
   left for the daemon to resolve.
 
@@ -149,6 +151,7 @@ owner's handoff" below), unless **Automatically approve handoffs** is on, in whi
 | `account` | no | The receiving session's account: an account's id or name, or `default` for the agent's default account. It must belong to `agent`. `default` chooses that account outright and does not fall through to a project pin. Left out or blank, while **Automatically select an account** is on, it is chosen as for a session of `agent` the caller starts in the session's project (or, for a console session, its console), among `agent`'s accounts only, as "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md` describes. When the switch is off, it is the caller's own account when `agent` is the caller's own agent and that account can still open a session; otherwise the project's account for that agent, else the console's. A left-out account is settled when the call is made; where the user is asked, that is the account their form starts on. |
 | `title` | no | The receiving session's created name, stored trimmed. Left out or blank, it takes the original's displayed name (see "What the receiving session takes over" below). It is to be written in the user's language (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
 | `model`, `effort` | no | The receiving session's model and reasoning effort. Left out, each comes from the project or console, as for any handoff; blank, it is the agent's own default; any other must be one the agent offers. |
+| `compatibility` | no | The receiving session's own compatibility switches, an object of `agent`'s switches by setting id, each `true` or `false` to hold that value or `null` to follow (see "Accounts and launch settings in arguments and results" in `docs/product/agent-settings-tools.md`). A switch left out follows the project or console, then the agent-level value; one `agent` does not declare is refused. |
 | `note` | no | What the caller tells the receiving session beyond the package, such as where the work stands and what to do first. It is added to the receiving session's opening prompt after what the prompt says of the package and before the responsibilities it lists, introduced as a note from the session that handed the work off, every line quoted. Blank is the same as left out. |
 
 The receiving session takes the original's place, so it is the caller's, as the original was, and reports to it. The
@@ -164,10 +167,11 @@ The call returns:
 | `account` | The receiving session's account: the account's id, or `default` for the default account. |
 | `account_name` | That account's name; for the default account the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). |
 | `model`, `effort` | The receiving session's own choice of model and of reasoning effort: a value, or `null` for the agent's own default; each absent where it inherits it. |
+| `compatibility` | The compatibility switches the receiving session holds its own value for, each `true` or `false`; absent while it holds none. |
 | `archived` | The original's id; it is archived. |
 | `branches` | The names of the branches that now name the receiving session as their responsible session. `[]` when the branches could not be moved, the reason then being in `note`. |
 | `owned_sessions` | The ids of the sessions now bound to the receiving session, archived ones included. |
-| `note` | Prose saying the original was archived and the work moved to the receiving session, of which agent and on which account, which reports to the caller as the original did and is driven with the usual tools; where the user changed the agent or the account asked for, that they did, and each model or reasoning effort the user set — a value, or the agent's own default; when the branches could not be moved, also that, why, and that they still name the original. |
+| `note` | Prose saying the original was archived and the work moved to the receiving session, of which agent and on which account, which reports to the caller as the original did and is driven with the usual tools; where the user changed the agent or the account asked for, that they did, and each model or reasoning effort the user set — a value, or the agent's own default — and each compatibility switch the user turned on, turned off or set back to following; when the branches could not be moved, also that, why, and that they still name the original. |
 
 Refused before the user is asked, with the reason in prose (as a tool error) and nothing changed:
 
@@ -204,7 +208,7 @@ The confirmation is titled "Hand off a session?", with two buttons, **Refuse** a
 names the requesting session, as a request for a session names it (see "The confirmation dialog" in
 `docs/product/session-requests.md`), then the session to hand off, by its displayed name, and the agent and the account
 the call asked for; it says that the session is archived and its work moves to the new session, and that the user can
-change the agent, account, model and reasoning effort before confirming. **Nothing the agent wrote is shown**, neither
+change the agent, account, model, reasoning effort and compatibility settings before confirming. **Nothing the agent wrote is shown**, neither
 the title nor the note it passed. A form follows:
 
 - **Hand off to** — the agent picker joined to an account picker of the handoff dialog (see "Handing off from the
@@ -215,10 +219,10 @@ the title nor the note it passed. A form follows:
   why under it, marked invalid, and Confirm cannot be pressed. So is an account turned off while the request waits
   (a call naming one is refused before the user is asked): the field says that it is turned off, and Confirm cannot be
   pressed.
-- The collapsed **Advanced** section — the receiving session's model and reasoning effort, starting on those the call
-  asked for, else on what a new session of that agent and account would inherit (see "The Advanced section" in
-  `docs/product/model-and-reasoning-effort.md`). The values the call asked for belong to the agent it asked for:
-  another agent starts on what it would inherit.
+- The collapsed **Advanced** section — the receiving session's model, reasoning effort and compatibility switches,
+  starting on those the call asked for, else on what a new session of that agent and account would inherit (see "The
+  Advanced section" in `docs/product/model-and-reasoning-effort.md`). The values the call asked for belong to the agent
+  it asked for: another agent starts on what it would inherit.
 
 **When the agent asked for can no longer be picked, or the account asked for is no longer among its accounts,** both
 pickers show nothing chosen and the field says under them, marked invalid, that the agent or account asked for is no
@@ -238,8 +242,9 @@ announced once, as in a request to switch a session's account. While the pickers
 mark. A window that does not know the session's console shows no form, and so no mark, and its approval is for what the
 call asked for.
 
-**On approval the handoff is made with what the form ended on**: the agent and the account it shows, and the model and
-reasoning effort the user changed, else, for the agent the call asked for, those it asked for. Everything a handoff
+**On approval the handoff is made with what the form ended on**: the agent and the account it shows, and the model,
+reasoning effort and compatibility switches the user changed, else, for the agent the call asked for, those it asked
+for. Everything a handoff
 refuses is refused at that moment, and is answered as in "When an approval cannot be carried out" in
 `docs/product/session-requests.md`. Approving selects nothing in any window.
 

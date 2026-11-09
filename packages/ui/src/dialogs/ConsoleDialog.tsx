@@ -1,14 +1,15 @@
-import { ActionableError } from "../errors/actionableError";
 import React, { useEffect, useRef, useState } from "react";
 
-import { changedAccounts, changedLaunch, readAccounts, readLaunch, withAgent, withLaunchField } from "../agents/agentFields";
+import { settingText } from "../settings/accounts/providerSettingCopy";
+import { ActionableError } from "../errors/actionableError";
+import { changedAccounts, changedLaunch, readAccounts, readLaunch, withAgent, withLaunchField, restoreLaunchField, launchFieldValue } from "../agents/agentFields";
 import { selectableAgent, servedAgents } from "../agents/agents";
 import { defaultProviderAgent, providerLabel } from "../agents/providers";
 import { imageToAvatar } from "./avatarImage";
 import { focusOpenDialog } from "../components/focus/modalFocus";
 import { AgentIcon, agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { useT } from "../i18n/react";
-import type { Agent, Console, Launch } from "../protocol";
+import type { Agent, Console } from "../protocol";
 import { SettingsDialog } from "../settings/SettingsDialog";
 import { useDaemon, useDaemonStore, useProviders } from "../store";
 import { AvatarField } from "./AvatarField";
@@ -75,7 +76,7 @@ export function ConsoleDialog({
   // daemon restart) changes nothing of what the form shows.
   const sameAsRead = (path: string) => {
     if (!stored) return true;
-    const [field, agent = "", key = ""] = path.split(".");
+    const [field, agent = "", key = "", setting = ""] = path.split(".");
     if (field === "name") return stored.name === read.name;
     if (field === "default_agent") return stored.default_agent === read.default_agent;
     if (field === "project_session_agent") return (stored.project_session_agent ?? "") === read.project_session_agent;
@@ -83,13 +84,13 @@ export function ConsoleDialog({
     if (field === "console_session_prompt") return (stored.console_session_prompt ?? "") === read.console_session_prompt;
     if (field === "accounts") return (stored.accounts?.[agent] ?? null) === (initial.accounts[agent] ?? null);
     if (field === "launch" || field === "project_session_launch") {
-      return (stored[field]?.[agent]?.[key as keyof Launch] ?? null) === (initial[field][agent]?.[key as keyof Launch] ?? null);
+      return launchFieldValue(stored[field]?.[agent], key, setting) === launchFieldValue(initial[field][agent], key, setting);
     }
     return true;
   };
   // Whether the user changed `path`'s field from what the form read, which is what makes its replacement worth announcing.
   const editedFromRead = (path: string) => {
-    const [field, agent = "", key = ""] = path.split(".");
+    const [field, agent = "", key = "", setting = ""] = path.split(".");
     if (field === "name") return name !== read.name;
     if (field === "default_agent") return defaultAgent !== read.default_agent;
     if (field === "project_session_agent") return projectAgent !== read.project_session_agent;
@@ -97,7 +98,7 @@ export function ConsoleDialog({
     if (field === "console_session_prompt") return sessionPrompt.trim() !== read.console_session_prompt;
     if (field === "accounts") return (settings.accounts[agent] ?? null) !== (initial.accounts[agent] ?? null);
     if (field === "launch" || field === "project_session_launch") {
-      return (settings[field][agent]?.[key as keyof Launch] ?? null) !== (initial[field][agent]?.[key as keyof Launch] ?? null);
+      return launchFieldValue(settings[field][agent], key, setting) !== launchFieldValue(initial[field][agent], key, setting);
     }
     return false;
   };
@@ -110,7 +111,12 @@ export function ConsoleDialog({
     if (field === "console_session_prompt") return t("dialog.console.sessionInstructions");
     if (field === "accounts") return t("dialog.console.accounts");
     // A launch setting is named as its picker is: the kind of session, then the setting.
-    const [, , key = ""] = path.split(".");
+    const [, agent = "", key = "", setting = ""] = path.split(".");
+    if (key === "compatibility") {
+      const label = settingText(t, providers, agent, setting, "heading") ?? setting;
+      const kind = t(field === "launch" ? "dialog.console.launchConsole" : "dialog.console.launchProject");
+      return `${kind} ${label}`;
+    }
     const kind = t(field === "launch" ? "dialog.console.launchConsole" : "dialog.console.launchProject");
     return `${kind} ${t(key === "effort" ? "dialog.agentSettings.effort" : "dialog.agentSettings.model")}`;
   };
@@ -120,7 +126,7 @@ export function ConsoleDialog({
     let nextInitial = initial;
     let nextSettings = settings;
     for (const path of paths) {
-      const [field, agent = "", key = ""] = path.split(".");
+      const [field, agent = "", key = "", setting = ""] = path.split(".");
       if (field === "name") {
         setName(stored.name);
         nextRead = { ...nextRead, name: stored.name };
@@ -141,9 +147,8 @@ export function ConsoleDialog({
         nextInitial = { ...nextInitial, accounts: withAgent(nextInitial.accounts, agent, account) };
         nextSettings = { ...nextSettings, accounts: withAgent(nextSettings.accounts, agent, account) };
       } else if (field === "launch" || field === "project_session_launch") {
-        const value = stored[field]?.[agent]?.[key as keyof Launch] ?? null;
-        nextInitial = { ...nextInitial, [field]: withLaunchField(nextInitial[field], agent, key as keyof Launch, value) };
-        nextSettings = { ...nextSettings, [field]: withLaunchField(nextSettings[field], agent, key as keyof Launch, value) };
+        nextInitial = { ...nextInitial, [field]: restoreLaunchField(nextInitial[field], agent, stored[field]?.[agent], key, setting) };
+        nextSettings = { ...nextSettings, [field]: restoreLaunchField(nextSettings[field], agent, stored[field]?.[agent], key, setting) };
       }
     }
     setRead(nextRead);
@@ -320,8 +325,8 @@ export function ConsoleDialog({
         <ConsoleLaunchFields
           defaultAgent={defaultAgent}
           values={settings}
-          onChange={(kind, agent, key, value) =>
-            setSettings({ ...settings, [kind]: { ...settings[kind], [agent]: { ...settings[kind][agent], [key]: value } } })}
+          onChange={(kind, agent, ...edit) =>
+            setSettings({ ...settings, [kind]: withLaunchField(settings[kind], agent, ...edit) })}
         >
           <TextAreaInput
             label={t("dialog.console.sessionInstructions")}

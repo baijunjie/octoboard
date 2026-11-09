@@ -86,7 +86,7 @@ focus mode's archived-row action menu (see "What both views show" in `docs/produ
 session ID in the session dialog's **Resume conversation** tab (see "Reopening an archived session from the tab" in
 `docs/product/resuming-a-conversation-by-its-session-id.md`). Each relaunches the same agent in the same directory and
 reassembles everything Octoboard injects. An owner session resumes or reopens a session of its own with
-`resume_session`, optionally with another model or reasoning effort (see "The console session's tools" in
+`resume_session`, optionally with another model, reasoning effort or compatibility switches (see "The console session's tools" in
 `docs/product/hub-orchestration.md`), finding its interrupted sessions with `list_sessions` and its archived ones with
 `list_archived_sessions` (see `docs/product/what-every-session-reads.md`); any other session can ask the user to resume
 or reopen a project session, by its conversation's session ID, with `request_resume_session` (see

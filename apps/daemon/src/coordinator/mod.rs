@@ -609,6 +609,7 @@ async fn handle_inner(
             account,
             model,
             effort,
+            compatibility,
             task,
             title,
             bound_to,
@@ -624,6 +625,7 @@ async fn handle_inner(
                     account,
                     model,
                     effort,
+                    compatibility: compatibility.unwrap_or_default(),
                     task,
                     title,
                     origin: Origin::User,
@@ -679,10 +681,18 @@ async fn handle_inner(
             session,
             model,
             effort,
+            compatibility,
             terminal_appearance,
         } => {
-            let change =
-                set_session_model(state, &session, model, effort, terminal_appearance).await?;
+            let change = set_session_model(
+                state,
+                &session,
+                model,
+                effort,
+                compatibility.unwrap_or_default(),
+                terminal_appearance,
+            )
+            .await?;
             let (outcome, continued) = match change {
                 ModelChange::Unchanged => (ModelChangeOutcome::Unchanged, None),
                 ModelChange::Recorded => (ModelChangeOutcome::Recorded, None),
@@ -704,6 +714,7 @@ async fn handle_inner(
             account,
             model,
             effort,
+            compatibility,
             terminal_appearance,
         } => {
             let moved = handoff::handoff_session(
@@ -714,6 +725,7 @@ async fn handle_inner(
                     account,
                     model,
                     effort,
+                    compatibility: compatibility.unwrap_or_default(),
                     title: None,
                     note: None,
                     asked_by: None,
@@ -916,12 +928,14 @@ async fn handle_inner(
             account,
             model,
             effort,
+            compatibility,
         } => {
             let edits = crate::session_request::Edits {
                 agent,
                 account,
                 model,
                 effort,
+                compatibility: compatibility.unwrap_or_default(),
             };
             let started = crate::session_request::answer(state, &asked, approve, edits).await?;
             Ok(started.map(|session| Event::SessionOpened {

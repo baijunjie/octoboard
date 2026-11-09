@@ -354,6 +354,7 @@ pub(super) fn no_process_with_conversation(id: &str, agent: AgentId, owner: &str
 /// What opens a console session of the console `state_for_opening` sets up.
 pub(super) fn open_request() -> OpenRequest {
     OpenRequest {
+        compatibility: Default::default(),
         console_id: "console-1".to_string(),
         project_id: None,
         agent: None,

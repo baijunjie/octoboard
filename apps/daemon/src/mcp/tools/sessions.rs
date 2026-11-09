@@ -11,9 +11,9 @@ use crate::accounts::choice;
 use crate::branch_origin::transfer::{branch_name, move_branches, BranchTransfer, TransferOutcome};
 use crate::coordinator::{self, launch::LaunchEdit, open::OpenRequest};
 use crate::mcp::lookup::{
-    find_console, find_project, optional_agent, optional_bool, optional_string,
-    optional_string_list, optional_text, own_console, own_project, present_text, raw_text,
-    required_str, resolve_account, resolve_owned_session, resolve_project,
+    compatibility_argument, find_console, find_project, optional_agent, optional_bool,
+    optional_string, optional_string_list, optional_text, own_console, own_project, present_text,
+    raw_text, required_str, resolve_account, resolve_owned_session, resolve_project,
 };
 use crate::mcp::views::{account_fields, branch_names_of, describe_session};
 use crate::messaging::texts::{self, branches_opening_prompt, request_opening_prompt};
@@ -74,6 +74,7 @@ pub(in crate::mcp) async fn open_session(
         "account_name": account_name,
         "model": model,
         "effort": effort,
+        "effective_compatibility": coordinator::launch::effective_compatibility(state, &session)?,
     });
     if let Some(transfer) = transfer {
         let outcome = move_branches(state, &transfer, caller, &session).await;
@@ -160,6 +161,7 @@ fn session_in(
         account,
         model: present_text(arguments, "model")?,
         effort: present_text(arguments, "effort")?,
+        compatibility: compatibility_argument(arguments, agent)?,
         task: Some(task),
         // Named for the task, not the project, when the caller gives no name: several sessions
         // dispatched into one project would otherwise all carry the project's name and be
@@ -259,6 +261,7 @@ pub(in crate::mcp) async fn resume_session(
         LaunchEdit {
             model: present_text(arguments, "model")?,
             effort: present_text(arguments, "effort")?,
+            compatibility: compatibility_argument(arguments, Some(target.agent))?,
         },
         snapshot,
         launch,
@@ -276,6 +279,7 @@ pub(in crate::mcp) async fn resume_session(
         "account_name": account_name,
         "model": model,
         "effort": effort,
+        "effective_compatibility": coordinator::launch::effective_compatibility(state, &resumed)?,
     }))
 }
 

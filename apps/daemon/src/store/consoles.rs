@@ -6,7 +6,10 @@ use std::collections::HashMap;
 use super::Result;
 use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 
-use super::rows::{agent_from_row, enum_to_text, registered_provider_clause};
+use super::rows::{
+    agent_from_row, compatibility_from_text, compatibility_to_text, enum_to_text,
+    registered_provider_clause,
+};
 use super::Store;
 use crate::protocol::{AgentId, CodedError, Console, Launch, PerAgent};
 
@@ -175,16 +178,19 @@ fn write_provider_rows(tx: &Transaction<'_>, console: &Console) -> Result<()> {
         (PROJECT_SESSIONS, &console.project_session_launch),
     ] {
         for (agent, launch) in launches.iter() {
-            if launch.model.is_some() || launch.effort.is_some() {
+            if launch.model.is_some() || launch.effort.is_some() || !launch.compatibility.is_empty()
+            {
                 tx.execute(
-                    "INSERT INTO console_launches (console_id, provider, session_kind, model, effort)
-                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    "INSERT INTO console_launches
+                         (console_id, provider, session_kind, model, effort, compatibility)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                     params![
                         console.id,
                         agent.wire_name(),
                         session_kind,
                         launch.model,
-                        launch.effort
+                        launch.effort,
+                        compatibility_to_text(&launch.compatibility)
                     ],
                 )?;
             }
@@ -224,7 +230,8 @@ fn read_provider_rows(
         }
     }
     let mut stmt = conn.prepare(
-        "SELECT console_id, provider, session_kind, model, effort FROM console_launches
+        "SELECT console_id, provider, session_kind, model, effort, compatibility
+         FROM console_launches
          WHERE ?1 IS NULL OR console_id = ?1",
     )?;
     let launches = stmt
@@ -236,14 +243,16 @@ fn read_provider_rows(
                 Launch {
                     model: row.get(3)?,
                     effort: row.get(4)?,
+                    compatibility: compatibility_from_text(row.get(5)?),
                 },
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    for (console_id, agent, session_kind, launch) in launches {
+    for (console_id, agent, session_kind, mut launch) in launches {
         let (Some(&position), Some(agent)) = (positions.get(&console_id), agent) else {
             continue;
         };
+        launch.compatibility = agent.descriptor().known_compatibility(launch.compatibility);
         let console = &mut consoles[position];
         match session_kind.as_str() {
             CONSOLE_SESSIONS => console.launch[agent] = launch,
@@ -679,5 +688,120 @@ mod tests {
         store.delete_console("console-1").unwrap();
         assert_eq!(count("console_providers", "retired"), 0);
         assert_eq!(count("console_launches", "retired"), 0);
+    }
+
+    #[test]
+    fn compatibility_launch_held_switches_survive_reopening() {
+        let path = temp_db("compatibility-console");
+        let store = Store::open(&path).unwrap();
+        let mut record = console(None, None, None);
+        record.launch[AgentId::CODEX]
+            .compatibility
+            .insert("claude_compatibility".into(), false);
+        store.insert_console(&record).unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store.require_console(&record.id).unwrap().launch,
+            record.launch
+        );
+    }
+
+    #[test]
+    fn compatibility_project_session_launch_held_switches_survive_reopening() {
+        let path = temp_db("compatibility-console");
+        let store = Store::open(&path).unwrap();
+        let mut record = console(None, None, None);
+        record.project_session_launch[AgentId::CODEX]
+            .compatibility
+            .insert("claude_compatibility".into(), false);
+        store.insert_console(&record).unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store
+                .require_console(&record.id)
+                .unwrap()
+                .project_session_launch,
+            record.project_session_launch
+        );
+    }
+
+    #[test]
+    fn compatibility_launch_ignores_unknown_and_non_overridable_entries() {
+        let path = temp_db("compatibility-console");
+        let store = Store::open(&path).unwrap();
+        let mut record = console(None, None, None);
+        record.launch[AgentId::CODEX].compatibility = [
+            ("claude_compatibility".into(), false),
+            ("future_switch".into(), true),
+            ("approval_reviewer".into(), true),
+        ]
+        .into();
+        store.insert_console(&record).unwrap();
+        assert_eq!(
+            store.require_console(&record.id).unwrap().launch[AgentId::CODEX].compatibility,
+            [("claude_compatibility".to_string(), false)].into()
+        );
+    }
+
+    #[test]
+    fn compatibility_project_session_launch_ignores_unknown_and_non_overridable_entries() {
+        let path = temp_db("compatibility-console");
+        let store = Store::open(&path).unwrap();
+        let mut record = console(None, None, None);
+        record.project_session_launch[AgentId::CODEX].compatibility = [
+            ("claude_compatibility".into(), false),
+            ("future_switch".into(), true),
+            ("approval_reviewer".into(), true),
+        ]
+        .into();
+        store.insert_console(&record).unwrap();
+        assert_eq!(
+            store
+                .require_console(&record.id)
+                .unwrap()
+                .project_session_launch[AgentId::CODEX]
+                .compatibility,
+            [("claude_compatibility".to_string(), false)].into()
+        );
+    }
+
+    #[test]
+    fn compatibility_console_launch_sets_return_to_following_independently() {
+        let path = temp_db("compatibility-console-following");
+        let store = Store::open(&path).unwrap();
+        let mut record = console(None, None, None);
+        record.launch[AgentId::CODEX]
+            .compatibility
+            .insert("claude_compatibility".into(), false);
+        record.project_session_launch[AgentId::GROK]
+            .compatibility
+            .insert("claude_compatibility".into(), true);
+        store.insert_console(&record).unwrap();
+        let count = || {
+            store
+                .lock()
+                .query_row("SELECT COUNT(*) FROM console_launches", [], |r| {
+                    r.get::<_, i64>(0)
+                })
+                .unwrap()
+        };
+        assert_eq!(count(), 2);
+        record.launch[AgentId::CODEX].compatibility.clear();
+        store.update_console(&record).unwrap();
+        assert_eq!(count(), 1);
+        assert_eq!(
+            store
+                .require_console(&record.id)
+                .unwrap()
+                .project_session_launch,
+            record.project_session_launch
+        );
+        record.project_session_launch[AgentId::GROK]
+            .compatibility
+            .clear();
+        store.update_console(&record).unwrap();
+        assert_eq!(count(), 0);
     }
 }

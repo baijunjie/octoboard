@@ -1845,3 +1845,241 @@ async fn a_reopen_text_is_headed_as_the_parent_sessions_instruction() {
         )
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_session_tools_edit_and_report_only_session_held_switches() {
+    let (state, _dir) = settings_state("mcp-compatibility-session");
+    let mut child = state.session_record("of-a").unwrap();
+    child.agent = AgentId::CODEX;
+    child.status = SessionStatus::Interrupted;
+    state.store.update_session(&child).unwrap();
+    let changed = call(
+        &state,
+        "a",
+        "set_session_model",
+        &arguments(json!({"session":"of-a","compatibility":{"claude_compatibility":false}})),
+    )
+    .await
+    .unwrap();
+    assert!(!changed.is_null());
+    let read = call(
+        &state,
+        "a",
+        "get_session",
+        &arguments(json!({"session":"of-a"})),
+    )
+    .await
+    .unwrap();
+    assert_eq!(read["compatibility"], json!({"claude_compatibility":false}));
+    let listed = call(
+        &state,
+        "a",
+        "list_sessions",
+        &arguments(json!({"status":"any"})),
+    )
+    .await
+    .unwrap();
+    let found = listed["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["session"] == "of-a")
+        .unwrap();
+    assert_eq!(found["compatibility"], read["compatibility"]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_session_tool_clears_a_held_switch() {
+    let (state, _dir) = settings_state("mcp-compatibility-session");
+    let mut child = state.session_record("of-a").unwrap();
+    child.agent = AgentId::CODEX;
+    child.status = SessionStatus::Interrupted;
+    child
+        .compatibility
+        .insert("claude_compatibility".into(), false);
+    state.store.update_session(&child).unwrap();
+    call(
+        &state,
+        "a",
+        "set_session_model",
+        &arguments(json!({"session":"of-a","compatibility":{"claude_compatibility":null}})),
+    )
+    .await
+    .unwrap();
+    assert!(state
+        .session_record("of-a")
+        .unwrap()
+        .compatibility
+        .is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_session_tool_refuses_unknown_choice_and_non_boolean_entries() {
+    let (state, _dir) = settings_state("mcp-compatibility-session");
+    let mut child = state.session_record("of-a").unwrap();
+    child.agent = AgentId::CODEX;
+    child.status = SessionStatus::Interrupted;
+    state.store.update_session(&child).unwrap();
+    for entries in [
+        json!({"approval_reviewer":true}),
+        json!({"unknown_switch":false}),
+        json!({"claude_compatibility":1}),
+    ] {
+        call(
+            &state,
+            "a",
+            "set_session_model",
+            &arguments(json!({"session":"of-a","compatibility":entries})),
+        )
+        .await
+        .expect_err("invalid compatibility");
+        assert!(state
+            .session_record("of-a")
+            .unwrap()
+            .compatibility
+            .is_empty());
+    }
+}
+
+#[tokio::test]
+async fn compatibility_resume_result_reports_effective_compatibility_and_keeps_held_values() {
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    use std::sync::Mutex;
+    let fixture = RepoState::new("compatibility-resume-result");
+    let state = &fixture.state;
+    let mut kid = state.session_record("kid").unwrap();
+    kid.agent = AgentId::CODEX;
+    kid.status = SessionStatus::Archived;
+    kid.has_conversation = false;
+    state.store.update_session(&kid).unwrap();
+    let caller = state.session_record("a").unwrap();
+    let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+    let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+    let answer = resume_session(
+        state,
+        &caller,
+        &arguments(json!({"session":"kid","compatibility":{"claude_compatibility":true}})),
+        || Ok(HashMap::new()),
+        {
+            let (started, launches) = (started.clone(), launches.clone());
+            move |request| {
+                assert!(request.settings.switch("claude_compatibility"));
+                stand_in_launch(&started, &launches, || {})(request)
+            }
+        },
+    )
+    .await
+    .unwrap();
+    tokio::time::pause();
+    tokio::time::advance(crate::test_support::PATIENCE).await;
+    assert_eq!(
+        state.session_record("kid").unwrap().compatibility,
+        [("claude_compatibility".into(), true)].into()
+    );
+    assert_eq!(
+        answer["effective_compatibility"],
+        json!({"claude_compatibility":true})
+    );
+}
+
+#[tokio::test]
+async fn compatibility_request_session_preserves_switches_through_approval() {
+    let (state, _dir) = shared_console_state("compatibility-request");
+    let _caller = running(&state, "a");
+    let caller = state.session_record("a").unwrap();
+    let args = arguments(
+        json!({"kind":"project","project":"project-1","agent":"codex","brief":{"goal":"Test compatibility"},"compatibility":{"claude_compatibility":false}}),
+    );
+    let pending = request_session(&state, &caller, &args);
+    tokio::pin!(pending);
+    let mut events = state.subscribe();
+    let request_id = tokio::select! {
+        result = &mut pending => panic!("approval should be pending: {result:?}"),
+        event = async {
+            loop {
+                if let Event::SessionRequest { request_id, .. } = events.recv().await.unwrap() { break request_id; }
+            }
+        } => event,
+    };
+    let observed = Arc::new(std::sync::Mutex::new(None));
+    let seen = observed.clone();
+    let result = session_request::answer_with_resume(
+        &state,
+        &request_id,
+        true,
+        move |open| async move {
+            *seen.lock().unwrap() = Some(open.compatibility);
+            Err(anyhow::anyhow!("fixture stops before launch"))
+        },
+        |_| async { Err(anyhow::anyhow!("must open rather than resume")) },
+    )
+    .await;
+    assert!(result.is_err());
+    assert!(pending.await.is_err());
+    tokio::time::pause();
+    tokio::time::advance(crate::test_support::PATIENCE).await;
+    assert_eq!(
+        *observed.lock().unwrap(),
+        Some([("claude_compatibility".into(), Some(false))].into())
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn compatibility_open_session_tool_passes_switches_to_storage_and_launch() {
+    let fixture = RepoState::new("compatibility-mcp-open");
+    let state = &fixture.state;
+    let caller = state.session_record("a").unwrap();
+    let during = state.clone();
+    let observed = Arc::new(std::sync::Mutex::new(None));
+    let seen = observed.clone();
+    let result = open_session(state, &caller, &arguments(json!({"project":"repo","agent":"codex","brief":{"goal":"Test compatibility"},"compatibility":{"claude_compatibility":false}})), move |request| {
+        let session = during.session_record(&request.session_id).unwrap();
+        *seen.lock().unwrap() = Some((session.compatibility, request.settings.switch("claude_compatibility")));
+        Err(anyhow::anyhow!("fixture stops before creating a process"))
+    }).await;
+    assert!(result.is_err());
+    assert_eq!(
+        *observed.lock().unwrap(),
+        Some(([("claude_compatibility".into(), false)].into(), false))
+    );
+}
+
+#[tokio::test]
+async fn compatibility_open_session_result_reports_held_and_inherited_effective_switches() {
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    use std::sync::Mutex;
+    let fixture = RepoState::new("compatibility-open-result");
+    let state = &fixture.state;
+    let mut project = state.store.require_project("repo").unwrap();
+    project.launch[AgentId::GROK]
+        .compatibility
+        .insert("codex_compatibility".into(), true);
+    state.store.update_project(&project).unwrap();
+    let caller = state.session_record("a").unwrap();
+    let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+    let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+    let answer = open_session(
+        state,
+        &caller,
+        &arguments(json!({
+            "project": "repo", "agent": "grok", "brief": {"goal": "Test result"},
+            "compatibility": {"claude_compatibility": false}
+        })),
+        stand_in_launch(&started, &launches, || {}),
+    )
+    .await
+    .unwrap();
+    tokio::time::pause();
+    tokio::time::advance(crate::test_support::PATIENCE).await;
+    assert_eq!(
+        answer["effective_compatibility"],
+        json!({"claude_compatibility": false, "codex_compatibility": true})
+    );
+    assert_eq!(
+        state
+            .session_record(answer["session"].as_str().unwrap())
+            .unwrap()
+            .compatibility,
+        [("claude_compatibility".into(), false)].into()
+    );
+}

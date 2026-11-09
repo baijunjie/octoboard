@@ -190,7 +190,8 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   output in a file under `paths::agent_cli_updates_dir`, so that an update still running when the daemon ends is not
   broken by it, and words the failure), `models.rs` (the
   `ModelCatalogue` interface a provider lists its models through, with the cache, the command runner and the checks
-  around the lists), launch settings, `json_rpc.rs` (reading JSON-RPC replies, shared by Codex's app server and
+  around the lists), launch settings (`launch_settings.rs`: the model, effort and compatibility values a launch level
+  holds, and their checks and normalization), `json_rpc.rs` (reading JSON-RPC replies, shared by Codex's app server and
   Grok's ACP stdio), `detect.rs` (which agent a project is set up for, from the marker files at its top level).
 
 ### Agent accounts
@@ -392,8 +393,11 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   in the registry's order. A `SettingDescriptor` declares one user setting of the provider: a choice (some choices
   needing confirmation; unset follows the account's own configuration) or a switch (on or off by default), whether a
   configuration export carries it (`exported`), whether the agents' `get_settings` shows it (`shown_to_agents`), and
-  which provider's configuration it makes the provider read (`compatibility_with`); `ProviderSettings` and
-  `SettingValue` are the values in effect, and the provider reads its own from `LaunchSpec.settings`. A `ProviderCode`
+  which provider's configuration it makes the provider read (`compatibility_with`, which also makes the setting
+  overridable: `SettingDescriptor::overridable`, asked through `ProviderDescriptor::is_overridable` and
+  `overridable_settings`, is the one rule for which settings a console, a project or a session may hold its own value
+  for); `ProviderSettings` and `SettingValue` are the values in effect, and the provider reads its own from
+  `LaunchSpec.settings`. A `ProviderCode`
   is a code only that provider raises, named `provider.<id>.<code>` and declared as a `pub const` of its file; `claude.rs`, `codex.rs` and `grok.rs` are one descriptor each, and `test_provider.rs` is the provider only the tests
   register (its behavior is `src/adapter/test_provider.rs`); `layout.rs` is the `AgentLayout` struct (where an agent keeps its
   files) and its lookup; each provider's own `LAYOUT` and the file-name constants only its logic uses are in its file. It is a layer of its own below `protocol`,
@@ -591,7 +595,9 @@ new site is never excused: it goes under `platform`.
   presentation module (see the UI structure doc).
 - A new setting of one provider: declared in the provider's descriptor (`settings`) and read by the provider from
   `LaunchSpec.settings`; the store, the wire (`provider_settings`, `set_provider_setting`), the configuration document,
-  the MCP `get_settings` tool and the UI's provider settings follow the schema, so none of them changes.
+  the MCP `get_settings` tool and the UI's provider settings follow the schema, so none of them changes. A switch that
+  declares `compatibility_with` is also held per console, project and session, validated and shown from the same
+  declaration.
 - A new MCP tool: the catalogue in `src/session_tools/catalogue/`, its dispatch in `src/mcp/dispatch.rs` and the tool
   in a file of `src/mcp/tools/`; it calls the coordinator or reporting function the control socket uses rather than
   reimplementing it.
@@ -604,7 +610,10 @@ new site is never excused: it goes under `platform`.
   application_id` marks Octoboard's databases. What belongs to one provider of a console or a project is a row of a
   child table keyed by the owner and the provider (`console_providers`, `console_launches`, `project_providers`), not a
   column; rows of a provider this build does not register are kept and left out of loads. A plain boolean application
-  setting is one line of the `bool_settings!` table in `src/store/settings.rs`.
+  setting is one line of the `bool_settings!` table in `src/store/settings.rs`. The compatibility switches a console's
+  launch settings, a project and a session hold are the one exception: a JSON `compatibility` column beside `model` and
+  `effort` on `console_launches`, `project_providers` and `sessions`, keyed by setting id, so a new overridable setting
+  needs no column.
 - Store code returns the store's `Result` (`src/store/failure.rs`), and a rusqlite error must reach `?` as itself:
   wrapping it into `anyhow` first (`.context()`, `anyhow::Error::from`) skips the classification. A caller outside the
   store that returns a store result as `anyhow` unwraps it with `Ok(store.x()?)`. The classification is in the store
@@ -654,6 +663,8 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A provider's fact (names, install page, binary, instruction file, tool-name prefix, detection markers, declared capabilities) | its descriptor: `AgentId::descriptor` and `providers::descriptors` (`src/providers/mod.rs`) |
 | Where an agent keeps its files | the descriptor's `layout` (`AgentLayout`, `src/providers/layout.rs`; each provider's value is its `LAYOUT` in `src/providers/<id>.rs`) |
 | A provider's settings, and the codes only it raises | the descriptor's `settings` and `codes` (`src/providers/mod.rs`); stored by `src/store/provider_settings.rs` |
+| Which settings a console, a project or a session may hold its own value for | `SettingDescriptor::overridable` is the rule; `ProviderDescriptor::is_overridable`, `overridable_settings` and `known_compatibility` (`src/providers/mod.rs`) query it or filter held values; requests are checked by `check_compatibility` (`src/agents/launch_settings.rs`) |
+| The provider settings a launch reads (the application-wide values with the switches some launch level holds on top) | `coordinator::launch::launch_provider_settings` for a session, `provider_settings_with_compatibility` for a chain not yet a session (`src/coordinator/launch.rs`); never `Store::provider_settings_of` directly for a launch |
 | Refuse an operation a provider does not offer (sign-in, MCP server sign-in, kick, reset credits, configuration sharing) | `CodedError::require_offered` (`src/protocol/errors.rs`), giving `provider_unsupported` |
 | What a provider offers one made compatible with it (MCP servers, skills, prompts, instructions) | `CompatibilitySource` (`src/adapter/mod.rs`), reached through `LaunchSpec::compatibility_source` (the sources are set by `adapter::compatibility_sources_of`); Claude Code's is `src/adapter/claude/compatibility.rs`, Codex's `src/adapter/codex/compatibility.rs` |
 | A consumer's use of a compatibility source (translating its MCP servers, keeping secrets off argv, linking skills and prompts) | `src/adapter/compatibility_offer.rs`; each consumer's own part is its `compatibility_consumer.rs` |
@@ -677,7 +688,8 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Archive a session whose work is finished (an owner archiving itself, a `done` report) | `coordinator::lifecycle::archive_finished` with its `Finished` rule (`src/coordinator/lifecycle/finished.rs`) |
 | Strip escape sequences from terminal output | `terminal::plain_text::strip_escapes` |
 | Share the steps of the two transfer tools | `Parties` and friends in `src/mcp/tools/transfer/mod.rs` |
-| Change a session's model and effort; resume checks | `coordinator::model_change::set_session_model`; `coordinator::resume::check_can_resume` and `locate_conversation` |
+| Write a session's launch overrides (model, effort, compatibility switches) | `Store::set_session_launch` or `set_session_launch_unless_archived` (`src/store/sessions.rs`, through its one guarded writer), published to clients by `AppState::set_session_launch` (`src/state/sessions.rs`) |
+| Change a session's model, effort and compatibility switches; resume checks | `coordinator::model_change::set_session_model`; `coordinator::resume::check_can_resume` and `locate_conversation` |
 | Drop a live session | `coordinator::exit_watch::unregister_live`, which runs `AppState::remove_live` and `after_live_removed` around withdrawing the session's request |
 | Keep a missing `git`'s `binary_not_found` through to a reply or a `GitStatus` (never flatten the error to a string first) | `project_git::no_git_or` for an action that words its other failures itself; `StepFailure::no_git` for a step recorded on a `GitStatus` (`src/project_git/mod.rs`) |
 | Re-read projects when a session's git moves refs | `project_git::ref_moves::moved` |

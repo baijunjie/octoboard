@@ -20,7 +20,9 @@ use crate::session_request::{self, Action};
 use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::{AppState, ClaimKind};
 
-use crate::mcp::lookup::{find_project, optional_string, own_project, present_text, required_str};
+use crate::mcp::lookup::{
+    compatibility_argument, find_project, optional_string, own_project, present_text, required_str,
+};
 
 /// Asks the user to resume the conversation `conversation`, and waits for the answer; see
 /// `crate::session_request`. The project is the one the call names, else the caller's own, and
@@ -73,11 +75,15 @@ async fn plan(
     let title = optional_string(arguments, "title");
     let model = present_text(arguments, "model")?;
     let effort = present_text(arguments, "effort")?;
+    // The agent is the conversation's, known once it is located: a switch it does not declare is
+    // refused when the session is opened.
+    let compatibility = compatibility_argument(arguments, None)?;
     // Left blank, a model or effort asks for nothing: a model that fills every field in is not
     // refused for the ones it had nothing to say in.
     let overrides_given = [&model, &effort]
         .into_iter()
-        .any(|value| matches!(value, Some(Some(text)) if !text.trim().is_empty()));
+        .any(|value| matches!(value, Some(Some(text)) if !text.trim().is_empty()))
+        || compatibility.values().any(Option::is_some);
 
     let id = coordinator::resume::parse_conversation_id(wanted)?;
     let location = locate(&project.id, &id).await?;
@@ -100,6 +106,7 @@ async fn plan(
                     account: Some(account),
                     model,
                     effort,
+                    compatibility,
                     task: None,
                     // Left out, the session is named for its project, as the daemon names one
                     // opened with no title.
@@ -154,8 +161,8 @@ async fn plan(
     }
     if overrides_given {
         bail!(
-            "`model` and `effort` are for a conversation no session holds, which opens a new \
-             session; {named} holds this one and keeps its own launch settings"
+            "`model`, `effort` and `compatibility` are for a conversation no session holds, which \
+             opens a new session; {named} holds this one and keeps its own launch settings"
         );
     }
     let rename = if archived {
@@ -628,5 +635,46 @@ mod tests {
             err.to_string().contains("`conversation` is required"),
             "{err}"
         );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn compatibility_resume_request_refuses_overrides_for_a_held_conversation() {
+        let (state, _dir) = shared_console_state("resume-request-compatibility");
+        for value in [true, false] {
+            let reason = refusal(
+                planned(
+                    &state,
+                    "loose",
+                    json!({"conversation":ID,"compatibility":{"claude_compatibility":value}}),
+                    held_by("archived-of-a", true),
+                )
+                .await,
+            );
+            assert!(reason.contains("keeps its own launch settings"), "{reason}");
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn compatibility_resume_request_carries_switches_for_an_external_record() {
+        let (state, _dir) = shared_console_state("resume-request-compatibility-record");
+        for value in [true, false] {
+            let action = planned(
+                &state,
+                "loose",
+                json!({"conversation":ID,"compatibility":{"claude_compatibility":value}}),
+                ConversationLocation::Record {
+                    agent: AgentId::CODEX,
+                    account: None,
+                },
+            )
+            .await
+            .unwrap();
+            match action {
+                Action::ResumeRecord { open, .. } => {
+                    assert_eq!(open.compatibility["claude_compatibility"], Some(value))
+                }
+                _ => panic!("the outside record must open a session"),
+            }
+        }
     }
 }

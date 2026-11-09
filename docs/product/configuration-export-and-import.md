@@ -49,7 +49,8 @@ git repository.
 
 Its name, its avatar image if it has one, its default agent for console sessions, its default agent for project sessions
 — none while it follows the one for console sessions — the account it names for each agent, the models and reasoning
-efforts it sets for its console sessions and for its project sessions, one pair of each per agent, and its console
+efforts it sets for its console sessions and for its project sessions, one pair of each per agent, with the
+compatibility switches each set holds (see "Models and efforts travel as stored" below), and its console
 session instructions if it has any (see "Console session instructions" in `docs/product/consoles.md`). An import
 restores the instructions trimmed, as saving them in the console dialog does, and a document that does not carry them
 gives the console none. A document that does not carry a default agent for project sessions gives the console none, so
@@ -64,8 +65,8 @@ import creates the console, and with it a working directory of its own.
 
 Its name, its description if it has one, the directory it points at, how it was associated, the remote URL recorded for
 it, its own default agent if it has one, whether it is pinned, its tags (see `docs/product/project-tags.md`), and — one
-set per agent — the account its sessions run under and the model and reasoning effort they launch with (see
-`docs/product/projects.md`), and its own git workflow settings under `git_workflow`, `null` for each item it leaves
+set per agent — the account its sessions run under and the model, reasoning effort and compatibility switches they
+launch with (see `docs/product/projects.md`), and its own git workflow settings under `git_workflow`, `null` for each item it leaves
 to the application-wide value (see "A project's own git workflow settings" in
 `docs/product/git-workflow-settings.md`). Every export of consoles carries them, of one console or of all. An import
 stores the description trimmed, and a project of a document that carries no description is imported with none; one
@@ -157,6 +158,13 @@ A model name and a reasoning effort travel as they are stored. They are read onl
 value the other machine's agent does not offer is nothing for an export or an import to refuse; it is the launch that
 meets it (see `docs/product/model-and-reasoning-effort.md`).
 
+The compatibility switches a console's or a project's launch settings hold travel with them, each as `true` or `false`
+under the agent's `compatibility`, a switch the level follows being left out (see
+`docs/product/compatibility-switches-in-launch-settings.md`). Only the switches whose agent-level choice an export
+carries are written (see "The agent account settings an export carries" in
+`docs/product/settings-in-a-configuration.md`), today all of them. An import keeps only the switches this build knows
+as switches of that agent, dropping any other without refusing the document, and stores the rest as they are.
+
 ### What is not configuration and never travels
 
 Sessions and their records, the pages sessions pushed to the report panel, the conversations the agents keep, and folder
@@ -210,7 +218,7 @@ import no longer reads: the order of sessions and projects travels instead as th
 
 An export always writes an entry for every agent in `accounts`, `launch` and `project_session_launch`. An import reads
 an agent's entry that is left out as unset: a console's account is then the agent's default account, a project's
-account inherits its console's reference, and the model and effort are unset. An entry of `accounts`, `launch` or
+account inherits its console's reference, the model and effort are unset, and every compatibility switch follows. An entry of `accounts`, `launch` or
 `project_session_launch` keyed by an agent this build does not support (see `docs/product/supported-agents.md`) is
 ignored, as are such an agent's `provider_settings` and `agent_tags` entries (see "The agent account settings an export
 carries" in `docs/product/settings-in-a-configuration.md`). A document that names such an agent anywhere else — among the added agents (`added_agents`), as an

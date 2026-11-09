@@ -9,7 +9,7 @@ import { delegatingSessionIds, type ShownStatusKind } from "./sessionStatus";
 /** No session delegates: the sessions of a test that does not look at delegated work. */
 const NONE: ReadonlySet<string> = new Set();
 
-const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to: string | null = null): Session => ({
+const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to: string | null = null): Session => ({ compatibility: {},
   id,
   agent: "claude",
   console_id: "c",
@@ -41,7 +41,7 @@ const project = (id: string, name: string, pinned = false): Project => ({
   tags: [],
   description: null,
   accounts: { claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } },
-  launch: { claude: { model: null, effort: null }, codex: { model: null, effort: null }, grok: { model: null, effort: null } },
+  launch: { claude: { compatibility: {}, model: null, effort: null }, codex: { compatibility: {}, model: null, effort: null }, grok: { compatibility: {}, model: null, effort: null } },
   git_workflow: FOLLOWING_GIT_WORKFLOW,
   versions: {},
 });
@@ -263,7 +263,7 @@ describe("isUnusedSession", () => {
 
   it.each([
     ["an unbound session with no conversation", {}, false, true],
-    ["a session that has had a turn", { has_conversation: true }, false, false],
+    ["a session that has had a turn", { compatibility: {}, has_conversation: true }, false, false],
     ["a session still starting", { status: "starting" }, false, false],
     ["an owner with a session bound to it", {}, true, false],
     ["a bound session the user opened", { bound_to: "h", origin: "user" }, false, true],
@@ -658,9 +658,9 @@ describe("STATUS_RANK", () => {
     const of = (extra: Partial<Session>): Session =>
       kind === "starting" ? { ...session("s", "starting", 1), ...extra } : { ...session("s", "interrupted", 1), switching_account: true, ...extra };
     const rankIn = (extra: Partial<Session>) => projectRank([of(extra)], NONE, NONE);
-    expect(rankIn({ prompt_on_launch: true, has_conversation: true })).toBe(STATUS_RANK.working);
-    expect(rankIn({ has_conversation: true })).toBe(STATUS_RANK.done);
-    expect(rankIn({ has_conversation: false })).toBe(STATUS_RANK.idle);
+    expect(rankIn({ compatibility: {}, prompt_on_launch: true, has_conversation: true })).toBe(STATUS_RANK.working);
+    expect(rankIn({ compatibility: {}, has_conversation: true })).toBe(STATUS_RANK.done);
+    expect(rankIn({ compatibility: {}, has_conversation: false })).toBe(STATUS_RANK.idle);
   });
 
   it("ranks and shows a session this window has queued for an account switch as switching, from the queue alone", () => {

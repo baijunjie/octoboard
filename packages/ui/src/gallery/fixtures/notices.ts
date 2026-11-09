@@ -148,6 +148,7 @@ const handoffRequestOn = (account: string) => requestOf({
   account,
   model: "gpt-5.6-sol",
   effort: "high",
+  compatibility: { claude_compatibility: true },
 });
 const handoffRequest = handoffRequestOn("a-team");
 // The quotas with Team's session window used up.
@@ -264,15 +265,16 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "normal",
     title: "Request to switch a session's account",
-    description: "The console session asks to switch Verify the migration, its Claude Code session, to the account Personal. The form under the question has Personal chosen in the Switch to picker, with the model and reasoning effort below it and a note that a change to them is kept for the session. Confirm reads Switch account and is enabled.",
+    description: "The console session asks to switch Verify the migration, its Claude Code session, to the account Personal. The form under the question has Personal chosen in the Switch to picker, with the Advanced section open below it on the session's Model and Reasoning effort and, under them, Codex compatibility following the project (Same as project with a grey Off badge); a note above them says that a change to them is kept for the session. Confirm reads Switch account and is enabled.",
     state: moveState(switchRequestTo("a-personal")),
+    steps: [(ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
   },
   {
     id: "session-request-handoff",
     group: TRUST,
     category: "normal",
     title: "Request to hand off a session",
-    description: "The console session asks to hand off Verify the migration, which is idle, to a new Codex session on the account Team. Under the question the agent and account picker stands on Codex and Team, with the Advanced section open on the model GPT-5.6-Sol and the reasoning effort the call asked for. Nothing the asking session wrote is shown. Confirm reads Hand off session and is enabled.",
+    description: "The console session asks to hand off Verify the migration, which is idle, to a new Codex session on the account Team. Under the question the agent and account picker stands on Codex and Team, with the Advanced section open on the model GPT-5.6-Sol and the reasoning effort the call asked for, and under them Claude compatibility, the switch Codex has, reading On, the value the call asked for, with no badge. Nothing the asking session wrote is shown. Confirm reads Hand off session and is enabled.",
     state: moveState(handoffRequest, { target: idleOwnedSession }),
     steps: [(ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
   },

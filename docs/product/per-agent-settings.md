@@ -53,7 +53,9 @@ configuration export that includes the accounts carries them (see "The agent acc
 ## Provider settings
 
 Each agent's provider declares the settings the user can make for it. Each is **one setting per agent**, applied to
-every account of that agent, the default account included. Today they are:
+every account of that agent, the default account included. The compatibility switches among them can besides be held,
+for the sessions they cover, by a console, a project or a session, whose value wins over the agent's (see
+`docs/product/compatibility-switches-in-launch-settings.md`). Today they are:
 
 | Agent | Row | Setting id | Kind | Carried by a configuration export | Readable by sessions |
 |---|---|---|---|---|---|
@@ -100,8 +102,10 @@ Whether a configuration export carries a setting's explicit choice is the provid
 settings an export carries" in `docs/product/settings-in-a-configuration.md`); one it does not carry stays on this
 machine. A setting whose turning on itself changes files outside Octoboard's own directory is not carried (see "What is
 not configuration and never travels" in `docs/product/configuration-export-and-import.md`); none of today's does, since
-Octoboard writes none of the agents' configuration files for them. Whether sessions may read a setting's value in effect is declared the same way; no session changes any of them
-(see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`).
+Octoboard writes none of the agents' configuration files for them. Whether sessions may read a setting's value in effect is declared the same way; no session changes any of them, though
+a console session may hold the compatibility switches at a console's, a project's or a session's level (see "Who reads
+and changes what" and "Application settings: `get_settings` and `update_settings`" in
+`docs/product/agent-settings-tools.md`).
 
 A program on the daemon's host sets a choice with the control request `set_provider_setting`, naming the agent, the
 setting id and the value — `true` or `false` for a switch, the choice's text for a choice setting, or `null` to clear
@@ -215,13 +219,15 @@ Off, Octoboard passes Codex nothing for it. For Grok Build, off means Octoboard 
 its own configuration, whose own Claude Code support is on unless the user turns it off there; so a Grok Build session
 may load Claude Code's configuration with the switch off, and turning the switch on makes sure it does.
 
-What a launch is given for it is in "Claude compatibility for Codex" and "Claude compatibility for Grok Build" in
+This row is the agent-level value: a console, a project or a session can hold its own value for the switch, which
+wins over this one for the sessions it covers (see `docs/product/compatibility-switches-in-launch-settings.md`). What a
+launch is given for it is in "Claude compatibility for Codex" and "Claude compatibility for Grok Build" in
 `docs/product/compatibility-between-agents.md`.
 
-A console session may read the value in effect, unlike the approval modes, but not change it (see "Application
-settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a configuration export
-that includes the accounts carries the explicit choices (see "The agent account settings an export carries" in
-`docs/product/settings-in-a-configuration.md`).
+A console session may read the agent-level value in effect, unlike the approval modes, but not change it (see
+"Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a
+configuration export that includes the accounts carries the explicit choices (see "The agent account settings an export
+carries" in `docs/product/settings-in-a-configuration.md`).
 
 ## Codex compatibility
 
@@ -242,10 +248,12 @@ only.
 **Until the user chooses** for an agent, it is **off**, for Claude Code and Grok Build alike, whichever agents are
 added. Off, Octoboard passes nothing for it.
 
-What a launch is given for it is in "Codex compatibility for Claude Code" and "Codex compatibility for Grok Build" in
+This row is the agent-level value: a console, a project or a session can hold its own value for the switch, which
+wins over this one for the sessions it covers (see `docs/product/compatibility-switches-in-launch-settings.md`). What a
+launch is given for it is in "Codex compatibility for Claude Code" and "Codex compatibility for Grok Build" in
 `docs/product/compatibility-between-agents.md`.
 
-Like Claude compatibility, a console session may read the value in effect but not change it (see "Application settings:
+Like Claude compatibility, a console session may read the agent-level value in effect but not change it (see "Application settings:
 `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a configuration export that
 includes the accounts carries the explicit choices (see "The agent account settings an export carries" in
 `docs/product/settings-in-a-configuration.md`).

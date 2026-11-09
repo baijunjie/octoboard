@@ -183,18 +183,24 @@ pub(crate) fn carry_on_in_place(
         })
 }
 
-/// Records the model and effort `before` had, for a restart that recorded others for its relaunch
-/// and failed. A revert that fails is logged, never allowed to hide the reason the restart failed.
-pub(crate) fn put_back_model_and_effort(state: &Arc<AppState>, before: &Session) {
+/// Records the model, effort and compatibility switches `before` had, for a restart that recorded
+/// others for its relaunch and failed. A revert that fails is logged, never allowed to hide the
+/// reason the restart failed.
+pub(crate) fn put_back_launch_overrides(state: &Arc<AppState>, before: &Session) {
     if let Ok(now) = state.session_record(&before.id) {
-        if (&now.model, &now.effort) != (&before.model, &before.effort) {
-            if let Err(revert) =
-                state.set_session_launch_overrides(&before.id, &before.model, &before.effort)
-            {
+        if (&now.model, &now.effort, &now.compatibility)
+            != (&before.model, &before.effort, &before.compatibility)
+        {
+            if let Err(revert) = state.set_session_launch(
+                &before.id,
+                &before.model,
+                &before.effort,
+                &before.compatibility,
+            ) {
                 tracing::warn!(
                     session = %before.id,
                     %revert,
-                    "putting the session's model and effort back failed"
+                    "putting the session's launch overrides back failed"
                 );
             }
         }
@@ -361,3 +367,6 @@ pub(super) async fn came_up_under_claim(state: &Arc<AppState>, id: &str) -> bool
     }
     up
 }
+
+#[cfg(test)]
+mod tests;

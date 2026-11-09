@@ -74,7 +74,10 @@ macro_rules! session_record_fields {
          (`resumable` in `get_session`, and in `list_archived_sessions` with `check_resumable`, \
          tells beforehand). `model` and `effort`, when present, are the session's own choices, \
          `null` leaving them to the agent's default; absent, it follows its project's (else \
-         console's) setting; `set_session_model` changes them for a session of yours. \
+         console's) setting; `compatibility`, when present, holds the session's own values for \
+         the agent's compatibility switches (setting id to `true` or `false`, the rest following \
+         its project's, console's or the application-wide value). `set_session_model` changes \
+         them for a session of yours. \
          `role` is `coordinator` (can manage child sessions) or `worker` (cannot); \
          `owner` is the parent session, null when independent, and `owner_kind` its kind. A \
          coordinator may have a parent and no child sessions. `owned_sessions` counts child \
@@ -140,33 +143,33 @@ pub(super) const GET_SESSION: ToolDef = ToolDef {
 pub(super) const LIST_PROJECTS: ToolDef = ToolDef {
     name: "list_projects",
     description: concat!(
-        "List the projects of this session's console (or another console's, see `console`): \
-         name, host, directory, source, remote URL (credentials removed), pin, the tags and the \
-         description (what the project is for) the user gave each, the settings \
-         (`default_agent`, `accounts`, `launch`: each agent's model and reasoning effort, as \
-         stored), `effective` (what they resolve to under the console), the `git_workflow` \
-         settings (the project's own `override`, `null` following the application-wide value, \
-         and the `effective` values), whether the user has `trust_consent`ed to Octoboard \
-         pressing the agent's folder-trust confirmation (read-only), its `git_status`, and the \
-         sessions currently running in each — every session of the console, whichever session \
-         owns it. Each carries `owner`, the session it reports to, `owner_kind` (a `console` or \
-         a `project` session) and `yours`; a project session with `owner: null` is independent, \
-         which the user opened themselves and kept outside the orchestration. A session with \
-         `yours: false` is not this caller's to drive — it is independent, or reports to a \
-         different parent session — leave it alone. An idle session with a non-empty \
-         `background_tasks` takes messages like any idle session but still has work running in \
-         the background. A non-null `writes_held` says why messages for a running session are \
-         queued rather than written into it, whatever its `status` reads; `queued_messages` \
-         counts them, and the messages kept for an interrupted session to take when it is \
-         resumed (shared information, and the reports and notices for an owner). With `console` \
-         naming another console (`list_consoles` lists them), only what is needed to target a \
-         project of it with `request_session` or `request_resume_session` is returned: each \
-         project's id (`project`), name, description and tags, and none of its sessions or \
-         settings. `project` narrows the list to one project. With `refresh` the git status of \
-         the projects listed is checked against their remotes first, as the application's own \
-         refresh does, so you need not run git for it; the answer then carries `git_refresh`, \
-         whose `finished` is false, with the `unfinished` projects, when a check had not \
-         finished after 30 seconds.",
+        "List the projects of this session's console (or another console's, see `console`): name, \
+         host, directory, source, remote URL (credentials removed), pin, the tags and the \
+         description (what the project is for) the user gave each, the settings (`default_agent`, \
+         `accounts`, `launch`: each agent's model, reasoning effort and held `compatibility` \
+         switches, as stored), `effective` (what they resolve to under the console), the \
+         `git_workflow` settings (the project's own `override`, `null` following the \
+         application-wide value, and the `effective` values), whether the user has \
+         `trust_consent`ed to Octoboard pressing the agent's folder-trust confirmation \
+         (read-only), its `git_status`, and the sessions currently running in each — every session \
+         of the console, whichever session owns it. Each carries `owner`, the session it reports \
+         to, `owner_kind` (a `console` or a `project` session) and `yours`; a project session with \
+         `owner: null` is independent, which the user opened themselves and kept outside the \
+         orchestration. A session with `yours: false` is not this caller's to drive — it is \
+         independent, or reports to a different parent session — leave it alone. An idle session \
+         with a non-empty `background_tasks` takes messages like any idle session but still has \
+         work running in the background. A non-null `writes_held` says why messages for a running \
+         session are queued rather than written into it, whatever its `status` reads; \
+         `queued_messages` counts them, and the messages kept for an interrupted session to take \
+         when it is resumed (shared information, and the reports and notices for an owner). With \
+         `console` naming another console (`list_consoles` lists them), only what is needed to \
+         target a project of it with `request_session` or `request_resume_session` is returned: \
+         each project's id (`project`), name, description and tags, and none of its sessions or \
+         settings. `project` narrows the list to one project. With `refresh` the git status of the \
+         projects listed is checked against their remotes first, as the application's own refresh \
+         does, so you need not run git for it; the answer then carries `git_refresh`, whose \
+         `finished` is false, with the `unfinished` projects, when a check had not finished after \
+         30 seconds.",
         git_status_field!(),
         " ",
         session_record_fields!(),
@@ -520,16 +523,18 @@ pub(super) const GET_PROJECT: ToolDef = ToolDef {
         "This project's settings in Octoboard, read-only: its id (`project`), name, `host`, \
          directory, source, remote URL (credentials removed), pin, tags, description, \
          `trust_consent` (whether the user allowed Octoboard to press the agent's folder-trust \
-         confirmation), `default_agent`, `accounts` and `launch` (the model and effort sessions \
-         of each agent start with) as set on the project, where `null` or `inherit` means \
-         unset, and `effective`, those three resolved against the console's settings: the \
-         project's default agent, the account id (or `default`) and the model and effort \
-         (`null` is unset: the default model, which `list_agent_models` names, and the \
-         agent's own default effort) a session of each agent gets when nothing names \
-         otherwise, before session-specific selection, and `git_workflow` (the project's own \
-         `override` of the git workflow settings, `null` following the application-wide value, \
-         and the `effective` resolved values; `squash_before_delivery`, `rebase_before_delivery` \
-         and `delivery` apply only while `development` is not `in_place`), and `git_status`. ",
+         confirmation), `default_agent`, `accounts` and `launch` (the model, effort and held \
+         `compatibility` switches sessions of each agent start with) as set on the project, where \
+         `null` or `inherit` means unset, and `effective`, those three resolved against the \
+         console's settings: the project's default agent, the account id (or `default`) and the \
+         model and effort (`null` is unset: the default model, which `list_agent_models` names, \
+         and the agent's own default effort) and every `compatibility` switch's value (the agent's \
+         own application-wide value where neither the project nor its console holds one) a session \
+         of each agent gets when nothing names otherwise, before session-specific selection, and \
+         `git_workflow` (the project's own `override` of the git workflow settings, `null` \
+         following the application-wide value, and the `effective` resolved values; \
+         `squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while \
+         `development` is not `in_place`), and `git_status`. ",
         git_status_field!(),
         " With `refresh` the status is checked against the remote first, as the application's \
          own refresh does, so you need not run git for it; `git_refresh` in the answer then says \

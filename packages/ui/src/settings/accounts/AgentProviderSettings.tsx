@@ -1,67 +1,20 @@
 import React, { useState } from "react";
 
-import { idWords, providerLabel, servedProvider, settingMessageKey } from "../../agents/providers";
+import { idWords, providerLabel, servedProvider, switchValue } from "../../agents/providers";
 import { alertAppDataFailure } from "../../components/alerts/raiseError";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
 import { OptionSelect, type Option } from "../../components/form/OptionSelect";
-import { HelpTip } from "../../components/hint/HelpTip";
 import { appDataRecovery } from "../../errors/errorRecovery";
-import type { MessageKey } from "../../i18n/catalog";
 import { InlineReference } from "../../i18n/InlineReference";
 import { isolate } from "../../i18n/isolate";
 import { Message, useT } from "../../i18n/react";
 import type { Agent, SettingDescriptor, SettingKind } from "../../protocol";
-import { settingReferences } from "../../providers/registry";
 import { useDaemon, useDaemonStore, useProviders } from "../../store";
 import { ProviderName } from "../../components/text/ProviderName";
+import { SettingHelp, useSettingCopy } from "./providerSettingCopy";
 import { SettingRow, SettingSwitch } from "../SettingRow";
 
 type Choice = Extract<SettingKind, { type: "choice" }>["choices"][number];
-
-/** What a setting's copy words it with: the provider's own messages for it (see `settingMessageKey`), and the provider's
- * name as `{agent}` in each, with the literals its description names set apart as references. */
-function useSettingCopy(agent: Agent, setting: string) {
-  const t = useT();
-  const providers = useProviders();
-  const key = (name: string) => settingMessageKey(agent, setting, name);
-  const agentName = <ProviderName agent={agent} />;
-  const references = Object.fromEntries(Object.entries(settingReferences(agent, setting)).map(([placeholder, text]) => [
-    placeholder,
-    <InlineReference key={placeholder} dir="ltr" monospace wrap>{text}</InlineReference>,
-  ]));
-  return {
-    key,
-    text: (name: string) => {
-      const found = key(name);
-      return found && (t as (key: MessageKey, params?: Record<string, string>) => string)(found, { agent: isolate(providerLabel(t, providers, agent)) });
-    },
-    node: (name: string) => {
-      const found = key(name);
-      return found && <Message id={found} params={{ agent: agentName, ...references } as never} />;
-    },
-    saveFailedTitle: () => {
-      const found = key("saveFailedTitle");
-      return found ? (t as (key: MessageKey) => string)(found) : t("settings.accounts.setting.saveFailedTitle");
-    },
-  };
-}
-
-/** The setting row's help tip, saying what the setting does in the provider's words. */
-function SettingHelp({ copy }: { copy: ReturnType<typeof useSettingCopy> }): React.ReactElement | null {
-  const label = copy.text("helpLabel");
-  const description = copy.node("helpTiming") ?? copy.node("description");
-  const custom = copy.node("helpCustom");
-  return label && description ? (
-    <HelpTip label={label}>
-      {custom ? (
-        <div className="flex flex-col gap-2">
-          <p>{description}</p>
-          <p>{custom}</p>
-        </div>
-      ) : description}
-    </HelpTip>
-  ) : null;
-}
 
 /** A choice setting: inherited native behavior plus the setting's declared choices, saved when selected. A choice
  * the schema marks `confirm` is saved only once its confirmation dialog is accepted; cancelling leaves the stored value
@@ -136,7 +89,7 @@ function ChoiceSetting({ agent, descriptor, choices }: { agent: Agent; descripto
 /** A switch setting, saved when toggled; the switch stays unavailable while the save is unanswered. It shows the value
  * the daemon carries in `settings.provider_settings`, which is the one in effect (the user's choice, else the setting's
  * default); a provider with no entry reads on unless the schema's default is off. */
-function SwitchSetting({ agent, descriptor, fallback }: { agent: Agent; descriptor: SettingDescriptor; fallback: boolean }): React.ReactElement | null {
+function SwitchSetting({ agent, descriptor }: { agent: Agent; descriptor: SettingDescriptor }): React.ReactElement | null {
   const { request } = useDaemon();
   const t = useT();
   const providers = useProviders();
@@ -160,7 +113,7 @@ function SwitchSetting({ agent, descriptor, fallback }: { agent: Agent; descript
     >
       <SettingSwitch
         label={copy.text("label") ?? heading}
-        isSelected={typeof stored === "boolean" ? stored : fallback}
+        isSelected={switchValue(descriptor, stored)}
         isUnavailable={busy}
         onChange={change}
       />
@@ -177,7 +130,7 @@ export function AgentProviderSettings({ agent }: { agent: Agent }): React.ReactE
     <>
       {provider?.settings.map((descriptor) => descriptor.kind.type === "choice"
         ? <ChoiceSetting key={descriptor.id} agent={agent} descriptor={descriptor} choices={descriptor.kind.choices} />
-        : <SwitchSetting key={descriptor.id} agent={agent} descriptor={descriptor} fallback={descriptor.kind.default !== "off"} />)}
+        : <SwitchSetting key={descriptor.id} agent={agent} descriptor={descriptor} />)}
     </>
   );
 }

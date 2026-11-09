@@ -1,13 +1,14 @@
 //! Opening a session: resolving what a request opens, recording it as starting, settling its
 //! launch, and refusing beforehand a session that could not be opened.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
 use uuid::Uuid;
 
+use crate::agents::launch_settings::{apply_compatibility, check_compatibility};
 use crate::env_shell;
 use crate::protocol::{
     nested_params, notice_code, AgentId, CodedError, Console, Notice, Origin, Project, Role,
@@ -46,6 +47,10 @@ pub struct OpenRequest {
     /// A model or effort override, preserving absent versus explicitly unset.
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
+    /// The compatibility switches the session holds its own value for, by setting id: `Some`
+    /// holds the value, `None` follows the project's (else the console's, else the agent's).
+    /// Checked against the session's agent when the session is opened.
+    pub compatibility: BTreeMap<String, Option<bool>>,
     pub task: Option<String>,
     pub title: Option<String>,
     pub origin: Origin,
@@ -321,6 +326,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         project_id,
         model,
         effort,
+        compatibility,
         task,
         title,
         origin,
@@ -328,6 +334,9 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         terminal_appearance,
         ..
     } = request;
+    check_compatibility(agent, &compatibility)?;
+    let mut held = BTreeMap::new();
+    apply_compatibility(&mut held, &compatibility);
     let resume_shell_env = match resume_agent_session_id.clone() {
         Some(id) => {
             let dir = config_dir.clone();
@@ -389,6 +398,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         config_dir,
         model,
         effort,
+        compatibility: held,
         role,
         bound_to,
         // Assigned by `insert_console_session` below for a console session; a project session
@@ -633,6 +643,7 @@ async fn check_open_with(
         account_id,
         ..
     } = resolve_open_with(state, request, enforce_quota)?;
+    check_compatibility(agent, &request.compatibility)?;
     check_launch_settings(
         state,
         agent,

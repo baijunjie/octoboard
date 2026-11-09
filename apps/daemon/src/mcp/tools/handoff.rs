@@ -5,6 +5,7 @@
 //! (`session_request`), and what the result tells it, since it is not sent the message that tells
 //! an owner of a handoff.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -13,8 +14,8 @@ use serde_json::{json, Map, Value};
 use crate::accounts::choice::choice_for_started_session;
 use crate::coordinator::{self, handoff};
 use crate::mcp::lookup::{
-    optional_string, parse_agent, present_text, required_str, resolve_account,
-    resolve_owned_session,
+    compatibility_argument, optional_string, parse_agent, present_text, required_str,
+    resolve_account, resolve_owned_session,
 };
 use crate::mcp::views::{account_fields, insert_own_launch};
 use crate::protocol::{AgentId, Session};
@@ -52,6 +53,7 @@ pub(in crate::mcp) async fn handoff_session(
         account,
         model: present_text(arguments, "model")?,
         effort: present_text(arguments, "effort")?,
+        compatibility: compatibility_argument(arguments, Some(agent))?,
         title: optional_string(arguments, "title"),
         note: optional_string(arguments, "note"),
     };
@@ -88,6 +90,7 @@ pub(in crate::mcp) async fn handoff_session(
         account: account.clone(),
         model: asked.model.clone(),
         effort: asked.effort.clone(),
+        compatibility: asked.compatibility.clone(),
         perform: Perform::new({
             let (state, caller_id, target) = (state.clone(), caller.id.clone(), target.clone());
             // The account the dialog showed stands, rather than one settled again at approval.
@@ -143,6 +146,7 @@ struct Asked {
     account: Option<Option<String>>,
     model: Option<Option<String>>,
     effort: Option<Option<String>>,
+    compatibility: BTreeMap<String, Option<bool>>,
     title: Option<String>,
     note: Option<String>,
 }
@@ -156,6 +160,7 @@ impl Asked {
             account: self.account.clone(),
             model: self.model.clone(),
             effort: self.effort.clone(),
+            compatibility: self.compatibility.clone(),
             title: self.title.clone(),
             note: self.note.clone(),
             asked_by: None,
@@ -197,6 +202,13 @@ async fn perform(
     } else {
         (edits.model, edits.effort)
     };
+    // The switches the call asked for belong to the agent it asked for, like its model.
+    let mut compatibility = if as_asked {
+        asked.compatibility.clone()
+    } else {
+        BTreeMap::new()
+    };
+    compatibility.extend(edits.compatibility.clone());
     let chose_otherwise = !as_asked || account != asked.account;
     let (set_model, set_effort) = (model.clone(), effort.clone());
     let moved = handoff::handoff_session_with(
@@ -207,6 +219,7 @@ async fn perform(
             account,
             model,
             effort,
+            compatibility,
             title: asked.title.clone(),
             note: asked.note.clone(),
             asked_by: Some(caller_id.to_string()),
@@ -247,6 +260,16 @@ async fn perform(
         note.push_str(&format!(
             " Its reasoning effort is {}.",
             setting_text(&effort)
+        ));
+    }
+    for (setting, value) in &edits.compatibility {
+        note.push_str(&format!(
+            " The user {} its `{setting}` compatibility switch.",
+            match value {
+                Some(true) => "turned on",
+                Some(false) => "turned off",
+                None => "reset to following",
+            }
         ));
     }
     match moved.branches {
@@ -846,6 +869,7 @@ mod tests {
             Edits {
                 agent: Some(AgentId::GROK),
                 account: Some(None),
+                compatibility: [("claude_compatibility".into(), Some(true))].into(),
                 ..Default::default()
             },
         )
@@ -858,6 +882,14 @@ mod tests {
         assert_eq!(result["session"], receiving.id);
         let record = state.store.get_session(&receiving.id).unwrap().unwrap();
         assert_eq!(record.agent, AgentId::GROK);
+        assert_eq!(
+            record.compatibility.get("claude_compatibility"),
+            Some(&true)
+        );
+        assert!(result["note"]
+            .as_str()
+            .unwrap()
+            .contains("The user turned on its `claude_compatibility` compatibility switch."));
         assert_eq!(record.title, "Fix the build");
         assert_eq!(
             state.store.get_session("of-a").unwrap().unwrap().status,
@@ -947,5 +979,62 @@ mod tests {
         assert_eq!(result["agent"], "grok");
         assert_eq!(result["account"], "default");
         assert!(result["note"].as_str().unwrap().contains("user changed"));
+    }
+
+    #[tokio::test]
+    async fn compatibility_handoff_approval_edits_reach_replacement_launch() {
+        let (state, _dir) = shared_console_state("compatibility-handoff-edits");
+        let _caller_live = running(&state, "a");
+        let _original = running(&state, "of-a");
+        let caller = state.session_record("a").unwrap();
+        let args = arguments(
+            json!({"session":"of-a","agent":"codex","compatibility":{"claude_compatibility":true}}),
+        );
+        let observed = Arc::new(std::sync::Mutex::new(None));
+        let seen = observed.clone();
+        let during = state.clone();
+        let pending = handoff_session(&state, &caller, &args, move |request| {
+            let record = during.session_record(&request.session_id).unwrap();
+            *seen.lock().unwrap() = Some((
+                record.compatibility,
+                request.settings.switch("claude_compatibility"),
+            ));
+            Err(anyhow::anyhow!("fixture replacement cannot start"))
+        });
+        tokio::pin!(pending);
+        let mut events = state.subscribe();
+        let request_id = tokio::select! {
+            result = &mut pending => panic!("approval must wait: {result:?}"),
+            event = async {
+                loop {
+                    if let Event::SessionRequest { request_id, compatibility, .. } = events.recv().await.unwrap() {
+                        assert_eq!(compatibility.get("claude_compatibility"), Some(&true));
+                        break request_id;
+                    }
+                }
+            } => event,
+        };
+        let result = session_request::answer(
+            &state,
+            &request_id,
+            true,
+            Edits {
+                compatibility: [("claude_compatibility".into(), Some(false))].into(),
+                ..Edits::default()
+            },
+        )
+        .await;
+        assert!(result.is_err());
+        assert!(pending.await.is_err());
+        tokio::time::pause();
+        tokio::time::advance(crate::test_support::PATIENCE).await;
+        assert_eq!(
+            *observed.lock().unwrap(),
+            Some(([("claude_compatibility".into(), false)].into(), false))
+        );
+        assert_ne!(
+            state.session_record("of-a").unwrap().status,
+            SessionStatus::Archived
+        );
     }
 }

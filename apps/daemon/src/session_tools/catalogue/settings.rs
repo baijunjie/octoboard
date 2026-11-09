@@ -138,8 +138,9 @@ pub(super) const GET_CONSOLE: ToolDef = ToolDef {
         "This console's own settings: its id (`console`), `name`, `default_agent` (the agent \
          of console sessions), `project_session_agent` (the agent a project session without \
          its own default uses; `null` follows `default_agent`), `accounts`, `launch` (the \
-         model and effort of console sessions like this one), `project_session_launch` (the \
-         model and effort a project session takes when neither it nor its project names one), \
+         model, effort and held `compatibility` switches of console sessions like this one), \
+         `project_session_launch` (what a project session takes when neither it nor its \
+         project names one), \
          whether it has an avatar (`has_icon`), and its working directory (`workdir`, \
          read-only). Only the console this session belongs to can be read. ",
         started_by_a_session!()
@@ -349,6 +350,11 @@ fn launch_schema(whose: &str) -> Value {
             "properties": {
                 "model": { "type": ["string", "null"] },
                 "effort": { "type": ["string", "null"] },
+                "compatibility": super::schemas::compatibility_schema(
+                    "these launch settings",
+                    "the level behind this one (a project's console set, then the \
+                     application-wide value)",
+                ),
             },
         },
     })

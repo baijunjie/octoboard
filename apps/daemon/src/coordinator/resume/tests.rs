@@ -117,6 +117,7 @@ async fn a_conversation_to_resume_is_checked_before_a_session_is_opened() {
     let err = open_session(
         &state,
         OpenRequest {
+            compatibility: Default::default(),
             console_id: "console-1".to_string(),
             project_id: Some("project-1".to_string()),
             agent: None,
@@ -389,6 +390,7 @@ async fn a_reopen_with_another_model_is_checked_and_put_back_when_it_fails() {
         })
         .unwrap();
     let edit = |model: &str, effort: Option<&str>| LaunchEdit {
+        compatibility: Default::default(),
         model: Some(Some(model.to_string())),
         effort: effort.map(|effort| Some(effort.to_string())),
     };

@@ -1,5 +1,8 @@
 import React, { useId, useRef, useState } from "react";
 
+import type { LaunchFieldEdit } from "../agents/agentFields";
+import { CompatibilityPicker } from "./AgentCompatibilityField";
+import { compatibilitySettings } from "../agents/launchCompatibility";
 import { storedAccount } from "../accounts/accountInheritance";
 import { agentChoiceBadge, listedPickerAgents } from "../agents/agents";
 import { providerLabel } from "../agents/providers";
@@ -10,8 +13,9 @@ import { Description, partSelector, Tab, TabList, TabListContainer, TabPanel, Ta
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
-import type { Agent, Launch, PerAgent } from "../protocol";
+import type { Agent, Launch, PerAgent, SettingDescriptor } from "../protocol";
 import { useDaemonStore, useProviders } from "../store";
+import { SettingHelp, useSettingCopy } from "../settings/accounts/providerSettingCopy";
 import { AdvancedSection } from "../components/form/AdvancedSection";
 import { EffortPicker, type LaunchModels, ModelPicker, ModelsFailureMark, useLaunchModels } from "./LaunchSettingsFields";
 
@@ -47,7 +51,7 @@ export function ConsoleLaunchFields({
 }: {
   defaultAgent: Agent;
   values: ConsoleAgentSettings;
-  onChange: (kind: "launch" | "project_session_launch", agent: Agent, key: keyof Launch, value: string | null) => void;
+  onChange: (kind: "launch" | "project_session_launch", agent: Agent, ...edit: LaunchFieldEdit) => void;
   children?: React.ReactNode;
 }): React.ReactElement {
   const t = useT();
@@ -59,6 +63,8 @@ export function ConsoleLaunchFields({
   const [picked, setPicked] = useState<Agent>();
   const stores = (agent: Agent) =>
     !!(
+      Object.keys(values.launch[agent].compatibility).length ||
+      Object.keys(values.project_session_launch[agent].compatibility).length ||
       values.launch[agent].model ||
       values.launch[agent].effort ||
       values.project_session_launch[agent].model ||
@@ -101,8 +107,8 @@ export function ConsoleLaunchFields({
                 launch={launch}
                 consoleSessions={values.launch[agent]}
                 projectSessions={values.project_session_launch[agent]}
-                onConsoleChange={(key, value) => onChange("launch", agent, key, value)}
-                onProjectChange={(key, value) => onChange("project_session_launch", agent, key, value)}
+                onConsoleChange={(...edit) => onChange("launch", agent, ...edit)}
+                onProjectChange={(...edit) => onChange("project_session_launch", agent, ...edit)}
               />
             </TabPanel>
           ))}
@@ -111,6 +117,13 @@ export function ConsoleLaunchFields({
       {children}
     </AdvancedSection>
   );
+}
+
+function CompatibilityName({ agent, descriptor, id }: { agent: Agent; descriptor: SettingDescriptor; id?: string }): React.ReactElement | null {
+  const copy = useSettingCopy(agent, descriptor.id);
+  const heading = copy.text("heading");
+  if (!heading) return null;
+  return <><span id={id} aria-hidden="true">{heading}</span><SettingHelp copy={copy} /></>;
 }
 
 /**
@@ -133,10 +146,11 @@ export function LaunchMatrix({
   launch: LaunchModels;
   consoleSessions: Launch;
   projectSessions: Launch;
-  onConsoleChange: (key: keyof Launch, value: string | null) => void;
-  onProjectChange: (key: keyof Launch, value: string | null) => void;
+  onConsoleChange: (...edit: LaunchFieldEdit) => void;
+  onProjectChange: (...edit: LaunchFieldEdit) => void;
 }): React.ReactElement {
   const t = useT();
+  const compatibility = compatibilitySettings(useProviders(), launch.agent);
   const id = useId();
   const [consoleKindId, projectKindId, modelRowId, effortRowId, projectNoteId] = [
     "console-kind",
@@ -184,6 +198,19 @@ export function LaunchMatrix({
           <span aria-hidden="true" className={settingName}>{effort}</span>
           <EffortPicker launch={launch} model={consoleSessions.model} effort={consoleSessions.effort} onChange={(value) => onConsoleChange("effort", value)} hideLabel labelledBy={`${consoleKindId} ${effortRowId}`} />
         </div>
+        {compatibility.map((descriptor, index) => (
+          <React.Fragment key={descriptor.id}>
+            <div style={{ "--compatibility-row": index + 4 } as React.CSSProperties} className={`${rowHeader} tablet:row-start-(--compatibility-row)`}>
+              <CompatibilityName agent={launch.agent} descriptor={descriptor} id={`${id}-compatibility-${descriptor.id}`} />
+            </div>
+            <div style={{ "--compatibility-row": index + 4 } as React.CSSProperties} className={`${cell} tablet:col-start-2 tablet:row-start-(--compatibility-row)`}>
+              <div className={`${settingName} flex items-center gap-1`}><CompatibilityName agent={launch.agent} descriptor={descriptor} /></div>
+              <CompatibilityPicker agent={launch.agent} descriptor={descriptor} labelledBy={`${consoleKindId} ${id}-compatibility-${descriptor.id}`}
+                value={consoleSessions.compatibility[descriptor.id] ?? null}
+                onChange={(value) => onConsoleChange(`compatibility.${descriptor.id}`, value)} />
+            </div>
+          </React.Fragment>
+        ))}
         <div id={projectKindId} aria-hidden="true" className={`mt-1 tablet:mt-0 ${kindHeading} tablet:col-start-3 tablet:row-start-1`}>{t("dialog.console.launchProject")}</div>
         <div className={`${cell} tablet:col-start-3 tablet:row-start-2`}>
           <span className={`${settingName} flex items-center gap-1`}>
@@ -196,6 +223,14 @@ export function LaunchMatrix({
           <span aria-hidden="true" className={settingName}>{effort}</span>
           <EffortPicker launch={launch} model={projectSessions.model} effort={projectSessions.effort} onChange={(value) => onProjectChange("effort", value)} hideLabel labelledBy={`${projectKindId} ${effortRowId}`} describedBy={projectNoteId} />
         </div>
+        {compatibility.map((descriptor, index) => (
+          <div key={descriptor.id} style={{ "--compatibility-row": index + 4 } as React.CSSProperties} className={`${cell} tablet:col-start-3 tablet:row-start-(--compatibility-row)`}>
+            <div className={`${settingName} flex items-center gap-1`}><CompatibilityName agent={launch.agent} descriptor={descriptor} /></div>
+            <CompatibilityPicker agent={launch.agent} descriptor={descriptor} labelledBy={`${projectKindId} ${id}-compatibility-${descriptor.id}`} describedBy={projectNoteId}
+              value={projectSessions.compatibility[descriptor.id] ?? null}
+              onChange={(value) => onProjectChange(`compatibility.${descriptor.id}`, value)} />
+          </div>
+        ))}
       </div>
       <Description id={projectNoteId}>{t("dialog.console.projectLaunchOverridesNote")}</Description>
     </div>

@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import type { CompatibilityChanges } from "../agents/launchCompatibility";
+import type { LaunchOverrides } from "../agents/agentLaunchSettings";
 import { agentOpeningChoice, currentChoice, openingChoice } from "../accounts/openingChoice";
 import { choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, findEntry, type AccountChoice, type ChoiceGroup } from "../accounts/choiceEntries";
 import { agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent, servedAgents } from "../agents/agents";
@@ -14,8 +16,6 @@ import { useDaemonStore, useProviders } from "../store";
 import { useNow } from "../format/useNow";
 import { accountOption } from "./accountOptions";
 import { accountRefusalMessage } from "./accountRefusalMessage";
-
-type Overrides = { model?: string | null; effort?: string | null };
 
 /** Every agent's group of accounts as the pickers offer them, with the used-up quota, the running sharing change, the
  * not-logged-in state and the disabled state of each account marked. */
@@ -62,8 +62,9 @@ export function useChoiceGroups(): ChoiceGroup[] {
  * longer among that agent's accounts, and nothing has been picked since: the dialog then shows the
  * pickers empty rather than a fallback the user never chose.
  */
-export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent, forced?: AccountChoice, preset?: { choice: AccountChoice } & Overrides) {
+export function useLaunchChoice(parentConsole: Console, project: Project | undefined, exclude?: Agent, forced?: AccountChoice, preset?: { choice: AccountChoice } & LaunchOverrides, projectSession?: boolean) {
   const t = useT();
+  const isProjectSession = projectSession ?? (project !== undefined);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
@@ -73,9 +74,9 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
   const [pickedAgent, setPickedAgentValue] = useState<Agent | undefined>(preset?.choice.agent);
   const [touched, setTouched] = useState(false);
   const [pickedAccounts, setPickedAccounts] = useState<Partial<Record<Agent, string | null>>>(preset ? { [preset.choice.agent]: preset.choice.account } : {});
-  const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, Overrides>>>(
-    preset && (preset.model !== undefined || preset.effort !== undefined)
-      ? { [preset.choice.agent]: { ...(preset.model !== undefined && { model: preset.model }), ...(preset.effort !== undefined && { effort: preset.effort }) } }
+  const [launchSettings, setLaunchSettings] = useState<Partial<Record<Agent, LaunchOverrides>>>(
+    preset && (preset.model !== undefined || preset.effort !== undefined || preset.compatibility !== undefined)
+      ? { [preset.choice.agent]: { ...(preset.model !== undefined && { model: preset.model }), ...(preset.effort !== undefined && { effort: preset.effort }), ...(preset.compatibility !== undefined && { compatibility: preset.compatibility }) } }
       : {},
   );
 
@@ -100,7 +101,7 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     : undefined;
 
   const selectable = pickableAgents(agentAvailability, addedAgents, providers).filter((agent) => groups.some((group) => group.agent === agent && group.selectable));
-  const wanted = project ? project.default_agent ?? projectSessionAgent(parentConsole) : parentConsole.default_agent;
+  const wanted = project?.default_agent ?? (isProjectSession ? projectSessionAgent(parentConsole) : parentConsole.default_agent);
   // Keep a value for the refusal when no agent can be chosen, without returning the excluded agent.
   const initialAgent = selectable.includes(wanted) ? wanted : selectable[0]
     ?? agentsInListingOrder(addedAgents, servedAgents(providers)).find((agent) => agent !== exclude)!;
@@ -110,7 +111,8 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
   // A fixed conversation can still name a turned-off account; keep its value so the refusal names it.
   const accountEntries = (groups.find((group) => group.agent === choice.agent)?.entries ?? []).filter((entry) => !entry.disabled || entry.key === choiceKey(choice));
   const overrides = launchSettings[choice.agent];
-  const { model, effort } = launchWithOverrides(inheritedSessionLaunch(parentConsole, project, choice.agent, providerModelDisplay(providers, choice.agent)), overrides);
+  const inherited = inheritedSessionLaunch(parentConsole, project, choice.agent, providerModelDisplay(providers, choice.agent), isProjectSession);
+  const { model, effort } = launchWithOverrides(inherited, overrides);
   const blocked = selectable.length === 0;
   const exhaustedBy = choiceExhaustion(choice, groups);
   const chosenEntry = findEntry(groups, choiceKey(choice));
@@ -161,6 +163,12 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
       account: choice.account,
       model,
       effort,
+      compatibility: {
+        value: overrides?.compatibility ?? {},
+        onChange: (compatibility: CompatibilityChanges) => setLaunchSettings((current) => ({ ...current, [choice.agent]: { ...current[choice.agent], compatibility } })),
+        inherit: inherited.compatibility,
+        followLabel: isProjectSession ? "dialog.agentSettings.sameAsProject" as const : "dialog.agentSettings.sameAsConsole" as const,
+      },
       onModelChange: changeLaunchSetting("model"),
       onEffortChange: changeLaunchSetting("effort"),
     },

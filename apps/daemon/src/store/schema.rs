@@ -34,7 +34,8 @@ pub(super) const MIGRATIONS: &[&str] = &[
     "ALTER TABLE sessions ADD COLUMN owner_notice_former_owner TEXT;",
     // 2 to 3: the sidebar's ordering moved into the client's own preferences, the settings that
     // resume the interrupted sessions when the daemon starts and hold the computer awake (Prevent
-    // sleep, and when) are added, and so are the tables of what the holders run (see `SCHEMA`).
+    // sleep, and when) are added, and so are the tables of what the holders run (see `SCHEMA`), and
+    // the compatibility switches a console's launch settings, a project's and a session hold.
     "ALTER TABLE settings DROP COLUMN sidebar_order_by_status;
      ALTER TABLE settings ADD COLUMN resume_sessions_on_start INTEGER NOT NULL DEFAULT 0;
      ALTER TABLE settings ADD COLUMN keep_awake INTEGER NOT NULL DEFAULT 0;
@@ -50,7 +51,10 @@ pub(super) const MIGRATIONS: &[&str] = &[
      CREATE TABLE shell_terminal_titles (
          id    TEXT PRIMARY KEY,
          title TEXT NOT NULL
-     );",
+     );
+     ALTER TABLE console_launches ADD COLUMN compatibility TEXT;
+     ALTER TABLE project_providers ADD COLUMN compatibility TEXT;
+     ALTER TABLE sessions ADD COLUMN compatibility TEXT;",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -147,13 +151,16 @@ CREATE TABLE console_providers (
 -- each has its own model names; NULL means the provider's own default. `session_kind` says which
 -- sessions the pair launches: `console` for a console session of the console, `project` for a
 -- project session there when neither it nor its project names one. Read at launch, so nothing
--- is copied onto the session. A row exists only while it names a model or an effort.
+-- is copied onto the session. `compatibility` is a JSON object of the compatibility switches the
+-- pair holds its own value for (setting id to `true` or `false`), NULL for none. A row exists only
+-- while it names a model or an effort or holds a switch.
 CREATE TABLE console_launches (
-    console_id   TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
-    provider     TEXT NOT NULL,
-    session_kind TEXT NOT NULL CHECK (session_kind IN ('console', 'project')),
-    model        TEXT,
-    effort       TEXT,
+    console_id    TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
+    provider      TEXT NOT NULL,
+    session_kind  TEXT NOT NULL CHECK (session_kind IN ('console', 'project')),
+    model         TEXT,
+    effort        TEXT,
+    compatibility TEXT,
     PRIMARY KEY (console_id, provider, session_kind)
 );
 -- What a project sets for each provider; a provider with no row inherits everything from its
@@ -163,9 +170,9 @@ CREATE TABLE console_launches (
 -- names an account: a separate column so that no stored value in the id column can be mistaken
 -- for an account id. The id is cleared by `Store::delete_account`, like the console's; the flag
 -- names no account. `model` and `effort` are what a session here is launched with; NULL means
--- the provider's own default. Read at launch, so nothing is copied onto the session. A row
--- exists only while it holds a value; rows naming a provider this build does not register are
--- kept and ignored.
+-- the provider's own default. `compatibility` is as in `console_launches`. Read at launch, so
+-- nothing is copied onto the session. A row exists only while it holds a value; rows naming a
+-- provider this build does not register are kept and ignored.
 CREATE TABLE project_providers (
     project_id      TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     provider        TEXT NOT NULL,
@@ -173,6 +180,7 @@ CREATE TABLE project_providers (
     account_default INTEGER NOT NULL DEFAULT 0,
     model           TEXT,
     effort          TEXT,
+    compatibility   TEXT,
     PRIMARY KEY (project_id, provider)
 );
 CREATE TABLE sessions (
@@ -242,10 +250,12 @@ CREATE TABLE sessions (
     locked           INTEGER NOT NULL DEFAULT 0,
     started_at       INTEGER NOT NULL,
     ended_at         INTEGER ,
-    owner_notice_former_owner TEXT);
+    owner_notice_former_owner TEXT, compatibility TEXT);
 -- `owner_notice_former_owner` is the id of the owner that released the session while it was
 -- not running, named in the notice with the parting note; NULL for none. Written and cleared
--- with `owner_notice_note`. It is the last column, spelled as a migration leaves it.
+-- with `owner_notice_note`. `compatibility` is a JSON object of the compatibility switches the
+-- session holds its own value for, as for a console's launch pair; NULL for none. They are the
+-- last columns, spelled as a migration leaves them.
 -- The lookups by the columns that other rows and the daemon's queries hold sessions by.
 CREATE INDEX sessions_console_id ON sessions (console_id);
 CREATE INDEX sessions_project_id ON sessions (project_id);

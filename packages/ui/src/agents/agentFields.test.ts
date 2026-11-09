@@ -4,7 +4,7 @@ import type { Launch } from "../protocol";
 import { changedAccounts, changedLaunch, changedProjectAccounts, readAccounts, readLaunch, readProjectAccounts } from "./agentFields";
 
 const served = ["claude", "codex", "grok"];
-const unset: Launch = { model: null, effort: null };
+const unset: Launch = { compatibility: {}, model: null, effort: null };
 const launch = (claude: Launch = unset, codex: Launch = unset) => ({ claude, codex, grok: unset });
 
 describe("reading what a dialog holds", () => {
@@ -29,24 +29,24 @@ describe("changedAccounts", () => {
 });
 
 describe("changedLaunch", () => {
-  const initial = launch({ model: "opus", effort: "high" });
+  const initial = launch({ compatibility: {}, model: "opus", effort: "high" });
 
   it("sends only the field that changed, for the agent that changed", () => {
-    expect(changedLaunch("update", launch({ model: "opus", effort: "low" }), initial)).toEqual({ claude: { effort: "low" } });
+    expect(changedLaunch("update", launch({ compatibility: {}, model: "opus", effort: "low" }), initial)).toEqual({ claude: { effort: "low" } });
   });
 
   it("sends only the agents that were touched", () => {
-    expect(changedLaunch("update", launch({ model: "opus", effort: "high" }, { model: "gpt-5", effort: null }), initial)).toEqual({
+    expect(changedLaunch("update", launch({ compatibility: {}, model: "opus", effort: "high" }, { compatibility: {}, model: "gpt-5", effort: null }), initial)).toEqual({
       codex: { model: "gpt-5" },
     });
   });
 
   it("clears a field with an explicit null on update", () => {
-    expect(changedLaunch("update", launch({ model: null, effort: "high" }), initial)).toEqual({ claude: { model: null } });
+    expect(changedLaunch("update", launch({ compatibility: {}, model: null, effort: "high" }), initial)).toEqual({ claude: { model: null } });
   });
 
   it("sends only the fields that were set on create", () => {
-    expect(changedLaunch("create", launch({ model: "beta", effort: null }), launch())).toEqual({ claude: { model: "beta" } });
+    expect(changedLaunch("create", launch({ compatibility: {}, model: "beta", effort: null }), launch())).toEqual({ claude: { model: "beta" } });
     expect(changedLaunch("create", launch(), launch())).toBeUndefined();
   });
 });

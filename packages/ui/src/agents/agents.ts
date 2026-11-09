@@ -9,7 +9,7 @@ import {
   type ProviderInfo,
   type Settings,
 } from "../protocol";
-import { shownModel } from "./agentLaunchSettings";
+import { shownModel, type LaunchOverrides } from "./agentLaunchSettings";
 import { providerLabel } from "./providers";
 
 /** The ids of the providers the daemon serves, in its registry order (`[]` until the first snapshot). */
@@ -18,7 +18,7 @@ export function servedAgents(providers: readonly ProviderInfo[]): Agent[] {
 }
 
 /** A launch pair that sets neither the model nor the effort, for an agent whose entry a per-agent map lacks. */
-const NO_LAUNCH: Launch = { model: null, effort: null };
+const NO_LAUNCH: Launch = { model: null, effort: null, compatibility: {} };
 
 /** Whether availability has been determined and found `agent` missing — never while it has not
  * yet been determined, which must not be read as "not installed". */
@@ -132,26 +132,34 @@ export function projectSessionLaunch(owner: Console, project: Project, agent: Ag
   return {
     model: shownModel(display, own.model) ?? shownModel(display, fallback.model),
     effort: own.effort ?? fallback.effort,
+    compatibility: { ...fallback.compatibility, ...own.compatibility },
   };
 }
 
 /** What a session of `agent` takes when it chooses nothing: a project session's project value,
- * else its console's project session one; a console session's console session one. */
-export function inheritedSessionLaunch(owner: Console, project: Project | undefined, agent: Agent, display: ModelDisplay | undefined): Launch {
+ * else its console's project session one; a console session's console session one.
+ * Without a project, `projectSession` selects its console's project-session fallback; it defaults to a console session. */
+export function inheritedSessionLaunch(owner: Console, project: Project | undefined, agent: Agent, display: ModelDisplay | undefined, projectSession?: boolean): Launch {
   if (project) return projectSessionLaunch(owner, project, agent, display);
-  const launch = owner.launch[agent] ?? NO_LAUNCH;
-  return { model: shownModel(display, launch.model), effort: launch.effort };
+  const isProjectSession = projectSession ?? false;
+  const launch = isProjectSession ? consoleProjectLaunch(owner, agent) : owner.launch[agent] ?? NO_LAUNCH;
+  return { model: shownModel(display, launch.model), effort: launch.effort, compatibility: launch.compatibility };
 }
 
 /** `inherited` with each value an override sets: absent follows `inherited`, `null` is the agent's
- * own default. */
+ * own default for model and effort. A compatibility clear follows the inherited switch again. */
 export function launchWithOverrides(
   inherited: Launch,
-  overrides: { model?: string | null; effort?: string | null } | undefined,
+  overrides: LaunchOverrides | undefined,
 ): Launch {
+  const compatibility = { ...inherited.compatibility };
+  for (const [setting, value] of Object.entries(overrides?.compatibility ?? {})) {
+    if (value !== null) compatibility[setting] = value;
+  }
   return {
     model: overrides?.model === undefined ? inherited.model : overrides.model,
     effort: overrides?.effort === undefined ? inherited.effort : overrides.effort,
+    compatibility,
   };
 }
 

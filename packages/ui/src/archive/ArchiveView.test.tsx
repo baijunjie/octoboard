@@ -133,7 +133,7 @@ it("leads a row's context badge with the ring of the share used where the agent 
 
 it("shows the model and effort a row's session inherits from its console where it set and showed none", () => {
   const session = boundArchived[0];
-  const owner = { ...console_, project_session_launch: { ...console_.project_session_launch, [session.agent]: { model: "claude-sonnet-5-5", effort: "low" } } };
+  const owner = { ...console_, project_session_launch: { ...console_.project_session_launch, [session.agent]: { compatibility: {}, model: "claude-sonnet-5-5", effort: "low" } } };
   const { container } = renderArchiveView(undefined, undefined, [session], { consoles: new Map([[owner.id, owner]]) });
   expect(container.querySelector("ul > li:has(button)")?.textContent).toContain(`${isolate("Sonnet 5.5")} · ${isolate("low")}`);
 });

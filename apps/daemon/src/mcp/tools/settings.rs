@@ -20,6 +20,7 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
 use crate::accounts::choice;
+use crate::agents::launch_settings::apply_compatibility;
 use crate::coordinator::{
     self, consoles::ConsoleChanges, projects::ProjectChanges, settings::SettingsChanges,
 };
@@ -89,6 +90,7 @@ pub(in crate::mcp) async fn add_project(
         let launch = settings.launch.get_mut(agent);
         launch.model = change.model.flatten();
         launch.effort = change.effort.flatten();
+        apply_compatibility(&mut launch.compatibility, &change.compatibility);
     }
     let added = coordinator::projects::add_project(
         state,

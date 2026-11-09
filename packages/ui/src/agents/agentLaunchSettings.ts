@@ -1,11 +1,15 @@
-import type { Translate } from "../i18n/catalog";
-import type { AgentModel, ModelDisplay } from "../protocol";
-
 // How each agent takes a model and an effort, and what it does with one it cannot honour, is in
 // the "Model and reasoning effort" note of each agent's section ("Claude Code", "Codex",
 // "Grok Build") in docs/agent-cli-reference.md. What the console and project dialogs offer is not
 // kept here: the daemon lists it when the dialog asks (`list_agent_models`), so it cannot go stale
 // in this source.
+
+import type { CompatibilityChanges } from "./launchCompatibility";
+import type { Translate } from "../i18n/catalog";
+import type { AgentModel, ModelDisplay } from "../protocol";
+
+/** Session launch values explicitly chosen by a dialog; absent fields follow the parent launch. */
+export type LaunchOverrides = { model?: string | null; effort?: string | null; compatibility?: CompatibilityChanges };
 
 /** One entry of a launch-setting picker. A `detail` (what a model stands for, "Opus 5.5") comes with
  * the `reason` line the picker draws it as under the label. */

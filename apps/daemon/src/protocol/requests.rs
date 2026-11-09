@@ -431,6 +431,14 @@ pub enum RequestBody {
         #[serde(default, deserialize_with = "present_option")]
         #[cfg_attr(test, ts(optional))]
         effort: Option<Option<String>>,
+        /// The compatibility switches (provider settings declaring `compatibility_with`) the
+        /// session holds its own value for, by setting id, with the rule `effort` has: absent for a
+        /// switch leaves what the session has, `true` or `false` holds that value, `null` goes back
+        /// to following the project's (else the console's, else the agent's). An unknown setting,
+        /// or one a launch cannot hold, is refused with `unreadable_request`.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        compatibility: Option<BTreeMap<String, Option<bool>>>,
         #[cfg_attr(test, ts(optional))]
         task: Option<String>,
         #[cfg_attr(test, ts(optional))]
@@ -513,6 +521,14 @@ pub enum RequestBody {
         #[serde(default, deserialize_with = "present_option")]
         #[cfg_attr(test, ts(optional))]
         effort: Option<Option<String>>,
+        /// The compatibility switches (provider settings declaring `compatibility_with`) the
+        /// session holds its own value for, by setting id, with the rule `effort` has: absent for a
+        /// switch leaves what the session has, `true` or `false` holds that value, `null` goes back
+        /// to following the project's (else the console's, else the agent's). An unknown setting,
+        /// or one a launch cannot hold, is refused with `unreadable_request`.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        compatibility: Option<BTreeMap<String, Option<bool>>>,
         /// See `OpenSession::terminal_appearance`.
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
@@ -537,6 +553,14 @@ pub enum RequestBody {
         #[serde(default, deserialize_with = "present_option")]
         #[cfg_attr(test, ts(optional))]
         effort: Option<Option<String>>,
+        /// The compatibility switches (provider settings declaring `compatibility_with`) the
+        /// session holds its own value for, by setting id, with the rule `effort` has: absent for a
+        /// switch leaves what the session has, `true` or `false` holds that value, `null` goes back
+        /// to following the project's (else the console's, else the agent's). An unknown setting,
+        /// or one a launch cannot hold, is refused with `unreadable_request`.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        compatibility: Option<BTreeMap<String, Option<bool>>>,
         /// See `OpenSession::terminal_appearance`. Applied to the receiving session's launch.
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
@@ -725,6 +749,14 @@ pub enum RequestBody {
         #[serde(default, deserialize_with = "present_option")]
         #[cfg_attr(test, ts(optional))]
         effort: Option<Option<String>>,
+        /// The compatibility switches (provider settings declaring `compatibility_with`) the
+        /// session holds its own value for, by setting id, with the rule `effort` has: absent for a
+        /// switch leaves what the session has, `true` or `false` holds that value, `null` goes back
+        /// to following the project's (else the console's, else the agent's). An unknown setting,
+        /// or one a launch cannot hold, is refused with `unreadable_request`.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        compatibility: Option<BTreeMap<String, Option<bool>>>,
     },
     /// Each settable field absent means "leave it alone". Broadcasts `settings_updated` only when
     /// something actually changed, as `remove_trusted_directory` does.

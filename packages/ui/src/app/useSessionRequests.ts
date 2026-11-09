@@ -3,7 +3,7 @@ import { type Dispatch, type SetStateAction, useRef, useState } from "react";
 import { runAccountSwitchBatch } from "../dialogs/accountSwitchBatch";
 import { CodedError } from "../errors/codedError";
 import type { ConfirmLaunch } from "../dialogs/useConfirmIncompleteLaunch";
-import type { ModelEdits } from "../dialogs/SessionModelDialog";
+import type { LaunchOverrides } from "../agents/agentLaunchSettings";
 import { modelChangeRecovery } from "../errors/errorRecovery";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
@@ -84,7 +84,7 @@ export function useSessionRequests({ confirmLaunch, announce }: { confirmLaunch:
    * tells: a restart, or values only recorded for the next resume. A session that had the values already
    * changed nothing, so nothing is announced. A model the agent does not offer points back to Change model,
    * not to launch settings. */
-  const changeSessionModel = (sessionId: string, edits: ModelEdits): void => {
+  const changeSessionModel = (sessionId: string, edits: LaunchOverrides): void => {
     request({ type: "set_session_model", session: sessionId, ...edits, terminal_appearance: appearance })
       .then((reply) => {
         // Named as it is now: it may have been renamed while the change was out, and is gone if deleted since.
@@ -93,8 +93,8 @@ export function useSessionRequests({ confirmLaunch, announce }: { confirmLaunch:
         const params = { session: isolate(sessionDisplayTitle(t, session)) };
         // A restart is answered only once the relaunch has settled, long past the dialog's focus move; a recorded
         // change is answered at once, and `announce` holds both back past the focus move.
-        if (reply.outcome === "recorded") announce(t("dialog.sessionModel.doneRecorded", params));
-        else if (reply.outcome === "restarted") announce(t("dialog.sessionModel.done", params));
+        if (reply.outcome === "recorded") announce(t("dialog.sessionModel.doneRecordedLaunch", params));
+        else if (reply.outcome === "restarted") announce(t("dialog.sessionModel.doneLaunch", params));
       }, (err: unknown) => raiseError(err, { title: t("dialog.sessionModel.failedTitle"), session: sessionId, recovery: modelChangeRecovery(err) }));
   };
 

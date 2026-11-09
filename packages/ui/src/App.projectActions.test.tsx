@@ -644,7 +644,7 @@ it("sends only the edited values when a model is changed, and announces the rest
   ]]);
   expect(said()).toBeUndefined();
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS);
-  expect(said()).toContain("restarted with its new model settings");
+  expect(said()).toContain("restarted with its new launch settings");
   expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
@@ -654,7 +654,7 @@ it("announces values recorded for the next resume after the focus move", async (
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(said()).toBeUndefined();
   await passTime(1);
-  expect(said()).toContain("will use its new model settings when it is resumed");
+  expect(said()).toContain("will use its new launch settings when it is resumed");
 });
 
 it("names the session by its title at the time of the reply", async () => {
@@ -681,7 +681,7 @@ it("holds an announcement while the window is not attended, then says it after t
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(said()).toBeUndefined();
   await passTime(1);
-  expect(said()).toContain("will use its new model settings when it is resumed");
+  expect(said()).toContain("will use its new launch settings when it is resumed");
 });
 
 it("holds an announcement while a modal is open over the window", async () => {
@@ -692,7 +692,7 @@ it("holds an announcement while a modal is open over the window", async () => {
   expect(said()).toBeUndefined();
   await act(async () => errorAlerts.acknowledge());
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS);
-  expect(said()).toContain("will use its new model settings when it is resumed");
+  expect(said()).toContain("will use its new launch settings when it is resumed");
   expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
@@ -781,5 +781,5 @@ it("keeps a reply unheard and unexpired while a FileViewer covers the status reg
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(status.textContent).toBe("");
   await passTime(1);
-  expect(status.textContent).toContain("will use its new model settings when it is resumed");
+  expect(status.textContent).toContain("will use its new launch settings when it is resumed");
 });

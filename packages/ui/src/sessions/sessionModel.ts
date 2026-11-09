@@ -38,7 +38,7 @@ export function modelDisplayName(model: string, display: ModelDisplay | undefine
  * not in the store yet still takes its console's project session pair. */
 export function inheritedLaunch(session: Session, consoles: Map<string, Console>, projects: Map<string, Project>, providers: readonly ProviderInfo[]): Launch {
   const owner = consoles.get(session.console_id);
-  if (!owner) return { model: null, effort: null };
+  if (!owner) return { model: null, effort: null, compatibility: {} };
   const project = session.project_id ? projects.get(session.project_id) : undefined;
   if (session.project_id && !project) return consoleProjectLaunch(owner, session.agent);
   return inheritedSessionLaunch(owner, project, session.agent, providerModelDisplay(providers, session.agent));
@@ -54,6 +54,7 @@ export function sessionModelEffort(session: Session, inherited: Launch, display:
   return {
     model: session.observed_model ?? shownModel(display, launched.model),
     effort: session.observed_effort ?? session.default_effort ?? launched.effort ?? null,
+    compatibility: { ...inherited.compatibility, ...session.compatibility },
   };
 }
 

@@ -60,7 +60,7 @@ still controls whether a `request_session` call starts anything.
 | `console` | no | For `console`: the console, by id or by an unambiguous name. Defaults to the caller's own console. Refused with `kind: project`, whose session is in its project's console. |
 | `brief` | yes | The task, as `open_session`'s brief (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md`). |
 | `title` | no | The new session's name, as `open_session` takes it: left out or blank, it is titled from its goal (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
-| `agent`, `account`, `model`, `effort` | no | The new session's agent, account, model and reasoning effort, exactly as `open_session` takes them (see "The console session's tools" in `docs/product/hub-orchestration.md`); `account` is read among the accounts of the agent the new session will run. Left out, `agent` and `account` are settled as "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md` describes, including automatic selection of a usable account and, when neither choice is explicit, fallback to another added agent while that setting is on, in the caller's own console and in another. |
+| `agent`, `account`, `model`, `effort`, `compatibility` | no | The new session's agent, account, model, reasoning effort and compatibility switches, exactly as `open_session` takes them (see "The console session's tools" in `docs/product/hub-orchestration.md`); `account` is read among the accounts of the agent the new session will run. Left out, `agent` and `account` are settled as "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md` describes, including automatic selection of a usable account and, when neither choice is explicit, fallback to another added agent while that setting is on, in the caller's own console and in another. |
 | `branches` | no | For `project`: local branches, by name, to transfer to the new session (see "Transferring branches" below). Left out, or an empty list, the request transfers nothing and behaves as one without it. |
 
 **A request that could never be carried out is refused before the user is asked**, with the reason in prose and no
@@ -68,7 +68,8 @@ dialog shown: whatever `open_session` would refuse for the same brief and overri
 an unknown agent or account, an account of another agent, an agent determined unavailable on this machine (never while
 that determination is still pending), an agent that is not added, an account that is turned off, whose quota is used up
 or that is not logged in (see "When the agent or the account cannot open a session" in
-`docs/product/opening-sessions.md`), a model or effort the agent does not offer — and a `kind` that is neither value, a
+`docs/product/opening-sessions.md`), a model or effort the agent does not offer, a compatibility switch the agent does
+not declare — and a `kind` that is neither value, a
 `project` or `console` given for the other kind, a project or console that does not exist, a name that names more than
 one, a console session asking for a project session without naming the project, and `branches` the request cannot
 transfer (see "Transferring branches" below).

@@ -44,9 +44,10 @@ collapsed when the dialog opens. The handoff dialog holds one too, which works a
 session that takes over (see "Handing off from the window" in `docs/product/handing-off-sessions.md`).
 
 In the project dialog and the session dialog it holds a **Model** picker and a **Reasoning effort** picker for the agent
-the dialog's agent field currently settles on. In the project dialog the section holds a row of tabs, as wide as their
+the dialog's agent field currently settles on, and below them a picker for each of that agent's compatibility switches
+(see "Where the switches are set in the window" in `docs/product/compatibility-switches-in-launch-settings.md`). In the project dialog the section holds a row of tabs, as wide as their
 content and starting at the row's start, which sits with the shown tab's content inside a bordered frame: **Launch
-settings**, holding the Model and Reasoning effort pickers, and **Git workflow**, holding the project's own git workflow
+settings**, holding the Model and Reasoning effort pickers and the switches' pickers, and **Git workflow**, holding the project's own git workflow
 settings (see "Reading and changing them" in `docs/product/git-workflow-settings.md`). Launch settings is the tab shown
 when the dialog opens. While no agent is settled the frame holds the Git workflow tab alone, shown (see "The project's
 account, model and reasoning effort" in `docs/product/projects.md`). The tab shown stays shown while the section is
@@ -69,12 +70,13 @@ bordered frame. An agent that cannot be picked has a tab, with the Not installed
 while the console stores a console session or project session value for it, until every one of them is cleared. Until
 the user picks a tab, the one shown follows the agent the Default agent group's Console sessions field holds; a picked
 tab stays shown until that tab goes away, which forgets the pick. From a window 768 px wide up, each tab holds a table:
-a column for each kind of session, headed **Console sessions** and **Project sessions**, and a **Model** row and a
-**Reasoning effort** row, named in a leading column, with a picker in each cell. Below the whole table, a note explains
+a column for each kind of session, headed **Console sessions** and **Project sessions**, and a **Model** row, a
+**Reasoning effort** row and a row for each of the agent's compatibility switches, named in a leading column, with a
+picker in each cell. Below the whole table, a note explains
 that a project session's project or session settings take precedence. In a narrower window the cells stack: each kind
-under its own heading, then its Model and Reasoning effort pickers, each with the setting's name above it. Either way,
-Tab moves through one kind's pickers before the other's: Console sessions' Model and Reasoning effort, then Project
-sessions'. Edits on one tab are kept while another is shown, and each value is saved only when changed. Below the frame
+under its own heading, then its Model, Reasoning effort and switch pickers, each with the setting's name above it.
+Either way, Tab moves through one kind's pickers before the other's: Console sessions' Model, Reasoning effort and
+switches, then Project sessions'. Edits on one tab are kept while another is shown, and each value is saved only when changed. Below the frame
 and outside it, since it applies whichever tab is shown, is the console session instructions field (see "Console session
 instructions" in `docs/product/consoles.md`).
 
@@ -203,8 +205,8 @@ The levels follow the chosen model, and are each agent's own business rather tha
 While the dialog's first answer for the agent and the account it shows is outstanding, both Model and Reasoning
 effort pickers are locked, including their clear actions. A spinner replaces each trailing chevron; a stored value
 stays visible, while an unset picker shows a localized loading message instead of its placeholder and badge. There
-is no loading note below either field. In the console dialog this applies to all four pickers, for Console sessions
-and Project sessions alike.
+is no loading note below either field. In the console dialog this applies to all four Model and Reasoning effort
+pickers, for Console sessions and Project sessions alike. The compatibility switches' pickers are not locked.
 
 Once the daemon has answered for an agent and account — with a list, or with the reason there is none — the answer is
 kept for as long as the section's fields stay mounted. In the project dialog that ends when "Detect from files" is
@@ -237,15 +239,17 @@ diagnostic output. Neither a missing list nor one still being fetched stops the 
 
 ## Changing a session's model and effort
 
-**Change model** in a session's action menu opens a dialog for that session's model and reasoning effort. It precedes
-Switch account, is absent for archived sessions, and is disabled while the session is starting or switching accounts.
-The dialog shows the Model and Reasoning effort pickers directly, with the same choices, loading and unavailable-list
-rules described above. They start on the session's launch choices, taking inherited values where the session has no
+**Change model** in a session's action menu opens a dialog for that session's model and reasoning effort, and its
+compatibility switches (see `docs/product/compatibility-switches-in-launch-settings.md`). It precedes Switch account,
+is absent for archived sessions, and is disabled while the session is starting or switching accounts. The dialog shows
+the Model and Reasoning effort pickers directly, with the same choices, loading and unavailable-list rules described
+above, and below them the session's switches. They start on the session's launch choices, taking inherited values where the session has no
 choice of its own; they do not start on the model last observed in the agent's records. While the dialog is open, its
 session name, account, restart explanation and untouched fields follow the session's current state and settings. An
 edited field keeps its chosen value; choosing the session's current value again makes it follow the session again.
-Clearing either chooses the agent's own default for it. Confirm requires at least one value to differ from the
-session's current launch values. Only changed values are sent, so the other value keeps its choice or inheritance.
+Clearing either chooses the agent's own default for it. Confirm requires at least one value — the model, the effort or
+a switch — to differ from the session's current launch values. Only changed values are sent, so the others keep their
+choice or inheritance. A change of switches alone restarts the session as a change of model does.
 
 A session that becomes starting or switches accounts while the dialog is open temporarily disables Confirm, with a
 warning explaining that the user must wait for it to finish. A session deleted or archived while it is open instead
@@ -278,9 +282,11 @@ Where no conversation has started, it explains that the restart starts a new con
 
 A console session or project coordinator changes a session bound to it with **`set_session_model`**, without asking for
 approval. Workers have no such tool, and an owner cannot change an independent session or another owner's session. The
-call takes `session` and at least one of `model` and `effort`. Each omitted value keeps the session's current choice or
-inheritance; a blank string chooses the agent's own default, and another string is trimmed and becomes the session's own
-value. Only values actually being changed are checked against what the agent offers under the session's account, under
+call takes `session` and at least one of `model`, `effort` and `compatibility`. Each omitted value keeps the session's
+current choice or inheritance; a blank string chooses the agent's own default, and another string is trimmed and becomes
+the session's own value. `compatibility` is an object of the agent's switches, each `true` or `false` to hold that value
+or `null` to follow again, a switch left out keeping what the session has; a switch the session's agent does not
+declare is refused. Only values actually being changed are checked against what the agent offers under the session's account, under
 "The Advanced section" above. Giving the choices it already has succeeds without restarting or checking them again, even
 when the current list no longer offers them. This no-change answer does not bypass another model change already in
 progress: a repeated request is refused while that change holds the session. Giving an inherited value explicitly makes
@@ -291,7 +297,7 @@ longer waiting when it ends, the result or failure is delivered as a message to 
 
 The call waits for the restart to come up and answers with `session`, `agent`, `restarted` and a `note`, plus the
 session's own `model` and `effort`: each absent when inherited, `null` for the agent's own default, or its chosen
-string. `restarted` is false for an interrupted session or unchanged choices. The note says whether it was sent a prompt
+string; and `compatibility`, the switches the session holds its own value for, absent while it holds none. `restarted` is false for an interrupted session or unchanged choices. The note says whether it was sent a prompt
 to continue its task, which the owner must not repeat; otherwise the owner sends its next step with `instruct_session`.
 No separate message about the change is sent to the session.
 
@@ -302,7 +308,7 @@ dormant, since the restart would close the view the user is in; both are refused
 dormant one under a message naming the view. A usage-limit dialog alone does not count as such a wait and can be ended by the restart. A changed value the agent does not offer is
 refused before the process is stopped or any choices are recorded. If the process cannot be stopped in time, the choices
 stay as they were (`model_change_did_not_stop`). If the restart is refused, fails to launch or ends immediately
-(`model_change_did_not_come_up`), the session is left interrupted with its earlier choices.
+(`model_change_did_not_come_up`), the session is left interrupted with its earlier choices, its switches included.
 
 The window's `session_model_set` reply distinguishes `outcome: unchanged`, `recorded` and `restarted`; only a restarted
 result carries `continued`, saying whether a continuation prompt was sent. The window announces a recorded change as

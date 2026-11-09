@@ -1,6 +1,7 @@
 //! The session record's writes through `AppState`, each of which writes only its own columns, and
 //! the removal of a record with what is held in memory for it.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -159,6 +160,7 @@ impl AppState {
 
     /// Replaces the session's model and effort overrides and tells every client; see
     /// [`Store::set_session_launch_overrides`].
+    #[cfg(test)]
     pub fn set_session_launch_overrides(
         &self,
         id: &str,
@@ -167,6 +169,21 @@ impl AppState {
     ) -> Result<()> {
         self.cancel_recoveries(id);
         self.store.set_session_launch_overrides(id, model, effort)?;
+        self.publish_session_by_id(id);
+        Ok(())
+    }
+
+    /// Replaces all held launch values in one write and tells every client once.
+    pub(crate) fn set_session_launch(
+        &self,
+        id: &str,
+        model: &Option<Option<String>>,
+        effort: &Option<Option<String>>,
+        compatibility: &BTreeMap<String, bool>,
+    ) -> Result<()> {
+        self.cancel_recoveries(id);
+        self.store
+            .set_session_launch(id, model, effort, compatibility)?;
         self.publish_session_by_id(id);
         Ok(())
     }

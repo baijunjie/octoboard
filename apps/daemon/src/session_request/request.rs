@@ -1,6 +1,8 @@
 //! What a request is: the [`Action`] an approval takes, the [`Ask`] a request makes, and the
 //! [`Request`] the dialog is told of.
 
+use std::collections::BTreeMap;
+
 use uuid::Uuid;
 
 use crate::branch_origin::transfer::BranchTransfer;
@@ -181,6 +183,7 @@ impl Request {
         let mut branches = Vec::new();
         let mut model = None;
         let mut effort = None;
+        let mut compatibility = BTreeMap::new();
         let action = match &self.ask {
             Ask::Change(change) => {
                 let described = change.describe();
@@ -188,6 +191,11 @@ impl Request {
                 account = described.account;
                 model = described.model;
                 effort = described.effort;
+                compatibility = described
+                    .compatibility
+                    .into_iter()
+                    .filter_map(|(setting, value)| Some((setting, value?)))
+                    .collect();
                 described.action
             }
             Ask::Session(Action::Start { transfer, .. }) => {
@@ -238,6 +246,7 @@ impl Request {
             branches,
             model,
             effort,
+            compatibility,
             requested_at: self.requested_at,
         }
     }

@@ -1,5 +1,5 @@
 import { isMessageKey, type MessageKey, type PlainMessageKey, type Translate } from "../i18n/catalog";
-import type { Agent, ModelDisplay, ProviderInfo } from "../protocol";
+import type { Agent, ModelDisplay, ProviderInfo, SettingDescriptor } from "../protocol";
 import type { ProviderMessageName } from "../providers/types";
 
 /** The UI's records of the codes the providers declare (`PROVIDER_CODES`, for the code registry) and their plan names
@@ -31,6 +31,11 @@ export function isKnownAgent(providers: readonly ProviderInfo[], id: string): bo
 /** The registered provider `id`, `undefined` while the daemon has not served the providers or serves none by that id. */
 export function servedProvider(providers: readonly ProviderInfo[], id: string): ProviderInfo | undefined {
   return providers.find((provider) => provider.id === id);
+}
+
+/** The effective provider switch value, falling back to its declared default before settings arrive. */
+export function switchValue(descriptor: SettingDescriptor, stored: unknown): boolean {
+  return typeof stored === "boolean" ? stored : descriptor.kind.type === "switch" && descriptor.kind.default !== "off";
 }
 
 /** How a model id of provider `id` is shown, as the daemon serves it; `undefined` while it has not served the providers

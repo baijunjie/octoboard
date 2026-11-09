@@ -99,11 +99,12 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   conversation** tab has no such field, since a resumed session is never bound (see
   `docs/product/resuming-a-conversation-by-its-session-id.md`).
 
-After these fields, the collapsed **Advanced** section offers the model and reasoning effort for this session. It
-initially shows what the session would inherit for the selected agent (see "Which model and reasoning effort a session
-uses" below); untouched values keep following it, and changes apply only to this session, including when resumed. The
-choices, clearing and account-specific lists are described in "The Advanced section" in
-`docs/product/model-and-reasoning-effort.md`.
+After these fields, the collapsed **Advanced** section offers the model, reasoning effort and compatibility switches for
+this session. It initially shows what the session would inherit for the selected agent (see "Which model and reasoning
+effort a session uses" below); untouched values keep following it, and changes apply only to this session, including
+when resumed. The choices, clearing and account-specific lists are described in "The Advanced section" in
+`docs/product/model-and-reasoning-effort.md`, and the switches in "Where the switches are set in the window" in
+`docs/product/compatibility-switches-in-launch-settings.md`.
 
 A console session has no project or Report to field and is never bound to another session. Opening it with the daemon
 protocol's `open_session` accepts an explicit agent and account as the dialog does. Its `title` is stored trimmed, and
@@ -290,7 +291,7 @@ The session opened is the one the dialog would open if submitted untouched:
 - the localized default name (see **Name** above);
 - the agent and account the dialog opens on (see "Which agent a session uses" and "Which account a session uses" below),
   sent as the session's own choice;
-- no model or reasoning effort of its own, so both follow the parent;
+- no model, reasoning effort or compatibility switch of its own, so all follow the parent;
 - a new conversation, never a resumed one;
 - **an independent project coordinator** — from the project list too, where the dialog's **Report to** starts on no
   console session — except in a console session's focus mode, where it is bound to that console session, as the dialog
@@ -476,4 +477,6 @@ A session uses its own model and reasoning effort choices, each independently, o
 agent: a project session from its project, else its console's project session pair; a console session from its console's
 console session pair. The inheritance, explicit clearing and persistence rules are in
 `docs/product/model-and-reasoning-effort.md`. How the resolved values reach the agent is in "The model and reasoning
-effort" in `docs/product/launching-agents.md`.
+effort" in `docs/product/launching-agents.md`. Its compatibility switches are resolved the same way, each on its own,
+with the agent-level value last (see "Which value a launch uses" in
+`docs/product/compatibility-switches-in-launch-settings.md`).

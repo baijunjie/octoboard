@@ -1084,7 +1084,7 @@ describe("the fixture daemon's console saving", () => {
     await d.request({ type: "update_console", console: owner.id, console_session_prompt: null });
     expect(d.store.getState().consoles.get(owner.id)?.console_session_prompt).toBeNull();
     await d.request({ type: "update_console", console: owner.id, console_session_prompt: "x" });
-    await d.request({ type: "update_console", console: owner.id, console_session_prompt: "  ", launch: { codex: { model: null } } });
+    await d.request({ type: "update_console", console: owner.id, console_session_prompt: "  ", launch: { codex: { model: null, compatibility: {} } } });
     expect(d.store.getState().consoles.get(owner.id)).toMatchObject({ console_session_prompt: null, launch: { codex: { model: null, effort: null } } });
   });
 });

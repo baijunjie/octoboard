@@ -5,7 +5,8 @@ use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 use std::collections::HashMap;
 
 use super::rows::{
-    agent_from_row, enum_from_row, enum_from_row_opt, enum_to_text, registered_provider_clause,
+    agent_from_row, compatibility_from_text, compatibility_to_text, enum_from_row,
+    enum_from_row_opt, enum_to_text, registered_provider_clause,
 };
 use super::Store;
 use crate::protocol::{
@@ -269,20 +270,22 @@ fn write_provider_rows(tx: &Transaction<'_>, project: &Project) -> Result<()> {
             && !account_default
             && launch.model.is_none()
             && launch.effort.is_none()
+            && launch.compatibility.is_empty()
         {
             continue;
         }
         tx.execute(
             "INSERT INTO project_providers (project_id, provider, account_id, account_default,
-                                            model, effort)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                                            model, effort, compatibility)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 project.id,
                 agent.wire_name(),
                 account_id,
                 account_default,
                 launch.model,
-                launch.effort
+                launch.effort,
+                compatibility_to_text(&launch.compatibility)
             ],
         )?;
     }
@@ -302,7 +305,7 @@ fn read_provider_rows(
         .map(|(position, project)| (project.id.clone(), position))
         .collect();
     let mut stmt = conn.prepare(
-        "SELECT project_id, provider, account_id, account_default, model, effort
+        "SELECT project_id, provider, account_id, account_default, model, effort, compatibility
          FROM project_providers WHERE ?1 IS NULL OR project_id = ?1",
     )?;
     let rows = stmt
@@ -314,12 +317,14 @@ fn read_provider_rows(
                 Launch {
                     model: row.get(4)?,
                     effort: row.get(5)?,
+                    compatibility: compatibility_from_text(row.get(6)?),
                 },
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    for (project_id, agent, account, launch) in rows {
+    for (project_id, agent, account, mut launch) in rows {
         if let (Some(&position), Some(agent)) = (positions.get(&project_id), agent) {
+            launch.compatibility = agent.descriptor().known_compatibility(launch.compatibility);
             projects[position].accounts[agent] = account;
             projects[position].launch[agent] = launch;
         }
@@ -834,5 +839,101 @@ mod tests {
 
         store.delete_project("project-1").unwrap();
         assert_eq!(rows("retired"), 0);
+    }
+
+    #[test]
+    fn compatibility_launch_held_switches_survive_reopening() {
+        let path = temp_db("compatibility-project");
+        let store = Store::open(&path).unwrap();
+        let mut record = project(false);
+        store.insert_console(&console(None, None, None)).unwrap();
+        record.launch[AgentId::CODEX]
+            .compatibility
+            .insert("claude_compatibility".into(), false);
+        store.insert_project(&record).unwrap();
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(
+            store.require_project(&record.id).unwrap().launch,
+            record.launch
+        );
+    }
+
+    #[test]
+    fn compatibility_keeps_rows_with_model() {
+        let path = temp_db("compatibility-project");
+        let store = Store::open(&path).unwrap();
+        let mut record = project(false);
+        store.insert_console(&console(None, None, None)).unwrap();
+        record.launch[AgentId::CODEX]
+            .compatibility
+            .insert("claude_compatibility".into(), false);
+        store.insert_project(&record).unwrap();
+        record.launch[AgentId::CODEX].compatibility.clear();
+        record.launch[AgentId::CODEX].model = Some("held-value".into());
+        store.update_project(&record).unwrap();
+        let count: i64 = store
+            .lock()
+            .query_row("SELECT COUNT(*) FROM project_providers", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn compatibility_keeps_rows_with_effort() {
+        let path = temp_db("compatibility-project");
+        let store = Store::open(&path).unwrap();
+        let mut record = project(false);
+        store.insert_console(&console(None, None, None)).unwrap();
+        record.launch[AgentId::CODEX]
+            .compatibility
+            .insert("claude_compatibility".into(), false);
+        store.insert_project(&record).unwrap();
+        record.launch[AgentId::CODEX].compatibility.clear();
+        record.launch[AgentId::CODEX].effort = Some("held-value".into());
+        store.update_project(&record).unwrap();
+        let count: i64 = store
+            .lock()
+            .query_row("SELECT COUNT(*) FROM project_providers", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn compatibility_removes_empty_rows_when_following() {
+        let path = temp_db("compatibility-project");
+        let store = Store::open(&path).unwrap();
+        let mut record = project(false);
+        store.insert_console(&console(None, None, None)).unwrap();
+        record.launch[AgentId::CODEX]
+            .compatibility
+            .insert("claude_compatibility".into(), false);
+        store.insert_project(&record).unwrap();
+        record.launch[AgentId::CODEX].compatibility.clear();
+        store.update_project(&record).unwrap();
+        let count: i64 = store
+            .lock()
+            .query_row("SELECT COUNT(*) FROM project_providers", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn compatibility_launch_ignores_unknown_and_non_overridable_entries() {
+        let path = temp_db("compatibility-project");
+        let store = Store::open(&path).unwrap();
+        let mut record = project(false);
+        store.insert_console(&console(None, None, None)).unwrap();
+        record.launch[AgentId::CODEX].compatibility = [
+            ("claude_compatibility".into(), false),
+            ("future_switch".into(), true),
+            ("approval_reviewer".into(), true),
+        ]
+        .into();
+        store.insert_project(&record).unwrap();
+        assert_eq!(
+            store.require_project(&record.id).unwrap().launch[AgentId::CODEX].compatibility,
+            [("claude_compatibility".to_string(), false)].into()
+        );
     }
 }

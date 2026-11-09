@@ -564,8 +564,10 @@ fn new_console(document_console: DocumentConsole, accounts: ConsoleAccounts) -> 
         default_agent: document_console.default_agent,
         project_session_agent: document_console.project_session_agent,
         accounts: accounts.accounts,
-        launch: document_console.launch,
-        project_session_launch: document_console.project_session_launch,
+        launch: crate::config_document::exported_launches(document_console.launch),
+        project_session_launch: crate::config_document::exported_launches(
+            document_console.project_session_launch,
+        ),
         icon: document_console.icon,
         console_session_prompt: document_console.console_session_prompt,
     }

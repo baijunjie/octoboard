@@ -117,7 +117,7 @@ function mountWindow(): void {
         <div>
           <StatusIcon status="idle" decorative />
         </div>
-        <AgentIcon agent="claude" tooltip={agentTooltip("Work", { model: "claude-opus-5-5", effort: "high" })} />
+        <AgentIcon agent="claude" tooltip={agentTooltip("Work", { compatibility: {}, model: "claude-opus-5-5", effort: "high" })} />
       </div>
     </>,
   );

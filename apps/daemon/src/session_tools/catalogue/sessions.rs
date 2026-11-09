@@ -3,7 +3,7 @@
 
 use serde_json::json;
 
-use super::schemas::{object_schema, open_session_schema, NAMING_LANGUAGE};
+use super::schemas::{compatibility_schema, object_schema, open_session_schema, NAMING_LANGUAGE};
 use super::ToolDef;
 
 /// `open_session` as a console session has it: the session starts in whichever of the console's
@@ -18,17 +18,18 @@ pub(super) const CONSOLE_OPEN_SESSION: ToolDef = ToolDef {
                   workers that report to it, not to you. Needs no approval. Returns the new \
                   session's id, its agent, the account it opened on (`account`, `account_name`) \
                   and the `model` and `effort` it was launched with (`null` is unset: the default \
-                  model, which `list_agent_models` names, and the agent's own default effort). The \
-                  brief is rendered into the session's opening prompt; `title` names the session \
-                  in the user's language. It prefers the project's default agent. A left-out \
-                  account is selected by the server according to the configured policy. Automatic \
-                  selection may choose another agent when neither agent nor account is named; an \
-                  explicit agent limits selection to it, and an explicit account preserves both. \
-                  Unspecified model and effort follow the final agent. A refusal explains why the \
-                  session could not start. Name another account only when the user asked for it. \
-                  Name another agent only when the user asked for it or when its tags \
-                  (`list_agents`) fit the work. Use this when you should keep directing the \
-                  session and receiving its reports. To pass your own work on to a peer in the \
+                  model, which `list_agent_models` names, and the agent's own default effort), \
+                  plus `effective_compatibility`, every compatibility switch's resolved boolean. \
+                  The brief is rendered into the session's opening prompt; `title` names the \
+                  session in the user's language. It prefers the project's default agent. A \
+                  left-out account is selected by the server according to the configured policy. \
+                  Automatic selection may choose another agent when neither agent nor account is \
+                  named; an explicit agent limits selection to it, and an explicit account \
+                  preserves both. Unspecified model and effort follow the final agent. A refusal \
+                  explains why the session could not start. Name another account only when the \
+                  user asked for it. Name another agent only when the user asked for it or when \
+                  its tags (`list_agents`) fit the work. Use this when you should keep directing \
+                  the session and receiving its reports. To pass your own work on to a peer in the \
                   next session, use `request_session`; if the user only wants notes for the next \
                   session and an end, leave the notes and end. Ask the user if their intent is \
                   unclear.",
@@ -39,34 +40,34 @@ pub(super) const CONSOLE_OPEN_SESSION: ToolDef = ToolDef {
 /// caller's own project.
 pub(super) const PROJECT_OPEN_SESSION: ToolDef = ToolDef {
     name: "open_session",
-    description: "Start a session in this project and hand it a task. It is yours for its \
-                  whole life: it reports to this session, its owner, and you instruct it with \
+    description: "Start a session in this project and hand it a task. It is yours for its whole \
+                  life: it reports to this session, its owner, and you instruct it with \
                   `instruct_session`, archive it once it is done and reopen it with \
-                  `resume_session` when it has another closely related task and room for it. \
-                  Needs no approval. It prefers your own agent. A left-out account is selected \
-                  by the server according to the configured policy. Automatic selection may \
-                  choose another agent when neither agent nor account is named; an explicit \
-                  agent limits selection to it, and an explicit account preserves both. \
-                  Unspecified model and effort follow the final agent. A refusal explains why \
-                  the session could not start. Name another account only when the user asked \
-                  for it, or when it is the way to reach another agent. Name another agent \
-                  only when the user asked for it or when you judge it fits the work better, \
-                  weighing the agents' tags in `list_agents`, and an account of it can open a \
-                  session. Returns the new session's id, its agent, the account it opened on \
-                  (`account`, `account_name`) and the `model` and `effort` it was launched \
-                  with (`null` is unset: the default model, which `list_agent_models` names, and \
-                  the agent's own default effort), and with `branches` the ones that \
-                  moved and a `note` on how the transfer went. The brief is rendered into the \
-                  session's opening prompt; `title` names the session in the user's language. \
-                  A session started this way cannot start sessions of its own, and only this \
-                  project is available; a session elsewhere, or one that should not report to \
-                  you, is one `request_session` asks the user for. To give the new session a \
-                  branch you are responsible for, pass it in `branches`; `transfer_branches` \
-                  moves the branches of any session of yours later. Use this only when you \
-                  should keep directing the session and receiving its reports. To pass your \
-                  own work on to a peer in the next session, use `request_session`; if the user \
-                  only wants notes for the next session and an end, leave the notes and end. \
-                  Ask the user if their intent is unclear.",
+                  `resume_session` when it has another closely related task and room for it. Needs \
+                  no approval. It prefers your own agent. A left-out account is selected by the \
+                  server according to the configured policy. Automatic selection may choose \
+                  another agent when neither agent nor account is named; an explicit agent limits \
+                  selection to it, and an explicit account preserves both. Unspecified model and \
+                  effort follow the final agent. A refusal explains why the session could not \
+                  start. Name another account only when the user asked for it, or when it is the \
+                  way to reach another agent. Name another agent only when the user asked for it \
+                  or when you judge it fits the work better, weighing the agents' tags in \
+                  `list_agents`, and an account of it can open a session. Returns the new \
+                  session's id, its agent, the account it opened on (`account`, `account_name`) \
+                  and the `model` and `effort` it was launched with (`null` is unset: the default \
+                  model, which `list_agent_models` names, and the agent's own default effort), \
+                  plus `effective_compatibility`, every compatibility switch's resolved boolean, \
+                  and with `branches` the ones that moved and a `note` on how the transfer went. \
+                  The brief is rendered into the session's opening prompt; `title` names the \
+                  session in the user's language. A session started this way cannot start sessions \
+                  of its own, and only this project is available; a session elsewhere, or one that \
+                  should not report to you, is one `request_session` asks the user for. To give \
+                  the new session a branch you are responsible for, pass it in `branches`; \
+                  `transfer_branches` moves the branches of any session of yours later. Use this \
+                  only when you should keep directing the session and receiving its reports. To \
+                  pass your own work on to a peer in the next session, use `request_session`; if \
+                  the user only wants notes for the next session and an end, leave the notes and \
+                  end. Ask the user if their intent is unclear.",
     schema: || open_session_schema(false),
 };
 
@@ -220,6 +221,9 @@ pub(super) const RESUME_SESSION: ToolDef = ToolDef {
                   the session's id, its account (`account`, `account_name`) and the `model` \
                   and `effort` it was launched with (`null` is unset: the default model, which \
                   `list_agent_models` names, and the agent's own default effort). \
+                  `compatibility` holds or clears the session's compatibility switches; left out, \
+                  it keeps them. Returns `effective_compatibility`, the resolved value of every \
+                  overridable compatibility switch of its agent used for the relaunch. \
                   Refused for a session that is not yours (`yours: false`): it is somebody \
                   else's, to be left alone.",
     schema: || {
@@ -246,6 +250,10 @@ pub(super) const RESUME_SESSION: ToolDef = ToolDef {
                                     `list_agent_models` lists the levels each model offers. \
                                     Left out, it keeps the effort it had.",
                 },
+                "compatibility": compatibility_schema(
+                    "this session",
+                    "the project's, else the console's, else the application-wide value",
+                ),
             }),
             &["session"],
         )

@@ -1,14 +1,17 @@
 import React, { useRef, useState } from "react";
 
+import { applyCompatibility, changedCompatibility, type Compatibility } from "../agents/launchCompatibility";
+
 import { ActionableError } from "../errors/actionableError";
 import { providerModelDisplay } from "../agents/providers";
-import { shownModel } from "../agents/agentLaunchSettings";
+import { shownModel, type LaunchOverrides } from "../agents/agentLaunchSettings";
 import { inheritedSessionLaunch, launchWithOverrides } from "../agents/agents";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { InlineReference } from "../i18n/InlineReference";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useHasPainted } from "../components/motion/useHasPainted";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
+import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Launch, Session } from "../protocol";
@@ -21,14 +24,12 @@ import { LaunchPickers, useLaunchModels } from "./LaunchSettingsFields";
 import { useFailureWhenBlocked } from "../components/dialog/useFailureWhenBlocked";
 import { Description, partSelector } from "../primitives";
 
-/** What the dialog sends: each value the user moved off what the session runs with, `null` for the
- * agent's own default. */
-export type ModelEdits = { model?: string | null; effort?: string | null };
-
 /** The edits that differ from what the pickers started on, so a value that now equals the session's own
  * (another window made the same change) is not sent, and a session is never restarted for nothing. */
-function changedFrom(start: Launch, picked: ModelEdits): ModelEdits {
+function changedFrom(start: Launch, picked: LaunchOverrides): LaunchOverrides {
+  const compatibility = changedCompatibility(applyCompatibility(start.compatibility, picked.compatibility), start.compatibility);
   return {
+    ...(Object.keys(compatibility).length > 0 ? { compatibility } : {}),
     ...(picked.model !== undefined && picked.model !== start.model ? { model: picked.model } : {}),
     ...(picked.effort !== undefined && picked.effort !== start.effort ? { effort: picked.effort } : {}),
   };
@@ -59,7 +60,7 @@ export function SessionModelDialog({
   onClose: () => void;
   /** Starts changing the model and effort of the session `sessionId` to `edits` in the background and
    * returns at once; the outcome is announced, or reported as an error alert, where the session is shown. */
-  onChangeModel: (sessionId: string, edits: ModelEdits) => void;
+  onChangeModel: (sessionId: string, edits: LaunchOverrides) => void;
 }): React.ReactElement | null {
   const t = useT();
   const stored = useDaemonStore((s) => s.sessions.get(opened.id));
@@ -78,29 +79,33 @@ export function SessionModelDialog({
     t("dialog.sessionModel.blockedTitle"),
   );
   if (!parentConsole && !failure) return null;
-  const inherited = parentConsole ? inheritedSessionLaunch(parentConsole, project, session.agent, display) : { model: null, effort: null };
+  const inherited = parentConsole ? inheritedSessionLaunch(parentConsole, project, session.agent, display, session.kind === "project") : { model: null, effort: null, compatibility: {} };
   const own = launchWithOverrides(inherited, { model: session.model, effort: session.effort });
   // A stored retired `best` is no model, so clearing the picker back to unset over it is no edit.
-  const start = { ...own, model: shownModel(display, own.model) };
-  return <SessionModelForm session={session} start={start} failure={failure} onClose={onClose} onChangeModel={onChangeModel} />;
+  const start = { ...own, compatibility: session.compatibility, model: shownModel(display, own.model) };
+  return <SessionModelForm session={session} start={start} inheritCompatibility={inherited.compatibility} followLabel={session.kind === "project" ? "dialog.agentSettings.sameAsProject" : "dialog.agentSettings.sameAsConsole"} failure={failure} onClose={onClose} onChangeModel={onChangeModel} />;
 }
 
 function SessionModelForm({
   session,
   start,
+  inheritCompatibility,
+  followLabel,
   failure,
   onClose,
   onChangeModel,
 }: {
   session: Session;
   start: Launch;
+  inheritCompatibility: Compatibility;
+  followLabel: PlainMessageKey;
   failure: AcknowledgementView | undefined;
   onClose: () => void;
-  onChangeModel: (sessionId: string, edits: ModelEdits) => void;
+  onChangeModel: (sessionId: string, edits: LaunchOverrides) => void;
 }): React.ReactElement {
   const t = useT();
   const painted = useHasPainted();
-  const [picked, setPicked] = useState<ModelEdits>({});
+  const [picked, setPicked] = useState<LaunchOverrides>({});
   const launch = useLaunchModels(session.agent, session.account_id ?? null, true);
   const pickers = useRef<HTMLDivElement>(null);
   // An account change can remove the focused failure mark and disable both pickers in one render.
@@ -119,7 +124,7 @@ function SessionModelForm({
   const held = session.status === "starting" || switching;
   const running = session.status !== "interrupted" && session.status !== "archived";
   // A value picked back to the session's own is no edit: the field follows the session again.
-  const pick = (field: keyof ModelEdits, value: string | null) => setPicked((now) => {
+  const pick = (field: "model" | "effort", value: string | null) => setPicked((now) => {
     const next = { ...now, [field]: value };
     if (value === start[field]) delete next[field];
     return next;
@@ -142,7 +147,7 @@ function SessionModelForm({
       onSubmit={submit}
     >
       <p className="text-sm">
-        <Message id="dialog.sessionModel.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />
+        <Message id="dialog.sessionModel.subjectLaunch" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />
         {`${t("common.sentenceSeparator")}${t(running ? restart : "dialog.sessionModel.nextResume")}`}
         {running && session.status === "waiting_user" ? `${t("common.sentenceSeparator")}${t("dialog.sessionModel.restartPrompt")}` : null}
         {running && session.status === "dormant" ? `${t("common.sentenceSeparator")}${t("dialog.sessionModel.restartDormant")}` : null}
@@ -158,11 +163,15 @@ function SessionModelForm({
       )}
       <StatusAnnouncer text={launch.modelText} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />
       <div ref={pickers} {...focusHandoff} className="flex flex-col gap-4">
-        <Description>{t("dialog.sessionModel.note")}</Description>
+        <Description>{t("dialog.sessionModel.noteLaunch")}</Description>
         <LaunchPickers
           launch={launch}
           model={model}
           effort={effort}
+          compatibility={{ value: { ...start.compatibility, ...picked.compatibility },
+            onChange: (compatibility) => setPicked((now) => ({ ...now, compatibility: changedCompatibility(applyCompatibility(start.compatibility, compatibility), start.compatibility) })),
+            inherit: inheritCompatibility, followLabel,
+          }}
           onModelChange={(value) => pick("model", value)}
           onEffortChange={(value) => pick("effort", value)}
         />

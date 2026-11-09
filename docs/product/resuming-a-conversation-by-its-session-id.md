@@ -102,8 +102,9 @@ field and the agent and account are locked, there is no Advanced section, and no
 ## Opening a new session on a found conversation
 
 Open starts a new project session that resumes the conversation, on the agent and account that hold its record, with the
-name typed and the model and reasoning effort of the Advanced section, which are passed to the agent when it resumes the
-conversation. In the daemon protocol, `open_session` takes the ID as `resume_agent_session_id`, trimmed, blank read as
+name typed and the model, reasoning effort and compatibility switches of the Advanced section, which are applied to the
+launch that resumes the conversation (see "Where the switches are set in the window" in
+`docs/product/compatibility-switches-in-launch-settings.md`). In the daemon protocol, `open_session` takes the ID as `resume_agent_session_id`, trimmed, blank read as
 absent, together with the session's `agent` and `account`; the dialog sends the account it found, `null` for the default
 account.
 

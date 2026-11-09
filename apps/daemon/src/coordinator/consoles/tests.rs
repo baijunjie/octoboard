@@ -193,6 +193,7 @@ async fn a_new_console_stores_its_default_agent_and_launch_settings() {
                 .with(
                     AgentId::CLAUDE,
                     Launch {
+                        compatibility: Default::default(),
                         model: Some("  ".to_string()),
                         effort: None,
                     },
@@ -200,6 +201,7 @@ async fn a_new_console_stores_its_default_agent_and_launch_settings() {
                 .with(
                     AgentId::CODEX,
                     Launch {
+                        compatibility: Default::default(),
                         model: Some(" gpt-5 ".to_string()),
                         effort: Some("high".to_string()),
                     },
@@ -207,6 +209,7 @@ async fn a_new_console_stores_its_default_agent_and_launch_settings() {
                 .with(
                     AgentId::GROK,
                     Launch {
+                        compatibility: Default::default(),
                         model: None,
                         effort: None,
                     },
@@ -247,6 +250,7 @@ async fn a_new_console_stores_its_default_agent_and_launch_settings() {
                 .with(
                     AgentId::CLAUDE,
                     Launch {
+                        compatibility: Default::default(),
                         model: None,
                         effort: None,
                     },
@@ -254,6 +258,7 @@ async fn a_new_console_stores_its_default_agent_and_launch_settings() {
                 .with(
                     AgentId::CODEX,
                     Launch {
+                        compatibility: Default::default(),
                         model: Some("gpt-9".to_string()),
                         effort: None,
                     },
@@ -261,6 +266,7 @@ async fn a_new_console_stores_its_default_agent_and_launch_settings() {
                 .with(
                     AgentId::GROK,
                     Launch {
+                        compatibility: Default::default(),
                         model: None,
                         effort: None,
                     },
@@ -532,6 +538,7 @@ async fn an_update_refuses_a_blank_name_and_a_model_the_agent_does_not_offer() {
             .with(
                 AgentId::CLAUDE,
                 Launch {
+                    compatibility: Default::default(),
                     model: Some("retired".to_string()),
                     effort: None,
                 },
@@ -539,6 +546,7 @@ async fn an_update_refuses_a_blank_name_and_a_model_the_agent_does_not_offer() {
             .with(
                 AgentId::CODEX,
                 Launch {
+                    compatibility: Default::default(),
                     model: None,
                     effort: None,
                 },
@@ -546,6 +554,7 @@ async fn an_update_refuses_a_blank_name_and_a_model_the_agent_does_not_offer() {
             .with(
                 AgentId::GROK,
                 Launch {
+                    compatibility: Default::default(),
                     model: None,
                     effort: None,
                 },
@@ -569,6 +578,7 @@ async fn an_update_refuses_a_blank_name_and_a_model_the_agent_does_not_offer() {
         changes
     };
     let launch = |model: &str, effort: Option<&str>| LaunchChange {
+        compatibility: Default::default(),
         model: Some(Some(model.to_string())),
         effort: effort.map(|effort| Some(effort.to_string())),
     };

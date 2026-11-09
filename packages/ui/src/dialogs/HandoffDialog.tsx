@@ -56,7 +56,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
   const { request } = useDaemon();
   const { busy, run } = useDialogAction(undefined, t("dialog.handoff.failedTitle"));
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
-  const { choice, blocked, unavailable, overrides, agentOptions, setPickedAgent, account, launch } = useLaunchChoice(parentConsole, project, session.agent);
+  const { choice, blocked, unavailable, overrides, agentOptions, setPickedAgent, account, launch } = useLaunchChoice(parentConsole, project, session.agent, undefined, undefined, session.kind === "project");
 
   // No other agent could take the session over (one was removed or uninstalled while this was open).
   const failure = useFailureWhenBlocked(blocked, t("dialog.handoff.noOtherAgent"), t("dialog.handoff.blockedTitle"));

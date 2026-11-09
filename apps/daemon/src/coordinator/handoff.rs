@@ -20,7 +20,7 @@
 //! The package is named by the receiving session's id, chosen before the session exists, so that
 //! deleting the session removes it (`AppState::forget_handoff_package`).
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -51,6 +51,8 @@ pub struct Handoff {
     pub account: Option<Option<String>>,
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
+    /// The compatibility switches the receiving session holds, as in [`OpenRequest`].
+    pub compatibility: BTreeMap<String, Option<bool>>,
     /// The receiving session's title; `None` takes the name the original is shown under.
     pub title: Option<String>,
     /// What the owner asking says to the receiving session, put in its opening prompt.
@@ -206,6 +208,7 @@ pub(crate) fn receiving_request(
         account: request.account.clone(),
         model: request.model.clone(),
         effort: request.effort.clone(),
+        compatibility: request.compatibility.clone(),
         task: None,
         title: Some(
             request

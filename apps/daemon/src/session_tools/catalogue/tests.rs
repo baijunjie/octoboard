@@ -571,3 +571,71 @@ fn list_agents_names_the_five_hour_window_as_each_provider_reporting_one_does() 
     ]));
     assert!(named.contains(&"Test Agent's session limit".to_string()));
 }
+
+#[test]
+fn compatibility_session_and_launch_tools_advertise_nullable_boolean_overrides() {
+    for name in [
+        "open_session",
+        "request_session",
+        "request_resume_session",
+        "handoff_session",
+        "resume_session",
+        "set_session_model",
+    ] {
+        let tool = tools_for(SessionKind::Console, false)
+            .iter()
+            .find(|tool| tool.name == name)
+            .unwrap();
+        let schema = (tool.schema)();
+        assert_eq!(
+            schema["properties"]["compatibility"]["type"], "object",
+            "{name}"
+        );
+        assert_eq!(
+            schema["properties"]["compatibility"]["additionalProperties"]["type"],
+            json!(["boolean", "null"]),
+            "{name}"
+        );
+    }
+    for name in ["add_project", "update_project", "update_console"] {
+        let tool = tools_for(SessionKind::Console, false)
+            .iter()
+            .find(|tool| tool.name == name)
+            .unwrap();
+        let schema = (tool.schema)();
+        assert!(schema.to_string().contains("compatibility"), "{name}");
+    }
+    let tool = tools_for(SessionKind::Console, false)
+        .iter()
+        .find(|tool| tool.name == "update_settings")
+        .unwrap();
+    assert!((tool.schema)()["properties"].get("compatibility").is_none());
+}
+
+#[test]
+fn compatibility_schema_names_the_launch_level_it_edits() {
+    for name in ["add_project", "update_project", "update_console"] {
+        let tool = tools_for(SessionKind::Console, false)
+            .iter()
+            .find(|tool| tool.name == name)
+            .unwrap();
+        let schema = (tool.schema)();
+        for field in ["launch", "project_session_launch"] {
+            let Some(launch) = schema["properties"].get(field) else {
+                continue;
+            };
+            let description = launch["additionalProperties"]["properties"]["compatibility"]
+                ["description"]
+                .as_str()
+                .unwrap();
+            assert!(
+                description.contains("for these launch settings"),
+                "{name}.{field}: {description}"
+            );
+            assert!(
+                !description.contains("for this session"),
+                "{name}.{field}: {description}"
+            );
+        }
+    }
+}

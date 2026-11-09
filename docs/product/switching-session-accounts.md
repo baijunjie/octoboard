@@ -146,7 +146,8 @@ The call returns:
 | `account` | The account it is now on: the account's id, or `default` for the default account. |
 | `account_name` | That account's name; for the default account the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). |
 | `model`, `effort` | The session's own choice of model and of reasoning effort (see `docs/product/model-and-reasoning-effort.md`): a value, or `null` for the agent's own default; each absent where the session inherits it. |
-| `note` | Prose naming the account and agent the session is now on and saying either that its turn had been cut off by the switch or stopped on a usage limit, so it was sent a prompt to continue that task and the caller is not to send one itself, or that it is back awaiting instructions with any turn in progress cut off and is to be sent its next step with `instruct_session`; and, for a session that had no conversation yet, that it starts fresh there. Where the user chose another account than the one asked for, it says so, and it names each model or reasoning effort the user set — a value, or the agent's own default. |
+| `compatibility` | The compatibility switches the session holds its own value for, each `true` or `false` (see `docs/product/compatibility-switches-in-launch-settings.md`); absent while it holds none. |
+| `note` | Prose naming the account and agent the session is now on and saying either that its turn had been cut off by the switch or stopped on a usage limit, so it was sent a prompt to continue that task and the caller is not to send one itself, or that it is back awaiting instructions with any turn in progress cut off and is to be sent its next step with `instruct_session`; and, for a session that had no conversation yet, that it starts fresh there. Where the user chose another account than the one asked for, it says so, and it names each model or reasoning effort the user set — a value, or the agent's own default — and each compatibility switch the user turned on, turned off or set back to following. |
 
 Refused before the user is asked, with the reason in prose (as a tool error) and nothing changed:
 
@@ -179,8 +180,8 @@ The confirmation is titled "Switch account?", with two buttons, **Refuse** and *
 the requesting session, as a request for a session names it (see "The confirmation dialog" in
 `docs/product/session-requests.md`), then the session to switch, by its displayed name, and the agent and the account
 the call asked for; it says that the session keeps its conversation, that a turn in progress is cut off and continued
-automatically after the switch where that is safe, and that the user can change the account, model and reasoning effort
-before confirming. The sentence on continuing is a general one: it lists neither which turns are continued, a turn
+automatically after the switch where that is safe, and that the user can change the account, model, reasoning effort and
+compatibility settings before confirming. The sentence on continuing is a general one: it lists neither which turns are continued, a turn
 stopped on a usage limit included, nor the exceptions (see "Continuing after a switch" below). A form follows:
 
 - **Switch to** — the accounts of the session's own agent, by the rules of the row's Switch account submenu (see
@@ -192,10 +193,11 @@ stopped on a usage limit included, nor the exceptions (see "Continuing after a s
   and an account whose sharing change runs — or every other account while the session's own account's sharing changes or
   a switch holds the session — listed with its usage, with no reason under its name, and not offered; a used-up account
   or one not logged in keeps its reason over these brief holds. It starts on the account the call asked for.
-- The collapsed **Advanced** section — the session's model and reasoning effort, starting on what the session would be
-  launched with (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md`), the models listed being
-  those of the account chosen. Its note says that a value the user changes stays the session's own from then on. Only
-  values the user changed are sent with the approval.
+- The collapsed **Advanced** section — the session's model, reasoning effort and compatibility switches, starting on
+  what the session would be launched with (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md`
+  and "Where the switches are set in the window" in `docs/product/compatibility-switches-in-launch-settings.md`), the
+  models listed being those of the account chosen. Its note says that a value the user changes stays the session's own
+  from then on. Only values the user changed are sent with the approval.
 
 **Switch account cannot be pressed** while what is chosen cannot be switched to, and the dialog says why. What is
 wrong with the account chosen is said under the **Switch to** picker, which is marked invalid:
@@ -230,8 +232,9 @@ so no mark, and its approval is for the account the call asked for.
 
 **On approval the switch is made with what the form ended on**, as described from "What a switch does" on. Each model
 or reasoning effort the user changed is checked as opening a session checks it, against the account the session is
-switched to, and recorded as the session's own choice before the relaunch reads it; a switch that fails puts the
-session's earlier model and reasoning effort back with its account. Everything a switch refuses is refused at that
+switched to, and recorded, with each compatibility switch the user changed, as the session's own choice before the
+relaunch reads it; a switch that fails puts the session's earlier model, reasoning effort and switches back with its
+account. Everything a switch refuses is refused at that
 moment, and is answered as in "When an approval cannot be carried out" in `docs/product/session-requests.md`.
 
 ## What a switch does
@@ -249,10 +252,11 @@ only which of its processes the switch ended, when it ended any, in its prompt t
 does not itself switch or archive the sessions bound to it; a confirmation whose set takes them in switches each of them
 separately.
 
-- **The session reads the target account's configuration and keeps its explicit model and reasoning effort choices.**
-  An account's directory holds the agent's global configuration as well as its login. Settings kept only in the old
-  account's directory do not follow the session; values explicitly supplied by Octoboard still apply according to
-  `docs/product/model-and-reasoning-effort.md`. The same conversation can come up with different account defaults.
+- **The session reads the target account's configuration and keeps its explicit model, reasoning effort and
+  compatibility switch choices.** An account's directory holds the agent's global configuration as well as its login.
+  Settings kept only in the old account's directory do not follow the session; values explicitly supplied by Octoboard
+  still apply according to `docs/product/model-and-reasoning-effort.md` and
+  `docs/product/compatibility-switches-in-launch-settings.md`. The same conversation can come up with different account defaults.
 - **It can take a few seconds**, the time the agent is given to exit and the time the relaunched process is watched; the
   session shows as switching its account until the result is known (see "While a session is switching" above), and
   cannot be resumed or switched again meanwhile.

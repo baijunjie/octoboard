@@ -18,7 +18,9 @@ use crate::coordinator::{
     launch::LaunchEdit,
     model_change::{ModelAsker, ModelChange},
 };
-use crate::mcp::lookup::{present_text, required_str, resolve_owned_session};
+use crate::mcp::lookup::{
+    compatibility_argument, present_text, required_str, resolve_owned_session,
+};
 use crate::mcp::views::insert_own_launch;
 use crate::protocol::{Session, SessionStatus};
 use crate::session_request;
@@ -44,14 +46,18 @@ pub(in crate::mcp) async fn set_session_model(
     let edit = LaunchEdit {
         model: present_text(arguments, "model")?,
         effort: present_text(arguments, "effort")?,
+        compatibility: compatibility_argument(arguments, Some(target.agent))?,
     };
-    if edit.model.is_none() && edit.effort.is_none() {
-        bail!("give `model`, `effort` or both: there is nothing to change otherwise");
+    if edit.model.is_none() && edit.effort.is_none() && edit.compatibility.is_empty() {
+        bail!(
+            "give `model`, `effort` or `compatibility`, alone or together: \
+             there is nothing to change otherwise"
+        );
     }
     if target.status == SessionStatus::Archived {
         bail!(
-            "`{}` is archived; reopen it with `{}`, which takes a `model` and an `effort` of \
-             its own",
+            "`{}` is archived; reopen it with `{}`, which takes `model`, `effort` and \
+             `compatibility` overrides of its own",
             target.id,
             qualified_tool_name(caller.agent, "resume_session")
         );
@@ -80,8 +86,8 @@ pub(in crate::mcp) async fn set_session_model(
 fn outcome(caller: &Session, changed: &Session, change: ModelChange) -> Value {
     let note = match change {
         ModelChange::Unchanged => format!(
-            "`{}` already had that model and reasoning effort as its own, so nothing was changed \
-             and it was not restarted.",
+            "`{}` already had those model, reasoning effort and compatibility overrides, \
+             so nothing was changed and it was not restarted.",
             changed.id
         ),
         ModelChange::Recorded => format!(
@@ -420,6 +426,7 @@ mod tests {
             state,
             "mine",
             LaunchEdit {
+                compatibility: Default::default(),
                 model: Some(Some("sonnet".to_string())),
                 effort: None,
             },
@@ -493,6 +500,7 @@ mod tests {
                 &state,
                 "mine",
                 LaunchEdit {
+                    compatibility: Default::default(),
                     model: Some(Some("opus".to_string())),
                     effort: None,
                 },
@@ -579,6 +587,7 @@ mod tests {
                 &state,
                 "mine",
                 LaunchEdit {
+                    compatibility: Default::default(),
                     model: Some(Some(model.to_string())),
                     effort: None,
                 },
@@ -720,6 +729,7 @@ mod tests {
             &state,
             "mine",
             LaunchEdit {
+                compatibility: Default::default(),
                 model: Some(Some("sonnet".to_string())),
                 effort: None,
             },
@@ -916,6 +926,7 @@ mod tests {
                 &state,
                 "mine",
                 LaunchEdit {
+                    compatibility: Default::default(),
                     model: Some(Some(model.to_string())),
                     effort: None,
                 },
@@ -966,6 +977,7 @@ mod tests {
                 &state,
                 "mine",
                 LaunchEdit {
+                    compatibility: Default::default(),
                     model: Some(Some(model.to_string())),
                     effort: None,
                 },

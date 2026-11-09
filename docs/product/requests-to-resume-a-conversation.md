@@ -36,6 +36,7 @@ are instructions for the agent; the user's approval is what Octoboard enforces.
 | `project` | no | The project the conversation is resumed in, playing the part of the project whose session dialog the tab is in: by id in any console, or by a name that is unambiguous among the caller's own console's projects, else among every console's. Defaults to a project session's own project; a console session has to give it. |
 | `title` | no | For a new session opened on an agent's record: its name, as the tab's **Name** field; left out, it is named after its project, as a session the user opens without a name. For an archived session that holds the conversation: the name it is given once it is reopened. Refused for an interrupted session, which keeps its name. Its description tells the agent to write it in the user's language (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
 | `model`, `effort` | no | Only for a new session opened on an agent's record: its model and reasoning effort, as the tab's Advanced section sets them; blank is the agent's own default, and any other must be one the agent offers. A session that holds the conversation keeps its own. |
+| `compatibility` | no | Only for a new session opened on an agent's record: its own compatibility switches, as the tab's Advanced section sets them, each `true` or `false` to hold that value or `null` to follow (see "Accounts and launch settings in arguments and results" in `docs/product/agent-settings-tools.md`); a switch the record's agent does not declare is refused. A session that holds the conversation keeps its own. |
 
 There is no argument for an agent or an account, which are those that hold the conversation, nor for an owner, branches
 or a message to deliver: a session the call resumes is given no instruction, and the caller tells it what it needs
@@ -64,7 +65,8 @@ dialog shown and nothing changed:
   the refusal names who the session reports to and says `inform_session` tells it something;
 - a holder that is being launched or resumed right now, or that is being switched to another account, handed off,
   rebound or having its branches transferred right now; each refusal says which, and to ask again in a moment;
-- a `model` or `effort` that is not blank for a conversation a session holds;
+- a `model` or `effort` that is not blank, or a compatibility switch given `true` or `false`, for a conversation a
+  session holds;
 - a `title` for an interrupted session;
 - a held conversation its agent no longer has (`conversation_unresumable`), judged as a resume judges it before
   relaunching anything (see "Archiving, interruption and resuming" in
@@ -95,7 +97,7 @@ where the conversation is held, judged again at that moment:
 - **Only an agent's record holds it: a new session is opened on it** (`opened`), as the tab's **Open** opens one (see
   "Opening a new session on a found conversation" in `docs/product/resuming-a-conversation-by-its-session-id.md`): a
   plain project session in the project, on the agent and account that hold the record, named by `title` or after its
-  project, with the model and reasoning effort asked for. It is bound to nobody and owned by nobody but the user, as a
+  project, with the model, reasoning effort and compatibility switches asked for. It is bound to nobody and owned by nobody but the user, as a
   session the user opened from the tab, and it is given no prompt: it comes up at the agent's prompt, continuing the
   conversation.
 - **The session that holds it is already running by then** (`already_running`): nothing is done. This holds only where

@@ -43,7 +43,12 @@ that rule. What is the user's alone is never changed through these tools, by any
   `docs/product/per-agent-settings.md`) or an agent's tags (see "Agent tags" in the same document), since which agents
   and accounts spend the user's quota, and how, is the user's choice. `get_settings` still returns the first and the
   last, and the provider settings their provider lets sessions read — Claude compatibility and Codex compatibility —
-  read-only: a session weighs them when it chooses an agent or an account;
+  read-only: a session weighs them when it chooses an agent or an account. The compatibility switches alone are open
+  to agents at the levels that also hold a model and effort — a console's two launch sets, a project's, a session's —
+  where a level's own value wins over the agent-level one (see
+  `docs/product/compatibility-switches-in-launch-settings.md`): the tools that take a model and effort take the
+  switches beside them (see "Accounts and launch settings in arguments and results" below). The agent-level value
+  stays the user's;
 - reading or changing Claude Code's or Grok Build's approval mode or Codex's permission preset (see "Approval modes" in
   `docs/product/per-agent-settings.md`), since a session could otherwise lift the permission prompts of the sessions
   launched after it, its own next resume included, for instance by switching Claude Code to Bypass permissions, Codex
@@ -88,10 +93,24 @@ Results always name an account by its id, and say `inherit` or `default` for the
 project's account can be in are in "The project's account, model and reasoning effort" in
 `docs/product/projects.md`.
 
-**`launch`** is an object keyed by agent, each value `{"model": …, "effort": …}`. In an argument, a field left out is
-left as it is, and `null` or a blank string is the agent's own default. A model or effort that is being changed must be
-one the agent offers, under the rules in "The Advanced section" in `docs/product/model-and-reasoning-effort.md`. Results
-give every agent, with `null` for an unset value.
+**`launch`** is an object keyed by agent, each value `{"model": …, "effort": …, "compatibility": …}`. In an argument, a
+field left out is left as it is, and `null` or a blank string is the agent's own default. A model or effort that is
+being changed must be one the agent offers, under the rules in "The Advanced section" in
+`docs/product/model-and-reasoning-effort.md`. Results give every agent, with `null` for an unset value.
+
+`compatibility` is an object of the agent's compatibility switches by setting id (see
+`docs/product/compatibility-switches-in-launch-settings.md`): `true` or `false` holds that value at this level, `null`
+goes back to following the level behind it, and a switch left out is left as it is. A setting that is not one of that
+agent's compatibility switches, or a value other than those three, is a tool error and nothing is changed; this holds
+even where models and efforts go unchecked. In results it holds only the switches the level holds, `{}` when it holds
+none; `get_project`'s `effective` is the exception (see "A project's settings" below).
+
+The tools that act on one session take the same `compatibility` object as an argument of its own, beside `model` and
+`effort`: `open_session`, `request_session`, `request_resume_session`, `handoff_session`, `resume_session` and
+`set_session_model` (see the tool tables in `docs/product/hub-orchestration.md`). There it holds or clears the
+session's own values, a switch left out keeping what the session has, and it is checked against the session's agent —
+the one finally selected, for a session not yet opened. A session's records report `compatibility`, the switches it
+holds its own value for, where it holds any (see "Session records" in `docs/product/what-every-session-reads.md`).
 
 **The default agent and account settings are initial preferences, not a guarantee of what a session's own sessions
 run on.** The tools describe a project's `default_agent` and `accounts`, a console's `default_agent`,
@@ -122,8 +141,8 @@ same set of fields:
 | `tags` | Its tags. |
 | `trust_consent` | Whether the user has given the trust permission for it (see "The trust permission" in `docs/product/folder-trust.md`). Read-only. |
 | `accounts` | Its account setting for every agent, as above. |
-| `launch` | Its model and reasoning effort for every agent, as above; for a value it leaves unset, its sessions take its console's `project_session_launch` (see "The console's own settings: `get_console` and `update_console`" below). |
-| `effective` | What `default_agent`, `accounts` and `launch` resolve to under the project's console, worked out as a launch works them out, as `{"default_agent": …, "accounts": …, "launch": …}`: the agent a session opened in the project without a choice runs on (the project's own, else the console's `project_session_agent`, else its `default_agent`); for every agent the account such a session of it gets, by id, or `default` for the agent's default account (the project's own, else the console's); and for every agent the model and reasoning effort it gets (each the project's own, else the console's `project_session_launch`; `null` is the agent's own default). A session's own choices come before these at a launch, and so do the agent and account automatic selection picks and the starting session's own agent and account (see "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`). |
+| `launch` | Its model, reasoning effort and held compatibility switches for every agent, as above; for a value it leaves unset, its sessions take its console's `project_session_launch` (see "The console's own settings: `get_console` and `update_console`" below). |
+| `effective` | What `default_agent`, `accounts` and `launch` resolve to under the project's console, worked out as a launch works them out, as `{"default_agent": …, "accounts": …, "launch": …}`: the agent a session opened in the project without a choice runs on (the project's own, else the console's `project_session_agent`, else its `default_agent`); for every agent the account such a session of it gets, by id, or `default` for the agent's default account (the project's own, else the console's); and for every agent the model and reasoning effort it gets (each the project's own, else the console's `project_session_launch`; `null` is the agent's own default) and under `compatibility` the value of every compatibility switch of that agent, `true` or `false` (the project's own, else the console's `project_session_launch`, else the agent-level value). A session's own choices come before these at a launch, and so do the agent and account automatic selection picks and the starting session's own agent and account (see "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`). |
 | `git_workflow` | Its git workflow settings (see `docs/product/git-workflow-settings.md`) as `{"override": …, "effective": …}`: under `override` the project's own value for each of `development`, `squash_before_delivery`, `rebase_before_delivery`, `delivery` and `revert_gate`, `null` for one it leaves to the application-wide value; under `effective` the five resolved values for it now (`squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is). |
 
 Each also carries `git_status`, the project's git state as the daemon last read it, read-only (see "Reading the status
@@ -184,8 +203,8 @@ Changed text follows the limits and unchanged-text compatibility rules in "Editi
 
 `get_console` answers with the calling console session's own console: `console` (its id), `name`, `default_agent` — the
 default agent for console sessions — `project_session_agent` — the default agent for project sessions, `null` while it
-follows `default_agent` (see `docs/product/consoles.md`) — `accounts`, `launch` — the model and reasoning effort of the
-console's console sessions — `project_session_launch` — in the same shape, the model and reasoning effort a project
+follows `default_agent` (see `docs/product/consoles.md`) — `accounts`, `launch` — the model, reasoning effort and held
+compatibility switches of the console's console sessions — `project_session_launch` — in the same shape, what a project
 session takes for each value neither it nor its project sets — `has_icon`, whether it has an avatar, and `workdir`, its
 working directory. Neither the avatar itself nor the console's console session instructions are ever returned.
 
@@ -242,8 +261,9 @@ can be held awake, the daemon takes or releases its hold on the computer's sleep
 ## When a change takes effect
 
 As for the same change in the UI: sessions already running keep what they were started with. A changed account reaches
-sessions opened afterwards, and a changed model or effort reaches a session's next launch where the session inherits
-that value (see `docs/product/model-and-reasoning-effort.md`). That holds for the calling console session too: its own
+sessions opened afterwards, and a changed model, effort or compatibility switch reaches a session's next launch where the
+session inherits that value (see `docs/product/model-and-reasoning-effort.md` and
+`docs/product/compatibility-switches-in-launch-settings.md`). That holds for the calling console session too: its own
 console's model and effort reach it when it is next launched, and its console's account only console sessions opened
 afterwards. A changed `project_session_launch` reaches a project session at its next launch, unless its project or the
 session sets that value itself. A changed `development`, `squash_before_delivery`, `rebase_before_delivery` or `delivery`,

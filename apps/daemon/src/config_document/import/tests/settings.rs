@@ -18,6 +18,7 @@ async fn an_exported_configuration_is_imported_as_it_is() {
         project_session_launch: crate::protocol::PerAgent::default().with(
             AgentId::CLAUDE,
             crate::protocol::Launch {
+                compatibility: Default::default(),
                 model: Some("opus".to_string()),
                 effort: Some("high".to_string()),
             },
