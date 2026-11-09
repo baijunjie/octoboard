@@ -160,9 +160,9 @@ export function useBranchCleanup({ items, pending }: Inspected): {
 }
 
 /** Speaks `text` once it has stood for `AFTER_FOCUS_MOVE_DELAY_MS`: the failure it announces arrives as the Trash
- * checkbox is ticked or as Try again hands focus back to the mark, and VoiceOver drops what is written within about
- * 300 ms of either. While `text` is `undefined` (a retry is out) the region is empty, so a retry that fails again in
- * the same words is written, and so spoken, again. */
+ * checkbox is ticked or as a retry's answer moves focus (back to the mark, or to the checkbox when the mark it was on
+ * goes), and VoiceOver drops what is written within about 300 ms of either. While `text` is `undefined` (a retry is
+ * out) the region is empty, so a retry that fails again in the same words is written, and so spoken, again. */
 function DelayedAnnouncer({ text }: { text: string | undefined }): React.ReactElement {
   const [written, setWritten] = useState<string>();
   if (text === undefined && written !== undefined) setWritten(undefined);
@@ -179,12 +179,12 @@ function DelayedAnnouncer({ text }: { text: string | undefined }): React.ReactEl
  * group, and the disclosure of the worktrees that stay because whether they are or hold another project's folder could
  * not be told; then the locked worktrees as an option of their own. `consequences` are the lines the confirmation's
  * consequence text adds while the options are ticked. A lookup that failed, so that the daemon could not say what else
- * goes, is a mark after the Trash option's label instead; where it is a missing Git its popover also holds Try again,
- * whose success (or a retry ending in a lost connection) takes that mark away, so focus it held goes to the Trash
- * checkbox, and whose failure in the same words is spoken again. A branch a locked worktree has checked out goes only
- * with it. `pending` holds Confirm while the answer is on its way. `choices` carries the token of a refusal that a
- * path that could not be resolved decided, for the removal to repeat it, or of an answer that held worktrees back, for
- * the removal to leave them too. */
+ * goes, is a mark after the Trash option's label instead, whose sentence is spoken once it appears; where it is a
+ * missing Git its popover also holds Try again, whose success (or a retry ending in a lost connection) takes that mark
+ * away, so focus it held goes to the Trash checkbox, and whose failure, in whatever words, is spoken again. A branch a
+ * locked worktree has checked out goes only with it. `pending` holds Confirm while the answer is on its way. `choices`
+ * carries the token of a refusal that a path that could not be resolved decided, for the removal to repeat it, or of an
+ * answer that held worktrees back, for the removal to leave them too. */
 export function useProjectRemovalCleanup(projectId: string, trash: boolean, setTrash: (trash: boolean) => void): {
   choices: ReturnType<typeof branchChoices> & { inspection?: string };
   pending: boolean;
@@ -210,6 +210,7 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
   // A missing Git says so, with the link to get it and Try again, which asks what goes along again.
   const failure = found.error === undefined ? undefined : classifyError(found.error);
   const gitMissing = failure?.kind === "actionable" && failure.recovery === "installGit" ? found.error : undefined;
+  const unknownShown = trash && found.failed;
   const unknownMark = gitMissing !== undefined
     ? (
       <>
@@ -239,9 +240,9 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
         <div className="flex flex-col gap-2">
           <div id={trashId}>
             <ConfirmOption isSelected={trash} onChange={setTrash} label={t("dialog.removeProject.trash")} hint={<Message id="dialog.removeProject.trashHint" />}
-              mark={trash && found.failed ? unknownMark : undefined} />
+              mark={unknownShown ? unknownMark : undefined} />
           </div>
-          <DelayedAnnouncer text={trash && gitMissing !== undefined && !found.pending ? t("dialog.removeProject.alongUnknown") : undefined} />
+          <DelayedAnnouncer text={unknownShown && !found.pending ? t("dialog.removeProject.alongUnknown") : undefined} />
           <KeepFocusInDialog>
             {trash && along.length > 0 && (
               <div className="ps-7">

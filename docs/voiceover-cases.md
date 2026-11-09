@@ -1391,6 +1391,8 @@ mapping.
   The join "Trash.2 sessions" is between two separate blocks of the body in the dialog's own description.
 - **Joins in the heard text.** "removed.Its" and "Codex (Default)Fixture turn" have the same cause and the same
   source change as in WARN-3; the new phrases were not heard.
+- **Since recorded.** The source now also writes the mark's sentence into a status region `AFTER_FOCUS_MOVE_DELAY_MS`
+  after the failure arrives (just after the tick); it was not heard.
 - **Capture.** As WARN-3. The ticked checkbox and the mark were focused again from Cancel first, so an unchanged focus
   could not leave a stale last phrase.
 - **Environment.** E9.
@@ -1621,7 +1623,7 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `dialogs/HandoffDialog.tsx` | branch check failed (`firstWriteDelayMs` of `AFTER_FOCUS_MOVE_DELAY_MS`) | none | none | Region mounted with the dialog; a failure arrives after it opened and again on each failed retry. Not heard. |
 | `report/ReportPanel.tsx` | list failure mark's words | none | none | Region mounted through every state of the panel. Not heard. |
 | `sidebar/useGitRetryAnnouncement.tsx`, through `AttendedStatusAnnouncer` | "Git check failed" after a Try again on the branch badge's Git-missing mark that still finds no Git | SA-D is the nearest recorded mechanism (a caller timer of `AFTER_FOCUS_MOVE_DELAY_MS`, attended wait); no complete match established | none | One region per placement, mounted empty for the placement's lifetime outside the row's `role="button"` (beside `TreeRow` in `ProjectNode`, after the focus header, after a focus project group's header); written from the request's answer, `clearAfterRead`, a repeat made distinct by alternating a trailing no-break space. Focus has moved from the mark to the row or header before the answer. Not heard; the sibling-of-a-row-button placement has no recorded case. |
-| `dialogs/BranchCleanupOptions.tsx`, `DelayedAnnouncer` | the missing-Git sentence of the project-removal dialog's "Other worktrees unknown" mark, at its arrival and after a retry that fails again | none | none | Region mounted with the Trash option; each failure written `AFTER_FOCUS_MOVE_DELAY_MS` after it arrives (after a checkbox tick or a retry that closed the mark's popover), emptied while a retry is out so a repeat in the same words is written again. Not heard. |
+| `dialogs/BranchCleanupOptions.tsx`, `DelayedAnnouncer` | the sentence of the project-removal dialog's "Other worktrees unknown" mark, whatever failure brought it, at its arrival and, for a missing Git, after a retry that fails again, in whatever words | none | none | Region mounted with the Trash option; each failure written `AFTER_FOCUS_MOVE_DELAY_MS` after it arrives (after a checkbox tick or a retry that closed the mark's popover), emptied while a retry is out so a repeat in the same words is written again. Not heard. |
 
 Totals: of 34 callers, 13 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
 `AccountLoginAnnouncer`, `PermissionsSection`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,

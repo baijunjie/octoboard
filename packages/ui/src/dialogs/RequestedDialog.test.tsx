@@ -1029,7 +1029,14 @@ it("keeps focus on the Trash option when a retry of the missing-Git check succee
   expect(document.activeElement).toBe(checkbox());
 });
 
+/** What the dialog's status regions hold; the popover's paragraph saying the same sentence is not one of them. */
+const statusText = () => [...document.body.querySelectorAll('[role="status"]')].map((node) => node.textContent).join("");
+/** Moves fake timers on by `ms`, letting what they set off settle. */
+const passTime = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
 it("keeps focus on the Trash option when a retry of the check ends in a lost connection", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
   let release!: () => void;
   const answered = new Promise<void>((resolve) => { release = resolve; });
   let asked = 0;
@@ -1039,7 +1046,7 @@ it("keeps focus on the Trash option when a retry of the check ends in a lost con
         // The first answer is a missing Git, the retry is held until the test lets it end in a lost connection.
         if (asked++ === 0) throw new CodedError("`git` was not found", "binary_not_found", { binary: "git" });
         await answered;
-        throw new Error("Connection lost");
+        throw new CodedError("connection closed", "connection_closed", {});
       }
       return body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null };
     },
@@ -1054,12 +1061,12 @@ it("keeps focus on the Trash option when a retry of the check ends in a lost con
   // Focus is not left on the mark that went; the mark that replaces it is the plain one, which has no Try again.
   expect(document.activeElement).toBe(checkbox());
   expect(unknownMark()).not.toBeNull();
+  // The plain mark's sentence is spoken once the delay after that focus move has passed.
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 50);
+  expect(statusText()).toContain("may be moved to the");
   await act(async () => unknownMark()!.click());
   expect(markRetry()).toBeUndefined();
 });
-
-/** What the dialog's status regions hold; the popover's paragraph saying the same sentence is not one of them. */
-const statusText = () => [...document.body.querySelectorAll('[role="status"]')].map((node) => node.textContent).join("");
 
 it("speaks the missing-Git sentence once the delay after a focus move has passed, and again after a retry fails in the same words", async () => {
   vi.useFakeTimers();
@@ -1075,7 +1082,6 @@ it("speaks the missing-Git sentence once the delay after a focus move has passed
       return body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null };
     },
   });
-  const passTime = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
   checkAll();
   await passTime(0);
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
@@ -1093,6 +1099,29 @@ it("speaks the missing-Git sentence once the delay after a focus move has passed
   expect(statusText()).toBe("");
   await passTime(200);
   expect(statusText()).toContain("may be moved to the");
+});
+
+it("speaks the sentence of a lookup that failed for another reason once the delay after ticking the Trash option has passed", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => {
+      if (body.type === "inspect_project_removal") throw new Error("inspection failed");
+      return body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null };
+    },
+  });
+  checkAll();
+  await passTime(0);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
+  expect(unknownMark()).not.toBeNull();
+  expect(statusText()).toBe("");
+  await passTime(200);
+  expect(statusText()).toContain("may be moved to the");
+  // Unticked, the mark and what was spoken go.
+  checkAll();
+  await passTime(0);
+  expect(unknownMark()).toBeNull();
+  expect(statusText()).toBe("");
 });
 
 it("takes a locked worktree, and the branch it has checked out, along with a project only when chosen, naming the branches back at their tips", async () => {
