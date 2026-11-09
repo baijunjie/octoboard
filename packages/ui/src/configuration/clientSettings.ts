@@ -1,7 +1,6 @@
 import type { PlainMessageKey } from "../i18n/catalog";
 import type { ThemeChoice } from "../preferences/theme";
 import { runInBackground } from "../lifecycle/runInBackground";
-import { isKeepAwakeWhen, keepAwake, KEEP_AWAKE_WHEN_LABEL, keepAwakeWhen, type KeepAwakeWhen } from "../lifecycle/keepAwake";
 import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import type { DocumentSessionOrder, SettingsSection } from "../protocol";
 import { ACTIVE_PROJECT_SORTS, INACTIVE_PROJECT_SORTS, SESSION_SORTS, type SessionOrder } from "../sessions/order";
@@ -17,8 +16,6 @@ export interface ClientSettings {
   markdown_style?: MarkdownStyle;
   run_in_background?: boolean;
   show_menu_bar_icon?: boolean;
-  keep_awake?: boolean;
-  keep_awake_when?: KeepAwakeWhen;
   /** The parts of the session order the document carries that this client knows. */
   session_order?: Partial<SessionOrder>;
 }
@@ -37,13 +34,11 @@ export interface ClientSettingsPlatform {
   backgroundRun: boolean;
   /** Whether the app has a menu bar icon (a notification area icon on Windows) to show or hide (the desktop app). */
   menuBarIcon: boolean;
-  /** Whether the app can hold the computer and its display awake (the desktop app). */
-  keepAwake: boolean;
 }
 
 /** What `platform`'s capabilities (each present only where the platform has it) say this client's platform offers. */
-export function clientSettingsPlatform(platform: { backgroundRun?: unknown; statusItem?: unknown; keepAwake?: unknown }): ClientSettingsPlatform {
-  return { backgroundRun: platform.backgroundRun !== undefined, menuBarIcon: platform.statusItem !== undefined, keepAwake: platform.keepAwake !== undefined };
+export function clientSettingsPlatform(platform: { backgroundRun?: unknown; statusItem?: unknown }): ClientSettingsPlatform {
+  return { backgroundRun: platform.backgroundRun !== undefined, menuBarIcon: platform.statusItem !== undefined };
 }
 
 const APPEARANCES: readonly ThemeChoice[] = ["light", "dark", "system"];
@@ -56,8 +51,7 @@ const APPEARANCE_LABEL: Record<ThemeChoice, PlainMessageKey> = {
 
 /** The values this client adds to a document it saves, for the Settings `sections` the document carries: for General
  * the appearance, the Markdown style and the session order (all three parts); for App behavior whether it runs in the
- * background, whether it shows its menu bar icon, whether it keeps the computer awake and when (each only where the
- * platform has that). */
+ * background, whether it shows its menu bar icon (each only where the platform has that). */
 export function heldClientSettings(
   current: { appearance: ThemeChoice },
   platform: ClientSettingsPlatform,
@@ -73,7 +67,6 @@ export function heldClientSettings(
     ...(sections.includes("app_behavior") && {
       ...(platform.backgroundRun && { run_in_background: runInBackground.get() }),
       ...(platform.menuBarIcon && { show_menu_bar_icon: showMenuBarIcon.get() }),
-      ...(platform.keepAwake && { keep_awake: keepAwake.get(), keep_awake_when: keepAwakeWhen.get() }),
     }),
   };
 }
@@ -86,15 +79,13 @@ export function documentClientSettings(document: unknown, platform: ClientSettin
 /** The client settings `settings` (a document's, or an import's reply) carries that this client can stand behind. */
 export function clientSettingsOf(settings: unknown, platform: ClientSettingsPlatform): ClientSettings {
   if (typeof settings !== "object" || settings === null) return {};
-  const { appearance, markdown_style, run_in_background, show_menu_bar_icon, keep_awake, keep_awake_when, session_order } = settings as Record<string, unknown>;
+  const { appearance, markdown_style, run_in_background, show_menu_bar_icon, session_order } = settings as Record<string, unknown>;
   const order = sessionOrderOf(session_order);
   return {
     ...(APPEARANCES.includes(appearance as ThemeChoice) && { appearance: appearance as ThemeChoice }),
     ...(MARKDOWN_STYLES.includes(markdown_style as MarkdownStyle) && { markdown_style: markdown_style as MarkdownStyle }),
     ...(platform.backgroundRun && typeof run_in_background === "boolean" && { run_in_background }),
     ...(platform.menuBarIcon && typeof show_menu_bar_icon === "boolean" && { show_menu_bar_icon }),
-    ...(platform.keepAwake && typeof keep_awake === "boolean" && { keep_awake }),
-    ...(platform.keepAwake && isKeepAwakeWhen(keep_awake_when) && { keep_awake_when }),
     ...(Object.keys(order).length > 0 && { session_order: order }),
   };
 }
@@ -120,8 +111,6 @@ export function applyClientSettings(values: ClientSettings, setAppearance: (choi
   if (values.markdown_style !== undefined) markdownStyle.set(values.markdown_style);
   if (values.run_in_background !== undefined) runInBackground.set(values.run_in_background);
   if (values.show_menu_bar_icon !== undefined) showMenuBarIcon.set(values.show_menu_bar_icon);
-  if (values.keep_awake !== undefined) keepAwake.set(values.keep_awake);
-  if (values.keep_awake_when !== undefined) keepAwakeWhen.set(values.keep_awake_when);
   if (values.session_order !== undefined) sessionOrderPreference.set({ ...sessionOrderPreference.get(), ...values.session_order });
 }
 
@@ -153,8 +142,6 @@ export function clientSettingValues(
     markdown_style: ["settings.markdownStyle.label", (value) => MARKDOWN_STYLE_NAMES[value], () => "en"],
     run_in_background: ["settings.background.label", onOff],
     show_menu_bar_icon: ["settings.menuBarIcon.label", onOff],
-    keep_awake: ["settings.keepAwake.label", onOff],
-    keep_awake_when: ["settings.keepAwake.when.label", (value) => t(KEEP_AWAKE_WHEN_LABEL[value])],
   };
   return (Object.keys(words) as ScalarClientField[]).flatMap((field) => {
     const [label, word, language] = words[field] as [PlainMessageKey, (value: unknown) => string, ((value: unknown) => string)?];

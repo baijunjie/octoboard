@@ -114,6 +114,37 @@ fn update_settings_applies_all_or_nothing_and_a_blank_clone_dir_clears_it() {
     assert!(events.try_recv().is_err(), "a repeat changes nothing");
 }
 
+/// Prevent sleep and when it holds are changed through `update_settings` like the other switches:
+/// stored, broadcast once, and a repeat changes nothing.
+#[test]
+fn update_settings_stores_prevent_sleep_and_when_it_holds() {
+    use crate::protocol::KeepAwakeWhen;
+    let (state, _dir) = crate::test_support::app_state("coordinator-keep-awake");
+    let settings = state.store.get_settings().unwrap();
+    assert!(!settings.keep_awake);
+    assert_eq!(settings.keep_awake_when, KeepAwakeWhen::Working);
+
+    let mut events = state.subscribe();
+    let change = || SettingsChanges {
+        keep_awake: Some(true),
+        keep_awake_when: Some(KeepAwakeWhen::Always),
+        ..SettingsChanges::default()
+    };
+    update_settings(&state, change()).unwrap();
+    assert!(state.store.keep_awake().unwrap());
+    assert_eq!(
+        state.store.keep_awake_when().unwrap(),
+        KeepAwakeWhen::Always
+    );
+    assert!(matches!(
+        events.try_recv(),
+        Ok(Event::SettingsUpdated { settings })
+            if settings.keep_awake && settings.keep_awake_when == KeepAwakeWhen::Always
+    ));
+    update_settings(&state, change()).unwrap();
+    assert!(events.try_recv().is_err(), "a repeat changes nothing");
+}
+
 /// Turning the setting that starts quota windows on looks over the readings already held;
 /// saying it is on again changes nothing, so it looks at nothing.
 #[tokio::test]

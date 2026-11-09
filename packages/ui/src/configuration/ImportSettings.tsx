@@ -16,7 +16,7 @@ import { Checkbox } from "../primitives";
  * document's own. */
 function currentSettings(settings: NonNullable<Inspection["settings"]>): CurrentSettings {
   const switches = Object.fromEntries(APPLICATION_SWITCHES.map(({ field }) => [field, settings[`current_${field}` as const]])) as Pick<CurrentSettings, (typeof APPLICATION_SWITCHES)[number]["field"]>;
-  return { ...switches, git_workflow: settings.current_git_workflow };
+  return { ...switches, keep_awake_when: settings.current_keep_awake_when, git_workflow: settings.current_git_workflow };
 }
 
 /** The default clone directory of the file, with the directory this machine has where they differ and, there, the choice

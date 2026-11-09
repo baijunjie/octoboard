@@ -12,6 +12,8 @@ export const DEFAULT_SETTINGS: Settings = {
   auto_approve_handoffs: false,
   ask_questions_as_choices: true,
   interface_language: null,
+  keep_awake: false,
+  keep_awake_when: "working",
   auto_select_account: false,
   auto_switch_on_usage_limit: false,
   auto_start_quota_windows: false,

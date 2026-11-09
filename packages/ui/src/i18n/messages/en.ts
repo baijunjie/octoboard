@@ -2022,7 +2022,7 @@ export const en = {
   "configuration.export.paths.remedy": "Share the file only with people you trust.",
   "configuration.export.general.description": "Includes appearance, language, Markdown style and sorting.",
   "configuration.export.appBehavior.description": "Includes resuming sessions on start, running in the background, the {menuBarIcon}, preventing sleep and closing idle terminals.",
-  "configuration.export.appBehavior.description.basic": "Includes resuming sessions on start and closing idle terminals.",
+  "configuration.export.appBehavior.description.basic": "Includes resuming sessions on start, preventing sleep and closing idle terminals.",
   "configuration.export.git.description": "Includes the default clone directory, pulling repositories automatically and the Git workflow.",
   "configuration.export.agentBehavior.description": "Includes which requests are approved automatically and whether questions are asked as choices.",
   "configuration.export.shortcuts.description": "Includes the keyboard shortcuts you have changed.",

@@ -19,7 +19,6 @@ mod diagnostics;
 mod directory_picker;
 mod exit;
 mod host_facts;
-mod keep_awake;
 mod languages;
 mod launch_at_login;
 mod lifecycle;
@@ -80,7 +79,6 @@ pub fn run() {
         .manage(lifecycle::LifecycleState::default())
         .manage(DaemonState::default())
         .manage(tray::TrayState::default())
-        .manage(keep_awake::KeepAwakeState::default())
         .manage(updater::UpdaterState::default())
         .invoke_handler(tauri::generate_handler![
             frontend_exit_heartbeat,
@@ -89,7 +87,7 @@ pub fn run() {
             sidecar::daemon_exit_detail,
             set_menu_labels,
             tray::set_tray_menu,
-            keep_awake::set_keep_awake,
+            tray::set_keep_awake_shown,
             launch_at_login::launch_at_login_status,
             launch_at_login::set_launch_at_login,
             launch_at_login::open_login_items_settings,

@@ -4,7 +4,6 @@ import { sessionOrderValues, type SettingValue } from "./importValues";
 import { isLanguage } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { runInBackground } from "../lifecycle/runInBackground";
-import { keepAwake, keepAwakeWhen } from "../lifecycle/keepAwake";
 import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import { usePlatform } from "../platform/react";
 import { useOctoboardTheme } from "../preferences/theme";
@@ -27,8 +26,6 @@ export function useClientSettingsReview(document: unknown) {
   const markdown = markdownStyle.useValue();
   const inBackground = runInBackground.useValue();
   const menuBarIconShown = showMenuBarIcon.useValue();
-  const keepingAwake = keepAwake.useValue();
-  const keepAwakeWhenValue = keepAwakeWhen.useValue();
   const sessionOrder = sessionOrderPreference.useValue();
   const platformSettings = clientSettingsPlatform(platform);
   const documentSettings = document === undefined ? {} : documentClientSettings(document, platformSettings);
@@ -40,7 +37,6 @@ export function useClientSettingsReview(document: unknown) {
       markdown_style: markdown,
       ...(platformSettings.backgroundRun && { run_in_background: inBackground }),
       ...(platformSettings.menuBarIcon && { show_menu_bar_icon: menuBarIconShown }),
-      ...(platformSettings.keepAwake && { keep_awake: keepingAwake, keep_awake_when: keepAwakeWhenValue }),
     }), ...languageSettingValues(documentLanguage(document), isLanguage(heldLanguage) ? heldLanguage : language)];
   return { platformSettings, setAppearance, sorting, values };
 }

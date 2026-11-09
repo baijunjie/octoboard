@@ -1661,7 +1661,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "configuration.export.paths.remedy": "Передавайте файл только тем, кому доверяете.",
   "configuration.export.general.description": "Включает оформление, язык, стиль Markdown и сортировку.",
   "configuration.export.appBehavior.description": "Включает возобновление сеансов при запуске, работу в фоне, {menuBarIcon}, недопущение сна и закрытие неактивных терминалов.",
-  "configuration.export.appBehavior.description.basic": "Включает возобновление сеансов при запуске и закрытие неактивных терминалов.",
+  "configuration.export.appBehavior.description.basic": "Включает возобновление сеансов при запуске, недопущение сна и закрытие неактивных терминалов.",
   "configuration.export.git.description": "Включает каталог клонирования по умолчанию, автоматическое получение изменений репозиториев и рабочий процесс Git.",
   "configuration.export.agentBehavior.description": "Включает то, какие запросы одобряются автоматически и задаются ли вопросы с выбором вариантов.",
   "configuration.export.shortcuts.description": "Включает сочетания клавиш, которые вы изменили.",

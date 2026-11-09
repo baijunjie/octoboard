@@ -1187,14 +1187,15 @@ export type DocumentSettings = {
    */
   show_menu_bar_icon?: boolean,
   /**
-   * Whether the desktop app holds the computer and its display awake (Prevent sleep), carried
-   * like `run_in_background`: only a client that can (the desktop app) writes it, and only such
-   * a client applies it.
+   * Whether the daemon holds its host awake (Prevent sleep, see `Settings.keep_awake`). The
+   * daemon builds it when the App behavior section is exported and applies it from an import,
+   * whether or not this host can hold: the value is stored either way.
    */
   keep_awake?: boolean,
   /**
-   * When Prevent sleep holds: `always`, or `working` (while a session is working), carried like
-   * `keep_awake`. A value the importing client does not know is ignored.
+   * When Prevent sleep holds: `always`, or `working` (while a session is working; see
+   * `Settings.keep_awake_when`). Carried as text so that a name this build does not know is
+   * left out of an import rather than refusing the document.
    */
   keep_awake_when?: string,
   auto_close_idle_shell_terminals?: boolean,
@@ -1373,6 +1374,12 @@ export type Event = {
    */
   host: HostInfo,
   /**
+   * Whether the daemon is holding its host awake right now (Prevent sleep, see
+   * `crate::keep_awake`): the setting is on, its `keep_awake_when` is met and the host
+   * granted the hold. Runtime state, not stored.
+   */
+  keep_awake_held: boolean,
+  /**
    * Every shell terminal the daemon holds, running or exited, oldest first. Runtime state,
    * not stored.
    */
@@ -1403,6 +1410,10 @@ export type Event = {
 | {
   "type": "settings_updated",
   settings: Settings,
+}
+| {
+  "type": "keep_awake_held_updated",
+  keep_awake_held: boolean,
 }
 | {
   "type": "console_upserted",
@@ -2040,6 +2051,12 @@ export type HostInfo = {
    * The host's system settings app, for wording a setting to change there.
    */
   settings: HostSettingsName,
+  /**
+   * Whether the host can be held awake (Prevent sleep, `Settings.keep_awake`): always on macOS
+   * and Windows, and on Linux only where logind answers on the system bus. When false, the
+   * setting changes nothing there and a client does not offer it.
+   */
+  keep_awake: boolean,
 };
 
 export type HostKind = "local" | "ssh";
@@ -2335,6 +2352,17 @@ export type InspectedSettings = {
    */
   resume_sessions_on_start: boolean,
   current_resume_sessions_on_start: boolean,
+  /**
+   * The document's Prevent sleep, or this machine's own when the document carries none.
+   */
+  keep_awake: boolean,
+  current_keep_awake: boolean,
+  /**
+   * The document's choice of when it holds, or this machine's own when the document carries
+   * none or names one this build does not know.
+   */
+  keep_awake_when: KeepAwakeWhen,
+  current_keep_awake_when: KeepAwakeWhen,
   git_workflow: GitWorkflowSettings,
   current_git_workflow: GitWorkflowSettings,
   /**
@@ -2354,6 +2382,11 @@ export type InspectedSettings = {
    */
   current_default_clone_dir: string,
 };
+
+/**
+ * When Prevent sleep holds the daemon's host awake (`Settings.keep_awake`).
+ */
+export type KeepAwakeWhen = "always" | "working";
 
 /**
  * The model and reasoning effort an agent's sessions are launched with, in the agent's own
@@ -3453,6 +3486,8 @@ export type Request = {
    * is refused.
    */
   interface_language?: string,
+  keep_awake?: boolean,
+  keep_awake_when?: KeepAwakeWhen,
   auto_select_account?: boolean,
   auto_switch_on_usage_limit?: boolean,
   auto_start_quota_windows?: boolean,
@@ -4204,6 +4239,8 @@ export type RequestBody = {
    * is refused.
    */
   interface_language?: string,
+  keep_awake?: boolean,
+  keep_awake_when?: KeepAwakeWhen,
   auto_select_account?: boolean,
   auto_switch_on_usage_limit?: boolean,
   auto_start_quota_windows?: boolean,
@@ -4852,6 +4889,16 @@ export type Settings = {
    * reaches every window. Carried by a configuration export in its General section.
    */
   interface_language: string | null,
+  /**
+   * Prevent sleep: whether the daemon holds its host awake (see `crate::keep_awake`), when
+   * `keep_awake_when` says it should. Off unless the user turned it on. It acts only where the
+   * host can be held (`HostInfo::keep_awake`); elsewhere it is stored and does nothing.
+   */
+  keep_awake: boolean,
+  /**
+   * When Prevent sleep holds. `working` unless the user chose `always`.
+   */
+  keep_awake_when: KeepAwakeWhen,
   /**
    * Whether a new session whose account was left out runs on the account of its agent whose
    * weekly quota resets soonest and still has some left. Off unless the user turned it on.

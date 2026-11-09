@@ -370,7 +370,7 @@ function tauriKeepAwake(): KeepAwakeCapability {
   return {
     async set(held) {
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("set_keep_awake", { held });
+      await invoke("set_keep_awake_shown", { held });
     },
   };
 }

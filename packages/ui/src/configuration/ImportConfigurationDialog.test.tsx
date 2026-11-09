@@ -11,7 +11,6 @@ import { press as pressElement } from "../components/alerts/detailsTestSupport";
 import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
-import { keepAwake, keepAwakeWhen } from "../lifecycle/keepAwake";
 import { runInBackground } from "../lifecycle/runInBackground";
 import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import { ConfigurationFileError } from "../platform";
@@ -309,7 +308,7 @@ const FOCUS = { code: "KeyK", primary: true, shift: true };
 const echoing = (settings: Record<string, unknown> = {}) => (body: ClientRequestBody): Promise<Event> => {
   if (body.type !== "import_configuration") return reply(body);
   const document = (body.document as { settings?: Record<string, unknown> }).settings ?? {};
-  const passedThrough = Object.fromEntries(["keyboard_shortcuts", "appearance", "markdown_style", "run_in_background", "show_menu_bar_icon", "keep_awake", "keep_awake_when", "interface_language", "session_order"].flatMap((field) => (document[field] === undefined || document[field] === null ? [] : [[field, document[field]]])));
+  const passedThrough = Object.fromEntries(["keyboard_shortcuts", "appearance", "markdown_style", "run_in_background", "show_menu_bar_icon", "interface_language", "session_order"].flatMap((field) => (document[field] === undefined || document[field] === null ? [] : [[field, document[field]]])));
   const applied = { ...MIXED_RESULT.settings_applied!, ...passedThrough, ...settings };
   return Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: body.apply_settings?.length ? applied : null });
 };
@@ -337,7 +336,7 @@ it("groups the application settings as the Settings dialog does, each group in t
   const groups = settingGroupsOf(document.body.querySelector("[role=tabpanel]")!);
   expect(groups.map((group) => group.title)).toEqual(["General", "App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"]);
   expect(groups[0].lines).toEqual([]);
-  expect(groups[1].lines).toEqual(["Resume sessions on start", "Close idle terminals when closing the panel"]);
+  expect(groups[1].lines).toEqual(["Resume sessions on start", "Prevent sleep", "When to prevent sleep", "Close idle terminals when closing the panel"]);
   expect(groups[2].lines).toEqual(["Default clone directory", "Automatically pull repositories", "Git workflow"]);
   expect(groups[3].lines).toEqual([
     "Automatically approve session requests",
@@ -359,14 +358,13 @@ it("lists the App behavior card in the order of the section on a desktop app, th
       save: vi.fn(),
       open: vi.fn(async () => ({
         name: "mine.json",
-        text: JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, run_in_background: true, show_menu_bar_icon: false, keep_awake: true, keep_awake_when: "always" } }),
+        text: JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, run_in_background: true, show_menu_bar_icon: false } }),
       })),
     },
     {},
     {
       backgroundRun: { set: vi.fn(async () => {}) },
       statusItem: { setMenu: async () => {}, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} },
-      keepAwake: { set: vi.fn(async () => {}) },
     },
   );
   await press("Choose file");
@@ -453,15 +451,13 @@ it("leaves this device's keyboard shortcuts alone when the document carries none
 
 describe("the settings only this client holds, and the language", () => {
   const carrying = (settings: Record<string, unknown>) => JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, ...settings } });
-  const FILE = { appearance: "dark", markdown_style: "github", interface_language: "ja", run_in_background: true, show_menu_bar_icon: false, keep_awake: true, keep_awake_when: "always" };
+  const FILE = { appearance: "dark", markdown_style: "github", interface_language: "ja", run_in_background: true, show_menu_bar_icon: false };
   const restoreOnFinish = () =>
     onTestFinished(() => {
       markdownStyle.set("tailwind");
       setLanguage("en");
       runInBackground.set(false);
       showMenuBarIcon.set(true);
-      keepAwake.set(false);
-      keepAwakeWhen.set("working");
       localStorage.removeItem("heroui-theme");
     });
 
@@ -582,36 +578,6 @@ describe("the settings only this client holds, and the language", () => {
     expect(resultSettingLines()["Show notification area icon"]).toEqual({ badge: "Off" });
   });
 
-  it("take Prevent sleep and when where the platform can hold the computer awake", async () => {
-    restoreOnFinish();
-    mountDialog(
-      (onClose) => <ImportConfigurationDialog onClose={onClose} />,
-      echoing(),
-      { save: vi.fn(), open: vi.fn(async () => ({ name: "mine.json", text: carrying(FILE) })) },
-      {},
-      { keepAwake: { set: vi.fn(async () => {}) } },
-    );
-    await press("Choose file");
-    await checkSettings();
-    await openTab("Settings");
-    expect(settingLines()["Prevent sleep"]).toEqual({ badge: "Set to the file's", note: "On (now Off)" });
-    expect(settingLines()["When to prevent sleep"]).toEqual({ badge: "Set to the file's", note: "Always (now While sessions work)" });
-    await press("Import");
-    act(() => setLanguage("en"));
-    await openTab("Settings");
-    expect(keepAwake.get()).toBe(true);
-    expect(keepAwakeWhen.get()).toBe("always");
-    expect(resultSettingLines()["Prevent sleep"]).toEqual({ badge: "On" });
-    expect(resultSettingLines()["When to prevent sleep"]).toEqual({ badge: "Always" });
-  });
-
-  it("leave Prevent sleep out where the platform cannot hold the computer awake", async () => {
-    restoreOnFinish();
-    await reviewingSettings({ text: carrying(FILE) });
-    expect(settingLines()["Prevent sleep"]).toBeUndefined();
-    expect(settingLines()["When to prevent sleep"]).toBeUndefined();
-  });
-
   it("are left alone when the settings are not imported", async () => {
     restoreOnFinish();
     await reviewing({ text: carrying(FILE), reply: echoing() });
@@ -631,6 +597,27 @@ describe("the settings only this client holds, and the language", () => {
     expect(markdownStyle.get()).toBe("tailwind");
     expect(currentLanguage()).toBe("en");
   });
+});
+
+it("leaves Prevent sleep to the daemon: its lines come from the inspection and the reply, and the file's own text does not make them", async () => {
+  onTestFinished(() => setLanguage("en"));
+  // The file's own text says the opposite of what the daemon's inspection and reply do.
+  const text = JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, keep_awake: false, keep_awake_when: "working" } });
+  mountDialog(
+    (onClose) => <ImportConfigurationDialog onClose={onClose} />,
+    echoing({ keep_awake: true, keep_awake_when: "always" }),
+    { save: vi.fn(), open: vi.fn(async () => ({ name: "mine.json", text })) },
+  );
+  await press("Choose file");
+  await checkSettings();
+  await openTab("Settings");
+  expect(settingLines()["Prevent sleep"]).toEqual({ badge: "Turns on", note: undefined });
+  expect(settingLines()["When to prevent sleep"]).toEqual({ badge: "Set to the file's", note: "Always (now While sessions work)" });
+  await press("Import");
+  act(() => setLanguage("en"));
+  await openTab("Settings");
+  expect(resultSettingLines()["Prevent sleep"]).toEqual({ badge: "On" });
+  expect(resultSettingLines()["When to prevent sleep"]).toEqual({ badge: "Always" });
 });
 
 describe("the default clone directory", () => {

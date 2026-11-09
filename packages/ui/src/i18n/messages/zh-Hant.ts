@@ -1785,7 +1785,7 @@ export const zhHant: Translation<"other"> = {
   "configuration.export.paths.remedy": "請只分享給你信任的人。",
   "configuration.export.general.description": "包含外觀、語言、Markdown 樣式和排序。",
   "configuration.export.appBehavior.description": "包含啟動時恢復工作階段、在背景執行、{menuBarIcon}、防止睡眠和關閉閒置終端機。",
-  "configuration.export.appBehavior.description.basic": "包含啟動時恢復工作階段和關閉閒置終端機。",
+  "configuration.export.appBehavior.description.basic": "包含啟動時恢復工作階段、防止睡眠和關閉閒置終端機。",
   "configuration.export.git.description": "包含預設複製目錄、自動提取儲存庫和 Git 工作流程。",
   "configuration.export.agentBehavior.description": "包含自動批准哪些請求，以及是否以選項形式提問。",
   "configuration.export.shortcuts.description": "包含你變更過的鍵盤快速鍵。",

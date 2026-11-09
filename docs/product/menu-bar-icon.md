@@ -38,10 +38,14 @@ looks:
 - **One bar** otherwise: an **outlined capsule** of **18 × 4 pt**, with a hollow unfilled portion; its outline is
   **1 pt**, a quarter of its height.
 
-**While Octoboard keeps the computer awake** (see `docs/product/keeping-the-computer-awake.md`) the whole of both eye
-sockets turns solid red, in the system red, which macOS resolves for a light or dark menu bar; their shape stays the
-same. It shows only while the computer is actually being kept awake, not merely while Prevent sleep is on, and it goes
-with either attention state and with or without a quota.
+**While Octoboard keeps the computer awake** — while the daemon reports that it holds its host awake (see "Whether the
+computer is held now" in `docs/product/keeping-the-computer-awake.md`) — the whole of both eye sockets turns solid red,
+in the system red, which macOS resolves for a light or dark menu bar; their shape stays the same. It shows only while
+the computer is actually being kept awake, not merely while Prevent sleep is on, and it goes with either attention state
+and with or without a quota. The window's UI passes what the daemon reports on to the icon, so the eyes turn red only
+while that UI is connected to the daemon: not before it has loaded and connected, not while it has lost its connection
+to the daemon, and never on the screen shown when the daemon failed to start, where there is no daemon to hold
+anything.
 
 The attention dot stays at the upper right, clear of the bars, and neither the dot, the space cleared around it, nor
 the bars ever cover the eyes. Without a readable quota the bars disappear; without attention, a quota or the computer
@@ -60,9 +64,10 @@ not to the window, whose layout is what a right-to-left language mirrors (see `d
 The look changes together with the menu: a change that has to wait for an open menu to close (see the end of "The icon's
 menu" below) changes the look and its label only when it reaches the menu, so both reflect the same session snapshot.
 The octopus's dot clearance and the orange dot always appear and go together. The red eyes are the exception to
-waiting: they come and go as soon as the computer starts or stops being kept awake, even while a menu is open, and the
-accessible name follows them. Until the window's UI has sent its first menu — and throughout on the screen shown when
-the daemon failed to start — the icon is the octopus alone, apart from the red eyes while the computer is kept awake.
+waiting: they come and go as soon as the window's UI learns that the daemon started or stopped keeping the computer
+awake, even while a menu is open, and the accessible name follows them. Until the window's UI has sent its first menu
+the icon is the octopus alone, apart from the red eyes while the computer is kept awake; on the screen shown when the
+daemon failed to start it is the octopus alone throughout.
 
 ## Clicking the icon
 

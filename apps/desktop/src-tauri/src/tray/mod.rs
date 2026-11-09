@@ -114,7 +114,7 @@ const MENU_OPENED_EVENT: &str = "tray-menu-opened";
 pub struct TrayState {
     tracking: Mutex<MenuTracking>,
     icon_shown: Mutex<IconState>,
-    /// What the icon is asked to show, from the menu last applied and the keep-awake hold.
+    /// What the icon is asked to show, from the menu last applied and whether the computer is kept awake.
     look: Mutex<Look>,
     /// What `finish_menu` is to do to the menu last set, until the menu first opens. It is replaced
     /// in the same pass as the menu, and taken only for a menu `is_tray_menu` matched, so it never
@@ -186,9 +186,15 @@ fn apply(app: &AppHandle, menu: &TrayMenu) -> Result<(), String> {
     })
 }
 
-/// Tells the icon whether the computer is now kept awake (`keep_awake::set_keep_awake`), which it
-/// shows at once, whether or not a menu is open: the hold is not part of the menu's snapshot.
-pub fn keep_awake_changed(app: &AppHandle, held: bool) -> Result<(), String> {
+/// Tells the icon whether the daemon is now keeping the computer awake (Prevent sleep, which the
+/// daemon holds itself: the UI hands over the `keep_awake_held` it reports), which the icon shows
+/// at once, whether or not a menu is open: the hold is not part of the menu's snapshot.
+#[tauri::command]
+pub fn set_keep_awake_shown(app: AppHandle, held: bool) -> Result<(), String> {
+    keep_awake_changed(&app, held)
+}
+
+fn keep_awake_changed(app: &AppHandle, held: bool) -> Result<(), String> {
     let tray = app
         .tray_by_id(TRAY_ID)
         .ok_or_else(|| "the menu bar icon does not exist".to_string())?;

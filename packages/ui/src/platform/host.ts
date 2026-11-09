@@ -20,7 +20,7 @@ export type HostFacts = {
   badge: boolean;
   /** Closing the window can keep the application running. */
   runInBackground: boolean;
-  /** The application can hold the computer and its display awake. */
+  /** The shell can show the daemon's hold on the computer awake on its menu bar icon. */
   keepAwake: boolean;
   /** The system can open the application when the user logs in. */
   launchAtLogin: boolean;

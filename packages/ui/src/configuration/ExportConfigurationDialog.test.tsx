@@ -7,7 +7,6 @@ import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnounce
 import { consoleOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import { setLanguage } from "../i18n/language";
-import { keepAwake, keepAwakeWhen } from "../lifecycle/keepAwake";
 import { runInBackground } from "../lifecycle/runInBackground";
 import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import type { SavedConfigurationFile } from "../platform";
@@ -163,15 +162,15 @@ it("notes under each section what it includes", () => {
   expect(note("Include agent accounts")).toContain("login credentials are not included");
 });
 
-it("notes under App behavior only the settings its platform can hold", () => {
+it("notes under App behavior the settings every platform holds", () => {
   const note = () => document.getElementById(box("App behavior").getAttribute("aria-describedby")!)!.textContent;
   mount();
-  expect(note()).toBe("Includes resuming sessions on start and closing idle terminals.");
+  expect(note()).toBe("Includes resuming sessions on start, preventing sleep and closing idle terminals.");
 });
 
-it("notes under App behavior the background run, the host's name for its icon and preventing sleep where its platform has them", () => {
+it("notes under App behavior the background run and the host's name for its icon where its platform has them", () => {
   const statusItem = { setMenu: async () => {}, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
-  mount(undefined, main, { backgroundRun: { set: vi.fn(async () => {}) }, statusItem, keepAwake: { set: vi.fn(async () => {}) } });
+  mount(undefined, main, { backgroundRun: { set: vi.fn(async () => {}) }, statusItem });
   expect(document.getElementById(box("App behavior").getAttribute("aria-describedby")!)!.textContent).toBe(
     "Includes resuming sessions on start, running in the background, the notification area icon, preventing sleep and closing idle terminals.",
   );
@@ -321,23 +320,6 @@ it("adds whether this client shows its menu bar icon where its platform has one"
   onTestFinished(() => showMenuBarIcon.set(true));
   const statusItem = { setMenu: async () => {}, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
   expect((await savedSettings(undefined, { statusItem })).saved.show_menu_bar_icon).toBe(false);
-});
-
-it("adds no Prevent sleep choice where its platform cannot hold the computer awake", async () => {
-  const { saved } = await savedSettings(undefined);
-  expect(saved).not.toHaveProperty("keep_awake");
-  expect(saved).not.toHaveProperty("keep_awake_when");
-});
-
-it("adds whether this client prevents sleep, and when, where its platform can", async () => {
-  keepAwake.set(true);
-  keepAwakeWhen.set("always");
-  onTestFinished(() => {
-    keepAwake.set(false);
-    keepAwakeWhen.set("working");
-  });
-  const { saved } = await savedSettings(undefined, { keepAwake: { set: vi.fn(async () => {}) } });
-  expect(saved).toMatchObject({ keep_awake: true, keep_awake_when: "always" });
 });
 
 it("leaves a single console's export as the daemon sent it, whatever this client has changed", async () => {

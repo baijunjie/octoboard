@@ -133,6 +133,8 @@ function exportedSettings(state: State, sections: readonly SettingsSection[]): D
     ...(has("general") && settings.interface_language !== null && { interface_language: settings.interface_language }),
     ...(has("app_behavior") && {
       resume_sessions_on_start: settings.resume_sessions_on_start,
+      keep_awake: settings.keep_awake,
+      keep_awake_when: settings.keep_awake_when,
       auto_close_idle_shell_terminals: settings.auto_close_idle_shell_terminals,
     }),
     ...(has("git") && {
@@ -400,8 +402,6 @@ const PASSED_THROUGH = {
   session_order: "general",
   run_in_background: "app_behavior",
   show_menu_bar_icon: "app_behavior",
-  keep_awake: "app_behavior",
-  keep_awake_when: "app_behavior",
 } as const satisfies Partial<Record<keyof DocumentSettings, SettingsSection>>;
 
 /** The result with the document's client-held settings (see `PASSED_THROUGH`) of the sections asked for echoed in

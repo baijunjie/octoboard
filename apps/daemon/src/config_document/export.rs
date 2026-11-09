@@ -172,6 +172,9 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
                     settings.auto_close_idle_shell_terminals =
                         Some(store.auto_close_idle_shell_terminals()?);
                     settings.resume_sessions_on_start = Some(store.resume_sessions_on_start()?);
+                    settings.keep_awake = Some(store.keep_awake()?);
+                    settings.keep_awake_when =
+                        Some(store.keep_awake_when()?.wire_name().to_string());
                 }
                 SettingsSection::Git => {
                     settings.auto_pull_repositories = Some(store.auto_pull_repositories()?);
@@ -625,6 +628,8 @@ mod tests {
                 auto_approve_handoffs: Some(false),
                 ask_questions_as_choices: Some(true),
                 resume_sessions_on_start: Some(false),
+                keep_awake: Some(false),
+                keep_awake_when: Some("working".to_string()),
                 git_workflow: Some(GitWorkflowSettings::default()),
                 default_clone_dir: Some(clone_dir),
                 ..Default::default()
@@ -1071,6 +1076,8 @@ mod tests {
             keys(vec![AppBehavior]),
             [
                 "auto_close_idle_shell_terminals",
+                "keep_awake",
+                "keep_awake_when",
                 "resume_sessions_on_start"
             ]
         );

@@ -1661,7 +1661,7 @@ export const it: Translation<"one" | "many" | "other"> = {
   "configuration.export.paths.remedy": "Condividi il file solo con persone di cui ti fidi.",
   "configuration.export.general.description": "Include l’aspetto, la lingua, lo stile Markdown e l’ordinamento.",
   "configuration.export.appBehavior.description": "Include la ripresa delle sessioni all’avvio, l’esecuzione in background, l’{menuBarIcon}, l’impedimento della sospensione e la chiusura dei terminali inattivi.",
-  "configuration.export.appBehavior.description.basic": "Include la ripresa delle sessioni all’avvio e la chiusura dei terminali inattivi.",
+  "configuration.export.appBehavior.description.basic": "Include la ripresa delle sessioni all’avvio, l’impedimento della sospensione e la chiusura dei terminali inattivi.",
   "configuration.export.git.description": "Include la directory di clonazione predefinita, il pull automatico dei repository e il flusso di lavoro Git.",
   "configuration.export.agentBehavior.description": "Include quali richieste vengono approvate automaticamente e se le domande vengono poste con opzioni.",
   "configuration.export.shortcuts.description": "Include le abbreviazioni da tastiera che hai modificato.",

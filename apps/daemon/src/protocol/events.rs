@@ -158,6 +158,10 @@ pub enum Event {
         /// can make file links, and how its interface names the Trash (`trash`) and its settings
         /// app (`settings`).
         host: HostInfo,
+        /// Whether the daemon is holding its host awake right now (Prevent sleep, see
+        /// `crate::keep_awake`): the setting is on, its `keep_awake_when` is met and the host
+        /// granted the hold. Runtime state, not stored.
+        keep_awake_held: bool,
         /// Every shell terminal the daemon holds, running or exited, oldest first. Runtime state,
         /// not stored.
         shell_terminals: Vec<ShellTerminal>,
@@ -199,6 +203,12 @@ pub enum Event {
     /// `Settings` later.
     SettingsUpdated {
         settings: Settings,
+    },
+    /// Whether the daemon is holding its host awake changed (`keep_awake_held` of the `snapshot`).
+    /// It follows the setting, the sessions' work and what the host allows, so it is sent on its
+    /// own rather than with the settings.
+    KeepAwakeHeldUpdated {
+        keep_awake_held: bool,
     },
     ConsoleUpserted {
         console: Console,

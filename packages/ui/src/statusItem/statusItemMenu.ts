@@ -44,7 +44,7 @@ export interface StatusItemMenuSource {
 /** The sessions in summary statuses, in the sidebar's order,
  * each shown status under its own heading, then a quota submenu per available agent. The icon shows its
  * attention dot (`attention`) while any session waits for the user or is dormant, and carries the icon's
- * accessible name for while the shell holds the computer awake (`keep_awake_label`). */
+ * accessible name for while the daemon holds the computer awake (`keep_awake_label`). */
 export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenuDraft {
   const { consoles, projects, sessions, consoleMap, projectMap, quota } = source;
   const statuses = new Map(sessions.map((session) => [session, sessionShownStatusKind(session, source.delegating, source.queuedSwitches)]));

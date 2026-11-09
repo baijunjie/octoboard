@@ -837,6 +837,43 @@ async fn settings_are_listed_without_directories_and_the_general_switches_are_wr
     .unwrap();
     assert_eq!(resumed["resume_sessions_on_start"], true);
     assert!(state.store.resume_sessions_on_start().unwrap());
+    // Prevent sleep, and when it holds, are App behavior settings an agent may read and change.
+    assert_eq!(read["keep_awake"], false);
+    assert_eq!(read["keep_awake_when"], "working");
+    let kept_awake = call(
+        &state,
+        "a",
+        "update_settings",
+        &arguments(json!({ "keep_awake": true, "keep_awake_when": " always " })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(kept_awake["keep_awake"], true);
+    assert_eq!(kept_awake["keep_awake_when"], "always");
+    assert!(state.store.keep_awake().unwrap());
+    assert_eq!(
+        state.store.keep_awake_when().unwrap(),
+        crate::protocol::KeepAwakeWhen::Always
+    );
+    let left = call(
+        &state,
+        "a",
+        "update_settings",
+        &arguments(json!({ "resume_sessions_on_start": false })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(left["keep_awake"], true);
+    assert_eq!(left["keep_awake_when"], "always");
+    let unknown = refused(
+        &state,
+        "a",
+        "update_settings",
+        json!({ "keep_awake": false, "keep_awake_when": "sometimes" }),
+    )
+    .await;
+    assert!(unknown.contains("always"), "{unknown}");
+    assert!(state.store.keep_awake().unwrap());
     // Each agent's default account, and the one account the state holds.
     assert_eq!(
         read["accounts"].as_array().unwrap().len(),

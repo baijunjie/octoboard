@@ -59,6 +59,10 @@ pub struct HostInfo {
     pub trash: HostTrashName,
     /// The host's system settings app, for wording a setting to change there.
     pub settings: HostSettingsName,
+    /// Whether the host can be held awake (Prevent sleep, `Settings.keep_awake`): always on macOS
+    /// and Windows, and on Linux only where logind answers on the system bus. When false, the
+    /// setting changes nothing there and a client does not offer it.
+    pub keep_awake: bool,
 }
 
 impl From<HostFacts> for HostInfo {
@@ -82,6 +86,7 @@ impl From<HostFacts> for HostInfo {
                 SettingsName::SystemSettings => HostSettingsName::SystemSettings,
                 SettingsName::Settings => HostSettingsName::Settings,
             },
+            keep_awake: facts.keep_awake,
         }
     }
 }
@@ -98,6 +103,7 @@ mod tests {
             file_links: false,
             trash: TrashName::RecycleBin,
             settings: SettingsName::Settings,
+            keep_awake: false,
         }))
         .unwrap();
         assert_eq!(
@@ -108,6 +114,7 @@ mod tests {
                 "file_links": false,
                 "trash": "recycle_bin",
                 "settings": "settings",
+                "keep_awake": false,
             })
         );
         let linux = serde_json::to_value(HostInfo::from(HostFacts {
@@ -116,10 +123,12 @@ mod tests {
             file_links: true,
             trash: TrashName::Trash,
             settings: SettingsName::Settings,
+            keep_awake: true,
         }))
         .unwrap();
         assert_eq!(linux["trash"], "trash");
         assert_eq!(linux["settings"], "settings");
+        assert_eq!(linux["keep_awake"], true);
         let here = serde_json::to_value(HostInfo::from(HostFacts::current())).unwrap();
         assert_eq!(here["os"] == "macos", cfg!(target_os = "macos"));
         assert_eq!(

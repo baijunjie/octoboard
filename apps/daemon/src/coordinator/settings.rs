@@ -7,7 +7,9 @@ use anyhow::Result;
 
 use crate::accounts::quotas;
 use crate::project_git;
-use crate::protocol::{error_code, AgentId, CodedError, Event, GitWorkflowSettingsChanges};
+use crate::protocol::{
+    error_code, AgentId, CodedError, Event, GitWorkflowSettingsChanges, KeepAwakeWhen,
+};
 use crate::providers::{SettingDescriptor, SettingValue};
 use crate::state::{broadcast_settings, AppState};
 
@@ -74,6 +76,8 @@ pub struct SettingsChanges {
     pub ask_questions_as_choices: Option<bool>,
     /// Refused unless it is a tag the interface offers.
     pub interface_language: Option<String>,
+    pub keep_awake: Option<bool>,
+    pub keep_awake_when: Option<KeepAwakeWhen>,
     pub auto_select_account: Option<bool>,
     pub auto_switch_on_usage_limit: Option<bool>,
     pub auto_start_quota_windows: Option<bool>,
@@ -103,6 +107,8 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_approve_handoffs,
         ask_questions_as_choices,
         interface_language,
+        keep_awake,
+        keep_awake_when,
         auto_select_account,
         auto_switch_on_usage_limit,
         auto_start_quota_windows,
@@ -172,6 +178,12 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(tag) = interface_language {
         changed |= state.store.set_interface_language(&tag)?;
+    }
+    if let Some(value) = keep_awake {
+        changed |= state.store.set_keep_awake(value)?;
+    }
+    if let Some(value) = keep_awake_when {
+        changed |= state.store.set_keep_awake_when(value)?;
     }
     if let Some(value) = auto_select_account {
         changed |= state.store.set_auto_select_account(value)?;

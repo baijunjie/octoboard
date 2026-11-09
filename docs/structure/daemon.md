@@ -58,7 +58,7 @@ and records tests replay.
 - `src/protocol/` — Rust types of the wire protocol, one file per concern, re-exported as `crate::protocol`; `codes.rs`
   is the `Code` registry (a core code can be made only there; a provider's code only through `Code::of_provider` from
   its declaration), `errors.rs` the one mapping from a failure to an `error` reply (with `CodedError::require_offered`,
-  which refuses an operation a provider does not offer as `provider_unsupported`), `version.rs` the protocol generation and the daemon's version the `hello` frame states, `host.rs` `HostInfo`, the snapshot's `host` (os, path style, file links, and how the host names its Trash and settings app, built from `platform::HostFacts`), `bindings.rs` the test
+  which refuses an operation a provider does not offer as `provider_unsupported`), `version.rs` the protocol generation and the daemon's version the `hello` frame states, `host.rs` `HostInfo`, the snapshot's `host` (os, path style, file links, whether the host can be held awake, and how the host names its Trash and settings app, built from `platform::HostFacts`), `bindings.rs` the test
   that renders the types (and the generation) into `packages/ui/src/protocol.generated.ts`.
 - `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode.
 
@@ -113,8 +113,8 @@ and records tests replay.
   write Octoboard's database the user can fix (read-only data folder, full disk, a file that cannot be opened or read)
   as `store_write_failed`.
 - `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,
-  titles, turns, sharing status, git status, requests, availability, hooks to the automatic account switch, forgetting
-  a record), plus `bindings.rs` (the read-only walks over which session is bound to which) and `refusals.rs` (the
+  titles, turns, sharing status, git status, requests, availability, hooks to the automatic account switch, whether the
+  host is held awake, forgetting a record), plus `bindings.rs` (the read-only walks over which session is bound to which) and `refusals.rs` (the
   locked and archived refusals every operation on a session shares).
 - `src/agents/` — what the daemon knows about each agent CLI apart from launching it: availability (`availability.rs`;
   `redetermine` judges one agent again after an update changed what its binary resolves to), `cli/` (the installed
@@ -218,7 +218,9 @@ and records tests replay.
 - `src/processes/` — the rest: `subprocess.rs` (running a spawned process within bounds; what a stop reaches, the signals
   and the pipe readers are `platform::proc`'s).
 - `src/platform/` — the only place OS-specific code lives, with no use of anything else in the crate, so any module may
-  use it. `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and
+  use it. `sleep/` holding the host awake (`Hold`, `available`; macOS IOKit assertions, a Windows power request,
+  Linux's logind inhibitor lock and the session bus's screen saver inhibition over `zbus`), whose answer is
+  `HostFacts::keep_awake`; `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and
   children, a descriptor's path, sockets, working directory), one reader per OS, shared by the ledger's `table.rs`,
   `platform::proc` and `terminal/shell/busy.rs`; `open/` the launcher commands `host_open` starts (file manager, default
   application, system terminal), chosen by an OS name so every OS's choice is tested anywhere
@@ -249,7 +251,7 @@ and records tests replay.
   as its settle window; contract tests in `term/contract_tests.rs`; on Windows the pseudoconsole is ConPTY, run on the bundled `conpty.dll` beside the daemon's executable when it loads, which starts `OpenConsole.exe` from the same directory or from a subdirectory named for the machine's native architecture (`x64` or `arm64`, which an x64 daemon emulated on ARM64 reads as `arm64`): the installer ships the x64 `conpty.dll` with an `OpenConsole.exe` in each of the two subdirectories (`scripts/fetch-conpty.mjs --installer`), so the x64 DLL on x64 hardware loads `x64\OpenConsole.exe` and under emulation on ARM64 finds `arm64\OpenConsole.exe`; with no DLL, or one that fails to load, the system's pseudoconsole is used (a failed load is logged as a warning), and a DLL that finds no `OpenConsole.exe` starts the inbox console host, which is logged as a warning); on Windows the output is drained after a close that races the last reader's drop, quit keys of a polite stop wait behind a bracketed paste being written rather than landing inside it, and a failed wait in a transfer is reported as an error; `random/` bytes from the host's random source; `policy/` what an administrator sets for a product: the directory they keep its managed files in (`managed_dir`), a Unix program's system configuration directory under `/etc`, none on Windows (`system_config_dir`), and its
   registry policy (the Windows registry's `Policies` key; elsewhere none), read through
   `registry.rs`, the Windows-only reader of registry string values; `test_helper.rs` the test binary re-run as the
-  helper process both contract suites start; `HostFacts` (os, path style, file links, and the host's words for its Trash and settings app; the snapshot's `host`) in `mod.rs`.
+  helper process both contract suites start; `HostFacts` (os, path style, file links, whether the host can be held awake, and the host's words for its Trash and settings app; the snapshot's `host`) in `mod.rs`.
 
 ### Agent records, hooks, adapters and MCP
 
@@ -277,6 +279,10 @@ and records tests replay.
   provider's payloads, the per-session ordered queue of events, and applying an event through the session's provider's
   interpreter (`apply.rs`, which also has the provider's record store arm the record watch the interpreter asks
   for).
+- `src/keep_awake/` — Prevent sleep: the task `main` starts that holds the host awake (through `platform::sleep`) while
+  `Settings.keep_awake` is on and either `keep_awake_when` is `always` or a session is working (the UI's `sessionIsWorking`,
+  kept from the session events), releases at once when that turns false, and reports whether it holds
+  (`AppState::set_keep_awake_held`, the `snapshot`'s `keep_awake_held` and `keep_awake_held_updated`).
 - `src/records/` — an agent's own on-disk session records, read the same way for every provider; `mod.rs` is the
   index. `store.rs` is the `RecordStore` trait each provider answers through (`AgentProvider::records`) everything that
   depends on how it names, files and writes its records, and on how it watches them (whether it recognises its record
@@ -384,7 +390,7 @@ same scan.
 | storage | `git_workflow`, `store` |
 | state | `state` |
 | workspace | `branch_cleanup`, `branch_origin`, `browse`, `host_tools`, `path_links`, `project_git`, `removal_safety`, `revert_gate`, `terminal` |
-| agent sessions | `accounts`, `adapter`, `agents`, `handoff`, `hooks`, `messaging`, `records`, `session`, `session_git_hooks`, `session_tools`, `titles` |
+| agent sessions | `accounts`, `adapter`, `agents`, `handoff`, `hooks`, `keep_awake`, `messaging`, `records`, `session`, `session_git_hooks`, `session_tools`, `titles` |
 | control | `config_document`, `coordinator`, `mcp`, `session_request` |
 | entry | `cli`, `server` |
 

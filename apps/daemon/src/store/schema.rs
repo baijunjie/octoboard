@@ -32,10 +32,13 @@ pub(super) const APPLICATION_ID: i64 = 0x4F43_5442;
 pub(super) const MIGRATIONS: &[&str] = &[
     // 1 to 2: the id of the owner a release left with the notice told at the next launch.
     "ALTER TABLE sessions ADD COLUMN owner_notice_former_owner TEXT;",
-    // 2 to 3: the sidebar's ordering moved into the client's own preferences, and the setting that
-    // resumes the interrupted sessions when the daemon starts is added.
+    // 2 to 3: the sidebar's ordering moved into the client's own preferences, and the settings that
+    // resume the interrupted sessions when the daemon starts and hold the computer awake (Prevent
+    // sleep, and when) are added.
     "ALTER TABLE settings DROP COLUMN sidebar_order_by_status;
-     ALTER TABLE settings ADD COLUMN resume_sessions_on_start INTEGER NOT NULL DEFAULT 0;",
+     ALTER TABLE settings ADD COLUMN resume_sessions_on_start INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE settings ADD COLUMN keep_awake INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE settings ADD COLUMN keep_awake_when TEXT NOT NULL DEFAULT 'working';",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -323,9 +326,9 @@ CREATE TABLE settings (
     squash_before_delivery INTEGER NOT NULL DEFAULT 0,
     rebase_before_delivery INTEGER NOT NULL DEFAULT 1,
     delivery            TEXT NOT NULL DEFAULT 'ask',
-    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0);
--- `resume_sessions_on_start` is the last column, spelled as a migration leaves it; see
--- `Store::resume_sessions_on_start`.
+    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working');
+-- `resume_sessions_on_start`, `keep_awake` and `keep_awake_when` are the last columns, spelled as a
+-- migration leaves them; see `Store::resume_sessions_on_start` and `Store::keep_awake`.
 -- The user's explicit choice for a setting of a provider, as JSON (`true`, `false` or a quoted
 -- choice); a setting with no row follows its default. Rows naming a provider or setting this
 -- build does not declare are kept and ignored. See `Store::provider_settings`.

@@ -308,7 +308,7 @@ it.each([
   }));
   const container = mountRows(
     <RowPathScope.Provider value={{ project: "p", worktree }}><RowActions path="src/caf%C3%A9.ts" name="café.ts" /></RowPathScope.Provider>,
-    { request, clipboard: { writeText }, notifications, state: { host: { os: "windows", path_style: "windows", file_links: true, trash: "recycle_bin", settings: "settings" } } },
+    { request, clipboard: { writeText }, notifications, state: { host: { os: "windows", path_style: "windows", file_links: true, trash: "recycle_bin", settings: "settings", keep_awake: false } } },
   );
   act(() => actionsOf(container).click());
   await flush();

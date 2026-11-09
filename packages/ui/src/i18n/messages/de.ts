@@ -1688,7 +1688,7 @@ export const de: Translation<"one" | "other"> = {
   "configuration.export.paths.remedy": "Teile die Datei nur mit Personen, denen du vertraust.",
   "configuration.export.general.description": "Enthält das Erscheinungsbild, die Sprache, den Markdown-Stil und die Sortierung.",
   "configuration.export.appBehavior.description": "Enthält das Fortsetzen von Sitzungen beim Start, das Weiterlaufen im Hintergrund, {menuBarIcon}, das Verhindern des Ruhezustands und das Schließen inaktiver Terminals.",
-  "configuration.export.appBehavior.description.basic": "Enthält das Fortsetzen von Sitzungen beim Start und das Schließen inaktiver Terminals.",
+  "configuration.export.appBehavior.description.basic": "Enthält das Fortsetzen von Sitzungen beim Start, das Verhindern des Ruhezustands und das Schließen inaktiver Terminals.",
   "configuration.export.git.description": "Enthält das Standard-Klonverzeichnis, das automatische Pullen von Repositorys und den Git-Arbeitsablauf.",
   "configuration.export.agentBehavior.description": "Enthält, welche Anfragen automatisch genehmigt werden, und ob Fragen als Auswahl gestellt werden.",
   "configuration.export.shortcuts.description": "Enthält die Tastaturkurzbefehle, die du geändert hast.",

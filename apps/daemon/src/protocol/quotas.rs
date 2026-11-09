@@ -202,6 +202,7 @@ mod tests {
             agent_cli_statuses: vec![],
             home_dir: None,
             host: crate::platform::HostFacts::current().into(),
+            keep_awake_held: false,
             shell_terminals: vec![],
         })
         .unwrap();

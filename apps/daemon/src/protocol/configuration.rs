@@ -12,6 +12,7 @@ use super::codes::Code;
 use super::errors::Params;
 use super::git_workflow::{GitWorkflowOverride, GitWorkflowSettings};
 use super::records::ProjectSource;
+use super::settings::KeepAwakeWhen;
 use crate::providers::SettingValue;
 
 /// Names the kind of file, so one that is not a configuration document is told apart from one
@@ -245,14 +246,15 @@ pub struct DocumentSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub show_menu_bar_icon: Option<bool>,
-    /// Whether the desktop app holds the computer and its display awake (Prevent sleep), carried
-    /// like `run_in_background`: only a client that can (the desktop app) writes it, and only such
-    /// a client applies it.
+    /// Whether the daemon holds its host awake (Prevent sleep, see `Settings.keep_awake`). The
+    /// daemon builds it when the App behavior section is exported and applies it from an import,
+    /// whether or not this host can hold: the value is stored either way.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub keep_awake: Option<bool>,
-    /// When Prevent sleep holds: `always`, or `working` (while a session is working), carried like
-    /// `keep_awake`. A value the importing client does not know is ignored.
+    /// When Prevent sleep holds: `always`, or `working` (while a session is working; see
+    /// `Settings.keep_awake_when`). Carried as text so that a name this build does not know is
+    /// left out of an import rather than refusing the document.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub keep_awake_when: Option<String>,
@@ -671,6 +673,13 @@ pub struct InspectedSettings {
     /// reads as no change.
     pub resume_sessions_on_start: bool,
     pub current_resume_sessions_on_start: bool,
+    /// The document's Prevent sleep, or this machine's own when the document carries none.
+    pub keep_awake: bool,
+    pub current_keep_awake: bool,
+    /// The document's choice of when it holds, or this machine's own when the document carries
+    /// none or names one this build does not know.
+    pub keep_awake_when: KeepAwakeWhen,
+    pub current_keep_awake_when: KeepAwakeWhen,
     pub git_workflow: GitWorkflowSettings,
     pub current_git_workflow: GitWorkflowSettings,
     /// The document's default clone directory as it resolves on this machine (`~/` expanded);

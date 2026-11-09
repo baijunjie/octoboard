@@ -319,10 +319,17 @@ export function snapshotState(parts: {
   };
 }
 
+/** What a snapshot says of a Mac that can be held awake (Prevent sleep): the daemon host's facts and its home
+ * directory, for `snapshotState`, so a scenario shows the Prevent sleep setting whichever client views the daemon. */
+export const MACOS_MACHINE = {
+  host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings", keep_awake: true },
+  homeDir: "/Users/dev",
+} as const satisfies { host: HostInfo; homeDir: string };
+
 /** What a snapshot says of a Windows machine: the daemon host's facts and its home directory, for `snapshotState`, so a
  * scenario about a Windows host shows its paths as the daemon spells them (`C:\Users\dev`, never shortened to `~`). */
 export const WINDOWS_MACHINE = {
-  host: { os: "windows", path_style: "windows", file_links: true, trash: "recycle_bin", settings: "settings" },
+  host: { os: "windows", path_style: "windows", file_links: true, trash: "recycle_bin", settings: "settings", keep_awake: true },
   homeDir: "C:\\Users\\dev",
 } as const satisfies { host: HostInfo; homeDir: string };
 

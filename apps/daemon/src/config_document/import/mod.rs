@@ -29,8 +29,9 @@ use crate::protocol::{
     ConfigurationDocument, DirectoryChoice, DirectoryOffers, DocumentConsole, DocumentProject,
     DocumentSettings, ImportFailure, ImportItem, ImportItemState, ImportStatus, ImportedAccounts,
     ImportedConsole, ImportedProject, InspectedAccounts, InspectedConsole, InspectedProject,
-    InspectedSettings, OffersUnderCloneDir, PerAgent, ProjectAccount, ProjectAccountRef,
-    ProjectResolution, SettingsSection, CONFIGURATION_FORMAT, CONFIGURATION_VERSION,
+    InspectedSettings, KeepAwakeWhen, OffersUnderCloneDir, PerAgent, ProjectAccount,
+    ProjectAccountRef, ProjectResolution, SettingsSection, CONFIGURATION_FORMAT,
+    CONFIGURATION_VERSION,
 };
 use crate::providers::SettingValue;
 use crate::state::AppState;
@@ -278,6 +279,11 @@ fn offered_language(tag: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
+/// The choice of when Prevent sleep holds in a document to apply: one this build knows.
+fn known_keep_awake_when(name: Option<&str>) -> Option<KeepAwakeWhen> {
+    name.and_then(KeepAwakeWhen::from_wire_name)
+}
+
 /// Reads the document and answers, per project, which directory choices its state allows and the
 /// account references that fall back. Changes nothing.
 ///
@@ -338,6 +344,8 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
     );
 
     let resume_sessions_on_start_now = state.store.resume_sessions_on_start()?;
+    let keep_awake_now = state.store.keep_awake()?;
+    let keep_awake_when_now = state.store.keep_awake_when()?;
     // A key the document does not carry is reported as this machine's own, so its line reads as no
     // change; `settings_sections` says which sections the document carries.
     let settings = match &document.settings {
@@ -389,6 +397,11 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
                     .resume_sessions_on_start
                     .unwrap_or(resume_sessions_on_start_now),
                 current_resume_sessions_on_start: resume_sessions_on_start_now,
+                keep_awake: settings.keep_awake.unwrap_or(keep_awake_now),
+                current_keep_awake: keep_awake_now,
+                keep_awake_when: known_keep_awake_when(settings.keep_awake_when.as_deref())
+                    .unwrap_or(keep_awake_when_now),
+                current_keep_awake_when: keep_awake_when_now,
                 git_workflow: settings.git_workflow.unwrap_or(git_workflow),
                 current_git_workflow: git_workflow,
                 default_clone_dir: usable_clone_dir(settings.default_clone_dir.as_deref()),
@@ -813,6 +826,7 @@ pub async fn apply_reporting(
     if let Some(settings) = document.settings.filter(|_| settings_error.is_none()) {
         progress.report(ImportItem::Settings, ImportItemState::Creating);
         let interface_language = offered_language(settings.interface_language.as_deref());
+        let keep_awake_when = known_keep_awake_when(settings.keep_awake_when.as_deref());
         let changes = SettingsChanges {
             auto_close_idle_shell_terminals: settings.auto_close_idle_shell_terminals,
             auto_pull_repositories: settings.auto_pull_repositories,
@@ -824,18 +838,22 @@ pub async fn apply_reporting(
             ask_questions_as_choices: settings.ask_questions_as_choices,
             interface_language: interface_language.clone(),
             resume_sessions_on_start: settings.resume_sessions_on_start,
+            keep_awake: settings.keep_awake,
+            keep_awake_when,
             // Written above, before the projects.
             default_clone_dir: None,
             git_workflow: settings.git_workflow.map(Into::into).unwrap_or_default(),
             ..Default::default()
         };
         match coordinator::settings::update_settings(state, changes) {
-            // The echo says what was applied, so the directory only where it was written above and
-            // the language only where this build offers it.
+            // The echo says what was applied, so the directory only where it was written above, the
+            // language only where this build offers it and the choice of when to hold only where
+            // this build knows it.
             Ok(()) => {
                 settings_applied = Some(DocumentSettings {
                     default_clone_dir: clone_dir_applied.clone(),
                     interface_language,
+                    keep_awake_when: keep_awake_when.map(|when| when.wire_name().to_string()),
                     ..settings
                 });
                 progress.report(ImportItem::Settings, ImportItemState::Done);

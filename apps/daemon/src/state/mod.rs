@@ -19,6 +19,7 @@
 //!   watch.
 //! - [`git_status`]: each project's live git status, with the claim that keeps two checks of one
 //!   project from racing and the timestamp that keeps them from piling up across several clients.
+//! - [`keep_awake`]: whether the host is held awake.
 //! - [`agent_availability`]: each agent's availability; [`forget`]: what is dropped where a record
 //!   is removed.
 //! - [`bindings`], [`refusals`]: free functions rather than `AppState` methods: the reads of which
@@ -40,6 +41,7 @@ pub(crate) mod bindings;
 mod claims;
 mod forget;
 mod git_status;
+mod keep_awake;
 mod late_turn_end;
 mod left_for_limit;
 mod live;
@@ -295,6 +297,9 @@ pub struct AppState {
     /// registered from then on, so a launch that was under way cannot start an agent after the
     /// stop.
     shutting_down: AtomicBool,
+    /// Whether the daemon holds its host awake (`crate::keep_awake`). Held in memory only: the
+    /// hold goes with the process.
+    keep_awake_held: AtomicBool,
     /// The sessions an `interrupt_session` is sending keys into now (`crate::session::interrupt`),
     /// so two at once cannot send a second interrupt key. Held in memory only.
     interrupts: Mutex<HashSet<String>>,
@@ -399,6 +404,7 @@ impl AppState {
             session_removals: Mutex::new(0),
             shutdown: tokio::sync::Notify::new(),
             shutting_down: AtomicBool::new(false),
+            keep_awake_held: AtomicBool::new(false),
             interrupts: Mutex::new(HashSet::new()),
             project_associations: Mutex::new(HashMap::new()),
             stalled_directory_passes: Default::default(),

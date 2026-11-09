@@ -1661,7 +1661,7 @@ export const id: Translation<"other"> = {
   "configuration.export.paths.remedy": "Bagikan file hanya kepada orang yang Anda percayai.",
   "configuration.export.general.description": "Mencakup tampilan, bahasa, gaya Markdown, dan pengurutan.",
   "configuration.export.appBehavior.description": "Mencakup melanjutkan sesi saat dimulai, berjalan di latar belakang, {menuBarIcon}, mencegah tidur, dan menutup terminal yang tidak aktif.",
-  "configuration.export.appBehavior.description.basic": "Mencakup melanjutkan sesi saat dimulai dan menutup terminal yang tidak aktif.",
+  "configuration.export.appBehavior.description.basic": "Mencakup melanjutkan sesi saat dimulai, mencegah tidur, dan menutup terminal yang tidak aktif.",
   "configuration.export.git.description": "Mencakup direktori klon default, pull repositori secara otomatis, dan alur kerja Git.",
   "configuration.export.agentBehavior.description": "Mencakup permintaan yang disetujui otomatis dan pertanyaan yang diajukan sebagai pilihan.",
   "configuration.export.shortcuts.description": "Mencakup pintasan keyboard yang Anda ubah.",

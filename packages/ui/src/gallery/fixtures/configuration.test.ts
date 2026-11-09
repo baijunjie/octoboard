@@ -319,11 +319,11 @@ function sectionsWithLines(inspection: Omit<Inspection, "type">, text: string): 
   if (!settings) return [];
   const document: unknown = JSON.parse(text);
   // Every platform capability, so that a client-held App behavior setting the file carries counts as a line.
-  const client = documentClientSettings(document, { backgroundRun: true, menuBarIcon: true, keepAwake: true });
+  const client = documentClientSettings(document, { backgroundRun: true, menuBarIcon: true });
   const switches = (list: readonly { field: keyof typeof settings }[]) => list.some(({ field }) => settings[field] != null);
   const lines: Record<SettingsSection, boolean> = {
     general: client.appearance !== undefined || isLanguage(documentLanguage(document)) || client.markdown_style !== undefined || client.session_order !== undefined || switches(GENERAL_SWITCHES),
-    app_behavior: client.run_in_background !== undefined || client.show_menu_bar_icon !== undefined || client.keep_awake !== undefined || client.keep_awake_when !== undefined || switches(APP_BEHAVIOR_SWITCHES),
+    app_behavior: client.run_in_background !== undefined || client.show_menu_bar_icon !== undefined || switches(APP_BEHAVIOR_SWITCHES),
     git: settings.default_clone_dir !== null || settings.foreign_default_clone_dir || settings.git_workflow != null || switches(GIT_SWITCHES),
     agent_behavior: switches(AGENT_BEHAVIOR_SWITCHES),
     keyboard_shortcuts: documentShortcuts(document) !== undefined,

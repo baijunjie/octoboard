@@ -64,7 +64,8 @@ export interface PlatformAdapter {
    * shell answers the window's close button and can do either, so the Settings switch for it
    * exists only there. */
   readonly backgroundRun?: BackgroundRunCapability;
-  /** Holding the computer and its display awake against idle sleep, present only where a shell can. */
+  /** Showing on the menu bar icon that the daemon is keeping the computer awake, present only where a shell has such
+   * an icon. */
   readonly keepAwake?: KeepAwakeCapability;
   /** Opening the application when the user logs in, present only where the system lets the shell register it. */
   readonly launchAtLogin?: LaunchAtLoginCapability;
@@ -357,8 +358,8 @@ export interface LaunchAtLoginCapability {
 }
 
 export interface KeepAwakeCapability {
-  /** Tells the shell whether to hold the computer and its display awake, so neither goes to sleep when idle (and the
-   * screen does not lock for it). The shell holds nothing at launch, so the UI sends its answer at startup. */
+  /** Tells the shell whether the daemon is keeping the computer awake, for its menu bar icon to show. The shell holds
+   * nothing itself: the daemon does (`Settings.keep_awake`), and the UI forwards the `keep_awake_held` it reports. */
   set(held: boolean): Promise<void>;
 }
 

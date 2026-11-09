@@ -17,6 +17,7 @@ pub(crate) mod random;
 #[cfg(windows)]
 mod registry;
 pub(crate) mod shell;
+pub(crate) mod sleep;
 pub(crate) mod term;
 #[cfg(test)]
 mod test_helper;
@@ -90,6 +91,8 @@ pub struct HostFacts {
     pub file_links: bool,
     pub trash: TrashName,
     pub settings: SettingsName,
+    /// Whether the host can be held awake (`sleep::available`).
+    pub keep_awake: bool,
 }
 
 impl HostFacts {
@@ -101,6 +104,7 @@ impl HostFacts {
             file_links: fs::file_links_available(),
             trash: TrashName::current(),
             settings: SettingsName::current(),
+            keep_awake: sleep::available(),
         }
     }
 }

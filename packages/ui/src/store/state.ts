@@ -105,6 +105,9 @@ export interface State {
   /** The daemon host's own facts as the last `snapshot` said (see `HostInfo`): its operating system, how it writes a
    * path and whether it can make file links. Null until the first snapshot. */
   host: HostInfo | null;
+  /** Whether the daemon is holding its host awake (Prevent sleep) as the last `snapshot` or `keep_awake_held_updated`
+   * said. False until the first snapshot. */
+  keepAwakeHeld: boolean;
   /** Every shell terminal the daemon holds, running or exited, keyed by id, in the order the
    * daemon lists them (oldest first) and then as created. Live state of the daemon: a `snapshot`
    * names them all again, and one goes only on `shell_terminal_deleted` or with its project. */
@@ -140,6 +143,7 @@ const initialState: State = {
   accountSharing: new Map(),
   homeDir: null,
   host: null,
+  keepAwakeHeld: false,
   shellTerminals: new Map(),
   queuedAccountSwitches: new Set(),
 };

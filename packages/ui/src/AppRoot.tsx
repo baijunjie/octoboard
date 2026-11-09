@@ -32,7 +32,8 @@ function NativeMenuLabelsSync(): null {
   return null;
 }
 
-// Under the daemon's provider, which it reads the sessions from, but outside `ErrorBoundary` too.
+// Under the daemon's provider, which it reads whether the daemon holds the computer awake from, to show on the icon,
+// but outside `ErrorBoundary` too.
 function KeepAwakeSync(): null {
   useKeepAwakeSync();
   return null;
@@ -48,9 +49,9 @@ export interface AppRootProps {
   platform: PlatformAdapter;
   /** `undefined` for a screen that has no daemon to connect to. */
   daemon: Daemon | undefined;
-  /** Whether the window pushes its menu labels, theme, keep-awake and system-quit choices to a native shell. The
-   * window's entry does; a page that stands in for one in a browser (the gallery, the website preview) has no shell
-   * to push to. */
+  /** Whether the window pushes its menu labels, theme, whether the daemon holds the computer awake and system-quit
+   * choice to a native shell. The window's entry does; a page that stands in for one in a browser (the gallery, the
+   * website preview) has no shell to push to. */
   nativeSync: boolean;
   /** Passed to `UpdatesProvider`: `null` leaves out the automatic checks, for a surface that must hold a state of its
    * own (the gallery). */

@@ -6,7 +6,7 @@ import { type AccountLogin, type AccountSharing, type Agent, type AgentAvailabil
 import type { AccountMcpAnswer } from "../../fixtures/fixture";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
-import { accountOf, agentCliStatusOf, agentCliUpdateOf, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState, WINDOWS_MACHINE } from "../../fixtures/builders";
+import { accountOf, agentCliStatusOf, agentCliUpdateOf, MACOS_MACHINE, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState, WINDOWS_MACHINE } from "../../fixtures/builders";
 import { defaultAgentCliStatuses } from "../../fixtures/fixtureAgentClis";
 import { browserHost } from "../../platform/host";
 import { MAC_HOST, WINDOWS_HOST } from "../../test/hosts";
@@ -50,10 +50,12 @@ const browserState: Scenario["state"] = {
   ]),
 };
 
-/** The desktop app with "Resume sessions on start" on, so the description it gives the macOS app shows. */
+/** The desktop app with "Resume sessions on start" on, so the description it gives the macOS app shows, and Prevent sleep
+ * on in a daemon whose host can hold the computer awake. */
 const resumingState: Scenario["state"] = {
   ...state,
-  settings: { ...state.settings!, resume_sessions_on_start: true },
+  host: MACOS_MACHINE.host,
+  settings: { ...state.settings!, resume_sessions_on_start: true, keep_awake: true },
 };
 
 /** The list of added agents still undecided: the daemon has not yet determined which agents are installed, so it has
@@ -761,8 +763,20 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Browser App behavior settings",
-    description: "The section after General, as a browser shows it: two groups. Startup holds only \"Resume sessions on start\", off, since a browser cannot be launched at login, and Terminals holds only the terminal-cleanup switch, off, whose description says closing the panel closes idle terminals and keeps running commands. Window and Power are not offered. At Tablet portrait (768px) and narrower the section tab is among the horizontal ones, with the controls stacked beneath their labels.",
+    description: "The section after General, as a browser shows it: two groups. Startup holds only \"Resume sessions on start\", off, since a browser cannot be launched at login, and Terminals holds only the terminal-cleanup switch, off, whose description says closing the panel closes idle terminals and keeps running commands. Window is not offered, and neither is Power, as the daemon's host cannot be held awake. At Tablet portrait (768px) and narrower the section tab is among the horizontal ones, with the controls stacked beneath their labels.",
     state: browserState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.appBehavior")),
+    ],
+  },
+  {
+    id: "settings-app-behavior-browser-prevent-sleep",
+    group: GROUP,
+    category: "normal",
+    title: "Browser App behavior settings, daemon host can stay awake",
+    description: "A browser against a daemon whose host can be held awake: the Power group is offered here too, between Startup and Terminals, with \"Prevent sleep\" on above \"When to prevent sleep\", a select reading \"While sessions work\". Window is still not offered.",
+    state: { ...browserState, host: MACOS_MACHINE.host, settings: { ...browserState!.settings!, keep_awake: true } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.appBehavior")),
@@ -779,10 +793,8 @@ export const settingsScenarios: Scenario[] = [
     desktopApp: true,
     backgroundRun: true,
     menuBarIcon: true,
-    keepAwake: true,
     launchAtLogin: "enabled",
     shellSettings: { runInBackground: true },
-    preferences: { keepAwake: true },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.appBehavior")),

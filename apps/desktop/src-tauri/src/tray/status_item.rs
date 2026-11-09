@@ -9,7 +9,7 @@ use super::TrayState;
 use crate::menu::APP_NAME;
 
 /// What the icon is to show: what the last menu applied says, and whether the computer is kept
-/// awake, which the keep-awake hold reports as it changes (`keep_awake_changed`).
+/// awake, which the UI forwards from the daemon's held state (`set_keep_awake_shown`).
 pub(super) struct Look {
     attention: bool,
     quota: Option<icon::Quota>,

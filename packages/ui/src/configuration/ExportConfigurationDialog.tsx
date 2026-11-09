@@ -67,7 +67,7 @@ export function ExportConfigurationDialog({
   const t = useT();
   const { request, showNotice } = useDaemon();
   const platform = usePlatform();
-  const { configurationFile, backgroundRun, statusItem, keepAwake } = platform;
+  const { configurationFile, backgroundRun, statusItem } = platform;
   const { choice: appearance } = useOctoboardTheme();
   const { busy, run } = useDialogAction(undefined, t("configuration.export.alertTitle"));
   const [consoles, setConsoles] = useState<ExportedConsoles>(inHand ? "one" : "all");
@@ -85,7 +85,7 @@ export function ExportConfigurationDialog({
   const exported = consoles === "one" ? inHand : undefined;
   const sections = SETTINGS_SECTIONS.filter((section) => included[section]);
   // The App behavior note lists the settings this client can hold only where the platform has all of them.
-  const heldHere = backgroundRun !== undefined && statusItem !== undefined && keepAwake !== undefined;
+  const heldHere = backgroundRun !== undefined && statusItem !== undefined;
   const nothing = consoles === "none" && sections.length === 0 && !includeAccounts;
   // A project's path is the only one the choice is about: with no console exported the option is not shown.
   const pathsApply = consoles !== "none";

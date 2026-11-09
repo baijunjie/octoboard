@@ -200,7 +200,9 @@ pub(super) const GET_SETTINGS: ToolDef = ToolDef {
     name: "get_settings",
     description: "The application-wide settings: `auto_close_idle_shell_terminals`, `auto_pull_repositories`, \
                   `auto_delete_unresumable_archives`, `resume_sessions_on_start`, \
-                  `auto_select_account`, `interface_language` (the language every window of the \
+                  `keep_awake` (Prevent sleep: whether Octoboard keeps the computer it runs on \
+                  awake), `keep_awake_when` (`always`, or `working` for while any session \
+                  works), `auto_select_account`, `interface_language` (the language every window of the \
                   user shows and the one you are told to reply in, a tag; `null` until a window \
                   reported one), \
                   `default_clone_dir`, the `git_workflow` settings, \
@@ -251,6 +253,20 @@ pub(super) const UPDATE_SETTINGS: ToolDef = ToolDef {
                     "description": "Whether, when Octoboard starts, the sessions that are \
                                     interrupted then are resumed automatically, including ones \
                                     interrupted before it last stopped.",
+                },
+                "keep_awake": {
+                    "type": "boolean",
+                    "description": "Prevent sleep: whether Octoboard keeps the computer it \
+                                    runs on awake, when `keep_awake_when` says so. It takes \
+                                    effect at once, and does nothing on a computer that \
+                                    cannot be held awake.",
+                },
+                "keep_awake_when": {
+                    "type": "string",
+                    "enum": ["always", "working"],
+                    "description": "When Prevent sleep holds the computer awake: `always`, \
+                                    for as long as `keep_awake` is on, or `working`, only \
+                                    while a session is working in any console or project.",
                 },
                 "interface_language": {
                     "type": "string",

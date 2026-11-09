@@ -35,7 +35,8 @@ export interface BooleanSetting<F extends BooleanField = BooleanField> {
   description: { on: PlainMessageKey; off: PlainMessageKey; onMacos?: PlainMessageKey };
   /** The help tip that ends the label's line: its accessible name and its text. */
   help?: { label: PlainMessageKey; text: PlainMessageKey };
-  consequence: PlainMessageKey;
+  /** What turning it on means in the import cards; `null` for a setting whose line says no more than "turns on". */
+  consequence: PlainMessageKey | null;
 }
 
 /** The entry of one switch, whose section is fixed by what kind of setting it is: an Agent accounts setting is shown
@@ -49,10 +50,17 @@ type Copy<F extends BooleanField> = Omit<BooleanSetting<F>, "field" | "section">
 const COPY: { [F in BooleanField]: Copy<F> } = {
   auto_close_idle_shell_terminals: {
     section: "appBehavior",
-    order: 2,
+    order: 3,
     label: "settings.closeIdleTerminals.label",
     description: { on: "settings.closeIdleTerminals.description.on", off: "settings.closeIdleTerminals.description.off" },
     consequence: "configuration.import.settings.consequence.closeIdleTerminals",
+  },
+  keep_awake: {
+    section: "appBehavior",
+    order: 2,
+    label: "settings.keepAwake.label",
+    description: { on: "settings.keepAwake.description.on", off: "settings.keepAwake.description.off" },
+    consequence: null,
   },
   auto_pull_repositories: {
     section: "git",
@@ -155,8 +163,8 @@ export const AGENT_SWITCHES = switchesIn<AgentBooleanField>("agentAccounts");
  * around them in the import cards). */
 export const GENERAL_SWITCHES = switchesIn<ApplicationBooleanField>("general");
 
-/** The switches of the App behavior section, in its order (the settings of it a client holds sit before them in the
- * import cards). */
+/** The switches of the App behavior section, in its order (the settings of it a client holds sit between the
+ * first and the second in the import cards). */
 export const APP_BEHAVIOR_SWITCHES = switchesIn<ApplicationBooleanField>("appBehavior");
 
 /** The switches of the Git section, in its order. */

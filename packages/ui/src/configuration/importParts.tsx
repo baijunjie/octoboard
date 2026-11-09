@@ -242,13 +242,13 @@ export function NamedValue({ text, lang }: { text: string; lang?: string }): Rea
 
 /** A boolean application setting: what applying it would do against `current` (turns it on, off, or leaves it as it
  * is), or, with no `current`, what it was set to. */
-export function BooleanSettingLine({ label, wanted, current, consequence }: { label: string; wanted: boolean; current: boolean | undefined; consequence: PlainMessageKey }): React.ReactElement {
+export function BooleanSettingLine({ label, wanted, current, consequence }: { label: string; wanted: boolean; current: boolean | undefined; consequence: PlainMessageKey | null }): React.ReactElement {
   const t = useT();
   if (current === undefined) return <SettingLine label={label} badge={t(wanted ? "configuration.import.result.badge.on" : "configuration.import.result.badge.off")} />;
   if (wanted === current) return <SettingLine label={label} badge={t("configuration.import.settings.badge.same")} />;
   return wanted ? (
     <SettingLine label={label} badge={t("configuration.import.settings.badge.turnsOn")} tone="accent">
-      <Message id={consequence} />
+      {consequence && <Message id={consequence} />}
     </SettingLine>
   ) : (
     <SettingLine label={label} badge={t("configuration.import.settings.badge.turnsOff")} />

@@ -213,8 +213,9 @@ Where to start, by question:
   daemon that dies, closing, quitting, crashes, logs and owned files.
 - [Launch at login](product/launch-at-login.md) — opening Octoboard when the user logs in: the system entry it reflects,
   waiting for approval on macOS, and the hidden start at a login launch.
-- [Keeping the computer awake](product/keeping-the-computer-awake.md) — Prevent sleep: Always or while sessions work,
-  which sessions count, and what is held on macOS and Windows.
+- [Keeping the computer awake](product/keeping-the-computer-awake.md) — Prevent sleep, held by the daemon on its host:
+  which hosts can hold it (macOS, Windows, Linux with logind), Always or while sessions work, which sessions count, what
+  is held on each system, and how clients learn whether it is held.
 - [In-app updates](product/in-app-updates.md) — update channels, where updates come from, checking, notice, download
   and restart.
 - [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon, its dot, its red eyes while the computer is kept

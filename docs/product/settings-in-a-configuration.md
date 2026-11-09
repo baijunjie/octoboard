@@ -55,8 +55,12 @@ language only when the daemon holds one; every other one is in every document wh
   the setting — the desktop application (see "Closing the window" in `docs/product/application-lifecycle.md`).
 - **Show menu bar icon**, under `show_menu_bar_icon`, `true` or `false`, carried only by the desktop application (see
   "Hiding the icon" in `docs/product/menu-bar-icon.md`).
-- **Prevent sleep**, under `keep_awake`, `true` or `false`, and **When to prevent sleep**, under `keep_awake_when`,
-  `always` or `working` (While sessions work), carried together only by the desktop application (see
+- **Prevent sleep** (see that section in `docs/product/settings.md`), under `keep_awake`, `true` or `false`, and
+  **When to prevent sleep**, under `keep_awake_when`, `always` or `working` (While sessions work). The daemon holds
+  both, so they are in every document whose export chose App behavior, whoever asked for it, a browser included. The
+  review's line for turning Prevent sleep on says nothing more than that it turns on. A `keep_awake_when` this build
+  does not know leaves this machine's choice as it is. An import applies both whether or not the importing daemon's host
+  can be held awake: they are stored there all the same (see "Which computers can be held awake" in
   `docs/product/keeping-the-computer-awake.md`).
 - **Close idle terminals when closing the panel** (see that section in `docs/product/settings.md`), under
   `auto_close_idle_shell_terminals`. The review's line for turning it on says that closing the Terminal panel closes
@@ -146,20 +150,20 @@ holds:
 
 ## The settings a client holds
 
-The appearance, the Markdown style, the sorting, keeping running in the background, showing the menu bar icon, Prevent
-sleep with When to prevent sleep, and the keyboard shortcuts are each client's own, kept in that client rather than by
-the daemon. So the client adds them to the document it saves, for the sections chosen alone — for General the
-appearance, the Markdown style and the sorting; for App behavior, where it has those settings, keeping running in the
-background, showing the menu bar icon and Prevent sleep with When to prevent sleep; for Keyboard shortcuts its changed
-shortcuts — and the daemon builds none of them and reads none of them. A document with application settings asked of
-the daemon by any other program therefore has none of them. The language is not among them: it is the daemon's, which
-builds it into the document and applies it on import.
+The appearance, the Markdown style, the sorting, keeping running in the background, showing the menu bar icon and the
+keyboard shortcuts are each client's own, kept in that client rather than by the daemon. So the client adds them to the
+document it saves, for the sections chosen alone — for General the appearance, the Markdown style and the sorting; for
+App behavior, where it has those settings, keeping running in the background and showing the menu bar icon; for
+Keyboard shortcuts its changed shortcuts — and the daemon builds none of them and reads none of them. A document with
+application settings asked of the daemon by any other program therefore has none of them. The language and Prevent
+sleep with When to prevent sleep are not among them: they are the daemon's, which builds them into the document and
+applies them on import.
 
 On import they are applied by the client that runs the import, to itself alone, and only once the daemon reports the
 application settings applied, from what the daemon passes back as applied — the keys of the sections applied alone;
 when the settings could not be applied, neither are these. Other clients — another browser, or the desktop app — keep their own. A value the importing client
-does not know, or a setting its platform does not have (keeping running in the background, showing the menu bar icon
-or Prevent sleep, in a browser), is ignored and leaves the client's own as it is.
+does not know, or a setting its platform does not have (keeping running in the background or showing the menu bar
+icon, in a browser), is ignored and leaves the client's own as it is.
 
 ## Application settings are left alone unless they are asked for
 

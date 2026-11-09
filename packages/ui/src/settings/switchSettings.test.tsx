@@ -22,7 +22,8 @@ beforeEach(() => {
 });
 
 it("lists every switch the settings page covers once", () => {
-  expect([...APPLICATION_SWITCHES, ...AGENT_SWITCHES].map(({ field }) => field).sort()).toEqual(switches.map(({ key }) => key).sort());
+  // Prevent sleep has a row of its own, with the choice of when beside it (`KeepAwakeSetting.test.tsx`).
+  expect([...APPLICATION_SWITCHES, ...AGENT_SWITCHES].map(({ field }) => field).filter((field) => field !== "keep_awake").sort()).toEqual(switches.map(({ key }) => key).sort());
 });
 
 // What each switch says while it is on; every one says the same while it is off.

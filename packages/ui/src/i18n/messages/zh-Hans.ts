@@ -1839,7 +1839,7 @@ export const zhHans: Translation<"other"> = {
   "configuration.export.paths.remedy": "请只分享给你信任的人。",
   "configuration.export.general.description": "包含外观、语言、Markdown 样式和排序。",
   "configuration.export.appBehavior.description": "包含启动时恢复会话、在后台运行、{menuBarIcon}、阻止睡眠和关闭闲置终端。",
-  "configuration.export.appBehavior.description.basic": "包含启动时恢复会话和关闭闲置终端。",
+  "configuration.export.appBehavior.description.basic": "包含启动时恢复会话、阻止睡眠和关闭闲置终端。",
   "configuration.export.git.description": "包含默认克隆目录、自动拉取仓库和 Git 工作流。",
   "configuration.export.agentBehavior.description": "包含自动批准哪些请求，以及是否以选项形式提问。",
   "configuration.export.shortcuts.description": "包含你修改过的键盘快捷键。",

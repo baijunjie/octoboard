@@ -334,6 +334,7 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         agent_cli_statuses: state.agent_clis.statuses(),
         home_dir: crate::paths::known_home_dir().map(|home| home.to_string_lossy().into_owned()),
         host: crate::platform::HostFacts::current().into(),
+        keep_awake_held: state.keep_awake_held(),
         shell_terminals: state.shell_terminals.list(),
     })
 }

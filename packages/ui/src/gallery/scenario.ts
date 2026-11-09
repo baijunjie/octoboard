@@ -143,9 +143,6 @@ export interface Scenario extends Fixture {
   /** The platform has the desktop app's menu bar icon (the notification area icon on Windows), so the Settings switch
    * for showing it exists. Nothing is drawn. */
   menuBarIcon?: boolean;
-  /** The platform can hold the computer awake, as the desktop app can, so the Prevent sleep setting is shown. Nothing
-   * is held. */
-  keepAwake?: boolean;
   /** The system lets the app register a login entry, as the desktop app's does on macOS 13 and later and on Windows, so
    * the Launch at login switch is shown, the system's entry standing at this status when the window opens. Changing the
    * switch succeeds and leaves the entry enabled or disabled as asked. */

@@ -1661,7 +1661,7 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "configuration.export.paths.remedy": "Ne partagez le fichier qu’avec des personnes de confiance.",
   "configuration.export.general.description": "Inclut l’apparence, la langue, le style Markdown et le tri.",
   "configuration.export.appBehavior.description": "Inclut la reprise des sessions au démarrage, l’exécution en arrière-plan, l’{menuBarIcon}, l’empêchement de la mise en veille et la fermeture des terminaux inactifs.",
-  "configuration.export.appBehavior.description.basic": "Inclut la reprise des sessions au démarrage et la fermeture des terminaux inactifs.",
+  "configuration.export.appBehavior.description.basic": "Inclut la reprise des sessions au démarrage, l’empêchement de la mise en veille et la fermeture des terminaux inactifs.",
   "configuration.export.git.description": "Inclut le répertoire de clonage par défaut, tirer automatiquement les dépôts et le flux de travail Git.",
   "configuration.export.agentBehavior.description": "Inclut quelles demandes sont approuvées automatiquement et si les questions sont posées sous forme de choix.",
   "configuration.export.shortcuts.description": "Inclut les raccourcis clavier que vous avez modifiés.",

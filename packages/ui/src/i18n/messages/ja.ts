@@ -1784,7 +1784,7 @@ export const ja: Translation<"other"> = {
   "configuration.export.paths.remedy": "信頼できる相手にだけファイルを共有してください。",
   "configuration.export.general.description": "外観、言語、Markdown のスタイル、並べ替えを含めます。",
   "configuration.export.appBehavior.description": "起動時のセッション再開、バックグラウンドでの実行、{menuBarIcon}、スリープを防ぐ設定、未使用のターミナルを閉じる設定を含めます。",
-  "configuration.export.appBehavior.description.basic": "起動時のセッション再開と、未使用のターミナルを閉じる設定を含めます。",
+  "configuration.export.appBehavior.description.basic": "起動時のセッション再開、スリープを防ぐ設定、未使用のターミナルを閉じる設定を含めます。",
   "configuration.export.git.description": "デフォルトのクローン先、リポジトリの自動プル、Git ワークフローを含めます。",
   "configuration.export.agentBehavior.description": "自動で承認するリクエストと、選択肢で質問するかどうかを含めます。",
   "configuration.export.shortcuts.description": "変更したショートカットを含めます。",

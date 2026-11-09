@@ -16,7 +16,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
 use crate::accounts::choice;
@@ -30,7 +30,9 @@ use crate::mcp::lookup::{
 };
 use crate::mcp::views::{describe_console, describe_project};
 use crate::project_git::remote_url;
-use crate::protocol::{error_code, AgentId, CodedError, Project, ProjectSource, Session};
+use crate::protocol::{
+    error_code, AgentId, CodedError, KeepAwakeWhen, Project, ProjectSource, Session,
+};
 use crate::state::AppState;
 
 pub(in crate::mcp) async fn update_project(
@@ -212,6 +214,8 @@ pub(in crate::mcp) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "auto_pull_repositories": state.store.auto_pull_repositories()?,
         "auto_delete_unresumable_archives": state.store.auto_delete_unresumable_archives()?,
         "resume_sessions_on_start": state.store.resume_sessions_on_start()?,
+        "keep_awake": state.store.keep_awake()?,
+        "keep_awake_when": state.store.keep_awake_when()?,
         "auto_select_account": state.store.auto_select_account()?,
         "interface_language": state.store.interface_language()?,
         "default_clone_dir": state.store.default_clone_dir()?,
@@ -221,6 +225,17 @@ pub(in crate::mcp) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "accounts": listed,
         "trusted_directories": state.store.trusted_directories()?,
     }))
+}
+
+/// The `keep_awake_when` argument: `always` or `working`, surrounding whitespace ignored; `None`
+/// when absent, and any other text refused.
+fn keep_awake_when_argument(arguments: &Map<String, Value>) -> Result<Option<KeepAwakeWhen>> {
+    raw_text(arguments, "keep_awake_when")?
+        .map(|text| {
+            KeepAwakeWhen::from_wire_name(text.trim())
+                .ok_or_else(|| anyhow!("`{}` is not `always` or `working`", text.trim()))
+        })
+        .transpose()
 }
 
 /// The values in effect of the provider settings agents may read, by provider id and then setting
@@ -256,6 +271,8 @@ pub(in crate::mcp) fn update_settings(
             auto_approve_account_switches: None,
             auto_approve_handoffs: None,
             ask_questions_as_choices: None,
+            keep_awake: optional_bool(arguments, "keep_awake")?,
+            keep_awake_when: keep_awake_when_argument(arguments)?,
             auto_select_account: None,
             auto_switch_on_usage_limit: None,
             auto_start_quota_windows: None,

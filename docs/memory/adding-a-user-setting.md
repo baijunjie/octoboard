@@ -33,7 +33,7 @@ outside files, ask. In the same change, by where the setting sits:
   `InspectedAgentSettings`, inspected and applied in `apps/daemon/src/config_document/import/accounts.rs` — never in
   `DocumentSettings`.
 - A setting only the client holds (kept in the client, like the appearance, the Markdown style, running in the
-  background, the menu bar icon, Prevent sleep or the shortcuts): an optional field of `DocumentSettings` that the
+  background, the menu bar icon or the shortcuts): an optional field of `DocumentSettings` that the
   daemon neither builds nor reads and passes back as it came, handled on the client beside the others in
   `packages/ui/src/configuration/clientSettings.ts`. The client adds it to a document it saves under its Settings
   section in `heldClientSettings`, so it travels only when the export carries that section, and applies it to itself
@@ -52,13 +52,25 @@ paragraph.
 In the window, the document's fields come from regenerating `packages/ui/src/protocol.generated.ts` after the Rust
 change (`docs/structure/daemon.md`, "Where new code goes"), never written by hand. A switch the daemon holds gets its
 entry in `COPY` in `packages/ui/src/configuration/booleanSettings.ts`, which the type check demands: its Settings
-section and place there, its settings-page label and on / off descriptions, an optional help tip, and a
-`configuration.import.settings.consequence.<name>` message saying what turning it on then does, added to every message
-catalog. The import review, the import result and the settings page all render from that entry; on the settings page
-the switch is `<DaemonSwitchSetting field="…" />` (`packages/ui/src/settings/DaemonSwitchSetting.tsx`), not a
-component of its own. A setting that is not a switch gets its own line in the card the review and the result share:
+section and place there, its settings-page label and on / off descriptions, an optional help tip, and its
+`consequence`: a `configuration.import.settings.consequence.<name>` message saying what turning it on then does, added
+to every message catalog, or `null` only where the import line would say no more than that it turns on. The import
+review, the import result and the settings page all render from that entry; on the settings page the switch is
+`<DaemonSwitchSetting field="…" />` (`packages/ui/src/settings/DaemonSwitchSetting.tsx`), never a switch of its own: a
+switch with rows that depend on it is a component that renders `DaemonSwitchSetting` and adds those rows
+(`packages/ui/src/settings/KeepAwakeSetting.tsx`). A setting that is not a switch gets its own line in the card the review and the result share:
 `packages/ui/src/configuration/SettingsGroups.tsx` for an application setting, `AgentSettingsCard.tsx` beside it for an
 Agent accounts setting; an optional one is shown only when the document carries it.
+
+## A daemon setting that acts on its machine is offered by the daemon's host facts, never by the client's platform
+
+Applies to a setting the daemon holds whose effect happens on the machine the daemon runs on and that not every such
+machine can carry out (Prevent sleep, which holds the daemon's host awake). Show it where `snapshot.host` says the
+daemon's host can (add the fact to `HostInfo` in `apps/daemon/src/protocol/host.rs`), not where the client's
+`PlatformAdapter` has a capability: the window may run on another machine than the daemon, and a browser client has
+no native capabilities at all yet must still offer it. Do not copy the gating of the rows around it in Settings' App
+behavior section, which are the client's own (launch at login, the menu bar icon, running in the background) and
+rightly go by the platform.
 
 ## A new provider setting is declared only in its provider's schema, with its flags set by whether it is a permission setting
 

@@ -149,10 +149,10 @@ there, followed by `\` or `/`.
 ## How switches save
 
 A row's switch whose value the daemon holds saves when it is turned, on its own: in App behavior, **Resume sessions on
-start** and **Close idle terminals when closing the panel**; in Git, **Automatically pull repositories**, **Squash
-commits before delivery**, **Rebase before delivery** and **Revert gate**; in Agent accounts, **Automatically select an
-account**, **Automatically switch accounts at the usage limit** and **Start usage windows automatically**; the five of
-Agent behavior; and in Cleanup, **Automatically delete archived sessions whose conversation is gone**. The switch always
+start**, **Prevent sleep** and **Close idle terminals when closing the panel**; in Git, **Automatically pull
+repositories**, **Squash commits before delivery**, **Rebase before delivery** and **Revert gate**; in Agent accounts,
+**Automatically select an account**, **Automatically switch accounts at the usage limit** and **Start usage windows
+automatically**; the five of Agent behavior; and in Cleanup, **Automatically delete archived sessions whose conversation is gone**. The switch always
 shows the value the daemon has stored, which every window shares: it moves when that value changes, not on the press
 itself. A press made while the save started by the previous press is still unanswered is ignored. Nothing marks that
 wait — the switch does not look unavailable — and it keeps showing the stored value meanwhile. A failed save is shown in
@@ -163,9 +163,8 @@ Other switches in Settings save by rules of their own: an account's Disable swit
 `docs/product/agent-accounts.md`), each agent's Claude compatibility and Codex compatibility switches, each unavailable
 while its save is unanswered (see "Provider settings" in `docs/product/per-agent-settings.md`), the sharing switch of an account's
 settings dialog (see "Sharing the default configuration" in `docs/product/agent-accounts.md`), **Keep running in
-the background**, **Show menu bar icon** and **Prevent sleep**, choices the client keeps itself rather than the daemon,
-which take effect as they are turned (see "Keep running in the background", "Show menu bar icon" and "Prevent sleep"
-below), and **Launch at login**, which shows and changes the system's own state (see "Launch at login" below).
+the background** and **Show menu bar icon**, choices the client keeps itself rather than the daemon, which take effect
+as they are turned (see "Keep running in the background" and "Show menu bar icon" below), and **Launch at login**, which shows and changes the system's own state (see "Launch at login" below).
 
 ## General
 
@@ -207,12 +206,12 @@ How the application behaves around its window, in four groups, each under a head
 - **Startup**: **Launch at login**, in the desktop application where the system offers it (see "Launch at login"
   below), then **Resume sessions on start**, in every client;
 - **Window**, in the desktop application only: **Keep running in the background**, then **Show menu bar icon**;
-- **Power**, in the desktop application only: **Prevent sleep**, and under it, while it is on, **When to prevent
-  sleep**;
+- **Power**, in every client, where the daemon's host can be held awake: **Prevent sleep**, and under it, while it is
+  on, **When to prevent sleep**;
 - **Terminals**: **Close idle terminals when closing the panel**, in every client.
 
 A group with nothing to show in the client is left out, so a browser shows Startup with Resume sessions on start alone,
-and Terminals.
+Power where the daemon's host can be held awake, and Terminals.
 
 ### Launch at login
 
@@ -274,22 +273,26 @@ configuration export that includes the App behavior section carries it (see "The
 
 ### Prevent sleep
 
-A switch, **off to begin with**: whether Octoboard keeps the computer and its display awake. **Only the desktop
-application has this row.** While the switch is off the row's description says that, once it is on, Octoboard keeps the
-computer and its display awake, so the screen does not turn off or lock while the user is idle; while it is on, that it
-does so as chosen below.
+A switch, **off to begin with**: whether Octoboard keeps the computer and its display awake. The computer is the
+daemon's host, and the row is there in every client, the desktop application and a browser alike, **only where that
+host can be held awake** — macOS and Windows always, Linux where logind answers on the system bus (see "Which computers
+can be held awake" in `docs/product/keeping-the-computer-awake.md`); elsewhere it is absent. While the switch is off
+the row's description says that, once it is on, Octoboard keeps the computer and its display awake, so the screen does
+not turn off or lock while the user is idle; while it is on, that it does so as chosen below.
 
 While the switch is on, a **When to prevent sleep** row follows it, a drop-down of **Always** and **While sessions
 work**, While sessions work to begin with. Its description follows the choice: for Always, that Octoboard keeps the
 computer awake for as long as it is running; for While sessions work, that it does so while a session is starting or
 working, in the background included, and that once none is the computer can sleep. While the switch is off the row is
 not shown and its value is kept; when the switch is turned off by something else while the row has keyboard focus — an
-import, say — focus moves to the switch.
+import, say — focus moves to the switch. The drop-down saves a choice as it is picked and shows the value the daemon has
+stored; a failed save is shown in an error alert saying the setting could not be saved.
 
-Both choices are kept per client, as Keep running in the background is, and a configuration export that includes the
-App behavior section carries them (see "The settings a client holds" in
-`docs/product/settings-in-a-configuration.md`). What is held, and exactly when, is in
-`docs/product/keeping-the-computer-awake.md`.
+The daemon stores both, as `keep_awake` and `keep_awake_when`, so every client shows the same. A console session may
+read and change them, and a configuration export that includes the App behavior section carries them (see
+"Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
+application settings an export carries" in `docs/product/settings-in-a-configuration.md`). What is held, and exactly
+when, is in `docs/product/keeping-the-computer-awake.md`.
 
 ### Close idle terminals when closing the panel
 

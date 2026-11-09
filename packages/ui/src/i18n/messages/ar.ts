@@ -1661,7 +1661,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "configuration.export.paths.remedy": "شارك الملف مع من تثق بهم فقط.",
   "configuration.export.general.description": "تتضمن المظهر واللغة ونمط Markdown والترتيب.",
   "configuration.export.appBehavior.description": "تتضمن استئناف الجلسات عند البدء ومواصلة العمل في الخلفية و{menuBarIcon} ومنع السكون وإغلاق الطرفيات الخاملة.",
-  "configuration.export.appBehavior.description.basic": "تتضمن استئناف الجلسات عند البدء وإغلاق الطرفيات الخاملة.",
+  "configuration.export.appBehavior.description.basic": "تتضمن استئناف الجلسات عند البدء ومنع السكون وإغلاق الطرفيات الخاملة.",
   "configuration.export.git.description": "تتضمن مجلد الاستنساخ الافتراضي وسحب المستودعات تلقائياً وسير عمل Git.",
   "configuration.export.agentBehavior.description": "تتضمن الطلبات التي تُوافَق عليها تلقائياً وطرح الأسئلة كخيارات.",
   "configuration.export.shortcuts.description": "تتضمن اختصارات لوحة المفاتيح التي غيّرتها.",

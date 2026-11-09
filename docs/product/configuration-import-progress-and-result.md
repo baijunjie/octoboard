@@ -102,6 +102,7 @@ When they were applied, a card for each section applied, grouped and headed as i
 review" in `docs/product/configuration-export-and-import-dialogs.md`), with a line for each setting applied:
 
 - each switch badged **On** or **Off**;
+- When to prevent sleep, when the daemon applied the file's choice, badged with that choice, worded as in the review;
 - each setting only a client holds that this client applied, badged with the value applied, worded as in the review;
 - Language, when the daemon applied the file's language, badged with the language applied, worded as in the review;
 - Sorting, when this client applied any of its parts, badged **Matches the file** and listing each part applied with

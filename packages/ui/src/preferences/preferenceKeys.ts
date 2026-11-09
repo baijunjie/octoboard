@@ -28,8 +28,6 @@ export const PREFERENCE_KEYS = {
   // desktop shell keeps these two settings in `settings.json` (`lifecycle/shellSettings.ts`).
   runInBackground: "octoboard.runInBackground",
   showMenuBarIcon: "octoboard.showMenuBarIcon",
-  keepAwake: "octoboard.keepAwake",
-  keepAwakeWhen: "octoboard.keepAwakeWhen",
   updateChannel: "octoboard.updateChannel",
   keyboardShortcuts: "octoboard.keyboardShortcuts",
 } as const;

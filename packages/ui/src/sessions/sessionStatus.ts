@@ -19,7 +19,8 @@ const WORKING_STATUSES: ReadonlySet<SessionStatus> = new Set(["starting", "worki
 
 /** Whether `session` is at work: starting, working or dormant, or idle with work left running in the background (a
  * paused one included). A session waiting for the user is not, which is what separates what holds the computer awake
- * from what holds a quit up (`quitHolders`). */
+ * from what holds a quit up (`quitHolders`). The daemon's `keep_awake::session_is_working` decides what holds the
+ * computer awake and mirrors this function; the two must stay in step. */
 export function sessionIsWorking(session: Session): boolean {
   return WORKING_STATUSES.has(session.status) || runsInBackground(session);
 }

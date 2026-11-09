@@ -1844,7 +1844,7 @@ export const tr: Translation<"one" | "other"> = {
   "configuration.export.paths.remedy": "Dosyayı yalnızca güvendiğiniz kişilerle paylaşın.",
   "configuration.export.general.description": "Görünüşü, dili, Markdown stilini ve sıralamayı içerir.",
   "configuration.export.appBehavior.description": "Başlangıçta oturumları sürdürmeyi, arka planda çalışmaya devam etmeyi, {menuBarIconAcc}, uykuyu engellemeyi ve boşta olan terminalleri kapatmayı içerir.",
-  "configuration.export.appBehavior.description.basic": "Başlangıçta oturumları sürdürmeyi ve boşta olan terminalleri kapatmayı içerir.",
+  "configuration.export.appBehavior.description.basic": "Başlangıçta oturumları sürdürmeyi, uykuyu engellemeyi ve boşta olan terminalleri kapatmayı içerir.",
   "configuration.export.git.description": "Saptanmış klon dizinini, depoları otomatik çekmeyi ve Git iş akışını içerir.",
   "configuration.export.agentBehavior.description": "Otomatik onaylanan istekleri ve soruları seçenek olarak sormayı içerir.",
   "configuration.export.shortcuts.description": "Değiştirdiğiniz klavye kestirmelerini içerir.",

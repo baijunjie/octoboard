@@ -1783,7 +1783,7 @@ export const th: Translation<"other"> = {
   "configuration.export.paths.remedy": "แชร์ไฟล์กับคนที่เชื่อถือเท่านั้น",
   "configuration.export.general.description": "รวมรูปลักษณ์ ภาษา รูปแบบ Markdown และการเรียงลำดับ",
   "configuration.export.appBehavior.description": "รวมการดำเนินเซสชันต่อเมื่อเริ่มต้น การทำงานเบื้องหลัง {menuBarIcon} การป้องกันการสลีป และการปิดเทอร์มินัลที่ไม่ได้ใช้งาน",
-  "configuration.export.appBehavior.description.basic": "รวมการดำเนินเซสชันต่อเมื่อเริ่มต้นและการปิดเทอร์มินัลที่ไม่ได้ใช้งาน",
+  "configuration.export.appBehavior.description.basic": "รวมการดำเนินเซสชันต่อเมื่อเริ่มต้น การป้องกันการสลีป และการปิดเทอร์มินัลที่ไม่ได้ใช้งาน",
   "configuration.export.git.description": "รวมไดเรกทอรีโคลนเริ่มต้น การพูลที่เก็บอัตโนมัติ และเวิร์กโฟลว์ Git",
   "configuration.export.agentBehavior.description": "รวมคำขอที่อนุมัติอัตโนมัติและการถามด้วยตัวเลือก",
   "configuration.export.shortcuts.description": "รวมปุ่มลัดแป้นพิมพ์ที่คุณเปลี่ยน",

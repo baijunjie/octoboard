@@ -23,6 +23,7 @@ mod host_tools;
 mod hostfs;
 mod instance_lock;
 mod interface_language;
+mod keep_awake;
 #[cfg(test)]
 mod layering_tests;
 mod log_file;
@@ -208,6 +209,10 @@ async fn run_daemon(parent_pid: Option<u32>, log_file: log_file::LogFile) -> Res
     accounts::quotas::spawn(&state);
     coordinator::archive_cleanup::spawn(&state);
     coordinator::resume_on_start::spawn(&state);
+    // Probed once before the server starts answering, on a blocking thread (it may wait on the
+    // host's bus, which the probe itself bounds), so that a snapshot only reads the answer kept.
+    let _ = tokio::task::spawn_blocking(platform::sleep::available).await;
+    keep_awake::spawn(&state);
     // Likewise off the runtime: it runs `git` in every project's directory, a few at a time.
     project_git::remote::reconcile_remote_urls(&state);
     project_git::watch::start(&state);

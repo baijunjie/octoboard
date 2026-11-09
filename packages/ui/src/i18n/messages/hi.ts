@@ -1660,7 +1660,7 @@ export const hi: Translation<"one" | "other"> = {
   "configuration.export.paths.remedy": "फ़ाइल सिर्फ़ भरोसेमंद लोगों के साथ शेयर करें।",
   "configuration.export.general.description": "इसमें दिखावट, भाषा, Markdown स्टाइल और क्रम शामिल हैं।",
   "configuration.export.appBehavior.description": "इसमें शुरू होने पर सेशन फिर से शुरू करना, बैकग्राउंड में चलते रहना, {menuBarIcon}, स्लीप रोकना और निष्क्रिय टर्मिनल बंद करना शामिल हैं।",
-  "configuration.export.appBehavior.description.basic": "इसमें शुरू होने पर सेशन फिर से शुरू करना और निष्क्रिय टर्मिनल बंद करना शामिल हैं।",
+  "configuration.export.appBehavior.description.basic": "इसमें शुरू होने पर सेशन फिर से शुरू करना, स्लीप रोकना और निष्क्रिय टर्मिनल बंद करना शामिल हैं।",
   "configuration.export.git.description": "इसमें डिफ़ॉल्ट क्लोन डायरेक्टरी, रिपॉज़िटरी को अपने आप पुल करना और Git वर्कफ़्लो शामिल हैं।",
   "configuration.export.agentBehavior.description": "इसमें यह शामिल है कि कौन से अनुरोध अपने आप मंज़ूर होते हैं और सवाल विकल्पों के रूप में पूछे जाते हैं या नहीं।",
   "configuration.export.shortcuts.description": "इसमें आपके बदले हुए कीबोर्ड शॉर्टकट शामिल हैं।",

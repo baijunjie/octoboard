@@ -2,12 +2,42 @@
 
 use std::collections::BTreeMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use super::agents::AgentId;
 use super::git_workflow::GitWorkflowSettings;
 use super::records::Account;
 use crate::providers::SettingValue;
+
+/// When Prevent sleep holds the daemon's host awake (`Settings.keep_awake`).
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KeepAwakeWhen {
+    /// For as long as the setting is on.
+    Always,
+    /// While a session is working: starting, working or dormant, or idle with work left running in
+    /// the background (any console's, any project's).
+    #[default]
+    Working,
+}
+
+impl KeepAwakeWhen {
+    /// The name it has on the wire, which is what the serialization writes.
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            Self::Always => "always",
+            Self::Working => "working",
+        }
+    }
+
+    /// The value named `text` on the wire, or `None` for a name this build does not know.
+    pub fn from_wire_name(text: &str) -> Option<Self> {
+        [Self::Always, Self::Working]
+            .into_iter()
+            .find(|value| value.wire_name() == text)
+    }
+}
 
 /// The app-wide user settings the daemon stores, and the account list alongside them: a record
 /// that already grows without a new request shape or a new event for every addition, which is
@@ -48,6 +78,12 @@ pub struct Settings {
     /// render in before it has connected) and the one sessions are told to reply in, so a change
     /// reaches every window. Carried by a configuration export in its General section.
     pub interface_language: Option<String>,
+    /// Prevent sleep: whether the daemon holds its host awake (see `crate::keep_awake`), when
+    /// `keep_awake_when` says it should. Off unless the user turned it on. It acts only where the
+    /// host can be held (`HostInfo::keep_awake`); elsewhere it is stored and does nothing.
+    pub keep_awake: bool,
+    /// When Prevent sleep holds. `working` unless the user chose `always`.
+    pub keep_awake_when: KeepAwakeWhen,
     /// Whether a new session whose account was left out runs on the account of its agent whose
     /// weekly quota resets soonest and still has some left. Off unless the user turned it on.
     /// Without a weekly pick, try the inherited account, then the first usable in saved order.
@@ -128,6 +164,8 @@ impl Default for Settings {
             auto_approve_handoffs: false,
             ask_questions_as_choices: true,
             interface_language: None,
+            keep_awake: false,
+            keep_awake_when: KeepAwakeWhen::Working,
             auto_select_account: false,
             auto_switch_on_usage_limit: false,
             auto_start_quota_windows: false,
@@ -180,6 +218,7 @@ mod tests {
             agent_cli_statuses: vec![],
             home_dir: Some("/Users/dev".to_string()),
             host: crate::platform::HostFacts::current().into(),
+            keep_awake_held: false,
             shell_terminals: vec![],
         })
         .unwrap();

@@ -793,6 +793,62 @@ async fn the_agent_account_switches_round_trip_with_the_accounts() {
     assert!(echoed.auto_select_account);
 }
 
+/// Prevent sleep is the daemon's own: every export carries it, an inspection shows it beside this
+/// machine's, and an import stores it, a name of when to hold this build does not know being left
+/// out of the application and of the reply.
+#[tokio::test]
+async fn prevent_sleep_round_trips_through_the_daemon() {
+    let (source, _source_dir) = app_state("import-keep-awake-source");
+    source.store.set_keep_awake(true).unwrap();
+    source
+        .store
+        .set_keep_awake_when(KeepAwakeWhen::Always)
+        .unwrap();
+    let full = export_everything(&source);
+    assert_eq!(full["settings"]["keep_awake"], true);
+    assert_eq!(full["settings"]["keep_awake_when"], "always");
+
+    let (target, _target_dir) = app_state("import-keep-awake-target");
+    let inspected = inspect(&target, &full).await.unwrap().settings.unwrap();
+    assert!(inspected.keep_awake && !inspected.current_keep_awake);
+    assert_eq!(inspected.keep_awake_when, KeepAwakeWhen::Always);
+    assert_eq!(inspected.current_keep_awake_when, KeepAwakeWhen::Working);
+
+    let options = |document: &serde_json::Value| ApplyOptions {
+        settings: carried_sections(document),
+        accounts: None,
+        consoles: true,
+        clone_dir: true,
+        agents: None,
+    };
+    let imported = apply(&target, &full, Vec::new(), options(&full))
+        .await
+        .unwrap();
+    assert!(target.store.keep_awake().unwrap());
+    assert_eq!(
+        target.store.keep_awake_when().unwrap(),
+        KeepAwakeWhen::Always
+    );
+    let echoed = imported.settings_applied.unwrap();
+    assert_eq!(echoed.keep_awake, Some(true));
+    assert_eq!(echoed.keep_awake_when.as_deref(), Some("always"));
+
+    let mut unknown = full.clone();
+    unknown["settings"]["keep_awake"] = json!(false);
+    unknown["settings"]["keep_awake_when"] = json!("sometimes");
+    let inspected = inspect(&target, &unknown).await.unwrap().settings.unwrap();
+    assert_eq!(inspected.keep_awake_when, KeepAwakeWhen::Always);
+    let imported = apply(&target, &unknown, Vec::new(), options(&unknown))
+        .await
+        .unwrap();
+    assert!(!target.store.keep_awake().unwrap());
+    assert_eq!(
+        target.store.keep_awake_when().unwrap(),
+        KeepAwakeWhen::Always
+    );
+    assert_eq!(imported.settings_applied.unwrap().keep_awake_when, None);
+}
+
 /// A version 1 document, as the beta releases wrote it, is upgraded before it is read: the Agent
 /// accounts settings move from `settings` into the accounts region, an account's sharing flag is
 /// dropped, and what version 1 never carried reads as absent. Inspecting and applying see the same
@@ -1016,7 +1072,7 @@ async fn the_interface_language_is_carried_and_an_unknown_setting_is_ignored() {
 }
 
 /// The values only a client holds (appearance, Markdown style, running in the background, the menu
-/// bar icon, Prevent sleep) are not built by the daemon and pass through an import's reply as they
+/// bar icon) are not built by the daemon and pass through an import's reply as they
 /// came.
 #[tokio::test]
 async fn the_clients_own_values_pass_through_an_import_untouched() {
@@ -1027,8 +1083,6 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
         "markdown_style",
         "run_in_background",
         "show_menu_bar_icon",
-        "keep_awake",
-        "keep_awake_when",
     ] {
         assert!(full["settings"].get(client_held).is_none());
     }
@@ -1038,8 +1092,6 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
     carried["settings"]["markdown_style"] = json!("github");
     carried["settings"]["run_in_background"] = json!(true);
     carried["settings"]["show_menu_bar_icon"] = json!(false);
-    carried["settings"]["keep_awake"] = json!(true);
-    carried["settings"]["keep_awake_when"] = json!("always");
     let (target, _target_dir) = app_state("import-client-values-target");
     let imported = apply(
         &target,
@@ -1060,8 +1112,6 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
     assert_eq!(echoed.markdown_style.as_deref(), Some("github"));
     assert_eq!(echoed.run_in_background, Some(true));
     assert_eq!(echoed.show_menu_bar_icon, Some(false));
-    assert_eq!(echoed.keep_awake, Some(true));
-    assert_eq!(echoed.keep_awake_when.as_deref(), Some("always"));
 
     // Absent in the document: absent in the reply, so a client leaves its own alone.
     let imported = apply(
@@ -1084,11 +1134,9 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
             echoed.appearance,
             echoed.markdown_style,
             echoed.run_in_background,
-            echoed.show_menu_bar_icon,
-            echoed.keep_awake,
-            echoed.keep_awake_when
+            echoed.show_menu_bar_icon
         ),
-        (None, None, None, None, None, None)
+        (None, None, None, None)
     );
 }
 

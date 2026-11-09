@@ -1,20 +1,21 @@
 import React from "react";
 
-import { useT } from "../i18n/react";
-import type { DocumentSettings, GitWorkflowSettings, SettingsSection } from "../protocol";
+import { Message, useT } from "../i18n/react";
+import { isKeepAwakeWhen, KEEP_AWAKE_WHEN_LABEL } from "./keepAwakeWhen";
+import type { DocumentSettings, GitWorkflowSettings, KeepAwakeWhen, SettingsSection } from "../protocol";
 import { AGENT_BEHAVIOR_SWITCHES, APP_BEHAVIOR_SWITCHES, type ApplicationBooleanField, type BooleanSetting, CLEANUP_SWITCHES, GENERAL_SWITCHES, GIT_SWITCHES } from "./booleanSettings";
 import type { ClientSettingValue } from "./clientSettings";
-import { BooleanSettingLine, choiceHeader, CompositeLine, type ImportChoice } from "./importParts";
+import { BooleanSettingLine, choiceHeader, CompositeLine, type ImportChoice, SettingLine } from "./importParts";
 import { FlatCard } from "../components/card/FlatCard";
 import { gitWorkflowValues } from "./importValues";
 import { SETTINGS_SECTIONS } from "./settingsSections";
 
 /** The application settings the cards show: the ones the daemon holds, each optional as a document carries them. */
-type GroupedSettings = Pick<DocumentSettings, ApplicationBooleanField | "git_workflow">;
+type GroupedSettings = Pick<DocumentSettings, ApplicationBooleanField | "keep_awake_when" | "git_workflow">;
 
 /** This machine's values of the application settings a document carries that the daemon holds, in the shape of the
  * document's own. */
-export type CurrentSettings = { [F in ApplicationBooleanField]: boolean } & { git_workflow: GitWorkflowSettings };
+export type CurrentSettings = { [F in ApplicationBooleanField]: boolean } & { keep_awake_when: KeepAwakeWhen; git_workflow: GitWorkflowSettings };
 
 /** One group of settings as a card: `title` as its heading, then `lines` (see `SettingLine`) as its rows; nothing when
  * there are none. With a `choice` the heading carries a checkbox named by the title (see `choiceHeader`), the card stays
@@ -39,9 +40,9 @@ export function SettingsGroupCard({ title, lines, choice }: { title: string; lin
  * the sections and, within a group, of the lines that section shows. With `current` (this machine's values) it is the
  * review's: each line says what applying `settings` would change, and the git workflow lists the items that would
  * change with what each is now. Without it, it is the result's: each line says what `settings` were applied as, the git
- * workflow listing its values. The daemon holds the switches and the git workflow; the lines of what only the client
- * holds or carries are the caller's: `clientLine` words one of `clientSettings` (appearance, language, which the daemon
- * holds but is worded the same way, Markdown style, run in background, menu bar icon, prevent sleep and when),
+ * workflow listing its values. The daemon holds the switches, when Prevent sleep holds and the git workflow; the lines
+ * of what only the client holds or carries are the caller's: `clientLine` words one of `clientSettings` (appearance,
+ * language, which the daemon holds but is worded the same way, Markdown style, run in background, menu bar icon),
  * `sorting` is the session order's line, `cloneDir` is the default clone directory's line and `shortcuts` the keyboard
  * shortcuts', each absent when the document carries none. Only the `sections` given are drawn (all of them when
  * absent), and a group with no line is not drawn: what `settings` lacks has no line. With `choices` (the review's)
@@ -77,6 +78,20 @@ export function SettingsGroups({
       const wanted = settings[field];
       return wanted == null ? [] : [<BooleanSettingLine key={field} label={t(label)} wanted={wanted} current={current?.[field]} consequence={consequence} />];
     });
+  // When Prevent sleep holds is a choice of two, worded as the switches are; a value this build does not know has no line.
+  const keepAwakeWhenLine = () => {
+    const wanted = settings.keep_awake_when;
+    if (!isKeepAwakeWhen(wanted)) return [];
+    const label = t("settings.keepAwake.when.label");
+    const now = current?.keep_awake_when;
+    if (now === undefined) return [<SettingLine key="keep_awake_when" label={label} badge={t(KEEP_AWAKE_WHEN_LABEL[wanted])} />];
+    if (wanted === now) return [<SettingLine key="keep_awake_when" label={label} badge={t("configuration.import.settings.badge.same")} />];
+    return [
+      <SettingLine key="keep_awake_when" label={label} badge={t("configuration.import.settings.badge.changes")} tone="accent">
+        <Message id="configuration.import.settingValueChange" params={{ value: t(KEEP_AWAKE_WHEN_LABEL[wanted]), current: t(KEEP_AWAKE_WHEN_LABEL[now]) }} />
+      </SettingLine>,
+    ];
+  };
   const appBehaviorSwitches = (...fields: ApplicationBooleanField[]) => switchLines(APP_BEHAVIOR_SWITCHES.filter(({ field }) => fields.includes(field)));
   const clientLines = (...fields: ClientSettingValue["field"][]) =>
     fields.flatMap((wanted) => clientSettings.filter(({ field }) => field === wanted).map((setting) => React.cloneElement(clientLine(setting), { key: setting.field })));
@@ -98,7 +113,9 @@ export function SettingsGroups({
         title={t("settings.section.appBehavior")}
         lines={[
           ...appBehaviorSwitches("resume_sessions_on_start"),
-          ...clientLines("run_in_background", "show_menu_bar_icon", "keep_awake", "keep_awake_when"),
+          ...clientLines("run_in_background", "show_menu_bar_icon"),
+          ...appBehaviorSwitches("keep_awake"),
+          ...keepAwakeWhenLine(),
           ...appBehaviorSwitches("auto_close_idle_shell_terminals"),
         ]}
       />

@@ -4,5 +4,5 @@
 
 [[permission]]
 identifier = "allow-tray"
-description = "Allows the frontend to hand over the menu bar icon's menu and to bring a hidden window back to the front."
-commands.allow = ["set_tray_menu", "bring_to_front"]
+description = "Allows the frontend to hand over the menu bar icon's menu, to say whether the computer is kept awake for the icon to show, and to bring a hidden window back to the front."
+commands.allow = ["set_tray_menu", "set_keep_awake_shown", "bring_to_front"]

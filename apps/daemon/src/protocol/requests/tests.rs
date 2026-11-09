@@ -1008,6 +1008,27 @@ fn an_answer_to_a_session_request_tells_a_value_left_out_from_a_null_one() {
     );
 }
 
+/// Prevent sleep arrives as a switch and a name of when to hold; a name that is not one is refused.
+#[test]
+fn an_update_settings_reads_prevent_sleep_and_refuses_an_unknown_when() {
+    use crate::protocol::KeepAwakeWhen;
+    let body = |json: &str| serde_json::from_str::<Request>(json).map(|request| request.body);
+    match body(r#"{"type":"update_settings","keep_awake":true,"keep_awake_when":"always"}"#)
+        .unwrap()
+    {
+        RequestBody::UpdateSettings {
+            keep_awake,
+            keep_awake_when,
+            ..
+        } => assert_eq!(
+            (keep_awake, keep_awake_when),
+            (Some(true), Some(KeepAwakeWhen::Always))
+        ),
+        _ => panic!("parses as update_settings"),
+    }
+    assert!(body(r#"{"type":"update_settings","keep_awake_when":"sometimes"}"#).is_err());
+}
+
 /// One field is enough: the others stay absent, and a body that names nothing leaves
 /// `auto_select_account` and `auto_start_quota_windows` absent too.
 #[test]

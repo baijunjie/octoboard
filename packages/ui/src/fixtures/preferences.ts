@@ -35,10 +35,6 @@ export interface Preferences {
   markdownStyle?: MarkdownStyle;
   /** The layout diffs open in; unified when unset. */
   diffLayout?: "unified" | "split";
-  /** The desktop app keeps the computer awake (Prevent sleep); off by default. */
-  keepAwake?: boolean;
-  /** When Prevent sleep holds; while sessions are working when unset. */
-  keepAwakeWhen?: "always" | "working";
   /** The release channel the user chose; unset, the running build's default (Beta on a prerelease, else Stable). */
   updateChannel?: UpdateChannel;
   /** The keyboard shortcuts the user has changed, by command; the others keep their defaults. */

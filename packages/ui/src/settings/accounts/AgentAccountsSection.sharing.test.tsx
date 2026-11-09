@@ -50,7 +50,7 @@ it("offers the sharing switch on each owned account and none on the default acco
 
 it("locks the sharing switch where the daemon's host cannot make file links, saying how to turn them on there", async () => {
   const { container: section, set } = mount("Codex");
-  await set({ host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings" } });
+  await set({ host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings", keep_awake: false } });
   const dialog = await openSettingsOf(section, "codex-work");
   const [sharing] = sharingSwitches(dialog);
   expect(sharing!.getAttribute("aria-disabled")).toBe("true");
@@ -65,7 +65,7 @@ it("locks the sharing switch where the daemon's host cannot make file links, say
 it("leaves an account that already shares free to be turned off where the host cannot make file links, with nothing under the switch", async () => {
   settings.accounts[1]!.share_default_config = true;
   const { container: section, set } = mount("Codex");
-  await set({ host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings" } });
+  await set({ host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings", keep_awake: false } });
   const dialog = await openSettingsOf(section, "codex-work");
   const [sharing] = sharingSwitches(dialog);
   expect(sharing!.checked).toBe(true);
@@ -79,7 +79,7 @@ it("leaves an account that already shares free to be turned off where the host c
 });
 
 describe("an account that shares, on a host that cannot make file links", () => {
-  const windows = { host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings" } } as const;
+  const windows = { host: { os: "windows", path_style: "windows", file_links: false, trash: "recycle_bin", settings: "settings", keep_awake: false } } as const;
 
   it("says the sessions that run, not Developer Mode, while sessions of the account run", async () => {
     settings.accounts[1]!.share_default_config = true;
@@ -108,7 +108,7 @@ it("keeps saying why sharing is locked, with the file links available, while ses
   settings.accounts[1]!.share_default_config = true;
   accountSharing.set("codex-work", { account: "codex-work", in_use: { sessions: 1, signing_in: false } });
   const { container: section, set } = mount("Codex");
-  await set({ host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "settings" } });
+  await set({ host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "settings", keep_awake: false } });
   const dialog = await openSettingsOf(section, "codex-work");
   const [sharing] = sharingSwitches(dialog);
   expect(sharing!.getAttribute("aria-disabled")).toBe("true");

@@ -1660,7 +1660,7 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "configuration.export.paths.remedy": "Compartilhe o arquivo apenas com pessoas em quem você confia.",
   "configuration.export.general.description": "Inclui a aparência, o idioma, o estilo de Markdown e a ordenação.",
   "configuration.export.appBehavior.description": "Inclui retomar sessões ao iniciar, continuar em segundo plano, o {menuBarIcon}, impedir a suspensão e fechar terminais inativos.",
-  "configuration.export.appBehavior.description.basic": "Inclui retomar sessões ao iniciar e fechar terminais inativos.",
+  "configuration.export.appBehavior.description.basic": "Inclui retomar sessões ao iniciar, impedir a suspensão e fechar terminais inativos.",
   "configuration.export.git.description": "Inclui o diretório padrão de clonagem, a obtenção automática de atualizações de repositórios e o fluxo de trabalho Git.",
   "configuration.export.agentBehavior.description": "Inclui quais solicitações são aprovadas automaticamente e se as perguntas são feitas como opções.",
   "configuration.export.shortcuts.description": "Inclui os atalhos de teclado que você alterou.",

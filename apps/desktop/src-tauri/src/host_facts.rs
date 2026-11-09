@@ -113,7 +113,7 @@ pub struct HostFacts {
     pub badge: bool,
     /// Closing the window can keep the application running.
     pub run_in_background: bool,
-    /// The application can hold the computer and its display awake (`keep_awake/`).
+    /// The menu bar icon can show that the daemon is keeping the computer awake (`tray::set_keep_awake_shown`).
     pub keep_awake: bool,
     /// The system can open the application when the user logs in (`launch_at_login/`).
     pub launch_at_login: bool,

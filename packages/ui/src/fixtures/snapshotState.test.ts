@@ -12,7 +12,7 @@ describe("snapshotState", () => {
   it("says nothing of the host unless given, and puts a given one and its home directory in the state", () => {
     expect(snapshotState({}).host).toBeUndefined();
     expect(snapshotState({}).homeDir).toBe("/Users/dev");
-    const host = { os: "windows", path_style: "windows", file_links: true, trash: "recycle_bin", settings: "settings" } as const;
+    const host = { os: "windows", path_style: "windows", file_links: true, trash: "recycle_bin", settings: "settings", keep_awake: false } as const;
     const windows = snapshotState({ host, homeDir: "C:\\Users\\dev" });
     expect(windows.host).toEqual(host);
     expect(windows.homeDir).toBe("C:\\Users\\dev");

@@ -16,6 +16,7 @@ use super::git_workflow::{
 };
 use super::records::{ConsoleSessionColour, ProjectAccount, ProjectSource};
 use super::session_branches::SessionBranchTarget;
+use super::settings::KeepAwakeWhen;
 use crate::providers::SettingValue;
 
 /// The appearance a client has resolved for its window, sent with a launch so Grok's theme matches
@@ -727,6 +728,12 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         interface_language: Option<String>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        keep_awake: Option<bool>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        keep_awake_when: Option<KeepAwakeWhen>,
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         auto_select_account: Option<bool>,

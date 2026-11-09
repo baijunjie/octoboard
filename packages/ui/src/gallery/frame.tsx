@@ -1,9 +1,9 @@
 // The page one scenario renders in, loaded in an iframe by the gallery shell (`shell.tsx`). It renders the real `App`
 // under the app's provider tree (`AppRoot`), over a fixture daemon in place of the WebSocket one. It passes
 // `nativeSync={false}` to `AppRoot` and does not reveal the window: the browser platform has no native menu or window.
-// It leaves out the syncs to the shell too (the keep-awake one, and `connectShellSettings` for the background and menu bar
-// icon choices): a scenario that offers `backgroundRun`, `menuBarIcon` or `keepAwake` gets a capability whose calls do
-// nothing (`galleryPlatform`), so there is no shell to push the choice to. Its stored preferences are set from the URL
+// It leaves out the syncs to the shell too (the keep-awake icon one, and `connectShellSettings` for the background and menu bar
+// icon choices): a scenario that offers `backgroundRun` or `menuBarIcon` gets a capability whose calls do nothing
+// (`galleryPlatform`), so there is no shell to push the choice to. Its stored preferences are set from the URL
 // before the app loads (`prepareStorage`); the choices the shell holds are set on their preference objects (`shellSettings`).
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
@@ -81,7 +81,7 @@ let daemonExited: ((detail: string) => void) | undefined;
  * grants stubbed from the scenario's `macosPermissions` (its System Settings pane refused when it gives a
  * `macosSettingsOpenError`), there being no other way to look at those rows than to really change a system setting, a
  * link opener that refuses with the error of a scenario's `externalLinkError` (otherwise the browser's own opener
- * stands, which opens a new tab), `backgroundRun`, `menuBarIcon`, `keepAwake` and `launchAtLogin` for a scenario that
+ * stands, which opens a new tab), `backgroundRun`, `menuBarIcon` and `launchAtLogin` for a scenario that
  * says so (the App behavior switches; none of them reaches a shell, and the login entry is a stub that keeps the last
  * choice, its list of login items refused when the scenario gives a `launchAtLoginOpenError`), the desktop shell's
  * `notifications` for one that says `desktopNotifications` (nothing is shown or opened; the link to the system's pane
@@ -140,7 +140,6 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
     ...(scenario?.menuBarIcon && {
       statusItem: { setVisible: async () => {}, setMenu: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} },
     }),
-    ...(scenario?.keepAwake && { keepAwake: { set: async () => {} } }),
     ...(launchAtLogin && {
       launchAtLogin: {
         status: async () => launchAtLogin.status,

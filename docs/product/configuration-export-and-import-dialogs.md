@@ -63,8 +63,8 @@ sentence.
   and ordered as Settings names them: **General**, **App behavior**, **Git**, **Agent behavior**, **Keyboard
   shortcuts** and **Cleanup** (see "Which settings travel" in `docs/product/settings-in-a-configuration.md`). Each has a
   one-sentence note under it saying what it includes: General the appearance, the language, the Markdown style and the
-  sorting; App behavior resuming sessions on start and closing idle terminals and, only where this client's platform
-  has all of them, running in the background, the menu bar icon (named as the system names it) and preventing sleep;
+  sorting; App behavior resuming sessions on start, preventing sleep and closing idle terminals and, only where this
+  client's platform has both, running in the background and the menu bar icon (named as the system names it);
   Git the default clone directory, pulling repositories automatically and the Git workflow; Agent behavior which
   requests are approved automatically and whether questions are asked as choices; Keyboard shortcuts the shortcuts the
   user has changed; Cleanup deleting archived sessions whose conversation is gone. Trusted folders, Permissions and
@@ -81,9 +81,9 @@ Every checkbox of the two groups starts unchecked, and no note changes with the 
 **Export** is unavailable while nothing is chosen — Do not export consoles with no checkbox checked — and nothing says
 why, since the boxes that left it so are in view. It asks the daemon for the document with the sections checked, adds
 the settings this client holds of those sections to it — for General its appearance, Markdown style and sorting; for
-App behavior, in the desktop application, keeping running in the background, showing the menu
-bar icon, and Prevent sleep with When to prevent sleep; for Keyboard shortcuts its changed shortcuts (see "The settings
-a client holds" in `docs/product/settings-in-a-configuration.md`) — and opens the save dialog. In the desktop app a
+App behavior, in the desktop application, keeping running in the background and showing the menu bar icon; for
+Keyboard shortcuts its changed shortcuts (see "The settings a client holds" in
+`docs/product/settings-in-a-configuration.md`) — and opens the save dialog. In the desktop app a
 toast names the file it was saved as. A browser files a download itself, under its own name and wherever its settings
 say, and does not report one that was blocked or cancelled, so there the toast says only that the configuration was
 downloaded and names no file. The save dialog is part of the export's request, so until it is answered the export
@@ -277,30 +277,32 @@ unchecked, a card collapses to its title row, with a **Left out** outcome at its
 the order of that section's rows:
 
 - **General**: Appearance, Language, Markdown style, then **Sorting**.
-- **App behavior**: the switch Resume sessions on start, then Keep running in the background, Show menu bar icon,
-  Prevent sleep and When to prevent sleep, then the switch Close idle terminals when closing the panel.
+- **App behavior**: the switch Resume sessions on start, then Keep running in the background and Show menu bar icon,
+  then the switch Prevent sleep and When to prevent sleep, then the switch Close idle terminals when closing the panel.
 - **Git**: the default clone directory, Automatically pull repositories, then one line for the git workflow.
 - **Agent behavior**: its five switches.
 - **Keyboard shortcuts**: one line, **Changed shortcuts**.
 - **Cleanup**: the switch Automatically delete archived sessions whose conversation is gone.
 
 A setting only a client holds, Language and Sorting have their line only when the file carries a value this client
-can use: a language this build offers; Keep running in the background, Show menu bar icon, Prevent sleep and When to
-prevent sleep have none in a browser. A switch
-or the git workflow that the file does not carry within a section it does carry — Resume sessions on start, in a file
-from a build without it — has its line all the same, badged **No change**, since applying leaves it as it is.
+can use: a language this build offers; Keep running in the background and Show menu bar icon have none in a browser. A
+switch, When to prevent sleep or the git workflow that the file does not carry within a section it does carry — Resume
+sessions on start, in a file from a build without it — has its line all the same, badged **No change**, since applying
+leaves it as it is; so has When to prevent sleep when the file names a choice this build does not know.
 
 A **switch**'s line names the setting with a badge for what applying would change from what is set now: **Turns on**,
 with what then follows in that setting's own words (see "The application settings an export carries" in
-`docs/product/settings-in-a-configuration.md`); **Turns off**; or **No change**.
+`docs/product/settings-in-a-configuration.md`) — nothing more for Prevent sleep; **Turns off**; or **No change**.
 
-A **setting only a client holds** — Appearance, Markdown style, Keep running in the background, Show menu bar icon,
-Prevent sleep, When to prevent sleep — is badged **Set to the file's**, with the file's value and, in brackets, the
-value this client has now, worded as Settings words them (a Markdown style by its name, a switch as **On** or **Off**,
-When to prevent sleep by its choice's name); or **No change** when they are the same. **Language**, which the daemon
-holds rather than the client, reads the same way, comparing the file's language with the language the daemon holds now
-— or with the language this window shows, when the daemon holds none or one this build does not offer — each by its
-name in its own language (see "The language the daemon holds" in `docs/product/language.md`).
+**When to prevent sleep**, which the daemon holds, is badged **Set to the file's**, with the file's choice and, in
+brackets, the one set now, each by its name as Settings words it; or **No change** when they are the same.
+
+A **setting only a client holds** — Appearance, Markdown style, Keep running in the background, Show menu bar icon — is
+badged **Set to the file's**, with the file's value and, in brackets, the value this client has now, worded as Settings
+words them (a Markdown style by its name, a switch as **On** or **Off**); or **No change** when they are the same.
+**Language**, which the daemon holds rather than the client, reads the same way, comparing the file's language with
+the language the daemon holds now — or with the language this window shows, when the daemon holds none or one this
+build does not offer — each by its name in its own language (see "The language the daemon holds" in `docs/product/language.md`).
 
 The **default clone directory** has its line when the file carries one that can be used here, or one written on another
 operating system. A directory written on another operating system (see "The default clone directory on import" in

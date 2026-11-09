@@ -10,8 +10,9 @@ import { SwitchSettingRow } from "./SettingRow";
 
 /** A setting that is one on/off switch the daemon holds (`booleanSetting` gives each its copy; see
  * `Settings.<field>` in protocol.generated.ts for what it does). The row's control never unmounts on its own, so this
- * needs no `useSectionRefocus`. */
-export function DaemonSwitchSetting({ field }: { field: BooleanField }): React.ReactElement {
+ * needs no `useSectionRefocus`. `motionKey` names the row for a list that animates the rows around it
+ * (`useListMotion`). */
+export function DaemonSwitchSetting({ field, motionKey }: { field: BooleanField; motionKey?: string }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
   const enabled = useDaemonStore((s) => s.settings[field]);
@@ -27,6 +28,7 @@ export function DaemonSwitchSetting({ field }: { field: BooleanField }): React.R
 
   return (
     <SwitchSettingRow
+      motionKey={motionKey}
       label={t(label)}
       help={help && <HelpTip label={t(help.label)}>{t(help.text)}</HelpTip>}
       description={t(enabled ? on : description.off)}

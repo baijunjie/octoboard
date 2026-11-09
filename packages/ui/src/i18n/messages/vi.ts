@@ -1660,7 +1660,7 @@ export const vi: Translation<"other"> = {
   "configuration.export.paths.remedy": "Chỉ chia sẻ tệp với người đáng tin cậy.",
   "configuration.export.general.description": "Bao gồm giao diện, ngôn ngữ, kiểu Markdown và sắp xếp.",
   "configuration.export.appBehavior.description": "Bao gồm tiếp tục các phiên khi khởi động, chạy nền, {menuBarIcon}, ngăn chế độ ngủ và đóng các thiết bị đầu cuối nhàn rỗi.",
-  "configuration.export.appBehavior.description.basic": "Bao gồm tiếp tục các phiên khi khởi động và đóng các thiết bị đầu cuối nhàn rỗi.",
+  "configuration.export.appBehavior.description.basic": "Bao gồm tiếp tục các phiên khi khởi động, ngăn chế độ ngủ và đóng các thiết bị đầu cuối nhàn rỗi.",
   "configuration.export.git.description": "Bao gồm thư mục sao chép mặc định, tự động kéo kho lưu trữ và quy trình Git.",
   "configuration.export.agentBehavior.description": "Bao gồm các yêu cầu được tự động chấp thuận và việc đặt câu hỏi bằng các lựa chọn.",
   "configuration.export.shortcuts.description": "Bao gồm các phím tắt bạn đã thay đổi.",

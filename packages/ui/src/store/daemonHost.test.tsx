@@ -17,7 +17,7 @@ import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import type { State } from "./state";
 
-const MAC_MACHINE = { host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings" }, homeDir: "/Users/dev" } as const satisfies {
+const MAC_MACHINE = { host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings", keep_awake: false }, homeDir: "/Users/dev" } as const satisfies {
   host: HostInfo;
   homeDir: string;
 };

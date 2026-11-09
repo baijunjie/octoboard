@@ -90,6 +90,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             "agents",
             "handoff",
             "hooks",
+            "keep_awake",
             "messaging",
             "records",
             "session",

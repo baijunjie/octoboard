@@ -64,7 +64,7 @@ Each of those stays the user's own, in the UI. A project's directory, source, ho
 either kind: they are chosen when the project is associated, by the user or by `add_project`, and nobody, the user
 included, can edit them afterwards (see "Editing a project" in `docs/product/projects.md`). Nor do the tools reach what a
 window keeps for itself rather than the daemon, such as the appearance, Markdown style, the window's own language,
-keyboard shortcuts, keeping running in the background, showing the menu bar icon and Prevent sleep, nor what the system
+keyboard shortcuts, keeping running in the background and showing the menu bar icon, nor what the system
 keeps, such as Launch at login.
 
 The console session's instructions tell it that projects, its console and the application settings belong to the
@@ -205,6 +205,8 @@ working directory. Neither the avatar itself nor the console's console session i
 | `auto_pull_repositories` | Whether projects behind their upstream are pulled (fast-forwarded) on their own (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). |
 | `auto_delete_unresumable_archives` | Whether archived sessions whose conversation is gone are deleted on their own (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). |
 | `resume_sessions_on_start` | Whether, when the daemon starts, the interrupted sessions are resumed on their own (see "Resume sessions on start" in `docs/product/settings.md` and "Resuming the interrupted sessions at start" in `docs/product/archiving-and-resuming-sessions.md`). |
+| `keep_awake` | Prevent sleep: whether the daemon keeps the computer it runs on awake (see "Prevent sleep" in `docs/product/settings.md`). |
+| `keep_awake_when` | When Prevent sleep holds: `always`, or `working` for while any session is working (see "When the computer is kept awake" in `docs/product/keeping-the-computer-awake.md`). |
 | `auto_select_account` | Whether a new session whose account was not named chooses a usable account automatically, preferring the initial agent's soonest weekly reset and trying another added agent when needed (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/opening-sessions.md`). Read-only. |
 | `interface_language` | The language the daemon holds, which every window of the user shows and sessions are told to talk to the user in, as its tag, or `null` while it holds none (see "The language the daemon holds" in `docs/product/language.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
@@ -215,12 +217,13 @@ working directory. Neither the avatar itself nor the console's console session i
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 
 `update_settings` takes `auto_close_idle_shell_terminals`, `auto_pull_repositories`,
-`auto_delete_unresumable_archives`, `resume_sessions_on_start`, `interface_language`,
-`default_clone_dir` and `git_workflow`, under the rules of the same settings in Settings: the
-switches take `true` or `false`, a clone directory must be absolute or start with `~/`, and a blank one goes back to the
-built-in default. `interface_language` is a tag of an offered language (see "The offered languages" in
-`docs/product/language.md`), surrounding whitespace ignored; any other text, a blank one included, is refused. It
-changes the language the daemon holds, as a pick in Settings does, and every open window switches to it.
+`auto_delete_unresumable_archives`, `resume_sessions_on_start`, `keep_awake`, `keep_awake_when`, `interface_language`,
+`default_clone_dir` and `git_workflow`, under the rules of the same settings in Settings: the switches take `true` or
+`false`, `keep_awake_when` is `always` or `working` (any other text is refused, surrounding whitespace ignored), a clone
+directory must be absolute or start with `~/`, and a blank one goes back to the built-in default. `interface_language`
+is a tag of an offered language (see "The offered languages" in `docs/product/language.md`), surrounding whitespace
+ignored; any other text, a blank one included, is refused. It changes the language the daemon holds, as a pick in
+Settings does, and every open window switches to it.
 `git_workflow` is an object of any of the five git workflow settings, with the values `update_project`'s takes
 (`squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while `development` is not `in_place`, and
 keep their values while it is); an item left out, or given as `null`, stays as it is. A refused value leaves the others
@@ -233,7 +236,8 @@ Settings does, which changes files in the user's repositories. Turning `auto_del
 nothing at once, and turning it off stops a deletion pass under way, exactly as the switch in Settings does. The call
 answers as `get_settings` does. Changing `auto_close_idle_shell_terminals` closes nothing at once; it applies when
 a user next explicitly closes the Terminal panel. Changing `resume_sessions_on_start` resumes nothing at once; it is
-read when the daemon next starts.
+read when the daemon next starts. Changing `keep_awake` or `keep_awake_when` takes effect at once: on a computer that
+can be held awake, the daemon takes or releases its hold on the computer's sleep.
 
 ## When a change takes effect
 

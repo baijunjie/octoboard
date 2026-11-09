@@ -164,6 +164,7 @@ export function reducer(state: State, action: Action): State {
             accountSharing: keepSame(state.accountSharing, event.account_sharing.filter(hasSharingState), (sharing) => sharing.account),
             homeDir: event.home_dir,
             host: sameValue(state.host, event.host) ? state.host : event.host,
+            keepAwakeHeld: event.keep_awake_held,
             shellTerminals: keepSame(state.shellTerminals, event.shell_terminals, (t) => t.id),
           };
         case "trusted_directories_updated":
@@ -340,6 +341,8 @@ export function reducer(state: State, action: Action): State {
           const settings = keepSameFields(state.settings, event.settings);
           return settings === state.settings ? state : { ...state, settings };
         }
+        case "keep_awake_held_updated":
+          return state.keepAwakeHeld === event.keep_awake_held ? state : { ...state, keepAwakeHeld: event.keep_awake_held };
         case "agent_availability_updated":
           return { ...state, agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])) };
         case "agent_cli_status_updated": {

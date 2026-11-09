@@ -75,6 +75,12 @@ commits or plan milestones it spans, is made in place at the version it already 
 past schema and no migration test. After a release, the first change to what it carried raises the version once, and
 later changes before the next release fold into that same version and step.
 
+Amending an unreleased step in place leaves behind any developer database an earlier build already brought to that
+version: the store opens a database at its own `SCHEMA_VERSION` as it is, so it fails at the first read of what the
+amendment added ("no such column"). That is expected, not a defect to fix in code: such a database is moved aside and
+created afresh, never bridged by a bump, a second step or a guard that tolerates the missing column. Say so to the user
+when the branch carrying the amendment replaces a build they have run.
+
 A version is released only once a release tag (`desktop-v*`, the tags `.github/workflows/release.yml` builds) is on a
 commit that carries it; check the remote's tags (`git ls-remote --tags origin 'desktop-v[0-9]*'`), not only the local
 `git tag`. A prerelease tag such as `desktop-v0.1.0-beta.1` is a release like any other. Once a version is released, a

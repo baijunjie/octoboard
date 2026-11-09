@@ -12,7 +12,9 @@ use super::agents::{read_account_order, read_added_agents};
 use super::provider_settings::read_provider_settings;
 use super::rows::{enum_from_row, enum_to_text};
 use super::{Store, SETTINGS_ID};
-use crate::protocol::{AgentId, GitWorkflowSettings, GitWorkflowSettingsChanges, Settings};
+use crate::protocol::{
+    AgentId, GitWorkflowSettings, GitWorkflowSettingsChanges, KeepAwakeWhen, Settings,
+};
 
 /// Where a clone goes while the user has not chosen a directory.
 const BUILT_IN_CLONE_DIR: &str = "~/Projects";
@@ -47,6 +49,8 @@ impl Store {
             auto_approve_handoffs: read_setting(&conn, "auto_approve_handoffs")?,
             ask_questions_as_choices: read_setting(&conn, "ask_questions_as_choices")?,
             interface_language: read_setting(&conn, "interface_language")?,
+            keep_awake: read_setting(&conn, "keep_awake")?,
+            keep_awake_when: read_keep_awake_when(&conn)?,
             auto_select_account: read_setting(&conn, "auto_select_account")?,
             auto_switch_on_usage_limit: read_setting(&conn, "auto_switch_on_usage_limit")?,
             auto_start_quota_windows: read_setting(&conn, "auto_start_quota_windows")?,
@@ -231,6 +235,20 @@ impl Store {
         Ok(changed > 0)
     }
 
+    /// When Prevent sleep holds (`keep_awake`).
+    pub fn keep_awake_when(&self) -> Result<KeepAwakeWhen> {
+        read_keep_awake_when(&self.lock())
+    }
+
+    /// Whether the setting actually changed.
+    pub fn set_keep_awake_when(&self, value: KeepAwakeWhen) -> Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE settings SET keep_awake_when = ?2 WHERE id = ?1 AND keep_awake_when != ?2",
+            params![SETTINGS_ID, enum_to_text(&value)],
+        )?;
+        Ok(changed > 0)
+    }
+
     /// The directory a clone lands in when none is named: the stored one, else `~/Projects`
     /// expanded, which is as absolute and lexically normalised as the home it expands from.
     pub fn default_clone_dir(&self) -> Result<String> {
@@ -295,6 +313,7 @@ bool_settings! {
     auto_switch_on_usage_limit, set_auto_switch_on_usage_limit;
     auto_start_quota_windows, set_auto_start_quota_windows;
     resume_sessions_on_start, set_resume_sessions_on_start;
+    keep_awake, set_keep_awake;
 }
 
 impl Store {
@@ -304,6 +323,14 @@ impl Store {
         let changed = self.lock().execute(sql, params![SETTINGS_ID, value])?;
         Ok(changed > 0)
     }
+}
+
+fn read_keep_awake_when(conn: &Connection) -> Result<KeepAwakeWhen> {
+    Ok(conn.query_row(
+        "SELECT keep_awake_when FROM settings WHERE id = ?1",
+        params![SETTINGS_ID],
+        |row| enum_from_row(row, 0),
+    )?)
 }
 
 fn read_git_workflow_settings(conn: &Connection) -> Result<GitWorkflowSettings> {
@@ -590,6 +617,13 @@ mod tests {
                 read: |settings| settings.auto_start_quota_windows,
                 get: Store::auto_start_quota_windows,
                 set: Store::set_auto_start_quota_windows,
+            },
+            Setting {
+                column: "keep_awake",
+                default: false,
+                read: |settings| settings.keep_awake,
+                get: Store::keep_awake,
+                set: Store::set_keep_awake,
             },
             Setting {
                 column: "resume_sessions_on_start",

@@ -1785,7 +1785,7 @@ export const ko: Translation<"other"> = {
   "configuration.export.paths.remedy": "신뢰하는 사람에게만 파일을 공유해 주세요.",
   "configuration.export.general.description": "화면 모드, 언어, Markdown 스타일, 정렬을 포함합니다.",
   "configuration.export.appBehavior.description": "시작 시 세션 재개, 백그라운드 실행, {menuBarIcon}, 잠자기 방지, 유휴 터미널 닫기를 포함합니다.",
-  "configuration.export.appBehavior.description.basic": "시작 시 세션 재개와 유휴 터미널 닫기를 포함합니다.",
+  "configuration.export.appBehavior.description.basic": "시작 시 세션 재개, 잠자기 방지, 유휴 터미널 닫기를 포함합니다.",
   "configuration.export.git.description": "기본 복제 디렉터리, 저장소 자동 풀, Git 작업 흐름을 포함합니다.",
   "configuration.export.agentBehavior.description": "자동으로 승인하는 요청과 선택지로 질문할지 여부를 포함합니다.",
   "configuration.export.shortcuts.description": "변경한 키보드 단축키를 포함합니다.",

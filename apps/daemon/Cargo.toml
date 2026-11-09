@@ -66,6 +66,11 @@ ureq = { version = "3", default-features = false, features = ["rustls", "platfor
 libc = "0.2"
 portable-pty = "0.8"
 
+# The Linux hold on sleep (`platform::sleep`): logind's inhibitor lock over D-Bus. Pure Rust, with
+# blocking calls; the version the lockfile already resolves for other dependencies.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5"
+
 # The platform layer's Windows modules; the version the lockfile already resolves for other
 # dependencies.
 [target.'cfg(windows)'.dependencies]
@@ -86,6 +91,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Kernel",
     "Win32_System_LibraryLoader",
     "Win32_System_Pipes",
+    "Win32_System_Power",
     "Win32_System_ProcessStatus",
     "Win32_System_Registry",
     "Win32_System_SystemInformation",
