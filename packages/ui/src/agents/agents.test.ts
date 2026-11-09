@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { consoleOf, projectOf } from "../fixtures/builders";
-import { providerModelDisplay } from "./providers";
+import { detectionMarkers, providerModelDisplay } from "./providers";
 import { TEST_AGENTS, TEST_PROVIDERS } from "../test/testProviders";
 import { agentChoiceBadge, agentPickerOptions, defaultAccountName, inheritedSessionLaunch, listedPickerAgents, noAgentState, projectSessionAgent, projectSessionLaunch, selectableAgent } from "./agents";
 import { format } from "../i18n/catalog";
@@ -173,5 +173,15 @@ describe("the launch settings a session inherits", () => {
     const owner = consoleOf("c", "Console", { launch: { claude: { model: "best", effort: "high" }, codex: { model: "best" } } });
     expect(inheritedSessionLaunch(owner, undefined, "claude", display("claude"))).toEqual({ model: null, effort: "high" });
     expect(inheritedSessionLaunch(owner, undefined, "codex", display("codex")).model).toBe("best");
+  });
+});
+
+describe("detectionMarkers", () => {
+  it("lists the served names in the registry's order, each once", () => {
+    expect(detectionMarkers(TEST_PROVIDERS)).toEqual(["CLAUDE.md", ".claude", ".codex", "AGENTS.md", ".agents", ".grok", ".test-agent"]);
+  });
+
+  it("is empty while the daemon has not served the providers", () => {
+    expect(detectionMarkers([])).toEqual([]);
   });
 });

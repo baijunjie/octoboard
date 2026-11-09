@@ -1360,7 +1360,7 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "dialog.project.agentDetect": "Detectar pelos arquivos",
   "dialog.project.agentDetectHint": "O agente escolhido aqui será usado em todos os repositórios.",
   "dialog.project.agentDetectHelp": "Sobre a detecção do agente",
-  "dialog.project.agentDetectMechanism": "{detect} procura {claudeFile}, {agentsFile} e pastas de agentes como {claudeDir} ou {codexDir} em cada repositório; quando não consegue decidir, herda do console.",
+  "dialog.project.agentDetectMechanism": "{detect} procura arquivos e pastas de agentes como {markers} em cada repositório; quando não consegue decidir, herda do console.",
   "dialog.project.directoryRequired": "Um diretório é obrigatório.",
   "dialog.project.pathChecking": "Verificando o diretório…",
   "dialog.project.createEmptyHint": "Um projeto vazio será criado neste diretório.",

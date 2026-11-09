@@ -22,6 +22,10 @@ pub struct ProviderInfo {
     /// The configuration directory the provider uses when none is set, relative to the home
     /// directory (`.claude`).
     pub default_config_dir: &'static str,
+    /// The names at a project's top level that point at the provider, as `DetectionMarkers` holds
+    /// them: its own, then the generic ones it reads. A client shows them to say what detecting
+    /// the agent of a repository looks for; several providers may carry the same generic name.
+    pub detection_markers: Vec<&'static str>,
     pub capabilities: Capabilities,
     /// How the provider's own interface names its quota windows, which a client's wording follows.
     pub quota_windows: QuotaWindowNaming,
@@ -40,6 +44,13 @@ impl ProviderInfo {
             short_name: descriptor.short_name,
             install_url: descriptor.install_url,
             default_config_dir: descriptor.layout.default_dir,
+            detection_markers: descriptor
+                .detection
+                .own
+                .iter()
+                .chain(descriptor.detection.generic)
+                .copied()
+                .collect(),
             capabilities: descriptor.capabilities,
             quota_windows: descriptor.quota_windows,
             model_display: descriptor.model_display,
@@ -70,6 +81,14 @@ mod tests {
         assert_eq!(claude["id"], "claude");
         assert_eq!(claude["label"], "Claude Code");
         assert_eq!(claude["default_config_dir"], ".claude");
+        assert_eq!(
+            claude["detection_markers"],
+            serde_json::json!(["CLAUDE.md", ".claude"])
+        );
+        assert_eq!(
+            serde_json::to_value(&served[1]).unwrap()["detection_markers"],
+            serde_json::json!([".codex", "AGENTS.md", ".agents"])
+        );
         assert_eq!(claude["capabilities"]["status_line"], true);
         assert_eq!(
             claude["capabilities"]["delivery"]["holds_report_for_completion_notice"],

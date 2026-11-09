@@ -55,9 +55,9 @@ const SETTINGS: Record<Agent, SettingDescriptor[]> = {
 /** Every registered provider's descriptor data, in the registry's order (claude, codex, grok), constant like the real
  * daemon's while it runs. */
 export const FIXTURE_PROVIDERS: ProviderInfo[] = [
-  { id: "claude", label: "Claude Code", short_name: "Claude", install_url: "https://code.claude.com/docs/en/setup", default_config_dir: ".claude", capabilities: CAPABILITIES.claude, quota_windows: QUOTA_WINDOWS.claude, model_display: MODEL_DISPLAY.claude, settings: SETTINGS.claude },
-  { id: "codex", label: "Codex", short_name: "Codex", install_url: "https://github.com/openai/codex", default_config_dir: ".codex", capabilities: CAPABILITIES.codex, quota_windows: QUOTA_WINDOWS.codex, model_display: MODEL_DISPLAY.codex, settings: SETTINGS.codex },
-  { id: "grok", label: "Grok Build", short_name: "Grok", install_url: "https://docs.x.ai/build/overview", default_config_dir: ".grok", capabilities: CAPABILITIES.grok, quota_windows: QUOTA_WINDOWS.grok, model_display: MODEL_DISPLAY.grok, settings: SETTINGS.grok },
+  { id: "claude", label: "Claude Code", short_name: "Claude", install_url: "https://code.claude.com/docs/en/setup", default_config_dir: ".claude", detection_markers: ["CLAUDE.md", ".claude"], capabilities: CAPABILITIES.claude, quota_windows: QUOTA_WINDOWS.claude, model_display: MODEL_DISPLAY.claude, settings: SETTINGS.claude },
+  { id: "codex", label: "Codex", short_name: "Codex", install_url: "https://github.com/openai/codex", default_config_dir: ".codex", detection_markers: [".codex", "AGENTS.md", ".agents"], capabilities: CAPABILITIES.codex, quota_windows: QUOTA_WINDOWS.codex, model_display: MODEL_DISPLAY.codex, settings: SETTINGS.codex },
+  { id: "grok", label: "Grok Build", short_name: "Grok", install_url: "https://docs.x.ai/build/overview", default_config_dir: ".grok", detection_markers: [".grok", "AGENTS.md", ".agents"], capabilities: CAPABILITIES.grok, quota_windows: QUOTA_WINDOWS.grok, model_display: MODEL_DISPLAY.grok, settings: SETTINGS.grok },
 ];
 
 /** A provider a newer daemon could serve that this build has no presentation module for (it is not among
@@ -71,6 +71,7 @@ export const UNPRESENTED_PROVIDER: ProviderInfo = {
   short_name: "Acme",
   install_url: "https://example.com/acme-agent/install",
   default_config_dir: ".acme",
+  detection_markers: [".acme"],
   capabilities: { preallocates_session_id: true, hook_script: false, status_line: false, reset_credits: false, per_session_trust: false, config_sharing: false, mcp_inventory: false, delivery: NO_QUIRKS },
   quota_windows: { kinds: ["session", "weekly"], session_window: "session", weekly_all_models: false },
   model_display: PLAIN_MODELS,

@@ -1592,7 +1592,7 @@ export const en = {
   "dialog.project.agentDetectHint": "An agent chosen here applies to every repository.",
   "dialog.project.agentDetectHelp": "About detecting the agent",
   "dialog.project.agentDetectMechanism":
-    "{detect} looks for {claudeFile}, {agentsFile} and agent folders such as {claudeDir} or {codexDir} in each repository; one it cannot decide on inherits from the console.",
+    "{detect} looks for agent files and folders such as {markers} in each repository; one it cannot decide on inherits from the console.",
   "dialog.project.directoryRequired": "A directory is required.",
   "dialog.project.pathChecking": "Checking the directory…",
   "dialog.project.createEmptyHint": "An empty project will be created in this directory.",

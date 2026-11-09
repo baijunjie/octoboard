@@ -1360,7 +1360,7 @@ export const hi: Translation<"one" | "other"> = {
   "dialog.project.agentDetect": "फ़ाइलों से पहचानें",
   "dialog.project.agentDetectHint": "यहाँ चुना एजेंट हर रिपॉज़िटरी पर लागू होता है।",
   "dialog.project.agentDetectHelp": "एजेंट पहचानने के बारे में",
-  "dialog.project.agentDetectMechanism": "{detect} हर रिपॉज़िटरी में {claudeFile}, {agentsFile} और {claudeDir} या {codexDir} जैसे एजेंट फ़ोल्डर खोजता है; जहाँ तय न हो सके वहाँ कंसोल की सेटिंग ली जाती है।",
+  "dialog.project.agentDetectMechanism": "{detect} हर रिपॉज़िटरी में {markers} जैसी एजेंट फ़ाइलें और फ़ोल्डर खोजता है; जहाँ तय न हो सके वहाँ कंसोल की सेटिंग ली जाती है।",
   "dialog.project.directoryRequired": "डायरेक्टरी ज़रूरी है।",
   "dialog.project.pathChecking": "डायरेक्टरी की जाँच हो रही है…",
   "dialog.project.createEmptyHint": "इस डायरेक्टरी में एक खाली प्रोजेक्ट बनाया जाएगा।",

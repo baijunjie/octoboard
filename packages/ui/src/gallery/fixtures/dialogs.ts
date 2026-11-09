@@ -1903,7 +1903,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Parent directory source, Detect help popover open",
-    description: "The \"?\" at the end of Default agent has been touched with a finger, so its popover stays open: Detect from files is a chip within the sentence, and CLAUDE.md, AGENTS.md, .claude and .codex are set as code in chips; the sentence ends with what is inherited from the console.",
+    description: "The \"?\" at the end of Default agent has been touched with a finger, so its popover stays open: Detect from files is a chip within the sentence, and the six agent file and folder names (CLAUDE.md, .claude, .codex, AGENTS.md, .agents, .grok; none repeated) are set as code in chips, joined as a list; the sentence ends with what is inherited from the console.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),

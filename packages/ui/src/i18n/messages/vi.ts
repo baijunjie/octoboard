@@ -1360,7 +1360,7 @@ export const vi: Translation<"other"> = {
   "dialog.project.agentDetect": "Phát hiện từ tệp",
   "dialog.project.agentDetectHint": "Tác tử chọn tại đây áp dụng cho mọi kho lưu trữ.",
   "dialog.project.agentDetectHelp": "Về cách phát hiện tác tử",
-  "dialog.project.agentDetectMechanism": "{detect} tìm {claudeFile}, {agentsFile} và các thư mục tác tử như {claudeDir} hoặc {codexDir} trong mỗi kho lưu trữ; kho nào không xác định được sẽ kế thừa từ bảng điều khiển.",
+  "dialog.project.agentDetectMechanism": "{detect} tìm các tệp và thư mục tác tử như {markers} trong mỗi kho lưu trữ; kho nào không xác định được sẽ kế thừa từ bảng điều khiển.",
   "dialog.project.directoryRequired": "Cần chọn thư mục.",
   "dialog.project.pathChecking": "Đang kiểm tra thư mục…",
   "dialog.project.createEmptyHint": "Một dự án trống sẽ được tạo trong thư mục này.",

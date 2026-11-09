@@ -56,6 +56,12 @@ export function providerConfigDir(providers: readonly ProviderInfo[], id: string
   return served && `~/${served.default_config_dir}`;
 }
 
+/** The names at a project's top level that point at some provider (`CLAUDE.md`, `.claude`), as the daemon serves them,
+ * in the registry's order and each once, though several providers read the same generic name. */
+export function detectionMarkers(providers: readonly ProviderInfo[]): string[] {
+  return [...new Set(providers.flatMap((provider) => provider.detection_markers))];
+}
+
 /** The key of the provider `id`'s message `name` (`provider.<id>.<name>`), or `undefined` for a provider whose
  * presentation module has none. */
 export function providerMessageKey(id: string, name: ProviderMessageName): MessageKey | undefined {

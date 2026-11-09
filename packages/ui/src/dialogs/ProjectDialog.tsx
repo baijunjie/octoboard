@@ -5,17 +5,18 @@ import { accountDisabled } from "../accounts/choiceEntries";
 import { consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accounts/accountInheritance";
 import { changedLaunch, changedProjectAccounts, readLaunch, readProjectAccounts } from "../agents/agentFields";
 import { consoleProjectLaunch, defaultAccountName, projectSessionAgent, servedAgents } from "../agents/agents";
-import { providerLabel } from "../agents/providers";
+import { detectionMarkers, providerLabel } from "../agents/providers";
 import { agentIconPickerOptions, AgentIcon } from "../components/icons/AgentIcon";
 import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { FailureAlert } from "../components/alerts/FailureAlert";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { HelpTip } from "../components/hint/HelpTip";
 import { InlineReference } from "../i18n/InlineReference";
+import { joinNodes } from "../i18n/joinPhrases";
 import { changedGitWorkflowItems, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { Message, useT } from "../i18n/react";
+import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore, useProviders } from "../store";
 import { useHostPaths } from "../components/hooks/useHostPaths";
@@ -70,6 +71,7 @@ export function ProjectDialog({
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
+  const language = useCurrentLanguage();
   const providers = useProviders();
   const { request } = useDaemon();
   const owner = useDaemonStore((s) => s.consoles.get(consoleId));
@@ -368,10 +370,7 @@ export function ProjectDialog({
                   id="dialog.project.agentDetectMechanism"
                   params={{
                     detect: <InlineReference dir="auto" wrap>{t("dialog.project.agentDetect")}</InlineReference>,
-                    claudeFile: <InlineReference monospace wrap>CLAUDE.md</InlineReference>,
-                    agentsFile: <InlineReference monospace wrap>AGENTS.md</InlineReference>,
-                    claudeDir: <InlineReference monospace wrap>.claude</InlineReference>,
-                    codexDir: <InlineReference monospace wrap>.codex</InlineReference>,
+                    markers: joinNodes(language, detectionMarkers(providers), (marker, key) => <InlineReference key={key} monospace wrap>{marker}</InlineReference>, "long"),
                   }}
                 />
               </HelpTip>

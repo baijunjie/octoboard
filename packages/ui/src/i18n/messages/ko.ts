@@ -1407,7 +1407,7 @@ export const ko: Translation<"other"> = {
   "dialog.project.agentDetect": "파일에서 감지",
   "dialog.project.agentDetectHint": "여기에서 선택한 에이전트가 모든 저장소에 적용됩니다.",
   "dialog.project.agentDetectHelp": "에이전트 감지에 관하여",
-  "dialog.project.agentDetectMechanism": "{detect}은(는) 각 저장소에서 {claudeFile}, {agentsFile} 및 {claudeDir}, {codexDir} 같은 에이전트 폴더를 찾습니다. 판별할 수 없는 저장소는 콘솔 설정을 상속합니다.",
+  "dialog.project.agentDetectMechanism": "{detect}은(는) 각 저장소에서 {markers} 같은 에이전트 파일과 폴더를 찾습니다. 판별할 수 없는 저장소는 콘솔 설정을 상속합니다.",
   "dialog.project.directoryRequired": "디렉터리가 필요합니다.",
   "dialog.project.pathChecking": "디렉터리 확인 중…",
   "dialog.project.createEmptyHint": "이 디렉터리에 빈 프로젝트가 생성됩니다.",

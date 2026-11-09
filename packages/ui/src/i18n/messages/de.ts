@@ -1388,7 +1388,7 @@ export const de: Translation<"one" | "other"> = {
   "dialog.project.agentDetect": "Anhand der Dateien erkennen",
   "dialog.project.agentDetectHint": "Ein hier ausgewählter Agent gilt für jedes Repository.",
   "dialog.project.agentDetectHelp": "Informationen zur Agentenerkennung",
-  "dialog.project.agentDetectMechanism": "{detect} sucht in jedem Repository nach {claudeFile}, {agentsFile} und Agentenordnern wie {claudeDir} oder {codexDir}. Ist keine eindeutige Zuordnung möglich, gilt der Agent der Konsole.",
+  "dialog.project.agentDetectMechanism": "{detect} sucht in jedem Repository nach Agentendateien und -ordnern wie {markers}. Ist keine eindeutige Zuordnung möglich, gilt der Agent der Konsole.",
   "dialog.project.directoryRequired": "Ein Verzeichnis ist erforderlich.",
   "dialog.project.pathChecking": "Verzeichnis wird geprüft…",
   "dialog.project.createEmptyHint": "In diesem Verzeichnis wird ein leeres Projekt erstellt.",

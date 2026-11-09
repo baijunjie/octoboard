@@ -107,6 +107,12 @@ describe.each(FIXTURE_PROVIDERS.map((provider) => [provider.id, provider] as con
     expect(served.default_config_dir).toBe(required(source, /const LAYOUT: AgentLayout = AgentLayout \{[\s\S]*?default_dir: "([^"]+)"/, "default_dir"));
   });
 
+  it("serves the detection markers of its descriptor, its own names and then its generic ones", () => {
+    const body = between(source, "detection: DetectionMarkers {", "instruction_file:");
+    const names = (field: string) => [...between(body, `${field}: &[`, "]").matchAll(/"([^"]+)"/g)].map(([, name]) => name);
+    expect(served.detection_markers).toEqual([...names("own"), ...names("generic")]);
+  });
+
   it("serves the capabilities of its descriptor", () => {
     expect(served.capabilities).toEqual(capabilitiesOf(source));
   });

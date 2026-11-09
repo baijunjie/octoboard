@@ -1407,7 +1407,7 @@ export const zhHant: Translation<"other"> = {
   "dialog.project.agentDetect": "根據檔案偵測",
   "dialog.project.agentDetectHint": "在此選擇的代理程式將套用至所有儲存庫。",
   "dialog.project.agentDetectHelp": "關於偵測代理程式",
-  "dialog.project.agentDetectMechanism": "{detect} 會在每個儲存庫中尋找 {claudeFile}、{agentsFile} 以及 {claudeDir}、{codexDir} 等代理程式目錄；無法判定的儲存庫將繼承主控台的預設值。",
+  "dialog.project.agentDetectMechanism": "{detect} 會在每個儲存庫中尋找 {markers} 等代理程式檔案和目錄；無法判定的儲存庫將繼承主控台的預設值。",
   "dialog.project.directoryRequired": "必須提供目錄。",
   "dialog.project.pathChecking": "正在檢查目錄…",
   "dialog.project.createEmptyHint": "將在此目錄中建立一個空專案。",

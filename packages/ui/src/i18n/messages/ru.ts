@@ -1361,7 +1361,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "dialog.project.agentDetect": "Определить по файлам",
   "dialog.project.agentDetectHint": "Выбранный здесь агент применяется ко всем репозиториям.",
   "dialog.project.agentDetectHelp": "Об определении агента",
-  "dialog.project.agentDetectMechanism": "{detect} ищет {claudeFile}, {agentsFile} и папки агентов, например {claudeDir} или {codexDir}, в каждом репозитории; если определить агента нельзя, наследуется настройка консоли.",
+  "dialog.project.agentDetectMechanism": "{detect} ищет файлы и папки агентов, например {markers}, в каждом репозитории; если определить агента нельзя, наследуется настройка консоли.",
   "dialog.project.directoryRequired": "Нужно указать каталог.",
   "dialog.project.pathChecking": "Проверка каталога…",
   "dialog.project.createEmptyHint": "В этом каталоге будет создан пустой проект.",

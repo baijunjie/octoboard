@@ -1361,7 +1361,7 @@ export const id: Translation<"other"> = {
   "dialog.project.agentDetect": "Deteksi dari file",
   "dialog.project.agentDetectHint": "Agen yang dipilih di sini berlaku untuk setiap repositori.",
   "dialog.project.agentDetectHelp": "Tentang pendeteksian agen",
-  "dialog.project.agentDetectMechanism": "{detect} mencari {claudeFile}, {agentsFile}, dan folder agen seperti {claudeDir} atau {codexDir} di setiap repositori; repositori yang tidak dapat ditentukan mewarisi pengaturan konsol.",
+  "dialog.project.agentDetectMechanism": "{detect} mencari file dan folder agen seperti {markers} di setiap repositori; repositori yang tidak dapat ditentukan mewarisi pengaturan konsol.",
   "dialog.project.directoryRequired": "Direktori wajib diisi.",
   "dialog.project.pathChecking": "Memeriksa direktori…",
   "dialog.project.createEmptyHint": "Proyek kosong akan dibuat di direktori ini.",

@@ -11,6 +11,7 @@ export const TEST_AGENT_PROVIDER: ProviderInfo = {
   short_name: "Test",
   install_url: "https://example.com/test-agent",
   default_config_dir: ".octoboard-test-agent",
+  detection_markers: [".test-agent"],
   capabilities: {
     preallocates_session_id: false,
     hook_script: false,
@@ -37,6 +38,7 @@ export const UNPRESENTED_PROVIDER: ProviderInfo = {
   label: "Unpresented Agent",
   short_name: "Unpresented",
   default_config_dir: ".unpresented_agent",
+  detection_markers: [".unpresented_agent"],
 };
 
 /** The providers a daemon serves in its `snapshot`, in its registry order: the fixture daemon's (`FIXTURE_PROVIDERS`, so

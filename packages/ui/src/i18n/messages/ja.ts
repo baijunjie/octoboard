@@ -1406,7 +1406,7 @@ export const ja: Translation<"other"> = {
   "dialog.project.agentDetect": "ファイルから検出",
   "dialog.project.agentDetectHint": "ここで選択したエージェントは、すべてのリポジトリに適用されます。",
   "dialog.project.agentDetectHelp": "エージェントの検出について",
-  "dialog.project.agentDetectMechanism": "{detect} は、各リポジトリで {claudeFile}、{agentsFile}、および {claudeDir} や {codexDir} などのエージェントのフォルダを探します。判定できないリポジトリは、コンソールの設定を継承します。",
+  "dialog.project.agentDetectMechanism": "{detect} は、各リポジトリで {markers} などのエージェントのファイルやフォルダを探します。判定できないリポジトリは、コンソールの設定を継承します。",
   "dialog.project.directoryRequired": "ディレクトリを指定してください。",
   "dialog.project.pathChecking": "ディレクトリを確認中…",
   "dialog.project.createEmptyHint": "このディレクトリに空のプロジェクトが作成されます。",

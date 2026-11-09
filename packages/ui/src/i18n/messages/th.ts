@@ -1405,7 +1405,7 @@ export const th: Translation<"other"> = {
   "dialog.project.agentDetect": "ตรวจจากไฟล์",
   "dialog.project.agentDetectHint": "เอเจนต์ที่เลือกที่นี่ใช้กับทุกที่เก็บ",
   "dialog.project.agentDetectHelp": "เกี่ยวกับการตรวจหาเอเจนต์",
-  "dialog.project.agentDetectMechanism": "{detect} ค้นหา {claudeFile}, {agentsFile} และโฟลเดอร์เอเจนต์ เช่น {claudeDir} หรือ {codexDir} ในแต่ละที่เก็บ หากระบุไม่ได้จะใช้ค่าจากคอนโซล",
+  "dialog.project.agentDetectMechanism": "{detect} ค้นหาไฟล์และโฟลเดอร์เอเจนต์ เช่น {markers} ในแต่ละที่เก็บ หากระบุไม่ได้จะใช้ค่าจากคอนโซล",
   "dialog.project.directoryRequired": "ต้องระบุไดเรกทอรี",
   "dialog.project.pathChecking": "กำลังตรวจสอบไดเรกทอรี…",
   "dialog.project.createEmptyHint": "จะสร้างโปรเจกต์ว่างในไดเรกทอรีนี้",

@@ -2783,6 +2783,12 @@ export type ProviderInfo = {
    * directory (`.claude`).
    */
   default_config_dir: string,
+  /**
+   * The names at a project's top level that point at the provider, as `DetectionMarkers` holds
+   * them: its own, then the generic ones it reads. A client shows them to say what detecting
+   * the agent of a repository looks for; several providers may carry the same generic name.
+   */
+  detection_markers: Array<string>,
   capabilities: Capabilities,
   /**
    * How the provider's own interface names its quota windows, which a client's wording follows.

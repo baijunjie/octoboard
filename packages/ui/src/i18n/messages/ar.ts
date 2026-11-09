@@ -1361,7 +1361,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "dialog.project.agentDetect": "الاكتشاف من الملفات",
   "dialog.project.agentDetectHint": "ينطبق الوكيل المختار هنا على جميع المستودعات.",
   "dialog.project.agentDetectHelp": "حول اكتشاف الوكيل",
-  "dialog.project.agentDetectMechanism": "يبحث {detect} عن {claudeFile} و{agentsFile} ومجلدات الوكلاء مثل {claudeDir} أو {codexDir} في كل مستودع؛ ويرث ما يتعذر تحديده إعدادات وحدة التحكم.",
+  "dialog.project.agentDetectMechanism": "يبحث {detect} عن ملفات ومجلدات الوكلاء مثل {markers} في كل مستودع؛ ويرث ما يتعذر تحديده إعدادات وحدة التحكم.",
   "dialog.project.directoryRequired": "المجلد مطلوب.",
   "dialog.project.pathChecking": "جارٍ فحص المجلد…",
   "dialog.project.createEmptyHint": "سيتم إنشاء مشروع فارغ في هذا المجلد.",

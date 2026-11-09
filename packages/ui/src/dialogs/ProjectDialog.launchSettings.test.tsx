@@ -359,7 +359,7 @@ it("keeps what the detection leaves to the user described, and the mechanism in 
   const popover = document.querySelector('[role="dialog"][aria-label="About detecting the agent"]');
   expect(popover?.textContent).toContain("looks for");
   expect(Array.from(popover!.querySelectorAll("code")).map((el) => el.textContent)).toEqual([
-    "CLAUDE.md", "AGENTS.md", ".claude", ".codex",
+    "CLAUDE.md", ".claude", ".codex", "AGENTS.md", ".agents", ".grok", ".test-agent",
   ]);
   await act(async () => void popover!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   await click(buttons().find((b) => b.textContent?.includes("A parent directory")));

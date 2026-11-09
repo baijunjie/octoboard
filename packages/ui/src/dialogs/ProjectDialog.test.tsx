@@ -7,7 +7,7 @@ import { expect, it, onTestFinished } from "vitest";
 import { CodedError } from "../errors/codedError";
 import { projectOf } from "../fixtures/builders";
 import type { Agent } from "../protocol";
-import { roots, work, personal, render, input, type, settle, click, answer, chooseSource, buttonText, accountPicker, pickerNamed, sentOf, fillDirectory, stored } from "./projectDialogTestSupport";
+import { roots, work, personal, render, input, type, settle, click, answer, chooseSource, buttonText, accountPicker, buttons, pickerNamed, sentOf, fillDirectory, stored } from "./projectDialogTestSupport";
 
 /** The hidden native select behind the Default agent field, which holds the chosen value. */
 const agentValue = () =>
@@ -267,6 +267,14 @@ it.each([
   const added = pending.find((p) => p.body.type === "add_project")?.body;
   expect(added).toMatchObject({ type: "add_project", source: source === "A single directory" ? "local" : "parent", ...sent });
   if (!("default_agent" in sent)) expect(added).not.toHaveProperty("default_agent", expect.anything());
+});
+
+it("lists the markers the daemon serves in the help of detecting the agent", async () => {
+  render();
+  await chooseSource("A parent directory");
+  await click(buttons().find((b) => b.getAttribute("aria-label") === "About detecting the agent"));
+  const help = document.body.textContent ?? "";
+  expect(help).toContain("looks for agent files and folders such as CLAUDE.md, .claude, .codex, AGENTS.md, .agents, .grok, and .test-agent in each repository");
 });
 
 const typeDescription = (value: string) => type(document.body.querySelector<HTMLTextAreaElement>("textarea")!, value);

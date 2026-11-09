@@ -1427,7 +1427,7 @@ export const tr: Translation<"one" | "other"> = {
   "dialog.project.agentDetect": "Dosyalardan algıla",
   "dialog.project.agentDetectHint": "Burada seçilen ajan tüm depolar için geçerli olur.",
   "dialog.project.agentDetectHelp": "Ajan algılama hakkında",
-  "dialog.project.agentDetectMechanism": "{detect}, her depoda {claudeFile}, {agentsFile} ve {claudeDir} veya {codexDir} gibi ajan klasörlerini arar; karar veremediği depolar konsolun ayarını devralır.",
+  "dialog.project.agentDetectMechanism": "{detect}, her depoda {markers} gibi ajan dosyalarını ve klasörlerini arar; karar veremediği depolar konsolun ayarını devralır.",
   "dialog.project.directoryRequired": "Dizin gereklidir.",
   "dialog.project.pathChecking": "Dizin kontrol ediliyor…",
   "dialog.project.createEmptyHint": "Bu dizinde boş bir proje oluşturulacak.",
