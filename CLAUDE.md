@@ -88,17 +88,18 @@ At delivery:
   re-judge once you have acted on it.
 - Otherwise, self-check item by item in the following order:
 
-1. **Gallery**: bring the gallery up to date via the `agent-gallery` skill; whether to do it is up to its judgement.
-2. **UI preview**: as soon as the previous step is done, preview for the user via the `agent-gallery` skill, without
+1. **Unit tests**: add tests for this round's changes via the `agent-unit-test` skill.
+2. **Gallery**: bring the gallery up to date via the `agent-gallery` skill; whether to do it is up to its judgement.
+3. **UI preview**: as soon as the previous step is done, preview for the user via the `agent-gallery` skill, without
    waiting for the later steps; whether to preview and whether to wait for confirmation is up to its judgement. UI the
    user said they wanted to see first is shown at this step too, not reported before the self-check. Where it has to
    wait for confirmation, or for the user's answer on whether temporary scenarios stay, move on only once the answer is
    in: the user may still change the UI or keep scenarios, and running the later steps first would be wasted.
-3. **Change check**: review this round's changes via the `agent-change-check` skill; only move on once the review
+4. **Change check**: review this round's changes via the `agent-change-check` skill; only move on once the review
    passes, or the user has settled the remaining findings and the changes they decided on have been made.
-4. **Documentation update**: when this round's changes call for updating the docs that later readers rely on,
+5. **Documentation update**: when this round's changes call for updating the docs that later readers rely on,
    update them via the `agent-docs` skill.
-5. **Formatting and checks**: first run the project's agreed formatting commands to rewrite the code, then run the
+6. **Formatting and checks**: first run the project's agreed formatting commands to rewrite the code, then run the
    checks by the scope of the change and confirm they all pass; if they do not, fix, then re-determine the scope from
    the changes as they now stand and run again (a fix that changes behavior, logic or UI goes through "You changed
    behavior, logic or UI again" below).
