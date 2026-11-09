@@ -200,17 +200,31 @@ Evidence: `/tmp/octoboard-remaining-20261110-7fd0/REPORT.md`. The new verificati
 which named the verification application and was denied; bundle-only `tccutil reset All` attempts returned
 "No such bundle identifier", so no reset succeeded and no other bundle was reset.
 
+**Windows SSH follow-up, 2026-11-10.** Verified on local main `035746de6`, rebuilt inside the VM; session 0 only.
+Evidence directory on the verification Mac: `/tmp/windows-ssh-remaining-evidence/` (full account in `REPORT.md`).
+
+- [x] Offline git gate: HTTP 503 after 30,165 ms, holder alive; adopted gate refused a protected reset — `offline-gate.json`, `live-gate-after-adoption.txt`.
+- [x] Out-of-range holder and its programs ended; session interrupted (welcome version injected as `99.0.0`) — `out-of-range-ended.json`.
+- [x] Compatible different build drained; new shell used the current build; old holder exited after its last terminal — `drain-allocation.json`, `drain-old-exited.json`.
+- [x] Unknown real terminal and its companion ended — `unknown-ended.json`.
+- [x] Session with no live holder interrupted at startup — `missing-holder-interrupted.json`.
+- [x] Unreachable holder stayed alive and claimed, showed pending, then recovered with the same launch — `pending-unreachable.json`, `pending-recovered.json`.
+
+**Supplemental failure, not fixed.** Force-terminating the holder for the no-holder check left its Codex companion
+running after startup reconciliation and the later daemon shutdown; it was explicitly cleaned up after verifying
+its process identity. The session-interruption assertion passed. This bypassed the holder's internal crash handler
+and does not verify that handler. Investigate cleanup of a companion after its holder is missing; see
+`missing-holder-settled.json`, `cleanup-processes.json` and `REPORT.md` in the follow-up evidence directory.
+
 **Remaining, each a real run:**
 1. Windows, from an interactive desktop logon, blocked on the sign-in password of the VM user `bjj`. The VM's working
    directory `C:\Users\bjj\windows-verification` keeps the source, the build and the isolated data. Signed in as a
    standard user, with the daemon started by the desktop application: the holders run outside the daemon's jobs and
    survive it, and where breakaway is refused the desktop application is the holder's parent (Handoff); Claude Code
    on the bundled console host draws before any input (Handoff); a real update over running sessions installs with no
-   Abort/Retry/Ignore prompt (Handoff). Also the completion criteria not yet run on Windows at all (they need no
-   desktop and may run over SSH first): the git gate after adoption, and a gate call with no daemon failing after 30 s;
-   an out-of-range holder ended; an in-range holder of another build drained; an unknown terminal ended; a session no
-   holder runs interrupted; a holder refusing links, or dropping them repeatedly, left running, shown pending and taken
-   over.
+   Abort/Retry/Ignore prompt (Handoff). The SSH follow-up above verified the remaining gate, compatibility, draining,
+   unknown-terminal, no-holder and connection-refusal criteria; repeated link drops were not separately run on Windows.
+   Investigate the supplemental companion left after forced holder termination, as recorded above.
 2. Linux without systemd, blocked on Docker, which is off: with the Linux build in a container, the Unix detach, and a
    held launch joining the cgroup group the daemon made for it below the holder's own cgroup (a writable cgroup v2
    subtree, as Linux daemon run milestone 01's notes describe).

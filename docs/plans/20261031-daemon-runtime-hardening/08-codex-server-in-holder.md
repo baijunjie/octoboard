@@ -332,11 +332,21 @@ verification Mac: `/tmp/octoboard-manual-20261110-67e2/REPORT.md`, `/tmp/octoboa
 On 2026-11-10, main `035746de6` also passed the pending-holder direct-connection run on macOS with real
 Codex 0.166.0, using an isolated local model provider. Evidence: `/tmp/octoboard-remaining-20261110-7fd0/REPORT.md`.
 
+**Windows SSH follow-up, 2026-11-10.** On local main `035746de6`, rebuilt inside the VM, with real Codex 0.166.0:
+
+- [x] A message accepted before manual planned-stop/start stayed queued with the same client ID, then started exactly once after cancelling the active turn — `/tmp/windows-ssh-remaining-evidence/queue-rollout-final.json`.
+
+The session was first taken out of command approval; the successful enqueue used a working text-only turn with no
+approval screen. The queue contained the same single entry before stop, offline and after start, and was empty after
+cancel. The final thread and rollout contained one UserMessage with that client ID and one final marker reply.
+Full account and limits: `/tmp/windows-ssh-remaining-evidence/REPORT.md`, "08 Codex queued message". This was session 0,
+not a desktop update, and did not exercise the sealed restart outbox race or a pre-kill queued message.
+
 **Remaining, a real run on Windows from an interactive desktop logon**, blocked on the sign-in password of the VM user
 `bjj`; the VM's working directory `C:\Users\bjj\windows-verification` keeps the source, the build and the isolated data,
 and Codex is signed in there. With the daemon started by the desktop application: the holder detached and running the
-server, the companion in a job of its own nested in the launch's (over SSH it was seen only in a job); queue delivery
-while its holder link is pending; messages queued
-before a daemon kill, and before a planned stop and start, started once each after a cancel (over SSH the queued message
-was refused while Codex waited for a command approval, so this was not established); and a real desktop update restart
-over a working Codex session, with the installer meeting no file in use.
+server, the companion in a job of its own nested in the launch's (over SSH it was seen only in a job); a message queued
+before a daemon kill started once after a cancel; the sealed restart outbox race; and a real desktop update restart
+over a working Codex session, with the installer meeting no file in use. The planned-stop/start queue-and-cancel case
+was established over SSH in the follow-up above. Also investigate the companion left by forced holder termination,
+recorded in 02's SSH follow-up; that session became interrupted, but its companion needed explicit cleanup.
