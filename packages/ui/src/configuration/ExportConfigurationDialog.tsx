@@ -8,7 +8,7 @@ import { Dialog } from "../components/dialog/Dialog";
 import { useDialogAction } from "../components/dialog/dialogHooks";
 import { LabelledGroup } from "../components/form/LabelledGroup";
 import { isolate } from "../i18n/isolate";
-import { Message, useCurrentLanguage, useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { useOctoboardTheme } from "../preferences/theme";
 import type { Console, ExportedConsoles, SettingsSection } from "../protocol";
@@ -52,10 +52,10 @@ const SECTION_NOTE: Record<SettingsSection, PlainMessageKey> = {
  * name it was saved under, or only that it was downloaded where the platform cannot say more. What is added are the
  * settings this client holds, which the daemon does not know of: a document that includes the Keyboard shortcuts
  * section gets this client's shortcut changes (an empty set when none is changed), and with the section they belong to
- * its appearance, Markdown style, session order and the language it shows in place of the one the daemon holds
- * (General) and, where the platform has it, whether it runs in the background, whether it shows its menu bar icon and
- * whether it prevents sleep, and when (App behavior; see `heldClientSettings`). Dismissing the save dialog leaves this
- * one open.
+ * its appearance, Markdown style and session order (General; the language is the daemon's own and is in the document as
+ * it holds it) and, where the platform has it, whether it runs in the background, whether it shows its menu bar icon
+ * and whether it prevents sleep, and when (App behavior; see `heldClientSettings`). Dismissing the save dialog leaves
+ * this one open.
  */
 export function ExportConfigurationDialog({
   console: inHand,
@@ -69,7 +69,6 @@ export function ExportConfigurationDialog({
   const platform = usePlatform();
   const { configurationFile, backgroundRun, statusItem, keepAwake } = platform;
   const { choice: appearance } = useOctoboardTheme();
-  const language = useCurrentLanguage();
   const { busy, run } = useDialogAction(undefined, t("configuration.export.alertTitle"));
   const [consoles, setConsoles] = useState<ExportedConsoles>(inHand ? "one" : "all");
   const [includeAccounts, setIncludeAccounts] = useState(false);
@@ -114,7 +113,7 @@ export function ExportConfigurationDialog({
           settings: {
             ...reply.document.settings,
             ...(sections.includes("keyboard_shortcuts") && { keyboard_shortcuts: shortcutOverrides.get() }),
-            ...heldClientSettings({ appearance, language }, clientSettingsPlatform(platform), sections),
+            ...heldClientSettings({ appearance }, clientSettingsPlatform(platform), sections),
           },
         }
         : reply.document;

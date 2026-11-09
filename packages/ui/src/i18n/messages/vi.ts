@@ -1936,7 +1936,7 @@ export const vi: Translation<"other"> = {
   "settings.sort.option.name": "Tên",
   "settings.sort.option.used": "Dùng gần đây",
   "settings.language.label": "Ngôn ngữ",
-  "settings.language.description": "Ngôn ngữ giao diện. Khi khởi chạy lần đầu, ngôn ngữ được chọn theo các ngôn ngữ của hệ thống.",
+  "settings.language.sharedDescription": "Ngôn ngữ của mọi cửa sổ, cũng là ngôn ngữ mà các tác tử dùng để trò chuyện với bạn.",
   "settings.cloneDir.label": "Thư mục sao chép mặc định",
   "settings.cloneDir.description.gitUrl": "Dự án thêm từ URL {git} được sao chép vào thư mục này trừ khi chọn thư mục khác.",
   "settings.cloneDir.placeholder": "~/Projects",

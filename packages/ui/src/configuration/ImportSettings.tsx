@@ -57,11 +57,11 @@ function CloneDirLine({
  * carries, each with the checkbox that imports it (`choices`; one left unchecked collapses to its title), grouped as
  * the Settings dialog groups them (see `SettingsGroups`), saying what applying each setting would change here. The git
  * workflow lists, when applying would change it, the items that would change with what each is now. The General and App
- * behavior cards take the settings only this client holds (`clientSettings`, each with the value this client has;
- * `sorting`, the session order's items that would change, in General), the Git card the default clone directory with
- * the choice to keep this machine's own (`cloneDir`; for a directory written on another operating system, only a line
- * saying it is not used here) and the Keyboard shortcuts card `shortcuts`, what the document's keyboard shortcuts would
- * do on this device; each is absent when the document carries none.
+ * behavior cards take the settings only this client holds and the language the daemon holds (`clientSettings`, each
+ * with the value it has now; `sorting`, the session order's items that would change, in General), the Git card the
+ * default clone directory with the choice to keep this machine's own (`cloneDir`; for a directory written on another
+ * operating system, only a line saying it is not used here) and the Keyboard shortcuts card `shortcuts`, what the
+ * document's keyboard shortcuts would do on this device; each is absent when the document carries none.
  */
 export function ImportSettings({
   settings,

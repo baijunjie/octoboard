@@ -2341,8 +2341,7 @@ export const en = {
   "settings.sort.option.name": "Name",
   "settings.sort.option.used": "Recently used",
   "settings.language.label": "Language",
-  "settings.language.description":
-    "The language of the interface. It is picked from the system's languages on first launch.",
+  "settings.language.sharedDescription": "The language of every window, and the one agents talk to you in.",
   "settings.cloneDir.label": "Default clone directory",
   "settings.cloneDir.description.gitUrl":
     "Projects added from a {git} URL are cloned into this directory unless you choose another.",

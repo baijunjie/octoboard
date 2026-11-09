@@ -1936,7 +1936,7 @@ export const hi: Translation<"one" | "other"> = {
   "settings.sort.option.name": "नाम",
   "settings.sort.option.used": "हाल में उपयोग किए गए",
   "settings.language.label": "भाषा",
-  "settings.language.description": "यह इंटरफ़ेस की भाषा तय करता है। पहली बार शुरू होने पर भाषा सिस्टम की भाषाओं से चुनी जाती है।",
+  "settings.language.sharedDescription": "यह सभी विंडो की भाषा है, और एजेंट इसी भाषा में आपसे बात करते हैं।",
   "settings.cloneDir.label": "डिफ़ॉल्ट क्लोन डायरेक्टरी",
   "settings.cloneDir.description.gitUrl": "{git} URL से जोड़े प्रोजेक्ट इस डायरेक्टरी में क्लोन होते हैं, जब तक आप दूसरी न चुनें।",
   "settings.cloneDir.placeholder": "~/Projects",

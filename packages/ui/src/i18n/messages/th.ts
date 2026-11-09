@@ -2085,7 +2085,7 @@ export const th: Translation<"other"> = {
   "settings.sort.option.name": "ชื่อ",
   "settings.sort.option.used": "ใช้ล่าสุด",
   "settings.language.label": "ภาษา",
-  "settings.language.description": "ภาษาของหน้าจอ เมื่อเปิดครั้งแรกจะเลือกตามภาษาของระบบ",
+  "settings.language.sharedDescription": "ภาษาของทุกหน้าต่าง และภาษาที่เอเจนต์ใช้คุยกับคุณ",
   "settings.cloneDir.label": "ไดเรกทอรีโคลนเริ่มต้น",
   "settings.cloneDir.description.gitUrl": "โปรเจ็กต์ที่เพิ่มจาก URL ของ {git} จะโคลนลงไดเรกทอรีนี้ เว้นแต่เลือกที่อื่น",
   "settings.cloneDir.placeholder": "~/Projects",

@@ -1937,7 +1937,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "settings.sort.option.name": "الاسم",
   "settings.sort.option.used": "المستخدمة مؤخرًا",
   "settings.language.label": "اللغة",
-  "settings.language.description": "لغة الواجهة. تُختار من لغات النظام عند أول تشغيل.",
+  "settings.language.sharedDescription": "لغة جميع النوافذ، وهي اللغة التي يتحدث بها الوكلاء معك.",
   "settings.cloneDir.label": "مجلد الاستنساخ الافتراضي",
   "settings.cloneDir.description.gitUrl": "تُستنسخ المشاريع المضافة من عنوان {git} إلى هذا المجلد ما لم تختر غيره.",
   "settings.cloneDir.placeholder": "~/Projects",

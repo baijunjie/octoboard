@@ -141,8 +141,11 @@ first read says granted, and the path that notices a grant arriving is never exe
 
 To test other system languages, pass them for that launch only:
 `open <scratch-app> --args -AppleLanguages '(zh-Hans-CN, en)'`. This steers only a profile with no
-`octoboard.language` key: the first launch stores its choice and later launches use that value. Use a fresh unique
-profile when testing the initial pick. To inspect a profile value, open the sqlite file normally rather than with
+`octoboard.language` key, and even then only until the window has connected: from then on the window shows the
+language the daemon holds (`interface_language` in its settings), and the system pick reaches the daemon only when it
+holds none, after which every later launch follows that value. So testing the initial pick needs both a fresh unique
+profile and a fresh daemon data directory; with only a fresh profile the window renders the pick and then switches
+away once connected. To inspect a profile value, open the sqlite file normally rather than with
 `immutable=1`: the app's last write may still be in the WAL, which `immutable=1` skips.
 
 Keep the `.app` and throwaway directories on the internal disk when the checkout is on a removable volume. An ad-hoc

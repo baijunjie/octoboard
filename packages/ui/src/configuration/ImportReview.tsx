@@ -85,7 +85,8 @@ export function ImportReview({
   onTab: (tab: Region) => void;
   /** What the document's keyboard shortcuts would do on this device; `undefined` when it carries none. */
   shortcuts?: ReturnType<typeof shortcutsReview>;
-  /** What the settings only this client holds would do here, one for each the document carries. */
+  /** What the settings only this client holds, and the language the daemon holds, would do here, one for each the
+   * document carries. */
   clientSettings: ClientSettingValue[];
   /** The items of the session order the document carries that would change; `undefined` when it carries none. */
   sorting?: SettingValue[];

@@ -3,7 +3,7 @@ import React from "react";
 import { useT } from "../i18n/react";
 import type { DocumentSettings, GitWorkflowSettings, SettingsSection } from "../protocol";
 import { AGENT_BEHAVIOR_SWITCHES, APP_BEHAVIOR_SWITCHES, type ApplicationBooleanField, type BooleanSetting, CLEANUP_SWITCHES, GENERAL_SWITCHES, GIT_SWITCHES } from "./booleanSettings";
-import type { ClientSettings, ClientSettingValue } from "./clientSettings";
+import type { ClientSettingValue } from "./clientSettings";
 import { BooleanSettingLine, choiceHeader, CompositeLine, type ImportChoice } from "./importParts";
 import { FlatCard } from "../components/card/FlatCard";
 import { gitWorkflowValues } from "./importValues";
@@ -38,14 +38,15 @@ export function SettingsGroupCard({ title, lines, choice }: { title: string; lin
  * behavior, Git, Agent behavior, Keyboard shortcuts and Cleanup, each titled with its section's name, in the order of
  * the sections and, within a group, of the lines that section shows. With `current` (this machine's values) it is the
  * review's: each line says what applying `settings` would change, and the git workflow lists the items that would
- * change with what each is now. Without it, it is the result's: each line says what `settings` were applied as, the
- * git workflow listing its values. The daemon holds the switches and the git workflow; the lines of what only the
- * client holds or carries are the caller's: `clientLine` words one of `clientSettings` (appearance, language, Markdown
- * style, run in background, menu bar icon, prevent sleep and when), `sorting` is the session order's line, `cloneDir`
- * is the default clone directory's line and `shortcuts` the keyboard shortcuts', each absent when the document carries
- * none. Only the `sections` given are drawn (all of them when absent), and a group with no line is not drawn: what
- * `settings` lacks has no line. With `choices` (the review's) every section drawn is a card with a checkbox for
- * importing it, drawn even with no line and collapsed while unchecked (see `SettingsGroupCard`).
+ * change with what each is now. Without it, it is the result's: each line says what `settings` were applied as, the git
+ * workflow listing its values. The daemon holds the switches and the git workflow; the lines of what only the client
+ * holds or carries are the caller's: `clientLine` words one of `clientSettings` (appearance, language, which the daemon
+ * holds but is worded the same way, Markdown style, run in background, menu bar icon, prevent sleep and when),
+ * `sorting` is the session order's line, `cloneDir` is the default clone directory's line and `shortcuts` the keyboard
+ * shortcuts', each absent when the document carries none. Only the `sections` given are drawn (all of them when
+ * absent), and a group with no line is not drawn: what `settings` lacks has no line. With `choices` (the review's)
+ * every section drawn is a card with a checkbox for importing it, drawn even with no line and collapsed while unchecked
+ * (see `SettingsGroupCard`).
  */
 export function SettingsGroups({
   settings,
@@ -77,8 +78,8 @@ export function SettingsGroups({
       return wanted == null ? [] : [<BooleanSettingLine key={field} label={t(label)} wanted={wanted} current={current?.[field]} consequence={consequence} />];
     });
   const appBehaviorSwitches = (...fields: ApplicationBooleanField[]) => switchLines(APP_BEHAVIOR_SWITCHES.filter(({ field }) => fields.includes(field)));
-  const clientLines = (...fields: (keyof ClientSettings)[]) =>
-    clientSettings.filter(({ field }) => fields.includes(field)).map((setting) => React.cloneElement(clientLine(setting), { key: setting.field }));
+  const clientLines = (...fields: ClientSettingValue["field"][]) =>
+    fields.flatMap((wanted) => clientSettings.filter(({ field }) => field === wanted).map((setting) => React.cloneElement(clientLine(setting), { key: setting.field })));
   const cards: Record<SettingsSection, React.ReactElement> = {
     general: (
       <SettingsGroupCard

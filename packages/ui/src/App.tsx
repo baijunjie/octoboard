@@ -31,7 +31,7 @@ import { columnSpan, isDockEasing } from "./layout/paneDockMotion";
 import { useRegionCycle } from "./layout/useRegionCycle";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
-import { useInterfaceLanguageSync } from "./lifecycle/useInterfaceLanguageSync";
+import { useInterfaceLanguage } from "./lifecycle/useInterfaceLanguage";
 import { useStatusItemMenu } from "./statusItem/useStatusItemMenu";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { sessionDisplayTitle } from "./sessions/sessionLabel";
@@ -114,7 +114,7 @@ export function App(): React.ReactElement {
   const hasAside = asideOwner !== undefined;
   const sidebarView = useSidebarView(consoleList);
   useGitStatusSchedule();
-  useInterfaceLanguageSync();
+  useInterfaceLanguage();
 
   const currentConsole = sidebarView.currentConsole;
   const {

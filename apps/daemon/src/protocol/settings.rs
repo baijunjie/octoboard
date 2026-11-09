@@ -43,11 +43,10 @@ pub struct Settings {
     /// (a console session's file is rewritten at each launch, so it follows at the next one). Only
     /// the user's own client changes it.
     pub ask_questions_as_choices: bool,
-    /// The tag of the language the user last picked for the interface, one of the tags the
-    /// interface offers; `null` until a client reports one. The user's language, not a client's:
-    /// the clients keep their own choice locally, and this holds the one most recently reported.
-    /// Carried by a configuration export in its General section, where the exporting client
-    /// replaces it with the language it shows.
+    /// The tag of the interface language, one of the tags the interface offers; `null` until a
+    /// client reports one. It is the one language every client shows (each keeps a copy only to
+    /// render in before it has connected) and the one sessions are told to reply in, so a change
+    /// reaches every window. Carried by a configuration export in its General section.
     pub interface_language: Option<String>,
     /// Whether a new session whose account was left out runs on the account of its agent whose
     /// weekly quota resets soonest and still has some left. Off unless the user turned it on.

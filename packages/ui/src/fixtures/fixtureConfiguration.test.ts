@@ -166,6 +166,26 @@ describe("withClientValuesEcho", () => {
   });
 });
 
+describe("an import's language", () => {
+  const importing = (settings_applied: DocumentSettings) => {
+    const daemon = createFixtureDaemon({ configuration: { inspection: REVIEW, imported: { ...imported({ consoles: [] }), settings_applied } } });
+    const request = daemon.request({ type: "import_configuration", document: { settings: {} }, apply_consoles: false, apply_settings: [...SETTINGS_SECTIONS] });
+    return { daemon, request };
+  };
+
+  it("is held by the daemon from what the result says it applied, as every window then follows it", async () => {
+    const { daemon, request } = importing(documentSettings({ interface_language: "ja" }));
+    await request;
+    expect(daemon.store.getState().settings.interface_language).toBe("ja");
+  });
+
+  it("leaves the language the daemon holds where the result applied none", async () => {
+    const { daemon, request } = importing(documentSettings({ auto_pull_repositories: true }));
+    await request;
+    expect(daemon.store.getState().settings.interface_language).toBeNull();
+  });
+});
+
 describe("handledImportItems", () => {
   const agentSettings: InspectedAgentSettings = {
     auto_select_account: true,

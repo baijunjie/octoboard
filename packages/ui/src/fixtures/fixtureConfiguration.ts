@@ -430,6 +430,7 @@ export function createConfigurationReplies(
   fail: (error: FixtureError) => never,
   providerSettingChoices: () => Settings["provider_settings"],
   reportProgress: (event: ImportProgressEvent) => void,
+  holdLanguage: (tag: string) => void,
 ): (body: ClientRequestBody) => Event | Promise<Event> | undefined {
   return (body) => {
     switch (body.type) {
@@ -472,6 +473,9 @@ export function createConfigurationReplies(
         const result = body.apply_accounts === true && body.apply_agents ? resultOfAgents(imported, body.apply_agents) : imported;
         const disagreement = importDisagreement(body, result);
         if (disagreement !== undefined) return refuseUnfillable(`the scenario's import result does not follow from its steps: ${disagreement}`);
+        // The daemon applies the language the result says it applied, which every window then follows.
+        const language = result.settings_applied?.interface_language;
+        if (language) holdLanguage(language);
         return { type: "configuration_imported", ...withClientValuesEcho(body, result) };
       }
       default:

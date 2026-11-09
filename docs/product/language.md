@@ -18,18 +18,21 @@ is not taken from the list's order.
 
 The language is chosen in the Language row of Settings' General section (see `docs/product/settings.md`). The options
 are the 17 languages in list order; there is no option that follows the system. Each language is named in that
-language itself (日本語, Deutsch, العربية and so on), so a user can find theirs whatever the UI currently shows. A
-choice takes effect at once, in the open window.
+language itself (日本語, Deutsch, العربية and so on), so a user can find theirs whatever the UI currently shows. The
+choice is one for every window and is also the language sessions are told to talk to the user in: it is the language
+the daemon holds (see "The language the daemon holds" below). A pick takes effect at once in the window it is made in,
+then in every other open window.
 
-**The default is picked from the system on the first launch.** When the client has no language stored, the UI maps
-the system's preferred languages onto the list (see below) and stores the result as if it had been chosen. From then on
-only a choice in Settings changes the language: a later change of the system's languages changes nothing, in the macOS
-application and in a browser alike.
+**Before a language is known, it is picked from the system.** When a client has no language cached (see "Where the
+choice is stored" below), the UI maps the system's preferred languages onto the list (see below) and renders in the
+result until it has connected; it then takes the language the daemon holds, when the daemon holds one this build
+offers. A later change of the system's languages changes nothing once a client has a language cached, in the macOS
+application and in a browser alike: the language changes only when the language the daemon holds does.
 
-The first pick in the macOS application uses the system's full list of preferred languages. The window's web view on
-its own would only know the first preference, which would put a user whose first language is not offered on English
-even when a later preference is offered; the application therefore hands the web view the system's full list at
-launch.
+The pick from the system in the macOS application uses the system's full list of preferred languages. The window's
+web view on its own would only know the first preference, which would put a user whose first language is not offered
+on English even when a later preference is offered; the application therefore hands the web view the system's full
+list at launch.
 
 In the macOS application, the words a screen reader speaks for a control's role ("button", "tab") follow the system's
 language, not the choice made in Settings: they are in the first of the system's preferred languages that is one of the
@@ -141,39 +144,49 @@ worded in the window's own terms.
 
 ## Where the choice is stored
 
-The choice is remembered **per client**, in that client's own browser storage, as the appearance choice is (see "Where
-the choice is stored" in `docs/product/appearance.md`). A desktop window and a browser tab, or two machines reaching the
-same daemon, each keep their own, and each renders its own whatever the daemon holds (see "The language the daemon
-holds" below). A client whose storage has been cleared picks the language from the system again on its next load.
-A configuration export that includes the General section carries the language the exporting client shows, and an
-import asked to apply that section switches the client that runs the import to it, when that client offers it (see "The
-settings a client holds" in `docs/product/settings-in-a-configuration.md`).
-Without that storage nothing is kept: every load picks the language from the system, and a choice in Settings lasts
-until the page is reloaded.
+The choice is held **by the daemon**, as the language the daemon holds (see below): one value for every client, a
+desktop window and a browser tab, or two machines reaching the same daemon, alike. Each client also keeps a copy in its
+own browser storage, refreshed whenever the window takes the daemon's language or the user picks one, and used only to
+render in before the client has connected, such as while it starts or after it has lost its connection. Once
+connected, the daemon's language wins: a copy that differs from it is replaced by it, when it is one this build
+offers, and never replaces it.
+
+A client with no copy — on its first launch, or once its storage has been cleared — renders in the language picked
+from the system until it has connected, then switches to the language the daemon holds; the switch may be briefly
+visible. Without that storage nothing is kept: every load renders in the language picked from the system until it has
+connected.
 
 ## The language the daemon holds
 
-The daemon also holds one language, taken as **the user's language**: the language sessions are told to talk to the user
-in (see "The guidance on the user's language" in `docs/product/launching-agents.md`). It is not a client's: there is one
-value for every client, the one reported most recently, and none until a client reports one. It is stored as
-`interface_language`, a tag from the 17 offered (see "The offered languages" above); the daemon refuses any other tag.
+The daemon holds one language, stored as `interface_language`, a tag from the 17 offered (see "The offered languages"
+above); the daemon refuses any other tag. It is **the language every window shows**, and also **the user's language**:
+the language sessions are told to talk to the user in (see "The guidance on the user's language" in
+`docs/product/launching-agents.md`), so a window's language is always the one agents are told. There is one value for
+every client, and none until a client reports one.
 
-A client reports its language:
+**Every window follows it.** Once a client has connected and received the daemon's state for that connection, the
+window shows the language the daemon holds, and switches whenever the daemon announces a new one, whoever changed it.
+Until then — on a reconnect too — the window keeps the language it has. A language this build does not offer leaves the
+window in the language it has, and the client leaves the daemon's value as it is. A window that is not connected when
+the language changes takes the new one when it reconnects.
 
-- **when the user picks one in Settings**. The window changes language whatever becomes of the report; a report the
-  daemon does not receive or refuses is shown as an error and is not sent again later;
-- **on connecting, only while the daemon holds none yet**, so the daemon starts from the language the client shows.
-  A client never reports on connecting otherwise, so clients set to different languages do not overwrite each other at
-  every start: the daemon keeps the most recent report.
+The language changes:
 
-The first launch's pick from the system is not reported by itself; it reaches the daemon only through the report on
-connecting. A configuration export that includes the General section carries the language the exporting client
-shows in its place, and an import asked to apply that section sets the held language to it when it is one of the offered
-languages, leaving it as it is otherwise (see "Application settings are left alone unless they are asked for" in
-`docs/product/settings-in-a-configuration.md`). A console session reads it and changes it through
-the settings tools, under the same rule about offered tags (see "Application settings: `get_settings` and
-`update_settings`" in `docs/product/agent-settings-tools.md`); such a change, like a client's report, changes no
-window's own language.
+- **when the user picks one in Settings**, in any window. The window switches at once and sends the pick to the daemon,
+  and every other open window follows. When the daemon does not receive the pick or refuses it, an error is shown and
+  the window goes back to the language the daemon holds, as the window last knew it, or to the language it showed
+  before the pick when the daemon holds none this build offers; the pick is not sent again later;
+- **when a console session changes it** through the settings tools, under the same rule about offered tags (see
+  "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`); every open
+  window follows;
+- **when an import applies the General section** of a configuration document that carries a language this build
+  offers; one it does not offer is skipped (see "Application settings are left alone unless they are asked for" in
+  `docs/product/settings-in-a-configuration.md`). Every open window follows. A configuration export that includes the
+  General section carries the language the daemon holds, when it holds one;
+- **on connecting, only while the daemon holds none yet**: the client reports the language it shows — its cached copy,
+  or its pick from the system — so the daemon starts from it. This is the only time a client reports a language
+  without the user picking one. A report that fails is not shown as an error, and is tried again later, at the latest
+  when the client next connects.
 
 ## What is translated so far
 

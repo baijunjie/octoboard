@@ -451,7 +451,7 @@ it("leaves this device's keyboard shortcuts alone when the document carries none
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyJ", primary: true, shift: true });
 });
 
-describe("the settings only this client holds", () => {
+describe("the settings only this client holds, and the language", () => {
   const carrying = (settings: Record<string, unknown>) => JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, ...settings } });
   const FILE = { appearance: "dark", markdown_style: "github", interface_language: "ja", run_in_background: true, show_menu_bar_icon: false, keep_awake: true, keep_awake_when: "always" };
   const restoreOnFinish = () =>
@@ -494,15 +494,16 @@ describe("the settings only this client holds", () => {
     await press("Import");
     expect(localStorage.getItem("heroui-theme")).toBe("dark");
     expect(markdownStyle.get()).toBe("github");
-    // The window is in the file's language now; the rest of the test reads it in English.
-    expect(currentLanguage()).toBe("ja");
-    act(() => setLanguage("en"));
+    // The language is the daemon's to apply, which the window then follows (see `useInterfaceLanguage`): this client
+    // leaves its own as it is.
+    expect(currentLanguage()).toBe("en");
     await openTab("Settings");
     // Not a platform that runs in the background: the value is not taken.
     expect(runInBackground.get()).toBe(false);
     const lines = resultSettingLines();
     expect(lines["Appearance"]).toEqual({ badge: "Dark" });
     expect(lines["Markdown style"]).toEqual({ badge: "GitHub" });
+    expect(lines["Language"]).toEqual({ badge: "日本語" });
     expect(Object.keys(lines)).not.toContain("Keep running in the background when the window is closed");
     expect(Object.keys(lines).filter((label) => /^Show .* icon$/.test(label))).toEqual([]);
     expect(showMenuBarIcon.get()).toBe(true);

@@ -263,7 +263,7 @@ it("adds the client's settings of the sections checked only, each under its own 
   });
   const capabilities = { backgroundRun: { set: vi.fn(async () => {}) } };
   const general = (await savedSettings("de", capabilities, ["General"])).saved;
-  expect(general).toMatchObject({ markdown_style: "github", interface_language: expect.any(String), session_order: { sessions: "status", active_projects: "status", inactive_projects: "name" } });
+  expect(general).toMatchObject({ markdown_style: "github", interface_language: "de", session_order: { sessions: "status", active_projects: "status", inactive_projects: "name" } });
   expect(general).not.toHaveProperty("run_in_background");
   expect(general).not.toHaveProperty("keyboard_shortcuts");
 });
@@ -288,7 +288,7 @@ it("adds the keyboard shortcuts, an empty set where none is changed, with the Ke
   expect(saved).not.toHaveProperty("appearance");
 });
 
-it("adds the appearance, Markdown style and language this client has to a full export, the language replacing the daemon's", async () => {
+it("adds the appearance and Markdown style this client has to a full export and leaves the language as the daemon holds it", async () => {
   markdownStyle.set("github");
   setLanguage("ja");
   localStorage.setItem("heroui-theme", "dark");
@@ -298,7 +298,7 @@ it("adds the appearance, Markdown style and language this client has to a full e
     localStorage.removeItem("heroui-theme");
   });
   const { saved } = await savedSettings("de");
-  expect(saved).toMatchObject({ appearance: "dark", markdown_style: "github", interface_language: "ja" });
+  expect(saved).toMatchObject({ appearance: "dark", markdown_style: "github", interface_language: "de" });
   // A browser has no background running to report.
   expect(saved).not.toHaveProperty("run_in_background");
 });

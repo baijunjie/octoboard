@@ -209,10 +209,9 @@ pub struct DocumentSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub appearance: Option<String>,
-    /// The language tag of the exporting client's interface (see `Settings.interface_language`):
-    /// the daemon writes the one it holds and the client replaces it with the one it shows, which
-    /// is the language the user chose. An import applies it only when this build offers it. Absent
-    /// when neither knew one.
+    /// The interface language tag (see `Settings.interface_language`): the daemon writes the one it
+    /// holds. An import applies it only when this build offers it. Absent when the daemon held
+    /// none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub interface_language: Option<String>,

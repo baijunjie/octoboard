@@ -1964,7 +1964,7 @@ export const de: Translation<"one" | "other"> = {
   "settings.sort.option.name": "Name",
   "settings.sort.option.used": "Zuletzt verwendet",
   "settings.language.label": "Sprache",
-  "settings.language.description": "Die Sprache der Oberfläche. Sie wird beim ersten Start anhand der Systemsprachen gewählt.",
+  "settings.language.sharedDescription": "Die Sprache aller Fenster und die, in der Agenten mit dir sprechen.",
   "settings.cloneDir.label": "Standard-Klonverzeichnis",
   "settings.cloneDir.description.gitUrl": "Projekte, die über eine {git}-URL hinzugefügt werden, werden in dieses Verzeichnis geklont, sofern du kein anderes auswählst.",
   "settings.cloneDir.placeholder": "~/Projects",

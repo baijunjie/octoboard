@@ -265,7 +265,8 @@ export function CompositeLine({ label, values, comparing }: { label: React.React
     : <SettingLine label={label} badge={t("configuration.import.settings.badge.changes")} tone="accent" values={values} />;
 }
 
-/** A setting only this client holds: the value in the file, with the value this client has now where they differ. */
+/** A client setting, or the language the daemon holds: the value in the file, with the value this client has now where
+ * they differ. */
 export function ClientSettingLine({ setting: { label, value, current, lang, currentLang } }: { setting: ClientSettingValue }): React.ReactElement {
   const t = useT();
   if (current === undefined || current === value) return <SettingLine label={t(label)} badge={t("configuration.import.settings.badge.same")} />;

@@ -1937,7 +1937,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "settings.sort.option.name": "Название",
   "settings.sort.option.used": "Недавние",
   "settings.language.label": "Язык",
-  "settings.language.description": "Язык интерфейса. При первом запуске выбирается из языков системы.",
+  "settings.language.sharedDescription": "Язык всех окон и язык, на котором с вами общаются агенты.",
   "settings.cloneDir.label": "Каталог клонирования по умолчанию",
   "settings.cloneDir.description.gitUrl": "Проекты, добавленные по URL {git}, клонируются в этот каталог, если не выбрать другой.",
   "settings.cloneDir.placeholder": "~/Projects",

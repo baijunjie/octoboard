@@ -121,8 +121,8 @@ function AgentResult({
  * accounts were created, a note that they are not logged in. The totals lines give the counts and the cards the items,
  * so neither repeats the other. `shortcuts` says what came of the document's keyboard shortcuts, when they were applied
  * here: how many, how many were skipped, and the overrides that were set. `clientSettings` are the settings only this
- * client holds that were applied here, worded for the cards, and `sorting` the items of the session order that were
- * applied.
+ * client holds that were applied here, and the language the daemon applied, worded for the cards, and `sorting` the
+ * items of the session order that were applied.
  */
 export function ImportResult({
   result,

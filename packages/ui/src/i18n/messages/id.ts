@@ -1937,7 +1937,7 @@ export const id: Translation<"other"> = {
   "settings.sort.option.name": "Nama",
   "settings.sort.option.used": "Terakhir digunakan",
   "settings.language.label": "Bahasa",
-  "settings.language.description": "Bahasa antarmuka. Dipilih dari bahasa sistem saat peluncuran pertama.",
+  "settings.language.sharedDescription": "Bahasa semua jendela, sekaligus bahasa yang dipakai agen untuk berbicara dengan Anda.",
   "settings.cloneDir.label": "Direktori klon default",
   "settings.cloneDir.description.gitUrl": "Proyek yang ditambahkan dari URL {git} diklon ke direktori ini kecuali Anda memilih direktori lain.",
   "settings.cloneDir.placeholder": "~/Projects",

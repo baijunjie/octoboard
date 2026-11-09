@@ -2159,7 +2159,7 @@ export const tr: Translation<"one" | "other"> = {
   "settings.sort.option.name": "Ad",
   "settings.sort.option.used": "Son kullanılanlar",
   "settings.language.label": "Dil",
-  "settings.language.description": "Arayüzün dili. İlk açılışta sistemin dillerine göre seçilir.",
+  "settings.language.sharedDescription": "Tüm pencerelerin dili ve ajanların sizinle konuştuğu dil.",
   "settings.cloneDir.label": "Saptanmış klon dizini",
   "settings.cloneDir.description.gitUrl": "Bir {git} URL’sinden eklenen projeler, başka bir dizin seçmediğiniz sürece buraya klonlanır.",
   "settings.cloneDir.placeholder": "~/Projects",

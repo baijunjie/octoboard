@@ -103,6 +103,7 @@ review" in `docs/product/configuration-export-and-import-dialogs.md`), with a li
 
 - each switch badged **On** or **Off**;
 - each setting only a client holds that this client applied, badged with the value applied, worded as in the review;
+- Language, when the daemon applied the file's language, badged with the language applied, worded as in the review;
 - Sorting, when this client applied any of its parts, badged **Matches the file** and listing each part applied with
   its choice;
 - the default clone directory, when the file's was written, badged **Matches the file**, with the directory under it;

@@ -2087,7 +2087,7 @@ export const ko: Translation<"other"> = {
   "settings.sort.option.name": "이름",
   "settings.sort.option.used": "최근 사용순",
   "settings.language.label": "언어",
-  "settings.language.description": "화면에 표시할 언어입니다. 처음 시작할 때 시스템 언어를 기준으로 선택합니다.",
+  "settings.language.sharedDescription": "모든 {appWindow}의 언어이며, 에이전트가 사용자와 대화할 때 쓰는 언어이기도 합니다.",
   "settings.cloneDir.label": "기본 복제 디렉터리",
   "settings.cloneDir.description.gitUrl": "{git} URL로 추가한 프로젝트는 다른 위치를 선택하지 않으면 이 디렉터리에 복제됩니다.",
   "settings.cloneDir.placeholder": "~/Projects",

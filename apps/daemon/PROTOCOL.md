@@ -1376,23 +1376,24 @@ role text, a console session in its instruction file. Both are fixed when the se
 rule is: a change reaches only sessions begun afterwards, and a console's file, rewritten at every launch, follows at
 the console session's next launch. It is as out of an agent's reach as the approvals (neither `get_settings` shows it
 nor `update_settings` changes it), and a full configuration export carries it as it does them.
-`interface_language` is the tag of the language the user last picked for the interface, which a client reports in
-`update_settings` when the user picks one in Settings, and also on connecting when the daemon holds none yet (never
-otherwise, so clients on different languages do not overwrite each other at every start). It is the user's language
-rather than a client's, so there is one value: the one reported most recently, `null` until one is. While a language is
-held and it is not English (any `en` tag), the instructions every session is launched with name it and ask the session
-to talk to the user in it: replies, questions, reports and pages meant for the user, and the titles it gives sessions,
-unless the user writes in another language or asks for one, or the project's or the user's own instructions say which to
-use; what it writes into a project follows that project's conventions instead. Nothing is added otherwise: sessions
-already follow the language the user writes in. A project session is given the section in its role text, a console
-session in its instruction file after the guidance on asking and before the user's own section; both are fixed when the
-session is launched like the settings above, so a change of the language reaches only sessions begun afterwards. Every
-`title` argument (`open_session`, `handoff_session`, `rename_session`, `request_session` and `request_resume_session`)
-keeps the same static description: the language of a name is the one the section names where the session has one, else
-the one the user writes in. A console session reads and changes it through the MCP settings tools (`get_settings`,
-`update_settings`), held to the same offered tags. A configuration export that includes the application settings carries
-it, and an import that applies them sets it when this build offers the tag. A settings key the daemon does not know is
-ignored on import.
+`interface_language` is the tag of the interface language, which a client reports in `update_settings` when the user
+picks one in Settings, and also on connecting when the daemon holds none yet (never otherwise). There is one value,
+shared by every client: each shows it as soon as it connects and whenever a `settings_updated` brings a new one (keeping
+a copy only to render in before it has connected), so a change from any client, or from a console session, switches
+every window; a tag a client does not offer leaves that client in the language it has. It is `null` until one is
+reported. While a language is held and it is not English (any `en` tag), the instructions every session is launched with
+name it and ask the session to talk to the user in it: replies, questions, reports and pages meant for the user, and the
+titles it gives sessions, unless the user writes in another language or asks for one, or the project's or the user's own
+instructions say which to use; what it writes into a project follows that project's conventions instead. Nothing is
+added otherwise: sessions already follow the language the user writes in. A project session is given the section in its
+role text, a console session in its instruction file after the guidance on asking and before the user's own section;
+both are fixed when the session is launched like the settings above, so a change of the language reaches only sessions
+begun afterwards. Every `title` argument (`open_session`, `handoff_session`, `rename_session`, `request_session` and
+`request_resume_session`) keeps the same static description: the language of a name is the one the section names where
+the session has one, else the one the user writes in. A console session reads and changes it through the MCP settings
+tools (`get_settings`, `update_settings`), held to the same offered tags. A configuration export that includes the
+application settings carries it, and an import that applies them sets it when this build offers the tag. A settings key
+the daemon does not know is ignored on import.
 `auto_start_quota_windows` (default `false`) is whether the daemon starts a
 usage window that has reset but not begun counting; see "Account quotas" below. Agents cannot read or change it, as it
 spends the user's quota. A configuration export that includes the accounts carries it.
@@ -1846,7 +1847,7 @@ Document { format: "octoboard-configuration", version: 3,
 DocumentSettings { // every key is optional (absent or null: not carried); a section is carried when any of its keys is
                    // general
                    appearance?,                         // "light" | "dark" | "system", added by the client
-                   interface_language?,                 // the language tag the exporting client's interface was in
+                   interface_language?,                 // the interface language tag the daemon held
                    markdown_style?,                     // the style's id, added by the client
                    session_order?: { sessions?, active_projects?, inactive_projects? },
                                                         // the sort orders ("status"|"started", "status"|"name"|"used",
@@ -1925,21 +1926,19 @@ DocumentAccount   { name, directory, disabled: bool }
   (`interface_language`, `appearance`, `markdown_style`, `session_order`), App behavior (`resume_sessions_on_start`,
   `run_in_background`, `show_menu_bar_icon`, `keep_awake`, `keep_awake_when`, `auto_close_idle_shell_terminals`), Git
   (`default_clone_dir`, `auto_pull_repositories`, `git_workflow`), Agent behavior (`auto_approve_session_requests`,
-  `auto_approve_resume_requests`, `auto_approve_account_switches`, `auto_approve_handoffs`,
-  `ask_questions_as_choices`), Keyboard shortcuts (`keyboard_shortcuts`) and Cleanup
-  (`auto_delete_unresumable_archives`); the Agent accounts section is the accounts region. A key the document does not
-  carry (absent or `null`) is left as this machine has it; `resume_sessions_on_start` is also absent in a document of
-  a build without the setting. The client's own keys are `appearance`, `markdown_style`, `session_order`,
-  `run_in_background`, `show_menu_bar_icon`, `keep_awake`, `keep_awake_when` and `keyboard_shortcuts`, which the daemon
-  never builds, stores or reads: the client adds them to the document it saves, for the sections chosen only (and
-  replaces `interface_language` by the language it shows), applies them itself on import, and the daemon passes them
-  through (`settings_applied` carries them back as they came). `session_order` is `{ sessions, active_projects,
+  `auto_approve_resume_requests`, `auto_approve_account_switches`, `auto_approve_handoffs`, `ask_questions_as_choices`),
+  Keyboard shortcuts (`keyboard_shortcuts`) and Cleanup (`auto_delete_unresumable_archives`); the Agent accounts section
+  is the accounts region. A key the document does not carry (absent or `null`) is left as this machine has it;
+  `resume_sessions_on_start` is also absent in a document of a build without the setting. The client's own keys are
+  `appearance`, `markdown_style`, `session_order`, `run_in_background`, `show_menu_bar_icon`, `keep_awake`,
+  `keep_awake_when` and `keyboard_shortcuts`, which the daemon never builds, stores or reads: the client adds them to
+  the document it saves, for the sections chosen only, applies them itself on import, and the daemon passes them through
+  (`settings_applied` carries them back as they came). `session_order` is `{ sessions, active_projects,
   inactive_projects }`, each part optional and passed through unchecked; the client writes all three, and on import
-  applies each part whose value it knows. The settings of the Agent
-  accounts section travel with the accounts, in `accounts.agent_settings`. Consoles are ordered by creation time and a
-  console's `projects` by name, with the stored id breaking a tie, so the order is the same on every export; the id
-  itself is not in the document. `projects` is all of a console's projects, whether or not a project is a git
-  repository.
+  applies each part whose value it knows. The settings of the Agent accounts section travel with the accounts, in
+  `accounts.agent_settings`. Consoles are ordered by creation time and a console's `projects` by name, with the stored
+  id breaking a tie, so the order is the same on every export; the id itself is not in the document. `projects` is all
+  of a console's projects, whether or not a project is a git repository.
 - **Nothing is an id.** No console, project or account carries an `id`. A console's `workdir` is not in the document
   either: the daemon derives it from the console's id when it creates the console, so it would carry that id and the
   daemon's own layout, and an import creates its console, and so its directory, itself. A console's `accounts.<agent>`
@@ -2282,8 +2281,8 @@ Failure           { code, params, message }             // as an `error` reply c
   `keep_awake`, `keep_awake_when` and `keyboard_shortcuts` are the one kind of setting the daemon does not apply: the
   client holds them, `{}` for the shortcuts meaning every shortcut at its default (which is what a client with none
   changed writes), and the daemon echoes them in `settings_applied` when the settings were applied, as they came, for
-  the client to apply to itself, ignoring a value it does not know or a setting its platform lacks. A client also
-  applies `interface_language` from the echo, to its own language.
+  the client to apply to itself, ignoring a value it does not know or a setting its platform lacks. The language is no
+  client's own: the daemon applies it, and every window follows it.
 - **The Agent accounts settings.** `accounts.agent_settings` (`auto_select_account`, `auto_switch_on_usage_limit`,
   `auto_start_quota_windows`, `provider_settings` and `agent_tags`) is applied with the accounts (`apply_accounts`),
   after the accounts, through the same path as `update_settings`, whatever `apply_settings` says;

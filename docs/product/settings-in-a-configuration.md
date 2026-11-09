@@ -30,16 +30,13 @@ line for turning one on says what then follows, in that setting's own words, as 
 importing Octoboard does not know, such as `reply_in_interface_language` or `sidebar_order_by_status`, is ignored. Every
 key is optional: one a document does not carry, absent or `null`, is left as the importing machine has it. The settings
 only a client holds are in a document only when a client saved it (see "The settings a client holds" below), and the
-language only when the client or the daemon knows one; every other one is in every document whose export chose its
-section.
+language only when the daemon holds one; every other one is in every document whose export chose its section.
 
 **General**
 
 - **Appearance**, under `appearance`: `light`, `dark` or `system` (see `docs/product/appearance.md`).
-- **Language**, under `interface_language`: the tag of the language the exporting client shows (see
-  `docs/product/language.md`). The client writes it in place of the language the daemon holds; a document the daemon
-  builds for another program carries the daemon's held language, when it holds one (see "The language the daemon
-  holds" in `docs/product/language.md`).
+- **Language**, under `interface_language`: the tag of the language the exporting daemon holds, which every window
+  shows (see "The language the daemon holds" in `docs/product/language.md`).
 - **Markdown style**, under `markdown_style`: `tailwind`, `github`, `newsprint` or `latex` (see
   `docs/product/markdown-documents.md`).
 - **Sorting**, under `session_order`, an object of its three parts, each the id of a choice (see "Choosing the sort" in
@@ -151,12 +148,12 @@ holds:
 
 The appearance, the Markdown style, the sorting, keeping running in the background, showing the menu bar icon, Prevent
 sleep with When to prevent sleep, and the keyboard shortcuts are each client's own, kept in that client rather than by
-the daemon, and the language a client shows is its own too. So the client adds them to the document it saves, for the
-sections chosen alone — for General the appearance, the Markdown style, the sorting and the language it shows; for App
-behavior, where it has those settings, keeping running in the background, showing the menu bar icon and Prevent sleep
-with When to prevent sleep; for Keyboard shortcuts its changed shortcuts — and the daemon builds none of them but the
-language and reads none of them. A document with application settings asked of the daemon by any other program
-therefore has none of them but the daemon's held language.
+the daemon. So the client adds them to the document it saves, for the sections chosen alone — for General the
+appearance, the Markdown style and the sorting; for App behavior, where it has those settings, keeping running in the
+background, showing the menu bar icon and Prevent sleep with When to prevent sleep; for Keyboard shortcuts its changed
+shortcuts — and the daemon builds none of them and reads none of them. A document with application settings asked of
+the daemon by any other program therefore has none of them. The language is not among them: it is the daemon's, which
+builds it into the document and applies it on import.
 
 On import they are applied by the client that runs the import, to itself alone, and only once the daemon reports the
 application settings applied, from what the daemon passes back as applied — the keys of the sections applied alone;
@@ -190,10 +187,9 @@ made in Settings, and the result of the import reports what was applied. So:
 - one that changes closing idle terminals with the panel closes nothing at once and applies to later panel closes;
 - one that turns an automatic approval on or off changes no request already waiting;
 - one that turns asking questions as choices on or off changes no session already running;
-- one that changes the language sets the language the daemon holds for the user, when this build offers the
-  document's language; a language it does not offer is skipped, and the rest of the settings still apply. A language
-  applied also switches the client that runs the import to it, as that client applies the other settings it holds (see
-  "The settings a client holds" above); other windows keep showing their own.
+- one that changes the language sets the language the daemon holds, when this build offers the document's language,
+  and every open window switches to it (see "The language the daemon holds" in `docs/product/language.md`); a language
+  it does not offer is skipped, and the rest of the settings still apply.
 
 ### The default clone directory on import
 

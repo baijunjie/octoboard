@@ -200,8 +200,9 @@ pub(super) const GET_SETTINGS: ToolDef = ToolDef {
     name: "get_settings",
     description: "The application-wide settings: `auto_close_idle_shell_terminals`, `auto_pull_repositories`, \
                   `auto_delete_unresumable_archives`, `resume_sessions_on_start`, \
-                  `auto_select_account`, `interface_language` (the user's language, a tag; \
-                  `null` until a window reported one), \
+                  `auto_select_account`, `interface_language` (the language every window of the \
+                  user shows and the one you are told to reply in, a tag; `null` until a window \
+                  reported one), \
                   `default_clone_dir`, the `git_workflow` settings, \
                   `provider_settings` (the settings the user made for each agent's \
                   provider that you may read, by agent and then setting id, with the value \
@@ -253,10 +254,11 @@ pub(super) const UPDATE_SETTINGS: ToolDef = ToolDef {
                 },
                 "interface_language": {
                     "type": "string",
-                    "description": "The language the daemon holds for the user, as a tag the \
+                    "description": "The language the user's interface is shown in, as a tag the \
                                     interface is offered in (such as `en`, `ja` or \
                                     `zh-Hans`). Sessions are told to talk to the user in \
-                                    it; the user's windows keep their own choice.",
+                                    it, and a change switches every window of the user \
+                                    to it.",
                 },
                 "default_clone_dir": {
                     "type": "string",

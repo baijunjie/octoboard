@@ -180,9 +180,10 @@ which one is the default and where the choice is kept are in `docs/product/appea
 
 ### Language
 
-The language of the UI, chosen from a drop-down of the offered languages, each named in its own language. What the
-options are, how the first launch picks a language, what follows the choice, where it is kept and how a pick also
-becomes the language sessions are told are in `docs/product/language.md`.
+The language of every window, and the one agents talk to the user in, chosen from a drop-down of the offered
+languages, each named in its own language; the row's description says both. What the options are, how a language is
+picked before one is known, what follows the choice, where it is kept, how every window follows it and how it becomes
+the language sessions are told are in `docs/product/language.md`.
 
 ### Markdown style
 

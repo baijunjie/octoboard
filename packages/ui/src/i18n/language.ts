@@ -14,9 +14,11 @@ function systemLanguages(): readonly string[] {
 }
 
 /**
- * The UI's language. The first launch picks it from the system's preferred languages and keeps it;
- * from then on only the user's choice in Settings changes it, never the system's. Without storage
- * nothing is kept, so it is picked from the system again on every load.
+ * The UI's language. Once connected it is the one the daemon holds, which every client shares
+ * (`useInterfaceLanguage`); what is kept here is only a cache of it, so that the start renders in
+ * that language before it has connected. With no cache (the first launch, or cleared storage) it is
+ * picked from the system's preferred languages. Without storage nothing is kept, so it is picked
+ * from the system again on every load.
  */
 const language = createPersistedPreference<Language>(
   PREFERENCE_KEYS.language,

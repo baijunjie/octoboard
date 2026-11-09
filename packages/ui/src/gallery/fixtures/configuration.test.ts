@@ -4,6 +4,8 @@ import { expect, it } from "vitest";
 import type { Imported } from "../../configuration/ImportResult";
 import { APP_BEHAVIOR_SWITCHES, CLEANUP_SWITCHES, GENERAL_SWITCHES, GIT_SWITCHES, AGENT_BEHAVIOR_SWITCHES } from "../../configuration/booleanSettings";
 import { documentClientSettings } from "../../configuration/clientSettings";
+import { documentLanguage } from "../../configuration/languageSettingValues";
+import { isLanguage } from "../../i18n/languages";
 import { documentShortcuts, type Inspection } from "../../configuration/importPlan";
 import { SETTINGS_SECTIONS } from "../../configuration/settingsSections";
 import { type AccountFallback, type Agent, type ProviderInfo, type SettingsSection } from "../../protocol";
@@ -320,7 +322,7 @@ function sectionsWithLines(inspection: Omit<Inspection, "type">, text: string): 
   const client = documentClientSettings(document, { backgroundRun: true, menuBarIcon: true, keepAwake: true });
   const switches = (list: readonly { field: keyof typeof settings }[]) => list.some(({ field }) => settings[field] != null);
   const lines: Record<SettingsSection, boolean> = {
-    general: client.appearance !== undefined || client.interface_language !== undefined || client.markdown_style !== undefined || client.session_order !== undefined || switches(GENERAL_SWITCHES),
+    general: client.appearance !== undefined || isLanguage(documentLanguage(document)) || client.markdown_style !== undefined || client.session_order !== undefined || switches(GENERAL_SWITCHES),
     app_behavior: client.run_in_background !== undefined || client.show_menu_bar_icon !== undefined || client.keep_awake !== undefined || client.keep_awake_when !== undefined || switches(APP_BEHAVIOR_SWITCHES),
     git: settings.default_clone_dir !== null || settings.foreign_default_clone_dir || settings.git_workflow != null || switches(GIT_SWITCHES),
     agent_behavior: switches(AGENT_BEHAVIOR_SWITCHES),

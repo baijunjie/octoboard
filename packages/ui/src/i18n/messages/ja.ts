@@ -2086,7 +2086,7 @@ export const ja: Translation<"other"> = {
   "settings.sort.option.name": "名前",
   "settings.sort.option.used": "最近使った順",
   "settings.language.label": "言語",
-  "settings.language.description": "画面に表示する言語です。初回起動時は、システムの言語に基づいて選択します。",
+  "settings.language.sharedDescription": "すべての{appWindow}の言語です。エージェントもこの言語で話しかけます。",
   "settings.cloneDir.label": "デフォルトのクローン先",
   "settings.cloneDir.description.gitUrl": "{git} の URL から追加するプロジェクトは、別の場所を選択しない限り、このディレクトリにクローンします。",
   "settings.cloneDir.placeholder": "~/Projects",

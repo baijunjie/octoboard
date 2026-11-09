@@ -80,6 +80,14 @@ cannot catch a missing gate: fixture scenarios are built with `hosts` already po
 (`packages/ui/src/fixtures/builders.ts`), so the pre-snapshot renders never happen there. Either keep the gate
 visible at the call site in `App.tsx`, or drive the pre-snapshot inputs directly in a unit test of the hook.
 
+That gate covers the launch only. On a reconnect the store keeps everything the previous connection last saw — `hosts`,
+`settings` and the collections — and `connectionState` turns `"open"` at the hello, before the new `snapshot`, while
+`snapshotEpoch` is already above zero from earlier snapshots. So code that acts on what the daemon holds *now*, above
+all code that writes back to the daemon (seeding a value when it holds none) or overrides the window from it, gates on
+a snapshot of the current connection: remember `snapshotEpoch` when `connectionState` changes and wait for a larger
+one while it is `"open"`, as `packages/ui/src/lifecycle/useInterfaceLanguage.ts` does. `hosts !== undefined`,
+`connectionState === "open"` or `snapshotEpoch > 0`, alone or together, still pass on the previous connection's data.
+
 ## A request's reply and the broadcast of its change reach the UI in either order
 
 A mutating request's handler under `apps/daemon/src/coordinator/` broadcasts the change before it answers, but that

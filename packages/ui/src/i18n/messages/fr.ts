@@ -1937,7 +1937,7 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "settings.sort.option.name": "Nom",
   "settings.sort.option.used": "Utilisés récemment",
   "settings.language.label": "Langue",
-  "settings.language.description": "La langue de l’interface. Elle est choisie d’après les langues du système au premier lancement.",
+  "settings.language.sharedDescription": "La langue de toutes les fenêtres, et celle dans laquelle les agents vous parlent.",
   "settings.cloneDir.label": "Répertoire de clonage par défaut",
   "settings.cloneDir.description.gitUrl": "Les projets ajoutés depuis une URL {git} sont clonés dans ce répertoire, sauf si vous en choisissez un autre.",
   "settings.cloneDir.placeholder": "~/Projects",

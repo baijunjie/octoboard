@@ -80,8 +80,8 @@ Every checkbox of the two groups starts unchecked, and no note changes with the 
 
 **Export** is unavailable while nothing is chosen — Do not export consoles with no checkbox checked — and nothing says
 why, since the boxes that left it so are in view. It asks the daemon for the document with the sections checked, adds
-the settings this client holds of those sections to it — for General its appearance, Markdown style, sorting and the
-language it shows; for App behavior, in the desktop application, keeping running in the background, showing the menu
+the settings this client holds of those sections to it — for General its appearance, Markdown style and sorting; for
+App behavior, in the desktop application, keeping running in the background, showing the menu
 bar icon, and Prevent sleep with When to prevent sleep; for Keyboard shortcuts its changed shortcuts (see "The settings
 a client holds" in `docs/product/settings-in-a-configuration.md`) — and opens the save dialog. In the desktop app a
 toast names the file it was saved as. A browser files a download itself, under its own name and wherever its settings
@@ -284,8 +284,9 @@ the order of that section's rows:
 - **Keyboard shortcuts**: one line, **Changed shortcuts**.
 - **Cleanup**: the switch Automatically delete archived sessions whose conversation is gone.
 
-A setting only a client holds, and Sorting, has its line only when the file carries a value this client can use: Keep
-running in the background, Show menu bar icon, Prevent sleep and When to prevent sleep have none in a browser. A switch
+A setting only a client holds, Language and Sorting have their line only when the file carries a value this client
+can use: a language this build offers; Keep running in the background, Show menu bar icon, Prevent sleep and When to
+prevent sleep have none in a browser. A switch
 or the git workflow that the file does not carry within a section it does carry — Resume sessions on start, in a file
 from a build without it — has its line all the same, badged **No change**, since applying leaves it as it is.
 
@@ -293,11 +294,13 @@ A **switch**'s line names the setting with a badge for what applying would chang
 with what then follows in that setting's own words (see "The application settings an export carries" in
 `docs/product/settings-in-a-configuration.md`); **Turns off**; or **No change**.
 
-A **setting only a client holds** — Appearance, Language, Markdown style, Keep running in the background, Show menu bar
-icon, Prevent sleep, When to prevent sleep — is badged **Set to the file's**, with the file's value and, in brackets, the
-value this client has now, worded as Settings words them (a language by its name in its own language, a Markdown style
-by its name, a switch as **On** or **Off**, When to prevent sleep by its choice's name); or **No change** when they are
-the same.
+A **setting only a client holds** — Appearance, Markdown style, Keep running in the background, Show menu bar icon,
+Prevent sleep, When to prevent sleep — is badged **Set to the file's**, with the file's value and, in brackets, the
+value this client has now, worded as Settings words them (a Markdown style by its name, a switch as **On** or **Off**,
+When to prevent sleep by its choice's name); or **No change** when they are the same. **Language**, which the daemon
+holds rather than the client, reads the same way, comparing the file's language with the language the daemon holds now
+— or with the language this window shows, when the daemon holds none or one this build does not offer — each by its
+name in its own language (see "The language the daemon holds" in `docs/product/language.md`).
 
 The **default clone directory** has its line when the file carries one that can be used here, or one written on another
 operating system. A directory written on another operating system (see "The default clone directory on import" in
