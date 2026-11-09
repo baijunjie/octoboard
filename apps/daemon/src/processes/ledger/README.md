@@ -21,7 +21,12 @@ registry files in the `holders` directory of the data directory the ledger is bu
 `Table::protected` then covers a holder process and its direct children (the agents and shell terminals it starts, and the companion an agent's terminal runs with) and
 the terminal sessions those children lead, exactly as it covers the daemon's own direct children, so rule 1 of
 `attribute.rs` never attributes them, `trees_of_project` never lists them as left behind or kept, and a shell terminal's
-processes under a removed directory are not shown as left behind.
+processes under a removed directory are not shown as left behind. Before forgetting a gone holder's records at
+startup, `apps/daemon/src/coordinator/unlinked.rs` gives each recorded launch's containment to the previous run's
+leftovers through `containment_orphaned`. This reopens it even when no attributed task was persisted, so a companion
+left by an older holder can still be found through the launch's Windows job. Reconciliation reads the previous ledger
+before stopping those members: explicit keeps are preserved, and when the file is unreadable, all members whose keep
+decisions are unknown are preserved for the next daemon too.
 
 Where things are: `mod.rs` the types, the launch lifecycle, reconciliation and `ForgetLaunch`, `attribute.rs` the rules
 that attribute processes to launches, `scan.rs` the scan of the table, the scanner thread and the stop of what ended
@@ -47,6 +52,8 @@ signals that follow what started meanwhile, and `table.rs` the table as the ledg
   (`Persisted::launch_sessions`, which `Persisted::from_book` writes for every launch but an ended one) go back to the
   launch the book follows instead of to an ended launch, and `reopen_containments` skips the launches the book follows,
   so a launch's job members are never taken for an ended launch's.
+- `ProcessLedger::containment_orphaned` — give startup reconciliation the containment of a launch whose holder is
+  known gone, including a launch no attributed task in the ledger file names.
 - `ProcessLedger::launch_unlinked` — for an agent a holder the starting daemon cannot link to yet runs: follow its
   launch, with the containment the host still keeps for it, before the reconcile, so that what the previous run's file
   attributed to it stays the launch's and nothing of it is stopped as an ended launch's. Once the holder is linked to

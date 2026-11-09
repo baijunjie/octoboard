@@ -172,6 +172,7 @@ impl Command {
     /// The same program, arguments, environment and working directory as a plain process
     /// command, for a process started with pipes rather than on a terminal. The quit keys mean
     /// nothing without a terminal and are left out.
+    #[cfg(any(unix, test))]
     pub fn plain(&self) -> std::process::Command {
         let mut command = std::process::Command::new(&self.program);
         command.args(&self.args);

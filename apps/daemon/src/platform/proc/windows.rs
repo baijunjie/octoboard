@@ -2,8 +2,9 @@
 //! starts is placed, before it runs its first instruction, in a job of its own (its reach: the
 //! group or session it leads, on Unix) and, for a launch, in the launch's named job inside which
 //! that one nests; what it starts lands in the same jobs, so a job lists exactly what descends
-//! from its process, wherever it went. A job is never closed with its processes in it, and never
-//! terminated as a whole: kept processes are ended one by one, by handle, or left.
+//! from its process, wherever it went. Launch jobs are never terminated as a whole: kept processes
+//! are ended one by one, by handle, or left. A server's private reach is owner-bound instead:
+//! closing its last handle ends every member, including after forced owner termination.
 //!
 //! A session here is what is attached to its leader's console: what a process starts shares its
 //! console unless it is started detached or on a console of its own, which is how a process leaves
@@ -34,7 +35,9 @@ use windows_sys::Win32::System::Diagnostics::ToolHelp::{
 };
 use windows_sys::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, IsProcessInJob, JobObjectBasicProcessIdList,
-    OpenJobObjectW, QueryInformationJobObject,
+    JobObjectExtendedLimitInformation, OpenJobObjectW, QueryInformationJobObject,
+    SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
 use windows_sys::Win32::System::Threading::{
     CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess,
@@ -120,6 +123,27 @@ impl Job {
     fn assign(&self, process: HANDLE) -> io::Result<()> {
         // SAFETY: both handles are open for the call.
         if unsafe { AssignProcessToJobObject(self.raw(), process) } == 0 {
+            return Err(last_error());
+        }
+        Ok(())
+    }
+
+    /// Only the owner holds this unnamed job: losing that owner must end its servers even
+    /// when no shutdown or crash handler can run. Launch jobs cannot use this policy because
+    /// their members can be kept and carry handles on the launch job themselves.
+    fn end_with_owner(&self) -> io::Result<()> {
+        let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        // SAFETY: the handle is open and `limits` has the layout and size the API requires.
+        if unsafe {
+            SetInformationJobObject(
+                self.raw(),
+                JobObjectExtendedLimitInformation,
+                (&raw const limits).cast(),
+                size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            )
+        } == 0
+        {
             return Err(last_error());
         }
         Ok(())
@@ -286,6 +310,14 @@ impl Placement {
             reach: Job::anonymous()?,
             session: reach == Reach::Session,
         })
+    }
+
+    /// A server's private reach ends with its owner. Its jobs must be supplied at creation,
+    /// so the server is protected even when its owner dies before creation returns.
+    pub(crate) fn server(containment: Option<&Containment>) -> io::Result<Self> {
+        let placement = Self::new(Reach::Session, containment)?;
+        placement.reach.end_with_owner()?;
+        Ok(placement)
     }
 
     /// The job handles for the child's job list attribute, in the order it must join them.

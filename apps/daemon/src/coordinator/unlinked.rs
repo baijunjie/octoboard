@@ -149,6 +149,12 @@ pub(super) fn claim_at_start(
             .chain(&adopted.claimed)
             .any(|id| id == session)
     });
+    // A holder's own children are deliberately absent from the process ledger. Its launch
+    // record still names their containment, even when no attributed task was ever persisted.
+    // Open it before forgetting the record so reconciliation can stop the entire lost launch.
+    for record in records.iter().filter(|record| gone(&record.holder_id)) {
+        state.process_ledger.containment_orphaned(&record.launch_id);
+    }
     if let Err(err) = state.store.forget_held_terminals_except(&still_run) {
         tracing::warn!(%err, "forgetting where the launches of gone holders ran failed");
     }

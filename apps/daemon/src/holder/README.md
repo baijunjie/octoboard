@@ -227,7 +227,16 @@ holder and what it starts as the daemon's own; see [`../processes/ledger/README.
   input closed, output piped and read for the port after the prefix it was given (`PortAfter`) and discarded when readiness
   is the socket existing (`SocketExists`), leading a session of its
   own (on Windows a job of its own nested in the launch's, with no console), in the launch's containment and the
-  holder's crash table. One that exits first or is not ready in time is ended, with its endpoint. The holder enforces
+  holder's crash table. Owner-death cleanup also works when the holder cannot run a handler or a destructor:
+  `apps/daemon/src/platform/proc/server/windows.rs` creates the server directly in a private kill-on-close job, whose
+  handles stay in the holder, and the launch's job, using an explicit list of inherited standard handles. The launch
+  job itself cannot kill on close, since its members can be kept and hold their own handles on it. On Unix,
+  `apps/daemon/src/platform/proc/server/parent.rs` creates a watcher after `setsid` and before exec; only the holder
+  keeps the pipe's write end, so its death gives the watcher EOF and the watcher kills its own group, including the
+  companion. The
+  watcher stays in that group to reserve its id, closes inherited descriptors and is double-forked so the companion
+  does not inherit an extra child to reap. These resources belong to the holder, so a daemon's parting leaves them
+  intact. One that exits first or is not ready in time is ended, with its endpoint. The holder enforces
   the lifetime itself, linked or not: once a terminal's exit is published, or the holder ends or releases it, its
   companion is ended (a polite request to its group, a 2 second grace, a kill and a sweep, its endpoint removed); a
   companion that exits by itself has `companion_ended` sent to the linked daemon and its terminal ended (a polite

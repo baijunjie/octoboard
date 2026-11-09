@@ -718,6 +718,24 @@ fn environment_block(command: &Command) -> io::Result<Vec<u16>> {
     Ok(block)
 }
 
+/// Encoded parameters shared by terminal and pipe-backed process creation.
+pub(crate) struct ProcessParameters {
+    pub(crate) application: Option<Vec<u16>>,
+    pub(crate) line: Vec<u16>,
+    pub(crate) environment: Vec<u16>,
+    pub(crate) directory: Option<Vec<u16>>,
+}
+
+pub(crate) fn process_parameters(command: &Command) -> io::Result<ProcessParameters> {
+    let (application, line) = command_line(command)?;
+    Ok(ProcessParameters {
+        application,
+        line,
+        environment: environment_block(command)?,
+        directory: command.cwd.as_deref().map(|path| wide(path.as_os_str())),
+    })
+}
+
 // --- Starting a process.
 
 /// Opens a pseudoconsole of `size` and starts `command` on it, in its own job inside

@@ -210,11 +210,28 @@ Evidence directory on the verification Mac: `/tmp/windows-ssh-remaining-evidence
 - [x] Session with no live holder interrupted at startup — `missing-holder-interrupted.json`.
 - [x] Unreachable holder stayed alive and claimed, showed pending, then recovered with the same launch — `pending-unreachable.json`, `pending-recovered.json`.
 
-**Supplemental failure, not fixed.** Force-terminating the holder for the no-holder check left its Codex companion
-running after startup reconciliation and the later daemon shutdown; it was explicitly cleaned up after verifying
-its process identity. The session-interruption assertion passed. This bypassed the holder's internal crash handler
-and does not verify that handler. Investigate cleanup of a companion after its holder is missing; see
-`missing-holder-settled.json`, `cleanup-processes.json` and `REPORT.md` in the follow-up evidence directory.
+**Forced-holder companion cleanup, fixed and reverified on 2026-11-10.** The SSH follow-up found that a forced
+holder termination left its Codex companion alive after startup reconciliation and shutdown (`missing-holder-settled.json`
+and `cleanup-processes.json` in the earlier evidence directory). The companion lacked an owner-death policy, and the
+ledger deliberately excluded it as a holder-managed child; a launch with no attributed task was therefore absent from
+the jobs reopened at startup. The launch job cannot itself be kill-on-close: its members keep handles on it and can be
+kept or carried between launches.
+
+The fix starts a server atomically in a private Windows kill-on-close job held only by its owner, with an explicit
+standard-handle inheritance list. Unix installs a double-forked pipe watcher before exec; holder death closes its sole
+writer and the watcher kills the server group, whose id its membership reserves. Startup also reopens a gone holder's
+recorded launch containment before forgetting its records, placing it with previous-run leftovers so normal ledger
+read-back preserves explicit keeps and unknown keep decisions when the file is unreadable.
+
+Verified on the Windows VM over SSH, with real Codex 0.166.0: an old-build orphan survived holder termination, then the
+fixed daemon's startup ended it and interrupted its session; shutdown left none of its processes. A fixed holder's
+companion and remote terminal survived planned daemon stop, both ended on forced holder termination while no daemon
+ran, and stayed gone through the next startup and shutdown. On macOS a real Codex app-server bound to a shell PTY
+ended with its SIGKILLed holder while no daemon ran; terminal exit ended its companion, and companion exit ended the
+terminal. The new owner-death test fails on macOS main and passes with the fix. Four new exact lifecycle tests passed
+on both hosts, three exact Windows startup/keep tests passed, and 12 concurrent exact lifecycle runs passed on each.
+Evidence: `/tmp/companion-orphan-evidence/REPORT.md`. No full suite ran. Forced termination bypasses the internal crash
+handler; these results do not claim separate handler or interactive-desktop verification.
 
 **Remaining, each a real run:**
 1. Windows, from an interactive desktop logon, blocked on the sign-in password of the VM user `bjj`. The VM's working
@@ -224,7 +241,6 @@ and does not verify that handler. Investigate cleanup of a companion after its h
    on the bundled console host draws before any input (Handoff); a real update over running sessions installs with no
    Abort/Retry/Ignore prompt (Handoff). The SSH follow-up above verified the remaining gate, compatibility, draining,
    unknown-terminal, no-holder and connection-refusal criteria; repeated link drops were not separately run on Windows.
-   Investigate the supplemental companion left after forced holder termination, as recorded above.
 2. Linux without systemd, blocked on Docker, which is off: with the Linux build in a container, the Unix detach, and a
    held launch joining the cgroup group the daemon made for it below the holder's own cgroup (a writable cgroup v2
    subtree, as Linux daemon run milestone 01's notes describe).

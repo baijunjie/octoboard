@@ -201,7 +201,7 @@ impl ServerHost for LocalHost<'_> {
                 bail!("the private server's endpoint has no socket to wait for")
             }
         };
-        let mut plain = command.plain();
+        let mut plain = command;
         self.containment.prepare(&mut plain);
         let mut child = ServerChild::start(
             plain,

@@ -1104,7 +1104,7 @@ fn a_line_that_is_not_utf8_does_not_stop_the_output_reader() {
 #[cfg(unix)]
 fn stand_in_server(script: &str, listen: Option<PrivateListen>) -> LocalServer {
     use crate::platform::proc::server::ServerChild;
-    let mut command = std::process::Command::new("/bin/sh");
+    let mut command = Command::new("/bin/sh");
     command.args(["-c", script]);
     let child = ServerChild::start(command, false, None, "stand-in server").unwrap();
     LocalServer::new(child, listen)

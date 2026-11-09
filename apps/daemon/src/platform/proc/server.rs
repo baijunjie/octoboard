@@ -3,15 +3,30 @@
 //! window), inside a launch's containment when given and in the crash table, its standard input
 //! closed and its output either read for what it reports or discarded. The caller waits for it to
 //! show it is ready and ends it with a polite request, a grace and a kill of what it left. What it
-//! serves, and how its readiness shows, are the caller's.
+//! serves, and how its readiness shows, are the caller's. The server also ends if its owner is
+//! force-terminated: a private kill-on-close job on Windows, a pipe watcher on Unix.
 
 use std::io::{self, BufRead, Read};
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+#[cfg(unix)]
+use std::process::{Child, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use super::{crash, stop_group, ChildHandle, Containment, Polite, ProcessId, Reach};
+#[cfg(unix)]
+use super::Reach;
+use super::{crash, stop_group, ChildHandle, Containment, Polite, ProcessId};
+use crate::platform::term::Command;
+
+#[cfg(test)]
+pub(crate) mod owner_tests;
+
+#[cfg(unix)]
+mod parent;
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+use windows::Child;
 
 /// How often a server is looked at while it is waited for.
 const READY_POLL: Duration = Duration::from_millis(20);
@@ -36,6 +51,8 @@ pub struct ServerChild {
     /// What the server is called in the log.
     label: String,
     ended: bool,
+    #[cfg(unix)]
+    _parent: parent::Guard,
 }
 
 impl ServerChild {
@@ -43,38 +60,43 @@ impl ServerChild {
     /// `read_output` (for a port it reports) and discarded otherwise. `label` names it in the log.
     /// The command's own standard streams and process creation flags are overridden.
     pub fn start(
-        mut command: Command,
+        command: Command,
         read_output: bool,
         containment: Option<&Containment>,
         label: &str,
     ) -> io::Result<Self> {
-        let output = || {
-            if read_output {
-                Stdio::piped()
-            } else {
-                Stdio::null()
-            }
+        #[cfg(unix)]
+        let (mut child, handle, parent) = {
+            let mut plain = command.plain();
+            let output = || {
+                if read_output {
+                    Stdio::piped()
+                } else {
+                    Stdio::null()
+                }
+            };
+            plain.stdin(Stdio::null()).stdout(output()).stderr(output());
+            Reach::Session.lead(&mut plain);
+            let parent = parent::Guard::prepare(&mut plain)?;
+            let mut child = plain.spawn()?;
+            let handle =
+                match ChildHandle::started(ProcessId(child.id()), Reach::Session, containment) {
+                    Ok(handle) => handle,
+                    Err(err) => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return Err(err);
+                    }
+                };
+            (child, handle, parent)
         };
-        command
-            .stdin(Stdio::null())
-            .stdout(output())
-            .stderr(output());
-        Reach::Session.lead(&mut command);
-        let mut child = command.spawn()?;
-        let handle = match ChildHandle::started(ProcessId(child.id()), Reach::Session, containment)
-        {
-            Ok(handle) => handle,
-            Err(err) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(err);
-            }
-        };
+        #[cfg(windows)]
+        let (mut child, handle) = windows::start(&command, read_output, containment)?;
         let crash = crash::register(&handle, true);
         if crash.is_none() {
             tracing::warn!(
                 process = label,
-                "the crash cleanup is full; this server would outlive a crash"
+                "the crash cleanup is full; only owner-death cleanup remains for this server"
             );
         }
         let lines = output_lines(&mut child);
@@ -85,6 +107,8 @@ impl ServerChild {
             lines,
             label: label.to_string(),
             ended: false,
+            #[cfg(unix)]
+            _parent: parent,
         })
     }
 

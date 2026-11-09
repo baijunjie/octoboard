@@ -465,6 +465,25 @@ impl ProcessLedger {
         self.take_back_previous(&mut book, launch_id);
     }
 
+    /// Gives startup reconciliation the containment of a launch whose holder is known gone,
+    /// even when the previous ledger recorded no attributed task in it. It belongs to the
+    /// previous run's leftovers: an unreadable ledger must still protect possibly kept members.
+    pub fn containment_orphaned(&self, launch_id: &str) {
+        let mut book = self.book();
+        if book.followed_as(launch_id).is_some() {
+            return;
+        }
+        if let Some(containment) = Containment::reopen(&self.instance, launch_id)
+            .filter(|containment| containment.members().is_some())
+        {
+            book.launches
+                .get_mut(ENDED)
+                .expect("the ended launch is always present")
+                .containments
+                .push(Arc::new(containment));
+        }
+    }
+
     /// Has the reconcile keep, rather than stop, what the previous run left: a holder the daemon
     /// cannot link to yet may run the agent of a launch no record places, which would otherwise
     /// read as ended. The previous run's file is read back and this run's launches are followed,

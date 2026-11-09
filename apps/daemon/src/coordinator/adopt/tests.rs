@@ -1540,3 +1540,136 @@ async fn an_adopted_codex_terminal_with_no_companion_has_no_transport() {
     let live = state.live_session("s1").expect("the session is live");
     assert!(live.transport.is_none());
 }
+
+/// Starts a launch from an older holder, without writing attributed processes to the ledger.
+/// The returned guard owns only this fixture's processes and cleans them up on failure.
+#[cfg(windows)]
+fn legacy_gone_launch(
+    state: &Arc<AppState>,
+    dir: &ScratchDir,
+) -> (
+    crate::platform::proc::server::owner_tests::Owner,
+    crate::platform::proc::ProcessIdentity,
+    crate::platform::proc::ProcessIdentity,
+) {
+    use crate::platform::proc::server::owner_tests::legacy_orphan;
+    use crate::processes::ledger::ProcessLedger;
+
+    let previous = ProcessLedger::new(dir);
+    previous.without_scanner();
+    let pending = previous.begin_launch("s1").expect("the previous launch");
+    let launch = pending.tag().launch_id().to_string();
+    let instance = pending.tag().instance_id().to_string();
+    let processes = legacy_orphan(&instance, &launch, dir);
+    drop(pending);
+    drop(previous);
+    assert!(
+        !dir.join("process-ledger.json").exists(),
+        "the old ledger must name no process in this setup"
+    );
+    state
+        .store
+        .record_held_terminal(&launched_in("gone-holder", "s1", &launch))
+        .unwrap();
+    state.process_ledger.await_reconcile();
+    processes
+}
+
+#[cfg(windows)]
+async fn reconcile_gone_launch(state: &Arc<AppState>, dir: &ScratchDir) {
+    let adopted = claim_in_blocking(state, Vec::new(), dir.join("run")).await;
+    assert!(
+        adopted.claimed.is_empty(),
+        "a dead holder cannot claim a session"
+    );
+    assert!(state.store.held_terminals().unwrap().is_empty());
+    let state_for_reconcile = state.clone();
+    tokio::task::spawn_blocking(move || state_for_reconcile.process_ledger.reconcile())
+        .await
+        .expect("startup reconciliation ran");
+}
+
+/// A companion of an older holder can be the only process in a launch job, with no attributed
+/// task in the previous ledger file. The held launch record is then the only way to find the job.
+#[cfg(windows)]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_gone_holders_launch_is_cleaned_up_even_without_a_persisted_process() {
+    use crate::test_support::within;
+
+    let (state, dir) = console_with_project_and_accounts("adopt-empty-ledger-orphan");
+    record(&state, "s1", SessionStatus::Idle);
+    let (_owner, companion, descendant) = legacy_gone_launch(&state, &dir);
+    assert!(companion.is_running());
+    reconcile_gone_launch(&state, &dir).await;
+    assert!(
+        within(PATIENCE, move || !companion.is_running()
+            && !descendant.is_running())
+        .await,
+        "startup left an unrecorded companion in the gone holder's launch"
+    );
+    state.store.mark_unheld_sessions_interrupted(&[]).unwrap();
+    assert_eq!(
+        state.session_record("s1").unwrap().status,
+        SessionStatus::Interrupted
+    );
+}
+
+/// If the previous ledger is corrupt, its keep decisions are unknown. Finding a gone holder's
+/// job must not turn those potentially kept processes into a current launch that is stopped.
+#[cfg(windows)]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_gone_holders_launch_preserves_unknown_members_when_the_ledger_is_unreadable() {
+    let (state, dir) = console_with_project_and_accounts("adopt-corrupt-ledger-orphan");
+    record(&state, "s1", SessionStatus::Idle);
+    let (_owner, companion, descendant) = legacy_gone_launch(&state, &dir);
+    std::fs::write(dir.join("process-ledger.json"), "{ not a process ledger")
+        .expect("the corrupt previous ledger");
+
+    reconcile_gone_launch(&state, &dir).await;
+    assert!(companion.is_running(), "an unknown keep decision was lost");
+    assert!(descendant.is_running(), "an unknown keep decision was lost");
+    let saved: Value = serde_json::from_slice(
+        &std::fs::read(dir.join("process-ledger.json")).expect("the reconciled ledger"),
+    )
+    .expect("the reconciled ledger is valid");
+    for identity in [companion, descendant] {
+        assert!(
+            saved["kept"].as_array().unwrap().iter().any(|kept| {
+                kept["pid"].as_u64() == Some(u64::from(identity.pid.0))
+                    && kept["start"].as_u64() == Some(identity.start_micros)
+            }),
+            "the unknown member was not preserved for the next daemon"
+        );
+    }
+}
+
+/// A readable ledger's explicit keep remains authoritative even when the kept process still
+/// belongs to the same Windows job as a companion whose holder is gone.
+#[cfg(windows)]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_gone_holders_companion_is_stopped_while_a_persisted_kept_member_survives() {
+    use crate::test_support::within;
+
+    let (state, dir) = console_with_project_and_accounts("adopt-kept-ledger-orphan");
+    record(&state, "s1", SessionStatus::Idle);
+    let (_owner, companion, kept) = legacy_gone_launch(&state, &dir);
+    let previous = json!({
+        "boot": crate::platform::proc_table::boot_id(),
+        "kept": [{"pid": kept.pid.0, "start": kept.start_micros}],
+    });
+    std::fs::write(
+        dir.join("process-ledger.json"),
+        serde_json::to_vec(&previous).unwrap(),
+    )
+    .expect("the previous keep is persisted");
+
+    reconcile_gone_launch(&state, &dir).await;
+    assert!(
+        within(PATIENCE, move || !companion.is_running()).await,
+        "the unkept companion survived startup"
+    );
+    assert!(
+        kept.is_running(),
+        "the persisted keep was stopped with its job"
+    );
+}

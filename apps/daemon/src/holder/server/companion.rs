@@ -164,7 +164,7 @@ impl Companion {
             .map(|launch| Containment::join_launch(&launch.instance, &launch.launch))
             .transpose()
             .map_err(|err| format!("opening the launch's containment: {err}"))?;
-        let mut plain = command.plain();
+        let mut plain = command.clone();
         if let Some(containment) = &containment {
             containment.prepare(&mut plain);
         }

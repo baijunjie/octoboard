@@ -342,11 +342,26 @@ cancel. The final thread and rollout contained one UserMessage with that client 
 Full account and limits: `/tmp/windows-ssh-remaining-evidence/REPORT.md`, "08 Codex queued message". This was session 0,
 not a desktop update, and did not exercise the sealed restart outbox race or a pre-kill queued message.
 
+**Forced-holder companion cleanup follow-up, 2026-11-10.** The orphan reported in 02 is fixed. A server now starts
+atomically inside an owner-only private kill-on-close job on Windows; Unix installs a double-forked pipe watcher before
+exec, killing the server group if its owner disappears. The shared launch containment retains its keep/carry semantics.
+Startup also discovers a lost holder's launch through its held record even when no task was attributed in the previous
+ledger, preserving both recorded keeps and unknown keep decisions on an unreadable ledger.
+
+The Windows SSH run reproduced an old holder's orphan with real Codex 0.166.0, then verified fixed startup cleaned it
+and ordinary shutdown left none. A fixed holder's server and remote terminal survived planned daemon stop, ended on
+forced holder termination offline, and stayed gone through startup reconciliation and shutdown. On macOS the real
+app-server and a bound shell PTY ended after SIGKILL of the holder, without a daemon; terminal exit ended the server,
+and server exit ended its terminal. Four new exact lifecycle tests passed on each host, three Windows startup/keep
+regressions passed, and 12 concurrent exact lifecycle runs passed on each. Evidence and build hashes:
+`/tmp/companion-orphan-evidence/REPORT.md`. No full suite ran; this closes the forced-holder orphan observation, not the
+independent desktop or queue criteria below.
+
 **Remaining, a real run on Windows from an interactive desktop logon**, blocked on the sign-in password of the VM user
 `bjj`; the VM's working directory `C:\Users\bjj\windows-verification` keeps the source, the build and the isolated data,
 and Codex is signed in there. With the daemon started by the desktop application: the holder detached and running the
 server, the companion in a job of its own nested in the launch's (over SSH it was seen only in a job); a message queued
 before a daemon kill started once after a cancel; the sealed restart outbox race; and a real desktop update restart
 over a working Codex session, with the installer meeting no file in use. The planned-stop/start queue-and-cancel case
-was established over SSH in the follow-up above. Also investigate the companion left by forced holder termination,
-recorded in 02's SSH follow-up; that session became interrupted, but its companion needed explicit cleanup.
+was established over SSH in the follow-up above. The companion left by forced holder termination was fixed and
+reverified separately in the follow-up above.
