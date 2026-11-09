@@ -214,6 +214,18 @@ down Windows — is not a quit and installs nothing: Octoboard stops its daemon 
 ends the session" in `docs/product/application-lifecycle.md`) and ends, and the update is offered again by the
 automatic check after the next start (see "When the application checks" above).
 
+On Windows the installer replaces every file it ships without asking, even while a process still runs from the
+installation folder. Octoboard itself is ended first, so it never runs on past its update. Any other shipped file a
+process still holds — the daemon's executable, `conpty.dll`, an `OpenConsole.exe` or a bundled license file, held by a
+process an agent started from the installation, say, or by a process holder running from it (see "The copy of the build
+holders run from" in `docs/product/process-holders.md`) — is renamed beside itself to `<file>.old-<n>`, `n` the first
+number not taken, and the new file takes the original name. No such process is ended: it runs on from the renamed file.
+A file that cannot be renamed either is left to the installer's own prompt. An install that fails or is aborted puts
+back each file it renamed where no new file has taken its place, so no shipped file is left missing. A renamed file is
+deleted as soon as nothing holds it: right after the install; otherwise at the daemon's next start (the daemon's
+executable, `conpty.dll` and the `OpenConsole.exe` files only), at the next install, or at uninstall. An update never
+asks for a reboot.
+
 An update is never installed twice: Download and install does nothing while a check or a download is under way, or once
 an update is installed.
 

@@ -305,6 +305,9 @@ async fn run_daemon(
     state.sweep_saved_output()?;
     // Likewise for a handoff package whose session is gone.
     handoff::sweep(&state)?;
+    // The installer that updated the installation may have left moved-aside files a process still
+    // held, which nothing else removes until the next install or the uninstall.
+    platform::build_files::remove_installer_set_aside(std::path::Path::new(&state.self_exe));
     // Pages a session pushed before it took the bound role, which no tool of its can list or
     // delete, and which a failed withdrawal or a push racing a binding may have left.
     if let Err(err) = coordinator::pages::withdraw_stray_pages(&state) {

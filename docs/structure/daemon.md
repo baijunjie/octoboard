@@ -334,7 +334,7 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   and the pipe readers are `platform::proc`'s).
 - `src/platform/` — the only place OS-specific code lives, with no use of anything else in the crate, so any module may
   use it. `build_files.rs` the files a copy of a build holds beside the executable on this host (on Windows `conpty.dll`
-  and the `OpenConsole.exe` of `x64/` and `arm64/`, none elsewhere); `sleep/` holding the host awake (`Hold`,
+  and the `OpenConsole.exe` of `x64/` and `arm64/`, none elsewhere) and `remove_installer_set_aside`, which `run_daemon` calls at start and which on Windows removes the `<file>.old-<n>` files the desktop installer's hooks moved aside of the executable and its companions (the suffix is shared with `apps/desktop/src-tauri/windows/installer-hooks.nsh`, which a test of the module reads); `sleep/` holding the host awake (`Hold`,
   `available`; macOS IOKit assertions, a Windows power request, Linux's logind inhibitor lock and the session bus's
   screen saver inhibition over `zbus`), whose answer is `HostFacts::keep_awake`; `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and
   children, a descriptor's path, sockets, working directory), one reader per OS, shared by the ledger's `table.rs`,

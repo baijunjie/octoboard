@@ -320,8 +320,10 @@ version are told apart.
 A holder, and the helpers of the launches it runs, run from a copy of their build under
 `~/.octoboard/builds/<build>/` (on Windows `%USERPROFILE%\.octoboard\builds\<build>\`, holding `conpty.dll` and the
 `OpenConsole.exe` of each architecture beside the executable), not from the installation. So an update can replace the
-installed application while sessions run, and the Windows installer meets no file of Octoboard's in use. A copy is
-removed once no holder runs from it. Where the copy cannot be made, the holder runs from the installation instead.
+installed application while sessions run, and on Windows they hold no file of the installation. A copy is removed
+once no holder runs from it. Where the copy cannot be made, the holder runs from the installation instead; that does not
+block a Windows update either: the installer renames the files the holder holds aside and the holder runs on from them
+(see "Downloading and installing" in `docs/product/in-app-updates.md`).
 
 ## How a holder is detached
 
