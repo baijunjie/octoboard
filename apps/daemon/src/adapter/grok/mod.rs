@@ -186,8 +186,8 @@ impl AgentProvider for GrokProvider {
         &records::GrokRecords
     }
 
-    fn rebuild_launch(&self, record: &serde_json::Value) -> super::RebuiltLaunch {
-        adoption::rebuild(record)
+    fn rebuild_launch(&self, launch: super::AdoptedLaunch<'_>) -> super::RebuiltLaunch {
+        launch.adoption.map(adoption::rebuild).unwrap_or_default()
     }
 
     fn refuse_unlaunchable_account(&self, pinned: Option<&Path>) -> Result<()> {

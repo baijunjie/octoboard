@@ -99,6 +99,13 @@ clients through the first paint.
   pin, keeps the last write.
 - **A heartbeat on the control channel** lets a client notice a connection that has silently died, which matters
   once clients reach the daemon over a network.
+- **A Codex session's private app server runs in its holder, as the terminal's companion.** The holder starts it
+  before the terminal under the terminal's id, from a command line the daemon sends, ends it once the terminal exits
+  and ends the terminal when it dies, whether or not a daemon is linked, and lists its endpoint in every welcome. The
+  daemon connects to that endpoint directly, as it did to its own server, so the queue logic and its tests stand, and
+  a daemon that adopts the terminal links to the server again and re-identifies the conversation from the session
+  record. A holder that does not advertise companions gets the ordinary Codex launch, and a daemon without holders
+  keeps the server as its own child.
 - **Remote hosts, once they are planned, are reached over SSH.** The protocol runs over an SSH session's standard
   input and output, with no port opened and authentication left to SSH. The daemon installs or updates its own binary
   on the remote machine, reconnects with backoff, treats a silent line as lost, and folds the remote machine's events
@@ -118,3 +125,5 @@ clients through the first paint.
 - [05 Program status reports](05-program-status-reports.md)
 - [06 Conflict-checked writes](06-conflict-checked-writes.md)
 - 07 Control-channel heartbeat (closed)
+- [08 Codex app server in the holder](08-codex-server-in-holder.md) — needs 02 and 03, and Codex's private app
+  server, which is in place

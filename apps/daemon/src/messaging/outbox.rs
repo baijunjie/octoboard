@@ -158,7 +158,9 @@ type MessageQueue = VecDeque<(Ticket, String, Option<Instant>)>;
 #[derive(Default)]
 pub struct Outbox {
     queues: Mutex<HashMap<String, MessageQueue>>,
-    /// The ticket the next message pushed gets.
+    /// The ticket the next message pushed gets. A message is written as `<launch id>:<ticket>`
+    /// (see [`Self::drain`]), and an agent's own queue keeps that id across daemon runs, so a
+    /// daemon's tickets start from the clock ([`Self::seeded_from_clock`]).
     next_ticket: AtomicU64,
     /// The sessions a drainer currently owns.
     draining: Mutex<HashSet<String>>,
@@ -249,6 +251,23 @@ struct Keeps {
 }
 
 impl Outbox {
+    /// An outbox whose tickets start at the microseconds since the Unix epoch, so that a later
+    /// daemon run, adopting a session whose agent still queues messages an earlier run wrote,
+    /// never gives one of its own the id of one of those: a run would have to give out more than a
+    /// ticket per microsecond to catch up with the next. A clock set back between the runs by more
+    /// than that margin can still repeat an id.
+    pub fn seeded_from_clock() -> Self {
+        let seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| {
+                u64::try_from(since.as_micros()).unwrap_or(u64::MAX / 2)
+            });
+        Self {
+            next_ticket: AtomicU64::new(seed),
+            ..Self::default()
+        }
+    }
+
     /// Accepts a message for a session, to be written as soon as it can take one; `None`, with
     /// nothing queued, once [`Self::seal`] has taken the queues for the next daemon, since nothing
     /// queued from then on would ever be written: the caller says what became of the message.
@@ -417,6 +436,51 @@ impl Outbox {
         Some(ticket)
     }
 
+    /// Queues a message a planned stop saved under the ticket it had, so that the id it is written
+    /// under (see [`Self::drain`]) is the one an agent's own queue may already know it by: a
+    /// message the agent took but did not start is then started in place, not added again.
+    /// `row` is the store row it is kept in, if it is. Otherwise as [`Self::push`] and
+    /// [`Self::push_kept`]: `None` once sealed, or when `row` is already queued. A ticket that is
+    /// already queued is never given twice: such a message gets a new one. The next ticket is kept
+    /// above every restored one, so no later message repeats it.
+    pub fn push_restored(
+        &self,
+        id: &str,
+        text: &str,
+        row: Option<i64>,
+        ticket: Ticket,
+    ) -> Option<Ticket> {
+        let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        if self.sealed.load(Ordering::Acquire) {
+            return None;
+        }
+        let mut kept = self.kept.lock().expect("outbox kept lock poisoned");
+        if row.is_some_and(|row| kept.tickets.contains_key(&row)) {
+            return None;
+        }
+        let in_use = kept.queued.contains_key(&ticket)
+            || queues
+                .values()
+                .any(|queue| queue.iter().any(|(queued, _, _)| *queued == ticket));
+        let ticket = if in_use {
+            self.next_ticket.fetch_add(1, Ordering::Relaxed)
+        } else {
+            self.next_ticket
+                .fetch_max(ticket.saturating_add(1), Ordering::Relaxed);
+            ticket
+        };
+        if let Some(row) = row {
+            kept.queued.insert(ticket, row);
+            kept.tickets.insert(row, ticket);
+        }
+        drop(kept);
+        queues
+            .entry(id.to_string())
+            .or_default()
+            .push_back((ticket, text.to_string(), None));
+        Some(ticket)
+    }
+
     /// Whether the message kept as row `row` is queued or being written.
     pub fn is_row_queued(&self, row: i64) -> bool {
         self.kept
@@ -517,6 +581,7 @@ impl Outbox {
                     text,
                     &format!("{}:{ticket}", session.launch_id),
                     allow_mixed,
+                    &|| prompts.writes_stopped(),
                 )
             },
             prompts,
@@ -923,8 +988,10 @@ impl Outbox {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::AgentId;
     use crate::session::dialogs::{Dialog, WrittenMessage};
     use std::cell::Cell;
+    use std::sync::Arc;
 
     /// An agent mid-turn, or one that reports no prompts at all: nothing written is waited on.
     struct MidTurn;
@@ -957,6 +1024,32 @@ mod tests {
         fn trust_holds_writes(&self) -> bool {
             false
         }
+    }
+
+    /// The id a message is written under outlives the daemon run in an agent's own queue, so a
+    /// later run's tickets must start where no earlier run reached: from the clock, in
+    /// microseconds since the Unix epoch.
+    #[test]
+    fn an_outbox_seeded_from_the_clock_numbers_its_tickets_from_the_time_it_was_made() {
+        let micros = || {
+            u64::try_from(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("a clock after the epoch")
+                    .as_micros(),
+            )
+            .unwrap()
+        };
+        let before = micros();
+        let outbox = Outbox::seeded_from_clock();
+        let first = outbox.push("s", "one").expect("accepted");
+        let second = outbox.push("s", "two").expect("accepted");
+        let after = micros();
+        assert!(
+            (before..=after).contains(&first),
+            "{first} is not between {before} and {after}"
+        );
+        assert_eq!(second, first + 1, "tickets still follow one another");
     }
 
     /// A message the agent's own queue refused outright fails alone: it is not written again, its
@@ -1492,6 +1585,98 @@ mod tests {
             .map(|(_, text, _)| text.as_str())
             .collect();
         assert_eq!(texts, ["second", "third"]);
+    }
+
+    /// [`MidTurn`] whose writes stop when the flag is raised, as a planned stop's barrier does.
+    struct Barrier(Arc<AtomicBool>);
+
+    impl PromptSignal for Barrier {
+        fn sent(&self) -> u64 {
+            0
+        }
+        fn expects_send(&self) -> bool {
+            false
+        }
+        fn wait_past(&self, _before: u64) -> bool {
+            unreachable!("nothing is waited on mid-turn")
+        }
+        fn mark_unsent(&self, _before: u64) {
+            unreachable!("nothing is checked mid-turn")
+        }
+        fn mark_not_submitted(&self, _before: u64) {
+            unreachable!("nothing is checked mid-turn")
+        }
+        fn unsent_waiting(&self) -> bool {
+            false
+        }
+        fn sighting(&self) -> Sighting {
+            Sighting::default()
+        }
+        fn watch_screen(&self, _on: bool) {
+            unreachable!("nothing is checked mid-turn")
+        }
+        fn trust_holds_writes(&self) -> bool {
+            false
+        }
+        fn writes_stopped(&self) -> bool {
+            self.0.load(Ordering::Acquire)
+        }
+    }
+
+    /// A message the agent's own server declines after the handover barrier rose is not written
+    /// into the terminal: it goes back to the front of its queue, and the seal takes it with the
+    /// rest, in order, for the next daemon.
+    #[test]
+    fn a_message_declined_after_the_barrier_rose_is_put_back_and_sealed_in_order() {
+        let barrier = Arc::new(AtomicBool::new(false));
+        let raised = barrier.clone();
+        let server = crate::test_support::DecliningServer::new(move || {
+            raised.store(true, Ordering::Release)
+        });
+        let live = crate::test_support::idle_stand_in_of("declined-after-barrier", AgentId::CODEX)
+            .with_transport(server.clone());
+        let outbox = Outbox::default();
+        let first = outbox.push_kept(&live.id, "first", 7).unwrap();
+        outbox.push(&live.id, "second");
+        let before = live.input_writes();
+
+        assert_eq!(
+            outbox.drain(&live, &Barrier(barrier.clone())),
+            Drain::Pending
+        );
+        assert_eq!(live.input_writes(), before, "something was written");
+        assert_eq!(server.offered().len(), 1, "only the first was offered");
+        assert_eq!(outbox.len(&live.id), 2);
+
+        let sealed = outbox.seal(Duration::ZERO);
+        assert_eq!(sealed.len(), 1);
+        let texts: Vec<&str> = sealed[0]
+            .1
+            .iter()
+            .map(|(_, text, _)| text.as_str())
+            .collect();
+        assert_eq!(texts, ["first", "second"]);
+        assert_eq!(sealed[0].1[0].0, first);
+        assert_eq!(sealed[0].1[0].2, Some(7), "the kept row went with it");
+    }
+
+    /// Before the barrier, a message the server declines is still written into the terminal and the
+    /// queue goes on. The stand-in is of an agent whose paste and Enter go in together on every
+    /// host, so the write waits on no input box the stand-in never draws.
+    #[test]
+    fn a_message_declined_before_the_barrier_is_written_into_the_terminal() {
+        let barrier = Arc::new(AtomicBool::new(false));
+        let server = crate::test_support::DecliningServer::new(|| {});
+        let live = crate::test_support::idle_stand_in("declined-before-barrier")
+            .with_transport(server.clone());
+        let outbox = Outbox::default();
+        outbox.push(&live.id, "first");
+        let before = live.input_writes();
+
+        assert_eq!(outbox.drain(&live, &Barrier(barrier)), Drain::Clear);
+        assert_eq!(live.input_writes(), before + 1);
+        assert_eq!(server.offered().len(), 1);
+        assert_eq!(outbox.len(&live.id), 0);
     }
 
     /// Sealing takes every queue whole, kept rows with them, and leaves the rows unqueued for the

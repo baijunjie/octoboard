@@ -50,6 +50,7 @@ pub(super) fn rebuild(record: &serde_json::Value) -> RebuiltLaunch {
             after_exit: recorded
                 .writeback
                 .map(|writeback| Box::new(writeback) as Box<dyn crate::session::term::AfterExit>),
+            transport: None,
         },
         Err(err) => {
             tracing::warn!(%err, "the Grok launch's adoption record does not read");

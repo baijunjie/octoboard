@@ -18,7 +18,7 @@ of trees through `apps/daemon/src/mcp/tools/transfer/processes.rs`.
 The holder processes (`apps/daemon/src/holder/`, [README](../../holder/README.md)) are the daemon's own to the ledger: the scanner lists them from the
 registry files in the `holders` directory of the data directory the ledger is built with (`paths::holders_dir_in`;
 `registry::list`, the running ones, matched by their start time) and gives them to the table (`Table::with_holders`).
-`Table::protected` then covers a holder process and its direct children (the agents and shell terminals it starts) and
+`Table::protected` then covers a holder process and its direct children (the agents and shell terminals it starts, and the companion an agent's terminal runs with) and
 the terminal sessions those children lead, exactly as it covers the daemon's own direct children, so rule 1 of
 `attribute.rs` never attributes them, `trees_of_project` never lists them as left behind or kept, and a shell terminal's
 processes under a removed directory are not shown as left behind.

@@ -6,7 +6,13 @@
 //!   process (interrupted), and not running already, is adopted: the [`LiveSession`] is built again
 //!   around the held terminal from what the launch left in the terminal's meta (see
 //!   `crate::session::term::launch`), and watched as one the daemon started itself. The session
-//!   keeps the status it was stored with.
+//!   keeps the status it was stored with. What the launch's plan and its private server gave the
+//!   session is rebuilt by its provider (`AgentProvider::rebuild_launch`): the server the holder's
+//!   welcome lists with the terminal, as the terminal's companion, is linked to again, and its
+//!   messages go through it as before the restart; one the welcome lists exited is a server that
+//!   is gone, and the terminal is ended for it as for a server that dies while the session runs. A
+//!   terminal the welcome lists no companion with (an ordinary launch, or a holder that runs none)
+//!   is adopted without one, its messages going to the terminal.
 //! - A shell terminal whose project is still on record is put back among the shell terminals
 //!   ([`crate::terminal::shell::restore`]).
 //! - Any other terminal is ended: the program is killed, what it started is swept and the terminal
@@ -44,12 +50,14 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::{exit_watch, unlinked};
-use crate::holder::client::{self, FoundTerminal, HeldAt};
+use crate::adapter::AdoptedLaunch;
+use crate::holder::client::{self, FoundCompanion, FoundTerminal, HeldAt};
 use crate::protocol::{AgentId, SessionStatus};
 use crate::session::{self, dialogs, trust, LiveSession, NewSession};
 use crate::state::{AppState, ExactScreen};
 use crate::terminal::backend::Started;
 use crate::terminal::pty;
+use crate::terminal::server_host::{FoundServer, HeldServer, ServerEndpoint};
 use crate::terminal::shell::{self, ShellMeta};
 
 /// What a start took over from the holders.
@@ -96,7 +104,11 @@ struct SessionMeta {
 
 /// What a terminal found in a holder is, by its meta and what the daemon has on record.
 enum Kind {
-    Session(SessionMeta),
+    Session {
+        meta: SessionMeta,
+        /// The agent's own id of the session's conversation, as its record holds it.
+        agent_session_id: Option<String>,
+    },
     Shell(ShellMeta),
     /// None of the daemon's: the reason it is ended for.
     Unknown(&'static str),
@@ -175,12 +187,12 @@ pub(crate) fn adopt_found(
             .map(|found| {
                 let kind = classify(state, &found.meta, &taken);
                 taken.extend(match &kind {
-                    Kind::Session(meta) => Some(meta.session_id.clone()),
+                    Kind::Session { meta, .. } => Some(meta.session_id.clone()),
                     Kind::Shell(meta) => Some(meta.id.clone()),
                     Kind::Unknown(_) => None,
                 });
                 let exact = state.select_exact_screen(&found);
-                if matches!(kind, Kind::Session(_) | Kind::Shell(_)) {
+                if matches!(kind, Kind::Session { .. } | Kind::Shell(_)) {
                     match &exact {
                         Ok(_) => {
                             tracing::info!(terminal = %found.id, "restoring the screen saved at the handover")
@@ -244,7 +256,10 @@ fn settle(
 ) {
     let id = found.id.clone();
     match kind {
-        Kind::Session(meta) => {
+        Kind::Session {
+            meta,
+            agent_session_id,
+        } => {
             // Claimed until the process is registered, so that no launch of the session can
             // begin in between and run beside it.
             let Some(claim) = state.claim_for_adoption(&meta.session_id) else {
@@ -253,7 +268,15 @@ fn settle(
                 adopted.ended += 1;
                 return;
             };
-            let scratch = adopt_session(state, meta, found, exact, run_dir, adopted);
+            let scratch = adopt_session(
+                state,
+                meta,
+                agent_session_id,
+                found,
+                exact,
+                run_dir,
+                adopted,
+            );
             drop(claim);
             tracing::info!(terminal = %id, scratch = ?scratch, "adopted a session's terminal");
         }
@@ -299,7 +322,10 @@ fn classify(state: &AppState, meta: &Value, taken: &HashSet<String>) -> Kind {
                 Ok(Some(session)) if session.status.has_no_process() => {
                     Kind::Unknown("its session is recorded as without a process")
                 }
-                Ok(Some(_)) => Kind::Session(meta),
+                Ok(Some(session)) => Kind::Session {
+                    meta,
+                    agent_session_id: session.agent_session_id,
+                },
                 Ok(None) => Kind::Unknown("its session is not on record"),
                 Err(err) => {
                     tracing::warn!(session = %meta.session_id, %err, "reading the session failed");
@@ -329,10 +355,12 @@ fn classify(state: &AppState, meta: &Value, taken: &HashSet<String>) -> Kind {
 
 /// Builds the session of `meta` again around `found`, and has the daemon watch it as it does a
 /// launch of its own, its screen restored from `exact`, the screen saved at the handover, when
-/// there is one. Returns the scratch directory it keeps.
+/// there is one, and its messages going through the server the holder runs with the terminal where
+/// the provider links to it again. Returns the scratch directory it keeps.
 fn adopt_session(
     state: &Arc<AppState>,
     meta: SessionMeta,
+    agent_session_id: Option<String>,
     found: FoundTerminal,
     exact: Option<ExactScreen>,
     run_dir: &Path,
@@ -344,7 +372,11 @@ fn adopt_session(
         Vec::new()
     };
     let FoundTerminal {
-        held, tail, exited, ..
+        held,
+        tail,
+        exited,
+        companion,
+        ..
     } = found;
     // A saved screen the save marked inexact keeps its content but is drawn again, as a rebuilt
     // one is: what it left out (the normal screen behind an alternate one, say) is the program's to
@@ -359,11 +391,16 @@ fn adopt_session(
         }
         None => tail,
     };
-    let rebuilt = meta
-        .adoption
-        .as_ref()
-        .map(|record| crate::adapter::provider(meta.agent).rebuild_launch(record))
-        .unwrap_or_default();
+    // Only what the welcome lists: a companion it lists exited is a server that is gone, which the
+    // transport reports once the session is registered, and the terminal is ended for it.
+    let server = companion.and_then(|companion| found_server(&meta.session_id, companion));
+    let rebuilt = crate::adapter::provider(meta.agent).rebuild_launch(AdoptedLaunch {
+        adoption: meta.adoption.as_ref(),
+        launch_id: &meta.launch_id,
+        agent_session_id: agent_session_id.as_deref(),
+        server,
+    });
+    let (transport, after_exit) = (rebuilt.transport, rebuilt.after_exit);
     // Only the directory the daemon makes for the session is kept, and removed with its process:
     // a meta that names another place is not trusted with the removal.
     let scratch = meta
@@ -376,13 +413,13 @@ fn adopt_session(
         launch_id: meta.launch_id,
         spawned: Started::Held(held),
         checks_composer: true,
-        transport: None,
+        transport: transport.clone(),
         scratch_dir: scratch.clone(),
         resolves_approvals_itself: meta.resolves_approvals_itself,
         carried_trust: rebuilt.carried_trust,
-        before_scratch_removal: rebuilt
-            .after_exit
-            .map(|after_exit| Box::new(move || after_exit.run()) as Box<dyn FnOnce() + Send>),
+        // The transport is stopped once the process is reaped; a server its holder runs is left to
+        // the holder, which ends it with the terminal.
+        before_scratch_removal: crate::session::term::before_scratch_removal(transport, after_exit),
     }));
     live.enable_native_stash(meta.native_stash);
     if let Some(prompt) = meta.launch_prompt {
@@ -425,6 +462,24 @@ fn adopt_session(
     adopted.scratch_dirs.extend(scratch.clone());
     adopted.sessions.push(meta.session_id);
     scratch
+}
+
+/// The private server `companion` is, for the provider to link to again; `None` for an endpoint of
+/// a kind this build does not know, which leaves the messages of the session `session` to its
+/// terminal.
+fn found_server(session: &str, companion: FoundCompanion) -> Option<FoundServer> {
+    let Some(endpoint) = ServerEndpoint::of_companion(&companion.endpoint) else {
+        tracing::warn!(
+            session = %session,
+            "the server listed with an adopted terminal listens at an endpoint this daemon does \
+             not know; the session's messages go to its terminal"
+        );
+        return None;
+    };
+    Some(FoundServer {
+        endpoint,
+        server: Box::new(HeldServer::new(companion.server)),
+    })
 }
 
 #[cfg(test)]

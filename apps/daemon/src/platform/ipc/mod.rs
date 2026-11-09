@@ -19,11 +19,9 @@ pub struct PrivateListen {
 enum Kind {
     #[cfg(unix)]
     Socket(unix::SocketDirectory),
-    #[cfg_attr(
-        all(unix, not(test)),
-        allow(dead_code, reason = "a Unix host listens on a socket")
-    )]
-    Loopback { token: String },
+    Loopback {
+        token: String,
+    },
 }
 
 /// How a [`PrivateListen`] is reached.
@@ -32,20 +30,13 @@ pub enum Address<'a> {
     #[cfg_attr(windows, allow(dead_code, reason = "Windows listens on loopback"))]
     Socket(&'a Path),
     /// A loopback port the child chooses and reports, guarded by this token.
-    #[cfg_attr(
-        all(unix, not(test)),
-        allow(dead_code, reason = "a Unix host listens on a socket")
-    )]
     Loopback { token: &'a str },
 }
 
 impl PrivateListen {
-    /// The channel the host offers: a socket named `name` in a new private directory whose name
-    /// starts with `prefix` on macOS and Linux; a loopback port with a new token on Windows.
-    /// Windows has Unix sockets too, but a child such as Codex takes one only in a directory whose
-    /// security descriptor admits the user alone, and neither the standard library nor tokio
-    /// connects to a Unix socket there.
-    pub fn for_host(prefix: &str, name: &str) -> io::Result<Self> {
+    /// A socket named `name` in a new private directory whose name starts with `prefix`; refused
+    /// where the host has no Unix sockets a child can be given.
+    pub fn socket(prefix: &str, name: &str) -> io::Result<Self> {
         #[cfg(unix)]
         {
             unix::SocketDirectory::create(prefix, name).map(|directory| Self {
@@ -55,15 +46,19 @@ impl PrivateListen {
         #[cfg(not(unix))]
         {
             let _ = (prefix, name);
-            Self::loopback()
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "this host has no Unix sockets to listen on",
+            ))
         }
     }
 
+    /// Whether [`PrivateListen::socket`] can succeed on this host.
+    pub fn offers_socket() -> bool {
+        cfg!(unix)
+    }
+
     /// A loopback port with a new token, as Windows uses.
-    #[cfg_attr(
-        all(unix, not(test)),
-        allow(dead_code, reason = "a Unix host listens on a socket")
-    )]
     pub fn loopback() -> io::Result<Self> {
         let mut secret = [0u8; 32];
         super::random::fill(&mut secret)?;
@@ -185,18 +180,11 @@ mod tests {
         assert_ne!(a, b);
     }
 
-    #[cfg(windows)]
-    #[test]
-    fn windows_listens_on_a_loopback_port() {
-        let listen = PrivateListen::for_host("octo-test", "rpc").unwrap();
-        assert!(matches!(listen.address(), Address::Loopback { .. }));
-    }
-
     #[cfg(unix)]
     #[test]
     fn sockets_are_private_short_and_removed_with_the_owner() {
         use std::os::unix::fs::PermissionsExt;
-        let listen = PrivateListen::for_host("octo-test", "rpc").unwrap();
+        let listen = PrivateListen::socket("octo-test", "rpc").unwrap();
         let Address::Socket(socket) = listen.address() else {
             unreachable!();
         };

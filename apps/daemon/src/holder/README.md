@@ -36,16 +36,17 @@ holder and what it starts as the daemon's own; see [`../processes/ledger/README.
   whole. If it cannot be made the holder runs from the installation, with a warning. Copies no live holder runs from are
   removed after adoption at start and after a holder's link ends; making a copy, starting from it and removing copies
   are serialized, so a copy is never removed between being made and being started from.
-- `server/` — the holder. `mod.rs` the listener, the link and the exit rule, `terminal.rs` one terminal's threads and
-  its 1 MiB raw tail (and what a handover restarted it with), `offline.rs` the recogniser of the queries it answers
-  itself while no daemon is linked,
+- `server/` — the holder. `mod.rs` the listener, the link and the exit rule (and the companions no terminal has bound
+  yet), `terminal.rs` one terminal's threads and its 1 MiB raw tail (and what a handover restarted it with),
+  `companion.rs` a terminal's companion (its endpoint, start, readiness wait, exit watch and end), `offline.rs` the
+  recogniser of the queries it answers itself while no daemon is linked,
   `launches.rs` the per-launch keys it issues, `helpers.rs` the helper routes on its port (`/hook`,
   `/git-ref`, `/context-window`, `/revert-gate`, `/mcp`: the daemon's paths and bodies, with the launch's key bound to the
   terminal and its session), `relay.rs` the path of those requests to the daemon.
 - `client/` — the daemon's side. `mod.rs` `Holders` (starts a holder on the first terminal, adopts the existing ones,
   tries again those it cannot link to yet, ends a holder), `link.rs` the link and its reconnect rules, `held.rs`
-  `HeldTerminal` and `HeldReader`, `relay.rs` the types of the relayed requests, `test_holders.rs` holders that run in
-  the test's own process.
+  `HeldTerminal` and `HeldReader`, `companion.rs` `HeldCompanion`, `relay.rs` the types of the relayed requests,
+  `test_holders.rs` holders that run in the test's own process.
 
 ## How it works
 
@@ -55,7 +56,8 @@ holder and what it starts as the daemon's own; see [`../processes/ledger/README.
   A launch the local backend runs keeps the daemon's. `client::install`, called by `src/main.rs`, makes the daemon use
   holders; a process that never calls it, the tests' stand-ins included, runs its terminals itself.
 - **Lifetime.** A holder outlives its daemon: when the link drops it keeps its programs and their tails. It exits once
-  it has no terminal and no spawn pending and either no daemon is linked or the daemon sent `drain`. The daemon's ordinary
+  it has no terminal, no spawn pending, no companion awaiting its terminal and none being ended, and either no daemon
+  is linked or the daemon sent `drain`. The daemon's ordinary
   stop ends every terminal itself, after which the holders exit; a planned stop hands them over instead ("Handover").
   One daemon is linked at a time; a newer link takes the holder over. The held terminals never enter the daemon's crash
   table (a holder has its own, which ends its programs when it crashes).
@@ -215,6 +217,36 @@ holder and what it starts as the daemon's own; see [`../processes/ledger/README.
   previews from them. Stated limits: a holder the previous daemon launched that had not yet written its registry file
   when the record was scoped is not a target, and a record that cannot be rewritten stays unscoped and is read again by
   the next start. `Holders::pending_holders` lists the holders that could not be linked to and are tried again.
+- **Companions.** A launch can have its holder run a process for its terminal before the terminal: its companion (a
+  private server the program attaches to). The holder knows nothing of what it serves. Under the terminal id the launch
+  key was issued for, the daemon has it open an endpoint (`open_endpoint`: a socket named as asked in a new owner-only
+  directory under `/tmp`, or a loopback port guarded by a new random token, which the holder makes and reports), start
+  the companion on it (`start_companion`: the daemon's command, environment and working directory, how readiness shows
+  and within how long), then spawn the terminal with `companion: true`, which binds the companion, or is refused when
+  it is missing or has exited. The companion runs as a plain child with no PTY (`platform::proc::server`): standard
+  input closed, output piped and read for the port after the prefix it was given (`PortAfter`) and discarded when readiness
+  is the socket existing (`SocketExists`), leading a session of its
+  own (on Windows a job of its own nested in the launch's, with no console), in the launch's containment and the
+  holder's crash table. One that exits first or is not ready in time is ended, with its endpoint. The holder enforces
+  the lifetime itself, linked or not: once a terminal's exit is published, or the holder ends or releases it, its
+  companion is ended (a polite request to its group, a 2 second grace, a kill and a sweep, its endpoint removed); a
+  companion that exits by itself has `companion_ended` sent to the linked daemon and its terminal ended (a polite
+  terminate, a kill after the terminal's polite lead and 3 seconds). A companion no terminal has bound is the request's:
+  it is ended when the connection it was asked over ends, on `revoke_launch` or `end_companion`, by a second
+  `open_endpoint` under its id, by a spawn that expects none, by a spawn refused while the holder drains, and after 2
+  minutes; a spawn that expects it over another link than the one that opened it is refused, and so is one made while
+  its start is under way. It counts as something to serve in the exit rule, as does each end under way (ended on a
+  thread of its own, the holder exits only once its grace, kill and sweep are done; an end that finds another
+  under way on the same companion, such as its terminal's exit watch or its own exit, waits for it, so the counted end
+  covers them all), is never listed in a welcome, and a
+  draining holder opens or starts none (a start that finds the holder draining ends the opened one). A holder that is
+  ended ends its terminals, and their companions, in parallel. The welcome says the holder runs companions (`companions`; an older holder is
+  sent no companion frame) and lists each terminal's bound companion with its endpoint, process and whether it exited.
+  On the daemon's side `Issued` carries the requests, `HeldCompanion` reads as exited from `companion_ended`, a welcome
+  that lists it exited or not at all, its end, its terminal's release, the link lost for good, or the connection
+  dropping before a terminal bound it (the holder ends an unbound one with its connection), and a found terminal
+  carries its companion (`FoundTerminal::companion`). The daemon reaches the companion at its endpoint directly, not
+  through the link.
 - **Starting a holder.** `Holders` starts one from the build's copy on the first terminal, detached
   (`platform::proc::start_detached`) so that it outlives the daemon, and waits for its registry file. On Windows, where
   the daemon's job refuses breakaway, it is started under the desktop application, or with none inside the job, with a
@@ -236,6 +268,9 @@ holder and what it starts as the daemon's own; see [`../processes/ledger/README.
   take over what holders kept running (`Adoption`, `Found`, `FoundTerminal`; `OnResolved`, `Resolved` and `HeldRelays`
   for a holder linked to later), sweep unused build copies, part from every holder (ending those that cannot be linked
   to).
+- `Issued::companions`, `Issued::open_endpoint`, `Issued::start_companion`, `Issued::end_companion`, `HeldCompanion`,
+  `FoundTerminal::companion` (`FoundCompanion`) — a launch's companion: whether the holder runs companions, its endpoint,
+  its start, its end before the terminal binds it, and its handle (`exited`, `end`).
 - `Holders::begin_planned_stop`, `Holders::hand_over`, `Holders::part_planned` — a planned stop: stop trying the
   pending holders (returning them), hand the terminals of the holders named over under a token (the `HeldAt` of each
   terminal handed over), then part from every holder leaving all of them running.

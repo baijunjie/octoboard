@@ -1660,6 +1660,7 @@ mod tests {
                 containment: None,
                 kill_session_leftovers: false,
                 meta: serde_json::Value::Null,
+                companion: false,
             })
             .expect("the program starts in the holder");
         let core = super::PtyCore::on_host(

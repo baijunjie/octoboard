@@ -370,6 +370,7 @@ fn launch(
         kill_session_leftovers: false,
         meta: meta.to_value(),
         helpers: None,
+        companion: false,
     })
     .with_context(|| format!("starting the shell `{}`", shell.program.display()))?;
     Ok(run(&id, spawned, containment, shell_name, Seed::Nothing))

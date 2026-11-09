@@ -290,12 +290,30 @@ pub struct LaunchPlan {
     pub adoption: Option<serde_json::Value>,
 }
 
-/// What a provider rebuilds of a launch's plan for a daemon that adopts the launch
-/// ([`LaunchPlan::adoption`]); the fields are those of [`LaunchPlan`] of the same names.
+/// What a daemon that adopts a launch knows of it, for [`AgentProvider::rebuild_launch`].
+pub struct AdoptedLaunch<'a> {
+    /// What the launch's plan recorded for its adoption ([`LaunchPlan::adoption`]), where it
+    /// recorded anything.
+    pub adoption: Option<&'a serde_json::Value>,
+    pub launch_id: &'a str,
+    /// The agent's own id of the session's conversation, as the session's record holds it.
+    pub agent_session_id: Option<&'a str>,
+    /// The launch's private server, where the holder's welcome lists one with the terminal at an
+    /// endpoint this build reads, whether it still runs or not.
+    pub server: Option<crate::terminal::server_host::FoundServer>,
+}
+
+/// What a provider rebuilds of a launch for a daemon that adopts it: `carried_trust` and
+/// `after_exit` from what its plan recorded ([`LaunchPlan::adoption`]), the fields of
+/// [`LaunchPlan`] of the same names, and the transport to the server its launch started
+/// ([`crate::session::term::StartedServer::transport`]).
 #[derive(Default)]
 pub struct RebuiltLaunch {
     pub carried_trust: Option<std::sync::Arc<dyn crate::session::trust::TrustCarrier>>,
     pub after_exit: Option<Box<dyn crate::session::term::AfterExit>>,
+    /// `None` where the launch has no server to link to again, and the session's messages go to
+    /// its terminal.
+    pub transport: Option<std::sync::Arc<dyn crate::session::term::MessageTransport>>,
 }
 
 /// A title an agent's own record gives its conversation. Of the titles one record gives, the
@@ -412,10 +430,13 @@ pub trait AgentProvider: Send + Sync {
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan>;
 
-    /// Rebuilds the `carried_trust` and `after_exit` of a launch from the `adoption` its plan
-    /// recorded, for the daemon that adopts the launch. A provider whose plan records none has
-    /// nothing to rebuild; so has one whose record no longer reads.
-    fn rebuild_launch(&self, _adoption: &serde_json::Value) -> RebuiltLaunch {
+    /// Rebuilds, for the daemon that adopts `launch`, what its plan and its server gave the
+    /// session: the `carried_trust` and `after_exit` from the `adoption` its plan recorded, and
+    /// the transport to the server found with its terminal. A provider whose plan records nothing
+    /// and whose launch starts no server has nothing to rebuild; so has one whose record no longer
+    /// reads. A server found and not linked to is left as it is: its holder ends it with the
+    /// terminal.
+    fn rebuild_launch(&self, _launch: AdoptedLaunch<'_>) -> RebuiltLaunch {
         RebuiltLaunch::default()
     }
 

@@ -257,6 +257,15 @@ impl AgentProvider for CodexProvider {
         &records::CodexRecords
     }
 
+    /// The transport to the private server the holder runs with the adopted terminal; the plan
+    /// records nothing else to rebuild.
+    fn rebuild_launch(&self, launch: super::AdoptedLaunch<'_>) -> super::RebuiltLaunch {
+        super::RebuiltLaunch {
+            transport: private_server::adopt(launch),
+            ..Default::default()
+        }
+    }
+
     /// The standalone install is what Codex's own installer leaves under `~/.codex/packages`; the
     /// package is `@openai/codex`, and Homebrew has a formula and a cask, both named `codex`.
     /// `codex update` updates a standalone install.

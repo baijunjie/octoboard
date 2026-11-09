@@ -224,6 +224,7 @@ fn spec(id: &str, command: Command) -> SpawnSpec {
         containment: None,
         kill_session_leftovers: false,
         meta: serde_json::json!({ "kind": "test", "id": id }),
+        companion: false,
     }
 }
 
@@ -1244,4 +1245,636 @@ async fn a_link_that_goes_away_fails_a_question_in_flight() {
         "{err}"
     );
     holder.ended().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_welcome_says_the_holder_runs_companions() {
+    let holder = Running::start().await;
+    let daemon = holder.link().await;
+    assert!(
+        matches!(
+            daemon.welcome,
+            FromHolder::Welcome {
+                companions: true,
+                ..
+            }
+        ),
+        "{:?}",
+        daemon.welcome
+    );
+    drop(daemon);
+    holder.ended().await;
+}
+
+/// The companions: processes a holder starts for a terminal before it, whose companions are real
+/// processes in these tests, shells that make the socket they are waited for on and stay up.
+#[cfg(unix)]
+mod companions {
+    use super::*;
+    use crate::holder::companion_test_support::{directory_of, socket_kind, touching};
+    use crate::holder::protocol::{CompanionEndpoint, EndpointKind, Ready};
+    use crate::test_support::{kill, within};
+
+    fn sh(script: &str) -> Command {
+        let mut command = Command::new("/bin/sh");
+        command.args(["-c", script]);
+        command
+    }
+
+    /// `spec` as the spawn of a terminal that binds the companion started under its id.
+    fn bound(mut spec: SpawnSpec) -> SpawnSpec {
+        spec.companion = true;
+        spec
+    }
+
+    /// Waits for the companion process `pid` to be gone.
+    async fn gone(pid: u32) {
+        let ended = within(PATIENCE, move || !is_running(pid as i32)).await;
+        assert!(ended, "the companion {pid} kept running");
+    }
+
+    /// Waits for the directory of the socket endpoint to be removed.
+    async fn removed(endpoint: &CompanionEndpoint) {
+        let directory = directory_of(endpoint);
+        let shown = directory.clone();
+        let ended = within(PATIENCE, move || !directory.exists()).await;
+        assert!(ended, "{} was not removed", shown.display());
+    }
+
+    /// The terminals the welcome of `daemon` lists.
+    fn listed(daemon: &Daemon) -> &[crate::holder::protocol::TerminalInfo] {
+        match &daemon.welcome {
+            FromHolder::Welcome { terminals, .. } => terminals,
+            other => panic!("{other:?}"),
+        }
+    }
+
+    impl Daemon {
+        /// The endpoint the holder opens for the companion of the terminal `id`, or why not.
+        async fn open_endpoint(
+            &mut self,
+            id: &str,
+            req: u64,
+            kind: EndpointKind,
+        ) -> Result<CompanionEndpoint, String> {
+            self.send(ToHolder::OpenEndpoint {
+                id: id.to_string(),
+                req,
+                kind,
+            })
+            .await;
+            let frames = self
+                .until(|frame| {
+                    matches!(
+                        frame,
+                        Frame::Reply(FromHolder::EndpointOpened { req: got, .. }) if *got == req
+                    )
+                })
+                .await;
+            match frames.into_iter().last() {
+                Some(Frame::Reply(FromHolder::EndpointOpened {
+                    endpoint: Some(endpoint),
+                    ..
+                })) => Ok(endpoint),
+                Some(Frame::Reply(FromHolder::EndpointOpened {
+                    error: Some(error), ..
+                })) => Err(error),
+                other => panic!("{other:?}"),
+            }
+        }
+
+        /// The pid and the port of the companion the holder starts for the terminal `id`, or why it
+        /// did not.
+        async fn start_companion(
+            &mut self,
+            id: &str,
+            req: u64,
+            command: Command,
+            ready: Ready,
+            within: Duration,
+        ) -> Result<(u32, Option<u16>), String> {
+            self.send(ToHolder::StartCompanion {
+                id: id.to_string(),
+                req,
+                command: Box::new(command),
+                ready,
+                ready_within_ms: u64::try_from(within.as_millis()).unwrap(),
+                containment: None,
+            })
+            .await;
+            let frames = self
+                .until(|frame| {
+                    matches!(
+                        frame,
+                        Frame::Reply(FromHolder::CompanionStarted { req: got, .. }) if *got == req
+                    )
+                })
+                .await;
+            match frames.into_iter().last() {
+                Some(Frame::Reply(FromHolder::CompanionStarted {
+                    pid: Some(pid),
+                    port,
+                    error: None,
+                    ..
+                })) => Ok((pid, port)),
+                Some(Frame::Reply(FromHolder::CompanionStarted {
+                    error: Some(error), ..
+                })) => Err(error),
+                other => panic!("{other:?}"),
+            }
+        }
+
+        async fn end_companion(&mut self, id: &str, req: u64) -> FromHolder {
+            self.send(ToHolder::EndCompanion {
+                id: id.to_string(),
+                req,
+            })
+            .await;
+            self.reply_to(req).await
+        }
+
+        /// Opens a socket endpoint for the companion of `id` and starts one on it that makes the
+        /// socket and stays up: the endpoint and the companion's pid. Uses the requests `req` and
+        /// the one after it.
+        async fn companion_on_socket(&mut self, id: &str, req: u64) -> (CompanionEndpoint, u32) {
+            let endpoint = self
+                .open_endpoint(id, req, socket_kind())
+                .await
+                .expect("the endpoint opens");
+            let CompanionEndpoint::Socket { path } = &endpoint else {
+                panic!("{endpoint:?}");
+            };
+            let (pid, port) = self
+                .start_companion(id, req + 1, touching(path), Ready::SocketExists, PATIENCE)
+                .await
+                .expect("the companion starts");
+            assert_eq!(port, None);
+            (endpoint, pid)
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_companion_started_before_its_terminal_is_listed_with_it_and_ended_with_it() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let (endpoint, companion) = daemon.companion_on_socket("t1", 10).await;
+        assert!(directory_of(&endpoint).is_dir());
+        let reply = daemon
+            .spawn_spec(bound(spec("t1", programs::sleep(60).term_command())))
+            .await;
+        assert!(pid_of(&reply) > 0);
+
+        drop(daemon);
+        let mut next = holder.link().await;
+        let terminal = listed(&next)
+            .iter()
+            .find(|terminal| terminal.id == "t1")
+            .expect("the terminal is listed");
+        let found = terminal
+            .companion
+            .as_ref()
+            .expect("the companion is listed with its terminal");
+        assert_eq!(found.endpoint, endpoint);
+        assert_eq!(found.pid, companion);
+        assert!(!found.exited);
+        assert!(is_running(companion as i32));
+
+        next.end_ids(&["t1"]).await;
+        gone(companion).await;
+        removed(&endpoint).await;
+        drop(next);
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_companion_is_ended_once_its_terminal_has_exited() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let (endpoint, companion) = daemon.companion_on_socket("t1", 10).await;
+        daemon
+            .spawn_spec(bound(spec("t1", programs::echo("done").term_command())))
+            .await;
+        daemon.output_until_exit("t1").await;
+        gone(companion).await;
+        removed(&endpoint).await;
+        daemon.end_terminals().await;
+        drop(daemon);
+        holder.ended().await;
+    }
+
+    /// A companion that ignores the polite request, so that its end takes the whole grace, and
+    /// makes the file at `path` once it does.
+    fn stubborn(path: &str) -> Command {
+        sh(&format!("trap '' TERM; touch '{path}'; exec sleep 60"))
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn the_holder_does_not_exit_while_the_end_of_a_companion_is_under_way() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let endpoint = daemon
+            .open_endpoint("t1", 10, socket_kind())
+            .await
+            .expect("the endpoint opens");
+        let CompanionEndpoint::Socket { path } = &endpoint else {
+            panic!("{endpoint:?}");
+        };
+        let (companion, _) = daemon
+            .start_companion("t1", 11, stubborn(path), Ready::SocketExists, PATIENCE)
+            .await
+            .expect("the companion starts");
+        daemon
+            .spawn_spec(bound(spec("t1", programs::sleep(60).term_command())))
+            .await;
+        // The terminal's exit and its release both end the companion, which takes the grace.
+        daemon.end_ids(&["t1"]).await;
+        drop(daemon);
+        holder.ended().await;
+        assert!(
+            !is_running(companion as i32),
+            "the holder exited with the companion still ending"
+        );
+        removed(&endpoint).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_spawn_after_a_link_takeover_fails_and_the_older_links_companion_is_ended() {
+        let holder = Running::start().await;
+        let mut older = holder.link().await;
+        let (endpoint, companion) = older.companion_on_socket("t1", 10).await;
+        let mut newer = holder.link().await;
+        let reply = newer
+            .spawn_spec(bound(spec("t1", programs::sleep(60).term_command())))
+            .await;
+        assert!(matches!(reply, FromHolder::SpawnFailed { .. }), "{reply:?}");
+        gone(companion).await;
+        removed(&endpoint).await;
+        drop((older, newer));
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_companion_that_dies_ends_its_terminal_and_a_linked_daemon_is_told() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let (_, companion) = daemon.companion_on_socket("t1", 10).await;
+        let reply = daemon
+            .spawn_spec(bound(spec("t1", programs::sleep(60).term_command())))
+            .await;
+        let terminal = pid_of(&reply) as i32;
+        kill(companion as i32);
+
+        let (mut told, mut exited) = (false, false);
+        while !(told && exited) {
+            match daemon.next().await {
+                Some(Frame::Reply(FromHolder::CompanionEnded { id })) if id == "t1" => told = true,
+                Some(Frame::Reply(FromHolder::Exited { id, .. })) if id == "t1" => exited = true,
+                Some(_) => {}
+                None => panic!("the link closed (told: {told}, exited: {exited})"),
+            }
+        }
+        assert!(!is_running(terminal));
+        daemon.end_terminals().await;
+        drop(daemon);
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_companion_that_dies_with_no_daemon_linked_still_ends_its_terminal() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let (_, companion) = daemon.companion_on_socket("t1", 10).await;
+        daemon
+            .spawn_spec(bound(spec("t1", programs::sleep(60).term_command())))
+            .await;
+        drop(daemon);
+        kill(companion as i32);
+
+        // The next daemon finds both ended, once the holder has seen them go.
+        let deadline = Instant::now() + PATIENCE;
+        let mut next = loop {
+            let daemon = holder.link().await;
+            let both_ended = listed(&daemon).iter().any(|terminal| {
+                terminal.id == "t1"
+                    && terminal.exited
+                    && terminal
+                        .companion
+                        .as_ref()
+                        .is_some_and(|found| found.exited)
+            });
+            if both_ended {
+                break daemon;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the terminal was not ended with its companion: {:?}",
+                listed(&daemon)
+            );
+            drop(daemon);
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        };
+        next.end_ids(&["t1"]).await;
+        drop(next);
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_companion_no_terminal_bound_is_ended_with_the_link_that_asked_for_it() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let (endpoint, companion) = daemon.companion_on_socket("t1", 10).await;
+        drop(daemon);
+        gone(companion).await;
+        removed(&endpoint).await;
+        // Nothing is left for it to wait for: the holder has no daemon and no terminal.
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn revoking_a_launch_ends_the_companion_no_terminal_bound() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let (endpoint, companion) = daemon.companion_on_socket("t1", 10).await;
+        daemon
+            .send(ToHolder::RevokeLaunch {
+                id: "t1".to_string(),
+            })
+            .await;
+        gone(companion).await;
+        removed(&endpoint).await;
+        drop(daemon);
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn ending_a_companion_removes_it_unless_its_terminal_has_bound_it() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let (endpoint, companion) = daemon.companion_on_socket("t1", 10).await;
+        let ended = daemon.end_companion("t1", 20).await;
+        assert!(
+            matches!(ended, FromHolder::Done { error: None, .. }),
+            "{ended:?}"
+        );
+        gone(companion).await;
+        removed(&endpoint).await;
+
+        let (_, bound_companion) = daemon.companion_on_socket("t2", 30).await;
+        daemon
+            .spawn_spec(bound(spec("t2", programs::sleep(60).term_command())))
+            .await;
+        let refused = daemon.end_companion("t2", 40).await;
+        assert!(
+            matches!(refused, FromHolder::Done { error: Some(_), .. }),
+            "{refused:?}"
+        );
+        assert!(is_running(bound_companion as i32));
+        daemon.end_terminals().await;
+        gone(bound_companion).await;
+        drop(daemon);
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_spawn_that_expects_a_missing_or_dead_companion_is_refused() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let missing = daemon
+            .spawn_spec(bound(spec("t1", programs::sleep(60).term_command())))
+            .await;
+        assert!(
+            matches!(missing, FromHolder::SpawnFailed { .. }),
+            "{missing:?}"
+        );
+
+        let (_, companion) = daemon.companion_on_socket("t2", 10).await;
+        kill(companion as i32);
+        daemon
+            .until(|frame| {
+                matches!(frame, Frame::Reply(FromHolder::CompanionEnded { id }) if id == "t2")
+            })
+            .await;
+        let dead = daemon
+            .spawn_spec(bound(spec("t2", programs::sleep(60).term_command())))
+            .await;
+        assert!(matches!(dead, FromHolder::SpawnFailed { .. }), "{dead:?}");
+        drop(daemon);
+        // No terminal was started and no companion is left awaiting one.
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_spawn_that_expects_no_companion_ends_the_one_left_under_its_id() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let (endpoint, companion) = daemon.companion_on_socket("t1", 10).await;
+        let reply = daemon
+            .spawn_spec(spec("t1", programs::sleep(60).term_command()))
+            .await;
+        assert!(pid_of(&reply) > 0);
+        gone(companion).await;
+        removed(&endpoint).await;
+
+        drop(daemon);
+        let mut next = holder.link().await;
+        let terminal = listed(&next)
+            .iter()
+            .find(|terminal| terminal.id == "t1")
+            .expect("the terminal is listed");
+        assert_eq!(terminal.companion, None);
+        next.end_ids(&["t1"]).await;
+        drop(next);
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_second_endpoint_for_the_same_terminal_is_elsewhere_and_ends_the_first() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let first = daemon
+            .open_endpoint("t1", 10, socket_kind())
+            .await
+            .expect("the first endpoint opens");
+        let second = daemon
+            .open_endpoint("t1", 11, socket_kind())
+            .await
+            .expect("the second endpoint opens");
+        assert_ne!(first, second);
+        assert_ne!(directory_of(&first), directory_of(&second));
+        removed(&first).await;
+        assert!(directory_of(&second).is_dir());
+
+        let CompanionEndpoint::Socket { path } = &second else {
+            panic!("{second:?}");
+        };
+        let started = daemon
+            .start_companion("t1", 12, touching(path), Ready::SocketExists, PATIENCE)
+            .await;
+        let (companion, _) = started.expect("the companion starts on the second endpoint");
+        let ended = daemon.end_companion("t1", 13).await;
+        assert!(matches!(ended, FromHolder::Done { error: None, .. }));
+        gone(companion).await;
+        removed(&second).await;
+        drop(daemon);
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn the_port_printed_after_the_prefix_is_reported_and_listed_with_the_terminal() {
+        const PREFIX: &str = "listening on: ws://127.0.0.1:";
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let opened = daemon
+            .open_endpoint("t1", 10, EndpointKind::Loopback)
+            .await
+            .expect("the endpoint opens");
+        let CompanionEndpoint::Loopback { token, port: None } = opened else {
+            panic!("a loopback endpoint with no port yet: {opened:?}");
+        };
+        assert_eq!(token.len(), 64);
+        let server = sh(&format!(
+            "echo starting; echo '{PREFIX}0'; echo '{PREFIX}4321'; exec sleep 60"
+        ));
+        let ready = Ready::PortAfter {
+            prefix: PREFIX.to_string(),
+        };
+        let (companion, port) = daemon
+            .start_companion("t1", 11, server, ready, PATIENCE)
+            .await
+            .expect("the companion starts");
+        assert_eq!(port, Some(4321));
+        daemon
+            .spawn_spec(bound(spec("t1", programs::sleep(60).term_command())))
+            .await;
+
+        drop(daemon);
+        let mut next = holder.link().await;
+        let found = listed(&next)
+            .iter()
+            .find(|terminal| terminal.id == "t1")
+            .and_then(|terminal| terminal.companion.clone())
+            .expect("the companion is listed with its terminal");
+        assert_eq!(
+            found.endpoint,
+            CompanionEndpoint::Loopback {
+                token,
+                port: Some(4321)
+            }
+        );
+        assert_eq!(found.pid, companion);
+        next.end_ids(&["t1"]).await;
+        gone(companion).await;
+        drop(next);
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_companion_that_exits_or_is_not_ready_fails_its_start_and_leaves_nothing() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+
+        let exits = daemon
+            .open_endpoint("t1", 10, socket_kind())
+            .await
+            .expect("the endpoint opens");
+        let error = daemon
+            .start_companion("t1", 11, sh("exit 3"), Ready::SocketExists, PATIENCE)
+            .await
+            .expect_err("a companion that exits is not ready");
+        assert!(error.contains("exited before it was ready"), "{error}");
+        removed(&exits).await;
+
+        // Never ready within the short wait this test gives it.
+        let silent = daemon
+            .open_endpoint("t2", 20, socket_kind())
+            .await
+            .expect("the endpoint opens");
+        let error = daemon
+            .start_companion(
+                "t2",
+                21,
+                sh("exec sleep 60"),
+                Ready::SocketExists,
+                Duration::from_millis(500),
+            )
+            .await
+            .expect_err("a companion that never listens is not ready");
+        assert!(error.contains("did not become ready"), "{error}");
+        removed(&silent).await;
+
+        // Nothing awaits a terminal any more: a spawn expecting either companion is refused.
+        for id in ["t1", "t2"] {
+            let reply = daemon
+                .spawn_spec(bound(spec(id, programs::sleep(60).term_command())))
+                .await;
+            assert!(matches!(reply, FromHolder::SpawnFailed { .. }), "{reply:?}");
+        }
+        drop(daemon);
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn an_endpoint_or_readiness_the_holder_does_not_know_is_refused() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        let unknown = daemon.open_endpoint("t1", 10, EndpointKind::Unknown).await;
+        assert!(unknown.is_err(), "{unknown:?}");
+        let path = daemon
+            .open_endpoint(
+                "t1",
+                11,
+                EndpointKind::Socket {
+                    prefix: "../escape".to_string(),
+                    name: "rpc".to_string(),
+                },
+            )
+            .await;
+        assert!(
+            path.is_err(),
+            "a prefix that is a path was opened: {path:?}"
+        );
+
+        let endpoint = daemon
+            .open_endpoint("t1", 12, socket_kind())
+            .await
+            .expect("the endpoint opens");
+        let started = daemon
+            .start_companion("t1", 13, sh("exec sleep 60"), Ready::Unknown, PATIENCE)
+            .await;
+        assert!(started.is_err(), "{started:?}");
+        removed(&endpoint).await;
+        drop(daemon);
+        holder.ended().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_draining_holder_refuses_a_companion_and_waits_for_one_that_awaits_its_terminal() {
+        let holder = Running::start().await;
+        let mut daemon = holder.link().await;
+        daemon.spawn("t1", programs::sleep(60).term_command()).await;
+        let awaiting = daemon
+            .open_endpoint("t2", 10, socket_kind())
+            .await
+            .expect("the endpoint opens before the drain");
+        daemon.send(ToHolder::Drain).await;
+
+        let refused = daemon.open_endpoint("t3", 11, socket_kind()).await;
+        assert!(refused.is_err(), "{refused:?}");
+        let refused = daemon
+            .start_companion("t2", 12, sh("exec sleep 60"), Ready::SocketExists, PATIENCE)
+            .await;
+        assert!(refused.is_err(), "{refused:?}");
+
+        // The last terminal goes, and the companion awaiting its own keeps the holder serving
+        // until it is ended.
+        daemon.end_ids(&["t1"]).await;
+        let ended = daemon.end_companion("t2", 13).await;
+        assert!(
+            matches!(ended, FromHolder::Done { error: None, .. }),
+            "{ended:?}"
+        );
+        removed(&awaiting).await;
+        holder.ended().await;
+        drop(daemon);
+    }
 }

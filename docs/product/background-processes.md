@@ -181,8 +181,8 @@ after **5 minutes**, or when another launch ends. Only Stop in the Processes pan
 (see "Process information and actions" below).
 
 The daemon, its ancestors and its direct children are protected, and so are the running process holders (see
-`docs/product/process-holders.md`) and their direct children, the agents and the shell terminals' shells a holder
-starts. The holders are found from their registry files in `~/.octoboard/holders/`, and one counts only while the
+`docs/product/process-holders.md`) and their direct children, the agents, the shell terminals' shells and the Codex
+sessions' private app servers a holder starts. The holders are found from their registry files in `~/.octoboard/holders/`, and one counts only while the
 process its file names, by process ID and start time, is still running. A protected process is the daemon's own: it is
 never a launch's background process, nor kept, nor left behind in a project. Processes in terminal sessions led by
 those direct children, including a Codex session's private app server and what runs in its session (see "Codex's
@@ -202,7 +202,8 @@ MCP servers and other helpers the agent's CLI starts as its children, reach the 
 and are listed among that launch's process trees in the Processes panel, where the user can see and stop them like
 any other background process, and keep them unless they are on the agent's own console (see "Processes on the agent's
 own console" below). The same goes there for what a Codex session's private app server starts, which is in the
-launch's job; the server itself, a direct child of the daemon, is not listed.
+launch's job; the server itself, a direct child of the process holder that runs the session (of the daemon where
+holders cannot be set up), is not listed.
 
 **Keeping a tree transfers its management to the user.** No session owns it any more: it leaves its session's list, is
 no longer stopped automatically, and remains kept across daemon restarts. It stays listed in its project's list among

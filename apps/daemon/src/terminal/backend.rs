@@ -18,6 +18,7 @@ use crate::platform::proc::{
 use crate::platform::term::{
     self, Command, Foreground, Input, PartialWrite, Pty, PtyReader, Size, Spawned,
 };
+use crate::terminal::server_host::{HeldHost, LocalHost, ServerHost};
 
 /// A terminal just started, before a [`PtyCore`](super::pty::PtyCore) is built on it.
 pub enum Started {
@@ -68,6 +69,29 @@ impl Helpers {
             issued: Some(issued),
         })
     }
+
+    /// Where the launch's private server runs, if it has one: in the daemon when the terminal
+    /// runs in it, as the terminal's companion in the holder that issued these credentials when
+    /// that holder runs companions, and nowhere when it does not, which leaves the launch its
+    /// ordinary terminal. `containment` is the launch's, made from `instance` and `launch`.
+    pub fn server_host<'a>(
+        &'a self,
+        containment: &'a Containment,
+        instance: &str,
+        launch: &str,
+    ) -> Option<Box<dyn ServerHost + 'a>> {
+        match &self.issued {
+            None => Some(Box::new(LocalHost::new(containment))),
+            Some(issued) if issued.companions => Some(Box::new(HeldHost::new(
+                issued,
+                ContainmentSpec {
+                    instance: instance.to_string(),
+                    launch: launch.to_string(),
+                },
+            ))),
+            Some(_) => None,
+        }
+    }
 }
 
 /// The daemon's own address, key and executable, which the helpers of a program that runs in this
@@ -94,6 +118,10 @@ pub struct Launching<'a> {
     pub meta: serde_json::Value,
     /// The credentials the program's helpers were given, for a program that has helpers.
     pub helpers: Option<Helpers>,
+    /// The companion started for the launch through the holder that issued `helpers`
+    /// ([`Helpers::server_host`]) is bound to the terminal, which the holder refuses to start
+    /// when that companion no longer runs.
+    pub companion: bool,
 }
 
 /// Starts `launching` on a terminal of its own: in the holder, when the daemon runs its terminals
@@ -109,6 +137,7 @@ pub fn start(launching: Launching<'_>) -> Result<Started> {
         kill_session_leftovers,
         meta,
         helpers,
+        companion,
     } = launching;
     let Some(holders) = client::current() else {
         return Ok(term::spawn(command, size, Some(containment))?.into());
@@ -123,6 +152,7 @@ pub fn start(launching: Launching<'_>) -> Result<Started> {
         }),
         kill_session_leftovers,
         meta,
+        companion,
     };
     let held = match helpers.and_then(|helpers| helpers.issued) {
         // The key was issued by one holder, which has to be the one that runs the program.
@@ -353,5 +383,52 @@ impl Backend {
             Self::Local { handle, .. } => handle,
             Self::Held(_) => panic!("the terminal is held, not local"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::ScratchDir;
+
+    fn helpers(issued: Option<Issued>) -> Helpers {
+        Helpers {
+            port: 1,
+            key: "key".to_string(),
+            exe: "exe".to_string(),
+            issued,
+        }
+    }
+
+    /// Where a launch's private server runs follows where its terminal does: in the daemon when the
+    /// terminal runs there, as the terminal's companion in a holder that runs them, and nowhere in a
+    /// holder that does not, which leaves the launch its ordinary terminal.
+    #[test]
+    fn the_launchs_private_server_runs_where_its_terminal_can_have_it() {
+        let containment = Containment::create("test", "backend-server-host").unwrap();
+
+        let local = helpers(None);
+        let host = local
+            .server_host(&containment, "test", "launch")
+            .expect("a terminal that runs in the daemon has the daemon run the server");
+        assert!(!host.companion());
+
+        let dir = ScratchDir::new("backend-server-host");
+        let holders = client::in_process(dir.join("holders")).unwrap();
+        let mut issued = holders.issue_launch("s1", None).unwrap();
+        assert!(issued.companions);
+        let held = helpers(Some(issued));
+        let host = held
+            .server_host(&containment, "test", "launch")
+            .expect("a holder that runs companions has one run the server");
+        assert!(host.companion());
+        drop(host);
+
+        // The credentials of a holder that does not advertise companions.
+        issued = held.issued.expect("the credentials");
+        issued.companions = false;
+        let old = helpers(Some(issued));
+        assert!(old.server_host(&containment, "test", "launch").is_none());
+        drop((old, holders));
     }
 }

@@ -14,6 +14,9 @@ The files holders keep — their registry files, the copies of builds they run f
 
 - The daemon starts a holder of its own build when the first terminal is asked for, and starts another if the one it
   uses is gone. One holder runs many terminals.
+- Beside a Codex session's terminal, the holder also runs that session's private app server, started before the
+  terminal and ended with it; a holder of an earlier build may not run one (see "Codex's private app server" in
+  `docs/product/per-agent-launch-specifics.md`).
 - A holder exits once it runs no terminal and is starting none, when no daemon is connected to it or the connected one
   has told it to take no more terminals.
 - **A holder's own crash still ends its programs**, the processes in each agent's terminal session with them, as
@@ -58,7 +61,9 @@ answer so that the start never waits long on a holder, and decides, for each ter
 - **A session's terminal** whose session is on record and is neither archived nor stored as *interrupted* is
   **adopted**. The session keeps running with the status it was stored with; it can be attached to, its tools work
   and its reports arrive, as for a session the daemon started itself. Its scratch space is kept, and the saved terminal
-  preview of an earlier process is discarded.
+  preview of an earlier process is discarded. A Codex session's private app server, where the holder runs one beside
+  the terminal, is linked to again (see "Codex's private app server" in
+  `docs/product/per-agent-launch-specifics.md`).
 - **A shell terminal** whose project is still on record is **restored** among that project's shell terminals, with its
   directory, worktree and place in the order, and with the name the user gave it, which is kept with the terminal; one
   the user never named shows the shell's name until the shell sets a title again (see "Terminal title" in

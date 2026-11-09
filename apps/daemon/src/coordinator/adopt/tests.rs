@@ -36,6 +36,7 @@ fn left_behind(dir: &ScratchDir, terminals: Vec<(&str, Value, programs::Program)
                 containment: None,
                 kill_session_leftovers: false,
                 meta,
+                companion: false,
             })
             .expect("the program starts in the holder");
         pids.push(held.pid().0 as i32);
@@ -1167,4 +1168,224 @@ async fn a_tail_that_holds_the_handover_mark_is_previewed_on_the_saved_screen() 
     let raw = String::from_utf8_lossy(&state.saved_output("s2").expect("a preview")).to_string();
     assert!(raw.contains("stale words"), "{raw}");
     assert!(!raw.contains("saved screen of s2"), "{raw}");
+}
+
+/// The meta of a Codex session's terminal, which is [`session_meta`] for the agent Codex.
+fn codex_meta(session: &str, scratch: &std::path::Path) -> Value {
+    let mut meta = session_meta(session, scratch);
+    meta["agent"] = json!(AgentId::CODEX);
+    meta
+}
+
+/// A Codex session `id` on record, working, whose conversation the agent calls `thread-1`.
+fn record_codex(state: &AppState, id: &str) {
+    let mut session = project_session(id, AgentId::CODEX, SessionStatus::Working);
+    session.agent_session_id = Some("thread-1".to_string());
+    state
+        .store
+        .insert_session(&session)
+        .expect("the session is stored");
+}
+
+/// A stand-in for Codex's app server listening on the socket `path`, answering what a message
+/// written to the session's queue asks of it; gives every request it was sent, by method and
+/// parameters.
+#[cfg(unix)]
+fn fake_codex_on(path: &std::path::Path) -> Arc<std::sync::Mutex<Vec<(String, Value)>>> {
+    use tokio_tungstenite::tungstenite::{self, Message};
+    let listener = std::os::unix::net::UnixListener::bind(path).expect("the socket binds");
+    let requests = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let log = requests.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(stream) = stream else { continue };
+            let log = log.clone();
+            std::thread::spawn(move || {
+                let Ok(mut socket) = tungstenite::accept(stream) else {
+                    return;
+                };
+                while let Ok(message) = socket.read() {
+                    let Ok(request) =
+                        serde_json::from_str::<Value>(message.to_text().unwrap_or(""))
+                    else {
+                        continue;
+                    };
+                    // A notification, which is answered by nothing.
+                    let Some(id) = request.get("id").cloned() else {
+                        continue;
+                    };
+                    let method = request["method"].as_str().unwrap_or_default().to_string();
+                    log.lock()
+                        .unwrap()
+                        .push((method.clone(), request["params"].clone()));
+                    let result = match method.as_str() {
+                        "thread/loaded/list" => json!({"data":["thread-1"],"nextCursor":null}),
+                        "thread/queue/list" => json!({"data":[],"nextCursor":null}),
+                        "thread/queue/add" => json!({"queuedSubmission":{"id":"q1"}}),
+                        _ => json!({}),
+                    };
+                    let reply = json!({"id":id,"result":result}).to_string();
+                    let _ = socket.send(Message::Text(reply));
+                }
+            });
+        }
+    });
+    requests
+}
+
+/// What a previous daemon left in a holder: a terminal bound to a companion, the stand-in for
+/// Codex's server listening at the companion's socket.
+#[cfg(unix)]
+struct LeftWithServer {
+    terminal: i32,
+    companion: i32,
+    requests: Arc<std::sync::Mutex<Vec<(String, Value)>>>,
+}
+
+/// Leaves a terminal with `meta` in the holder of `dir`, bound to its companion as a launch in a
+/// holder that runs them starts it, as a daemon that is gone would: its terminal and its
+/// companion's handle are leaked, since dropping one releases it in the holder, and its link is
+/// parted from.
+#[cfg(unix)]
+fn left_with_server(dir: &ScratchDir, meta: Value) -> LeftWithServer {
+    use crate::holder::protocol::{CompanionEndpoint, EndpointKind, Ready};
+    let previous = in_process(dir.join("holders")).expect("holders");
+    let issued = previous
+        .issue_launch("s1", None)
+        .expect("the holder issues the launch's credentials");
+    let endpoint = issued
+        .open_endpoint(EndpointKind::Socket {
+            prefix: "octo-test".to_string(),
+            name: "rpc".to_string(),
+        })
+        .expect("the endpoint opens");
+    let CompanionEndpoint::Socket { path } = &endpoint else {
+        panic!("{endpoint:?}");
+    };
+    let requests = fake_codex_on(std::path::Path::new(path));
+    let mut server = crate::platform::term::Command::new("/bin/sh");
+    server.args(["-c", "exec sleep 60"]);
+    let (companion, _) = issued
+        .start_companion(server, Ready::SocketExists, PATIENCE, None)
+        .expect("the companion starts");
+    let held = issued
+        .spawn(SpawnSpec {
+            id: "t1".to_string(),
+            command: programs::sleep(60).term_command(),
+            size: Size { rows: 24, cols: 80 },
+            containment: None,
+            kill_session_leftovers: false,
+            meta,
+            companion: true,
+        })
+        .expect("the terminal starts bound to its companion");
+    let left = LeftWithServer {
+        terminal: held.pid().0 as i32,
+        companion: companion.pid().0 as i32,
+        requests,
+    };
+    std::mem::forget((held, companion));
+    drop(previous);
+    left
+}
+
+/// The server the holder runs with an adopted Codex session's terminal is linked to again, so a
+/// message to the session still goes into Codex's queue, and for the conversation the store knows
+/// by the agent's id of it: the successor learned nothing of it from the server.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_adopted_codex_sessions_message_goes_through_its_servers_queue_with_the_thread_from_the_store(
+) {
+    let (state, dir) = console_with_project_and_accounts("adopt-codex-server");
+    record_codex(&state, "s1");
+    let run_dir = dir.join("run");
+    let left = left_with_server(&dir, codex_meta("s1", &run_dir.join("s1")));
+    let _guard = KillOnDrop(vec![left.terminal, left.companion]);
+
+    let (_next, found) = found_in(&dir);
+    assert_eq!(found.len(), 1);
+    assert!(found[0].companion.is_some());
+    let adopted = adopt_in_blocking(&state, found, run_dir).await;
+    assert_eq!(adopted.sessions, ["s1"]);
+    let transport = state
+        .live_session("s1")
+        .expect("the session is live")
+        .transport
+        .clone()
+        .expect("the adopted session reaches its server");
+    let sent = tokio::task::spawn_blocking(move || transport.send("hello again", "launch-s1:5"))
+        .await
+        .unwrap();
+    assert_eq!(sent.unwrap(), crate::session::term::Sent::Queued);
+
+    let requests = left.requests.lock().unwrap().clone();
+    let (_, added) = requests
+        .iter()
+        .find(|(method, _)| method == "thread/queue/add")
+        .expect("the message went into the server's queue");
+    assert_eq!(added["threadId"], "thread-1");
+    assert_eq!(added["clientUserMessageId"], "launch-s1:5");
+    assert!(is_running(left.terminal), "the terminal was not ended");
+}
+
+/// A server the welcome lists exited is a server that is gone: the terminal is ended for it, and
+/// the session goes through its exit path as one whose server died.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_adopted_terminal_whose_companion_exited_goes_through_the_exit_path() {
+    let (state, dir) = console_with_project_and_accounts("adopt-codex-server-gone");
+    record_codex(&state, "s1");
+    let run_dir = dir.join("run");
+    let left = left_with_server(&dir, codex_meta("s1", &run_dir.join("s1")));
+    let _guard = KillOnDrop(vec![left.terminal, left.companion]);
+    crate::test_support::kill(left.companion);
+
+    // The holder ends the terminal with its companion, whether or not a daemon is linked.
+    let (_next, found) = found_when(&dir, |found| {
+        found.first().is_some_and(|terminal| {
+            terminal.exited
+                && terminal
+                    .companion
+                    .as_ref()
+                    .is_some_and(|companion| companion.server.exited())
+        })
+    })
+    .await;
+    let adopted = adopt_in_blocking(&state, found, run_dir).await;
+    assert_eq!(adopted.sessions, ["s1"]);
+
+    let deadline = Instant::now() + PATIENCE;
+    while state.live_session("s1").is_some() {
+        assert!(Instant::now() < deadline, "the exit was never observed");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert_eq!(
+        state.session_record("s1").unwrap().status,
+        SessionStatus::Interrupted
+    );
+}
+
+/// A terminal the welcome lists no companion with, as every one an older holder runs, is adopted
+/// without a transport: the session's messages go to its terminal.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_adopted_codex_terminal_with_no_companion_has_no_transport() {
+    let (state, dir) = console_with_project_and_accounts("adopt-codex-no-server");
+    record_codex(&state, "s1");
+    let run_dir = dir.join("run");
+    let pids = left_behind(
+        &dir,
+        vec![(
+            "t1",
+            codex_meta("s1", &run_dir.join("s1")),
+            programs::sleep(60),
+        )],
+    );
+    let _guard = KillOnDrop(pids);
+
+    let (_next, found) = found_in(&dir);
+    assert!(found[0].companion.is_none());
+    let adopted = adopt_in_blocking(&state, found, run_dir).await;
+    assert_eq!(adopted.sessions, ["s1"]);
+    let live = state.live_session("s1").expect("the session is live");
+    assert!(live.transport.is_none());
 }

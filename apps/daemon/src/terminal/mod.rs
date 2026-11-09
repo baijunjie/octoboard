@@ -23,6 +23,7 @@ pub(crate) mod reply_route;
 pub(crate) mod ringbuf;
 pub(crate) mod saved_output;
 pub(crate) mod saved_screen;
+pub(crate) mod server_host;
 pub(crate) mod shell;
 pub(crate) mod snapshot;
 pub(crate) mod title;

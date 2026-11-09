@@ -22,6 +22,9 @@ pub mod quit_targets;
 pub mod registry;
 pub mod server;
 
+#[cfg(all(test, unix))]
+mod companion_test_support;
+
 /// How long a request a helper waits on (the revert gate's question, an MCP call) waits for a
 /// daemon to link when none is. It covers an ordinary daemon restart: the desktop application
 /// restarts a dead daemon after a second and a start takes a few seconds. Past it the request

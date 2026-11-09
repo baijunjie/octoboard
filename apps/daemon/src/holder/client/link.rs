@@ -16,6 +16,11 @@
 //! to the queries in the output it read before the mark, which nobody else answers: they are still
 //! written until the daemon parts ([`Sending::Answers`]). A link opened again after a handover
 //! tells the holder which terminals it handed over, and the holder keeps those unlinked.
+//!
+//! The link also carries the requests for a terminal's companion (its endpoint, its start, its
+//! end before the terminal binds it), to a holder whose welcome says it runs companions, and
+//! routes what it learns of each companion's end to the companion's handle ([`HeldCompanion`]),
+//! for the terminals it spawned and those it found alike.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -30,14 +35,17 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 
+use super::companion::HeldCompanion;
 use super::held::HeldTerminal;
 use super::relay::{RelayHandler, RelayRequest, Relaying};
 use crate::holder::protocol::{
-    decode_bulk, BulkKind, FromHolder, HandoverTail, LastParting, OfflineAnswer, RelayRoute,
-    SignalKind, SpawnSpec, TerminalInfo, ToHolder,
+    decode_bulk, BulkKind, CompanionEndpoint, ContainmentSpec, EndpointKind, FromHolder,
+    HandoverTail, LastParting, OfflineAnswer, Ready, RelayRoute, SignalKind, SpawnSpec,
+    TerminalInfo, ToHolder,
 };
 use crate::holder::registry::{self, RegistryEntry};
 use crate::platform::proc::ProcessIdentity;
+use crate::platform::term::Command;
 
 /// How long a holder has to accept the connection and answer the hello, but at the daemon's
 /// start, which takes `super::ADOPT_DEADLINE`.
@@ -134,6 +142,9 @@ pub struct Welcome {
     pub answers_offline: Vec<OfflineAnswer>,
     /// The holder carries out a handover ([`Link::hand_over`]).
     pub handover: bool,
+    /// The holder runs companions ([`Link::open_endpoint`], [`Link::start_companion`],
+    /// [`Link::end_companion`]).
+    pub companions: bool,
     /// When the daemon read the welcome, which the ages of output since a handover's mark count
     /// back from.
     pub received_at: Instant,
@@ -146,6 +157,8 @@ pub(super) struct Adopted {
     pub(super) tail: Vec<u8>,
     pub(super) welcomed_at: Instant,
     pub(super) held: HeldTerminal,
+    /// The handle on the companion the welcome listed with the terminal.
+    pub(super) companion: Option<HeldCompanion>,
 }
 
 /// A terminal as the link routes to it.
@@ -167,6 +180,15 @@ pub(super) struct Routed {
 
 /// What a terminal's owner asked to be run when the link was opened again, or changed.
 pub(super) type Resumed = Arc<dyn Fn() + Send + Sync>;
+
+/// A companion as the link routes what it learns of it to its handle.
+#[derive(Default)]
+pub(super) struct CompanionRoute {
+    /// Set once the companion is known to no longer run; see [`HeldCompanion`].
+    pub(super) exited: AtomicBool,
+    /// Its terminal bound it: it outlives the connection it was started over.
+    bound: AtomicBool,
+}
 
 /// What a frame that names a terminal is to a handover ([`Link::hand_over`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -278,6 +300,8 @@ pub(super) struct Link {
     /// The terminals handed over to the daemon that comes next, by their marks: no frame that
     /// names one is sent from then on, and none is recorded as exited.
     handed_over: Mutex<HashSet<String>>,
+    /// The companions of this link's terminals and launches, by terminal id.
+    companions: Mutex<HashMap<String, Arc<CompanionRoute>>>,
     welcome: Welcome,
 }
 
@@ -316,7 +340,17 @@ impl Link {
         // already print.
         let mut terminals = HashMap::new();
         let mut found = HashMap::new();
+        let mut companions = HashMap::new();
         for info in &welcome.terminals {
+            if let Some(companion) = &info.companion {
+                companions.insert(
+                    info.id.clone(),
+                    Arc::new(CompanionRoute {
+                        exited: AtomicBool::new(companion.exited),
+                        bound: AtomicBool::new(true),
+                    }),
+                );
+            }
             let (output, events) = mpsc::channel(ADOPTED_OUTPUT_CHUNKS);
             terminals.insert(
                 info.id.clone(),
@@ -392,6 +426,7 @@ impl Link {
             ),
             tail_arrived: Condvar::new(),
             handed_over: Mutex::new(HashSet::new()),
+            companions: Mutex::new(companions),
             welcome,
         });
         link.serve(wire_out, wire_in);
@@ -449,6 +484,7 @@ impl Link {
                         terminals,
                         answers_offline,
                         handover,
+                        companions,
                         ..
                     }) = serde_json::from_str(&text)
                     else {
@@ -463,6 +499,7 @@ impl Link {
                         terminals,
                         answers_offline,
                         handover,
+                        companions,
                         received_at: Instant::now(),
                     };
                     return Ok((wire_out, wire_in, welcome));
@@ -803,6 +840,22 @@ impl Link {
                 }
             }
         }
+        // A companion runs on only where the welcome lists it running with its terminal: one no
+        // terminal had bound was ended with the connection it was asked over.
+        for (id, route) in locked(&self.companions).iter() {
+            if handed_over.contains(id) {
+                continue;
+            }
+            let running = welcome
+                .terminals
+                .iter()
+                .find(|info| &info.id == id)
+                .and_then(|info| info.companion.as_ref())
+                .is_some_and(|companion| !companion.exited);
+            if !running {
+                route.exited.store(true, Ordering::Release);
+            }
+        }
     }
 
     /// Ends the terminals the welcome lists that this link does not own, whatever it did about
@@ -911,6 +964,16 @@ impl Link {
                 continue;
             };
             let held = HeldTerminal::new(self.clone(), info.id.clone(), info.pid, routed, events);
+            let companion = info.companion.as_ref().and_then(|found| {
+                let route = locked(&self.companions).get(&info.id).cloned()?;
+                Some(HeldCompanion::new(
+                    self.clone(),
+                    info.id.clone(),
+                    route,
+                    found.pid,
+                    found.identity.as_deref(),
+                ))
+            });
             match tail {
                 Some(tail) => adopted.push(Adopted {
                     info: TerminalInfo {
@@ -920,6 +983,7 @@ impl Link {
                     tail,
                     welcomed_at,
                     held,
+                    companion,
                 }),
                 None => {
                     tracing::warn!(terminal = %info.id, "the holder did not send the terminal's tail; it is ended");
@@ -1130,6 +1194,9 @@ impl Link {
     /// drop anywhere: one that cannot be sent while the connection is down is sent once it is
     /// opened again.
     pub(super) fn revoke_launch(&self, terminal: &str) {
+        // The holder ends the launch's unbound companion with the key, as it does with the
+        // connection should the revoke not get through.
+        self.forget_companion(terminal);
         let revoke = ToHolder::RevokeLaunch {
             id: terminal.to_string(),
         };
@@ -1146,12 +1213,153 @@ impl Link {
         }
     }
 
+    /// Fails unless the holder runs companions: a frame of theirs is never sent to one that does
+    /// not.
+    fn runs_companions(&self) -> Result<()> {
+        if !self.welcome.companions {
+            bail!("the holder runs no companions");
+        }
+        Ok(())
+    }
+
+    /// Has the holder open the endpoint `kind` asks for, for the companion of the terminal `id`.
+    /// **Blocks.**
+    pub(super) fn open_endpoint(&self, id: &str, kind: EndpointKind) -> Result<CompanionEndpoint> {
+        self.runs_companions()?;
+        let opened = self.request(Some(REPLY_DEADLINE), |req| ToHolder::OpenEndpoint {
+            id: id.to_string(),
+            req,
+            kind,
+        });
+        match opened {
+            Some(FromHolder::EndpointOpened {
+                endpoint: Some(endpoint),
+                ..
+            }) => {
+                // The holder ended whatever companion it kept unbound under the id.
+                self.forget_companion(id);
+                Ok(endpoint)
+            }
+            Some(FromHolder::EndpointOpened {
+                error: Some(error), ..
+            }) => bail!("{error}"),
+            Some(_) => bail!("the holder opened no endpoint for the companion"),
+            None => bail!("the holder did not answer the opening of the companion's endpoint"),
+        }
+    }
+
+    /// Has the holder start the companion of the terminal `id` on the endpoint opened for it, and
+    /// waits for it to be ready, or not, as the holder takes, ended only by its answer or the end
+    /// of the connection, as a spawn is. The companion's handle, and the port it reported.
+    /// **Blocks.**
+    pub(super) fn start_companion(
+        self: &Arc<Self>,
+        id: &str,
+        command: Command,
+        ready: Ready,
+        within: Duration,
+        containment: Option<ContainmentSpec>,
+    ) -> Result<(HeldCompanion, Option<u16>)> {
+        self.runs_companions()?;
+        // A connection that dropped is dealt with first, so that the route is not cleared with the
+        // connection it was not started over.
+        self.settled();
+        // Routed before the request goes out: the companion's end may arrive before the answer is
+        // read.
+        let route = Arc::new(CompanionRoute::default());
+        locked(&self.companions).insert(id.to_string(), route.clone());
+        let started = self.request(None, |req| ToHolder::StartCompanion {
+            id: id.to_string(),
+            req,
+            command: Box::new(command),
+            ready,
+            ready_within_ms: u64::try_from(within.as_millis()).unwrap_or(u64::MAX),
+            containment,
+        });
+        let failure = match started {
+            Some(FromHolder::CompanionStarted {
+                pid: Some(pid),
+                identity,
+                port,
+                error: None,
+                ..
+            }) => {
+                let companion = HeldCompanion::new(
+                    self.clone(),
+                    id.to_string(),
+                    route,
+                    pid,
+                    identity.as_deref(),
+                );
+                return Ok((companion, port));
+            }
+            Some(FromHolder::CompanionStarted {
+                error: Some(error), ..
+            }) => error,
+            Some(_) => "the holder started no companion".to_string(),
+            None => "the link to the holder was lost before it answered the companion's start"
+                .to_string(),
+        };
+        route.exited.store(true, Ordering::Release);
+        {
+            let mut companions = locked(&self.companions);
+            if companions
+                .get(id)
+                .is_some_and(|routed| Arc::ptr_eq(routed, &route))
+            {
+                companions.remove(id);
+            }
+        }
+        bail!("{failure}")
+    }
+
+    /// Has the holder end the companion of the terminal `id` while no terminal has bound it, and
+    /// waits for that. **Blocks.**
+    pub(super) fn end_companion(&self, id: &str) -> Result<()> {
+        self.runs_companions()?;
+        let ended = self.request(Some(REPLY_DEADLINE), |req| ToHolder::EndCompanion {
+            id: id.to_string(),
+            req,
+        });
+        match ended {
+            Some(FromHolder::Done { error: None, .. }) => {
+                self.forget_companion(id);
+                Ok(())
+            }
+            Some(FromHolder::Done {
+                error: Some(error), ..
+            }) => bail!("{error}"),
+            Some(_) => bail!("the holder answered the companion's end with something else"),
+            None => bail!("the holder did not answer the companion's end"),
+        }
+    }
+
+    /// Stops routing to the companion of the terminal `id`, which reads as exited: its holder
+    /// ended it, or ends it with its terminal. One the next daemon takes over keeps running.
+    fn forget_companion(&self, id: &str) {
+        let removed = locked(&self.companions).remove(id);
+        let Some(route) = removed else {
+            return;
+        };
+        let planned = self.parting.load(Ordering::Acquire) && self.handover.load(Ordering::Acquire);
+        if !planned && !self.is_handed_over(id) {
+            route.exited.store(true, Ordering::Release);
+        }
+    }
+
     /// Starts the terminal `spec` describes in the holder and waits for it. **Blocks.**
     pub(super) fn spawn(self: &Arc<Self>, spec: SpawnSpec) -> Result<HeldTerminal> {
         // A connection that dropped is dealt with first, so that the terminal is routed on the
         // connection the request goes out on, and not cleared with the one that is gone.
         self.settled();
         let id = spec.id.clone();
+        let binds_companion = spec.companion;
+        if binds_companion {
+            self.runs_companions()?;
+        } else {
+            // The holder ends whatever companion was left under the id.
+            self.forget_companion(&id);
+        }
         let (output, events) = mpsc::channel(OUTPUT_CHUNKS);
         let routed = Arc::new(Routed {
             exited: AtomicBool::new(false),
@@ -1170,6 +1378,9 @@ impl Link {
         };
         if !self.send_now(&ToHolder::Spawn(Box::new(spec))) {
             forgotten(self);
+            if binds_companion {
+                self.forget_companion(&id);
+            }
             bail!("the link to the holder is lost");
         }
         // Waits for as long as the holder takes: a start it has not confirmed may be running, so
@@ -1178,15 +1389,24 @@ impl Link {
         // program the holder started but could not confirm over it is ended by the holder, which
         // finds nobody to tell, or by this link once it is opened again and the welcome lists it.
         match replied.recv() {
+            // The companion was marked bound as the frame was routed ([`Self::route_text`]).
             Ok(FromHolder::Spawned { pid, .. }) => {
                 Ok(HeldTerminal::new(self.clone(), id, pid, routed, events))
             }
+            // A refused spawn that expected a companion found none running, or the holder ended
+            // it; one whose answer is lost had it ended with the connection.
             Ok(FromHolder::SpawnFailed { error, .. }) => {
                 forgotten(self);
+                if binds_companion {
+                    self.forget_companion(&id);
+                }
                 bail!("{error}")
             }
             _ => {
                 forgotten(self);
+                if binds_companion {
+                    self.forget_companion(&id);
+                }
                 bail!(
                     "the link to the holder was lost before it confirmed the start of the program"
                 )
@@ -1203,6 +1423,8 @@ impl Link {
         if let Some(routed) = routed {
             routed.close_output();
         }
+        // Its companion ends with it.
+        self.forget_companion(id);
         // A link given up leaves the terminal to the holder, for the link that takes it next.
         if !self.abandoned.load(Ordering::Acquire) {
             self.send_now(&ToHolder::Release { id: id.to_string() });
@@ -1261,6 +1483,13 @@ impl Link {
         };
         match &message {
             FromHolder::Spawned { id, .. } | FromHolder::SpawnFailed { id, .. } => {
+                // A companion the terminal bound outlives the connection it was started over. Marked
+                // before the frame is forwarded: a drop between the two must not read it as exited.
+                if matches!(message, FromHolder::Spawned { .. }) {
+                    if let Some(route) = locked(&self.companions).get(id) {
+                        route.bound.store(true, Ordering::Release);
+                    }
+                }
                 let waiting = locked(&self.spawns).remove(id);
                 match waiting {
                     Some(waiting) => {
@@ -1304,9 +1533,19 @@ impl Link {
             }
             FromHolder::Written { req, .. }
             | FromHolder::Done { req, .. }
-            | FromHolder::Answer { req, .. } => {
+            | FromHolder::Answer { req, .. }
+            | FromHolder::EndpointOpened { req, .. }
+            | FromHolder::CompanionStarted { req, .. } => {
                 if let Some(waiting) = locked(&self.replies).remove(req) {
                     waiting.send(message).ok();
+                }
+            }
+            // A companion handed over with its terminal is the next daemon's to see end.
+            FromHolder::CompanionEnded { id } if self.is_handed_over(id) => {}
+            FromHolder::CompanionEnded { id } => {
+                let route = locked(&self.companions).get(id).cloned();
+                if let Some(route) = route {
+                    route.exited.store(true, Ordering::Release);
                 }
             }
             FromHolder::LaunchIssued { req, .. } => {
@@ -1464,6 +1703,12 @@ impl Link {
                 terminals.remove(id);
             }
         }
+        // The holder ends a companion no terminal has bound with the connection it was asked over.
+        for route in locked(&self.companions).values() {
+            if !route.bound.load(Ordering::Acquire) {
+                route.exited.store(true, Ordering::Release);
+            }
+        }
         self.relaying.cancel_all();
     }
 
@@ -1480,6 +1725,13 @@ impl Link {
                 routed.exited.store(true, Ordering::Release);
             }
             routed.close_output();
+        }
+        // The holder is gone, or this daemon is: so is what it ran, but what is left to the next
+        // daemon.
+        for (id, route) in locked(&self.companions).iter() {
+            if !planned && !handed_over.contains(id) {
+                route.exited.store(true, Ordering::Release);
+            }
         }
         // The writer and the socket of a connection that is still open are closed with it.
         locked(&self.out).send(Message::Close(None)).ok();
@@ -1501,7 +1753,10 @@ fn terminal_of(message: &ToHolder) -> Option<&str> {
         | ToHolder::Reap { id, .. }
         | ToHolder::Release { id }
         | ToHolder::IssueLaunch { id, .. }
-        | ToHolder::RevokeLaunch { id } => Some(id.as_str()),
+        | ToHolder::RevokeLaunch { id }
+        | ToHolder::OpenEndpoint { id, .. }
+        | ToHolder::StartCompanion { id, .. }
+        | ToHolder::EndCompanion { id, .. } => Some(id.as_str()),
         ToHolder::Hello { .. }
         | ToHolder::Parting { .. }
         | ToHolder::Drain

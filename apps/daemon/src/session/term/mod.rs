@@ -224,25 +224,45 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     }
     process_tag.containment().prepare(&mut environment);
     environment.insert("TERM".to_string(), pty::TERM.to_string());
-    let (args, transport) = match &plan.private_server {
-        Some(server) => match server.start(&binary, &environment, cwd, process_tag.containment()) {
-            Ok(started) => {
-                environment.extend(started.env);
-                (started.args, Some(started.transport))
+    // Where the plan's private server runs: none where the holder that is to run the terminal
+    // runs no companions, and the launch is then the ordinary one.
+    let host = helpers.server_host(
+        process_tag.containment(),
+        process_tag.instance_id(),
+        process_tag.launch_id(),
+    );
+    let (args, transport, companion) = match (&plan.private_server, &host) {
+        (Some(server), Some(host)) => {
+            match server.start(&binary, &environment, cwd, &**host, process_tag.launch_id()) {
+                Ok(started) => {
+                    environment.extend(started.env);
+                    (started.args, Some(started.transport), host.companion())
+                }
+                // The ordinary launch stands on its own: a server that does not come up costs the
+                // session only the delivery that would have gone through it.
+                Err(err) => {
+                    tracing::warn!(
+                        session = %session_id,
+                        error = %format!("{err:#}"),
+                        "the agent's own server could not be started; launching its terminal on its own"
+                    );
+                    host.end();
+                    (plan.args.clone(), None, false)
+                }
             }
-            // The ordinary launch stands on its own: a server that does not come up costs the
-            // session only the delivery that would have gone through it.
-            Err(err) => {
-                tracing::warn!(
-                    session = %session_id,
-                    error = %format!("{err:#}"),
-                    "the agent's own server could not be started; launching its terminal on its own"
-                );
-                (plan.args.clone(), None)
-            }
-        },
-        None => (plan.args.clone(), None),
+        }
+        (Some(_), None) => {
+            tracing::info!(
+                session = %session_id,
+                "the holder runs no companions; launching the agent's terminal without its own \
+                 server"
+            );
+            (plan.args.clone(), None, false)
+        }
+        (None, _) => (plan.args.clone(), None, false),
     };
+    // It borrows the launch's credentials, which the spawn takes.
+    drop(host);
     let mut cmd = host_term::Command::new(&binary.program);
     cmd.args(&binary.leading_args);
     cmd.args(&args);
@@ -281,6 +301,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         kill_session_leftovers: true,
         meta,
         helpers: Some(helpers),
+        companion,
     })
     .with_context(|| format!("spawning `{}`", binary.program.display()))?;
 
@@ -300,19 +321,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         scratch_dir: Some(scratch),
         resolves_approvals_itself: plan.resolves_approvals_itself,
         carried_trust: plan.carried_trust,
-        before_scratch_removal: {
-            let after_exit = plan.after_exit;
-            (transport.is_some() || after_exit.is_some()).then(move || {
-                Box::new(move || {
-                    if let Some(transport) = transport {
-                        transport.stop();
-                    }
-                    if let Some(after_exit) = after_exit {
-                        after_exit.run();
-                    }
-                }) as Box<dyn FnOnce() + Send>
-            })
-        },
+        before_scratch_removal: before_scratch_removal(transport, plan.after_exit),
     }));
     live.enable_native_stash(native_stash);
     if let Some(prompt) = launch_prompt {
@@ -339,7 +348,9 @@ pub trait MessageTransport: Send + Sync {
     /// Has the server run the messages it took that wait in its queue, as it does not by itself
     /// after a turn the user or an owner cancelled, and says what came of it.
     fn start_queue(&self) -> QueueStart;
-    /// Ends the server; called after the session's process is reaped.
+    /// Ends the server where the daemon runs it, and withdraws what the session was told of
+    /// messages held back; called after the session's process is reaped. A server a holder runs
+    /// with the terminal is the holder's to end, and is left to it.
     fn stop(&self);
 }
 
@@ -349,7 +360,8 @@ pub enum Sent {
     /// The server took the message.
     Queued,
     /// The server did not take it and nothing of it reached the server, for the reason given; the
-    /// terminal can take it instead.
+    /// terminal can take it instead, unless a planned stop's handover barrier is up (see
+    /// [`send_message_with_id`]).
     Declined(String),
 }
 
@@ -428,19 +440,38 @@ pub struct StartedServer {
 
 /// How a launch starts such a server, when its plan has one.
 pub trait PrivateServer: Send + Sync {
-    /// Starts the server for the session, with the launch's environment and in the launch's
-    /// containment, before its terminal.
+    /// Starts the server for the session of the launch `launch_id` through `host`, with the
+    /// launch's environment, before its terminal. **Blocks.**
     fn start(
         &self,
         binary: &crate::platform::shell::ResolvedBinary,
         environment: &HashMap<String, String>,
         cwd: &Path,
-        containment: &crate::platform::proc::Containment,
+        host: &dyn crate::terminal::server_host::ServerHost,
+        launch_id: &str,
     ) -> Result<StartedServer>;
 
     /// The plan itself, for the tests of the provider that made it.
     #[cfg(test)]
     fn as_any(&self) -> &dyn std::any::Any;
+}
+
+/// What a session does before its scratch directory is removed: stops its `transport` and runs its
+/// `after_exit`; `None` where it has neither.
+pub fn before_scratch_removal(
+    transport: Option<Arc<dyn MessageTransport>>,
+    after_exit: Option<Box<dyn AfterExit>>,
+) -> Option<Box<dyn FnOnce() + Send>> {
+    (transport.is_some() || after_exit.is_some()).then(move || {
+        Box::new(move || {
+            if let Some(transport) = transport {
+                transport.stop();
+            }
+            if let Some(after_exit) = after_exit {
+                after_exit.run();
+            }
+        }) as Box<dyn FnOnce() + Send>
+    })
 }
 
 /// Work a launch leaves for once its process has exited (`LaunchPlan::after_exit`), done before the
@@ -497,7 +528,7 @@ impl std::error::Error for UncertainSubmission {}
 
 #[cfg(test)]
 pub fn send_message(session: &LiveSession, text: &str) -> Result<(), PartialWrite> {
-    send_message_with_id(session, text, &Uuid::new_v4().to_string(), false).map(|_| ())
+    send_message_with_id(session, text, &Uuid::new_v4().to_string(), false, &|| false).map(|_| ())
 }
 
 /// Submits a message through the session's own server ([`MessageTransport`]) where it has one, or
@@ -511,7 +542,11 @@ pub fn send_message(session: &LiveSession, text: &str) -> Result<(), PartialWrit
 ///
 /// Where the server may have accepted the message without confirming it, the failure carries
 /// [`UncertainSubmission`] and nothing is written into the terminal, which could deliver it twice.
-/// Where nothing of it reached the server, the terminal path below takes it.
+/// Where nothing of it reached the server, the terminal path below takes it, unless
+/// `writes_stopped` says a planned stop has raised its handover barrier since the message was
+/// taken: then nothing is written and the failure is an empty [`PartialWrite`], which the outbox
+/// puts back at the front of its queue for the stop to save for the next daemon, as it does with
+/// every message the barrier stops.
 /// The input write checks for an empty, acknowledged composer or saves and restores the draft
 /// through a supported native stash. Preservation has a bounded grace period; after expiry,
 /// delivery may include unfinished user input and retained keys are released into the current editor.
@@ -526,6 +561,7 @@ pub fn send_message_with_id(
     text: &str,
     logical_id: &str,
     allow_mixed: bool,
+    writes_stopped: &dyn Fn() -> bool,
 ) -> Result<Route, PartialWrite> {
     if let Some(transport) = &session.transport {
         if session.is_frozen()
@@ -542,7 +578,19 @@ pub fn send_message_with_id(
         }
         match transport.send(&shaped(text), logical_id)? {
             Sent::Queued => return Ok(Route::Queued),
-            // Nothing of the message reached the server, so the terminal takes it instead.
+            // Nothing of the message reached the server. A send begun before the handover barrier
+            // can end after it rose, and from the barrier on the outbox writes nothing: the
+            // message stays whole for the next daemon rather than being written.
+            Sent::Declined(reason) if writes_stopped() => {
+                tracing::info!(
+                    session = %session.id,
+                    %reason,
+                    "the agent's own server did not take a message after the handover barrier \
+                     was raised; it is kept for the next daemon"
+                );
+                return Err(kept_for_next_daemon());
+            }
+            // Otherwise the terminal takes it instead.
             Sent::Declined(reason) => tracing::warn!(
                 session = %session.id,
                 %reason,
@@ -557,6 +605,18 @@ pub fn send_message_with_id(
     session
         .write_message_input(&framed, prompt, allow_mixed)
         .map(|()| Route::Terminal)
+}
+
+/// The failure of a message [`send_message_with_id`] does not write because the handover barrier is
+/// up: nothing of it went in, so the outbox puts it back.
+fn kept_for_next_daemon() -> PartialWrite {
+    PartialWrite {
+        written: 0,
+        error: std::io::Error::new(
+            std::io::ErrorKind::WouldBlock,
+            "a planned stop is handing the session over; the message is kept for the next daemon",
+        ),
+    }
 }
 
 /// Shapes a message into the inputs `send_message_with_id` writes on the terminal path: a paste of
@@ -733,6 +793,61 @@ mod tests {
         expected.extend_from_slice(PASTE_END);
         expected.extend_from_slice(SUBMIT);
         assert_eq!(framed, expected);
+    }
+
+    /// A Codex stand-in whose own server declines every message and raises `barrier` while it
+    /// does, as a send that ends after the handover barrier rose.
+    fn declined_during(
+        name: &str,
+        barrier: &Arc<std::sync::atomic::AtomicBool>,
+    ) -> (
+        crate::test_support::StandIn,
+        Arc<crate::test_support::DecliningServer>,
+    ) {
+        let raised = barrier.clone();
+        let server = crate::test_support::DecliningServer::new(move || {
+            raised.store(true, std::sync::atomic::Ordering::Release)
+        });
+        let live = crate::test_support::idle_stand_in_of(name, AgentId::CODEX)
+            .with_transport(server.clone());
+        (live, server)
+    }
+
+    /// Where the server declines a message and the barrier rose while it ran, nothing goes into
+    /// the terminal, which is being handed over: the failure writes nothing and would block, which
+    /// the outbox puts back for the stop to save for the next daemon.
+    #[test]
+    fn a_declined_message_is_not_written_once_the_barrier_rose_during_the_send() {
+        let barrier = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (live, server) = declined_during("declined-after-barrier", &barrier);
+        let before = live.input_writes();
+        let failure = match send_message_with_id(&live, "hello", "launch:1", false, &|| {
+            barrier.load(std::sync::atomic::Ordering::Acquire)
+        }) {
+            Err(failure) => failure,
+            Ok(route) => panic!("the message went by {route:?}"),
+        };
+        assert_eq!(failure.written, 0);
+        assert_eq!(failure.error.kind(), std::io::ErrorKind::WouldBlock);
+        assert_eq!(live.input_writes(), before, "something was written");
+        assert_eq!(server.offered().len(), 1);
+        assert!(server.offered()[0].contains("hello"));
+    }
+
+    /// Before the barrier, a message the server declines still falls back to the terminal. The
+    /// route does not depend on the agent; the stand-in is of one whose paste and Enter go in
+    /// together on every host, so the write waits on no input box the stand-in never draws.
+    #[test]
+    fn a_declined_message_is_written_into_the_terminal_before_the_barrier() {
+        let server = crate::test_support::DecliningServer::new(|| {});
+        let live = crate::test_support::idle_stand_in("declined-before-barrier")
+            .with_transport(server.clone());
+        let before = live.input_writes();
+        let route = send_message_with_id(&live, "hello", "launch:1", false, &|| false)
+            .expect("the terminal takes it");
+        assert_eq!(route, Route::Terminal);
+        assert_eq!(live.input_writes(), before + 1);
+        assert_eq!(server.offered().len(), 1);
     }
 
     #[test]

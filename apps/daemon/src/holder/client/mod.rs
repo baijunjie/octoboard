@@ -18,7 +18,12 @@
 //! ([`Holders::part_planned`]). An ordinary stop asked for once that has begun ends those holders
 //! by their verified process instead, with all they run ([`Holders::end_handed_over`]): the
 //! terminals they hold are no longer this daemon's to end one by one.
+//!
+//! A launch in a holder whose welcome says it runs companions can have the holder start a process
+//! for its terminal before the terminal ([`Issued::start_companion`]), which the terminal then binds
+//! at its spawn; a terminal found running carries its companion ([`FoundTerminal::companion`]).
 
+mod companion;
 mod held;
 mod link;
 mod relay;
@@ -31,16 +36,20 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
 
+pub use self::companion::HeldCompanion;
 pub use self::held::{HeldAt, HeldReader, HeldTerminal};
 use self::link::{locked, Adopted, Link, OnLost, Refused, Unreadable, CONNECT_DEADLINE};
 pub use self::relay::{RelayHandler, RelayReply, RelayRequest};
 use super::build::Builds;
 use super::compat::{Range, Verdict};
-use super::protocol::{HandoverTail, LastParting, OfflineAnswer, SpawnSpec, ToHolder};
+use super::protocol::{
+    CompanionEndpoint, ContainmentSpec, EndpointKind, HandoverTail, LastParting, OfflineAnswer,
+    Ready, SpawnSpec, ToHolder,
+};
 use super::quit_targets::QuitTargets;
 use super::registry::{self, RegistryEntry};
 use crate::platform::proc::{self, Polite, ProcessIdentity, Sent, Signal};
-use crate::platform::term::Size;
+use crate::platform::term::{Command, Size};
 
 /// How long a started holder has to leave its registry file.
 const START_DEADLINE: Duration = Duration::from_secs(10);
@@ -111,13 +120,25 @@ pub fn launch_detached(application: Option<u32>) -> Launch {
 
 /// A launch's credentials, as its holder issued them: what its helpers call, and the key they
 /// carry. The key is the holder's until the terminal is released, and is revoked when this is
-/// dropped without the program having been started.
+/// dropped without the program having been started, which ends the launch's companion too, if
+/// one was started and no terminal bound it.
+///
+/// Where the holder runs companions (`companions`), the launch can have it start one for its
+/// terminal first: [`Self::open_endpoint`], then [`Self::start_companion`], then
+/// [`Self::spawn`] with `spec.companion` set, which binds the companion to the terminal. Before
+/// the spawn, [`Self::end_companion`] ends the companion and its endpoint, so that the launch can
+/// open another (a resume's second server) or spawn its terminal unbound (`spec.companion`
+/// unset, which ends any companion left as well). The holder also ends an unbound companion when
+/// the link it was asked over drops and when no terminal binds it for a while.
 pub struct Issued {
     /// The port of the holder's helper routes.
     pub port: u16,
     pub key: String,
     /// The executable the holder runs from, for the helpers to run.
     pub exe: String,
+    /// The holder runs companions: the methods below are refused by one that does not, which is
+    /// sent no companion frame at all.
+    pub companions: bool,
     terminal: String,
     link: Arc<Link>,
     used: bool,
@@ -125,11 +146,41 @@ pub struct Issued {
 
 impl Issued {
     /// Starts the program on the holder that issued the key, as the terminal the key is for;
-    /// `spec.id` is replaced by that terminal's id. **Blocks.**
+    /// `spec.id` is replaced by that terminal's id. With `spec.companion` the holder refuses the
+    /// spawn unless the companion started for the launch runs. **Blocks.**
     pub fn spawn(mut self, mut spec: SpawnSpec) -> Result<HeldTerminal> {
         self.used = true;
         spec.id = self.terminal.clone();
         self.link.spawn(spec)
+    }
+
+    /// Has the holder open the endpoint `kind` asks for, for the launch's companion, and returns
+    /// it: a socket path, or a loopback token whose port the start reports. An endpoint opened
+    /// before and not bound is ended first. **Blocks**, up to the link's reply deadline.
+    pub fn open_endpoint(&self, kind: EndpointKind) -> Result<CompanionEndpoint> {
+        self.link.open_endpoint(&self.terminal, kind)
+    }
+
+    /// Has the holder start `command` as the launch's companion on the endpoint opened for it,
+    /// in `containment`, and waits until it is ready as `ready` says, it exits, or `within` passes
+    /// (the holder ends one that is not ready, with its endpoint). Waits for as long as the holder
+    /// takes, ended only by its answer or the end of the connection. Returns the companion's
+    /// handle and the port it reported for [`Ready::PortAfter`]. **Blocks.**
+    pub fn start_companion(
+        &self,
+        command: Command,
+        ready: Ready,
+        within: Duration,
+        containment: Option<ContainmentSpec>,
+    ) -> Result<(HeldCompanion, Option<u16>)> {
+        self.link
+            .start_companion(&self.terminal, command, ready, within, containment)
+    }
+
+    /// Has the holder end the launch's companion and its endpoint while no terminal has bound it,
+    /// as [`HeldCompanion::end`] does. **Blocks.**
+    pub fn end_companion(&self) -> Result<()> {
+        self.link.end_companion(&self.terminal)
     }
 }
 
@@ -174,6 +225,16 @@ pub struct FoundTerminal {
     pub answers_offline: Vec<OfflineAnswer>,
     /// The holder that runs the terminal.
     pub holder_id: String,
+    /// The companion the terminal bound at its spawn, as the welcome listed it; whether it still
+    /// runs is its handle's to say.
+    pub companion: Option<FoundCompanion>,
+}
+
+/// A terminal's companion, found running with it or exited ([`FoundTerminal::companion`]).
+pub struct FoundCompanion {
+    /// Where it listens; a loopback endpoint without a port names no place to reach.
+    pub endpoint: CompanionEndpoint,
+    pub server: HeldCompanion,
 }
 
 impl FoundTerminal {
@@ -579,6 +640,7 @@ impl Holders {
         Ok(Issued {
             port: link.helper_port(),
             exe: link.helper_exe().to_string(),
+            companions: link.welcome().companions,
             key,
             terminal,
             link,
@@ -1060,6 +1122,7 @@ impl Shared {
                          tail,
                          welcomed_at,
                          held,
+                         companion,
                      }| FoundTerminal {
                         id: info.id,
                         size: info.size,
@@ -1071,6 +1134,12 @@ impl Shared {
                         welcomed_at,
                         answers_offline: welcome.answers_offline.clone(),
                         holder_id: welcome.holder_id.clone(),
+                        companion: info.companion.zip(companion).map(|(found, server)| {
+                            FoundCompanion {
+                                endpoint: found.endpoint,
+                                server,
+                            }
+                        }),
                     },
                 )
                 .collect(),
@@ -1479,6 +1548,8 @@ pub fn current() -> Option<&'static Holders> {
 
 #[cfg(test)]
 mod adoption_tests;
+#[cfg(all(test, unix))]
+mod companion_tests;
 #[cfg(test)]
 pub(crate) mod test_holders;
 #[cfg(test)]

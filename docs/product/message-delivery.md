@@ -168,7 +168,8 @@ that cannot take one. Once the terminals are handed over, what is still queued f
 whole, in its order — is saved for the next daemon (`~/.octoboard/restart-outbox.json`, see "Files Octoboard owns" in
 `docs/product/application-lifecycle.md`), and from then on a message is refused with `daemon_shutting_down`, to be sent
 again once the daemon is back. The next daemon, once it has taken the sessions over, writes the saved messages into
-each session it took over still running the same process they were queued for, in order, each once. A session not
+each session it took over still running the same process they were queued for, in order, each once (for the case
+where a Codex session can run such a message twice, see "Messages through Codex's own queue" below). A session not
 running that process any more gets none of them, as a session whose process ended with messages queued gets none,
 apart from those kept for an interrupted session, which stay kept for its next resume; nor does a session whose
 process is taken over only later, once its holder can be connected to. A message written only in part when the stop
@@ -367,10 +368,13 @@ their grace period do not apply, and nor do the checks of "A message written but
 
 **Which conversation it goes to.** Always the session's own, identified once and kept while its process runs: on a
 resume, the resumed conversation; on a new session, the first conversation of the user's that the server reports
-starting. That can come before the user's first submission, so an automatic message can be the session's first prompt.
-Codex's ephemeral conversation for generating a title, its sub-agents' conversations, and further tasks the user opens
-or creates in Codex's agent command center never receive the session's messages: even while the user has switched to
-another task there, they go to the original conversation.
+starting. That can come before the user's first submission, so an automatic message can be the session's first prompt. A
+daemon that takes a running session over after a restart (see "Codex's private app server" in
+`docs/product/per-agent-launch-specifics.md`) identifies it again: the conversation of the session's recorded agent-side
+id when it has one; without one, as below, the user's conversation the server has loaded when a message is written, or
+the next one the server reports starting. Codex's ephemeral conversation for generating a title, its sub-agents'
+conversations, and further tasks the user opens or creates in Codex's agent command center never receive the session's
+messages: even while the user has switched to another task there, they go to the original conversation.
 
 **Before the session's own conversation is known:**
 
@@ -395,6 +399,22 @@ that reply (see "A message whose acceptance is uncertain" below): it waits there
 tried again, it is started where it waits in Codex's queue rather than added a second time, and once it is no longer
 there, having run meanwhile, it counts as delivered. When Codex otherwise refuses to take the message into its queue,
 the message fails instead of waiting (see "A message Codex's own queue refuses" below).
+
+**Octoboard's messages from before a daemon restart.** Each message goes into Codex's queue under an id that names the
+session's launch, and a later daemon run never gives out an id an earlier one did (unless the system clock was set back
+between the runs), so a daemon that takes the session over (see "Codex's private app server" in
+`docs/product/per-agent-launch-specifics.md`) knows the messages an earlier daemon run left waiting in Codex's queue as
+its own: it starts them after a cancelled turn and after adding a message behind them, as it does its own, and never
+takes one of them for a new message. A message a planned restart carries over (see "What is queued crosses a planned
+restart" above) keeps its id, so one Codex already holds in its queue is started where it waits rather than added a
+second time. Two cases can still run a message twice:
+
+- a message Codex took into its queue but answered as overloaded when asked to start it, still waiting to be tried again
+  when a planned restart came, which Codex then ran by itself before the next daemon tried it again: it is no longer in
+  Codex's queue to be found, so it is added again;
+- a daemon that ends without a planned stop — a crash, or one killed outright — loses what it had queued. A message kept
+  for the session's next resume is queued again only by that resume, under the new launch's id, so a copy Codex still
+  holds is not recognised and the message can run twice.
 
 **A server that has exited** keeps the message queued, whether or not the conversation is known: the session's
 terminal ends with its server (see "Codex's private app server" in `docs/product/per-agent-launch-specifics.md`).

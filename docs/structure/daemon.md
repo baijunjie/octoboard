@@ -115,7 +115,7 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   `console_workdir.rs` (a console's working directory: its instruction file written into it, and its removal),
   `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`), `adopt.rs` (at start,
   matches the terminals the holders kept running with the store: a session's is adopted into a
-  rebuilt `LiveSession` and watched like a launch of the daemon's own, a shell terminal's is put back,
+  rebuilt `LiveSession` and watched like a launch of the daemon's own, with its messages going through the private server its holder kept running as the terminal's companion, where the provider's `rebuild_launch` links to it again; a shell terminal's is put back,
   any other is ended; its module doc has the rules), `unlinked.rs` (what a holder that cannot be linked to runs:
   claimed at start from the store's record of where each launch runs, taken over once the holder is linked to,
   interrupted once it is gone; the screen a planned stop saved for a session whose holder is gone at the next start
@@ -135,7 +135,7 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   is, `change.rs` the account switch and handoff variant, `carry_out.rs` what an approval does, `outcome.rs` the wording
   of the outcome.
 - `src/messaging/` — every message Octoboard writes into sessions: `delivery.rs` (gates, queueing, what became of each
-  message), `outbox.rs` (the per-session ordered queue, sealed at a planned stop's handover, which also keeps the tickets a refusal failed), `write_queue.rs`
+  message), `outbox.rs` (the per-session ordered queue, sealed at a planned stop's handover, which also keeps the tickets a refusal failed; a daemon's tickets start from the clock, `Outbox::seeded_from_clock`, because an agent's own queue keeps a message's id across runs), `write_queue.rs`
   (`AppState`'s queuing, flushing and holds over it, and the notice of a refused message), `restart_outbox.rs` (the messages still queued at the handover,
   saved for the next daemon and requeued by it), `reporting.rs`, `capacity_retry.rs` (the retries of a Codex turn that stopped at its model's capacity; its
   waits live in `AppState::capacity_retries`), `sharing.rs`, `naming.rs` (how a message names a session, a place, a
@@ -250,12 +250,18 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
 ### Running sessions
 
 - `src/holder/` ([README](../../apps/daemon/src/holder/README.md)) — process holders: the `octoboardd holder` process that
-  owns the PTYs of the programs the daemon starts so they outlive it, and the daemon's side that links to them, adopts
-  what they kept running and answers the helper requests they relay; `protocol.rs`, `registry.rs`, `compat.rs`, `build.rs`,
+  owns the PTYs of the programs the daemon starts so they outlive it (and the provider's private server a terminal
+  attaches to, as its provider-neutral companion), and the daemon's side that links to them, adopts what they kept
+  running and answers the helper requests they relay; `protocol.rs`, `registry.rs`, `compat.rs`, `build.rs`,
   `quit_targets.rs` (the application's quit record), `server/` and `client/`.
 - `src/terminal/` — PTY processes and what clients see of them (`backend.rs` where a terminal and its program live,
   `Backend::Local` (`platform::term`'s) or `Backend::Held` (a holder's), and `start`, which production spawn sites go
-  through; `pty.rs` `PtyCore`, the lifecycle over a terminal either backend started: the reader thread, input (`lock_input` takes the lock on the platform `Pty`, which every
+  through, and `Helpers::server_host`, which picks where a launch's private server runs; `server_host.rs` where that
+  server runs (`ServerHost` and `RunningServer`: open its endpoint, start it, wait for it, end it, with the provider
+  saying what to run and how readiness shows; `LocalHost` has the daemon run it as a child it owns, for a terminal that
+  runs in the daemon, `HeldHost` has the holder that runs the terminal start it as the terminal's companion so that it
+  outlives the daemon; `FoundServer`, the server a holder lists with an adopted terminal; none for a holder that runs
+  no companions, which leaves the launch its ordinary terminal); `pty.rs` `PtyCore`, the lifecycle over a terminal either backend started: the reader thread, input (`lock_input` takes the lock on the platform `Pty`, which every
   write into the terminal is made under), freezing, exit observation, scratch directory and crash-cleanup entry,
   `fan.rs` the output fan-out of parsed screen, replay ring and attached clients, which also keeps each client's
   requested size and applies the most recently active client's (a client attaching to a live terminal
@@ -297,13 +303,15 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   `MessageTransport` where the launch started the provider's own server, otherwise the guarded bracketed-paste write
   (`send_message_with_id` says which way it went, a `Route`); a transport also starts the server's queue and says what
   came of it (`start_queue` gives a `QueueStart`: nothing waited, how many started, how many wait behind messages someone
-  else queued, or that it could not be told); `PrivateServer`, how a launch starts that server,
+  else queued, or that it could not be told); `PrivateServer`, how a launch starts that server through a `ServerHost`,
   `LaunchPlan::private_server`, with `StartedServer` and `TransportEvents`, which `register_live` attaches so a transport
   can retry its queue, hand over the notice that messages are held and the code of that notice once they went in (the
   state layer only broadcasts them), and end the terminal when the server dies; `UncertainSubmission`, the error of a
   write whose acceptance is unknown, which holds the session's later messages; `RefusedByAgent`, the error of a message
   the agent's own queue refused outright, which fails that message to its sender, coded `message_refused`, while the
-  queue behind it goes on, and `HeldByServer`, that of a message the server holds back for now; `AfterExit`, the work a launch leaves for once its process has exited: `LaunchPlan::after_exit`), `draft.rs`,
+  queue behind it goes on, and `HeldByServer`, that of a message the server holds back for now; `AfterExit`, the work a launch leaves for once its process has exited: `LaunchPlan::after_exit`;
+  `before_scratch_removal`, what a launch and an adopted session both do once the process is reaped: stop the transport and run
+  `AfterExit`), `draft.rs`,
   `swap.rs`, `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the `TrustCarrier` interface of a provider that records the trust in
   a per-session home; `screen.rs` reads a provider's screen off the recent output, or off the parsed screen where
   `TermFacts::host_renders` says the output is the host's repaint, `TrustState::reads_screen`; there Codex's watch ends
@@ -351,9 +359,10 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   processes the daemon starts (leading a session or a process group, the child handle that tells how an unreaped child stands, asks
   it to end politely or kills it, sweeps what it left behind and reaps it, the containment that tells one launch's processes from any
   other's and lists their members where the host can (on Windows a named job per launch, which each child holds a duplicated handle on so the next daemon finds it by name again; on Linux, for an agent launch (`Containment::for_launch`), a cgroup v2 group `cgroup.rs` makes below the cgroup of the process that starts the launch where that cgroup lets it, which the launch's end kills and removes after moving out what it is told to spare, and without which the launch is told by its tag alone; a holder starting a launch's program joins the daemon's group, `Containment::join_launch`), a polite request to end or a kill sent to a process or a group, the process
-  identity and its wire form, the bounded pipe reader, the host's request to end the daemon (`shutdown_requested`), its planned-restart request (`restart_requested`, which `request_restart` sends: `SIGUSR1` on Unix, none on Windows), whether a systemd service runs the daemon as its main process (`restarted_by_service_manager`), the watch on the application that started it (`watch_parent`), `run_in_background` (with `runs_in_background`, whether the host can), what `start` asks of the host to keep the daemon running after its login (a session of its own on Unix; refused on Windows), starting a process that outlives the daemon (`start_detached`: a session of its own on Unix; on Windows no console or inherited handle and outside the daemon's jobs, by breakaway or else as a child of the desktop application's process, or with a warning in the job when there is none to name or a child of it cannot be created), and `crash/`, the table that kills every process the daemon runs on a PTY
+  identity and its wire form, the bounded pipe reader, the host's request to end the daemon (`shutdown_requested`), its planned-restart request (`restart_requested`, which `request_restart` sends: `SIGUSR1` on Unix, none on Windows), whether a systemd service runs the daemon as its main process (`restarted_by_service_manager`), the watch on the application that started it (`watch_parent`), `run_in_background` (with `runs_in_background`, whether the host can), what `start` asks of the host to keep the daemon running after its login (a session of its own on Unix; refused on Windows), starting a process that outlives the daemon (`start_detached`: a session of its own on Unix; on Windows no console or inherited handle and outside the daemon's jobs, by breakaway or else as a child of the desktop application's process, or with a warning in the job when there is none to name or a child of it cannot be created), `server.rs`, a server started as a plain child with no terminal (`ServerChild`: a session of its own, in a launch's containment and the crash table,
+  waited on until its endpoint exists or it reports a port, ended with a polite request, a grace and a kill; what the holder's companions and the daemon's local servers both run as), and `crash/`, the table that kills every process the daemon runs on a PTY
   when it goes down on an internal failure; contract tests in `proc/contract_tests.rs`); `term/` the terminal backend
-  (starting a process on a PTY from a plain command description, with its child handle; the `Pty` that is read, written,
+  (starting a process on a PTY from a plain command description (`Command`, which `plain` turns into a process command for a child with no terminal), with its child handle; the `Pty` that is read, written,
   resized and hung up, and tells whose job its foreground is and its slave path; the daemon's own `Input` values, encoded
   as the host's terminal takes them (`vt.rs`); `TermFacts`, how the backend behaves where business code must know, such
   as its settle window; contract tests in `term/contract_tests.rs`; on Windows the pseudoconsole is ConPTY, run on the bundled `conpty.dll` beside the daemon's executable when it loads, which starts `OpenConsole.exe` from the same directory or from a subdirectory named for the machine's native architecture (`x64` or `arm64`, which an x64 daemon emulated on ARM64 reads as `arm64`): the installer ships the x64 `conpty.dll` with an `OpenConsole.exe` in each of the two subdirectories (`scripts/fetch-conpty.mjs --installer`), so the x64 DLL on x64 hardware loads `x64\OpenConsole.exe` and under emulation on ARM64 finds `arm64\OpenConsole.exe`; with no DLL, or one that fails to load, the system's pseudoconsole is used (a failed load is logged as a warning), and a DLL that finds no `OpenConsole.exe` starts the inbox console host, which is logged as a warning); on Windows the output is drained after a close that races the last reader's drop, quit keys of a polite stop wait behind a bracketed paste being written rather than landing inside it, and a failed wait in a transfer is reported as an error; `random/` bytes from the host's random source; `policy/` what an administrator sets for a product: the directory they keep its managed files in (`managed_dir`), a Unix program's system configuration directory under `/etc`, none on Windows (`system_config_dir`), and its
@@ -361,9 +370,10 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   `registry.rs`, the Windows-only reader of registry string values; `test_helper.rs` the test binary re-run as the
   helper process both contract suites start; `ipc/` the private channel a child of the daemon listens on for the daemon's
   connections alone (`PrivateListen` made before the child starts, which is a Unix socket in a directory only the user can
-  enter, or, on Windows, a loopback port guarded by a token the daemon hands the child; its
+  enter (`socket`, offered where `offers_socket`) or a loopback port guarded by a token the daemon hands the child
+  (`loopback`, which Windows uses); its
   `Address`, `Socket(path)` or `Loopback { token }`, and `Connection`, which connects to either and reads and writes within
-  timeouts; Codex's session server is the user: `adapter/codex/transport/`); `HostFacts` (os, path style, file links, whether the host can be held awake, and the host's words for its Trash and settings app; the snapshot's `host`) in `mod.rs`.
+  timeouts; Codex's session server is the user, `adapter/codex/transport/`, through `terminal::server_host`); `HostFacts` (os, path style, file links, whether the host can be held awake, and the host's words for its Trash and settings app; the snapshot's `host`) in `mod.rs`.
 
 ### Agent records, hooks, adapters and MCP
 
@@ -444,7 +454,8 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   own queue, loading the conversation again when Codex unloaded it, starting the queue after a cancel, and the notice
   that messages are held, `held_notice`, coded `provider.codex.messages_held`; `rpc.rs` the JSON-RPC stream, the
   endpoint a client and the terminal connect to, and `Rpc` (its stream is a `platform::ipc::Connection`); `server.rs`
-  starting the server on a `platform::ipc::PrivateListen`, waiting for it to listen and watching it exit; the transport
+  starting the server through the launch's `ServerHost` (the endpoint it listens on, the arguments and readiness it
+  asks), and watching it exit; `CodexTransport::adopt` links to the server a holder kept running with an adopted terminal; the transport
   names no OS; `resume.rs` what a
   remote resume needs of the server, the trust of the generated hooks and the `thread/resume` that applies the
   permission preset), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`); Codex, Claude
@@ -631,7 +642,8 @@ New code uses these rather than a second implementation. None is enforced by a c
 | List every process id | `platform::proc_table::pids::all` (only `platform::proc::crash` keeps its own listing, which must not allocate) |
 | Run a spawned process within bounds | `src/processes/subprocess.rs` (`run_bounded`, `run_exchange`, `Bounds`; `run_to_file` for a command that is to outlive the daemon, its output going to a file rather than a pipe) |
 | Lead a session, signal a process or a group, sweep a session; wait for the host's request to end the daemon, watch the application's process; tell a launch's processes apart (`Containment`) and stop or kill a child (`ChildHandle`) | `platform::proc` |
-| Listen on a private channel for a child process, and connect to it | `platform::ipc` (`PrivateListen`, `Address`, `Connection`); the caller owns what travels over it (Codex's is `src/adapter/codex/transport/`) |
+| Listen on a private channel for a child process, and connect to it | `platform::ipc` (`PrivateListen`, `Address`, `Connection`); the caller owns what travels over it (Codex's is `src/adapter/codex/transport/`); a provider's private server for a launch goes through `terminal::server_host`, which makes the `PrivateListen` where the daemon runs the server |
+| Run a provider's private server for a launch (in the daemon, or in the holder that outlives it) | `ServerHost` (`src/terminal/server_host.rs`), given by `terminal::backend::Helpers::server_host` to `PrivateServer::start`; the holder side is its companions ([README](../../apps/daemon/src/holder/README.md)); a provider links to the server a holder kept through `AgentProvider::rebuild_launch` |
 | Start a terminal and its program for the daemon (it lives in a holder, or in this process where none is installed) | `terminal::backend::start` with `Helpers::issue` for the launch's helper credentials (`src/terminal/backend.rs`); the lifecycle around it is `terminal::pty::PtyCore`. `platform::term::spawn` is what the local backend and the holder itself call |
 | Write the daemon's own paste or key into a terminal | `platform::term` (`Pty::write_input` with `Input`), which a held terminal answers over the link (`holder::client::HeldTerminal`) |
 | Check a request's Origin and Host, compare a key, make a key | `src/request_guard.rs` (`headers_allowed`, `key_matches`, `same_secret`, `generate_key`); the daemon's guard is `src/server/access.rs`, and a holder's helper routes use it too |

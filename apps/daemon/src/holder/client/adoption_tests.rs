@@ -27,6 +27,7 @@ fn spec(id: &str) -> SpawnSpec {
         containment: None,
         kill_session_leftovers: false,
         meta: serde_json::Value::Null,
+        companion: false,
     }
 }
 

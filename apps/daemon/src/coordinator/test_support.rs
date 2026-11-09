@@ -421,6 +421,7 @@ pub(super) fn left_running_script(
             containment: None,
             kill_session_leftovers: false,
             meta,
+            companion: false,
         })
         .expect("the program starts in the holder");
     let pid = held.pid().0 as i32;

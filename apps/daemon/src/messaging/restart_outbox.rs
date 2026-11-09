@@ -11,8 +11,9 @@
 //! written again whole. The outbox takes no message once saved, and a delivery asked for then is
 //! refused with `daemon_shutting_down`, which the sender may try again once the next daemon is up.
 //!
-//! The next daemon queues the messages again as it reads them, in order, each id once, and once
-//! its adoption is over writes them into each session it adopted with the same launch: the process
+//! The next daemon queues the messages again as it reads them, in order, each id once, each under
+//! the ticket it had where it can (see `SavedMessage::ticket`), and once its adoption is over
+//! writes them into each session it adopted with the same launch: the process
 //! the messages were queued for. A session that is not running that launch any more gets none of
 //! them, as a session whose process ended with messages queued gets none; a message kept in the
 //! store stays there for the session's next resume.
@@ -27,7 +28,9 @@ use serde::{Deserialize, Serialize};
 use crate::hostfs::replace::{remove_replaced, replace_beside, Permissions};
 use crate::state::AppState;
 
-/// The version of the file's format this build writes and reads; a file of another is dropped.
+/// The version of the file's format this build writes and reads; a file of another is dropped. A
+/// field added with a serde default and skipped when empty keeps it: an earlier build reads a newer
+/// file ignoring the field, and a newer build reads an older file without it.
 const VERSION: u32 = 1;
 
 /// How long the queues are kept open, once no message is accepted any more, for a drain still
@@ -53,6 +56,12 @@ struct SavedMessage {
     /// The launch of the session's process it was queued for.
     launch: String,
     text: String,
+    /// The message's ticket in the stopping daemon's outbox. The next daemon queues it under the
+    /// same one, so the id it is written to an agent's own queue under stays the same and a message
+    /// the agent already took is not added again. A file without it (an earlier build's) queues
+    /// under a new ticket.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ticket: Option<u64>,
     /// The store row it is also kept in (`Store::add_kept_message`), deleted once it is written.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     kept_row: Option<i64>,
@@ -114,6 +123,7 @@ impl AppState {
                         session: session.clone(),
                         launch: live.launch_id.clone(),
                         text,
+                        ticket: Some(ticket),
                         kept_row,
                     }),
             );
@@ -158,11 +168,15 @@ impl AppState {
             if !seen.insert(message.id.clone()) {
                 continue;
             }
-            match message.kept_row {
-                Some(row) => {
+            match (message.ticket, message.kept_row) {
+                (Some(ticket), kept_row) => {
+                    self.outbox
+                        .push_restored(&message.session, &message.text, kept_row, ticket);
+                }
+                (None, Some(row)) => {
                     self.outbox.push_kept(&message.session, &message.text, row);
                 }
-                None => {
+                (None, None) => {
                     self.outbox.push(&message.session, &message.text);
                 }
             }
@@ -203,6 +217,8 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use crate::messaging::delivery::{write_message, WhenBlocked};
     use crate::protocol::{error_code, AgentId, SessionStatus};
     use crate::state::test_support::insert_record;
@@ -260,6 +276,81 @@ mod tests {
         next.load_restart_outbox(&path);
         next.end_adoption();
         assert_eq!(next.queued_count("s"), 0);
+    }
+
+    /// A message crosses a planned stop under the ticket it had, kept row included, in its queue's
+    /// order, and a message queued after it in the next daemon gets a greater one: the id an
+    /// agent's own queue knows it by stays the same, and nothing repeats it.
+    #[tokio::test]
+    async fn a_saved_message_is_queued_again_under_its_ticket() {
+        let (state, dir) = app_state("restart-outbox-ticket");
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
+        state.register_live(live);
+        let one = state.outbox.push("s", "one").expect("accepted");
+        let kept = state.outbox.push_kept("s", "kept", 7).expect("accepted");
+        let two = state.outbox.push("s", "two").expect("accepted");
+        let path = dir.join("restart-outbox.json");
+        assert_eq!(state.save_restart_outbox(&path), 3);
+
+        let (next, _next_dir) = app_state("restart-outbox-ticket-next");
+        next.begin_adoption();
+        next.load_restart_outbox(&path);
+        let later = next.outbox.push("s", "later").expect("accepted");
+        let queued = next.outbox.seal(Duration::ZERO);
+        let [(session, messages)] = queued.as_slice() else {
+            panic!("expected one queue, got {queued:?}");
+        };
+        assert_eq!(session, "s");
+        assert_eq!(
+            messages,
+            &[
+                (one, "one".to_string(), None),
+                (kept, "kept".to_string(), Some(7)),
+                (two, "two".to_string(), None),
+                (later, "later".to_string(), None),
+            ]
+        );
+        assert!(
+            later > two,
+            "{later} repeats or precedes a restored ticket {two}"
+        );
+    }
+
+    /// A file an earlier build wrote has no tickets: its messages are queued under new ones, in
+    /// order, as before.
+    #[tokio::test]
+    async fn a_file_without_tickets_queues_under_new_ones() {
+        let (state, dir) = app_state("restart-outbox-no-ticket");
+        let path = dir.join("restart-outbox.json");
+        std::fs::write(
+            &path,
+            r#"{"version":1,"messages":[
+                {"id":"t-1","session":"s","launch":"l","text":"one"},
+                {"id":"t-2","session":"s","launch":"l","text":"kept","kept_row":7}]}"#,
+        )
+        .unwrap();
+        state.begin_adoption();
+        state.load_restart_outbox(&path);
+        let queued = state.outbox.seal(Duration::ZERO);
+        let [(_, messages)] = queued.as_slice() else {
+            panic!("expected one queue, got {queued:?}");
+        };
+        let texts: Vec<_> = messages.iter().map(|(_, text, _)| text.as_str()).collect();
+        assert_eq!(texts, ["one", "kept"]);
+        assert_eq!(messages[1].2, Some(7));
+        assert!(messages[0].0 < messages[1].0);
+    }
+
+    /// A restored ticket a queued message already holds is not given twice.
+    #[test]
+    fn a_ticket_already_queued_is_not_reused() {
+        let outbox = crate::messaging::outbox::Outbox::seeded_from_clock();
+        let first = outbox.push("s", "one").expect("accepted");
+        let restored = outbox
+            .push_restored("s", "two", None, first)
+            .expect("accepted");
+        assert_ne!(restored, first);
+        assert!(outbox.push("s", "three").expect("accepted") > restored);
     }
 
     /// With nothing queued, a planned stop leaves no file, and removes one an earlier stop left.

@@ -43,6 +43,67 @@ pub struct SpawnSpec {
     /// the handshake, and reads none of it.
     #[serde(default)]
     pub meta: Value,
+    /// The terminal binds the companion started under its id ([`ToHolder::StartCompanion`]): the
+    /// spawn is refused when that companion is missing or has exited, so no terminal is attached
+    /// to a dead server. Without it, any companion left under the id is ended and the terminal
+    /// starts unbound. False from builds that predate companions.
+    #[serde(default)]
+    pub companion: bool,
+}
+
+/// The endpoint a companion is to listen on ([`ToHolder::OpenEndpoint`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum EndpointKind {
+    /// A socket named `name` in a new owner-only directory under `/tmp` whose name starts with
+    /// `prefix`. Both are plain names, never paths.
+    Socket { prefix: String, name: String },
+    /// A loopback port the companion chooses and reports, guarded by a new random token.
+    Loopback,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Where a companion listens, as the holder opened it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CompanionEndpoint {
+    /// The socket at `path`, which the companion makes once it listens.
+    Socket { path: String },
+    /// A loopback port guarded by `token`; `port` is absent until the companion reports it.
+    Loopback {
+        token: String,
+        #[serde(default)]
+        port: Option<u16>,
+    },
+    #[serde(other)]
+    Unknown,
+}
+
+/// How a companion shows it is ready ([`ToHolder::StartCompanion`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Ready {
+    /// The socket path of the endpoint appears (it may be a link to a socket elsewhere).
+    SocketExists,
+    /// A line of the companion's output holds a non-zero port number right after `prefix`, which
+    /// the holder reports.
+    PortAfter { prefix: String },
+    #[serde(other)]
+    Unknown,
+}
+
+/// A terminal's companion, as the handshake lists it with its terminal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompanionInfo {
+    pub endpoint: CompanionEndpoint,
+    pub pid: u32,
+    /// The process's `<pid>:<start>`, when its start time could be read.
+    #[serde(default)]
+    pub identity: Option<String>,
+    /// The companion no longer runs.
+    #[serde(default)]
+    pub exited: bool,
 }
 
 /// A signal by what is meant.
@@ -217,6 +278,36 @@ pub enum ToHolder {
         req: u64,
         token: String,
     },
+    /// Opens the endpoint the companion of the terminal `id` is to listen on, answered by
+    /// [`FromHolder::EndpointOpened`]. The holder owns what it opens: the directory of a socket is
+    /// removed when the companion ends. An endpoint still open under `id` without a terminal is
+    /// ended first. Sent only to a holder whose welcome says it runs companions (`companions`), as
+    /// are the two below.
+    OpenEndpoint {
+        id: String,
+        req: u64,
+        kind: EndpointKind,
+    },
+    /// Starts the companion of the terminal `id` on the endpoint opened for it, answered by
+    /// [`FromHolder::CompanionStarted`] once it is ready, has exited or was not ready within
+    /// `ready_within_ms`; one that is not ready is ended. `command` runs over the daemon's own
+    /// environment and working directory as a spawn's does, in the launch's `containment`.
+    StartCompanion {
+        id: String,
+        req: u64,
+        command: Box<Command>,
+        ready: Ready,
+        ready_within_ms: u64,
+        #[serde(default)]
+        containment: Option<ContainmentSpec>,
+    },
+    /// Ends the companion of the terminal `id` while no terminal has bound it, removing its
+    /// endpoint, answered by [`FromHolder::Done`]. A companion its terminal has bound ends with
+    /// the terminal, and the request is answered with an error.
+    EndCompanion {
+        id: String,
+        req: u64,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -289,6 +380,10 @@ pub struct TerminalInfo {
     /// mark begins in it. Absent from builds that predate handovers.
     #[serde(default)]
     pub handover: Option<HandoverTail>,
+    /// The companion the terminal bound at its spawn, whether it still runs or not. Absent from
+    /// builds that predate companions, and for a terminal started unbound.
+    #[serde(default)]
+    pub companion: Option<CompanionInfo>,
 }
 
 /// What a query is answered with.
@@ -415,6 +510,11 @@ pub enum FromHolder {
         /// which are never sent one.
         #[serde(default)]
         handover: bool,
+        /// The holder runs companions ([`ToHolder::OpenEndpoint`], [`ToHolder::StartCompanion`],
+        /// [`ToHolder::EndCompanion`]). False from builds that predate them, which are sent none
+        /// of those frames.
+        #[serde(default)]
+        companions: bool,
     },
     Spawned {
         id: String,
@@ -481,6 +581,33 @@ pub enum FromHolder {
     /// The terminal `id` is handed over ([`ToHolder::Handover`]): every frame of its output for
     /// this link came before this one, and none comes after it.
     HandoverMark {
+        id: String,
+    },
+    /// The answer to [`ToHolder::OpenEndpoint`]: the endpoint, or why there is none.
+    EndpointOpened {
+        req: u64,
+        #[serde(default)]
+        endpoint: Option<CompanionEndpoint>,
+        #[serde(default)]
+        error: Option<String>,
+    },
+    /// The answer to [`ToHolder::StartCompanion`]: the companion's process and the port it
+    /// reported, or why it is not running.
+    CompanionStarted {
+        req: u64,
+        #[serde(default)]
+        pid: Option<u32>,
+        #[serde(default)]
+        identity: Option<String>,
+        #[serde(default)]
+        port: Option<u16>,
+        #[serde(default)]
+        error: Option<String>,
+    },
+    /// The companion of the terminal `id` exited by itself: neither on
+    /// [`ToHolder::EndCompanion`] nor after its terminal's exit. A terminal that bound it is being
+    /// ended.
+    CompanionEnded {
         id: String,
     },
     #[serde(other)]
@@ -607,6 +734,7 @@ mod tests {
             }),
             kill_session_leftovers: true,
             meta: serde_json::json!({"kind": "shell"}),
+            companion: false,
         }));
         let ToHolder::Spawn(back) = round_trip(&spawn) else {
             panic!("not a spawn");
@@ -793,6 +921,291 @@ mod tests {
         };
         let error = error.expect("the error").into_io();
         assert_eq!((written, error.kind()), (12, io::ErrorKind::TimedOut));
+    }
+
+    #[test]
+    fn the_frames_that_ask_for_a_companion_cross_the_link() {
+        let open = ToHolder::OpenEndpoint {
+            id: "t".into(),
+            req: 3,
+            kind: EndpointKind::Socket {
+                prefix: "octo-cdx".into(),
+                name: "rpc".into(),
+            },
+        };
+        let text = serde_json::to_string(&open).unwrap();
+        assert!(text.contains(r#""type":"open_endpoint""#), "{text}");
+        let ToHolder::OpenEndpoint { id, req, kind } = round_trip(&open) else {
+            panic!("not an open_endpoint");
+        };
+        assert_eq!(
+            (id.as_str(), req, kind),
+            (
+                "t",
+                3,
+                EndpointKind::Socket {
+                    prefix: "octo-cdx".into(),
+                    name: "rpc".into()
+                }
+            )
+        );
+        let loopback = ToHolder::OpenEndpoint {
+            id: "t".into(),
+            req: 4,
+            kind: EndpointKind::Loopback,
+        };
+        assert!(matches!(
+            round_trip(&loopback),
+            ToHolder::OpenEndpoint {
+                kind: EndpointKind::Loopback,
+                ..
+            }
+        ));
+
+        let mut command = Command::new("/bin/echo");
+        command.args(["a b"]).env_clear().env("K", "v").cwd("/tmp");
+        let start = ToHolder::StartCompanion {
+            id: "t".into(),
+            req: 5,
+            command: Box::new(command),
+            ready: Ready::PortAfter {
+                prefix: "listening on: ".into(),
+            },
+            ready_within_ms: 15_000,
+            containment: Some(ContainmentSpec {
+                instance: "i".into(),
+                launch: "l".into(),
+            }),
+        };
+        let text = serde_json::to_string(&start).unwrap();
+        assert!(text.contains(r#""type":"start_companion""#), "{text}");
+        let ToHolder::StartCompanion {
+            id,
+            req,
+            command,
+            ready,
+            ready_within_ms,
+            containment,
+        } = round_trip(&start)
+        else {
+            panic!("not a start_companion");
+        };
+        let ToHolder::StartCompanion {
+            command: sent_command,
+            ..
+        } = start
+        else {
+            unreachable!()
+        };
+        assert_eq!(format!("{command:?}"), format!("{sent_command:?}"));
+        assert_eq!((id.as_str(), req, ready_within_ms), ("t", 5, 15_000));
+        assert_eq!(
+            ready,
+            Ready::PortAfter {
+                prefix: "listening on: ".into()
+            }
+        );
+        assert_eq!(
+            containment,
+            Some(ContainmentSpec {
+                instance: "i".into(),
+                launch: "l".into()
+            })
+        );
+
+        let end = ToHolder::EndCompanion {
+            id: "t".into(),
+            req: 6,
+        };
+        let text = serde_json::to_string(&end).unwrap();
+        assert!(text.contains(r#""type":"end_companion""#), "{text}");
+        assert!(matches!(
+            round_trip(&end),
+            ToHolder::EndCompanion { id, req: 6 } if id == "t"
+        ));
+    }
+
+    #[test]
+    fn what_the_holder_says_of_a_companion_crosses_the_link() {
+        let opened = FromHolder::EndpointOpened {
+            req: 3,
+            endpoint: Some(CompanionEndpoint::Loopback {
+                token: "tok".into(),
+                port: Some(4321),
+            }),
+            error: None,
+        };
+        let FromHolder::EndpointOpened {
+            req,
+            endpoint,
+            error,
+        } = round_trip(&opened)
+        else {
+            panic!("not an endpoint_opened");
+        };
+        assert_eq!(
+            (req, endpoint, error),
+            (
+                3,
+                Some(CompanionEndpoint::Loopback {
+                    token: "tok".into(),
+                    port: Some(4321)
+                }),
+                None
+            )
+        );
+        let started = FromHolder::CompanionStarted {
+            req: 5,
+            pid: Some(77),
+            identity: Some("77:1000".into()),
+            port: Some(4321),
+            error: None,
+        };
+        let FromHolder::CompanionStarted {
+            req,
+            pid,
+            identity,
+            port,
+            error,
+        } = round_trip(&started)
+        else {
+            panic!("not a companion_started");
+        };
+        assert_eq!(
+            (req, pid, identity.as_deref(), port, error),
+            (5, Some(77), Some("77:1000"), Some(4321), None)
+        );
+        let ended = FromHolder::CompanionEnded { id: "t".into() };
+        let text = serde_json::to_string(&ended).unwrap();
+        assert!(text.contains(r#""type":"companion_ended""#), "{text}");
+        assert!(matches!(
+            round_trip(&ended),
+            FromHolder::CompanionEnded { id } if id == "t"
+        ));
+        let socket = CompanionEndpoint::Socket {
+            path: "/tmp/octo-cdx-1/rpc".into(),
+        };
+        assert_eq!(round_trip(&socket), socket);
+    }
+
+    #[test]
+    fn a_terminal_lists_its_companion_and_a_spawn_names_whether_it_binds_one() {
+        let info = TerminalInfo {
+            id: "t".into(),
+            pid: 3,
+            identity: None,
+            size: None,
+            meta: Value::Null,
+            exited: false,
+            handover: None,
+            companion: Some(CompanionInfo {
+                endpoint: CompanionEndpoint::Socket {
+                    path: "/tmp/octo-cdx-1/rpc".into(),
+                },
+                pid: 9,
+                identity: Some("9:5".into()),
+                exited: true,
+            }),
+        };
+        let back = round_trip(&info);
+        assert_eq!(back.companion, info.companion);
+
+        let mut spec = SpawnSpec {
+            id: "t".into(),
+            command: Command::new("/bin/echo"),
+            size: Size { rows: 24, cols: 80 },
+            containment: None,
+            kill_session_leftovers: false,
+            meta: Value::Null,
+            companion: true,
+        };
+        assert!(round_trip(&spec).companion);
+        spec.companion = false;
+        assert!(!round_trip(&spec).companion);
+    }
+
+    #[test]
+    fn a_welcome_or_terminal_from_a_holder_without_companions_reads_as_having_none() {
+        let welcome: FromHolder = serde_json::from_str(
+            r#"{"type":"welcome","holder_id":"h","instance_id":"i","version":"v","build_id":"b",
+                "last_parting":"none","terminals":[],"facts":{},"handover":true}"#,
+        )
+        .unwrap();
+        let FromHolder::Welcome { companions, .. } = welcome else {
+            panic!("not a welcome");
+        };
+        assert!(!companions);
+        let info: TerminalInfo = serde_json::from_str(r#"{"id":"t","pid":3}"#).unwrap();
+        assert_eq!(info.companion, None);
+        // A spawn from a daemon that predates companions binds none.
+        let mut sent = serde_json::to_value(ToHolder::Spawn(Box::new(SpawnSpec {
+            id: "t".into(),
+            command: Command::new("/bin/echo"),
+            size: Size { rows: 24, cols: 80 },
+            containment: None,
+            kill_session_leftovers: false,
+            meta: Value::Null,
+            companion: true,
+        })))
+        .unwrap();
+        sent.as_object_mut().unwrap().remove("companion");
+        let spawn: ToHolder = serde_json::from_value(sent).unwrap();
+        let ToHolder::Spawn(spec) = spawn else {
+            panic!("not a spawn: {spawn:?}");
+        };
+        assert!(!spec.companion);
+        // A companion listed with only what the first builds that ran one sent.
+        let companion: CompanionInfo =
+            serde_json::from_str(r#"{"endpoint":{"kind":"loopback","token":"tok"},"pid":4}"#)
+                .unwrap();
+        assert_eq!(
+            companion,
+            CompanionInfo {
+                endpoint: CompanionEndpoint::Loopback {
+                    token: "tok".into(),
+                    port: None
+                },
+                pid: 4,
+                identity: None,
+                exited: false,
+            }
+        );
+    }
+
+    #[test]
+    fn an_endpoint_or_readiness_a_later_build_adds_is_read_as_unknown() {
+        let kind: EndpointKind =
+            serde_json::from_str(r#"{"kind":"named_pipe","name":"x"}"#).unwrap();
+        assert_eq!(kind, EndpointKind::Unknown);
+        let ready: Ready = serde_json::from_str(r#"{"kind":"http_ok","url":"x"}"#).unwrap();
+        assert_eq!(ready, Ready::Unknown);
+        let endpoint: CompanionEndpoint =
+            serde_json::from_str(r#"{"kind":"named_pipe","name":"x"}"#).unwrap();
+        assert_eq!(endpoint, CompanionEndpoint::Unknown);
+        // Inside a frame, which is then still read.
+        let open: ToHolder = serde_json::from_str(
+            r#"{"type":"open_endpoint","id":"t","req":1,"kind":{"kind":"named_pipe"}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            open,
+            ToHolder::OpenEndpoint {
+                kind: EndpointKind::Unknown,
+                ..
+            }
+        ));
+        let opened: FromHolder = serde_json::from_str(
+            r#"{"type":"endpoint_opened","req":1,"endpoint":{"kind":"named_pipe"}}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            opened,
+            FromHolder::EndpointOpened {
+                endpoint: Some(CompanionEndpoint::Unknown),
+                error: None,
+                ..
+            }
+        ));
     }
 
     #[test]

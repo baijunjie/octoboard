@@ -3,33 +3,43 @@ use std::sync::atomic::AtomicUsize;
 
 use tokio_tungstenite::tungstenite::{self, Message, WebSocket};
 
-use super::server::Listen;
 use super::*;
+use crate::platform::ipc::PrivateListen;
+#[cfg(unix)]
+use crate::platform::proc::Containment;
+use crate::platform::term::Command;
 use crate::session::term::QueueStart;
+#[cfg(unix)]
+use crate::terminal::server_host::{LocalHost, LocalServer};
+use crate::terminal::server_host::{ServerListen, ServerReady};
 use crate::test_support::PATIENCE;
 
 /// A transport to `endpoint`, with no server process behind it.
-fn fixture_transport(endpoint: Endpoint, listen: Option<Listen>) -> CodexTransport {
+fn fixture_transport(endpoint: Endpoint) -> CodexTransport {
     CodexTransport {
         server: Arc::new(Mutex::new(None)),
         endpoint,
         shared: Arc::new(Shared::default()),
         operation: Mutex::new(()),
-        _listen: listen,
     }
 }
 
-/// A transport to a socket the test listens on, with no server process behind it.
+/// A transport to a socket the test listens on, with no server process behind it, and the
+/// private directory of the socket, removed when it is dropped.
 #[cfg(unix)]
-fn socket_transport() -> (CodexTransport, std::os::unix::net::UnixListener) {
-    let listen = Listen::for_host().unwrap();
+fn socket_transport() -> (
+    CodexTransport,
+    std::os::unix::net::UnixListener,
+    PrivateListen,
+) {
+    let listen = PrivateListen::socket("octo-cdx", "rpc").unwrap();
     let crate::platform::ipc::Address::Socket(socket) = listen.address() else {
         unreachable!("a Unix host listens on a socket");
     };
     let socket = socket.to_path_buf();
     let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
     let endpoint = Endpoint::Socket(socket);
-    (fixture_transport(endpoint, Some(listen)), listener)
+    (fixture_transport(endpoint), listener, listen)
 }
 
 /// A loopback transport, which every host can run, and the listener behind it.
@@ -41,7 +51,7 @@ fn loopback() -> (CodexTransport, TcpListener, String) {
         port,
         token: token.clone(),
     };
-    (fixture_transport(endpoint, None), listener, token)
+    (fixture_transport(endpoint), listener, token)
 }
 
 /// What the fake server answers a request with.
@@ -78,12 +88,17 @@ fn accepted(listener: &TcpListener) -> TcpStream {
 }
 
 /// Accepts a connection that presents `token`, and answers its handshake.
+fn initialized(listener: &TcpListener, token: &str) -> WebSocket<TcpStream> {
+    handshake(accepted(listener), token)
+}
+
+/// Answers the handshake and the initialization of the client on `stream`, which has to present
+/// `token`.
 #[allow(
     clippy::result_large_err,
     reason = "the handshake callback's error type is tungstenite's"
 )]
-fn initialized(listener: &TcpListener, token: &str) -> WebSocket<TcpStream> {
-    let stream = accepted(listener);
+fn handshake(stream: TcpStream, token: &str) -> WebSocket<TcpStream> {
     stream.set_read_timeout(Some(PATIENCE)).unwrap();
     let expected = format!("Bearer {token}");
     let mut socket = tungstenite::accept_hdr(
@@ -880,9 +895,9 @@ fn a_refused_start_on_an_unloaded_thread_loads_it_again() {
 #[cfg(unix)]
 #[test]
 fn an_unreachable_server_holds_the_message_once_the_conversation_is_known() {
-    let (transport, listener) = socket_transport();
+    let (transport, listener, _listen) = socket_transport();
     drop(listener);
-    *transport.server.lock().unwrap() = Some(stand_in_server("exec sleep 30"));
+    *transport.server.lock().unwrap() = Some(Box::new(stand_in_server("exec sleep 30", None)));
     assert!(matches!(
         transport.send("hello", "id").unwrap(),
         Sent::Declined(_)
@@ -893,7 +908,7 @@ fn an_unreachable_server_holds_the_message_once_the_conversation_is_known() {
         (error.written, error.error.kind()),
         (0, io::ErrorKind::WouldBlock)
     );
-    *transport.server.lock().unwrap() = Some(stand_in_server("exit 0"));
+    *transport.server.lock().unwrap() = Some(Box::new(stand_in_server("exit 0", None)));
     let deadline = Instant::now() + PATIENCE;
     while !transport.server_exited() {
         assert!(Instant::now() < deadline, "the stand-in did not exit");
@@ -1013,13 +1028,16 @@ fn resume_fingerprints_only_the_generated_session_flag_hook() {
 
 #[test]
 fn a_loopback_server_is_given_only_the_token_hash_and_the_terminal_reads_the_token() {
-    let listen = Listen::loopback().unwrap();
+    let listen = PrivateListen::loopback().unwrap();
     let crate::platform::ipc::Address::Loopback { token } = listen.address() else {
         unreachable!();
     };
     let token = token.to_string();
     assert_eq!(token.len(), 64);
-    let args = listen.server_args();
+    let args = server::server_args(&ServerEndpoint::Loopback {
+        token: token.clone(),
+        port: None,
+    });
     assert_eq!(
         args[..6],
         [
@@ -1076,35 +1094,29 @@ fn the_port_is_read_from_the_line_the_server_prints_once_it_listens() {
 #[test]
 fn a_line_that_is_not_utf8_does_not_stop_the_output_reader() {
     let output: &[u8] = b"codex \xff\xfe app-server\n  listening on: ws://127.0.0.1:4321\n";
-    let lines = server::read_lines_for_test(output);
+    let lines = crate::platform::proc::server::read_lines_for_test(output);
     assert_eq!(lines.len(), 2);
     assert_eq!(server::listening_port(&lines[1]), Some(4321));
 }
 
-/// A server process standing in for Codex's, running `script`.
+/// A server process standing in for Codex's, running `script`, the daemon's own as a local host
+/// starts it, listening on `listen` when given.
 #[cfg(unix)]
-fn stand_in_server(script: &str) -> ServerProcess {
-    use crate::platform::proc::{crash, ChildHandle, ProcessId, Reach};
+fn stand_in_server(script: &str, listen: Option<PrivateListen>) -> LocalServer {
+    use crate::platform::proc::server::ServerChild;
     let mut command = std::process::Command::new("/bin/sh");
     command.args(["-c", script]);
-    Reach::Session.lead(&mut command);
-    let child = command.spawn().unwrap();
-    let handle = ChildHandle::started(ProcessId(child.id()), Reach::Session, None).unwrap();
-    let crash_cleanup = crash::register(&handle, true);
-    ServerProcess {
-        child,
-        handle,
-        crash_cleanup,
-    }
+    let child = ServerChild::start(command, false, None, "stand-in server").unwrap();
+    LocalServer::new(child, listen)
 }
 
 #[cfg(unix)]
 #[test]
 fn stopping_the_session_reaps_its_server_and_removes_the_socket() {
-    let (transport, listener) = socket_transport();
-    let server = stand_in_server("exec sleep 30");
-    let pid = server.handle.pid();
-    *transport.server.lock().unwrap() = Some(server);
+    let (transport, listener, listen) = socket_transport();
+    let server = stand_in_server("exec sleep 30", Some(listen));
+    let pid = server.pid();
+    *transport.server.lock().unwrap() = Some(Box::new(server));
     transport.stop();
     assert!(!crate::platform::proc::crash::is_registered(pid));
     assert!(crate::platform::proc::unreaped_state(pid).is_none());
@@ -1131,9 +1143,9 @@ fn watch(transport: &CodexTransport, gone: Arc<AtomicBool>) {
 #[cfg(unix)]
 #[test]
 fn a_server_that_dies_ends_the_session_and_a_stopped_one_does_not() {
-    let (transport, _listener) = socket_transport();
+    let (transport, _listener, _listen) = socket_transport();
     let gone = Arc::new(AtomicBool::new(false));
-    *transport.server.lock().unwrap() = Some(stand_in_server("exit 3"));
+    *transport.server.lock().unwrap() = Some(Box::new(stand_in_server("exit 3", None)));
     watch(&transport, gone.clone());
     let deadline = Instant::now() + PATIENCE;
     while !gone.load(Ordering::Acquire) {
@@ -1144,9 +1156,9 @@ fn a_server_that_dies_ends_the_session_and_a_stopped_one_does_not() {
         std::thread::sleep(Duration::from_millis(20));
     }
 
-    let (transport, _listener) = socket_transport();
+    let (transport, _listener, _listen) = socket_transport();
     let gone = Arc::new(AtomicBool::new(false));
-    *transport.server.lock().unwrap() = Some(stand_in_server("exec sleep 30"));
+    *transport.server.lock().unwrap() = Some(Box::new(stand_in_server("exec sleep 30", None)));
     watch(&transport, gone.clone());
     transport.stop();
     std::thread::sleep(server::EXIT_POLL * 3);
@@ -1308,8 +1320,14 @@ fn start_fake(mode: &str) -> (Result<CodexTransport>, Vec<fake::Started>) {
         }),
     };
     let containment = Containment::create("test", "codex-fake-server").unwrap();
-    let started =
-        CodexTransport::start(&fake::binary(), &plan, &environment, &scratch, &containment);
+    let started = CodexTransport::start(
+        &fake::binary(),
+        &plan,
+        &environment,
+        &scratch,
+        &LocalHost::new(&containment),
+        "launch",
+    );
     let starts = fake::starts(&log);
     (started, starts)
 }
@@ -1364,7 +1382,7 @@ fn a_refused_permission_preset_fails_the_start_and_leaves_nothing() {
 fn a_server_that_exits_or_never_listens_fails_the_start() {
     let error = start_fake("exit").0.err().unwrap();
     assert!(
-        format!("{error:#}").contains("exited before becoming ready"),
+        format!("{error:#}").contains("exited before it was ready"),
         "{error:#}"
     );
     // A server that never listens; tried again until the fake had started within the short
@@ -1380,9 +1398,566 @@ fn a_server_that_exits_or_never_listens_fails_the_start() {
     };
     let error = started.err().unwrap();
     assert!(
-        format!("{error:#}").contains("did not start listening in time"),
+        format!("{error:#}").contains("was not ready in time"),
         "{error:#}"
     );
     assert!(gone(starts[0].pid));
     assert!(!starts[0].socket.parent().unwrap().exists());
+}
+
+/// A listener on a loopback port, and the token a client has to present to it.
+fn listening() -> (TcpListener, u16, String) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    (listener, port, "the-token".to_string())
+}
+
+/// A fake server that takes every connection on a thread of its own, for a transport that opens
+/// connections besides the one it sends over (the thread watch of an adopted one): each is answered
+/// as `answer` says, one request at a time, and the requests are kept. Stops taking connections
+/// when dropped.
+struct ServedAll {
+    requests: Arc<Mutex<Vec<(String, Value)>>>,
+    stop: Arc<AtomicBool>,
+    accepting: Option<std::thread::JoinHandle<()>>,
+}
+
+impl ServedAll {
+    fn start(
+        listener: TcpListener,
+        token: String,
+        answer: impl FnMut(&str, &Value) -> Answer + Send + 'static,
+    ) -> Self {
+        let requests = Arc::new(Mutex::new(Vec::new()));
+        let stop = Arc::new(AtomicBool::new(false));
+        let answer = Arc::new(Mutex::new(answer));
+        let (log, halt) = (requests.clone(), stop.clone());
+        listener.set_nonblocking(true).unwrap();
+        let accepting = std::thread::spawn(move || {
+            while !halt.load(Ordering::Acquire) {
+                match listener.accept() {
+                    Ok((stream, _)) => {
+                        stream.set_nonblocking(false).unwrap();
+                        let (token, answer, log) = (token.clone(), answer.clone(), log.clone());
+                        std::thread::spawn(move || serve_connection(stream, &token, &answer, &log));
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(_) => return,
+                }
+            }
+        });
+        Self {
+            requests,
+            stop,
+            accepting: Some(accepting),
+        }
+    }
+
+    fn requests(&self) -> Vec<(String, Value)> {
+        self.requests.lock().unwrap().clone()
+    }
+}
+
+impl Drop for ServedAll {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(accepting) = self.accepting.take() {
+            accepting.join().ok();
+        }
+    }
+}
+
+/// Answers the requests on one connection, as [`serve_one`] does, until the client goes.
+fn serve_connection<F: FnMut(&str, &Value) -> Answer>(
+    stream: TcpStream,
+    token: &str,
+    answer: &Mutex<F>,
+    log: &Mutex<Vec<(String, Value)>>,
+) {
+    let mut socket = handshake(stream, token);
+    while let Some(request) = receive(&mut socket) {
+        let method = request["method"].as_str().unwrap_or_default().to_string();
+        log.lock()
+            .unwrap()
+            .push((method.clone(), request["params"].clone()));
+        let outcome = {
+            let mut answer = answer.lock().unwrap();
+            (*answer)(&method, &request["params"])
+        };
+        let reply = match outcome {
+            Answer::Result(result) => json!({"id":request["id"],"result":result}),
+            Answer::Error(message) => {
+                json!({"id":request["id"],"error":{"code":-32600,"message":message}})
+            }
+            Answer::Close => {
+                let _ = socket.close(None);
+                let _ = socket.flush();
+                break;
+            }
+        };
+        if socket.send(Message::Text(reply.to_string())).is_err() {
+            break;
+        }
+    }
+}
+
+/// A server a holder runs, as the transport sees it: whether it has exited is the test's to say,
+/// and the times it was asked to end are counted. `with_terminal` says whether it ends with its
+/// terminal, as a holder's does.
+struct HeldStandIn {
+    gone: Arc<AtomicBool>,
+    ended: Arc<AtomicUsize>,
+    with_terminal: bool,
+}
+
+impl RunningServer for HeldStandIn {
+    fn exited(&self) -> bool {
+        self.gone.load(Ordering::Acquire)
+    }
+
+    fn end(&self) {
+        self.ended.fetch_add(1, Ordering::AcqRel);
+    }
+
+    fn ends_with_its_terminal(&self) -> bool {
+        self.with_terminal
+    }
+}
+
+/// A [`HeldStandIn`], with whether it is gone and how often it was asked to end.
+fn held_server(with_terminal: bool) -> (Box<dyn RunningServer>, Arc<AtomicBool>, Arc<AtomicUsize>) {
+    let gone = Arc::new(AtomicBool::new(false));
+    let ended = Arc::new(AtomicUsize::new(0));
+    let server = HeldStandIn {
+        gone: gone.clone(),
+        ended: ended.clone(),
+        with_terminal,
+    };
+    (Box::new(server), gone, ended)
+}
+
+/// The transport of the launch `launch` taken over by a daemon, to the server on `port`.
+fn adopted(
+    port: u16,
+    token: &str,
+    thread: Option<&str>,
+    server: Box<dyn RunningServer>,
+) -> CodexTransport {
+    CodexTransport::adopt(
+        ServerEndpoint::Loopback {
+            token: token.to_string(),
+            port: Some(port),
+        },
+        server,
+        "launch",
+        thread,
+    )
+    .expect("the endpoint names a port")
+}
+
+/// An adopted transport whose conversation is known queues for it at once: the connection it
+/// sends over is the only one, and nothing is read to find the conversation. A message of its
+/// launch is looked for in the queue before it is added.
+#[test]
+fn an_adopted_transport_with_the_conversation_known_queues_without_looking_for_it() {
+    let (listener, port, token) = listening();
+    let (server, _, _) = held_server(true);
+    let transport = adopted(port, &token, Some("main"), server);
+    assert_eq!(transport.shared.thread().as_deref(), Some("main"));
+    let serving = serve(listener, token, idle_main);
+    assert_eq!(transport.send("hello", "launch:7").unwrap(), Sent::Queued);
+    drop(transport);
+    let requests = serving.join().unwrap();
+    let methods = methods(&requests);
+    assert!(!methods.contains(&"thread/read"));
+    let position = |wanted: &str| methods.iter().position(|method| *method == wanted);
+    assert!(position("thread/queue/add").is_some(), "{methods:?}");
+    assert!(
+        position("thread/queue/list") < position("thread/queue/add"),
+        "{methods:?}"
+    );
+}
+
+/// Without the conversation the adopted transport finds it as any session's does: among the
+/// threads the server holds loaded, once a message is written.
+#[test]
+fn an_adopted_transport_without_the_conversation_finds_it_among_the_loaded_threads() {
+    let (listener, port, token) = listening();
+    let (server, _, _) = held_server(true);
+    let serving = ServedAll::start(listener, token.clone(), |method, params| match method {
+        "thread/loaded/list" => Answer::Result(json!({"data":["title","main"],"nextCursor":null})),
+        "thread/read" if params["threadId"] == "title" => {
+            Answer::Result(json!({"thread":thread("title", true, "thread_title", None)}))
+        }
+        "thread/read" => Answer::Result(json!({"thread":thread("main", false, "user", None)})),
+        other => idle_main(other, params),
+    });
+    let transport = adopted(port, &token, None, server);
+    assert_eq!(transport.shared.thread(), None);
+    assert_eq!(transport.send("hello", "launch:7").unwrap(), Sent::Queued);
+    assert_eq!(transport.shared.thread().as_deref(), Some("main"));
+    drop(transport);
+    assert!(methods(&serving.requests()).contains(&"thread/queue/add"));
+}
+
+/// A thread the user starts after the adoption is the session's conversation, which the watch
+/// the adoption opened learns, and the session's queue is written out again.
+#[test]
+fn an_adopted_transport_without_the_conversation_takes_the_user_thread_started_later() {
+    let (listener, port, token) = listening();
+    let (server, _, _) = held_server(true);
+    let transport = adopted(port, &token, None, server);
+    let ready = Arc::new(AtomicBool::new(false));
+    let seen = ready.clone();
+    transport.attach(TransportEvents {
+        ready: Box::new(move || seen.store(true, Ordering::Release)),
+        server_gone: Box::new(|| {}),
+        held: Box::new(|_| {}),
+        released: Box::new(|_| {}),
+    });
+    let serving = std::thread::spawn(move || {
+        let mut socket = initialized(&listener, &token);
+        for started in [
+            thread("title", true, "thread_title", None),
+            thread("main", false, "user", None),
+        ] {
+            socket
+                .send(Message::Text(
+                    json!({"method":"thread/started","params":{"thread":started}}).to_string(),
+                ))
+                .unwrap();
+        }
+        // The watch ends once it has the thread, which closes its connection.
+        while receive(&mut socket).is_some() {}
+    });
+    let deadline = Instant::now() + PATIENCE;
+    while !ready.load(Ordering::Acquire) {
+        assert!(Instant::now() < deadline, "no thread was identified");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(transport.shared.thread().as_deref(), Some("main"));
+    serving.join().unwrap();
+}
+
+/// A server that is gone when the daemon adopts its terminal is reported once the session
+/// attaches, which ends the terminal as for a server that dies while the session runs.
+#[test]
+fn an_adopted_transport_over_a_server_that_is_gone_reports_it_once_the_session_attaches() {
+    let (_listener, port, token) = listening();
+    let (server, gone, _) = held_server(true);
+    gone.store(true, Ordering::Release);
+    let transport = adopted(port, &token, Some("main"), server);
+    let reported = Arc::new(AtomicBool::new(false));
+    let seen = reported.clone();
+    transport.attach(TransportEvents {
+        ready: Box::new(|| {}),
+        server_gone: Box::new(move || seen.store(true, Ordering::Release)),
+        held: Box::new(|_| {}),
+        released: Box::new(|_| {}),
+    });
+    let deadline = Instant::now() + PATIENCE;
+    while !reported.load(Ordering::Acquire) {
+        assert!(
+            Instant::now() < deadline,
+            "the server's end was not reported"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// What waits in the queue under an id that starts with the launch's was queued by Octoboard,
+/// whichever daemon run queued it, so a cancel after a restart starts it as it would have been
+/// started without the restart.
+#[test]
+fn messages_an_earlier_run_queued_are_octoboards_by_their_ids_and_started_after_a_cancel() {
+    for (items, start, expected) in [
+        (
+            json!([{"id":"q-1","clientUserMessageId":"launch:41"},
+                {"id":"q-2","clientUserMessageId":"launch:42"}]),
+            Some(Answer::Result(json!({"turn":{}}))),
+            QueueStart::Started(2),
+        ),
+        (
+            json!([{"id":"user-item","clientUserMessageId":"typed"},
+                {"id":"q-1","clientUserMessageId":"launch:41"}]),
+            None,
+            QueueStart::BehindOthers(1),
+        ),
+        (
+            json!([{"id":"q-1","clientUserMessageId":"other:41"}]),
+            None,
+            QueueStart::Nothing,
+        ),
+        (
+            // The prefix is the launch's id and a colon, not whatever starts with the id.
+            json!([{"id":"q-1","clientUserMessageId":"launch-2:41"}]),
+            None,
+            QueueStart::Nothing,
+        ),
+    ] {
+        let (listener, port, token) = listening();
+        let (server, _, _) = held_server(true);
+        let transport = adopted(port, &token, Some("main"), server);
+        let start = Mutex::new(start);
+        let serving = serve(listener, token, move |method, params| match method {
+            "thread/queue/list" => Answer::Result(json!({"data":items,"nextCursor":null})),
+            "thread/queue/start" => {
+                assert_eq!(
+                    params,
+                    &json!({"threadId":"main","queuedSubmissionId":"q-1"})
+                );
+                start.lock().unwrap().take().expect("no start was expected")
+            }
+            "thread/read" => Answer::Result(json!({"thread":{"status":{"type":"idle"}}})),
+            other => panic!("unexpected request {other}"),
+        });
+        let started = transport.start_queue();
+        drop(transport);
+        serving.join().unwrap();
+        assert_eq!(started, expected);
+    }
+}
+
+/// A message found in the queue under its own id, which a daemon that is gone added, is started
+/// where it waits and not added a second time.
+#[test]
+fn a_message_already_queued_under_its_id_is_started_in_place_and_not_added_again() {
+    let (listener, port, token) = listening();
+    let (server, _, _) = held_server(true);
+    let transport = adopted(port, &token, Some("main"), server);
+    let serving = serve(listener, token, |method, _| match method {
+        "thread/loaded/list" => Answer::Result(json!({"data":["main"],"nextCursor":null})),
+        "thread/queue/list" => Answer::Result(
+            json!({"data":[{"id":"q-9","clientUserMessageId":"launch:7"}],"nextCursor":null}),
+        ),
+        "thread/queue/start" => Answer::Result(json!({"turn":{}})),
+        other => panic!("unexpected request {other}"),
+    });
+    assert_eq!(transport.send("again", "launch:7").unwrap(), Sent::Queued);
+    drop(transport);
+    let requests = serving.join().unwrap();
+    assert!(!methods(&requests).contains(&"thread/queue/add"));
+    let starts: Vec<_> = requests
+        .iter()
+        .filter(|(method, _)| method == "thread/queue/start")
+        .collect();
+    assert_eq!(starts.len(), 1, "{requests:?}");
+    assert_eq!(
+        starts[0].1,
+        json!({"threadId":"main","queuedSubmissionId":"q-9"})
+    );
+}
+
+/// The server a holder runs ends with the terminal, so a session that stops first leaves it; one
+/// the daemon runs is ended with the session.
+#[test]
+fn stopping_a_transport_leaves_a_server_its_holder_runs_and_ends_one_the_daemon_runs() {
+    for (with_terminal, expected_ends) in [(true, 0), (false, 1)] {
+        let (_listener, port, token) = listening();
+        let (server, _, ended) = held_server(with_terminal);
+        let transport = adopted(port, &token, Some("main"), server);
+        transport.stop();
+        assert_eq!(ended.load(Ordering::Acquire), expected_ends);
+        // Stopped once: nothing more is done by a second stop, nor by the drop.
+        drop(transport);
+        assert_eq!(ended.load(Ordering::Acquire), expected_ends);
+    }
+}
+
+/// A host whose servers are one fake app server the test listens for, which records what it was
+/// asked and in which order.
+struct RecordingHost {
+    port: u16,
+    token: String,
+    calls: Arc<Mutex<Vec<String>>>,
+    starts: Arc<Mutex<Vec<String>>>,
+}
+
+struct RecordedServer {
+    calls: Arc<Mutex<Vec<String>>>,
+}
+
+impl RunningServer for RecordedServer {
+    fn exited(&self) -> bool {
+        false
+    }
+
+    fn end(&self) {
+        self.calls.lock().unwrap().push("end server".to_string());
+    }
+
+    fn ends_with_its_terminal(&self) -> bool {
+        false
+    }
+}
+
+impl ServerHost for RecordingHost {
+    fn open_endpoint(&self, _: ServerListen) -> Result<ServerEndpoint> {
+        self.calls.lock().unwrap().push("open endpoint".to_string());
+        Ok(ServerEndpoint::Loopback {
+            token: self.token.clone(),
+            port: None,
+        })
+    }
+
+    fn start(
+        &self,
+        command: Command,
+        ready: ServerReady<'_>,
+        _: Duration,
+    ) -> Result<(Box<dyn RunningServer>, Option<u16>)> {
+        self.calls.lock().unwrap().push("start".to_string());
+        self.starts
+            .lock()
+            .unwrap()
+            .push(format!("{ready:?} {command:?}"));
+        let server = RecordedServer {
+            calls: self.calls.clone(),
+        };
+        Ok((Box::new(server), Some(self.port)))
+    }
+
+    fn end(&self) {
+        self.calls.lock().unwrap().push("end host".to_string());
+    }
+
+    fn companion(&self) -> bool {
+        false
+    }
+}
+
+/// A resume starts the server twice through its host, the first to read the fingerprints of the
+/// hooks to trust: the first goes, and with it its endpoint, before a new endpoint is opened for
+/// the second, which the terminal is then given.
+#[test]
+fn a_resume_restarts_the_server_through_the_host_on_an_endpoint_of_its_own() {
+    let (listener, port, token) = listening();
+    let serving = ServedAll::start(listener, token.clone(), |method, _| match method {
+        "hooks/list" => Answer::Result(json!({"data":[{"hooks":[{"handlerType":"command",
+            "source":"sessionFlags","command":"the-hook",
+            "key":"/<session-flags>/config.toml:stop:0:0","currentHash":"sha256:the-hash"}]}]})),
+        "thread/resume" => Answer::Result(json!({"thread":{"id":"thread-1"}})),
+        other => panic!("unexpected request {other}"),
+    });
+    let host = RecordingHost {
+        port,
+        token,
+        calls: Arc::default(),
+        starts: Arc::default(),
+    };
+    let plan = PrivateServerPlan {
+        args: vec!["-c".into(), "model=\"m\"".into()],
+        tui_args: Vec::new(),
+        task: None,
+        hook_command: "the-hook".into(),
+        resume_thread: Some("thread-1".into()),
+        resume_permissions: Some(super::super::private_server::ResumePermissions {
+            profile: ":workspace",
+            approval_policy: "on-request",
+            reviewer: "user",
+        }),
+    };
+    let transport = CodexTransport::start(
+        &ResolvedBinary::new("codex"),
+        &plan,
+        &HashMap::new(),
+        Path::new("."),
+        &host,
+        "launch",
+    )
+    .expect("the server starts");
+
+    assert_eq!(
+        *host.calls.lock().unwrap(),
+        [
+            "open endpoint",
+            "start",
+            "end server",
+            "open endpoint",
+            "start"
+        ]
+    );
+    let starts = host.starts.lock().unwrap().clone();
+    assert!(!starts[0].contains("hooks.state"), "{}", starts[0]);
+    assert!(starts[1].contains("hooks.state="), "{}", starts[1]);
+    for start in &starts {
+        assert!(
+            start.contains(r#"PortAfter("listening on: ws://127.0.0.1:")"#),
+            "{start}"
+        );
+    }
+    assert_eq!(
+        transport.client_args(),
+        [
+            "--remote".to_string(),
+            format!("ws://127.0.0.1:{port}"),
+            "--remote-auth-token-env".to_string(),
+            rpc::TOKEN_VARIABLE.to_string(),
+        ]
+    );
+    assert_eq!(transport.shared.thread().as_deref(), Some("thread-1"));
+    drop(transport);
+    drop(serving);
+}
+
+/// A loopback endpoint with no port names no place to reach, so nothing is linked to again.
+#[test]
+fn an_adopted_loopback_endpoint_without_a_port_names_nothing_to_reach() {
+    let (server, _, ended) = held_server(true);
+    let adopted = CodexTransport::adopt(
+        ServerEndpoint::Loopback {
+            token: "token".to_string(),
+            port: None,
+        },
+        server,
+        "launch",
+        Some("main"),
+    );
+    assert!(adopted.is_err());
+    assert_eq!(
+        ended.load(Ordering::Acquire),
+        0,
+        "a server its holder runs is left to it"
+    );
+}
+
+/// The transport the provider of `agent` rebuilds for an adopted launch of a session whose
+/// conversation is `thread-1`, the server found with its terminal being `server`.
+fn rebuilt_transport(
+    agent: crate::protocol::AgentId,
+    server: Option<crate::terminal::server_host::FoundServer>,
+) -> Option<Arc<dyn crate::session::term::MessageTransport>> {
+    crate::adapter::provider(agent)
+        .rebuild_launch(crate::adapter::AdoptedLaunch {
+            adoption: None,
+            launch_id: "launch",
+            agent_session_id: Some("thread-1"),
+            server,
+        })
+        .transport
+}
+
+#[test]
+fn only_codex_links_an_adopted_launch_to_the_server_found_with_its_terminal() {
+    use crate::protocol::AgentId;
+    use crate::terminal::server_host::FoundServer;
+    let found = |port: Option<u16>| {
+        let (server, _, _) = held_server(true);
+        Some(FoundServer {
+            endpoint: ServerEndpoint::Loopback {
+                token: "token".to_string(),
+                port,
+            },
+            server,
+        })
+    };
+    assert!(rebuilt_transport(AgentId::CODEX, found(Some(1))).is_some());
+    // None found, or one whose endpoint names no port: the session's messages go to its terminal.
+    assert!(rebuilt_transport(AgentId::CODEX, None).is_none());
+    assert!(rebuilt_transport(AgentId::CODEX, found(None)).is_none());
+    // Other providers start no server of their own.
+    assert!(rebuilt_transport(AgentId::GROK, found(Some(1))).is_none());
+    assert!(rebuilt_transport(AgentId::TEST, found(Some(1))).is_none());
 }

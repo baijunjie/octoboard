@@ -168,6 +168,24 @@ impl Command {
         self.quit_keys = Some(keys);
         self
     }
+
+    /// The same program, arguments, environment and working directory as a plain process
+    /// command, for a process started with pipes rather than on a terminal. The quit keys mean
+    /// nothing without a terminal and are left out.
+    pub fn plain(&self) -> std::process::Command {
+        let mut command = std::process::Command::new(&self.program);
+        command.args(&self.args);
+        if !self.inherits_env {
+            command.env_clear();
+        }
+        for (key, value) in &self.env {
+            command.env(key, value);
+        }
+        if let Some(cwd) = &self.cwd {
+            command.current_dir(cwd);
+        }
+        command
+    }
 }
 
 /// The keys a program takes as a request to quit: `key` pressed `presses` times, `apart` from each
@@ -394,5 +412,58 @@ mod tests {
         let first = through_json(&command).quit_keys.expect("keys").key;
         let second = through_json(&command).quit_keys.expect("keys").key;
         assert!(std::ptr::eq(first, second));
+    }
+
+    #[test]
+    fn a_plain_command_keeps_the_program_arguments_variables_and_directory() {
+        let mut command = Command::new("/some/program");
+        command
+            .args(["one", "two words"])
+            .env("A", "1")
+            .cwd("/some/dir");
+        command.quit_keys(QuitKeys {
+            key: &[Input::Ctrl('c')],
+            presses: 2,
+            apart: Duration::from_millis(100),
+            wait: Duration::from_secs(1),
+        });
+        let plain = command.plain();
+        assert_eq!(plain.get_program(), "/some/program");
+        assert_eq!(
+            plain.get_args().collect::<Vec<_>>(),
+            ["one", "two words"].map(OsStr::new)
+        );
+        let variables: Vec<_> = plain.get_envs().collect();
+        assert_eq!(variables, [(OsStr::new("A"), Some(OsStr::new("1")))]);
+        assert_eq!(plain.get_current_dir(), Some(Path::new("/some/dir")));
+
+        let bare = Command::new("p").plain();
+        assert_eq!(bare.get_current_dir(), None);
+        assert_eq!(bare.get_envs().count(), 0);
+    }
+
+    /// Whether the process starts over the daemon's environment or over its own variables alone is
+    /// seen in what a process prints of its environment.
+    #[cfg(unix)]
+    #[test]
+    fn a_plain_command_inherits_the_environment_unless_it_cleared_it() {
+        let printed = |command: &Command| {
+            let output = command.plain().output().expect("env runs");
+            String::from_utf8(output.stdout).expect("text")
+        };
+        let mut cleared = Command::new("/usr/bin/env");
+        cleared.env_clear().env("K", "v");
+        let text = printed(&cleared);
+        assert!(text.lines().any(|line| line == "K=v"), "{text}");
+        assert!(
+            !text.lines().any(|line| line.starts_with("PATH=")),
+            "{text}"
+        );
+
+        let mut inheriting = Command::new("/usr/bin/env");
+        inheriting.env("K", "v");
+        let text = printed(&inheriting);
+        assert!(text.lines().any(|line| line == "K=v"), "{text}");
+        assert!(text.lines().any(|line| line.starts_with("PATH=")), "{text}");
     }
 }

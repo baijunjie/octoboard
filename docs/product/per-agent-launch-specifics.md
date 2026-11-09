@@ -186,7 +186,14 @@ install: the `codex-package.json` of a standalone release or the `package.json` 
 neither is found, Codex's own `--version` answer. A version with a suffix after `-` or `+` (a platform package's)
 counts by the release before it, and a metadata file that cannot be read for a version is passed over. An older
 version, and an install whose version cannot be told this way (a Homebrew one carries no such metadata), get the
-ordinary launch: the terminal alone.
+ordinary launch: the terminal alone. So does a launch whose terminal goes to a process holder of an earlier build that
+cannot run the server (see "Holders of other builds" in `docs/product/process-holders.md`), whatever the version.
+
+**Who runs it.** The process holder that runs the session's terminal (see `docs/product/process-holders.md`) runs the
+server too, beside the terminal, so the server outlives the daemon as the terminal does. Where holders cannot be set up
+and the terminal runs inside the daemon (see "When holders cannot be set up" in `docs/product/process-holders.md`), the
+daemon runs the server itself, and it ends with the daemon as the terminal does. Either way Octoboard's own
+connections, which carry its messages, go to the server's endpoint directly, not through the holder.
 
 **How the session runs.** Octoboard first starts `codex app-server` for the session, then the terminal, which attaches
 to it (`--remote`). Both are given the launch's `-c` overrides (the hooks, Octoboard's MCP server, the role
@@ -206,7 +213,8 @@ permission as usual (see `docs/product/folder-trust.md`). On a resume:
 **Where the server listens.** On macOS and Linux, a Unix socket in a private directory under `/tmp`, removed with the
 server. On a Windows daemon host, a loopback WebSocket port, which any local process can reach, guarded by a random
 capability token: the server is given only the token's SHA-256, and the terminal reads the token from an environment
-variable of its own, `OCTOBOARD_CODEX_REMOTE_TOKEN`.
+variable of its own, `OCTOBOARD_CODEX_REMOTE_TOKEN`. A holder that runs the server makes the token itself and hands it to
+the daemon over its connection to the daemon; a daemon that runs the server makes it.
 
 **Requests of the server's.** Approvals and the other requests the server sends a client are answered in the terminal
 alone: Octoboard's own connections to the server, which carry its messages, leave them unanswered. A turn that runs on a
@@ -216,12 +224,24 @@ resumed session's terminal attached, send their approval requests to Octoboard's
 never answers them; the request then waits. Codex's agent command center lists that task as "Needs input", and opening
 it shows the approval in the terminal, where it can be answered (measured on Codex 0.166.0).
 
-**Its lifetime.** The server belongs to the running session. When the terminal exits, the server is ended. When the
-server exits by itself, the terminal is ended too, as if the agent had exited by itself rather than been ended by
-Octoboard, since it would otherwise wait for the server to come back for good. The server is in the launch's process
-containment and leads a process session of its own (on a Windows daemon host, a job of its own inside the launch's
-job); what that means for the background-process lists is in "Automatic stopping and its boundaries" in
+**Its lifetime.** The server belongs to the running session, and runs as long as its terminal does. When the terminal
+exits, the server is ended. When the server exits by itself, the terminal is ended too, as if the agent had exited by
+itself rather than been ended by Octoboard, since it would otherwise wait for the server to come back for good. A
+holder that runs both does this itself, whether or not a daemon is connected to it. The server is in the launch's
+process containment and leads a process session of its own (on a Windows daemon host, a job of its own inside the
+launch's job); what that means for the background-process lists is in "Automatic stopping and its boundaries" in
 `docs/product/background-processes.md`.
+
+**Across a daemon restart.** Where a holder runs the server, every daemon end that leaves the programs running in their
+holders (see "Which daemon ends leave the programs running" in `docs/product/process-holders.md`) — a crash, a planned
+restart such as `octoboardd restart` or the desktop application's restart into an update — leaves the server running
+with the session, and what is already in Codex's own queue keeps running meanwhile. The daemon that takes the
+session's terminal over (see "What a daemon start takes over" in `docs/product/process-holders.md`) links to the server
+again, and the session's messages go through Codex's own queue as before (see "Messages through Codex's own queue" in
+`docs/product/message-delivery.md`). A server that exited while no daemon was connected has had its terminal ended by
+the holder, and the session ends as if its agent had exited by itself. A session taken over with no server beside its
+terminal — an ordinary launch, or one a holder of an earlier build ran — or with one at an endpoint the daemon cannot
+use has its automatic messages take the guarded terminal delivery.
 
 **When it cannot be used.** If the server does not start listening within 15 seconds, exits first, or cannot be
 initialised, or, on a resume, the hook trust or the permission preset cannot be applied, the session is launched the

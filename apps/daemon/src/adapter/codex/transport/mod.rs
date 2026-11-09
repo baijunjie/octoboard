@@ -13,6 +13,14 @@
 //!
 //! The server belongs to the terminal: it is ended once the terminal has exited, and the terminal
 //! is ended when the server dies, since it would otherwise wait for a server that never comes back.
+//! Where the terminal runs in a holder, the server is the holder's too, started as the terminal's
+//! companion: the holder ends it with the terminal, and a daemon that adopts the terminal links to
+//! it again ([`CodexTransport::adopt`]). Octoboard's messages in the queue are known by their id,
+//! `<launch id>:<ticket>` as the outbox names them. A message a planned restart carries over keeps
+//! its ticket (`messaging::restart_outbox`), so the run that holds the transport now finds it in
+//! the queue by that id, starts it where it waits and does not add it a second time. A daemon that
+//! exits without a planned stop loses its outbox, and a message kept in the store is queued again
+//! only by a later resume, under a new launch and ticket: it gets another id.
 
 mod resume;
 mod rpc;
@@ -29,16 +37,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use serde_json::{json, Value};
 
 use super::private_server::PrivateServerPlan;
-use crate::platform::proc::Containment;
 use crate::platform::shell::ResolvedBinary;
 use crate::platform::term::PartialWrite;
 use crate::session::term::{self, MessageTransport, QueueStart, Sent, TransportEvents};
+use crate::terminal::server_host::{RunningServer, ServerEndpoint, ServerHost};
 use rpc::{Endpoint, Rpc, RpcFailure};
-use server::{launch_server, watch_for_exit, Listen, ServerProcess};
+use server::{launch_server, watch_for_exit};
 
 /// How long a message held back waits before the queue is written out again, where no event of
 /// the server's says it can be taken now: the session has no conversation yet (its terminal still
@@ -82,8 +90,12 @@ struct Shared {
     /// A retry of the queue is already scheduled.
     retry_scheduled: AtomicBool,
     /// The `clientUserMessageId` of every message this transport added to the queue, which tells
-    /// its messages there from the user's.
+    /// its messages there from the user's along with [`Self::launch_prefix`].
     added: Mutex<std::collections::HashSet<String>>,
+    /// `<launch id>:`, which the id of every message the outbox gives the launch starts with: a
+    /// queued message whose id does is Octoboard's, whichever daemon run added it. Empty where the
+    /// launch is not known, and then only [`Self::added`] tells.
+    launch_prefix: String,
     /// When messages began to wait, whether the session has been told of the wait, and whether
     /// the wait has been logged as a warning.
     held_since: Mutex<Option<Held>>,
@@ -105,6 +117,7 @@ impl Default for Shared {
             stopping: AtomicBool::new(false),
             retry_scheduled: AtomicBool::new(false),
             added: Mutex::default(),
+            launch_prefix: String::new(),
             held_since: Mutex::new(None),
             last_start: Mutex::new(None),
             start_held: Mutex::default(),
@@ -130,6 +143,18 @@ struct Events {
 }
 
 impl Shared {
+    /// What a transport of the launch `launch_id` starts with.
+    fn for_launch(launch_id: &str) -> Self {
+        Self {
+            launch_prefix: if launch_id.is_empty() {
+                String::new()
+            } else {
+                format!("{launch_id}:")
+            },
+            ..Self::default()
+        }
+    }
+
     fn thread(&self) -> Option<String> {
         self.thread.get().cloned()
     }
@@ -246,33 +271,51 @@ impl Shared {
             .expect("Codex added lock poisoned")
             .contains(id)
     }
+
+    /// Whether `id` names a message of the session's launch, whichever daemon run gave it.
+    fn of_this_launch(&self, id: &str) -> bool {
+        !self.launch_prefix.is_empty() && id.starts_with(&self.launch_prefix)
+    }
+
+    /// Whether the queued message `id` is Octoboard's: added by this transport, or named as the
+    /// outbox names the launch's messages, as one an earlier daemon run added is.
+    fn is_own(&self, id: &str) -> bool {
+        self.was_added(id) || self.of_this_launch(id)
+    }
+
+    fn is_start_held(&self, id: &str) -> bool {
+        self.start_held
+            .lock()
+            .expect("Codex start-held lock poisoned")
+            .contains(id)
+    }
 }
 
 pub struct CodexTransport {
-    server: Arc<Mutex<Option<ServerProcess>>>,
+    /// The server, where it still runs as far as this transport knows; taken out once stopped.
+    server: Arc<Mutex<Option<Box<dyn RunningServer>>>>,
     endpoint: Endpoint,
     shared: Arc<Shared>,
     operation: Mutex<()>,
-    /// Kept for its `Drop` alone: the socket's directory goes once the server is gone.
-    _listen: Option<Listen>,
 }
 
 impl CodexTransport {
+    /// Starts the private server of the launch `launch_id` through `host`, as `plan` says, before
+    /// the terminal. A resume starts it twice: the first, on an endpoint of its own, tells the
+    /// fingerprints of the hooks to trust, and is ended before the second starts. A start that
+    /// fails leaves whatever the daemon ran ended; what a holder ran is ended through `host`
+    /// ([`ServerHost::end`]). **Blocks.**
     pub fn start(
         binary: &ResolvedBinary,
         plan: &PrivateServerPlan,
         environment: &HashMap<String, String>,
         cwd: &Path,
-        containment: &Containment,
+        host: &dyn ServerHost,
+        launch_id: &str,
     ) -> Result<Self> {
-        let start = |args: &[String]| -> Result<(ServerProcess, Endpoint, Listen)> {
-            let listen = Listen::for_host().context("preparing the Codex server's endpoint")?;
-            let (server, endpoint) =
-                launch_server(binary, args, &listen, environment, cwd, containment)?;
-            Ok((server, endpoint, listen))
-        };
+        let launch = |args: &[String]| launch_server(host, binary, args, environment, cwd);
         let mut server_args = plan.args.clone();
-        let (mut server, mut endpoint, mut listen) = start(&server_args)?;
+        let (mut server, mut endpoint) = launch(&server_args)?;
         let mut rpc = endpoint
             .connect()
             .context("initializing the private Codex app server")?;
@@ -283,15 +326,15 @@ impl CodexTransport {
             let trusts = resume::own_hook_trust(&metadata, &plan.hook_command)?;
             drop(rpc);
             // The first server goes, and what it left with it, before the next starts elsewhere.
+            server.end();
             drop(server);
-            drop(listen);
             server_args.extend(trusts);
-            (server, endpoint, listen) = start(&server_args)?;
+            (server, endpoint) = launch(&server_args)?;
             rpc = endpoint
                 .connect()
                 .context("initializing the restarted private Codex app server")?;
         }
-        let shared = Arc::new(Shared::default());
+        let shared = Arc::new(Shared::for_launch(launch_id));
         if let Some(thread) = &plan.resume_thread {
             if let Some(permissions) = plan.resume_permissions {
                 rpc.request(
@@ -305,6 +348,49 @@ impl CodexTransport {
             // Opened before the terminal starts, so it is told of the thread the terminal starts.
             watch_for_thread(rpc, shared.clone());
         }
+        Ok(Self::running(server, endpoint, shared))
+    }
+
+    /// The transport of the launch `launch_id`, whose terminal a daemon took over, to `server`
+    /// listening on `endpoint`, which a holder runs with the terminal. It opens no server. With
+    /// the session's conversation known (`thread`) it is the session's at once; without, a thread
+    /// the user starts from now on is watched for, and one started before is identified when a
+    /// message finds it loaded, as for any session. A server already gone is reported once the
+    /// session attaches. Fails only for an endpoint that names no port to reach. Never waits for
+    /// the server: the thread watch is opened on a thread of its own, since a daemon adopts its
+    /// terminals within the time its start is given, and a server that does not answer would hold
+    /// the start up to the RPC timeout. A thread started before the watch is open is identified
+    /// as one started before the adoption is.
+    pub fn adopt(
+        endpoint: ServerEndpoint,
+        server: Box<dyn RunningServer>,
+        launch_id: &str,
+        thread: Option<&str>,
+    ) -> Result<Self> {
+        let endpoint = Endpoint::reached_at(endpoint, None)
+            .ok_or_else(|| anyhow!("the private Codex app server's endpoint names no port"))?;
+        let shared = Arc::new(Shared::for_launch(launch_id));
+        match thread {
+            Some(thread) => {
+                shared.identify(thread);
+            }
+            None => {
+                let (watched, watching) = (endpoint.clone(), shared.clone());
+                std::thread::spawn(move || match watched.connect() {
+                    Ok(rpc) => watch_for_thread(rpc, watching),
+                    // Gone, or not answering: its end is reported by the exit watch, and a message
+                    // looks for the conversation itself.
+                    Err(error) => {
+                        tracing::debug!(%error, "could not watch an adopted Codex server for its thread");
+                    }
+                });
+            }
+        }
+        Ok(Self::running(server, endpoint, shared))
+    }
+
+    /// The transport to `server`, reached at `endpoint`, watched for its exit from now on.
+    fn running(server: Box<dyn RunningServer>, endpoint: Endpoint, shared: Arc<Shared>) -> Self {
         let server = Arc::new(Mutex::new(Some(server)));
         let (stopping, gone) = (shared.clone(), shared.clone());
         watch_for_exit(
@@ -315,13 +401,12 @@ impl CodexTransport {
                 gone.server_gone();
             },
         );
-        Ok(Self {
+        Self {
             server,
             endpoint,
             shared,
             operation: Mutex::new(()),
-            _listen: Some(listen),
-        })
+        }
     }
 
     pub fn client_args(&self) -> Vec<String> {
@@ -337,7 +422,7 @@ impl CodexTransport {
             .lock()
             .expect("Codex server lock poisoned")
             .as_ref()
-            .is_none_or(ServerProcess::exited)
+            .is_none_or(|server| server.exited())
     }
 
     /// The session's conversation, identified now if it has not been, and loaded again if the
@@ -419,7 +504,7 @@ impl CodexTransport {
         if !queued.iter().any(|item| item.id == id) {
             return Ok(AfterAdd::Runs);
         }
-        if !self.shared.was_added(&head.client_id) {
+        if !self.shared.is_own(&head.client_id) {
             tracing::info!("a message waits in Codex's queue behind one someone else queued");
             return Ok(AfterAdd::Runs);
         }
@@ -443,22 +528,18 @@ impl CodexTransport {
         }
     }
 
-    /// The id Codex gave the message `logical_id` in `thread`'s queue, where Codex took it before
-    /// but would not start it: `Some(None)` once it is no longer queued, as it has run since.
-    /// `None` for a message not held so.
-    fn held_in_queue(
+    /// The id Codex gave the message `logical_id` in `thread`'s queue, where it may be there
+    /// already: Codex took it before but would not start it, as it was overloaded, or it is of the
+    /// session's launch and an earlier daemon run may have queued it. An earlier run's message
+    /// keeps its `logical_id` only where a planned restart carried it over with its ticket.
+    /// `Some(None)` when it is not queued; `None` for a message that cannot be there.
+    fn already_queued(
         &self,
         rpc: &mut Rpc,
         thread: &str,
         logical_id: &str,
     ) -> Option<Result<Option<String>, RpcFailure>> {
-        if !self
-            .shared
-            .start_held
-            .lock()
-            .expect("Codex start-held lock poisoned")
-            .contains(logical_id)
-        {
+        if !self.shared.is_start_held(logical_id) && !self.shared.of_this_launch(logical_id) {
             return None;
         }
         Some(queued_items(rpc, thread).map(|queued| {
@@ -475,7 +556,7 @@ impl CodexTransport {
         let queued = queued_items(rpc, thread)?;
         let Some(first) = queued
             .iter()
-            .position(|item| self.shared.was_added(&item.client_id))
+            .position(|item| self.shared.is_own(&item.client_id))
         else {
             return Ok(self
                 .shared
@@ -484,7 +565,7 @@ impl CodexTransport {
         };
         let own = queued
             .iter()
-            .filter(|item| self.shared.was_added(&item.client_id))
+            .filter(|item| self.shared.is_own(&item.client_id))
             .count();
         // Started a moment ago, by the cancel's own hook or an owner's interrupt, and running: what
         // follows its first message runs after it, so nothing is started again, and the first
@@ -593,7 +674,11 @@ impl MessageTransport for CodexTransport {
             .lock()
             .expect("Codex server lock poisoned")
             .take();
-        drop(server);
+        // A server the holder runs with the terminal is the holder's to end, and outlives a daemon
+        // that stops before the terminal does.
+        if let Some(server) = server.filter(|server| !server.ends_with_its_terminal()) {
+            server.end();
+        }
     }
 
     fn send(&self, text: &str, logical_id: &str) -> Result<Sent, PartialWrite> {
@@ -668,15 +753,19 @@ impl MessageTransport for CodexTransport {
             Err(Refusal::Wait(reason)) => return Err(wait(reason)),
             Err(Refusal::Decline(reason)) => return decline(reason),
         };
-        // Taken before, but not started as Codex was overloaded: started where it waits.
-        match self.held_in_queue(&mut rpc, &thread_id, logical_id) {
+        // Taken before, by this run or an earlier one whose planned restart carried the message
+        // over under the same id, and still waiting: started where it waits, never added a second
+        // time. One taken but not started, as Codex was overloaded, that is no longer queued has
+        // run since.
+        match self.already_queued(&mut rpc, &thread_id, logical_id) {
             None => {}
             Some(Ok(Some(id))) => return start(&mut rpc, &thread_id, &id),
-            Some(Ok(None)) => {
+            Some(Ok(None)) if self.shared.is_start_held(logical_id) => {
                 self.shared.forget_start_held(logical_id);
                 self.shared.end_held();
                 return Ok(Sent::Queued);
             }
+            Some(Ok(None)) => {}
             Some(Err(error)) => {
                 tracing::debug!(%error, "could not read Codex's queue");
                 return Err(wait("the private Codex app server did not answer"));

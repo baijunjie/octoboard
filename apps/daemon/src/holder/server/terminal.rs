@@ -1,6 +1,8 @@
 //! One terminal a holder runs: its program on the PTY, the threads that read what it prints,
 //! write what it is sent and watch it exit, and the tail kept for a daemon that connects later.
-//! While no daemon is linked it answers the queries [`super::offline`] says it may.
+//! While no daemon is linked it answers the queries [`super::offline`] says it may. A terminal
+//! that bound a companion at its spawn ends it once its exit is published, or it is ended or
+//! released.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -11,12 +13,13 @@ use axum::extract::ws::Message;
 use serde_json::Value;
 use tokio::sync::mpsc as outbound;
 
+use super::companion::Companion;
 use super::offline::{OfflineQueries, PRIMARY_DEVICE_ATTRIBUTES};
 use crate::holder::protocol::{
     encode_bulk, BulkKind, FromHolder, HandoverTail, SignalKind, SpawnSpec, TailAge, TerminalInfo,
     WireError,
 };
-use crate::platform::proc::{crash, ChildHandle, ProcessId, ProcessIdentity, Sent};
+use crate::platform::proc::{crash, ChildHandle, Polite, ProcessId, ProcessIdentity, Sent};
 use crate::platform::proc_table;
 use crate::platform::term::{self, Input, Pty, Spawned};
 
@@ -48,6 +51,10 @@ const EXIT_POLL: Duration = Duration::from_millis(20);
 /// How long a program that was still running when its terminal was released is waited for, to be
 /// reaped once it exits. Closing its PTY hangs it up, which ends most programs at once.
 const REAP_AFTER_RELEASE: Duration = Duration::from_secs(60);
+
+/// How long a program whose companion exited is given to take the polite request to terminate,
+/// past what its host does before it makes the request, before it is killed.
+const COMPANION_STOP_GRACE: Duration = Duration::from_secs(3);
 
 /// Where a link's frames go: the link's writer takes them in order.
 pub(super) type Sink = outbound::Sender<Message>;
@@ -249,6 +256,9 @@ pub(super) struct Terminal {
     exited: AtomicBool,
     released: AtomicBool,
     writes: Mutex<Option<mpsc::Sender<WriteJob>>>,
+    /// The companion the terminal bound at its spawn, kept once it has ended so that a welcome
+    /// still lists it.
+    companion: Mutex<Option<Arc<Companion>>>,
 }
 
 struct Reaping {
@@ -260,11 +270,14 @@ struct Reaping {
 
 impl Terminal {
     /// Starts the program `spec` describes, with the threads that serve it, sending its output to
-    /// `sink` from the first byte. The threads wait on `runtime` for room in the link.
+    /// `sink` from the first byte. The threads wait on `runtime` for room in the link. The program
+    /// binds `companion` when given; one that exited meanwhile has the program ended before it
+    /// is served and the start fail, the companion left to the caller.
     pub(super) fn start(
         spec: SpawnSpec,
         sink: Option<Sink>,
         runtime: tokio::runtime::Handle,
+        companion: Option<Arc<Companion>>,
     ) -> anyhow::Result<Arc<Self>> {
         use anyhow::Context as _;
 
@@ -309,7 +322,16 @@ impl Terminal {
             exited: AtomicBool::new(false),
             released: AtomicBool::new(false),
             writes: Mutex::new(Some(writes)),
+            companion: Mutex::new(None),
         });
+        if let Some(companion) = companion {
+            // Bound before any thread serves the terminal, so that a refused one sends nothing.
+            if !companion.bind(&terminal) {
+                terminal.end();
+                anyhow::bail!("the terminal's companion exited as the terminal started");
+            }
+            *terminal.companion() = Some(companion);
+        }
         terminal.start_reader();
         terminal.start_writer(jobs);
         terminal.start_exit_watch();
@@ -341,7 +363,56 @@ impl Terminal {
             meta: self.meta.clone(),
             exited: self.exited.load(Ordering::Acquire),
             handover,
+            companion: self
+                .companion()
+                .as_ref()
+                .and_then(|companion| companion.info()),
         }
+    }
+
+    fn companion(&self) -> MutexGuard<'_, Option<Arc<Companion>>> {
+        self.companion.lock().unwrap_or_else(|err| err.into_inner())
+    }
+
+    /// The companion the terminal bound at its spawn, if it did.
+    pub(super) fn bound_companion(&self) -> Option<Arc<Companion>> {
+        self.companion().clone()
+    }
+
+    /// Ends the terminal's companion, if it bound one. **Blocks** for up to the companion's grace.
+    fn end_companion(&self) {
+        let companion = self.companion().clone();
+        if let Some(companion) = companion {
+            companion.end();
+        }
+    }
+
+    /// Whether the program has exited, as far as the holder knows.
+    fn has_exited(&self) -> bool {
+        if self.exited.load(Ordering::Acquire) || self.released.load(Ordering::Acquire) {
+            return true;
+        }
+        let child = self.child();
+        child.reaped || child.handle.exited_unreaped() == Some(true)
+    }
+
+    /// Ends the program because its companion exited by itself, as a daemon ends it when its
+    /// server dies: a polite request to terminate, then a kill once the polite lead its host
+    /// reports and a grace have passed. **Blocks** until then.
+    pub(super) fn end_for_companion(&self) {
+        if self.has_exited() {
+            return;
+        }
+        self.signal(SignalKind::PoliteTerminate);
+        let deadline =
+            Instant::now() + self.pty.polite_stop_lead(Polite::Terminate) + COMPANION_STOP_GRACE;
+        while Instant::now() < deadline {
+            if self.has_exited() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        self.signal(SignalKind::Kill);
     }
 
     fn stream(&self) -> MutexGuard<'_, Stream> {
@@ -637,6 +708,7 @@ impl Terminal {
             // the frame or finds the terminal exited when it attaches.
             let message = terminal.exited_frame();
             terminal.publish(message, |_| terminal.exited.store(true, Ordering::Release));
+            terminal.end_companion();
         });
     }
 
@@ -735,13 +807,15 @@ impl Terminal {
             }
             std::thread::sleep(Duration::from_millis(20));
         }
+        self.end_companion();
         self.release();
     }
 
-    /// Forgets the terminal: closes its PTY and ends its threads. The program is reaped, now if it
-    /// has exited, or once it does from a thread of its own, since the exit watcher stops here
-    /// and nothing else would: one killed just before its release is not gone yet, and would
-    /// stay a zombie.
+    /// Forgets the terminal: closes its PTY and ends its threads. Its companion is left to the
+    /// caller ([`Self::bound_companion`]), which ends it where the holder can count the end as
+    /// something it still serves. The program is reaped, now if it has exited, or once it does from a thread of its
+    /// own, since the exit watcher stops here and nothing else would: one killed just before its
+    /// release is not gone yet, and would stay a zombie.
     pub(super) fn release(self: &Arc<Self>) {
         self.released.store(true, Ordering::Release);
         self.hang_up();

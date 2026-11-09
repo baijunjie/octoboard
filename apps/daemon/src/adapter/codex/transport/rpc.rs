@@ -10,6 +10,7 @@ use tokio_tungstenite::tungstenite::{self, Message, WebSocket};
 use super::super::app_server;
 use crate::agents::json_rpc;
 use crate::platform::ipc::Connection;
+use crate::terminal::server_host::ServerEndpoint;
 
 /// How long one request may take, from sending it to its reply.
 pub(super) const RPC_TIMEOUT: Duration = Duration::from_secs(5);
@@ -20,12 +21,28 @@ const MESSAGE_LIMIT: usize = 4 * 1024 * 1024;
 pub(super) const TOKEN_VARIABLE: &str = "OCTOBOARD_CODEX_REMOTE_TOKEN";
 
 /// How a client reaches a server that listens.
+#[derive(Clone)]
 pub(super) enum Endpoint {
     Socket(std::path::PathBuf),
     Loopback { port: u16, token: String },
 }
 
 impl Endpoint {
+    /// How a client reaches the server listening on `endpoint`, on `port` where it reported one
+    /// on starting; `None` for a loopback endpoint whose port is known from neither.
+    pub(super) fn reached_at(endpoint: ServerEndpoint, port: Option<u16>) -> Option<Self> {
+        match endpoint {
+            ServerEndpoint::Socket(path) => Some(Self::Socket(path)),
+            ServerEndpoint::Loopback {
+                token,
+                port: listed,
+            } => Some(Self::Loopback {
+                port: port.or(listed)?,
+                token,
+            }),
+        }
+    }
+
     pub(super) fn connect(&self) -> Result<Rpc, RpcFailure> {
         use tungstenite::client::IntoClientRequest;
         let transport = |error: io::Error| RpcFailure::Transport(error.to_string());

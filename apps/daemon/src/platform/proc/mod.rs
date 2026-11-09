@@ -2,7 +2,8 @@
 //! group, telling how a child stands without reaping it, signalling a process or a group by what
 //! is meant (a polite request to end, or a kill) rather than by a signal number, listing what a
 //! session left behind, the table that ends every process the daemon runs when it goes down on an
-//! internal failure ([`crash`]), and reading a child's pipes within bounds. It also holds what the
+//! internal failure ([`crash`]), reading a child's pipes within bounds, and a server started as a
+//! plain child that is waited on until it is ready ([`server`]). It also holds what the
 //! daemon asks of the host about itself: the host asking it to end ([`shutdown_requested`]) or to
 //! make a planned restart ([`restart_requested`], which [`request_restart`] asks for), whether a
 //! service manager restarts it on the status a planned restart ends it with
@@ -28,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use super::proc_table;
 
 pub(crate) mod crash;
+pub(crate) mod server;
 
 /// The path of the executable this process is running, with every symlink resolved (and, on
 /// Windows, without the verbatim prefix), so that it names the image itself: what the build

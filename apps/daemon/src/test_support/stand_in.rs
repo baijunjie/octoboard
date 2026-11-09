@@ -351,6 +351,48 @@ impl Drop for StandIn {
     }
 }
 
+/// A server of the session's own standing in for Codex's that declines every message, as one does
+/// that cannot take it: nothing of the message reached it. It runs `during_send` while the
+/// request is under way, which is where a test raises a planned stop's handover barrier, and
+/// keeps what it was offered.
+pub(crate) struct DecliningServer {
+    during_send: Box<dyn Fn() + Send + Sync>,
+    offered: std::sync::Mutex<Vec<String>>,
+}
+
+impl DecliningServer {
+    pub(crate) fn new(during_send: impl Fn() + Send + Sync + 'static) -> Arc<Self> {
+        Arc::new(Self {
+            during_send: Box::new(during_send),
+            offered: Default::default(),
+        })
+    }
+
+    /// The texts the server was offered, in order.
+    pub(crate) fn offered(&self) -> Vec<String> {
+        self.offered.lock().unwrap().clone()
+    }
+}
+
+impl crate::session::term::MessageTransport for DecliningServer {
+    fn send(
+        &self,
+        text: &str,
+        _: &str,
+    ) -> Result<crate::session::term::Sent, crate::platform::term::PartialWrite> {
+        self.offered.lock().unwrap().push(text.to_string());
+        (self.during_send)();
+        Ok(crate::session::term::Sent::Declined(
+            "the server is busy".to_string(),
+        ))
+    }
+    fn attach(&self, _: crate::session::term::TransportEvents) {}
+    fn start_queue(&self) -> crate::session::term::QueueStart {
+        crate::session::term::QueueStart::Nothing
+    }
+    fn stop(&self) {}
+}
+
 pub(crate) fn fake_live_session(
     id: &str,
     agent: AgentId,

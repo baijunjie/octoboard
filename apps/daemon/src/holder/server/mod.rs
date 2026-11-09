@@ -10,9 +10,10 @@
 //! closed. The holder is found by its registry file ([`super::registry`]).
 //!
 //! A holder outlives its daemon: the programs go on running when the link drops, their output kept
-//! in the tails for the daemon that links next. It exits once it has no terminal and no start
-//! under way, and either no daemon is linked or the linked one has said to drain. A link that
-//! drops without the daemon having parted is recorded as a crash, for the next welcome to say.
+//! in the tails for the daemon that links next. It exits once it has no terminal, no start
+//! under way, no companion awaiting its terminal or being ended, and either no daemon is linked
+//! or the linked one has said to drain. A link that drops without the daemon having parted is
+//! recorded as a crash, for the next welcome to say.
 //!
 //! A daemon that stops on purpose for another to take over hands its terminals over
 //! ([`ToHolder::Handover`]): each terminal its link follows is marked where its output stops going
@@ -22,7 +23,12 @@
 //! The same listener serves the helpers of the launches the holder runs ([`helpers`]): each launch
 //! has a key the holder issued, and what a helper asks is relayed to the linked daemon
 //! ([`relay`]).
+//!
+//! A terminal may have a companion ([`companion`]): a process the holder starts for it before the
+//! terminal, which the terminal binds at its spawn. The holder enforces both directions of their
+//! lifetime itself, whether or not a daemon is linked.
 
+mod companion;
 mod helpers;
 mod launches;
 mod offline;
@@ -31,9 +37,9 @@ mod terminal;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -45,17 +51,20 @@ use axum::Router;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{mpsc, watch};
 
+use self::companion::{Companion, OnExit};
 use self::helpers::Helpers;
 use self::launches::Launches;
 use self::relay::Relays;
 use self::terminal::{frame, Sink, Terminal, Told};
 use super::protocol::{
-    Answer, FromHolder, LastParting, OfflineAnswer, QueryKind, SpawnSpec, ToHolder, WireError,
+    Answer, CompanionEndpoint, ContainmentSpec, EndpointKind, FromHolder, LastParting,
+    OfflineAnswer, QueryKind, Ready, SpawnSpec, ToHolder, WireError,
 };
 use super::registry::{self, RegistryEntry};
 use crate::platform::proc::ProcessIdentity;
 use crate::platform::proc_table;
 use crate::platform::term as host_term;
+use crate::platform::term::Command;
 use crate::request_guard::{headers_allowed, same_secret};
 
 /// How long a connection has to say hello.
@@ -67,6 +76,18 @@ const OUTBOUND_FRAMES: usize = 512;
 /// How long the last frame of a link, and its close, have to be taken by the daemon at the other
 /// end before the link is dropped without them.
 const CLOSE_DEADLINE: Duration = Duration::from_secs(2);
+
+/// How long a companion no terminal has bound is kept after its endpoint was opened or it was
+/// started: a daemon spawns the terminal right after the start, so one left this long belongs to
+/// a launch that will not come.
+const BIND_DEADLINE: Duration = Duration::from_secs(120);
+
+/// How long [`Holder::end_all`] waits for the ends of companions already under way: a little more
+/// than a companion's grace.
+const END_ALL_WAIT: Duration = Duration::from_secs(5);
+
+/// How often the bind deadline of a companion whose start is under way is looked at again.
+const BIND_RECHECK: Duration = Duration::from_secs(1);
 
 /// How a holder is run. Everything that names a place is passed in, so a test runs one against a
 /// directory of its own.
@@ -119,6 +140,37 @@ struct LinkSlot {
     superseded_runs: HashSet<String>,
 }
 
+/// A companion no terminal has bound yet, by the terminal id it was opened under.
+struct Unbound {
+    companion: Arc<Companion>,
+    /// The link it was asked over, whose end ends it.
+    generation: u64,
+    /// Its start is under way.
+    starting: bool,
+    /// When it is ended if no terminal has bound it by then.
+    deadline: Instant,
+}
+
+/// An end of a companion under way, which the holder counts until it is dropped and then settles.
+struct EndingGuard(Arc<Holder>);
+
+impl Drop for EndingGuard {
+    fn drop(&mut self) {
+        self.0.ending.fetch_sub(1, Ordering::AcqRel);
+        self.0.settle();
+    }
+}
+
+/// What [`ToHolder::StartCompanion`] asks.
+struct CompanionStart {
+    id: String,
+    req: u64,
+    command: Command,
+    ready: Ready,
+    within: Duration,
+    containment: Option<ContainmentSpec>,
+}
+
 struct Holder {
     config: HolderConfig,
     instance_id: String,
@@ -126,6 +178,13 @@ struct Holder {
     terminals: Mutex<HashMap<String, Arc<Terminal>>>,
     /// Terminals being started, which count as running when deciding whether to exit.
     pending: Mutex<HashSet<String>>,
+    /// The companions no terminal has bound yet, which count as something to serve as a pending
+    /// spawn does, and are never listed in a welcome.
+    companions: Mutex<HashMap<String, Unbound>>,
+    /// The companions being ended on threads of their own, which count as something to serve
+    /// until each end is done: the holder must not exit before the grace, the kill and the sweep
+    /// of an end it started.
+    ending: AtomicUsize,
     link: Mutex<LinkSlot>,
     helpers: Arc<Helpers>,
     last_parting: Mutex<LastParting>,
@@ -183,6 +242,8 @@ pub async fn run_until(
         secret,
         terminals: Mutex::new(HashMap::new()),
         pending: Mutex::new(HashSet::new()),
+        companions: Mutex::new(HashMap::new()),
+        ending: AtomicUsize::new(0),
         link: Mutex::new(LinkSlot {
             generation: 0,
             current: None,
@@ -265,18 +326,39 @@ impl Holder {
         self.link.lock().unwrap_or_else(|err| err.into_inner())
     }
 
+    fn companions(&self) -> MutexGuard<'_, HashMap<String, Unbound>> {
+        self.companions
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+    }
+
     fn terminal(&self, id: &str) -> Option<Arc<Terminal>> {
         self.terminals().get(id).cloned()
     }
 
-    /// Exits when nothing is left to serve: no terminal, no spawn under way, and either no daemon
-    /// linked or the linked one has said to drain.
+    /// Exits when nothing is left to serve: no terminal, no spawn under way, no companion awaiting
+    /// its terminal or being ended, and either no daemon linked or the linked one has said to drain.
     fn settle(&self) {
-        let nothing_left = self.terminals().is_empty() && self.pending().is_empty();
+        let nothing_left = self.terminals().is_empty()
+            && self.pending().is_empty()
+            && self.companions().is_empty()
+            && self.ending.load(Ordering::Acquire) == 0;
         let linked = self.link().current.is_some();
         if nothing_left && (!linked || self.draining.load(Ordering::Acquire)) {
             self.exit.send(true).ok();
         }
+    }
+
+    /// Ends `companion` on a thread of its own, for a caller that must not wait. The end counts as
+    /// something the holder serves until it is done, and the holder settles then. Counted before
+    /// this returns, so that the caller's own settle sees it.
+    fn end_in_background(self: &Arc<Self>, companion: Arc<Companion>) {
+        self.ending.fetch_add(1, Ordering::AcqRel);
+        let counted = EndingGuard(self.clone());
+        std::thread::spawn(move || {
+            companion.end();
+            drop(counted);
+        });
     }
 
     /// Closes the link `generation` from this side, if it is still the one in place. The daemon
@@ -291,17 +373,35 @@ impl Holder {
         }
     }
 
-    /// Ends every program and forgets every terminal. **Blocks** off the runtime.
+    /// Ends every program and forgets every terminal, and ends every companion, the terminals in
+    /// parallel (each waits out its own grace) and the ends already under way waited for.
+    /// **Blocks** off the runtime.
     async fn end_all(self: &Arc<Self>) {
         let all: Vec<Arc<Terminal>> = self
             .terminals()
             .drain()
             .map(|(_, terminal)| terminal)
             .collect();
+        let unbound: Vec<Arc<Companion>> = self
+            .companions()
+            .drain()
+            .map(|(_, unbound)| unbound.companion)
+            .collect();
+        let holder = self.clone();
         let ended = tokio::task::spawn_blocking(move || {
-            for terminal in all {
-                terminal.end();
-            }
+            std::thread::scope(|scope| {
+                for terminal in &all {
+                    scope.spawn(move || terminal.end());
+                }
+                for companion in &unbound {
+                    scope.spawn(move || companion.end());
+                }
+                // Ends started on threads of their own before the holder was asked to end.
+                let deadline = Instant::now() + END_ALL_WAIT;
+                while holder.ending.load(Ordering::Acquire) > 0 && Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+            });
         })
         .await;
         if ended.is_err() {
@@ -317,6 +417,8 @@ impl Holder {
     /// crash.
     async fn link_ended(self: &Arc<Self>, generation: u64, ending: Ending) {
         self.helpers.relays.detach(generation);
+        // Whatever the ending: a launch straddling it fails, as a spawn whose answer is lost does.
+        self.end_unbound_of(generation);
         {
             let mut slot = self.link();
             if slot.generation != generation {
@@ -345,7 +447,7 @@ impl Holder {
         self.settle();
     }
 
-    async fn spawn(self: Arc<Self>, spec: SpawnSpec, reply: Sink) {
+    async fn spawn(self: Arc<Self>, spec: SpawnSpec, reply: Sink, generation: u64) {
         let id = spec.id.clone();
         let draining = self.draining.load(Ordering::Acquire);
         let refused = if draining {
@@ -356,10 +458,15 @@ impl Holder {
             None
         };
         if let Some(why) = refused {
-            // The key issued for the launch is of no use: its program will not run here. A key of
-            // a terminal that was spawned already is that terminal's, and stays.
+            // The key issued for the launch, and the companion started for it, are of no use: its
+            // program will not run here. Those of a terminal that was spawned already are that
+            // terminal's, and stay.
             if draining {
                 self.helpers.launches.revoke(&id);
+                let unbound = self.companions().remove(&id);
+                if let Some(unbound) = unbound {
+                    self.end_in_background(unbound.companion);
+                }
             }
             reply
                 .send(frame(&FromHolder::SpawnFailed {
@@ -368,14 +475,74 @@ impl Holder {
                 }))
                 .await
                 .ok();
+            self.settle();
             return;
         }
+        // The companion the terminal binds, if it expects one: a terminal is never attached to a
+        // dead server. One that expects none starts unbound, whatever was left under its id. A
+        // companion opened over another link than the one asking is not this launch's: the launch
+        // straddles a link drop, and fails as it does on the daemon's side. What belongs to
+        // the other link is left to it.
+        let taken = {
+            let mut companions = self.companions();
+            if spec.companion
+                && companions
+                    .get(&id)
+                    .is_some_and(|unbound| unbound.generation != generation)
+            {
+                None
+            } else {
+                Some(companions.remove(&id))
+            }
+        };
+        let Some(unbound) = taken else {
+            self.pending().remove(&id);
+            self.helpers.launches.revoke(&id);
+            reply
+                .send(frame(&FromHolder::SpawnFailed {
+                    id,
+                    error: "the terminal's companion was opened over another link".to_string(),
+                }))
+                .await
+                .ok();
+            self.settle();
+            return;
+        };
+        let companion = match (spec.companion, unbound) {
+            (true, Some(unbound)) if !unbound.starting && unbound.companion.running() => {
+                Some(unbound.companion)
+            }
+            (true, unbound) => {
+                if let Some(unbound) = unbound {
+                    self.end_in_background(unbound.companion);
+                }
+                self.pending().remove(&id);
+                self.helpers.launches.revoke(&id);
+                reply
+                    .send(frame(&FromHolder::SpawnFailed {
+                        id,
+                        error: "the terminal's companion is missing or has exited".to_string(),
+                    }))
+                    .await
+                    .ok();
+                self.settle();
+                return;
+            }
+            (false, unbound) => {
+                if let Some(unbound) = unbound {
+                    self.end_in_background(unbound.companion);
+                }
+                None
+            }
+        };
         // Its output goes to the link that is current as it starts, which is the request's own
         // unless another has taken the holder over since.
         let sink = self.link().sink.clone();
         let runtime = tokio::runtime::Handle::current();
+        let binding = companion.clone();
         let started =
-            tokio::task::spawn_blocking(move || Terminal::start(spec, sink, runtime)).await;
+            tokio::task::spawn_blocking(move || Terminal::start(spec, sink, runtime, binding))
+                .await;
         let (reply_frame, terminal) = match started {
             Ok(Ok(terminal)) => {
                 let spawned = FromHolder::Spawned {
@@ -404,6 +571,12 @@ impl Holder {
                 (failed, None)
             }
         };
+        if terminal.is_none() {
+            // A terminal that did not start bound nothing: its companion is ended here.
+            if let Some(companion) = companion {
+                self.end_in_background(companion);
+            }
+        }
         self.pending().remove(&id);
         let delivered = reply.send(frame(&reply_frame)).await.is_ok();
         match (delivered, terminal) {
@@ -495,7 +668,228 @@ impl Holder {
                 Vec::new()
             },
             handover: true,
+            companions: true,
         }
+    }
+
+    /// Ends the companions no terminal has bound that were asked for over the link `generation`.
+    fn end_unbound_of(self: &Arc<Self>, generation: u64) {
+        let mut ended = Vec::new();
+        self.companions().retain(|_, unbound| {
+            if unbound.generation == generation {
+                ended.push(unbound.companion.clone());
+                false
+            } else {
+                true
+            }
+        });
+        if ended.is_empty() {
+            return;
+        }
+        for companion in ended {
+            self.end_in_background(companion);
+        }
+        self.settle();
+    }
+
+    /// Ends the companion of `id` if no terminal has bound it. **Blocks** for up to its grace.
+    fn end_unbound(&self, id: &str) {
+        let removed = self.companions().remove(id);
+        if let Some(removed) = removed {
+            removed.companion.end();
+            self.settle();
+        }
+    }
+
+    /// Opens the endpoint of the companion of the terminal `id`, asked for over the link
+    /// `generation`, ending any companion left unbound under that id.
+    fn open_endpoint(
+        self: &Arc<Self>,
+        id: &str,
+        kind: &EndpointKind,
+        generation: u64,
+    ) -> Result<CompanionEndpoint, String> {
+        if self.draining.load(Ordering::Acquire) {
+            return Err("the holder is draining".to_string());
+        }
+        if self.terminals().contains_key(id) || self.pending().contains(id) {
+            return Err("a terminal of that id was spawned already".to_string());
+        }
+        let companion = Companion::open(id, kind)?;
+        let endpoint = companion.endpoint();
+        let serial = companion.serial;
+        let replaced = self.companions().insert(
+            id.to_string(),
+            Unbound {
+                companion,
+                generation,
+                starting: false,
+                deadline: Instant::now() + BIND_DEADLINE,
+            },
+        );
+        if let Some(replaced) = replaced {
+            self.end_in_background(replaced.companion);
+        }
+        self.watch_bind_deadline(id.to_string(), serial);
+        Ok(endpoint)
+    }
+
+    /// Ends the companion `serial` of `id` once its bind deadline passes, unless a terminal has
+    /// bound it or it was ended by then.
+    fn watch_bind_deadline(self: &Arc<Self>, id: String, serial: u64) {
+        let holder = self.clone();
+        tokio::spawn(async move {
+            loop {
+                let mut wait = BIND_RECHECK;
+                let expired = {
+                    let mut companions = holder.companions();
+                    let (starting, deadline) = match companions.get(&id) {
+                        Some(unbound) if unbound.companion.serial == serial => {
+                            (unbound.starting, unbound.deadline)
+                        }
+                        _ => return,
+                    };
+                    let now = Instant::now();
+                    if starting {
+                        None
+                    } else if deadline > now {
+                        wait = deadline - now;
+                        None
+                    } else {
+                        companions.remove(&id)
+                    }
+                };
+                if let Some(expired) = expired {
+                    tracing::warn!(terminal = %id, "no terminal bound a companion in time; it is ended");
+                    holder.end_in_background(expired.companion);
+                    holder.settle();
+                    return;
+                }
+                tokio::time::sleep(wait).await;
+            }
+        });
+    }
+
+    /// Starts the companion `start` asks for and answers on `reply`.
+    async fn start_companion(self: Arc<Self>, start: CompanionStart, reply: Sink) {
+        let (id, req) = (start.id.clone(), start.req);
+        let answer = match self.run_companion(start).await {
+            Ok((pid, identity, port)) => FromHolder::CompanionStarted {
+                req,
+                pid: Some(pid),
+                identity,
+                port,
+                error: None,
+            },
+            Err(error) => {
+                tracing::warn!(terminal = %id, %error, "a companion did not start");
+                FromHolder::CompanionStarted {
+                    req,
+                    pid: None,
+                    identity: None,
+                    port: None,
+                    error: Some(error),
+                }
+            }
+        };
+        reply.send(frame(&answer)).await.ok();
+    }
+
+    /// Starts the companion opened under `start.id` and waits for it to be ready, off the
+    /// runtime. A companion that does not come up is ended with its endpoint, and one ended while
+    /// it started (its link ended, a revoke, an end) fails the start. That end finds no process yet,
+    /// so the start ends it itself once its readiness wait returns: the holder's exit relies on the
+    /// runtime's drop waiting for blocking tasks, which a shutdown with a timeout would break.
+    async fn run_companion(
+        self: &Arc<Self>,
+        start: CompanionStart,
+    ) -> Result<(u32, Option<String>, Option<u16>), String> {
+        let CompanionStart {
+            id,
+            command,
+            ready,
+            within,
+            containment,
+            ..
+        } = start;
+        if self.draining.load(Ordering::Acquire) {
+            // As a spawn is refused while draining, the companion opened for it is of no use.
+            let unbound = self.companions().remove(&id);
+            if let Some(unbound) = unbound {
+                self.end_in_background(unbound.companion);
+            }
+            return Err("the holder is draining".to_string());
+        }
+        let companion = {
+            let mut companions = self.companions();
+            let Some(unbound) = companions.get_mut(&id) else {
+                return Err("no endpoint is open for the terminal's companion".to_string());
+            };
+            if unbound.starting || unbound.companion.started() {
+                return Err("the terminal's companion was started already".to_string());
+            }
+            unbound.starting = true;
+            unbound.companion.clone()
+        };
+        let on_exit = self.on_companion_exit(companion.clone());
+        let starting = companion.clone();
+        let started = tokio::task::spawn_blocking(move || {
+            starting.start(&command, &ready, within, containment.as_ref(), on_exit)
+        })
+        .await
+        .unwrap_or_else(|_| Err("starting the companion panicked".to_string()));
+        let (ours, failed) = {
+            let mut companions = self.companions();
+            let ours = companions
+                .get(&id)
+                .is_some_and(|unbound| unbound.companion.serial == companion.serial);
+            if !ours {
+                (false, None)
+            } else if started.is_ok() {
+                if let Some(unbound) = companions.get_mut(&id) {
+                    unbound.starting = false;
+                    unbound.deadline = Instant::now() + BIND_DEADLINE;
+                }
+                (true, None)
+            } else {
+                (true, companions.remove(&id))
+            }
+        };
+        if let Some(failed) = failed {
+            self.end_in_background(failed.companion);
+            self.settle();
+        }
+        if !ours && started.is_ok() {
+            // Ended as it came up; the end took the process.
+            return Err("the companion was ended as it started".to_string());
+        }
+        started
+    }
+
+    /// What is done once the companion `companion` exits by itself: a linked daemon is told, what
+    /// it left is swept and its endpoint removed, and the terminal that bound it is ended. An
+    /// unbound one stays in the map as exited until its spawn, end or deadline, so that a spawn
+    /// that expects it is refused.
+    fn on_companion_exit(self: &Arc<Self>, companion: Arc<Companion>) -> OnExit {
+        let holder = self.clone();
+        let runtime = tokio::runtime::Handle::current();
+        Box::new(move |terminal: Option<Arc<Terminal>>| {
+            let id = companion.id.clone();
+            tracing::warn!(terminal = %id, "a companion exited by itself");
+            // Sent off this thread: a full link must not hold up the ending below.
+            let sink = holder.link().sink.clone();
+            if let Some(sink) = sink {
+                runtime.spawn(async move {
+                    sink.send(frame(&FromHolder::CompanionEnded { id }))
+                        .await
+                        .ok();
+                });
+            }
+            companion.end();
+            if let Some(terminal) = terminal {
+                terminal.end_for_companion();
+            }
+        })
     }
 }
 
@@ -655,7 +1049,7 @@ async fn serve_link(holder: Arc<Holder>, socket: WebSocket) {
             incoming = wire_in.next() => match incoming {
                 Some(Ok(Message::Text(text))) => {
                     match serde_json::from_str::<ToHolder>(&text) {
-                        Ok(message) => handle(&holder, &out, &mut parted, message).await,
+                        Ok(message) => handle(&holder, &out, &mut parted, generation, message).await,
                         Err(err) => tracing::debug!(%err, "ignoring a frame that is not a message"),
                     }
                 }
@@ -692,11 +1086,17 @@ async fn tell_superseded(
     .ok();
 }
 
-async fn handle(holder: &Arc<Holder>, out: &Sink, parted: &mut Option<bool>, message: ToHolder) {
+async fn handle(
+    holder: &Arc<Holder>,
+    out: &Sink,
+    parted: &mut Option<bool>,
+    generation: u64,
+    message: ToHolder,
+) {
     match message {
         ToHolder::Hello { .. } | ToHolder::Unknown => {}
         ToHolder::Spawn(spec) => {
-            tokio::spawn(holder.clone().spawn(*spec, out.clone()));
+            tokio::spawn(holder.clone().spawn(*spec, out.clone(), generation));
         }
         ToHolder::Write { id, req, bytes } => match holder.terminal(&id) {
             Some(terminal) => terminal.write_raw(req, bytes, out.clone()),
@@ -804,6 +1204,9 @@ async fn handle(holder: &Arc<Holder>, out: &Sink, parted: &mut Option<bool>, mes
             let released = holder.terminals().remove(&id);
             if let Some(terminal) = released {
                 terminal.release();
+                if let Some(companion) = terminal.bound_companion() {
+                    holder.end_in_background(companion);
+                }
                 holder.settle();
             }
         }
@@ -828,7 +1231,16 @@ async fn handle(holder: &Arc<Holder>, out: &Sink, parted: &mut Option<bool>, mes
                 .await
                 .ok();
         }
-        ToHolder::RevokeLaunch { id } => holder.helpers.launches.revoke(&id),
+        ToHolder::RevokeLaunch { id } => {
+            holder.helpers.launches.revoke(&id);
+            // The launch will not come, so neither will the terminal that would bind its
+            // companion.
+            let removed = holder.companions().remove(&id);
+            if let Some(removed) = removed {
+                holder.end_in_background(removed.companion);
+                holder.settle();
+            }
+        }
         ToHolder::RelayReply { req, status, body } => holder
             .helpers
             .relays
@@ -853,6 +1265,55 @@ async fn handle(holder: &Arc<Holder>, out: &Sink, parted: &mut Option<bool>, mes
         ToHolder::Drain => {
             holder.draining.store(true, Ordering::Release);
             holder.settle();
+        }
+        ToHolder::OpenEndpoint { id, req, kind } => {
+            let answer = match holder.open_endpoint(&id, &kind, generation) {
+                Ok(endpoint) => FromHolder::EndpointOpened {
+                    req,
+                    endpoint: Some(endpoint),
+                    error: None,
+                },
+                Err(error) => FromHolder::EndpointOpened {
+                    req,
+                    endpoint: None,
+                    error: Some(error),
+                },
+            };
+            out.send(frame(&answer)).await.ok();
+        }
+        ToHolder::StartCompanion {
+            id,
+            req,
+            command,
+            ready,
+            ready_within_ms,
+            containment,
+        } => {
+            let start = CompanionStart {
+                id,
+                req,
+                command: *command,
+                ready,
+                within: Duration::from_millis(ready_within_ms),
+                containment,
+            };
+            tokio::spawn(holder.clone().start_companion(start, out.clone()));
+        }
+        ToHolder::EndCompanion { id, req } => {
+            if holder.terminal(&id).is_some() {
+                let error = Some("the companion is its terminal's and ends with it".to_string());
+                out.send(frame(&FromHolder::Done { req, error })).await.ok();
+                return;
+            }
+            // The end waits out the companion's grace, so it is not made on the link's reader.
+            let (holder, out) = (holder.clone(), out.clone());
+            tokio::spawn(async move {
+                let ended = tokio::task::spawn_blocking(move || holder.end_unbound(&id)).await;
+                let error = ended
+                    .err()
+                    .map(|_| "ending the companion panicked".to_string());
+                out.send(frame(&FromHolder::Done { req, error })).await.ok();
+            });
         }
     }
 }

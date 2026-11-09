@@ -42,6 +42,7 @@ fn welcome_text_of(version: &str) -> String {
         facts: crate::platform::term::facts(),
         answers_offline: Vec::new(),
         handover: false,
+        companions: false,
     };
     serde_json::to_string(&welcome).unwrap()
 }
@@ -133,6 +134,7 @@ fn spec() -> SpawnSpec {
         containment: None,
         kill_session_leftovers: false,
         meta: serde_json::Value::Null,
+        companion: false,
     }
 }
 
@@ -1385,4 +1387,254 @@ async fn a_planned_parting_leaves_a_holder_that_cannot_be_linked_to_running() {
     assert!(registry::read(&registry_dir, "unlinkable").is_some());
     stand_in.end();
     drop(dir);
+}
+
+/// The welcome of a holder that runs companions.
+fn welcome_text_running_companions() -> String {
+    let mut welcome: serde_json::Value = serde_json::from_str(&welcome_text()).unwrap();
+    welcome["companions"] = serde_json::Value::Bool(true);
+    welcome.to_string()
+}
+
+/// A holder that welcomes the daemon with `welcome` and answers a launch's key, a companion's
+/// start and a spawn. With `hangs_up_on_spawn`, once it has answered the spawn it removes its
+/// registry files from `registry_dir`, when given, and hangs up, as a holder that ends on its own
+/// does (one that leaves its files is a holder that cannot be reached for now). Returns the port
+/// it listens on and every frame it received.
+async fn launch_holder(
+    welcome: String,
+    registry_dir: Option<PathBuf>,
+    hangs_up_on_spawn: bool,
+) -> (u16, Arc<std::sync::Mutex<Vec<String>>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("a port");
+    let port = listener.local_addr().unwrap().port();
+    let received = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let seen = received.clone();
+    tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.expect("the daemon connects");
+        let mut socket = tokio_tungstenite::accept_async(stream)
+            .await
+            .expect("a websocket");
+        socket.next().await;
+        socket
+            .send(Message::Text(welcome))
+            .await
+            .expect("the welcome");
+        while let Some(Ok(Message::Text(text))) = socket.next().await {
+            seen.lock().unwrap().push(text.clone());
+            let (reply, vanishes) = match serde_json::from_str::<ToHolder>(&text) {
+                Ok(ToHolder::IssueLaunch { req, .. }) => (
+                    Some(FromHolder::LaunchIssued {
+                        req,
+                        key: Some("key".to_string()),
+                    }),
+                    false,
+                ),
+                Ok(ToHolder::StartCompanion { req, .. }) => (
+                    Some(FromHolder::CompanionStarted {
+                        req,
+                        pid: Some(4242),
+                        identity: None,
+                        port: None,
+                        error: None,
+                    }),
+                    false,
+                ),
+                Ok(ToHolder::Spawn(spec)) => (
+                    Some(FromHolder::Spawned {
+                        id: spec.id,
+                        pid: 4343,
+                        identity: None,
+                    }),
+                    hangs_up_on_spawn,
+                ),
+                _ => (None, false),
+            };
+            if let Some(reply) = reply {
+                socket
+                    .send(Message::Text(serde_json::to_string(&reply).unwrap()))
+                    .await
+                    .ok();
+            }
+            if vanishes {
+                if let Some(dir) = &registry_dir {
+                    for entry in registry::list(dir) {
+                        registry::remove(dir, &entry.holder_id);
+                    }
+                }
+                socket.close(None).await.ok();
+                return;
+            }
+        }
+    });
+    (port, received)
+}
+
+/// A holder whose welcome does not advertise companions, as those of builds that predate them do,
+/// is sent no frame of theirs: the launch has no companion to start, and its requests for one fail
+/// on the daemon's side.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_launch_in_a_holder_that_runs_no_companions_is_told_so_and_sends_none() {
+    let dir = ScratchDir::new("client-no-companions");
+    let (port, received) = launch_holder(welcome_text(), None, false).await;
+    tokio::task::spawn_blocking(move || {
+        let holders = holders_over(&dir, port);
+        let issued = holders
+            .issue_launch("s", None)
+            .expect("the holder issues the launch's credentials");
+        assert!(!issued.companions);
+        let error = issued
+            .open_endpoint(EndpointKind::Loopback)
+            .expect_err("no endpoint is asked of a holder that runs no companions");
+        assert!(format!("{error:#}").contains("no companions"), "{error:#}");
+        issued
+            .start_companion(
+                Command::new("/bin/true"),
+                Ready::SocketExists,
+                Duration::from_secs(1),
+                None,
+            )
+            .err()
+            .expect("no companion is started in such a holder");
+        issued
+            .end_companion()
+            .expect_err("no companion is ended in such a holder");
+        // The revoke is the last frame the launch sends, so all it sent before has arrived once it
+        // has.
+        drop(issued);
+        let deadline = Instant::now() + PATIENCE;
+        while !received
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|text| text.contains(r#""type":"revoke_launch""#))
+        {
+            assert!(Instant::now() < deadline, "the revoke never arrived");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let texts = received.lock().unwrap().clone();
+        for kind in ["open_endpoint", "start_companion", "end_companion"] {
+            assert!(
+                !texts
+                    .iter()
+                    .any(|text| text.contains(&format!(r#""type":"{kind}""#))),
+                "a {kind} frame was sent: {texts:?}"
+            );
+        }
+        drop(holders);
+    })
+    .await
+    .unwrap();
+}
+
+/// A started companion in a holder `launch_holder` scripts, bound by a terminal spawned for it.
+fn bound_companion(link: &Arc<Link>) -> (HeldCompanion, HeldTerminal) {
+    let (companion, started_port) = link
+        .start_companion(
+            "t1",
+            Command::new("/bin/true"),
+            Ready::SocketExists,
+            Duration::from_secs(5),
+            None,
+        )
+        .expect("the holder starts the companion");
+    assert_eq!(started_port, None);
+    let terminal = link
+        .spawn(SpawnSpec {
+            companion: true,
+            ..spec()
+        })
+        .expect("the holder starts the terminal");
+    (companion, terminal)
+}
+
+/// Waits until `done`, which is told what the test is waiting for if it never comes.
+fn wait_for(what: &str, mut done: impl FnMut() -> bool) {
+    let deadline = Instant::now() + PATIENCE;
+    while !done() {
+        assert!(Instant::now() < deadline, "{what}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// A holder gone for good takes the companion its terminal bound with it: here the holder ends on
+/// its own, leaving no registry file, once the terminal is started.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_bound_companion_reads_as_exited_once_the_link_to_its_holder_is_lost_for_good() {
+    let dir = ScratchDir::new("client-companion-lost");
+    let registry_dir = dir.join("holders");
+    let (port, _) =
+        launch_holder(welcome_text_running_companions(), Some(registry_dir), true).await;
+    tokio::task::spawn_blocking(move || {
+        let holders = holders_over(&dir, port);
+        let link = holders.link().expect("linked");
+        let (companion, terminal) = bound_companion(&link);
+        wait_for(
+            "the holder was lost and the companion still reads as running",
+            || companion.exited(),
+        );
+        drop((terminal, companion, link, holders));
+    })
+    .await
+    .unwrap();
+}
+
+/// A link that is only pending leaves the companion its terminal bound as it was, and it reads as
+/// exited once the holder is gone: the holder's process runs meanwhile, with its registry file.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_bound_companion_stays_while_the_link_is_pending_and_exits_once_the_holder_is_gone() {
+    let dir = ScratchDir::new("client-companion-pending");
+    let (port, _) = launch_holder(welcome_text_running_companions(), None, true).await;
+    let stand_in = StandIn::start();
+    let entry = stand_in.entry("dropped", port);
+    registry::write(&dir.join("holders"), &entry).unwrap();
+    let (holders, link, companion, terminal, dir) = tokio::task::spawn_blocking(move || {
+        let holders = holders_over(&dir, port);
+        let link = holders.connect(&entry).expect("linked");
+        let (companion, terminal) = bound_companion(&link);
+        (holders, link, companion, terminal, dir)
+    })
+    .await
+    .unwrap();
+    let deadline = Instant::now() + PATIENCE;
+    while !link.pending() {
+        assert!(Instant::now() < deadline, "the link never became pending");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(!companion.exited(), "a pending link made it read as exited");
+
+    stand_in.end();
+    while link.pending() {
+        assert!(Instant::now() < deadline, "the link is still pending");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(companion.exited());
+    tokio::task::spawn_blocking(move || drop((terminal, companion, link, holders)))
+        .await
+        .unwrap();
+    drop(dir);
+}
+
+/// A planned parting leaves the companions as they were: they are the next daemon's.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_planned_parting_leaves_a_bound_companion_not_exited() {
+    let dir = ScratchDir::new("client-companion-parting");
+    let (port, _) = launch_holder(welcome_text_running_companions(), None, false).await;
+    tokio::task::spawn_blocking(move || {
+        let holders = holders_over(&dir, port);
+        let link = holders.link().expect("linked");
+        let (companion, terminal) = bound_companion(&link);
+        link.part(true);
+        wait_for("the link stayed alive after the parting", || !link.alive());
+        // The link is recovering until what the end of the connection does is done.
+        link.settled();
+        assert!(
+            !companion.exited(),
+            "a planned parting made the companion read as exited"
+        );
+        drop((terminal, companion, link, holders));
+    })
+    .await
+    .unwrap();
 }

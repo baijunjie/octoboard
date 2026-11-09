@@ -7,14 +7,15 @@
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::Result;
 
 use super::transport::CodexTransport;
-use crate::adapter::AgentVersion;
-use crate::platform::proc::Containment;
+use crate::adapter::{AdoptedLaunch, AgentVersion};
 use crate::platform::shell::ResolvedBinary;
-use crate::session::term::{PrivateServer, StartedServer};
+use crate::session::term::{MessageTransport, PrivateServer, StartedServer};
+use crate::terminal::server_host::{FoundServer, ServerHost};
 
 /// The first release whose private server and remote terminal were measured to work as this
 /// launch needs, on macOS and Windows. Later releases are taken to keep working; whatever fails at
@@ -96,22 +97,43 @@ impl PrivateServer for PrivateServerPlan {
         binary: &ResolvedBinary,
         environment: &HashMap<String, String>,
         cwd: &Path,
-        containment: &Containment,
+        host: &dyn ServerHost,
+        launch_id: &str,
     ) -> Result<StartedServer> {
-        let transport = CodexTransport::start(binary, self, environment, cwd, containment)?;
+        let transport = CodexTransport::start(binary, self, environment, cwd, host, launch_id)?;
         let mut args = self.tui_args.clone();
         args.extend(transport.client_args());
         args.extend(self.task.iter().cloned());
         Ok(StartedServer {
             args,
             env: transport.client_env(),
-            transport: std::sync::Arc::new(transport),
+            transport: Arc::new(transport),
         })
     }
 
     #[cfg(test)]
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+/// The transport to the private server found with the terminal of the adopted `launch`, linked
+/// to again; `None` where none was found (an ordinary launch, or one in a holder that runs no
+/// servers) or the one found names no port to reach, the session's messages then going to its
+/// terminal.
+pub(super) fn adopt(launch: AdoptedLaunch<'_>) -> Option<Arc<dyn MessageTransport>> {
+    let FoundServer { endpoint, server } = launch.server?;
+    match CodexTransport::adopt(endpoint, server, launch.launch_id, launch.agent_session_id) {
+        Ok(transport) => Some(Arc::new(transport)),
+        Err(err) => {
+            tracing::warn!(
+                launch = %launch.launch_id,
+                error = %format!("{err:#}"),
+                "the private Codex app server of an adopted terminal cannot be reached; its \
+                 messages go to the terminal"
+            );
+            None
+        }
     }
 }
 

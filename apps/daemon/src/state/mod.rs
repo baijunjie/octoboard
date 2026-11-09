@@ -406,6 +406,10 @@ impl AppState {
             record_watch_generations: Mutex::new(HashMap::new()),
             next_record_watch_generation: std::sync::atomic::AtomicU64::new(0),
             record_offsets: Mutex::new(HashMap::new()),
+            // Tests name the tickets they expect from 0.
+            #[cfg(not(test))]
+            outbox: Outbox::seeded_from_clock(),
+            #[cfg(test)]
             outbox: Outbox::default(),
             hook_queues: Default::default(),
             git_statuses: RwLock::new(GitStatuses::default()),
