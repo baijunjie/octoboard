@@ -277,9 +277,11 @@ export function ShellTerminalPanel({
                 </TabList>
               </TabListContainer>
             )}
-            {/* Not inside the tab, whose close mark is its one control: after the strip, named for the terminal. */}
+            {/* Not inside the tab, whose close mark is its one control: after the strip, named for the terminal.
+                Keyed by the terminal, so closing a marked terminal while the remaining one is marked too removes
+                this mark, and runs its handoff, instead of reusing it under the other terminal's name. */}
             {activeTerminal?.screen_inexact && (
-              <span className="ms-1 flex shrink-0 items-center">
+              <span key={activeTerminal.id} className="ms-1 flex shrink-0 items-center">
                 {/* First among what goes away with the mark, so focus on it or its popover is still found. */}
                 <HandoffOnUnmount from={`[data-status-mark-id="${RECOVERED_DISPLAY_MARK_ID}"]`} to={focusShownTab} />
                 <RecoveredDisplayMark terminalTitle={activeTerminal.title} />

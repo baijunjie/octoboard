@@ -148,7 +148,48 @@ commands. Native accessibility trees were read separately (VoiceOver off or on) 
 | E11 | An unmerged local wrapper-verification build based on main `9ee45c135` | Packaged `Octoboard Wrapper Verify Fixed`, identifier and scratch signing identifier `dev.octoboard.verify.wrappers.fixed-20261107`; normal production entry, real isolated daemon and credential-free Claude fixture records/processes. FOCUS-5 uses native caption-panel screenshots, not AppleScript speech reads. |
 | E12 | Branch `fix/window-focus-refresh` at `7c717c35d` | Packaged `Octoboard Verification`, build-time identifier `dev.octoboard.verify.fr1108b`; SA-L with a human listener, real daemon and throwaway HOME, no agent CLIs. The branch's later commits `dba8e528d` and `2ff384292` change only tests, comments and polling, not the announcer path. |
 | E13 | Local main `6e8b8845bf5fd988c4fc72d923e0c1bff4423c5d`, source of `docs/voiceover-removal-git-retry` | Packaged `Octoboard Verification`, build-time identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo13-20261109-retry`; SA-O and SA-P, real daemon with isolated HOME/TMPDIR/shell and agent configuration directories, throwaway Git repositories, no agent CLI or login. |
+| E14 | Local main `263bfa3f88e77e1f507eacddf2b26380d5ccc5f3`, daemon holder-runtime repair `30eb3e434` | Packaged `Octoboard Recovery Verify`, identifier and ad-hoc signing identifier `dev.octoboard.verify.recovery.vo14`; real isolated daemon/holders, credential-free Claude CLI and real shell processes. Recovery baseline and pending-cover observations. |
+| E15 | Local main `263bfa3f88e77e1f507eacddf2b26380d5ccc5f3` (E14's source and daemon) with the UI repairs of `docs/voiceover-results` applied to its UI sources as a patch, before the follow-up changes measured on E17: the recovered mark's handoff waiting two frames from the mark and from its explanation (`shell/TitleBar.tsx`), the terminal ring from react-aria's text-input rule (`terminal/TerminalSurface.tsx`), the shell mark keyed by its terminal (`terminal/shell/ShellTerminalPanel.tsx`) and the recovered sentence deferred while the agent area is inert (`terminal/TerminalPane.tsx`, `App.tsx`) | The same packaged entry as E14, fixing recovered-mark focus handoff, terminal focus indication, shell mark identity and recovered delivery while the agent area is inert. Native rechecks use the repaired production UI. Follow-up changes are measured separately on E17. |
+| E16 | UI tree equal to main `8aba9fc5e`: built from `fix/row-axpress-delete` at `28ee0d0dc` in its own detached worktree (`git diff --stat 28ee0d0dc 8aba9fc5e -- packages/ui` is empty) | The same isolated desktop/daemon fixture as E15, with this UI's assets rather than E15's focus repairs. Native AXPress and actual VO-Space on session/project rows, plus the separate unused-session Delete shortcut. |
+| E17 | UI from `docs/voiceover-results` at `727a782e705dbb61e9d99655041ffbe1a0b76356` | Rebuilt packaged `Octoboard Recovery Verify`, identifier and ad-hoc signing identifier `dev.octoboard.verify.recovery.vo14`, with this branch's complete production UI via an absolute `frontendDist`. The isolated E14 daemon source, holder-runtime repair and scratch routing/timing/update fixtures are unchanged. Re-listens the follow-up handoff/ring mechanisms and the new held-sentence paths. |
 
+E14, E15 and E16 used macOS 26.2 (25C56), arm64, English application text, Simplified Chinese VoiceOver, and light
+appearance (E16's from its own-window screenshots) on 2026-11-10 JST. Reports use native AppleScript `content of last phrase`, requested every 25 ms, with
+actual read times, foreground PID and screen-lock checks, plus separately sampled native accessibility trees and
+own-window screenshots. Caption visibility was not used as evidence. Existing AppleScript-control, Accessibility and
+Automation grants worked outside the restricted execution sandbox; no new grant or setting change was requested.
+The scripts started VoiceOver only when it was initially off and tracked ownership for cleanup.
+
+The packaged production entry used a throwaway HOME/TMPDIR/XDG/agent configuration, a real Git project, a
+credential-free Claude CLI and real shell/holder processes. An isolated loopback gateway closed only holder WebSockets,
+leaving processes alive, and the real reconnect callbacks produced pending and inexact-screen states. For the
+under-cover rise variants an explicit verification-only 1000 ms scheduling gate ran the real resumed callback before
+clearing pending. That timing fixture is not the production callback order; ordinary-order E15 recordings omitted it.
+The UI was not populated by synthetic state events or synthetic VoiceOver `output`. Paths in RCV-1 to RCV-5 are
+relative to `packages/ui/src/`.
+
+E15's update cases installed an ephemeral-key-signed localhost archive for version 9.9.9 containing the same
+verification executables and a versioned native bundle. A Mach-O sidecar launcher kept its embedded ad-hoc signature
+through archive extraction; strict verification of both an extracted archive and the actually installed bundle passed.
+The feed's incompatible holder floor caused the genuine restart confirmation. A proxy held the real `handover_check`
+request for 900 ms from receipt, below its 2000 ms timeout, then forwarded it unchanged. No positive restart was
+accepted. Earlier updater attempts with a shell-script launcher lost its extended-attribute signature in the archive,
+failed strict validation and made fresh AX clients receive `AXErrorAPIDisabled`; those are excluded setup failures.
+The final update pass used an AX connection established before installation, retained across it, with a persistent
+native tree observer. It does not require another permission grant.
+
+E17 used macOS 26.2 (25C56), arm64, English application text, Simplified Chinese VoiceOver and light appearance on
+2026-11-10 JST. Its native last-phrase reader, native AX trees/streams and own-window captures use the same procedure
+and existing grants as E14–E16. The 1000 ms under-cover callback scheduling fixture was enabled; this round does not
+re-certify ordinary callback ordering. The bundle was rebuilt by `cargo-voiceover-relisten` with
+`CARGO_BUILD_JOBS=2`, after waiting for other Rust executables; no scripted test suite ran. Strict signature verification
+of the extracted local update passed. `relisten-environment.json` records the actual bundle identity/signature and
+executable SHA-256 `6937ee800e77ca31ecdd76f72ea8535dbe243747ae36278e6766a6766b626e9e`;
+`relisten-ui-assets.sha256.json` records the frontend assets. The local verification toolkit retains the source,
+`verify-relisten.conf.json`, build log and `relisten-cases.json` recipes. Recording paths below are under its
+`run/relisten-evidence/`, with full date prefix `20261110T`; each directory contains `steps.jsonl`, `phrases.jsonl`,
+`ax-stream.jsonl`, numbered native trees and PNGs. These are measured recordings, not synthetic speech or gallery
+state. All completed recordings were unlocked and had no phrase-reader errors.
 
 E4's tree equals main `429be4556`. E1 to E3 and the build commits behind them were unmerged local-only builds, so they
 are not durable references and are not cited by hash. E5's three commits are the fixes as they landed on main; the build
@@ -296,6 +337,13 @@ mapping.
 | [SA-N Viewer notice after paint, then an empty status](#sa-n-viewer-notice-after-paint-then-an-empty-status) | `FileNotice` through `StatusAnnouncer`, then clear; first-paint large-file notice without an announcement region | Pass for the recorded branches and focus handoff; native live attributes not sampled |
 | [SA-O Project-removal inspection failure after tick and retry](#sa-o-project-removal-inspection-failure-after-tick-and-retry) | `DelayedAnnouncer` before `StatusAnnouncer`, per-failure wait inside the removal dialog | Pass: missing Git tick/retry; malformed config tick and untick (E13) |
 | [SA-P Project Git retry beside a row button](#sa-p-project-git-retry-beside-a-row-button) | `useGitRetryAnnouncement` through `AttendedStatusAnnouncer`, alternating trailing no-break space | Pass: two still-missing-Git retries in the sidebar (E13) |
+| [RCV-1 Recovered display after uncover, attention and exposure](#rcv-1-recovered-display-after-uncover-attention-and-exposure) | attended rise through `StatusAnnouncer`, read-time clear | Pass for listed agent/shell variants; baseline inert loss repaired; responsive floating unconfirmed |
+| [RCV-2 Recovered mark removed while it or its explanation holds focus](#rcv-2-recovered-mark-removed-while-it-or-its-explanation-holds-focus) | disappearing-source handoff and visible keyboard landing | Pass for separately listed repaired destinations; baseline failures retained |
+| [RCV-3 Pending cover entry, delayed sentence and recovery](#rcv-3-pending-cover-entry-delayed-sentence-and-recovery) | named focused cover and conditional attended status | Pass for listed focus/delayed paths; double-reading sequence and immediate modal silence recorded |
+| [RCV-4 Restart preflight while keyboard focus stays on the button](#rcv-4-restart-preflight-while-keyboard-focus-stays-on-the-button) | retained pending button, genuine preflight and cancel | Pass for Settings and notice focus/state; exact feedback and busy-word limit recorded |
+| [RCV-5 Pointer Restart while terminal input keeps focus](#rcv-5-pointer-restart-while-terminal-input-keeps-focus) | non-focusing pointer press, preflight and cancel | Pass for focus/return; pending speech silent |
+| [RCV-6 Pending and no-process sentences held while the agent area is inert](#rcv-6-pending-and-no-process-sentences-held-while-the-agent-area-is-inert) | held status on exposure, focused-cover suppression | Pass for five separately measured maximized-panel variants |
+| [ROW-1 Native row activation does not invoke its nested quick action](#row-1-native-row-activation-does-not-invoke-its-nested-quick-action) | hidden first native press target in composite row | Pass: native AXPress and VO-Space for unused/used session and project; Delete pointer works, Space not certified |
 | [FOCUS-1 Focus after the login dialog closes](#focus-1-focus-after-the-login-dialog-closes) | explicit focus handoff | Pass: current table and account details; transient web-area phrase still observed (E10) |
 | [FOCUS-2 Focus after an expansion takes the pressed control away](#focus-2-focus-after-an-expansion-takes-the-pressed-control-away) | caller-told focus restore and code-frame handoff | Pass |
 | [FOCUS-3 Status mark and quota popover focus and reading paths](#focus-3-status-mark-and-quota-popover-focus-and-reading-paths) | shared hover/press popover, focus and item chooser | Pass for quota Enter/Escape focus paths, the mark's focus return on Escape and item-chooser reachability; the bare-mark Enter naming failed, see KNW-9 and FOCUS-4 |
@@ -309,7 +357,7 @@ mapping.
 | [WARN-3 Deletion warning modal with option notes outside the checkbox](#warn-3-deletion-warning-modal-with-option-notes-outside-the-checkbox) | warning modal: plain body, session list and consequences; checkbox name and an external note through `aria-describedby` | Pass for focus and sequential reading; opening announcement unconfirmed |
 | [WARN-4 Remove project with running sessions and a lookup-failure mark](#warn-4-remove-project-with-running-sessions-and-a-lookup-failure-mark) | warning modal with running sessions; external note; a separate mark after the checkbox | Pass |
 | [WARN-5 Trust prompt caution as plain body text](#warn-5-trust-prompt-caution-as-plain-body-text) | the caution as one plain paragraph, no prefix or title | Pass for sequential reading; opening announcement unconfirmed |
-| [Known not to work](#known-not-to-work) | nine failing or negative observations (KNW-1 to KNW-9; each names the case that replaced it) | **Fail** (history) |
+| [Known not to work](#known-not-to-work) | twelve failing or negative observations (KNW-1 to KNW-12; each names the case that replaced it) | **Fail** (history) |
 | [OPEN-1 Import result dialog rename](#open-1-import-result-dialog-rename) | focus move onto a renamed dialog | Unconfirmed |
 | [OPEN-2 Startup failure page alert](#open-2-startup-failure-page-alert) | delayed `EmptyPanel` alert on a page with no focus move | Unconfirmed |
 
@@ -1587,6 +1635,327 @@ mapping.
 - **Reuse scope.** Covers the Codex-specific plain caution in the packaged trust dialog. It does not establish the
   Claude Code or Grok cautions, another language or appearance, accepting trust or its persistence.
 
+### RCV-1 Recovered display after uncover, attention and exposure
+
+- **Location and state change.** A running agent terminal or the shown shell loses its holder connection, becomes
+  `holder_link: pending`, then returns with `screen_inexact: true`. The process remains alive. Agent recovery passes
+  through its loading/first-paint cover; the shell uncovers directly.
+- **Mechanism.** `terminal/TerminalPane.tsx` (`recoveredSaid`) and `terminal/shell/ShellTerminalView.tsx`, through
+  `terminal/useAnnouncedOnRise.ts` and `terminal/useAttendedDelivery.ts`, feed a `StatusAnnouncer` with
+  `clearAfterRead`. The sentence waits `AFTER_FOCUS_MOVE_DELAY_MS` (1500 ms) of attended, uncovered time. Its
+  `liveAnnouncerProps` wrapper keeps it exposed beside an unrelated modal, but not inside an inert area. While the agent
+  area is inert, E15 defers the sentence: `App`'s `agentAreaInert = covered || floatingShown` is passed to
+  `TerminalPane` as `exposed`, and the sentence is written once after exposure. Merely undocking the desktop pane is a
+  different condition. E17 also measures the pending and no-process sentences held by `TerminalPane` in RCV-6;
+  other cover sentences remain outside those measurements.
+- **ARIA wiring as rendered.** Native `AXGroup`, `AXARIALive: polite`, `AXARIAAtomic: true`,
+  `AXARIARelevant: additions text`; a descendant `AXStaticText` carries the sentence. Its own value is empty, so the
+  captured child text, rather than the group's value alone, establishes the write and clear. The recovered mark is a
+  separate `AXButton`; it remains after the automatic sentence clears.
+- **Result.** The exact automatic sentence is `Recovered terminal display`. Each row is a separate recording, not a
+  claim that another focus or destination matches it. “Once” has the last-phrase limit described above.
+
+| Variant | Result and observed speech | Recording |
+|---|---|---|
+| Agent, focus on pending cover | Pass: named pending region, `Terminal input 文本输入区`, then recovered sentence 1.59 s later | E14 `013542-g1-agent-cover` |
+| Agent, focus elsewhere | Pass: Settings kept focus; one recovered sentence | E14 `013602-g1-agent-elsewhere` |
+| Agent, recovery while Finder is frontmost | Pass: no recovered sentence while away; window/input phrase on return, then recovered sentence | E14 `013622-g1-agent-away` |
+| Agent, unrelated Settings modal | Pass: recovered sentence beside the still-open dialog | E14 `013641-g1-agent-modal` |
+| Agent, second recovery with flag unchanged | Pass: two cover/input transitions, only the first recovered sentence | E14 `013658-g1-agent-duplicate` |
+| Agent, switch subject before delivery and return with flag already on | Pass: no stale or newly replayed recovered sentence | E14 `013720-g1-agent-subject-change` |
+| Shell, focus on pending cover | Pass: named shell region, input phrase, then recovered sentence 1.60 s later | E14 `013320-g1-shell-cover` |
+| Shell, focus elsewhere | Pass: Settings kept focus; one recovered sentence | E14 `013858-g1-shell-elsewhere` |
+| Shell, recovery while Finder is frontmost | Pass: no recovered sentence while away; window/input phrase first on return, then recovered sentence | E14 `013918-g1-shell-away` |
+| Shell, unrelated Settings modal | Pass: recovered sentence beside the dialog | E14 `013938-g1-shell-modal` |
+| Shell, second recovery with flag unchanged | Pass: only the first recovered sentence | E14 `013955-g1-shell-duplicate` |
+| Shell, switch before delivery and return with flag already on | Pass: no stale or newly replayed recovered sentence | E14 `014019-g1-shell-subject-change` |
+| Agent, maximized Terminal panel holds it inert for 8 s | Fail in E14: sentence lost, including after Restore panel size | E14 `020945-g1-agent-inert-maximized` |
+| Same maximized path, exposure gate | Pass in E15: no measured-subject recovered sentence while inert; one after Restore panel size | E15 `021902-g1-agent-inert-maximized` |
+| Desktop Float panels | Recovered sentence heard while undocked; this does not cover an inert agent area | E14 `021019-g1-agent-inert-floating` |
+| Agent ordinary callback order, without under-cover scheduling gate | Pass: input phrase precedes one recovered sentence | E15 `022419-g1-agent-cover` |
+| Shell ordinary callback order, without under-cover scheduling gate | Pass: direct input return precedes one recovered sentence | E15 `022440-g1-shell-cover` |
+| Agent cover → input, follow-up ring mechanism | Pass in E17: `Terminal input 文本输入区`, one recovered sentence 1.58 s later; blue input ring in `10-recovered.png` | `042626-g1-agent-cover` |
+| Shell cover → input, follow-up ring mechanism | Pass in E17: `Terminal input 文本输入区`, one recovered sentence 1.58 s later; blue input ring in `13-recovered.png` | `042645-g1-shell-cover` |
+| Responsive floating panel | Unconfirmed: native window minimum is 1168 px, above the 768 px responsive boundary; requested 740 px was clamped to 1168 px | E15 `021937-g1-agent-inert-responsive` |
+
+- **Clear and on-demand reading.** Agent and shell native streams each captured one write followed by an empty region
+  about 5.12 s and 5.02 s later respectively (the 5000 ms read time plus sampling). Later focusing the separate mark
+  read `Recovered terminal display 已折叠 按钮 横幅` for the agent and
+  `Recovered terminal display (⁨VO shell d176f⁩) 已折叠 按钮 Terminals of ⁨VO project⁩ 区域` for the shell. That manual
+  reading is not a second automatic announcement.
+- **Capture, environment and date.** E14/E15/E17 native AppleScript last phrase, persistent native AX streams and
+  screenshots, 2026-11-10 JST. All recording identifiers in this section have the date prefix `20261110T`.
+- **Reuse scope.** Only the listed cover/exposure/attention/focus relations. Recovery with the flag deliberately rising
+  under the pending cover used the E14 scheduling fixture; ordinary ordering and actual daemon restart are separate
+  observations. An additional real daemon SIGKILL/relaunch did produce `screen_inexact: true` on the surviving
+  session (`022607-g1-agent-daemon-restart`), but the frontend remounted with no project session selected. That does
+  not certify an automatic announcement for a continuously open view; its attempted mark lookup was excluded.
+  The responsive floating condition has no passing native case.
+
+### RCV-2 Recovered mark removed while it or its explanation holds focus
+
+- **Location and state change.** End the isolated agent process, or close the shown shell, while the recovered trigger
+  or its pressed explanation holds focus. The explanation really opens and receives native focus before removal.
+- **Mechanism.** `shell/TitleBar.tsx` (`Breadcrumb`, `HandoffOnUnmount`) waits two frames for the explanation's
+  focus-scope restore when focus was inside the explanation, then focuses the terminal only if focus is still
+  unclaimed. With only the trigger focused, E17 hands off immediately. `terminal/TerminalSurface.tsx` uses
+  `primitives/focus.ts` (`useArrivalFocusProps`) in E17 to decide the ring as focus arrives; E15 used
+  `useFocusVisibleProps` with the text-input rule. E17's ring is shown for keyboard arrival or an automatic handoff,
+  suppressed beneath an opaque cover, and unchanged by Escape/Tab typed after a pointer arrival.
+  `terminal/shell/ShellTerminalPanel.tsx` keys the recovered-mark wrapper by terminal identity, so replacing a marked
+  shell with another marked shell unmounts the old source; `useShellTabFocus` hands focus to the selected tab or
+  New terminal. Events while another control holds focus move nothing.
+- **ARIA wiring as rendered.** The trigger is `AXButton`, expanded while pressed; the explanation is a named native
+  web dialog with its body in a group. Agent landing is `AXTextArea`, named `Terminal input`; shell landing is the
+  selected native `AXRadioButton` tab, or the header's `AXButton` named `New terminal` when no tabs remain.
+- **Baseline failures.** E14 agent trigger removal reached input without a visible ring (`013739-g2-agent-trigger`).
+  An actually opened explanation then removed left only `Octoboard 网页内容` and no input landing
+  (`014344-g2-agent-explanation`). Closing a marked shell when its replacement also had a mark reused the focused
+  mark for the replacement instead of reaching its tab (`014040-g2-shell-trigger`). These failures remain history;
+  earlier Enter attempts that did not open the explanation are not explanation evidence.
+- **Results, E15 and separately marked E17.** Every row below is independent. A transient `Octoboard 网页内容` was still sampled during removal,
+  followed by the correct destination phrase; it is not a web-area-only final landing. Settled native focus and the
+  visible blue ring were checked in the screenshots for each destination.
+
+| Source and destination | Result | Recording |
+|---|---|---|
+| Agent trigger → terminal | Pass: `Terminal input 文本输入区 主要`, ring visible | `022028-g2-agent-trigger` |
+| Agent pressed explanation → terminal | Pass: actual body/dialog phrase before removal, then input phrase and ring | `022048-g2-agent-explanation` |
+| Agent trigger → terminal, immediate handoff | Pass in E17: `Terminal input 文本输入区 主要`; blue ring in `12-after-end.png` | `042402-g2-agent-trigger` |
+| Agent pressed explanation → terminal, two-frame handoff | Pass in E17: actual body/dialog phrase, transient web-area phrase, then `Terminal input 文本输入区 主要`; blue ring in `14-after-end.png` | `042436-g2-agent-explanation` |
+| Agent trigger, Settings already focused | Pass: Settings remains focused | `022109-g2-agent-trigger-elsewhere` |
+| Agent explanation closed, then Settings focused | Pass: Settings remains focused when process ends | `022128-g2-agent-explanation-elsewhere` |
+| Shell trigger → remaining marked shell's tab | Pass: `VO spare 34647 已选择 标签，第1项（共1项） Terminals 标签组`, ring visible | `022149-g2-shell-trigger` |
+| Shell pressed explanation → remaining marked shell's tab | Pass: `VO spare 5f5fc 已选择 标签，第1项（共1项） Terminals 标签组`, ring visible | `022210-g2-shell-explanation` |
+| Shell trigger, Settings already focused | Pass: Settings remains focused | `022231-g2-shell-trigger-elsewhere` |
+| Shell explanation closed, then Settings focused | Pass: Settings remains focused | `022253-g2-shell-explanation-elsewhere` |
+| Last shell's trigger → no-tabs fallback | Pass: `New terminal 按钮 Terminals of ⁨VO project⁩ 区域`, header button ring visible | `022315-g2-shell-no-tabs` |
+| Last shell's pressed explanation → no-tabs fallback | Pass: explanation was focused, then New terminal and its visible ring | `023132-g2-shell-explanation-no-tabs` |
+
+- **Capture, environment and date.** E15 and the separately marked E17 native last phrase, native focus/trees and
+  screenshots, 2026-11-10 JST. Recording identifiers have the date prefix `20261110T`.
+- **Reuse scope.** Only these disappearing sources, real process-end/terminal-close transitions and destinations.
+  “Elsewhere after explanation” closes the explanation before focusing Settings; it does not claim that focus can
+  be placed behind an open modal. The table does not certify arbitrary popup-removal or terminal-focus patterns.
+
+### RCV-3 Pending cover entry, delayed sentence and recovery
+
+- **Location and state change.** Disconnect only the daemon-to-holder transport while the real agent or shell
+  process continues. The daemon reports `holder_link: pending` and retries; releasing the connection restores it.
+- **Mechanism.** `terminal/TerminalCover.tsx` renders the pending cover as a focusable named region, described by its
+  title and body. `terminal/usePendingFocus.ts` hands focus from input or a vanished Reconnect to that region and
+  returns it to input only while the cover still holds it. `terminal/useAnnouncedWhilePending.ts` supplies separate
+  immediate and delayed `StatusAnnouncer` texts in `TerminalPane` and `shell/ShellTerminalView`. An already-pending
+  subject waits 1500 ms of attended time; at delivery it checks whether focus is on the cover. Retries and renames do
+  not start another period. The delayed region is marked as a live announcer beside a modal; the immediate one is not.
+- **ARIA wiring as rendered.** The focused cover is native `AXGroup`, role description `区域`, named by the session's
+  display title or shell title. The shell also has a same-named `标签页面板`; these are two separate ancestors, not two
+  live regions. Title/body are native readable text. Status regions have the polite/atomic/additions-text mapping in
+  RCV-1. Generated `aria-describedby` ID strings were not extracted from the DOM.
+- **Exact copy.** Agent focus reads the session name, `Reconnecting to the session…`, and
+  `The session process is still running. Input is unavailable until the connection returns. Reconnection is automatic.`
+  The delayed automatic sentence begins `Reconnecting to the session.` and continues with that same body. The shell
+  uses `Reconnecting to the terminal…` on focus and `Reconnecting to the terminal.` automatically, with
+  `The shell process is still running. Input is unavailable until the connection returns. Reconnection is automatic.`
+  Each focused phrase ends in `区域` (and can include the main-region prefix `主要`).
+
+| Variant | Result | Recording (E14 unless marked) |
+|---|---|---|
+| Agent input → pending → recovery | Pass: session name/title/body once from focus, no second pending sentence; input on recovery | `015136-g3-agent-input` |
+| Agent open subject turns pending, Settings focus rested 700 ms | Pass: one immediate pending sentence; Settings retained through recovery | E15 `022820-g3-agent-elsewhere` |
+| Agent immediate write while away, pending held another 4 s after return | Silent throughout away interval and the post-return pending interval; no replay | E15 `022904-g3-agent-immediate-away` |
+| Agent focused Reconnect → pending → recovery | Pass: `Reconnect 按钮`, named pending region, then `Terminal input 文本输入区` | `020807-g3-agent-reconnect` |
+| Agent shown already pending, Settings focused | Pass: one delayed sentence, Settings retained | `015220-g3-agent-delayed` |
+| Agent move onto cover before due | Pass: focused region copy, no delayed sentence | `015241-g3-agent-onto-cover` |
+| Agent reach cover, then leave before due | Observed two readings: focused region copy, then the automatic pending sentence | `015302-g3-agent-cover-and-leave` |
+| Agent leave window during delayed wait | Pass: no pending sentence in Finder; one after return | `015323-g3-agent-away` |
+| Agent immediate write under Settings modal | Silent while modal open; after Escape, the focused cover's copy is read; this is not live-announcement success | `015412-g3-agent-immediate-modal` |
+| Agent rename and repeated connection attempts | Pass: no extra pending sentence; recovery still returns input | `020847-g3-agent-rename-retry` |
+| Shell input → pending → recovery | Pass: shell name/title/body once from focus, no second pending sentence; input on recovery | `015432-g3-shell-input` |
+| Agent input → pending → recovery, follow-up ring | Pass in E17: named cover description only during pending, input phrase on return; ring in `11-input-restored.png` | `042456-g3-agent-input` |
+| Agent Reconnect → pending → recovery, follow-up ring | Pass in E17: actual Reconnect, named cover, then input phrase; ring in `13-restored.png` | `042520-g3-agent-reconnect` |
+| Shell input → pending → recovery, follow-up ring | Pass in E17: named cover description only, input phrase on return; ring in `14-input-restored.png` | `042600-g3-shell-input` |
+| Shell open subject turns pending, Settings focus rested 700 ms | Pass: one pending sentence; Settings retained | E15 `023651-g3-shell-elsewhere` |
+| Shell immediate write while away, pending held another 4 s after return | Silent while away and after return; no replay | E15 `023714-g3-shell-immediate-away` |
+| Shell shown already pending, Settings focused | Pass: one delayed sentence, Settings retained | `015521-g3-shell-delayed` |
+| Shell move onto cover before due | Pass: focused region copy, no delayed sentence | `020004-g3-shell-onto-cover` |
+| Shell reach cover, then leave before due | Observed two readings: focused region copy, then the automatic pending sentence | `020026-g3-shell-cover-and-leave` |
+| Shell leave window during delayed wait | Pass: no pending sentence in Finder; one after return | `020048-g3-shell-away` |
+| Shell immediate write under Settings modal | Silent while modal open; subsequent cover focus reads its copy | `020141-g3-shell-immediate-modal` |
+| Shell already pending, keyboard tab switch | Pass: tab retains focus; one delayed pending sentence | `020203-g3-shell-tab-keyboard` |
+| Shell already pending, pointer tab switch | Pass: focus moves into the named cover; no second pending sentence | `020225-g3-shell-tab-pointer` |
+| Shell rename and repeated connection attempts | Pass: no extra pending sentence | `020915-g3-shell-rename-retry` |
+
+- **Pointer arrival and covered surface, E17.** In `042456-g3-agent-input` and `042600-g3-shell-input`, a real
+  pointer click into the recovered input removed its ring. Real Escape then Tab stayed in the same terminal input and
+  did not bring it back (`13-mouse-no-ring.png` / `17-mouse-escape-tab-no-ring.png` for agent;
+  `16-mouse-no-ring.png` / `20-mouse-escape-tab-no-ring.png` for shell). The focused pending region has its own ring,
+  distinct from the hidden input's. RCV-6's exposed off-cover screenshots show no input ring through the opaque
+  pending covers. RCV-6 separately measures the new held immediate/delayed sentences while the agent area is inert.
+- **Usable input.** E15 `024151-g3-agent-input-usable` recovered from pending, retained the returned input focus and
+  sent real character key events plus Enter; the fixture's stdin receipt was exactly `VO-AGENT-INPUT-OK`.
+  `024213-g3-shell-input-usable` sent `printf 'VO-SHELL-INPUT-OK\n'` after recovery and captured its terminal output.
+  Earlier whole-string Unicode-event probes only delivered the first character to xterm and are excluded as typing
+  fixtures, rather than treated as successful full probe commands.
+- **Timing/setup limits.** Reconnect was awaited until it actually appeared after the production backoff (about 23 s),
+  not inferred from a fixed 8 s wait. The early agent immediate-elsewhere attempt moved Settings focus less than 300 ms
+  before the pending write and was silent; it is not an at-rest SA-A match. For the away immediate path, the first
+  attempts released pending immediately on return and do not establish a full post-return interval.
+- **Capture, environment and date.** E14, E15 and E17 native last phrase, native trees/focus and screenshots,
+  2026-11-10 JST, each row on the build its recording column names; recording identifiers have the date prefix `20261110T`.
+- **Reuse scope.** Listed focus/attention relations only. The two-copy reach-and-leave sequence is explicitly observed,
+  not evidence for an exactly-once total. Immediate writes under a modal are recorded as silence, not covered by the
+  delayed path's exposed-live-region result. No real model or login service was involved.
+
+### RCV-4 Restart preflight while keyboard focus stays on the button
+
+- **Location and state change.** From installed-update Settings > About, then separately from the bottom update
+  notice, focus Restart now and send Enter. The real preflight is held for 900 ms; send a second Enter about 150 ms
+  after the first. The real incompatible-holder confirmation opens, and Cancel is pressed.
+- **Mechanism.** `settings/UpdatesSetting.tsx` and `updates/UpdateNotice.tsx` pass the update store's restarting state
+  to `primitives/Button.tsx` (`pending`, HeroUI/react-aria `isPending`). `updates/updateStore.ts` guards the restart
+  operation; the desktop platform's real handover preflight opens the ordinary exit confirmation. This is pending on
+  a retained control, rather than a disabled control replaced with a different one.
+- **ARIA wiring as rendered.** Same native `AXButton` and DOM identifier before, during and after preflight.
+  Pending retains `AXFocused: true`, changes `AXEnabled` to false and removes `AXPress`; Cancel restores
+  `AXEnabled: true` and `AXPress`. Native `AXARIABusy` was not returned, so no literal native busy attribute is
+  claimed. Frame captures show the spinner and the button's visible focus ring during the held interval.
+- **Result.** Both keyboard placements pass focus retention, blocked second activation, genuine confirmation and
+  cancellation return, recorded separately below. Each interval contains exactly one outbound `handover_check`,
+  one receipt-based hold, one forward after 900 ms and one confirmation; a second Enter produces no second request.
+  The final native button is enabled and focused. VoiceOver's pending feedback is recorded verbatim, without
+  inferring a busy utterance from source markup or from FOCUS-5.
+
+| Placement | Speech and return | E15 recordings |
+|---|---|---|
+| Settings > About | During the first pending run: `Restart now`, then `Restart now Restart now`; confirmation: `Restart Octoboard Restarting interrupts the sessions below. You can resume each one after the restart. 网页警告对话框`. Cancel returns to the same Settings button; the return phrase includes `Restart now 网站“按钮”正忙 按钮 About 标签页面板`, followed by the settled enabled native state. | `024110-g4-settings`; visual/state repeat `024344-g4-settings` |
+| Bottom notice, keyboard | During pending: `Restart now 按钮 Application update 区域`, then `Restart now`; same confirmation sentence. Cancel returns to the notice button, with `Restart now 网站“按钮”正忙 按钮 Application update 区域`, followed by settled enabled state. | `024124-g4-notice`; visual/state repeat `024359-g4-notice` |
+
+- **Capture, environment and date.** E15, last-phrase polling, a persistent AX observer established before actual
+  update installation, snapshots and timestamped own-window frame captures, 2026-11-10 JST. Recorded speech can
+  still describe pending just as focus returns, before the async restart promise clears it; the settled samples
+  establish that it did clear. The first held interval did not yield an explicit busy word in either placement.
+- **Reuse scope.** These two real installed-update keyboard paths only. It does not establish a universal spoken
+  busy phrase, another pending duration, timeout/refusal behavior, or actual restart execution.
+
+### RCV-5 Pointer Restart while terminal input keeps focus
+
+- **Location and state change.** With a real signed update installed and terminal input focused, click the bottom
+  notice's Restart now. Hold the real preflight for 900 ms, allow its confirmation, then Cancel.
+- **Mechanism.** `updates/UpdateNotice.tsx` uses `Button` with `focusOnPress={false}` and `pending` from the same
+  guarded update operation as RCV-4. The native pointer click, rather than AXPress or a keyboard activation, is used.
+  The ordinary exit confirmation restores the input that held focus before opening.
+- **ARIA wiring as rendered.** The notice button changes native enabled/action state as in RCV-4, but stays
+  `AXFocused: false`; the terminal `AXTextArea` retains `AXFocused: true` throughout the held preflight. After Cancel
+  the enabled Restart button has its action again and the same terminal input is focused. Held-interval screenshots
+  show the spinner without a focus ring on the pointer-pressed button.
+- **Result.** Pass for focus and return; silence is the measured busy-feedback result. `Terminal input 文本输入区 主要`
+  precedes the held interval, no pending/busy sentence is read during it, the real confirmation sentence from RCV-4
+  follows, and Cancel returns to `Terminal input 文本输入区 主要`. A transient `Octoboard 网页内容` occurs on cancellation
+  before that input phrase. One `handover_check` was actually held and forwarded. No positive restart was accepted.
+- **Capture, environment and date.** E15 `024138-g5-notice-pointer`, repeated with held-interval frames as
+  `024413-g5-notice-pointer`; persistent native AX state and last-phrase polling, 2026-11-10 JST.
+- **Follow-up re-listen, E17.** `042959-g5-notice-pointer` passes with the new arrival-based terminal ring. The real
+  signed update installed and passed strict bundle verification. One `handover_check` was received at
+  `2026-11-09T19:30:05.670Z`, held from `.671Z` and forwarded at `19:30:06.573Z` (900 ms configured, 902 ms
+  between logged hold/release). Native samples in `held-interval-summary.json` keep `Terminal input` focused while
+  Restart now is disabled, unfocused and lacks `AXPress`; `AXARIABusy` is absent. The phrase log contains no busy
+  utterance during the hold. The genuine confirmation opens before the 2000 ms timeout, Cancel returns through
+  `Octoboard 网页内容` to `Terminal input 文本输入区 主要`, and `12-cancel-return.png` shows the blue input ring.
+  Held-state frames and `persistent-update-ax.jsonl` are retained beside the proxy-event slice. No positive restart
+  action was sent.
+- **Reuse scope.** This non-focusing pointer notice path and its input return only. Silence here cannot claim
+  FOCUS-5 or RCV-4's focused-button speech result.
+
+### RCV-6 Pending and no-process sentences held while the agent area is inert
+
+- **Location and state change.** Maximize the project's Terminal panel, making the agent area inert. For immediate
+  pending, the selected live agent then loses its holder transport. For delayed pending, select the alternate agent,
+  block the transport, then select the already-pending target while still maximized. For the no-process bar, end only
+  the selected fixture process while maximized. Wait 6 s in the hidden state, press Restore panel size, then place
+  native focus on Settings or the newly exposed pending cover before the held delivery is due. No modal is opened.
+- **Mechanism.** `App.tsx` passes `agentAreaInert` as `terminal/TerminalPane.tsx`'s `exposed`. `TerminalPane`'s
+  `coverSaid`, `pendingDelayedSaid` and `barSaid` use `terminal/useHeldWhileHidden.ts` (`useHeldWhileHidden`);
+  `terminal/useAnnouncedWhilePending.ts` (`useAnnouncedWhilePending`) distinguishes a live rise
+  from opening an already-pending subject. `useHeldWhileHidden` waits `AFTER_FOCUS_MOVE_DELAY_MS` (1500 ms) after
+  exposure before writing to `components/announce/StatusAnnouncer.tsx` (`StatusAnnouncer`). For pending,
+  `stillDue: notOnCover` consumes the held sentence silently if the cover already holds focus.
+  An already delivered sentence stays unchanged across hiding and exposure. The no-process bar measured here says
+  `Not running`; the archived variant and the other cover sentences were not heard in this round.
+- **Effective native mapping.** No target agent sentence or target cover was exposed in the inert native tree. On
+  exposure, the off-cover cases have one native `AXGroup` with empty name/value, `AXARIALive: polite`,
+  `AXARIAAtomic: true`, `AXARIARelevant: additions text`, and an `AXStaticText` child carrying the exact sentence.
+  In the on-cover cases the named `AXGroup` region holds focus and its title/body remain readable; no pending sentence
+  is present in either status region, including after focus subsequently moves to Settings. Settings remains a named
+  native `AXButton`, not a modal. The no-process bar's visible sentence is hidden separately while Resume remains
+  reachable; the spoken text comes from its status region. Source ARIA wiring and native exposure were checked
+  separately; generated description IDs were not extracted.
+- **Result.** All five E17 variants pass within last-phrase polling's repeat-count limit. The exact automatic pending
+  phrase is `Reconnecting to the session. The session process is still running. Input is unavailable until the
+  connection returns. Reconnection is automatic.` Cover focus instead reads `主要`, the actual session name,
+  `Reconnecting to the session…`, the same body and `区域`. That is a focus description, not a live-region success.
+
+| Variant after Restore panel size | Result | Recording and snapshots |
+|---|---|---|
+| Immediate pending, focus on Settings | No target sentence while inert; one automatic pending phrase 1.62 s after Restore; no replay after later focus action | `042705-new-immediate-elsewhere`: `8-inert`, `12-exposed`, `15-no-replay` |
+| Immediate pending, focus lands on cover | Cover description only; no automatic pending sentence, including after moving to Settings 6 s later | `042740-new-immediate-cover`: `8-inert`, `12-exposed`, `15-no-replay` |
+| Delayed pending, focus on Settings | No target sentence while inert; one automatic pending phrase 1.60 s after Restore; no later replay | `042814-new-delayed-elsewhere`: `10-inert`, `14-exposed`, `17-no-replay` |
+| Delayed pending, focus lands on cover | Cover description only; no automatic pending sentence, including after moving to Settings 6 s later | `042847-new-delayed-cover`: `10-inert`, `14-exposed`, `17-no-replay` |
+| No-process bar, focus on Settings | No `Not running` while inert; one `Not running` 1.61 s after Restore; no second reading after another maximize/restore | `042921-new-no-process`: `7-inert`, `11-exposed`, `17-second-exposure` |
+
+- **Evidence and reuse scope.** E17 native phrase samples include timestamps, foreground PID and focus; the numbered
+  snapshots above each have `.ax.json` and `.png` artifacts. The restored off-cover pending screenshots have no
+  terminal ring beneath the cover; the on-cover screenshots show the cover's own ring. The shared gateway also
+  disconnects the visible shell; its distinct `Reconnecting to the terminal.` phrase is retained in the logs and is
+  not counted as the hidden agent's sentence. These cases cover only the named maximized-panel exposure and focus
+  relations. They do not cover responsive floating, archived bars, other cover copy, away-window immediate delivery,
+  or pending focus reached and then left before its original delayed delivery (RCV-3's two-reading history remains).
+
+### ROW-1 Native row activation does not invoke its nested quick action
+
+- **Location and state change.** Sidebar TreeRows: an unused Claude fixture A (`has_conversation: false`,
+  SessionStart only), a used fixture B (`has_conversation: true`, UserPromptSubmit/Stop), and their project.
+  Native AXPress is sent to each row itself; actual VO-arrow navigation and VO-Space repeat those three paths.
+- **Mechanism.** E16 `packages/ui/src/components/rows/TreeRow.tsx` (`RowPressTarget`) places a plain hidden native
+  button first, outside layout, tab order and the accessibility tree. The row remains a focusable `role="button"`
+  composite with its own click/keyboard activation. The experiment checks WebKit's native action dispatch on the
+  packaged WKWebView; a DOM click or unit-test `.click()` alone would not establish it.
+- **ARIA wiring as rendered.** The session and project rows are native `AXButton`s with their full label/status
+  descriptions and `AXPress`. No extra hidden press target is exposed as a row control. VO cursor text and its bounds
+  were checked against the intended row before every VO-Space. The chord used explicit Control/Option down, Space
+  down/up and modifier release, with real VO-arrow movements; it was not substituted with AXPress.
+- **Baseline failure.** In the earlier supplied calibration build (UI tree equal to main `505f1c2fc`) with the holder-runtime repair, native
+  AXPress on an unused session row sent `delete_session` and the daemon emitted `session_deleted`. No confirmation
+  action was sent and the session was actually removed. That observation was AXPress, not an earlier VO-Space result.
+- **E16 result.** Pass for all six row actions in `20261110T025652-row-axpress`, repeated in
+  `20261110T025855-row-axpress`. Each row below is its own before/action/after interval. Neither session was deleted
+  or archived, and no session was created by either project activation.
+
+| Row | Native AXPress | Actual VO-Space |
+|---|---|---|
+| Unused A | Pass: a real `/ws/term/<A id>` connection selects A; no `delete_session` | Pass: the same selection, A remains unused and present, no delete request/event |
+| Used B | Pass: a real `/ws/term/<B id>` connection selects B; no `archive_session` | Pass: the same selection; B remains idle/present, no archive request/event |
+| Project | Pass: project collapses; session IDs unchanged, no `open_session`/`create_session` | Pass: collapse is spoken, no new-session request or record |
+
+- **Speech.** Navigation read `⁨VO row unused A⁩ session, ⁨⁨Claude Code⁩ (⁨Default⁩)⁩, Awaiting instructions, Default model 按钮`
+  and the used row's full title/status, followed by `Terminal input 文本输入区 主要` when it activated. The project read
+  `⁨VO project⁩, Done, Branch ⁨main⁩ 已折叠 按钮`. These are row navigation/activation observations, not automatic
+  status announcements.
+- **Independent Delete shortcut.** `20261110T030034-delete-shortcut` reached the visible Delete quick button with
+  Tab (its own blue ring and Delete tooltip are captured). The first generated Space did not issue a delete request;
+  that keyboard activation is not certified. A subsequent real pointer click on that separately pictured garbage-bin
+  control sent `delete_session` and produced the real `session_deleted` event for the unused fixture, with no
+  confirmation action. The shortcut therefore still deletes on its own by pointer; this does not assert its VoiceOver
+  name/discovery route or turn the unsuccessful Space attempt into a pass.
+- **Capture, environment and date.** E16, 2026-11-10 JST: native last phrase, guarded native AX actions, VO cursor
+  bounds/text, window frames, GUI request log, real terminal connection paths, daemon event observer and before/after
+  snapshots. Initial stale-VO-cursor and incomplete-modifier attempts were excluded before VO-Space was delivered.
+  VoiceOver was restarted using only the process started by this verification; a real Finder phrase was read before
+  the valid VO pass. The row source was not changed during this recheck.
+- **Reuse scope.** The three tested row roles/placements and these two native activation routes only. The successful
+  behavior is consistent with the hidden first target working in this WebKit build; internal DOM event targeting was
+  not instrumented. Other composite roles, other engines and the Delete keyboard/discovery path need separate proof.
+
 ### Known not to work
 
 These patterns were heard failing or heard to leave a gap. Do not reuse them, and do not treat an implementation of
@@ -1595,7 +1964,9 @@ on E5; KNW-9 was heard on E6 and is replaced by FOCUS-4, heard on E8. They stay 
 mechanisms did. KNW-8 and KNW-9 are the exceptions in kind: each records one failing aspect of a recording whose case
 stays a pass. KNW-8 records the focus destination of the same recording as the passing case SA-K, whose reuse scope
 covers the status write and states that focus relation, so it never barred matching SA-K's status write. KNW-9 records
-the bare-mark Enter naming of the recording behind FOCUS-3, whose other results stay passing.
+the bare-mark Enter naming of the recording behind FOCUS-3, whose other results stay passing. KNW-10 and KNW-12 were
+heard on E14 and are replaced by RCV-1 and RCV-2 heard on E15; KNW-11 was heard on the supplied calibration build (UI
+tree equal to main `505f1c2fc`, with the holder-runtime repair `30eb3e434`) and is replaced by ROW-1 heard on E16.
 
 #### KNW-1 A plain status mounted already holding its text
 
@@ -1695,6 +2066,34 @@ the bare-mark Enter naming of the recording behind FOCUS-3, whose other results 
   wired in E6) stays a pass.
 - **Replaced by.** FOCUS-4 (E8), where the dialog is named by its tone word.
 
+#### KNW-10 A status written into an inert agent area
+
+- **What and where.** E14: the recovered sentence of RCV-1 for an agent session while a maximized Terminal panel made
+  the agent area inert for 8 s. `terminal/TerminalPane.tsx` (`recoveredSaid`) wrote it into its region inside the
+  `liveAnnouncerProps` wrapper, which exposes a region beside a modal but not inside an inert ancestor.
+- **Result.** Not spoken: the sentence was lost, including after Restore panel size exposed the area again
+  (`20261110T020945-g1-agent-inert-maximized`). The inert ancestor is the working explanation; a live-announcer mark
+  does not help there.
+- **Replaced by.** RCV-1 (E15), where the sentence is held until the area is exposed and then written once.
+
+#### KNW-11 A native press on a role=button row clicks its first nested button
+
+- **What and where.** The supplied calibration build (UI tree equal to main `505f1c2fc`, with `30eb3e434`): native AXPress on an unused
+  session's sidebar row, a `role="button"` composite whose first native button inside is its Delete shortcut
+  (ROW-1 baseline failure).
+- **Result.** The press sent `delete_session` and the daemon emitted `session_deleted`; the session was removed with no
+  confirmation. The cause, WebKit's choice of the first native button inside the row as its action element, is
+  source-derived and was not reproduced in isolation.
+- **Replaced by.** ROW-1 (E16), where a hidden native button leads the row.
+
+#### KNW-12 Removing the explanation's source leaves focus on the web area
+
+- **What and where.** E14: RCV-2's agent recovered mark, with its explanation actually opened and focused, then the
+  process ended so the mark was removed.
+- **Result.** Only `Octoboard 网页内容` was spoken and focus stayed on the web area, with no landing in the terminal
+  input (`20261110T014344-g2-agent-explanation`).
+- **Replaced by.** RCV-2 (E15), whose rows land on the terminal input or the surviving tab.
+
 ### OPEN-1 Import result dialog rename
 
 - **Location and state change.** The configuration import's result step: the dialog's title becomes "Import finished"
@@ -1747,7 +2146,7 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `viewer/code/CodeSurface.tsx` | expansion loading and note | SA-K and FOCUS-2 for the loading text and the focus after an expansion; no match for the outcome notes | Heard | Loading heard while the pressed button had focus, and focus restored to the surviving control or the code frame on E5. Notes, failure and capped outcomes were not exercised, nor the emptying of each text `READ_TIME_MS` after it was written (`clearAfterRead`). |
 | `components/form/AdvancedSection.tsx`, `AdvancedSection` | models loading, unavailable, failed | SA-M for loading and failed; no match for the unavailable text | Heard | Region mounted with each opening outside the folded body, heard for a fresh opening and two reopenings. The unavailable text was not heard separately. |
 | `terminal/shell/ShellTerminalPanel.tsx` | shell starting | none | none | Text can be present at the first render at default delay and clears as a terminal appears and takes focus, a write at a focus move; the starting status was not observed populated. |
-| `terminal/TerminalPane.tsx`, cover and dormant status | loading, starting, resuming, reconnecting, disconnected and switching covers; the pending cover's sentence when an open session turns pending (`useAnnouncedWhilePending`'s `immediate`, not written while the cover has focus); the dormant bar's "Not running" or "This session is archived" | SA-A for the writes into the mounted regions, the pending sentence only with focus at rest elsewhere, the window attended and no modal open (the pane always mounts with no session, so SA-H applies only to test and gallery mounts); no match for a write made as selecting a session moves focus into the terminal, and none for the dormant bar's button | Candidate | Two `StatusAnnouncer` regions mounted with the pane, default delay (browser-observed: regions inserted empty, text written 100 to 250 ms later). The bar's sentence is `aria-hidden` and its button stays reachable, so only the sentence is spoken, not sentence and button as PLAIN-2 heard. The bar's sentence is held while a modal is open (selecting an interrupted session on an incomplete account asks first) and written `AFTER_FOCUS_MOVE_DELAY_MS` after the close, so it is not written under the modal (KNW-2). A sentence already spoken stays in the region unchanged through a modal, so closing it says nothing. Nothing was heard on the pane itself. An archived bar and `SessionHistoryView`'s own region can both hold text while the history loads (different sentences, no duplicate). |
+| `terminal/TerminalPane.tsx`, cover and dormant status | loading, starting, resuming, reconnecting, disconnected and switching covers; the pending cover's sentence when an open session turns pending (`useAnnouncedWhilePending`'s `immediate`, not written while the cover has focus); the dormant bar's "Not running" or "This session is archived" | SA-A for the writes into the mounted regions, the pending sentence only with focus at rest elsewhere, the window attended and no modal open (the pane always mounts with no session, so SA-H applies only to test and gallery mounts); no match for a write made as selecting a session moves focus into the terminal, and none for the dormant bar's button | Candidate | Two `StatusAnnouncer` regions mounted with the pane, default delay (browser-observed: regions inserted empty, text written 100 to 250 ms later). The bar's sentence is `aria-hidden` and its button stays reachable, so only the sentence is spoken, not sentence and button as PLAIN-2 heard. The bar's sentence is held while a modal is open (selecting an interrupted session on an incomplete account asks first) and written `AFTER_FOCUS_MOVE_DELAY_MS` after the close, so it is not written under the modal (KNW-2). A sentence already spoken stays in the region unchanged through a modal, so closing it says nothing. RCV-3 heard the named pending cover and its focused/elsewhere variants; it does not cover the other cover or dormant texts here. RCV-6 separately heard the immediate pending and `Not running` sentences held during maximized-panel inertness, with its stated focus relations; this does not certify other cover text or the archived bar. An archived bar and `SessionHistoryView`'s own region can both hold text while the history loads (different sentences, no duplicate). |
 | `terminal/shell/ShellTerminalView.tsx`, trouble and exited status | disconnected, reconnecting and exited, for the shown tab only; the pending cover's sentence when the shown terminal turns pending (`immediate`, as in the pane) | close to SA-H for the first write after a keyboard tab switch (focus stays on the tab; the regions are mounted with each showing, but with the longer `AFTER_FOCUS_MOVE_DELAY_MS`), a candidate only; no case matches a pointer switch or a new terminal, where focus moves into the view (open item); SA-A for trouble changes; PLAIN-2 for the exit filling in place while the terminal input keeps focus, with the sentence only | Candidate | Two `StatusAnnouncer` regions per shown tab, empty when mounted (browser-observed); a hidden tab has none, so switching to an exited or troubled tab writes its text after the delay rather than with the region. PLAIN-2 heard the earlier hand-built region holding the sentence and the Close terminal button, spoken as `The shell has exited Close terminal`; the button is now outside the region, so the match is for the sentence only, by decision, and it has to be listened to again before it is claimed. The write after a tab switch made with the pointer comes with a focus move into the view, which no case covers. |
 | `viewer/notices.tsx`, `FileNotice` | the notice's sentence, for a notice that arrives after the viewer has painted | SA-N for SVG fallback, clear and later reading; the first-paint large-file notice has no announcement region (no `speak`) and stayed silent, as context | Heard for these branches | 1500 ms first delay and `clearAfterRead`; SVG sentence present at about 2 s and empty by about 7 s, with focus handed from the now-unavailable Previous file to Next file. E6 did not sample native live attributes. Other image failures, patch fallbacks and replacement sequences remain unheard; SA-J is still the retained-focus representative. |
 | `viewer/notices.tsx`, `BlockFallback` | the fallback sentence, for a block (a Mermaid diagram or a formula) that fails after paint, when `speak` is set | none | none | Uses `SpokenSentence` as `FileNotice`; `MermaidBlock` and `FormulaView` pass `speak`. Not heard; focus relation, exposure and native live attributes are unmatched. |
@@ -1768,16 +2167,17 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `dialogs/ConsoleDialog.tsx`, `dialogs/ProjectDialog.tsx`, `settings/accounts/AccountDialog.tsx`, through `ChangedElsewhereAnnouncer` | the fields the user had edited that were replaced because they changed elsewhere | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | `ChangeAnnouncer` is remounted per change and written `AFTER_FOCUS_MOVE_DELAY_MS` of attended time after it arrives, inside the open dialog with focus kept in the form, and cleared `READ_TIME_MS` after the write. A write while another modal covers the dialog (Settings over the console dialog, an error alert for another failure) is the KNW-2 shape, where the announcement is lost. Not heard. |
 | `settings/CloneDirSetting.tsx`, through `ChangedElsewhereAnnouncer` | the clone directory field replaced over what was typed because it changed elsewhere | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | The same region as the dialogs', in the Settings dialog beside the field. A write while another modal covers Settings (an error alert for another failure) is the KNW-2 shape, where the announcement is lost. Not heard. |
 | `configuration/ImportConfigurationDialog.tsx`, through `ChangeAnnouncer` | the file was read again because settings changed | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | Written after the same delay, which also outlasts the focus handed on when a failed read's Alert goes away. Not heard. |
-| `terminal/TerminalPane.tsx`, through `useAttendedDelivery` | "Recovered terminal display" when `screen_inexact` rises under the open session (`useAnnouncedOnRise`, `clearAfterRead`); the pending cover's sentence when a session is opened already pending (`useAnnouncedWhilePending`'s `delayed`) | none; SA-L is the nearest attended wait, SA-A the nearest region shape | none | Two regions mounted with the pane inside a `liveAnnouncerProps` wrapper, so a write beside an unrelated modal stays exposed. Each sentence is queued per session and written `AFTER_FOCUS_MOVE_DELAY_MS` of attended time later, the wait restarted on each return to the window; it is dropped unsaid when the session changes, the flag turns off or the pending period ends first. A rise under the pending cover is queued only once that cover and the loading cover after it are gone, as is a rise still waiting when a new pending cover comes up, so the wait follows the uncover and its focus return. The delayed pending sentence is skipped when the cover has focus as the wait ends. SA-L's recorded trigger and destination (a Settings tab) are not a terminal recovery or session selection. Not heard. |
-| `terminal/shell/ShellTerminalView.tsx`, through `useAttendedDelivery` | "Recovered terminal display" when `screen_inexact` rises while the tab is shown; the pending cover's sentence when a tab is shown already pending | none; SA-L is the nearest attended wait, SA-A the nearest region shape | none | As the pane's, but the regions are mounted with each showing of the tab, at the default first delay, which the attended wait outlasts; hiding the tab drops a queued sentence. A rise under the pending cover is queued as the cover lifts (no loading cover follows). Not heard. |
+| `terminal/TerminalPane.tsx`, through `useAttendedDelivery` | "Recovered terminal display" when `screen_inexact` rises under the open session (`useAnnouncedOnRise`, `clearAfterRead`); the pending cover's sentence when a session is opened already pending (`useAnnouncedWhilePending`'s `delayed`) | RCV-1 for recovered rise; RCV-3 for the separately listed delayed pending relations | Heard for listed variants | Listed for `useAttendedDelivery`: the attended wait after a focus move that delivers these sentences (RCV-1, RCV-3). Two regions mounted with the pane inside a `liveAnnouncerProps` wrapper, so a write beside an unrelated modal stays exposed. Each sentence is queued per session and written `AFTER_FOCUS_MOVE_DELAY_MS` of attended time later, the wait restarted on each return to the window; it is dropped unsaid when the session changes, the flag turns off or the pending period ends first. A rise under the pending cover is queued only once that cover and the loading cover after it are gone, as is a rise still waiting when a new pending cover comes up, so the wait follows the uncover and its focus return. The delayed pending sentence is skipped when the cover has focus as the wait ends. RCV-6 heard it held through maximized-panel inertness and either spoken on exposure or consumed silently when the cover holds focus. The RCV cases give the measured terminal-specific attention, cover and destination relations; responsive inert floating remains unconfirmed. |
+| `terminal/shell/ShellTerminalView.tsx`, through `useAttendedDelivery` | "Recovered terminal display" when `screen_inexact` rises while the tab is shown; the pending cover's sentence when a tab is shown already pending | RCV-1 and RCV-3 for their listed shell relations | Heard for listed variants | Listed for `useAttendedDelivery`, as the pane's: the attended wait after a focus move that delivers these sentences (RCV-1, RCV-3). The regions are mounted with each showing of the tab, at the default first delay, which the attended wait outlasts; hiding the tab drops a queued sentence. A rise under the pending cover is queued as the cover lifts (no loading cover follows); RCV-1 and RCV-3 keep the pointer and keyboard destinations separate. |
 
-Totals: of 41 callers (the three dialogs of one row count as three, and the terminal views' attended regions count apart from their other regions), 15 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
+Totals: of 41 callers (the three dialogs of one row count as three, and the terminal views' attended regions count apart from their other regions), 17 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
 `AccountLoginAnnouncer`, `PermissionsSection`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
-`ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`, `useGitRetryAnnouncement`, `DelayedAnnouncer`), 5 are candidates (`ImportReview`, `ChangeList`,
-`FilesPanel`, `TerminalPane`, `ShellTerminalView`) and 21 have no complete match (`ShellTerminalPanel`, `SpotNotice`,
-`BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the seventeen unmatched callers listed after it, the three dialogs counted as three). Of
+`ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`, `useGitRetryAnnouncement`, `DelayedAnnouncer`, and the
+attended regions of `TerminalPane` and `ShellTerminalView`), 5 are candidates (`ImportReview`, `ChangeList`,
+`FilesPanel`, `TerminalPane` and `ShellTerminalView` for their other regions) and 19 have no complete match (`ShellTerminalPanel`, `SpotNotice`,
+`BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the fifteen unmatched callers listed after it, the three dialogs counted as three). Of
 the heard callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer` matches the E10
-table and owned-account details paths recorded in SA-D; the other thirteen match for some writes only, with SA-N's
+table and owned-account details paths recorded in SA-D; the other fifteen match for some writes only, with SA-N's
 native-capture limits stated in that case. Of the candidates, `ImportReview` matches for every write it makes;
 `ChangeList`, `FilesPanel`, `TerminalPane` and `ShellTerminalView` for some.
 
@@ -1813,12 +2213,10 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 - SA-O and SA-P (E13) heard the removal-inspection failure and sidebar Git-retry mechanisms. The earlier immediate
   consequence utterance after ticking Trash repeated the mark name twice; the delayed risk sentence appeared once.
   Focus-mode header/group Git-retry placements, attention loss/return and rapid overlapping retries remain untested.
-- Accessibility press on a sidebar row: on 2026-11-10 a native AXPress on an unused session's row (an `AXButton`
-  named by the row) sent `delete_session` and deleted the session with no confirmation. Per WebKit's source
-  (`AccessibilityNodeObject::actionElement`), not reproduced in isolation, the press clicks the first native button
-  inside the `role="button"` row, here its Delete shortcut. `TreeRow` now leads with its own hidden press
-  target (`RowPressTarget`, see `docs/ui-standard.md`, "Buttons"). Neither the fixed row's AXPress nor VoiceOver's
-  VO-Space on a row has been tried on the packaged application yet.
+- Accessibility press on a sidebar row: ROW-1 heard the repaired row (E16) for native AXPress and VO-Space on an unused
+  session, a used session and a project, with the baseline failure kept as KNW-11. Still open: the independent Delete
+  shortcut's keyboard route (the generated Space did not delete; its VoiceOver name and discovery were not recorded),
+  and the `tab`, `menuitem` and `listitem` roles of other composite rows.
 - Import result dialog rename: not yet listened to (OPEN-1).
 - Startup failure page alert (daemon-failed and crash pages): not yet listened to (OPEN-2). No case matches an alert
   inserted after the first paint on a page the window opens on, with no focus move.
@@ -1851,45 +2249,21 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   "Start on <account>?" question is open and written after it closes, a write after a modal closes that no passing case
   covers directly. The close-terminal confirmation of `ShellTerminalPanel` is not counted in the pane's modal flag
   (rare: the session would have to end during that confirmation).
-- Terminal recovery and restart behaviours still to be listened to, in five groups. Within a group, record each focus
-  or destination variant apart; one heard variant does not cover a materially different one. Not needed after the claim
-  checks pass: the recovered mark's ordinary press and reading of its custom body (WARN-4 candidate), the immediate
-  pending sentence at rest (SA-A candidate), the ordinary attended opening and reading of the exit confirmation
-  (WARN-4 candidate), and the on-demand named "Reconnecting" image in confirmation lists (WARN-4 candidate).
-  1. Recovered sentence after recovery, exposure and attention. In an isolated packaged app, show an exact terminal,
-     make it pending and let `screen_inexact` rise under the cover; keep focus on the cover in one run and on an
-     unrelated control in another. Restore the holder: for the agent wait through the loading cover and first paint,
-     for the shell observe its direct uncover. Expect the focus phrase first and exactly one recovered sentence about
-     1.5 s later. Repeat with the flag rising while the window is away: nothing while away, one sentence after the
-     return. Hide or switch the subject before delivery, and recover again with the flag unchanged: no old-subject or
-     duplicate sentence. Sample the `clearAfterRead` clear and check the mark stays readable. With an unrelated modal
-     open at delivery, expect the sentence spoken beside it (the regions are marked live announcers). A rise on the
-     agent session while a maximized Terminal panel or a floating panel makes the agent area inert is written into an
-     inert region, which a live-announcer mark does not expose: record whether it is lost, or gate it.
-  2. Recovered mark disappears while focused. On the agent mark, focus the trigger, then separately open its
-     explanation; clear the flag or end the process while each holds focus. Expect the terminal landing with a visible
-     ring, with no stranded focus or web-area-only phrase. Repeat in the shell, expecting the selected tab (and the
-     no-tabs fallback if it is relied on). An event while focus is elsewhere must not move it.
-  3. Pending cover entry, delayed notification and recovery. With input focused, make a running agent terminal pending:
-     expect its session name, pending title and line once from the focused region, with no second sentence. Restore it
-     and confirm focus returns to usable terminal input only while still on the cover. Repeat with a focused Reconnect
-     becoming pending. With focus elsewhere, show a subject already pending and wait for its one delayed sentence; then
-     move focus onto the cover before the wait ends and verify it is not said (focus that reaches the cover and leaves
-     it again before the wait ends lets it be said, after the cover's own copy was read: record whether that reads
-     twice); leave the window during the wait and verify it is said only after the return. For the shell, repeat the
-     named-region reading inside its same-named tab panel, and compare a keyboard tab switch (focus stays on the tab)
-     with a pointer one (focus moves into the cover). Retries and renames stay silent; a recovery after focus moved
-     elsewhere never pulls it back. The immediate sentence, when an open subject turns pending, is still written while
-     the window is away or under an unrelated modal (its region is neither gated nor a live announcer); SA-A covers it
-     only attended with no modal, so listen to those two writes as well, or gate them.
-  4. Restart pending with focus retained. From installed-update Settings, focus Restart now and press it by keyboard;
-     hold the real preflight long enough to observe pending. Verify the button's busy feedback, no focus loss and a
-     blocked second press. Let the preflight open the confirmation, cancel, and verify focus and the button's state.
-     Repeat from the update notice by keyboard only if its rendered wiring or return differs.
-  5. Restart pending with focus elsewhere. With focus in a terminal, press the notice's Restart now with the pointer and
-     hold the preflight. Verify focus stays where it was and record what busy feedback, if any, is spoken; silence is
-     recorded as silence, not borrowed from FOCUS-5. Let the confirmation open and cancel; its return must not strand
-     focus.
+- Claim-check candidates that need no listening once the checks under "Claiming a match" pass: the recovered mark's
+  ordinary press and reading of its custom body (WARN-4 candidate), the immediate pending sentence at rest (SA-A
+  candidate; RCV-3 heard it at rest for the agent and the shell), the ordinary attended opening and reading of the exit
+  confirmation from its other entry points (WARN-4 candidate; RCV-4 heard only its opening through Restart now) and the
+  on-demand named "Reconnecting" image in confirmation lists (WARN-4 candidate).
+- E17 re-listened the follow-up recovered-mark handoff and terminal ring paths in RCV-1, RCV-2, RCV-3 and RCV-5;
+  RCV-6 measures immediate pending, delayed pending and the `Not running` bar held while a maximized panel makes
+  the agent area inert, including the two pending paths whose restored focus lands on the cover. Those listed
+  variants are covered; other cover sentences held by `TerminalPane` and the archived no-process bar remain unmeasured.
+- Recovery/restart measurements now live in RCV-1 to RCV-6. Remaining limits: no passing native case for a
+  responsive floating panel making the agent area inert (the desktop's 1168 px minimum prevents reaching the 768 px
+  layout); immediate pending sentences while away or behind an unrelated modal were silent, so those writes still
+  have no passing match; reaching and then leaving the cover before delayed delivery reads its copy twice. Restart
+  keyboard focus/state and pointer return passed, with no explicit busy word during the first keyboard holds and
+  silence during the pointer hold. These observations do not certify another timeout/duration or actual restart.
 - A write made while the region is under an open modal outside a marker: heard failing in the login success form
   (KNW-2); no passing case.
 - A window visible but not frontmost, and a minimized window with the application also not frontmost (KNW-4's condition,

@@ -708,6 +708,17 @@ style with `ui-keyboard-focus:ring-2 ui-keyboard-focus:ring-focus` (`group-ui-ke
 `has-ui-keyboard-focus:` from a parent; the variants are defined in `style.css`).
 The application's custom ring uses HeroUI's `--focus`, the same token HeroUI controls use.
 
+A container whose keyboard focus is held by an input a library owns inside it (xterm.js's hidden textarea in a terminal
+view) draws the ring on the container, since the input itself is kept out of sight, and takes it from
+`useArrivalFocusProps` instead. Every key in such an input is the input's own, Escape and Tab included, so react-aria's
+rule for text inputs, which turns the ring on at those two keys, would light it after a click as soon as the user typed
+one into the terminal. The ring is decided as focus lands on an element in the container, from outside or from another
+element inside it (the pending cover handing focus back to the input): shown when that move came by keyboard (F6 or Tab)
+or was an automatic handoff (`ringForAutomaticFocus`), not after a click; keys typed into the focused input never change
+it, since they do not move focus; a pointer press anywhere turns it off, and it ends when focus leaves the container (not when it leaves with the window,
+which keeps the decision). It is not drawn while a cover (loading, reconnecting, disconnected, pending, an account
+switch; every terminal cover is opaque) hides the content it would frame (`TerminalSurface`'s `covered`).
+
 ### Never style focus with CSS `:focus-visible`
 
 No `focus-visible:` or `group-focus-visible:` variant, no `:has(:focus-visible)` selector. Once the last focus came from
@@ -743,6 +754,12 @@ react-aria there, so `HandoffOnUnmount` sends the destination a `focusin` of its
 the destination would hold focus with no ring. A mark whose focus goes to the start of its panel (the Files and Report
 panels' marks) and the handoffs of panes and panels taken away keep `HandoffOnUnmount` with its ring: no dialog's
 restore follows them.
+
+A third shape is for a source whose explanation popover restores focus itself, from a frame of its own, as the popover
+goes with the source: the agent title bar's recovered-display mark, whose focus goes to the terminal. Focus on the mark
+alone moves at once, from `HandoffOnUnmount` with `ring` false and a `to` that sets the ring itself. Focus inside the
+popover waits two frames for that restore, then moves only if focus has fallen to `<body>`: a control that claimed focus
+meanwhile keeps it, and the restore cannot take focus back from the terminal after the handoff.
 
 Selecting another archived session while focus is in the history on screen is not such a move: a sidebar row's press
 keeps focus where it is, so the history it replaces drops focus to `<body>`, but the user made the switch, whether
@@ -1670,6 +1687,10 @@ in the sidebar, the rail or the menu bar.
   screen is, the reconnecting status whether the process can be reached; both can show at once, each in its own
   place, never folded into one mark. A note that would be announced while the cover is shown waits until the cover,
   and the loading cover after it, are gone.
+- **While the agent area is inert** (a maximized or floating panel over it), the agent pane's sentences — the cover's,
+  the immediate and the delayed pending sentence, the no-process bar's and the recovered-display note's — are held and
+  each said once on exposure, as "Announcing a change" sets out for an inert subtree; a pending sentence is dropped
+  instead when exposure lands focus on the cover, whose description reads the same copy.
 
 #### How a mark is drawn and opened
 
@@ -2010,6 +2031,15 @@ element, an error from `role="alert"`.
   `liveAnnouncerProps`) or a top layer (`topLayerProps`), and closing the modal moves focus, which replaces what was
   written. A status about what the modal's own action produced (a login that ends by closing its dialog) is therefore written after the close and
   the focus move, a delay past both, not at the moment the state changes.
+- A status written into an `inert` subtree is lost, a live announcer (`liveAnnouncerProps`) included: the agent area is
+  inert while a maximized panel covers it or a floating panel stands over it (`agentAreaInert` in
+  `packages/ui/src/App.tsx`, passed to `TerminalPane` as `exposed`). A view whose status regions can sit there holds each
+  sentence that arrives or changes meanwhile and writes it once the area is exposed again, `AFTER_FOCUS_MOVE_DELAY_MS`
+  after the focus move the exposure makes (`useHeldWhileHidden`, or the `deferred` of `useAnnouncedOnRise`), unless that
+  focus move lands on a region that already reads the same copy (`useHeldWhileHidden`'s `stillDue`). A sentence
+  already written before stays in its region, so exposure does not say it again, and one that went stale meanwhile is
+  not said. This is not the attended-window rule: a status may still be written while the user is away or a modal is
+  open, and those rules decide that; the inert hold is only about a region that cannot be heard at all.
 - A status about something that can happen while the user is out of the window (a login finishing in the browser) waits
   until the window is attended (`useWindowAttended`: the document is visible and the window has focus), then
   `AFTER_FOCUS_MOVE_DELAY_MS`: on the way back VoiceOver speaks the window's focused control, and an earlier status is

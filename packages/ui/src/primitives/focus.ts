@@ -1,4 +1,5 @@
 import type React from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { setInteractionModality, useFocusRing, useFocusVisible, useObjectRef as useAriaObjectRef } from "react-aria";
 
 /** Whether the current input modality is the keyboard's (react-aria's interaction modality), so focus arriving now is
@@ -33,6 +34,43 @@ export type FocusVisibleProps = React.DOMAttributes<Element> & { "data-focus-vis
 export function useFocusVisibleProps(): FocusVisibleProps {
   const { focusProps, isFocusVisible } = useFocusRing();
   return { ...focusProps, "data-focus-visible": isFocusVisible || undefined };
+}
+
+/**
+ * The props of `useFocusVisibleProps` for a container whose focus is held by an input a library owns inside it
+ * (xterm.js's textarea), where every key, Escape and Tab included, is typed into that input. Whether the container
+ * shows focus is decided as focus lands on an element in it, from outside or from another element inside (a cover's
+ * region handing focus back to the input): shown when the modality is the keyboard's then (F6 or Tab, an automatic
+ * handoff that called `ringForAutomaticFocus`), not after a click. Keys typed into the focused element never turn it
+ * on, as they would with react-aria's own text-input rule, since they do not move focus; a pointer press anywhere
+ * turns it off, and it ends when focus leaves the container. Focus that leaves and comes back to the same element with
+ * the window (the element still active meanwhile) keeps the decision made for it.
+ */
+export function useArrivalFocusProps(): FocusVisibleProps {
+  const keyboard = useKeyboardModality();
+  const [focus, setFocus] = useState<"out" | "arrived" | "shown" | "hidden">("out");
+  // The element the current decision was made for.
+  const decidedFor = useRef<EventTarget | null>(null);
+  // Decided in the render after focus arrives, where the modality of the move that brought it is read.
+  useLayoutEffect(() => {
+    if (focus === "arrived") setFocus(keyboard ? "shown" : "hidden");
+    else if (focus === "shown" && !keyboard) setFocus("hidden");
+  }, [focus, keyboard]);
+  return {
+    onFocus: (event) => {
+      const same = event.target === decidedFor.current;
+      decidedFor.current = event.target;
+      setFocus((f) => (same && f !== "out" ? f : "arrived"));
+    },
+    onBlur: (event) => {
+      // Focus that leaves with the window stays on the element: not a departure.
+      if (document.activeElement === event.target) return;
+      if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+      decidedFor.current = null;
+      setFocus("out");
+    },
+    "data-focus-visible": focus === "shown" || undefined,
+  };
 }
 
 /** Whether `props`, from `useFocusVisibleProps`, say the element has keyboard focus now. */

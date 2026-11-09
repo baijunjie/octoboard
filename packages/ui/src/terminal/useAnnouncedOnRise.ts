@@ -7,7 +7,8 @@ import { useAttendedDelivery } from "./useAttendedDelivery";
  * `undefined` otherwise: a flag found on at first sight, or already on when `subject` changed (another
  * terminal, a hidden view shown), is read with the view it qualifies and is not announced apart from it.
  *
- * While `deferred` (a cover's announcement holds the view) the sentence is held back: a flag that
+ * While `deferred` (a cover's announcement holds the view, or the view is out of reach, as the agent area is while a
+ * maximized or floating panel makes it inert) the sentence is held back: a flag that
  * turned on meanwhile is queued once the deferral ends, as is one queued but not yet said when the
  * deferral began, and one already said is not said again then.
  * A queued sentence is written through `useAttendedDelivery`, after the wait of a focus move in attended

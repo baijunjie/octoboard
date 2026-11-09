@@ -196,6 +196,7 @@ export function ShellTerminalView({
       padding="ps-(--pane-inset) pe-2 py-2"
       mountMarker="data-shell-terminal"
       inert={pending}
+      covered={Boolean(trouble) || pending}
       editMenu={<TerminalEditMenu sessionId={terminal.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
     >
       {(trouble || pendingCover) && (

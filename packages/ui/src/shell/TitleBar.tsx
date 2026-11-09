@@ -10,7 +10,10 @@ import { useDaemonStore, useSessionShownStatus } from "../store";
 import { ChromeButton } from "./ChromeButton";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { HandoffOnUnmount } from "../components/focus/HandoffOnUnmount";
+import { focusFellToPage } from "../components/focus/regionFocus";
+import { ringForAutomaticFocus } from "../input/touchInput";
 import { StatusIcon } from "../components/status/StatusIcon";
+import { STATUS_MARK_POPOVER } from "../components/status/StatusMark";
 import { RECOVERED_DISPLAY_MARK_ID, RecoveredDisplayMark } from "../terminal/RecoveredDisplayMark";
 
 /** The bar's frame: full window width, above everything, painting nothing of its own (the window's
@@ -80,7 +83,25 @@ function Breadcrumb({ session, focusTerminal }: { session: Session; focusTermina
       {session.screen_inexact && (
         <>
           {/* The flag clears when the process ends; focus on the mark or its popover goes to the terminal. */}
-          <HandoffOnUnmount from={`[data-status-mark-id="${RECOVERED_DISPLAY_MARK_ID}"]`} to={focusTerminal} />
+          <HandoffOnUnmount
+            from={`[data-status-mark-id="${RECOVERED_DISPLAY_MARK_ID}"]`}
+            ring={false}
+            to={() => {
+              // Focus on the mark alone goes to the terminal at once.
+              if (!document.activeElement?.closest(STATUS_MARK_POPOVER)) {
+                ringForAutomaticFocus();
+                focusTerminal();
+                return;
+              }
+              // The explanation being removed restores focus from a frame of its own, so the handoff waits two
+              // frames for it, then lands only where that restore left focus on the page.
+              requestAnimationFrame(() => requestAnimationFrame(() => {
+                if (!focusFellToPage()) return;
+                ringForAutomaticFocus();
+                focusTerminal();
+              }));
+            }}
+          />
           <RecoveredDisplayMark />
         </>
       )}

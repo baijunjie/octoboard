@@ -167,6 +167,9 @@ export function App(): React.ReactElement {
     selectedSessionId,
     focusTerminal,
   });
+  // A maximized panel (`covered`) or a floating one over it takes the agent area out of reach: inert, so its
+  // regions are not pressable and their status text is lost until it is exposed again.
+  const agentAreaInert = covered || floatingShown;
   const {
     archiveScope,
     setArchiveScope,
@@ -205,8 +208,8 @@ export function App(): React.ReactElement {
       rail: !railAway,
       welcome: noConsoles,
       sidebar: !noConsoles && panes.sidebarShown,
-      archive: archiveOpen && !covered && !floatingShown,
-      terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen && !covered && !floatingShown,
+      archive: archiveOpen && !agentAreaInert,
+      terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen && !agentAreaInert,
       banner: connectionState === "reconnecting" || connectionState === "closed",
       update: updateNoticeShown,
     },
@@ -635,7 +638,7 @@ export function App(): React.ReactElement {
                 {/* The agent area and docked pane share a layer below resize handles and floating
                     cards, so the cards' edges and shadows can paint over the terminal's outer inset.
                     The scroll container casts the sidebar shadow. */}
-                <div ref={agentAreaRef} inert={covered || floatingShown} className={`relative flex min-h-0 ${asideFloats ? "min-w-0 flex-1" : "min-w-[400px] flex-[1_1_400px]"} pane-docked:z-1`}>
+                <div ref={agentAreaRef} inert={agentAreaInert} className={`relative flex min-h-0 ${asideFloats ? "min-w-0 flex-1" : "min-w-[400px] flex-[1_1_400px]"} pane-docked:z-1`}>
                   <ArchiveLayer
                     focusTerminal={focusTerminal}
                     view={archiveOpen && archiveConsole ? {
@@ -659,6 +662,7 @@ export function App(): React.ReactElement {
                     } : undefined}
                   />
                   <TerminalPane
+                    exposed={!agentAreaInert}
                     ref={terminalRef}
                     resizing={isDockEasing(sidebarColumnPhase)}
                     onViewFile={viewLinkedFile}

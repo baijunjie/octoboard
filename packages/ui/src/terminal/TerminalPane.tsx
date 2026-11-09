@@ -6,7 +6,7 @@ import type { NoAgentReason } from "../agents/agents";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { PATH_VAR_PARAMS } from "../components/text/literalParams";
 import { focusTopBar } from "../components/focus/regionFocus";
-import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useLatest } from "../components/hooks/useLatest";
 import { Message, useT } from "../i18n/react";
@@ -23,6 +23,7 @@ import { TerminalSurface } from "./TerminalSurface";
 import { TerminalCover } from "./TerminalCover";
 import { TerminalNoticeBar, TerminalNoticeSlot } from "./TerminalNoticeBar";
 import { useAnnouncedOnRise } from "./useAnnouncedOnRise";
+import { useHeldWhileHidden } from "./useHeldWhileHidden";
 import { useAnnouncedWhilePending } from "./useAnnouncedWhilePending";
 import { usePendingFocus } from "./usePendingFocus";
 import { useTerminalController } from "./useTerminalController";
@@ -42,6 +43,9 @@ interface TerminalPaneProps {
   /** A modal dialog is open over the window, which hides the pane from assistive technology: the
    * no-process bar's sentence is written once it has closed and its focus move has been spoken. */
   modalOpen?: boolean;
+  /** False while a maximized or floating panel makes the agent area inert, where a status region's text is lost,
+   * even in a live announcer: the pane's sentences are held until it is exposed again, and said once then. */
+  exposed?: boolean;
   /** Adds a project when the current console already has a console session but no projects. */
   onAddProject?: () => void;
   /** Offers session creation for the current console and focus scope. */
@@ -87,6 +91,7 @@ export function TerminalPane({
   onResume,
   resuming = false,
   modalOpen = false,
+  exposed = true,
   onAddProject,
   newSession,
   noAgents,
@@ -343,28 +348,10 @@ export function TerminalPane({
         : { sessionId: session.id, sentence: t("terminal.notRunning"), action: t("terminal.resume") }
       : undefined;
   // A sentence that arrives or changes under a modal (selecting an interrupted session on an account
-  // whose sharing change did not finish asks first) would be written into a hidden region, and
-  // closing the modal moves focus over it, so it waits for the close and the focus move. One already
-  // spoken stays in the region through a modal: clearing and rewriting it would say it again.
-  const barSentence = noProcessBar?.sentence;
-  const [bar, setBar] = useState<{ held: boolean; spoken: string | undefined }>({ held: false, spoken: undefined });
-  useEffect(() => {
-    if (!barSentence) {
-      setBar((b) => (b.held || b.spoken !== undefined ? { held: false, spoken: undefined } : b));
-      return;
-    }
-    if (modalOpen) {
-      if (bar.spoken !== barSentence) setBar({ held: true, spoken: bar.spoken });
-      return;
-    }
-    if (!bar.held) {
-      if (bar.spoken !== barSentence) setBar({ held: false, spoken: barSentence });
-      return;
-    }
-    const timer = setTimeout(() => setBar({ held: false, spoken: barSentence }), AFTER_FOCUS_MOVE_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [barSentence, modalOpen]);
-  const barSaid = modalOpen || bar.held ? (bar.spoken === barSentence ? barSentence : undefined) : barSentence;
+  // whose sharing change did not finish asks first), or while a maximized or floating panel makes the agent
+  // area inert, would be written into a hidden region, and closing the modal or the panel moves focus over
+  // it, so it waits for that and the focus move (`useHeldWhileHidden`).
+  const barSaid = useHeldWhileHidden(noProcessBar?.sentence, modalOpen || !exposed);
   const pendingCover = livePending && session ? { label: sessionDisplayTitle(t, session), title: t("terminal.holderPending.title"), body: t("terminal.holderPending.body") } : undefined;
   const pendingSaid = useAnnouncedWhilePending(session?.id, livePending, t("terminal.holderPending.sentence"), coverHasFocus);
   const cover: { text: string; spinner: boolean } | undefined = pendingCover
@@ -387,7 +374,13 @@ export function TerminalPane({
     if (livePending) setAfterPending(true);
     else if (!covered) setAfterPending(false);
   }, [livePending, covered]);
-  const recoveredSaid = useAnnouncedOnRise(session?.id, session?.screen_inexact === true, t("terminal.recovered.title"), livePending || afterPending);
+  const recoveredSaid = useAnnouncedOnRise(session?.id, session?.screen_inexact === true, t("terminal.recovered.title"), livePending || afterPending || !exposed);
+  // The cover's and the pending sentences are lost the same way while the agent area is inert, a live
+  // announcer included, so they are held until it is exposed too.
+  // Exposing the area usually moves focus into the pending cover, whose description reads the same copy.
+  const notOnCover = () => !coverHasFocus();
+  const coverSaid = useHeldWhileHidden(livePending ? pendingSaid.immediate : cover?.text, !exposed, { stillDue: notOnCover });
+  const pendingDelayedSaid = useHeldWhileHidden(pendingSaid.delayed, !exposed, { stillDue: notOnCover });
 
   return (
     // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener
@@ -402,6 +395,7 @@ export function TerminalPane({
       setLinkRef={setLinkRef}
       padding="session-terminal-inset py-2"
       inert={!session || isArchived || switching || livePending}
+      covered={covered}
       editMenu={session && !isArchived && <TerminalEditMenu key={session.id} sessionId={session.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
     >
       {session && isArchived && (
@@ -437,7 +431,7 @@ export function TerminalPane({
           its first delay (`StatusAnnouncer`). The loading and reconnecting covers are hidden from
           assistive technology; the disconnected one and the pending one are not, so that the button
           and the focusable region stay reachable, and browsing meets their message a second time. */}
-      <StatusAnnouncer text={livePending ? pendingSaid.immediate : cover?.text} />
+      <StatusAnnouncer text={coverSaid} />
       {!session && (
         // `held`: a creation button goes away when its list gains content, from this window
         // or another, and a focused element that is removed leaves focus on `<body>`. It is the
@@ -477,7 +471,7 @@ export function TerminalPane({
       {/* Written after an attended wait, so they may arrive with an unrelated modal open, which hides
           the rest of the window from assistive technology: marked live announcers, they stay heard. */}
       <div {...liveAnnouncerProps()}>
-        <StatusAnnouncer text={pendingSaid.delayed} />
+        <StatusAnnouncer text={pendingDelayedSaid} />
         <StatusAnnouncer text={recoveredSaid} clearAfterRead />
       </div>
       <TerminalNoticeSlot>

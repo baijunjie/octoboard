@@ -1,6 +1,7 @@
 import React from "react";
 
 import { useOctoboardTheme } from "../preferences/theme";
+import { useArrivalFocusProps } from "../primitives";
 import { TerminalLinkTooltip } from "./TerminalLinkTooltip";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
 import { XTERM_THEMES } from "./xtermThemes";
@@ -19,6 +20,12 @@ import { XTERM_THEMES } from "./xtermThemes";
  * element's computed height and width, padding included, so padding there would give it rows and
  * columns that the overflow then clips. Isolation keeps xterm's transparent link canvas below the
  * overlays so it cannot intercept their clicks.
+ *
+ * The root draws the focus ring while xterm's textarea, the input that holds the terminal's keyboard focus, has it
+ * and that focus arrived by keyboard: F6 or Tab from elsewhere, or a handoff the user did not ask for
+ * (`useArrivalFocusProps`). Escape and Tab typed into the terminal after a click are the terminal's keys and do not
+ * draw it. The ring is on the root rather than on the textarea, which xterm keeps out of sight; it is not drawn while
+ * `covered`, as a cover (every terminal cover is opaque) hides the terminal it would frame.
  */
 export function TerminalSurface({
   ref,
@@ -26,10 +33,13 @@ export function TerminalSurface({
   setLinkRef,
   padding,
   inert,
+  covered = false,
   mountMarker,
   editMenu,
   className,
   children,
+  onFocus,
+  onBlur,
   ...rootProps
 }: {
   ref?: React.Ref<HTMLDivElement>;
@@ -40,6 +50,8 @@ export function TerminalSurface({
   padding: string;
   /** The terminal is out of reach (no session to show, switching, or its process cannot be reached). */
   inert?: boolean;
+  /** A cover hides the terminal (every cover is opaque): no focus ring is drawn for it. */
+  covered?: boolean;
   /** A `data-*` attribute that marks the mount element, for what looks for a terminal by it. */
   mountMarker?: `data-${string}`;
   editMenu?: React.ReactNode;
@@ -47,12 +59,17 @@ export function TerminalSurface({
   children?: React.ReactNode;
 } & Omit<React.HTMLAttributes<HTMLDivElement>, "style">): React.ReactElement {
   const { resolved: colorTheme } = useOctoboardTheme();
+  const focusVisible = useArrivalFocusProps();
+  const ring = "ui-keyboard-focus:has-[.xterm-helper-textarea:focus]:ring-2 ui-keyboard-focus:has-[.xterm-helper-textarea:focus]:ring-inset ui-keyboard-focus:has-[.xterm-helper-textarea:focus]:ring-focus";
   return (
     <div
       ref={ref}
-      className={className}
+      className={covered ? className : `${className} ${ring}`}
       style={{ "--terminal-background": XTERM_THEMES[colorTheme].background, backgroundColor: "var(--terminal-background)" } as React.CSSProperties}
       {...rootProps}
+      {...focusVisible}
+      onFocus={(event) => { focusVisible.onFocus?.(event); onFocus?.(event); }}
+      onBlur={(event) => { focusVisible.onBlur?.(event); onBlur?.(event); }}
     >
       <div inert={inert} className={`isolate min-h-0 flex-1 ${padding}`}>
         {/* xterm lays its cells out left to right whatever the page's direction. */}

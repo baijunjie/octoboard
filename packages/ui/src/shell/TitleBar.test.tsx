@@ -14,6 +14,7 @@ import { BROWSER_HOST } from "../test/hosts";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { tap, press as pressMark } from "../components/hint/tooltipTestSupport";
+import { framesAsTimers, settleFrames, trackMountRefocus } from "../components/dialog/dialogTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -88,6 +89,7 @@ it("hands focus to the terminal, with the focus ring, when the toggle that holds
   const onPress = vi.fn();
   const { container, render } = mount({ panelToggles: [toggle(false, onPress)], focusTerminal });
   act(() => container.querySelector<HTMLElement>(".title-bar-end button")!.focus());
+  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
   act(() => setInteractionModality("pointer"));
   render({ panelToggles: [], focusTerminal });
   expect(focusTerminal).toHaveBeenCalledOnce();
@@ -180,24 +182,63 @@ it("words the note in the interface language, with the mark in the title's own f
   expect(mark.className).not.toMatch(/(^|\s)(ml|mr|left|right|pl|pr)-/);
 });
 
-it("hands focus to the terminal, with the focus ring, when the note goes while the mark or its popover holds focus", () => {
+it("hands focus to the terminal at once, with the focus ring, when the note goes while only its mark holds focus", () => {
+  framesAsTimers();
   const session = sessionOf("s", "c", undefined, "Work", "working", { screen_inexact: true });
-  const focusTerminal = vi.fn();
+  const landing = document.body.appendChild(document.createElement("textarea"));
+  onTestFinished(() => landing.remove());
+  const focusTerminal = vi.fn(() => landing.focus());
   const { container, render } = mountWithSession(session, focusTerminal);
   act(() => recoveredMark(container)!.focus());
   // A mouse press just before, which an earlier touch in the file would otherwise outlast.
   document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
   act(() => setInteractionModality("pointer"));
   render({ ...session, screen_inexact: false });
+  // No frame has passed: the handoff is in the commit that removed the mark.
   expect(focusTerminal).toHaveBeenCalledOnce();
+  expect(document.activeElement).toBe(landing);
   expect(getInteractionModality()).toBe("keyboard");
-  // From the open popover too.
-  render(session);
-  focusTerminal.mockClear();
+});
+
+async function openExplanation(container: HTMLElement) {
+  act(() => recoveredMark(container)!.focus());
   tap(recoveredMark(container)!, "Enter");
   expect(dialog()).not.toBeNull();
+  const mountSettled = trackMountRefocus();
+  await settleFrames();
+  await mountSettled();
+  act(() => (dialog() as HTMLElement).focus());
+}
+
+it("hands focus to the terminal from the open explanation only after its own restore, without losing the landing", async () => {
+  framesAsTimers();
+  const session = sessionOf("s", "c", undefined, "Work", "working", { screen_inexact: true });
+  const landing = document.body.appendChild(document.createElement("textarea"));
+  onTestFinished(() => landing.remove());
+  const focusTerminal = vi.fn(() => landing.focus());
+  const { container, render } = mountWithSession(session, focusTerminal);
+  await openExplanation(container);
   render({ ...session, screen_inexact: false });
+  expect(focusTerminal).not.toHaveBeenCalled();
+  await settleFrames();
+  expect(document.activeElement).toBe(landing);
   expect(focusTerminal).toHaveBeenCalledOnce();
+  expect(getInteractionModality()).toBe("keyboard");
+});
+
+it("does not take focus back if another control claimed it while the open explanation was removed", async () => {
+  framesAsTimers();
+  const session = sessionOf("s", "c", undefined, "Work", "working", { screen_inexact: true });
+  const focusTerminal = vi.fn();
+  const { container, render } = mountWithSession(session, focusTerminal);
+  const outside = document.body.appendChild(document.createElement("button"));
+  onTestFinished(() => outside.remove());
+  await openExplanation(container);
+  render({ ...session, screen_inexact: false });
+  act(() => outside.focus());
+  await settleFrames();
+  expect(document.activeElement).toBe(outside);
+  expect(focusTerminal).not.toHaveBeenCalled();
 });
 
 it("leaves focus alone when the note goes while focus is elsewhere", () => {

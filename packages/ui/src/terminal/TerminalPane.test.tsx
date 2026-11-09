@@ -120,8 +120,8 @@ afterEach(() => {
 
 const session = sessionOf("s-1", "c-1", undefined, "Work", "working");
 
-function render(root: Root, current = session) {
-  act(() => root.render(host(<TerminalPane session={current} onResume={async () => true} onAddAgent={() => {}} />)));
+function render(root: Root, current = session, exposed = true) {
+  act(() => root.render(host(<TerminalPane exposed={exposed} session={current} onResume={async () => true} onAddAgent={() => {}} />)));
 }
 
 function mount() {
@@ -798,6 +798,23 @@ describe("the recovered display's announcement, delivered while the window is at
     expect(recovered(container)).toEqual([]);
   });
 
+  it("holds a rise while the agent area is inert and does not replay it on later exposure", () => {
+    const { container, root } = mountOpen();
+    const flagged = { ...session, screen_inexact: true };
+    render(root, flagged, false);
+    advance(READ_TIME_MS + AFTER_FOCUS_MOVE_DELAY_MS * 2);
+    expect(recovered(container)).toEqual([]);
+    render(root, flagged);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+    expect(recovered(container)).toEqual([]);
+    advance(1);
+    expect(recovered(container)).toEqual([RECOVERED]);
+    render(root, flagged, false);
+    render(root, flagged);
+    advance(AFTER_FOCUS_MOVE_DELAY_MS * 2);
+    expect(recovered(container)).toEqual([]);
+  });
+
   it("writes nothing while the user is away, and waits the whole time again once they are back", () => {
     const setAttended = attention;
     const { container, root } = mountOpen();
@@ -1405,5 +1422,358 @@ describe("a session whose process the daemon cannot reach", () => {
     render(root, { ...session, switching_account: true });
     speak();
     expect(status(container)).toBe("Switching account");
+  });
+});
+
+describe("the pane's sentences while the agent area is inert", () => {
+  const pending = { ...session, holder_link: "pending" as const };
+  const SENTENCE = "Reconnecting to the session. The session process is still running. Input is unavailable until the connection returns. Reconnection is automatic.";
+  const interrupted = sessionOf("s-1", "c-1", undefined, "Work", "interrupted");
+  /** The status regions holding exactly `text`. */
+  const said = (container: HTMLElement, text: string) => statusRegions(container).filter((region) => region.textContent === text);
+  const spokenText = (container: HTMLElement) => statusRegions(container).map((region) => region.textContent).filter(Boolean);
+
+  /** A pane opened on `current`, the status regions past their first write delay. */
+  function openOn(current: typeof session, exposed = true) {
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    render(root, current, exposed);
+    speak();
+    return { container, root };
+  }
+
+  /** Records every change made to the nodes under `container` from now on. */
+  function watchWrites(container: HTMLElement) {
+    const observer = new MutationObserver(() => {});
+    observer.observe(container, { childList: true, characterData: true, subtree: true });
+    onTestFinished(() => observer.disconnect());
+    return () => observer.takeRecords().length;
+  }
+
+  describe("the pending sentences when exposure lands focus on the cover", () => {
+    const focusCover = (container: HTMLElement) => act(() => container.querySelector<HTMLElement>("[role=region][aria-label]")!.focus());
+
+    it("does not write the immediate sentence held while inert when focus is on the cover, which reads the same copy", () => {
+      const { container, root } = openOn(session);
+      render(root, pending, false);
+      render(root, pending);
+      focusCover(container);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toEqual([]);
+      // Not queued again by a later exposure.
+      render(root, pending, false);
+      render(root, pending);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toEqual([]);
+    });
+
+    it("does not write the delayed sentence held while inert when focus is on the cover", () => {
+      const { container, root } = openOn(pending, false);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      render(root, pending);
+      focusCover(container);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toEqual([]);
+    });
+  });
+
+  describe("the cover's sentence", () => {
+    it("holds the sentence of a session that turns pending while inert, and says it once, after the focus-move wait of exposure", () => {
+      const { container, root } = openOn(session);
+      render(root, pending, false);
+      advance(READ_TIME_MS + AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toEqual([]);
+      render(root, pending);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+      expect(said(container, SENTENCE)).toEqual([]);
+      advance(1);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      expect(statusRegions(container)[0].textContent).toBe(SENTENCE);
+    });
+
+    it("does not say it again when the area is made inert and exposed again", () => {
+      const { container, root } = openOn(session);
+      render(root, pending, false);
+      render(root, pending);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      const writes = watchWrites(container);
+      render(root, pending, false);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      render(root, pending);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      expect(writes()).toBe(0);
+    });
+
+    it("leaves a sentence already written in its region, neither cleared nor written again, as the area goes inert and back", () => {
+      const { container, root } = openOn(session);
+      render(root, pending);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      const writes = watchWrites(container);
+      render(root, pending, false);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      render(root, pending);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      expect(writes()).toBe(0);
+    });
+
+    it("does not say a pending sentence that went stale before the area was exposed", () => {
+      const { container, root } = openOn(session);
+      render(root, pending, false);
+      render(root, session, false);
+      render(root, session);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toEqual([]);
+    });
+
+    it("holds the loading cover's sentence of a pane opened inert until the area is exposed", () => {
+      const { container, root } = openOn(session, false);
+      advance(READ_TIME_MS + AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(status(container)).toBe("");
+      render(root, session);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+      expect(status(container)).toBe("");
+      advance(1);
+      expect(status(container)).toBe("Loading terminal…");
+    });
+
+    it("holds a disconnection that comes while inert, and says the state current at exposure", () => {
+      const { container, root } = openOn(session);
+      render(root, session, false);
+      for (let i = 0; i < 5; i++) failAttempt();
+      FakeController.last.settle("closed");
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(status(container)).not.toBe("Terminal disconnected");
+      render(root, session);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+      expect(status(container)).not.toBe("Terminal disconnected");
+      advance(1);
+      expect(status(container)).toBe("Terminal disconnected");
+    });
+
+    it("keeps saying a cover's changes at once while the area stays exposed", () => {
+      const { container } = openOn(session);
+      FakeController.last.settle("closed");
+      expect(status(container)).toBe("Reconnecting the terminal…");
+    });
+  });
+
+  describe("the delayed pending sentence", () => {
+    it("holds a sentence due while inert, and says it once, after the focus-move wait of exposure", () => {
+      const { container, root } = openOn(pending, false);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toEqual([]);
+      render(root, pending);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+      expect(said(container, SENTENCE)).toEqual([]);
+      advance(1);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      expect(said(container, SENTENCE)[0].closest("[data-live-announcer=true]")).not.toBeNull();
+    });
+
+    it("does not say it again when the area is made inert and exposed again", () => {
+      const { container, root } = openOn(pending, false);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      render(root, pending);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      const writes = watchWrites(container);
+      render(root, pending, false);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      render(root, pending);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      expect(writes()).toBe(0);
+    });
+
+    it("leaves a sentence already written in its region as the area goes inert and back", () => {
+      const { container, root } = openOn(pending);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      const writes = watchWrites(container);
+      render(root, pending, false);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      render(root, pending);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toHaveLength(1);
+      expect(writes()).toBe(0);
+    });
+
+    it("does not say a sentence that went stale while inert, when the pending ended before exposure", () => {
+      const { container, root } = openOn(pending, false);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      render(root, session, false);
+      render(root, session);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(said(container, SENTENCE)).toEqual([]);
+    });
+  });
+
+  describe("the no-process bar's sentence", () => {
+    it("holds it while inert and writes it once the area is exposed and the focus move has been spoken", () => {
+      const { container, root } = openOn(interrupted, false);
+      advance(READ_TIME_MS + AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(spokenText(container)).toEqual([]);
+      render(root, interrupted);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+      expect(spokenText(container)).toEqual([]);
+      advance(1);
+      expect(spokenText(container)).toEqual(["Not running"]);
+    });
+
+    it("holds an archived session's sentence the same way", async () => {
+      request.mockResolvedValueOnce({ type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as never);
+      const { container, show } = mountArchived({ exposed: false });
+      await act(async () => {});
+      advance(READ_TIME_MS + AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(spokenText(container)).toEqual([]);
+      show({ exposed: true });
+      advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+      expect(spokenText(container)).toEqual([]);
+      advance(1);
+      expect(spokenText(container)).toEqual(["This session is archived"]);
+    });
+
+    it("keeps a sentence already written in its region as the area goes inert and back", () => {
+      const { container, root } = openOn(interrupted);
+      expect(spokenText(container)).toEqual(["Not running"]);
+      const writes = watchWrites(container);
+      render(root, interrupted, false);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(spokenText(container)).toEqual(["Not running"]);
+      render(root, interrupted);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(spokenText(container)).toEqual(["Not running"]);
+      expect(writes()).toBe(0);
+    });
+
+    it("keeps holding it after a modal closes while the area is still inert, and writes it once both are clear", () => {
+      const container = document.body.appendChild(document.createElement("div"));
+      const root = createRoot(container);
+      roots.push(root);
+      const show = (modalOpen: boolean, exposed: boolean) =>
+        act(() => root.render(host(<TerminalPane session={interrupted} modalOpen={modalOpen} exposed={exposed} onResume={async () => true} onAddAgent={() => {}} />)));
+      show(true, false);
+      speak();
+      show(false, false);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(spokenText(container)).toEqual([]);
+      show(false, true);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+      expect(spokenText(container)).toEqual([]);
+      advance(1);
+      expect(spokenText(container)).toEqual(["Not running"]);
+    });
+  });
+});
+
+describe("the terminal's focus ring", () => {
+  const surface = (container: HTMLElement) => container.querySelector<HTMLElement>("[data-region=terminal]")!;
+  const ringed = (container: HTMLElement) => surface(container).hasAttribute("data-focus-visible");
+  /** An element standing for xterm's textarea, inside the terminal's mount element. */
+  function terminalInput(container: HTMLElement): HTMLTextAreaElement {
+    const input = container.querySelector("[data-region=terminal] [dir=ltr]")!.appendChild(document.createElement("textarea"));
+    input.className = "xterm-helper-textarea";
+    return input;
+  }
+  const modality = (next: "keyboard" | "pointer") => act(() => setInteractionModality(next));
+  const key = (target: Element, name: string) =>
+    act(() => {
+      target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true }));
+      target.dispatchEvent(new KeyboardEvent("keyup", { key: name, bubbles: true }));
+    });
+  /** A pane past its cover, with focus outside it and the modality restored after the test. */
+  function mountUncovered() {
+    const previous = getInteractionModality();
+    onTestFinished(() => { act(() => Reflect.apply(setInteractionModality, undefined, [previous])); });
+    const outside = document.body.appendChild(document.createElement("button"));
+    const { container, root } = mount();
+    FakeController.last.settle("open");
+    FakeController.last.paint();
+    act(() => outside.focus());
+    return { container, root, outside, input: terminalInput(container) };
+  }
+
+  it("is drawn when focus arrives in the terminal by keyboard, and goes when focus leaves", () => {
+    const { container, outside, input } = mountUncovered();
+    modality("keyboard");
+    act(() => input.focus());
+    expect(ringed(container)).toBe(true);
+    act(() => outside.focus());
+    expect(ringed(container)).toBe(false);
+  });
+
+  it("is not drawn when focus arrives after a click, nor when Escape, Tab or a letter is typed in the terminal then", () => {
+    const { container, input } = mountUncovered();
+    modality("pointer");
+    act(() => input.focus());
+    expect(ringed(container)).toBe(false);
+    for (const name of ["Escape", "Tab", "a"]) {
+      key(input, name);
+      expect(ringed(container)).toBe(false);
+    }
+  });
+
+  it("is drawn again when focus comes back by keyboard after a click", () => {
+    const { container, outside, input } = mountUncovered();
+    modality("pointer");
+    act(() => input.focus());
+    act(() => outside.focus());
+    modality("keyboard");
+    act(() => input.focus());
+    expect(ringed(container)).toBe(true);
+  });
+
+  it("is drawn when recovery hands focus from the pending cover back to the input, after a click had put focus there", () => {
+    const { container, root, input } = mountUncovered();
+    modality("pointer");
+    act(() => input.focus());
+    expect(ringed(container)).toBe(false);
+    render(root, { ...session, holder_link: "pending" });
+    expect(document.activeElement).toBe(container.querySelector("[role=region][aria-label]"));
+    const focuses = FakeController.last.focuses;
+    render(root, session);
+    FakeController.last.settle("open");
+    FakeController.last.paint();
+    // The handoff asked the controller to focus xterm's input; the fake one moves no focus, so do what xterm would.
+    expect(FakeController.last.focuses).toBeGreaterThan(focuses);
+    act(() => input.focus());
+    expect(ringed(container)).toBe(true);
+  });
+
+  it("is not applied while the loading cover hides the terminal, and is once the first paint has uncovered it", () => {
+    const { container } = mount();
+    expect(surface(container).className).not.toMatch(/ring-2/);
+    FakeController.last.settle("open");
+    expect(surface(container).className).not.toMatch(/ring-2/);
+    FakeController.last.paint();
+    expect(surface(container).className).toMatch(/ring-2/);
+  });
+
+  it("is not applied while the reconnecting or the disconnected cover hides the terminal", () => {
+    const { container } = mountUncovered();
+    expect(surface(container).className).toMatch(/ring-2/);
+    FakeController.last.settle("closed");
+    expect(status(container) ?? "").not.toBe("Loading terminal…");
+    expect(surface(container).className).not.toMatch(/ring-2/);
+    for (let i = 0; i < 5; i++) failAttempt();
+    FakeController.last.settle("closed");
+    expect(surface(container).className).not.toMatch(/ring-2/);
+  });
+
+  it("is not applied while the pending cover hides the terminal, and is again once it has cleared and painted", () => {
+    const { container, root } = mountUncovered();
+    render(root, { ...session, holder_link: "pending" });
+    expect(surface(container).className).not.toMatch(/ring-2/);
+    render(root, session);
+    FakeController.last.settle("open");
+    FakeController.last.paint();
+    expect(surface(container).className).toMatch(/ring-2/);
   });
 });

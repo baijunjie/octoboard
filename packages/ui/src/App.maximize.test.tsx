@@ -4,6 +4,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
 import { stubWindow } from "./appTestSupport";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "./components/announce/StatusAnnouncer";
+import { windowAttention } from "./components/announce/windowTestSupport";
 import { PanelHeader } from "./components/panel/PanelHeader";
 import { mountForTooltip } from "./components/hint/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
@@ -76,11 +78,12 @@ function mountApp() {
     state: snapshotState({ consoles: [console_], projects: [project], sessions }),
     request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
   });
-  return mountForTooltip(
+  mountForTooltip(
     <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
       <ThemeProvider><DaemonProvider value={daemon}><StackReset /><App /></DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
+  return daemon;
 }
 
 const pressElement = (element: HTMLElement | null | undefined) => {
@@ -267,4 +270,65 @@ it("restores the maximized Terminal panel when Back or Forward arrives at an arc
   await pressElement(byLabel("Forward"));
   expect(archiveShown()).toBe(true);
   expect(terminalCard()!.hasAttribute("data-panel-maximized")).toBe(false);
+});
+
+const RECOVERED = "Recovered terminal display";
+const PENDING_SENTENCE = "Reconnecting to the session. The session process is still running. Input is unavailable until the connection returns. Reconnection is automatic.";
+/** The status regions in the window holding exactly `text`. */
+const said = (text: string) => Array.from(document.querySelectorAll("[role=status]")).filter((region) => region.textContent === text);
+
+/** The App mounted with its timers faked before anything arms one, the window attended, and the project's session
+ * selected with the Terminal panel maximized over the agent area. Returns what changes the selected session. */
+async function maximizedWithOpenSession() {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  onTestFinished(() => {
+    act(() => void vi.runOnlyPendingTimers());
+    vi.useRealTimers();
+  });
+  windowAttention();
+  const daemon = mountApp();
+  await maximizeTerminal();
+  const update = (change: Partial<ReturnType<typeof sessionOf>>) =>
+    act(() => {
+      const sessions = new Map(daemon.store.getState().sessions);
+      sessions.set("s-site", { ...sessions.get("s-site")!, ...change });
+      daemon.store.setState({ sessions });
+    });
+  const advance = (ms: number) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
+  // Past the status regions' first write delay, so what comes next is written as it is said.
+  await advance(AFTER_FOCUS_MOVE_DELAY_MS);
+  return { update, advance };
+}
+
+it("holds the recovered display's sentence raised under a maximized panel until the panel is restored, then says it once", async () => {
+  const { update, advance } = await maximizedWithOpenSession();
+  expect(isCovered("[data-region=terminal]")).toBe(true);
+  await update({ screen_inexact: true });
+  await advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(said(RECOVERED)).toEqual([]);
+
+  await pressElement(byLabel("Restore panel size", terminalCard()!));
+  expect(isCovered("[data-region=terminal]")).toBe(false);
+  await advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(said(RECOVERED)).toEqual([]);
+  await advance(1);
+  expect(said(RECOVERED)).toHaveLength(1);
+});
+
+it("holds the pending sentence of a session that turns pending under a maximized panel until the panel is restored, then says it once", async () => {
+  const { update, advance } = await maximizedWithOpenSession();
+  await update({ holder_link: "pending" });
+  await advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(said(PENDING_SENTENCE)).toEqual([]);
+
+  await pressElement(byLabel("Restore panel size", terminalCard()!));
+  await advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+  expect(said(PENDING_SENTENCE)).toEqual([]);
+  await advance(1);
+  expect(said(PENDING_SENTENCE)).toHaveLength(1);
+  // Maximized and restored again: said no more.
+  await pressElement(byLabel("Maximize panel", terminalCard()!));
+  await pressElement(byLabel("Restore panel size", terminalCard()!));
+  await advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(said(PENDING_SENTENCE)).toHaveLength(1);
 });

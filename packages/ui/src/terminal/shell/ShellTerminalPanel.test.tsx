@@ -10,6 +10,7 @@ import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { presence, stubListMotion } from "../../components/motion/listMotionTestSupport";
 import { tap, press as pressMark } from "../../components/hint/tooltipTestSupport";
+import { framesAsTimers, settleFrames, trackMountRefocus } from "../../components/dialog/dialogTestSupport";
 import { isolate } from "../../i18n/isolate";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { PanelFrameProvider, type PanelFrame } from "../../components/panel/PanelHeader";
@@ -50,6 +51,7 @@ afterEach(() => {
   mountedViews.length = 0;
   localStorage.clear();
   setGitModeWorktree("p", undefined);
+  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
 });
 
 // `eventFirst`: the broadcast of the new record arrives before the reply that names it; otherwise
@@ -583,6 +585,28 @@ it("leaves focus alone when the note goes while focus is elsewhere", () => {
   act(() => button.focus());
   setTerminals(panel, [shell("a", 1, { screen_inexact: false })]);
   expect(document.activeElement).toBe(button);
+});
+
+it.each(["trigger", "explanation"] as const)("hands focus to the remaining tab when its own recovered mark replaces the closed terminal's focused %s", async (from) => {
+  framesAsTimers();
+  const remaining = shell("a", 1, { screen_inexact: true });
+  const panel = mount([remaining, shell("b", 2, { screen_inexact: true })]);
+  await act(async () => panel.tabs()[1].click());
+  expect(panel.shown()).toBe("b");
+  act(() => marks(panel)[0].focus());
+  if (from === "explanation") {
+    tap(marks(panel)[0], "Enter");
+    const mountSettled = trackMountRefocus();
+    await settleFrames();
+    await mountSettled();
+    act(() => (popover() as HTMLElement).focus());
+  }
+  setTerminals(panel, [remaining]);
+  await settleFrames();
+  expect(panel.shown()).toBe("a");
+  expect(document.activeElement).toBe(panel.tabs()[0]);
+  expect(marks(panel)[0].getAttribute("aria-label")).toBe(`${RECOVERED} (${isolate("shell a")})`);
+  expect(getInteractionModality()).toBe("keyboard");
 });
 
 it("draws no mark or state for a terminal whose process cannot be reached, which stays a running tab among the others", () => {
