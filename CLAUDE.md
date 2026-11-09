@@ -168,16 +168,16 @@ the earlier steps do not run them separately (the related tests a step runs to c
 - Within "Documentation update": `docs/ui-standard.md`, the UI standard, has no writer subagent of its own — you
   maintain it yourself, from what the change turned up and from what a writer subagent hands back as belonging to it.
   Skip it when this round's changes touch nothing it states.
-- Timing override for "Formatting and checks", including the pre-merge flow and other skills' verification
-  baselines: by the user's explicit workflow choice, routine development completion and local merges do not run
-  the full checks. Before a local merge only, once the branch is aligned with its target branch and right before
-  merging, run the quick check, `pnpm verify --quick`, and do not merge until it passes; it runs at no other point,
-  neither at commits nor at development completion. When it fails only on tests that look intermittent (unrelated
-  to the branch's changes), rerun just the failed test files on their own; if they pass, the quick check counts as
-  passed, without rerunning the whole quick check (by the user's instruction). Skip it when the branch's changes are
-  only files that the build, type checking, and tests never read. The full checks, builds and full test suites included, run only before
-  pushing. Checks used specifically to establish a changed rule while implementing it remain appropriate; neither
-  they nor the quick check replace push verification.
+- Timing override for "Formatting and checks", including the pre-merge flow and other skills' verification baselines: by
+  the user's explicit workflow choice, routine development completion and local merges do not run the full checks.
+  Before a local merge only, once the branch is aligned with its target branch and right before merging, run the quick
+  check, `pnpm verify --quick`, and do not merge until it passes; it runs at no other point, neither at commits nor at
+  development completion. When it fails only on tests that look intermittent (unrelated to the branch's changes), rerun
+  just the failed test files on their own; if they pass, the quick check counts as passed, without rerunning the whole
+  quick check (by the user's instruction). Skip it when the branch's changes are only files that the build, type
+  checking, and tests never read. The full checks, builds and full test suites included, run only before pushing. Checks
+  used specifically to establish a changed rule while implementing it remain appropriate; neither they nor the quick
+  check replace push verification.
 - Before committing, the `pre-commit` hook runs `scripts/hooks/format-staged.mjs` (the same as `pnpm format:staged`):
   format only staged supported source files, preserving unstaged edits. A partial commit (`git commit <paths>`) is
   refused; stage the files and commit without paths. A checkout without the script (a branch older than the hook)
