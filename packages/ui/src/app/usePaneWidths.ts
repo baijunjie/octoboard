@@ -89,9 +89,10 @@ export function usePaneWidths({
       ? kinds.length === 1 && allocation.columns.length === 2 ? { width: allocation.width, kinds: allocation.kinds.join("\0") } : undefined
       : allocation?.pair;
   let adjustment = preferredChanged ? 0 : allocation?.adjustment ?? 0;
-  // Only changing the open cards adds or removes width. A viewport clamp, a hover preview and
-  // maximizing a card leave the chosen allocation available when the full group returns.
-  if (allocation && changed && !preferredChanged && !asideFloats && !allocation.mobile && !maximized && !allocation.maximized && allocation.key === panelWidthKey && kinds.length > 0 && allocation.kinds.length > 0) {
+  // Changing the visible cards adds or removes width, including when a new owner has no report.
+  // A viewport clamp, a hover preview and maximizing a card leave the chosen allocation
+  // available when the full group returns.
+  if (allocation && changed && !preferredChanged && !asideFloats && !allocation.mobile && !maximized && !allocation.maximized && kinds.length > 0 && allocation.kinds.length > 0) {
     const oldCount = allocation.columns.length;
     const nextCount = kinds.length > 2 || (kinds.length === 2 && keepPairColumns) ? 2 : kinds.length === 1 || allocation.kinds.length > 2 ? 1 : columns.length;
     if (oldCount !== nextCount) {

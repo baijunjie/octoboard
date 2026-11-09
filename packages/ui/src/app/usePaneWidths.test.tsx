@@ -180,3 +180,19 @@ it("forgets the previous pair's exact width when every card closes", () => {
   test.render(["report", "files"]);
   expect(test.widths().asideWidth.width).toBe(546);
 });
+
+it("keeps the surviving cards stacked when switching away from a project's report", () => {
+  const test = mount(false, 0.5, ["report", "files", "processes"]);
+  act(() => test.widths().asideWidth.setWidth(720));
+  test.render(["files", "processes"], false, "b");
+  expect(test.widths().asideWidth.width).toBe(363);
+});
+
+it("keeps the collapsed width after closing a report and changing projects", () => {
+  const test = mount(false, 0.5, ["report", "files", "processes"]);
+  act(() => test.widths().asideWidth.setWidth(720));
+  test.render(["files", "processes"]);
+  expect(test.widths().asideWidth.width).toBe(363);
+  test.render(["files", "processes"], false, "b");
+  expect(test.widths().asideWidth.width).toBe(363);
+});

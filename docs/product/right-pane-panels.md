@@ -117,7 +117,8 @@ to keep the surviving cards at their displayed column width, within the pane's c
 beside two stacked cards adds width for the new column; closing it removes that width. If two cards were already
 side by side, opening and closing the third keeps their two-column layout and the pane's total width. If cards from
 unequal-width columns combine into one column, the first surviving kind in the fixed order determines the width to
-keep.
+keep. The same adjustment applies when switching sessions or projects adds or removes a column and at least one
+panel kind remains on screen.
 
 Closing one of two side-by-side cards keeps the surviving card's width; reopening the same card restores the pair's
 previous total width and column widths, within the current limits. Two stacked cards return stacked instead. The

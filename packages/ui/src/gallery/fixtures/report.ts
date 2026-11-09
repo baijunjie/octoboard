@@ -97,6 +97,15 @@ const panelState = snapshotState({
   pages: { [withReport.id]: [pageOf("pc-1", withReport.id, summary("Idempotency keys, ready for review"), 20)] },
   shellTerminals: [shellTerminalOf("sh-report", project, "zsh", 0)],
 });
+const switchingProject = projectOf("p-panel-switch", console_.id, "Website");
+const switchingSession = sessionOf("s-panel-switch", console_.id, switchingProject.id, "Adjust the page layout", "idle");
+const threePanelState = snapshotState({
+  consoles: [console_],
+  projects: [project, switchingProject],
+  sessions: [withReport, withoutReport, switchingSession],
+  pages: { [withReport.id]: [pageOf("pc-1", withReport.id, summary("Idempotency keys, ready for review"), 20)] },
+  shellTerminals: [shellTerminalOf("sh-report", project, "zsh", 0)],
+});
 const panelProcesses = { trees: [processTreeOf("400:1", withReport, "pnpm dev", 60, { ports: [5173] })] };
 
 export const reportScenarios: Scenario[] = [
@@ -105,9 +114,9 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Three panels in two columns",
-    description: "Report fills the first column, with Terminal above Files in the second. The saved pane width is only 320px, so this initial three-panel layout uses its 546px minimum: two 260px cards, their 10px gap and the 16px outer spacing. Adding or removing a column preserves the remaining cards' widths by changing the group's total width, until the docked group's 720px limit or the floating group's available space requires narrower cards. Close Report in the initial layout: Terminal and Files stack in a 276px group, keeping their 260px card widths and compact headers. Opening or closing a card without changing the column count keeps the group width. Drag the full-height grip between columns or the height separator between Terminal and Files; both remain operable when the group floats. While the group is visible, an individual top-bar panel icon toggles only its card; the others stay visible until the last card is closed. With the sidebar visible the group docks from 1254px. At 1168px it floats; hide the sidebar with its top-bar toggle to dock both columns beside a terminal of at least 400px, then show the sidebar to float the group again. Choose Tablet portrait (768px) or Phone (390px): the sidebar becomes a drawer and only one right-hand card is shown; swipe towards the start to cycle through available panels, or towards the end to close it.",
-    state: panelState,
-    preferences: { asideWidth: 320, panelStacks: { project: { open: ["terminal", "files"], shares: {} } } },
+    description: "Report fills the first column, with Terminal above Files in the second. The saved pane width is 720px before any viewport clamp, split into two columns with their 10px gap and 16px outer spacing. Adding or removing a column preserves the remaining cards' widths by changing the group's total width, until the docked group's 720px limit or the floating group's available space requires narrower cards. Close Report in the initial layout: Terminal and Files stack in one column, keeping their displayed card widths. Select Tidy the fixtures in Search API or Adjust the page layout in Website, either with Report still open or after closing it: the remaining pair keeps the same narrow width. Opening or closing a card without changing the column count keeps the group width. Drag the full-height grip between columns or the height separator between Terminal and Files; both remain operable when the group floats. While the group is visible, an individual top-bar panel icon toggles only its card; the others stay visible until the last card is closed. With the sidebar visible the group docks from 1254px. At 1168px it floats; hide the sidebar with its top-bar toggle to dock both columns beside a terminal of at least 400px, then show the sidebar to float the group again. Choose Tablet portrait (768px) or Phone (390px): the sidebar becomes a drawer and only one right-hand card is shown; swipe towards the start to cycle through available panels, or towards the end to close it.",
+    state: threePanelState,
+    preferences: { asideWidth: 720, panelStacks: { project: { open: ["terminal", "files"], shares: {} } } },
     steps: [openProjectSession(withReport.title), (ui) => ui.closeDrawer(), (ui) => ui.showPanel("report")],
   },
   {
