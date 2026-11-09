@@ -26,6 +26,8 @@
 - [x] Every quit tells the daemon it is quitting before the application exits, without waiting for an answer, the
       quits that do not wait for the daemon included. A daemon that finds the application gone after that makes an
       ordinary stop.
+  - [x] On macOS, a quit while the sidecar is still starting leaves a quit record that ends every leftover session
+        at the next start. Evidence: `/tmp/octoboard-remaining-20261110-7fd0/starting-quit.json`.
 - [x] The daemon finding the application gone makes the planned stop rather than an ordinary stop, so an
       application crash leaves the sessions to the next launch.
 - [ ] A system shutdown, restart or logout is told apart from a quit: it asks for no confirmation, and the daemon
@@ -37,9 +39,11 @@
       compatible range. It names those sessions.
 - [x] The new application starts its own daemon as today. That daemon adopts the holders through milestone 02's
       adoption, including a holder of an older build in the compatible range.
-- [ ] The new build's database migration runs at `Store::open`, before the holders are adopted, and leaves the
-      records of adopted sessions valid: its steps add columns and tables and change the settings table, and rewrite
-      no session or held-terminal row.
+- [x] The new build's database migration runs at `Store::open`, before holders are adopted, and an additive
+      migration leaves their session and held-terminal records valid. Verified on macOS with a signed localhost
+      beta.3→beta.6 update built from main and a scratch v3→v4 empty-table step; all held rows and program PIDs
+      survived, with Codex queue delivery and shell input working.
+      Evidence: `/tmp/octoboard-remaining-20261110-7fd0/REPORT.md` (cross-schema update records).
 - [x] The adopted sessions' hooks, MCP bridge and git gate run from their build's copy and keep working through
       their holder's relay (milestone 02), while the installation is replaced (verified on macOS; the Windows
       installer meeting no file in use is milestone 02's Handoff).
@@ -167,14 +171,15 @@ VM, where only the daemon's planned stop and start ran. The scripted suites (`ho
 `holder::client`, `state::application_note`, `coordinator::handover_check`, `coordinator::unlinked`, desktop
 `sidecar::`, `exit::`, `updater::`, UI `ExitConfirmDialog`, `useAppExit`, `updateStore`) run at push.
 
+On 2026-11-10, main `035746de6` also passed macOS startup-time quit and a real signed cross-schema update.
+The scratch next build added only an empty-table v3→v4 migration and verification metadata/version overrides; it
+was never committed. Evidence: `/tmp/octoboard-remaining-20261110-7fd0/REPORT.md`.
+
 **Remaining, each a real run:**
-1. On macOS, not run on 2026-11-10: a quit while the application's daemon is still starting ends every session at the
-   next start. And an update across builds whose schemas differ (the updates above shared one), with sessions
-   adopted: the migration runs and the adopted sessions keep working.
-2. A system shutdown, on macOS (not done, since it would end the verification machine's own session): log out, and
+1. A system shutdown, on macOS (not done, since it would end the verification machine's own session): log out, and
    separately shut down, with sessions working, also during an update restart's planned stop: no confirmation, no
    relaunch, and at the next start every session interrupted with its last screen as its preview.
-3. Windows, from an interactive desktop logon, blocked on the sign-in password of the VM user `bjj`; the VM's working
+2. Windows, from an interactive desktop logon, blocked on the sign-in password of the VM user `bjj`; the VM's working
    directory `C:\Users\bjj\windows-verification` keeps the source, the build and the isolated data. Killing the
    application leaves every session running at the next launch; a plain quit, and the stopped-responding escape hatch,
    end every session. With two built versions: a real update restart over working sessions and a shell terminal, every

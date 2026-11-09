@@ -194,8 +194,10 @@
 - [x] The daemon connects to the companion's endpoint itself, not through the holder: on macOS and Linux a socket in
       a directory only the user can enter, as today, now made and removed by the holder (a holder killed outright
       leaves the directory, as a killed daemon did); on Windows the loopback port guarded by the token above.
-- [ ] The direct connection keeps working while the holder link is down, so a message is queued through a pending
-      holder too.
+- The direct connection keeps working while the holder link is down, so a message is queued through a pending holder:
+  - [x] macOS, real Codex 0.166.0: one message reached the queue while `holder_link: pending`, with the same id
+        present once after reconnect. Evidence: `/tmp/octoboard-remaining-20261110-7fd0/codex-pending.json`.
+  - [ ] Windows: verify queue delivery while the holder link is pending.
 
 ## Implementation plan
 
@@ -327,14 +329,14 @@ verification Mac: `/tmp/octoboard-manual-20261110-67e2/REPORT.md`, `/tmp/octoboa
 `terminal::server_host::tests`, `terminal::backend::tests`, `messaging::outbox::tests`, `restart_outbox`,
 `adapter::codex::transport::tests`, `coordinator::adopt::tests`) run at push.
 
-**Remaining on macOS, a real run not done on 2026-11-10:** with a Codex session running, make its holder refuse
-links (a relay in front of its address, as the evidence's pending-holder run did) so the session shows pending, send
-the session a message: it goes into Codex's queue over the direct connection.
+On 2026-11-10, main `035746de6` also passed the pending-holder direct-connection run on macOS with real
+Codex 0.166.0, using an isolated local model provider. Evidence: `/tmp/octoboard-remaining-20261110-7fd0/REPORT.md`.
 
 **Remaining, a real run on Windows from an interactive desktop logon**, blocked on the sign-in password of the VM user
 `bjj`; the VM's working directory `C:\Users\bjj\windows-verification` keeps the source, the build and the isolated data,
 and Codex is signed in there. With the daemon started by the desktop application: the holder detached and running the
-server, the companion in a job of its own nested in the launch's (over SSH it was seen only in a job); messages queued
+server, the companion in a job of its own nested in the launch's (over SSH it was seen only in a job); queue delivery
+while its holder link is pending; messages queued
 before a daemon kill, and before a planned stop and start, started once each after a cancel (over SSH the queued message
 was refused while Codex waited for a command approval, so this was not established); and a real desktop update restart
 over a working Codex session, with the installer meeting no file in use.

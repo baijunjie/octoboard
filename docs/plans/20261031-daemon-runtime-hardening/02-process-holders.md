@@ -66,8 +66,13 @@
         daemon not run by a systemd user manager detaches its holders as on macOS, with the process ledger alone.
   - [ ] On Windows, outside the daemon's hidden console and its jobs, as "Process holders on Windows" in
         `docs/architecture.md` describes.
-- [ ] The daemon's crash hook, which today kills every PTY process when the daemon panics or aborts, no longer
-      reaches programs a holder runs. A holder's own crash still ends its programs.
+- The daemon's crash hook no longer reaches programs a holder runs; a holder's own crash still ends them:
+  - [x] macOS: daemon `SIGABRT` preserved the agent and shell for adoption; holder `SIGABRT` ended both.
+        Evidence: `/tmp/octoboard-remaining-20261110-7fd0/REPORT.md` (crash-hook records).
+  - [ ] Linux and Windows: verify the same crash-hook boundary.
+- [x] On macOS, a program in a held terminal raises a privacy prompt naming the packaged application, with the
+      holder outside the bundle; Desktop access was denied after capture.
+      Evidence: `/tmp/octoboard-remaining-20261110-7fd0/privacy-prompt.png`.
 - [x] Helpers connect to their holder, not to the daemon:
   - The holder listens on a local address of its own, an HTTP one included, since Claude Code's hooks take a URL.
   - It issues and checks each launch's credentials, and relays helper requests to the connected daemon.
@@ -190,17 +195,13 @@ scripted suites (`holder::`, `coordinator::adopt`, `coordinator::resume_on_start
 `store::held_terminals`, the `platform::proc` contract tests and the UI tests of the recovered-display mark) run at
 push.
 
+On 2026-11-10, current main `035746de6` also passed the macOS crash-hook and fresh privacy-prompt runs.
+Evidence: `/tmp/octoboard-remaining-20261110-7fd0/REPORT.md`. The new verification bundle raised its first Desktop prompt,
+which named the verification application and was denied; bundle-only `tccutil reset All` attempts returned
+"No such bundle identifier", so no reset succeeded and no other bundle was reset.
+
 **Remaining, each a real run:**
-1. The crash hook, on macOS (not run on 2026-11-10; no test covers a held program's absence from the crash cleanup):
-   with an agent session and a shell running under a holder, `kill -ABRT` the daemon, whose abort handler runs the
-   crash cleanup: the held programs keep running and the next daemon adopts them. Then `kill -ABRT` the holder: its
-   programs end.
-2. The macOS privacy prompt (`docs/product/macos-privacy-permissions.md`): from the packaged application, with holders
-   running from the build copy outside the bundle, make a program in a held terminal raise a fresh consent prompt (a
-   permission the verification application has not been granted or denied, such as screen recording through
-   `CGRequestScreenCaptureAccess`), and check that the prompt names Octoboard. On 2026-11-10 a held program's
-   responsible process was the application, but macOS raised no prompt, which proves nothing about its attribution.
-3. Windows, from an interactive desktop logon, blocked on the sign-in password of the VM user `bjj`. The VM's working
+1. Windows, from an interactive desktop logon, blocked on the sign-in password of the VM user `bjj`. The VM's working
    directory `C:\Users\bjj\windows-verification` keeps the source, the build and the isolated data. Signed in as a
    standard user, with the daemon started by the desktop application: the holders run outside the daemon's jobs and
    survive it, and where breakaway is refused the desktop application is the holder's parent (Handoff); Claude Code
@@ -210,9 +211,9 @@ push.
    an out-of-range holder ended; an in-range holder of another build drained; an unknown terminal ended; a session no
    holder runs interrupted; a holder refusing links, or dropping them repeatedly, left running, shown pending and taken
    over.
-4. Linux without systemd, blocked on Docker, which is off: with the Linux build in a container, the Unix detach, and a
+2. Linux without systemd, blocked on Docker, which is off: with the Linux build in a container, the Unix detach, and a
    held launch joining the cgroup group the daemon made for it below the holder's own cgroup (a writable cgroup v2
    subtree, as Linux daemon run milestone 01's notes describe).
-5. Linux with systemd, blocked on the daemon running on Linux as a systemd user service, which does not exist yet:
+3. Linux with systemd, blocked on the daemon running on Linux as a systemd user service, which does not exist yet:
    the holder as a systemd user service with `Delegate=yes` and a group per launch, the daemon's unit stopping before
    the holders' units, and the Linux host shutdown criterion.
