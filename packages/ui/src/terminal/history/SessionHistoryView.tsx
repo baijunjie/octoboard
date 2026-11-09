@@ -216,7 +216,7 @@ function Message({ message }: { message: ConversationMessage }): React.ReactElem
           <time dateTime={new Date(message.at).toISOString()}>{isolate(new Date(message.at).toLocaleString(language))}</time>
         )}
       </div>
-      <div data-speaker={message.speaker} className="history-message rounded-xl bg-default px-3 py-2 text-sm leading-6 shadow-(--panel-shadow)">
+      <div data-speaker={message.speaker} className="history-message rounded-xl bg-default px-3 py-2 text-sm leading-6">
         {message.speaker === "agent" ? (
           <RendererBoundary resetKey={message.text} fallback={plain} retry={markdownDocument.retry}>
             <Suspense fallback={trackSuspenseFallback(plain)}>

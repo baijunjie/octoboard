@@ -34,7 +34,7 @@ record dated it, the date and time, written for the app's language:
   budgets in `docs/product/markdown-documents.md`; each reply has its own budget. Replies have no project file context,
   so relative images stay their alt text and relative file links stay text. Links have no external-link icon.
 
-User messages and agent replies share rounded message surfaces with a soft shadow, distinct from the page. User messages
+User messages and agent replies share rounded message surfaces without shadows, distinct from the page. User messages
 have a soft accent-coloured background; agent replies have a neutral gray background. Both follow the app's light or dark
 appearance and use the app's UI font at 14 px with a 24 px line height. Replies keep compact Markdown spacing; their
 headings use the body text's size and line height with semibold weight, and tables keep the body text's size. Inline
