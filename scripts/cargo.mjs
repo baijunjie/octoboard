@@ -4,7 +4,10 @@
 // go to cargo (`pnpm test:rust some_test_name` filters by test name; for `clippy`, which ends in the
 // lint flags, they come before them). With `-p <crate>` or `--package <crate>` among them (the
 // `--package=<crate>` form is not recognised) only `--workspace` is dropped, so the command covers just that
-// crate with its other flags (`--all-targets`) kept; `pnpm verify --quick` uses this for a change to one crate.
+// crate with its other flags (`--all-targets`) kept. Features are then resolved for that crate alone, so a
+// dependency whose features differ, and the crate itself, build a second time beside the workspace build; to
+// narrow to one crate without that second build, pass its targets (`--bin`, `--lib`) instead, which keeps
+// `--workspace`.
 //
 // The desktop crate's `build.rs` makes `tauri-build` refuse to build when the sidecar named by
 // `bundle.externalBin` or a file named by `bundle.resources` (the Windows installer's ConPTY files, which

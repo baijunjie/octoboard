@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { CRATE_WIDE_TESTS, moduleFilter, quickSteps, RUST_MARKDOWN_READERS, rustChanges, rustTests, UI_DISK_TESTS, UI_DISK_TESTS_COVERED, UI_READERS, UI_UNTRACEABLE, uiTests } from "./quick.mjs";
+import { CRATE_WIDE_TESTS, CRATES, moduleFilter, quickSteps, RUST_MARKDOWN_READERS, rustChanges, rustTests, UI_DISK_TESTS, UI_DISK_TESTS_COVERED, UI_READERS, UI_UNTRACEABLE, uiTests } from "./quick.mjs";
 import { planScope } from "./scope.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -52,9 +52,14 @@ test("the Rust test run is skipped, narrowed to filters or one crate, or kept in
   assert.deepEqual(rustTests(["apps/daemon/src/coordinator.rs", "apps/desktop/src-tauri/src/menu.rs", "apps/daemon/src/hooks.rs"]), {
     mode: "related", args: ["--", "coordinator::", "hooks::", "menu::", ...WIDE].sort(),
   });
-  assert.deepEqual(rustTests(["apps/daemon/src/main.rs"]), { mode: "related", args: ["-p", "octoboardd"] });
-  assert.deepEqual(rustTests(["apps/desktop/src-tauri/src/lib.rs"]), { mode: "related", args: ["-p", "octoboard"] });
+  assert.deepEqual(rustTests(["apps/daemon/src/main.rs"]), { mode: "related", args: ["--bin", "octoboardd"] });
+  assert.deepEqual(rustTests(["apps/desktop/src-tauri/src/lib.rs"]), { mode: "related", args: ["--lib", "--bin", "octoboard"] });
+  assert.deepEqual(rustTests(["apps/daemon/src/coordinator.rs"]), { mode: "related", args: ["--bin", "octoboardd", "--", ...["coordinator::", ...WIDE].sort()] });
+  assert.deepEqual(rustTests(["apps/desktop/src-tauri/src/menu.rs"]), { mode: "related", args: ["--lib", "--bin", "octoboard", "--", "menu::"] });
   assert.equal(rustTests(["apps/daemon/src/main.rs", "apps/desktop/src-tauri/src/menu.rs"]).mode, "full");
+  assert.equal(rustTests(["apps/desktop/src-tauri/src/lib.rs", "apps/daemon/src/coordinator.rs"]).mode, "full");
+  // The result is the caller's to change, never the crate's own list.
+  assert.notEqual(rustTests(["apps/daemon/src/main.rs"]).args, CRATES.daemon.targets);
   assert.equal(rustTests(["Cargo.lock"]).mode, "full");
 });
 
@@ -89,8 +94,8 @@ test("a file outside the package that UI tests read runs those tests, and the pr
 });
 
 test("Markdown a crate reads runs the reading module's tests, and nothing of the UI", () => {
-  assert.deepEqual(rustTests(["apps/daemon/PROTOCOL.md"]), { mode: "related", args: ["--", "session_tools::", ...WIDE].sort() });
-  assert.deepEqual(rustTests(["apps/daemon/src/adapter/codex/compatibility.md"]), { mode: "related", args: ["--", "adapter::", ...WIDE].sort() });
+  assert.deepEqual(rustTests(["apps/daemon/PROTOCOL.md"]), { mode: "related", args: ["--bin", "octoboardd", "--", ...["session_tools::", ...WIDE].sort()] });
+  assert.deepEqual(rustTests(["apps/daemon/src/adapter/codex/compatibility.md"]), { mode: "related", args: ["--bin", "octoboardd", "--", ...["adapter::", ...WIDE].sort()] });
   assert.deepEqual(uiTests(["apps/daemon/PROTOCOL.md"]), { mode: "skip" });
   assert.deepEqual(labels(["apps/daemon/PROTOCOL.md"]), ["identity check", "verify lint", "verify tests", "rustfmt check", "rust clippy", "rust related tests"]);
 });
@@ -115,7 +120,7 @@ test("narrowed test steps are heavy, last and never stamped; a fallback keeps th
   const related = narrowed.filter((step) => /related/.test(step.label));
   assert.ok(related.every((step) => step.heavy && step.stamp === false));
   assert.deepEqual(related[0].cmd, ["pnpm", "--filter", "@octoboard/ui", "exec", "vitest", "related", "--run", "src/a/X.tsx", ...UI_DISK_TESTS]);
-  assert.deepEqual(related[1].cmd, ["node", "scripts/cargo.mjs", "test", "--", "coordinator::", "layering_tests::", "protocol::", "records::history::"]);
+  assert.deepEqual(related[1].cmd, ["node", "scripts/cargo.mjs", "test", "--bin", "octoboardd", "--", "coordinator::", "layering_tests::", "protocol::", "records::history::"]);
   assert.ok(narrowed.filter((step) => !/related/.test(step.label)).every((step) => step.stamp !== false));
   const fallback = quick(["packages/ui/vite.config.ts"]);
   const ui = fallback.steps.find((step) => step.label === "ui tests");
@@ -266,5 +271,52 @@ test("every file outside the package that a UI file reads or imports selects the
       decision.mode === "full" || (decision.mode === "related" && (decision.files.includes(relative(file)) || decision.files.includes(relative(target)))),
       `${file} reads ${target}, whose quick run leaves it out`,
     );
+  }
+});
+
+// A target the selection misses would never run in a quick run, so each crate's test targets are held to what the
+// manifest and the source tree declare.
+test("the targets a crate is narrowed to are all of its test targets", () => {
+  const manifest = (crate) => read(`${CRATES[crate].dir}Cargo.toml`);
+  const has = (file) => existsSync(path.join(root, file));
+  for (const crate of Object.keys(CRATES)) {
+    const { dir } = CRATES[crate];
+    for (const kind of ["test", "bench", "example"]) assert.doesNotMatch(manifest(crate), new RegExp(`^\\[\\[${kind}\\]\\]`, "m"), `${dir}: [[${kind}]]`);
+    for (const extra of ["tests", "src/bin", "examples", "benches"]) assert.ok(!has(`${dir}${extra}`), `${dir}${extra}`);
+  }
+  // One `[[bin]]` table, named `octoboardd` wherever the key sits in it.
+  const bins = manifest("daemon").split(/^(?=\[)/m).filter((table) => table.startsWith("[[bin]]"));
+  assert.deepEqual(bins.map((table) => table.match(/^name = "([^"]+)"/m)?.[1]), ["octoboardd"]);
+  assert.ok(!has(`${CRATES.daemon.dir}src/lib.rs`) && !/^\[lib\]/m.test(manifest("daemon")), "the daemon gained a library, which `--bin` does not select");
+  assert.deepEqual(CRATES.daemon.targets, ["--bin", "octoboardd"]);
+  // The desktop crate: its library and the default binary of `src/main.rs`, named after the package.
+  assert.match(manifest("native"), /^\[package\]\s*\nname = "octoboard"/m);
+  assert.doesNotMatch(manifest("native"), /^\[\[bin\]\]/m);
+  assert.ok(has(`${CRATES.native.dir}src/main.rs`) && has(`${CRATES.native.dir}src/lib.rs`));
+  assert.deepEqual(CRATES.native.targets, ["--lib", "--bin", "octoboard"]);
+  // `--lib` leaves out doctests, which the full suite runs, and cargo does not combine `--doc` with `--lib` or `--bin`:
+  // a first doctest in the library needs a change to how the crate is narrowed, not to `CRATES` alone. The check is
+  // conservative: every fenced block in a line doc comment counts as a doctest unless its opening fence is exactly
+  // `text` or `ignore`, so does a line indented by four spaces that opens a doc comment or follows a blank doc line (an
+  // indented code block), and `#[doc]` attributes and block doc comments, which it does not parse, are refused.
+  const doctest = "counts as a doctest, which a quick run narrowed to the desktop crate's targets would not run";
+  for (const file of tracked(`${CRATES.native.dir}src/`).filter((name) => name.endsWith(".rs"))) {
+    const text = read(file);
+    // The fence that opened the current block, and the previous doc line (null outside a doc comment).
+    let open = null;
+    let previous = null;
+    for (const line of text.split("\n")) {
+      const doc = line.match(/^\s*\/\/[/!] ?(.*)$/)?.[1] ?? null;
+      const indented = !open && (previous === null || previous.trim() === "") && doc !== null && /^ {4,}\S/.test(doc);
+      assert.ok(!indented, `${file}: the indented block at "${line.trim()}" ${doctest}`);
+      previous = doc;
+      const fence = line.match(/^\s*\/\/[/!]\s*(```+|~~~+)\s*([\w,-]*)/);
+      if (!fence) continue;
+      if (!open) {
+        assert.match(fence[2], /^(?:text|ignore)$/, `${file}: the block opening with "${line.trim()}" ${doctest}`);
+        open = fence[1];
+      } else if (fence[1][0] === open[0] && fence[1].length >= open.length) open = null;
+    }
+    assert.doesNotMatch(text, /#!?\[doc\s*=|^\s*\/\*[*!]/m, `${file}: a #[doc] attribute or a block doc comment may hold a doctest; it is not checked`);
   }
 });

@@ -121,9 +121,14 @@ export const RUST_MARKDOWN_READERS = {
   "apps/daemon/src/adapter/codex/compatibility.md": { crate: "daemon", filters: ["adapter::"] },
 };
 
-const CRATES = {
-  daemon: { dir: "apps/daemon/", pkg: "octoboardd" },
-  native: { dir: "apps/desktop/src-tauri/", pkg: "octoboard" },
+// `targets` selects every test target of the crate (the daemon is one binary; the desktop crate a library and its
+// binary, with no doctests) while the whole workspace stays selected. Selecting the package with `-p` instead would
+// resolve the dependencies' features for that crate alone, which builds a second copy of every dependency whose
+// features differ and of the crate itself, beside the one the workspace runs use. `quick.test.mjs` fails when a crate
+// gains a test target these do not select.
+export const CRATES = {
+  daemon: { dir: "apps/daemon/", targets: ["--bin", "octoboardd"] },
+  native: { dir: "apps/desktop/src-tauri/", targets: ["--lib", "--bin", "octoboard"] },
 };
 
 // The module a crate source file belongs to as a libtest filter, or null when the file is not
@@ -165,21 +170,20 @@ export function rustChanges(files, markdownReaders = RUST_MARKDOWN_READERS) {
 }
 
 // The Rust test run for `files`: `{ mode: "skip" }`, `{ mode: "full", why }` or `{ mode: "related", args }` with
-// the arguments for `scripts/cargo.mjs test`. The whole workspace is built and run together, as the full
-// suite does, so the crates share one feature set. One crate alone runs with `-p`: after a workspace
-// build that reuses every dependency (only the desktop crate itself is rebuilt, as its build script
-// reruns when the selection changes). Module filters of a crate come with its `CRATE_WIDE_TESTS`. A crate
-// that needs its full tests next to filters for the other makes the whole workspace's tests run, since one
-// `cargo test` cannot apply filters to one crate only.
+// the arguments for `scripts/cargo.mjs test`. The whole workspace stays selected, as in the full suite, so the
+// crates share one feature set and one build; one crate alone is narrowed to its test targets. Module filters of a
+// crate come with its `CRATE_WIDE_TESTS`. A crate that needs its full tests next to filters for the other makes the
+// whole workspace's tests run, since one `cargo test` cannot apply filters to one crate only.
 export function rustTests(files) {
   const need = rustChanges(files);
   const crates = Object.keys(CRATES).filter((name) => need[name] !== null);
   if (crates.length === 0) return { mode: "skip" };
   const full = crates.filter((name) => need[name] === "full");
-  if (full.length === 1 && crates.length === 1) return { mode: "related", args: ["-p", CRATES[full[0]].pkg] };
+  const targets = crates.length === 1 ? CRATES[crates[0]].targets : [];
+  if (full.length === 1 && crates.length === 1) return { mode: "related", args: [...targets] };
   if (full.length > 0) return { mode: "full", why: "a crate root, a manifest or a file outside the sources changed, which can change any test" };
   const wide = crates.flatMap((name) => CRATE_WIDE_TESTS[name].map((test) => test.filter));
-  return { mode: "related", args: ["--", ...[...new Set([...crates.flatMap((name) => need[name]), ...wide])].sort()] };
+  return { mode: "related", args: [...targets, "--", ...[...new Set([...crates.flatMap((name) => need[name]), ...wide])].sort()] };
 }
 
 const BUILDS_AND_SUITES = new Set(["web build", "ui build", "web tests", "ui tests", "rust tests"]);

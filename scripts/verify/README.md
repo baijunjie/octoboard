@@ -65,8 +65,9 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
 6. **Quick mode** (`quick.mjs`, `--quick`). The normal plan without builds and without the two full test suites; UI and
    Rust tests narrow to what the changes reach (`vitest related`, and cargo module filters), falling back to a full
    suite where the reach cannot be traced. A file outside the UI package runs the UI tests that read it
-   (`UI_READERS`), and Markdown a crate reads runs the reading modules' tests (`RUST_MARKDOWN_READERS`). Narrowed steps
-   are never recorded as a pass of the whole.
+   (`UI_READERS`), and Markdown a crate reads runs the reading modules' tests (`RUST_MARKDOWN_READERS`). A run that
+   needs one crate keeps `--workspace` and selects that crate's test targets (`CRATES`), so it reuses the workspace
+   build. Narrowed steps are never recorded as a pass of the whole.
 
 ## Git environment boundary
 
@@ -120,6 +121,10 @@ retention and timing measurements are documented in the [Rust cache module](../.
 - A new check: a step in `steps.mjs`; keep `quick.mjs` consistent (its tests fail when a UI test reads files or a crate
   has crate-wide tests that its lists do not name). A new release check belongs in the frontend, native or windows
   group; `steps.test.mjs` checks that their combined commands equal the complete release plan.
+- A new test target in a Rust crate: name it in `CRATES` of `quick.mjs`, whose tests fail on a `[[test]]`, `[[bench]]`
+  or `[[example]]`, a `tests/`, `src/bin`, `examples` or `benches` directory, a second daemon binary, a daemon library,
+  or a doctest in the desktop crate. A doctest cannot be selected next to `--lib` and `--bin`, so it needs a change to
+  how that crate is narrowed.
 - A new `include_str!` of Markdown is named in `DAEMON_READS_MARKDOWN` (or a rule of its own) and in
   `RUST_MARKDOWN_READERS`; the tests fail with the file to name. A file outside the UI package that a UI test reads runs
   the full UI suite in a quick run until `UI_READERS` names its readers; the tests fail when an entry leaves a reader
