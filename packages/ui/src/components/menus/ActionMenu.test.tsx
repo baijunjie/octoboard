@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, useEffect, useRef } from "react";
+import { act, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Trash2 } from "lucide-react";
 import { setInteractionModality } from "react-aria";
@@ -11,7 +11,7 @@ import { detailsButton } from "../alerts/detailsTestSupport";
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 import { ActionMenu } from "./ActionMenu";
-import type { ActionMenuEntry, ActionMenuPanelContext } from "./menuEntries";
+import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanelContext } from "./menuEntries";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -625,4 +625,78 @@ it("opens a submenu with an arrow key and keeps parent letters out of it", async
   act(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true, cancelable: true })));
   expect(child).toHaveBeenCalledOnce();
   expect(parent).not.toHaveBeenCalled();
+});
+
+
+it("shows a resolving action immediately without holding up siblings, and keeps keyboard focus as it enables", async () => {
+  let resolve!: (item: ActionMenuItem) => void;
+  const load = vi.fn(() => new Promise<ActionMenuItem>((done) => { resolve = done; }));
+  const copy = vi.fn();
+  await openMenu([
+    { label: "Copy relative path", icon: Trash2, onClick: () => {} },
+    { label: "Copy absolute path", icon: Trash2, onClick: () => {}, load: { key: "path", run: load } },
+    "separator",
+    { label: "Open in", icon: Trash2, items: [{ label: "File manager", icon: Trash2, onClick: () => {} }] },
+  ]);
+  const items = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")];
+  expect(items.map((item) => item.textContent)).toEqual(["Copy relative path", "Copy absolute path", "Open in"]);
+  expect(items[0].getAttribute("aria-disabled")).not.toBe("true");
+  expect(items[1].getAttribute("aria-disabled")).toBe("true");
+  expect(document.body.textContent).not.toContain("Loading");
+  act(() => items[1].focus());
+  await act(async () => resolve({ label: "Copy absolute path", icon: Trash2, onClick: copy }));
+  expect(document.activeElement).toBe(items[1]);
+  expect(items[1].getAttribute("aria-disabled")).not.toBe("true");
+  act(() => items[1].click());
+  expect(copy).toHaveBeenCalledOnce();
+  expect(load).toHaveBeenCalledOnce();
+});
+
+it("refreshes resolving actions on reopening and ignores a reply from the closed menu", async () => {
+  const pending: ((item: ActionMenuItem) => void)[] = [];
+  const load = vi.fn(() => new Promise<ActionMenuItem>((done) => pending.push(done)));
+  const oldCopy = vi.fn();
+  const newCopy = vi.fn();
+  await openMenu([{ label: "Absolute", icon: Trash2, onClick: () => {}, load: { key: "path", run: load } }]);
+  const menu = document.querySelector<HTMLElement>("[role=menu]")!;
+  await act(async () => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(document.querySelector("[role=menu]")).toBeNull();
+  const trigger = document.querySelector<HTMLButtonElement>('button[aria-label="Actions of X"]')!;
+  await act(async () => trigger.click());
+  expect(load).toHaveBeenCalledTimes(2);
+  await act(async () => pending[0]({ label: "Absolute", icon: Trash2, onClick: oldCopy }));
+  expect(document.querySelector("[role=menuitem]")?.getAttribute("aria-disabled")).toBe("true");
+  await act(async () => pending[1]({ label: "Absolute", icon: Trash2, onClick: newCopy }));
+  act(() => document.querySelector<HTMLElement>("[role=menuitem]")!.click());
+  expect(newCopy).toHaveBeenCalledOnce();
+  expect(oldCopy).not.toHaveBeenCalled();
+});
+
+it("invalidates a resolved action when its target changes, including returning to an earlier target", async () => {
+  let changeTarget!: (key: string) => void;
+  const pending: ((item: ActionMenuItem) => void)[] = [];
+  const load = vi.fn(() => new Promise<ActionMenuItem>((done) => pending.push(done)));
+  function TargetMenu() {
+    const [target, setTarget] = useState("a");
+    useEffect(() => { changeTarget = setTarget; }, []);
+    return <ActionMenu label="Target actions" items={() => [{ label: target, icon: Trash2, onClick: () => {}, load: { key: target, run: load } }]} />;
+  }
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  unmount = () => { act(() => root.unmount()); container.remove(); };
+  act(() => root.render(<TargetMenu />));
+  expect(load).not.toHaveBeenCalled();
+  await act(async () => container.querySelector("button")!.click());
+  await act(async () => pending[0]({ label: "a", icon: Trash2, onClick: () => {} }));
+  expect(document.querySelector("[role=menuitem]")?.getAttribute("aria-disabled")).not.toBe("true");
+  await act(async () => changeTarget("b"));
+  expect(document.querySelector("[role=menuitem]")?.getAttribute("aria-disabled")).toBe("true");
+  await act(async () => changeTarget("a"));
+  expect(document.querySelector("[role=menuitem]")?.getAttribute("aria-disabled")).toBe("true");
+  await act(async () => pending[1]({ label: "b", icon: Trash2, onClick: () => {} }));
+  expect(document.querySelector("[role=menuitem]")?.textContent).toBe("a");
+  expect(document.querySelector("[role=menuitem]")?.getAttribute("aria-disabled")).toBe("true");
+  await act(async () => pending[2]({ label: "a", icon: Trash2, onClick: () => {} }));
+  expect(document.querySelector("[role=menuitem]")?.getAttribute("aria-disabled")).not.toBe("true");
+  expect(load).toHaveBeenCalledTimes(3);
 });

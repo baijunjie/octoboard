@@ -4,7 +4,7 @@ import { listLane } from "../browse/budget";
 import { useStableHandler } from "../components/hooks/useLatest";
 import { useResolveAbsolutePath } from "../components/host/useResolveAbsolutePath";
 import { useCopyWithNotice } from "../components/host/useCopyWithNotice";
-import type { ActionMenuEntry } from "../components/menus/menuEntries";
+import type { ActionMenuEntry, ActionMenuItem } from "../components/menus/menuEntries";
 import { reportExternalLinkFailure } from "../components/text/ExternalLink";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { useT } from "../i18n/react";
@@ -106,16 +106,12 @@ export function useRowRequests() {
   const stableOpenRepository = useStableHandler(openRepository);
   const stableOpenSystemTerminal = useStableHandler(openSystemTerminal);
   const stableCopySessionId = useStableHandler(copySessionId);
-  const stableLoadProjectCopyItems = useStableHandler(async (project: Project): Promise<ActionMenuEntry[]> => {
-    const absoluteItem = await resolveAbsolutePath({ project: project.id, path: "" }).then(
+  const stableLoadProjectCopyPathItem = useStableHandler((project: Project): Promise<ActionMenuItem> =>
+    resolveAbsolutePath({ project: project.id, path: "" }).then(
       (path) => ({ label: t("common.copyAbsolutePath"), icon: Copy, onClick: () => copy(displayWirePath(path), { copied: t("common.pathCopied"), failed: t("common.copyFailed") }) }),
       () => ({ label: t("common.copyAbsolutePath"), icon: Copy, disabled: true, reason: { state: t("common.copyFailed") }, onClick: () => {} }),
-    );
-    return [
-      { label: t("sidebar.project.copyName"), icon: Copy, onClick: () => copyProjectName(project) },
-      absoluteItem,
-    ];
-  });
+    ),
+  );
   const stableCopyProjectName = useStableHandler(copyProjectName);
   const stablePullProjectBranch = useStableHandler(pullProjectBranch);
   const stablePushProjectBranch = useStableHandler(pushProjectBranch);
@@ -130,7 +126,7 @@ export function useRowRequests() {
     stableOpenSystemTerminal,
     stableCopySessionId,
     stableCopyProjectName,
-    stableLoadProjectCopyItems,
+    stableLoadProjectCopyPathItem,
     stablePullProjectBranch,
     stablePushProjectBranch,
     stableLoadProjectBranches,

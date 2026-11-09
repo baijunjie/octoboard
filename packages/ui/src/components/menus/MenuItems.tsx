@@ -12,6 +12,7 @@ import { FadeOverflow } from "../text/FadeOverflow";
 import { registerMenuCommand } from "./menuCommands";
 import { useLatest } from "../hooks/useLatest";
 import { MODAL_DIALOG, TABBABLE } from "../focus/selectors";
+import { useResolvedMenuEntries } from "./useResolvedMenuEntries";
 import { MenuShortcutScope } from "./menuShortcutScope";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanelContext } from "./menuEntries";
 import { activateMenuItem, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSeparator, setKeyboardModality, Submenu, SubmenuIndicator, useSubmenuPanel } from "../../primitives";
@@ -94,7 +95,8 @@ function PanelBody({ children }: { children: (context: ActionMenuPanelContext) =
 
 /** `autoFocus` is the root menu's, for a menu opened from the keyboard on its context target, which
  * focuses its first item as a menu opened from its trigger with the keyboard does. */
-export function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; autoFocus?: "first" }): React.ReactElement {
+export function MenuItems({ entries: source, autoFocus }: { entries: ActionMenuEntry[]; autoFocus?: "first" }): React.ReactElement {
+  const entries = useResolvedMenuEntries(source);
   const t = useT();
   const shortcutsActive = useContext(MenuShortcutScope);
   const prefix = useId();

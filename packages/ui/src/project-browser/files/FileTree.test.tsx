@@ -192,7 +192,7 @@ it("opens the menu without opening the file, and gives directories actions while
   const withButton = rows.filter((row) => row.querySelector("button[aria-haspopup]"));
   expect(withButton).toEqual(rows.filter((row) => row.dataset.key !== "status:src"));
   act(() => withButton[0].querySelector<HTMLButtonElement>("button[aria-haspopup]")!.click());
-  expect(document.querySelector<HTMLElement>("[role=menuitem]")!.textContent).toBe("Copy");
+  expect(document.querySelector<HTMLElement>("[role=menuitem]")!.textContent).toBe("Copy relative path");
   expect(onOpenFile).not.toHaveBeenCalled();
 });
 
@@ -227,7 +227,6 @@ it.each([false, true])("copies a directory path without toggling it (expanded: %
     onExpandedChange.mockClear();
   }
   act(() => actions.click());
-  act(() => document.querySelector<HTMLElement>("[role=menuitem]")!.click());
   act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Copy relative path")!.click());
   await act(async () => {});
   expect(writeText).toHaveBeenCalledWith("src/café");
@@ -246,7 +245,7 @@ it.each(["file", "directory"] as const)("opens a %s row's context menu without a
   const container = render([node], { clipboard: { writeText: async () => {} }, onOpenFile, onExpandedChange });
   const row = container.querySelector<HTMLElement>("[role=row]")!;
   act(() => row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 30, clientY: 40 })));
-  expect(document.querySelector<HTMLElement>("[role=menuitem]")!.textContent).toBe("Copy");
+  expect(document.querySelector<HTMLElement>("[role=menuitem]")!.textContent).toBe("Copy relative path");
   expect(onOpenFile).not.toHaveBeenCalled();
   expect(onExpandedChange).not.toHaveBeenCalled();
 });
@@ -503,7 +502,6 @@ it.each(["Escape", "Enter"])("returns focus to a row's Actions button when its k
   const container = render([fileNode("a.ts", false)], { clipboard: { writeText } });
   const { actions, item } = openActionsFromKeyboard(container.querySelector<HTMLElement>("[role=row]")!);
   press(item, key);
-  if (key === "Enter") press([...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Copy relative path")!, "Enter");
   await vi.waitFor(() => expect(document.activeElement).toBe(actions));
   expect(document.querySelector("[role=menu]")).toBeNull();
   expect(writeText).toHaveBeenCalledTimes(key === "Enter" ? 1 : 0);

@@ -17,9 +17,9 @@ on the session, project or console the menu belongs to, regardless of the select
 and "The console header" in `docs/product/sidebar.md`.
 
 Only items that perform an action have these keys. Entries that open another menu or a custom panel, such as Colour,
-Switch account, Copy, Open in and View archive, have no letter or key cap; they keep their usual pointer and keyboard
-navigation. Choices inside those submenus have no temporary letter shortcuts either. Keys pressed in a submenu or
-its panel never activate a parent item.
+Switch account, Open in and View archive, have no letter or key cap; they keep their usual pointer and keyboard
+navigation. Choices inside those submenus have no temporary letter shortcuts either. Keys pressed in a submenu or its
+panel never activate a parent item.
 
 An action shows its letter at its trailing edge, except when a disabled item's reason takes that space. The letters
 are fixed across languages, cannot be changed and are not listed in Settings. Only actions that are present can be

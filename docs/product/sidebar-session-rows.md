@@ -36,10 +36,10 @@ a small grey badge (the badge described in "Which agents the agent pickers list"
 no badge for a removed account that recorded no directory; it shows the same account, and wraps a long one, as above.
 Confirmations provide the agent and account as hidden accessible text beside the icon.
 
-A live session's action menu separates these groups, in order: Lock / Unlock, Pin / Unpin and Focus mode;
-Rename, Copy session ID and Colour; Switch account, Hand off and Unbind; then Archive or Delete. Items appear only
-where available as described below. An archived session's menu offers Reopen and Copy session ID, then a separator
-and Delete.
+A live session's action menu separates these groups, in order: Lock / Unlock, Pin / Unpin and Focus mode; Rename and
+Colour; Copy session ID alone; Change model, Switch account, Hand off and Unbind; then Archive or Delete. Items appear
+only where available as described below. An archived session's menu offers Reopen, Copy session ID and Delete, each in a
+group of its own.
 
 A session row's action menu offers:
 
@@ -51,19 +51,19 @@ A session row's action menu offers:
   shortcut" in `docs/product/focus-mode.md`). Its key cap shows that command's current configurable combination,
   which also activates the item while this menu's main list holds keyboard focus.
 - **Rename** — see "Renaming a session" in `docs/product/sessions.md`.
-- **Copy session ID** — immediately after Rename, shows the session ID below its label in muted monospace text,
-  left to right on one line within the same menu item, fading where it overflows. An overflowing ID scrolls while the
-  pointer is over the ID line and returns to its beginning when the pointer leaves; it stays still under reduced motion.
-  While the ID is cut off, resting the pointer on the ID line shows the full ID as its tooltip, left to right in every
-  language; an ID that fits shows none, and keyboard focus shows none (see "Names too long for their space" in
-  `docs/product/labels-and-tooltips.md`). Pressing the ID line is pressing the item. Selecting the item copies the
-  full ID exactly to the clipboard. Available for project and console sessions wherever their action menus are offered,
-  including right-click menus, focus mode and nested sessions. An archived session's menu offers it after Reopen. Where
-  the platform has no clipboard, or it refuses, the ID is copied through the browser's selection copy instead. Success
-  raises a notice; a copy neither way allows raises an error alert.
 - **Colour** — a console session's row only: a submenu of swatches where the user chooses the console session's colour
   (see "The binding badge" below). A project session's row has no such entry, and neither has an archived console
   session's.
+- **Copy session ID** — in its own group after Rename and Colour, shows the session ID below its label in muted
+  monospace text, left to right on one line within the same menu item, fading where it overflows. An overflowing ID
+  scrolls while the pointer is over the ID line and returns to its beginning when the pointer leaves; it stays still
+  under reduced motion. While the ID is cut off, resting the pointer on the ID line shows the full ID as its tooltip,
+  left to right in every language; an ID that fits shows none, and keyboard focus shows none (see "Names too long for
+  their space" in `docs/product/labels-and-tooltips.md`). Pressing the ID line is pressing the item. Selecting the item
+  copies the full ID exactly to the clipboard. Available for project and console sessions wherever their action menus
+  are offered, including right-click menus, focus mode and nested sessions. An archived session's menu offers it after
+  Reopen. Where the platform has no clipboard, or it refuses, the ID is copied through the browser's selection copy
+  instead. Success raises a notice; a copy neither way allows raises an error alert.
 - **Change model** — opens the dialog described in "Changing a session's model and effort" in
   `docs/product/model-and-reasoning-effort.md`.
 - **Switch account** — a submenu of the accounts of the session's agent, in the saved display order (see "Reordering
@@ -204,24 +204,24 @@ which is the other reason nothing is ever told apart by colour alone. Each colou
 `docs/product/appearance.md`).
 
 **Choosing the colour.** **Colour** in a console session's action menu — wherever that menu is offered, its sidebar row
-and its own card in its focus mode among them, after **Rename** and the optional **Copy session ID** — is a submenu
-entry, marked with the same chevron as **Switch account**. Its submenu holds the palette as swatches in two rows of
-eight, in the order above. The console session's current colour is selected, marked with a check mark and a ring in its
-own colour. Pointing at **Colour** opens the submenu without moving keyboard focus; `ArrowRight` (`ArrowLeft` under a
-right-to-left language) or `Enter` on the entry opens it, or moves into it when it is already open, with focus on the
-current swatch, or the first one when the current colour is not in the palette. Inside it the arrow keys move focus
-between swatches; `ArrowLeft` from a swatch in the first column (`ArrowRight` under a right-to-left language), or
-`Escape`, closes the submenu and puts focus back on **Colour** in the menu, which stays open. Clicking a swatch, or
-pressing `Enter` or `Space` on the focused one, gives the console session that colour at once and closes the whole menu;
-choosing the current colour just closes it. A click outside closes the menu without a change. When the menu closes,
-keyboard focus goes where closing it always puts it (see "Rows, names and keyboard focus" in `docs/product/sidebar.md`).
-For assistive technology the swatches are a list named by the **Colour** entry, and each swatch is announced by the
-colour description generated in the interface language; the palette keeps those descriptions distinct in every offered
-language and both appearances, except that in Arabic violet and fuchsia share one, and in Korean teal shares one with
-cyan in the light appearance and with sky in the dark one. The colour is stored by the daemon with the console session,
-so every window and every client sees it and it survives a restart. A change that fails is shown as an error alert, as a
-failed **Pin** is (see "Error alerts" in `docs/product/error-alerts.md`). An archived console session's menu has no
-**Colour** entry, and a project session has no colour to choose.
+and its own card in its focus mode among them, after **Rename**, before the copy group — is a submenu entry, marked with
+the same chevron as **Switch account**. Its submenu holds the palette as swatches in two rows of eight, in the order
+above. The console session's current colour is selected, marked with a check mark and a ring in its own colour. Pointing
+at **Colour** opens the submenu without moving keyboard focus; `ArrowRight` (`ArrowLeft` under a right-to-left language)
+or `Enter` on the entry opens it, or moves into it when it is already open, with focus on the current swatch, or the
+first one when the current colour is not in the palette. Inside it the arrow keys move focus between swatches;
+`ArrowLeft` from a swatch in the first column (`ArrowRight` under a right-to-left language), or `Escape`, closes the
+submenu and puts focus back on **Colour** in the menu, which stays open. Clicking a swatch, or pressing `Enter` or
+`Space` on the focused one, gives the console session that colour at once and closes the whole menu; choosing the
+current colour just closes it. A click outside closes the menu without a change. When the menu closes, keyboard focus
+goes where closing it always puts it (see "Rows, names and keyboard focus" in `docs/product/sidebar.md`). For assistive
+technology the swatches are a list named by the **Colour** entry, and each swatch is announced by the colour description
+generated in the interface language; the palette keeps those descriptions distinct in every offered language and both
+appearances, except that in Arabic violet and fuchsia share one, and in Korean teal shares one with cyan in the light
+appearance and with sky in the dark one. The colour is stored by the daemon with the console session, so every window
+and every client sees it and it survives a restart. A change that fails is shown as an error alert, as a failed **Pin**
+is (see "Error alerts" in `docs/product/error-alerts.md`). An archived console session's menu has no **Colour** entry,
+and a project session has no colour to choose.
 
 ## Session lock controls
 

@@ -95,7 +95,7 @@ export type MenuPlacement = "list" | "focused" | "nested";
 /** The project's actions, in the project row and in a focus mode (the project's own header, and a
  * console session's project headings); `placement` says which. Pin / Unpin comes first, as in a
  * session's menu; then the actions are grouped as viewing the project inside the app (focus mode,
- * archive), copying and opening it (Copy, Open in, Open panel, Git), managing the project itself,
+ * archive), copying it, opening it (Open in, Open panel, Git), managing the project itself,
  * and removing it.
  * "View archive" previews `archived` and its "View all" opens `archiveScope`. By default both are the
  * project's archive; a console session's focus mode passes the project's share of that console
@@ -128,11 +128,12 @@ export function projectMenu(
       ? []
       : [archiveSubmenu(t, t("sidebar.project.archive"), archived, handlers.onSelectSession, () => handlers.onOpenArchive(archiveScope))]),
     "separator",
+    { label: t("sidebar.project.copyName"), icon: Copy, shortcut: "C", onClick: () => handlers.onCopyProjectName(project) },
     {
-      label: t("common.copy"), icon: Copy,
-      items: [{ label: t("sidebar.project.copyName"), icon: Copy, onClick: () => handlers.onCopyProjectName(project) }],
-      loadItems: () => handlers.onLoadProjectCopyItems(project),
+      label: t("common.copyAbsolutePath"), icon: Copy, shortcut: "A", onClick: () => {},
+      load: { key: JSON.stringify([project.id, t("common.copyAbsolutePath")]), run: () => handlers.onLoadProjectCopyPathItem(project) },
     },
+    "separator",
     {
       label: t("common.openIn"), icon: SquareArrowOutUpRight,
       items: [
@@ -325,6 +326,8 @@ export function sessionMenu(
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, commandShortcut: { label: focusShortcut ?? ariaBinding(bindingFor("focusMode"), host), matches: (event: KeyboardEvent) => matchesCommand("focusMode", event, host) }, onClick: () => handlers.onFocus(focusTarget) }] : []),
     ...(!archived ? ["separator" as const] : []),
     ...(!archived ? [{ label: t("sidebar.session.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
+    ...(session.kind === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
+    "separator",
     {
       label: t("sidebar.session.copyId"),
       ariaLabel: t("sidebar.session.copyId"),
@@ -343,8 +346,7 @@ export function sessionMenu(
       shortcut: "C",
       onClick: () => handlers.onCopySessionId(session),
     },
-    ...(session.kind === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
-    ...(!archived ? ["separator" as const] : []),
+    "separator",
     // A session still starting, or being switched to another account, is refused by the daemon; both end on their own.
     ...(archived ? [] : [{ label: t("sidebar.session.changeModel"), shortcut: "M", icon: Cpu, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) }]),
     ...(switchAccount ? [switchAccount] : []),

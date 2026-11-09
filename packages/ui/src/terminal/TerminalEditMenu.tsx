@@ -69,6 +69,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
           reason: !selection && mouseReporting ? { state: t(OPTION_FORCES_SELECTION ? "terminal.copyHint.mac" : "terminal.copyHint") } : undefined,
           onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => raiseError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }), { title: t("common.copyFailedTitle") })); },
         },
+        "separator",
         {
           label: t("terminal.paste"), icon: ClipboardPaste, disabled: !clipboard?.readText || inputSession !== sessionId,
           // A session that cannot take input says why on the terminal itself (a spinner, the disconnected notice).

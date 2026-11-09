@@ -362,7 +362,8 @@ describe("a project's menu", () => {
     const menu = projectMenu(t, handlers, { id: "p", pinned: false } as Project, [], { gitRepository: true });
     expect(menu.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual([
       "Pin", "Focus mode", "View archive", "separator",
-      "Copy", "Open in", "Open panel", "Git", "separator",
+      "Copy project name", "Copy absolute path", "separator",
+      "Open in", "Open panel", "Git", "separator",
       "Rename", "Project settings", "separator",
       "Remove project",
     ]);
@@ -551,7 +552,9 @@ describe("the Copy session ID entry", () => {
     const handlers = { onCopySessionId: vi.fn() } as unknown as SidebarHandlers;
     const menu = sessionMenu(t, handlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, placement });
     const labels = menu.map((entry) => entry === "separator" ? entry : entry.label);
-    if (status !== "archived") expect(labels.indexOf("Copy session ID")).toBe(labels.indexOf("Rename") + 1);
+    const copyIndex = labels.indexOf("Copy session ID");
+    expect(labels[copyIndex - 1]).toBe("separator");
+    expect(labels[copyIndex + 1]).toBe("separator");
     const entry = menu.find((item) => typeof item === "object" && item.label === "Copy session ID");
     (entry as { onClick: () => void }).onClick();
     expect(handlers.onCopySessionId).toHaveBeenCalledExactlyOnceWith(session);
@@ -627,6 +630,7 @@ describe("menu-only letters on direct actions", () => {
       expect(letters(menu)).toEqual([
         ...(placement !== "focused" ? [[pinned ? "Unpin" : "Pin", "P"]] : []),
         ...(placement === "list" ? [["Focus mode", "F"]] : []),
+        ["Copy project name", "C"], ["Copy absolute path", "A"],
         ["Rename", "R"], ["Project settings", "E"], ["Remove project", "D"],
       ]);
       noNestedLetters(menu);

@@ -200,8 +200,8 @@ it("hands focus on the pane's width handle to the terminal when the pane goes", 
 
 it("sends the project directory request and reports a failure through the shared error channel", async () => {
   const { daemon, project } = mountApp();
-  vi.mocked(daemon.request).mockRejectedValueOnce(new Error("The system file manager could not be opened."));
   await openProjectMenu(project.name);
+  vi.mocked(daemon.request).mockRejectedValueOnce(new Error("The system file manager could not be opened."));
   await press("Open in");
   await press("File manager");
   expect(daemon.request).toHaveBeenCalledWith({ type: "open_project_directory", project: project.id });
@@ -253,8 +253,8 @@ it("starts no shell from Open panel when the project already has one", async () 
 
 it("sends the system terminal request and reports a failure through the shared error channel", async () => {
   const { daemon, project } = mountApp();
-  vi.mocked(daemon.request).mockRejectedValueOnce(new Error("The system terminal could not be opened."));
   await openProjectMenu(project.name);
+  vi.mocked(daemon.request).mockRejectedValueOnce(new Error("The system terminal could not be opened."));
   await press("Open in");
   await press("System terminal");
   expect(daemon.request).toHaveBeenCalledWith({ type: "open_project_terminal", project: project.id });
@@ -265,7 +265,6 @@ it("copies the project name unchanged and reports success", async () => {
   const clipboard = { writeText: vi.fn(async () => {}) };
   const { daemon, project } = mountApp(false, clipboard);
   await openProjectMenu(project.name);
-  await press("Copy");
   await press("Copy project name");
   expect(clipboard.writeText).toHaveBeenCalledExactlyOnceWith(project.name);
   expect(daemon.showNotice).toHaveBeenCalledWith("Project name copied");
@@ -275,7 +274,6 @@ it("reports a clipboard failure", async () => {
   const clipboard = { writeText: vi.fn(async () => { throw new Error("Denied"); }) };
   const { daemon, project } = mountApp(false, clipboard);
   await openProjectMenu(project.name);
-  await press("Copy");
   await press("Copy project name");
   expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ message: "Could not copy the project name", title: "Could not copy", classification: expect.objectContaining({ kind: "actionable", recovery: "clipboard" }) })]);
   expect(daemon.showNotice).not.toHaveBeenCalled();
@@ -362,8 +360,8 @@ it("says a truncated branch list is limited, as a muted note after the branches 
 
 it("keeps a native operation rejection string as the error diagnostic", async () => {
   const { daemon } = mountApp();
-  vi.mocked(daemon.request).mockRejectedValueOnce("Native file manager rejected");
   await openProjectMenu("Website");
+  vi.mocked(daemon.request).mockRejectedValueOnce("Native file manager rejected");
   await press("Open in");
   await press("File manager");
   expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ message: "Native file manager rejected", title: "Could not open in the file manager", error: "Native file manager rejected" })]);

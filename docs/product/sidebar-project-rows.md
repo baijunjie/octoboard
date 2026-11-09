@@ -41,10 +41,11 @@ held, opens the session at once without it (see "Opening a session with defaults
 — and the project's action menu. The same menu is the focused project's, and a project's heading in a console session's
 focus mode, apart from the items those views leave out (see "What both views show" and "A console session's focus mode"
 in `docs/product/focus-mode.md`). Choosing an action closes the menu at once; submenu entries open their next menu.
-Separators split it into four groups, in this order: the first holds **Pin** / **Unpin**, as in a session's menu, and
-the actions for viewing the project inside the app (**Focus mode**, **View archive**); then the **Copy**, **Open in**,
-**Open panel** and **Git** submenus, in that order; managing the project itself (**Rename**, **Project settings**); and
-**Remove project**. An item a view does not offer is left out without moving the others.
+Separators split it into five groups, in this order: the first holds **Pin** / **Unpin**, as in a session's menu, and
+the actions for viewing the project inside the app (**Focus mode**, **View archive**); then the top-level **Copy project
+name** and **Copy absolute path** actions; the **Open in**, **Open panel** and **Git** submenus, in that order; managing
+the project itself (**Rename**, **Project settings**); and **Remove project**. An item a view does not offer is left out
+without moving the others.
 
 - **Pin** / **Unpin** — see "Pinning" in `docs/product/order-of-projects-and-sessions.md`.
 - **Focus mode** — see `docs/product/focus-mode.md`.
@@ -55,10 +56,11 @@ the actions for viewing the project inside the app (**Focus mode**, **View archi
   shows only a disabled item saying so. On a project's heading in a console session's focus mode, the submenu covers
   only the project's share of that console session's archive, and its View all opens the console session's archive view
   instead (see "A console session's focus mode" in `docs/product/focus-mode.md`).
-- **Copy** — a submenu with **Copy project name**, which copies the project's name exactly, then **Copy absolute
-  path**, which copies its resolved directory path on the daemon's host. Available in all the project-menu placements
-  above, including right-click menus. The directory is looked up when the submenu opens; if it cannot be resolved, the
-  absolute-path item is disabled with a reason, while copying the name remains available. Reopening the submenu tries
+- **Copy project name**, then **Copy absolute path** — top-level actions in their own group, copying the project's name
+  exactly or its resolved directory path on the daemon's host. Available in all the project-menu placements above,
+  including right-click menus. Both appear as soon as the menu opens. The directory is looked up then, with only the
+  absolute-path item disabled, without a reason, until it is resolved; copying the name and the other menu actions
+  remain available. If the lookup fails, the absolute-path item stays disabled with a reason. Reopening the menu tries
   the lookup again. Where the platform has no clipboard, or it refuses, either value is copied through the browser's
   selection copy instead (see "Copy buttons" in `docs/product/labels-and-tooltips.md`). Success raises a notice; a copy
   neither way allows raises an error alert.
@@ -117,12 +119,14 @@ belongs to under "Menu keyboard shortcuts" in `docs/product/keyboard-shortcuts.m
 |---|---|
 | Pin / Unpin | P |
 | Focus mode | F |
+| Copy project name | C |
+| Copy absolute path | A |
 | Rename | R |
 | Project settings | E |
 | Remove project | D |
 
-The focus header leaves out Pin / Unpin and Focus mode; a heading inside a console session's focus mode leaves out
-Focus mode. View archive, Copy, Open in, Open panel and Git are submenus and have no temporary letter shortcuts.
+The focus header leaves out Pin / Unpin and Focus mode; a heading inside a console session's focus mode leaves out Focus
+mode. View archive, Open in, Open panel and Git are submenus and have no temporary letter shortcuts.
 
 ## Opening the system file manager
 

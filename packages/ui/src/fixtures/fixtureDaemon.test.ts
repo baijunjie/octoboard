@@ -54,6 +54,23 @@ describe("the fixture daemon's session archiving", () => {
   });
 });
 
+describe("the fixture daemon's project source lookups", () => {
+  it("keeps a pending lookup unanswered without blocking other projects", async () => {
+    const daemon = createFixtureDaemon({ projectSources: { pending: "pending" } });
+    let settled = false;
+    void daemon.request({ type: "get_project_source", project: "pending" }).finally(() => { settled = true; });
+    await expect(daemon.request({ type: "get_project_source", project: "ready" })).resolves.toMatchObject({ type: "project_source", source: { project: "ready" } });
+    expect(settled).toBe(false);
+  });
+
+  it("refuses only the project whose source lookup fails", async () => {
+    const error = { code: "source_unavailable", params: { path: "/missing", cause: "missing", detail: "No such file or directory (os error 2)" }, message: "/missing is unavailable" };
+    const daemon = createFixtureDaemon({ projectSources: { missing: error } });
+    await expect(daemon.request({ type: "get_project_source", project: "missing" })).rejects.toMatchObject({ code: error.code, params: error.params });
+    await expect(daemon.request({ type: "get_project_source", project: "ready" })).resolves.toMatchObject({ type: "project_source", source: { project: "ready" } });
+  });
+});
+
 describe("the fixture daemon's model lists", () => {
   const ask = (agent: Agent, agentModels?: Fixture["agentModels"]) => createFixtureDaemon({ agentModels }).request({ type: "list_agent_models", agent });
 

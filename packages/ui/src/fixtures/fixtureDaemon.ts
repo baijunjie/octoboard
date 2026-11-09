@@ -107,6 +107,11 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     store,
     scenarioNotificationsRaised,
     request: looseRequestSender(async (body: ClientRequestBody): Promise<Event> => {
+      if (body.type === "get_project_source") {
+        const result = scenario.projectSources?.[body.project];
+        if (result === "pending") return neverReplied();
+        if (result) return fail(result);
+      }
       if (body.type === "list_project_branches") {
         const result = scenario.projectBranches?.[body.project];
         if (result === "pending") return neverReplied();

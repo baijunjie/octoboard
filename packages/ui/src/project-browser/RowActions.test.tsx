@@ -39,11 +39,6 @@ const press = (element: HTMLElement, key: string) =>
     element.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
   });
 const flush = () => act(async () => {});
-function openCopy() {
-  const item = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Copy")!;
-  act(() => item.focus());
-  press(item, "Enter");
-}
 
 // The rows differ between the two layouts (changes alone, and under directories), so this runs on both.
 it.each(["flat", "tree"] as const)("%s: gives each change row an actions button, named for its change, that the row's arrow keys reach", (layout) => {
@@ -70,8 +65,7 @@ it("copies the change's path from the menu and confirms with a notification, wit
   const { container, onOpen } = render("flat", { writeText });
   act(() => actionsOf(rowOf(container, "alpha.ts")).click());
   const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
-  expect(item.textContent).toBe("Copy");
-  openCopy();
+  expect(item.textContent).toBe("Copy relative path");
   await flush();
   act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Copy relative path")!.click());
   await flush();
@@ -86,7 +80,6 @@ it("copies a path as text to paste: a percent-encoded UTF-8 byte sequence decode
   const { container } = render("flat", { writeText }, changeItems(wirePaths.map((path) => change("unstaged", path))));
   for (const name of ["café.ts", "bad\uFFFD.ts"]) {
     act(() => actionsOf(rowOf(container, name)).click());
-    openCopy();
     await flush();
     act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Copy relative path")!.click());
     await flush();
@@ -97,7 +90,6 @@ it("copies a path as text to paste: a percent-encoded UTF-8 byte sequence decode
 it("says so when the clipboard refuses", async () => {
   const { container } = render("flat", { writeText: async () => Promise.reject(new Error("denied")) });
   act(() => actionsOf(rowOf(container, "beta.ts")).click());
-  openCopy();
   await flush();
   act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Copy relative path")!.click());
   await flush();
@@ -113,8 +105,7 @@ it("offers Copy path where the platform has no clipboard, copying through the se
   const { container } = render("flat", undefined);
   act(() => actionsOf(rowOf(container, "alpha.ts")).click());
   const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
-  expect(item.textContent).toBe("Copy");
-  openCopy();
+  expect(item.textContent).toBe("Copy relative path");
   await flush();
   act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Copy relative path")!.click());
   await flush();
@@ -132,7 +123,7 @@ it.each([
   { layout: "flat", worktree: "w" },
   { layout: "tree", worktree: "w" },
 ] as const)("$layout: committed row host actions use worktree $worktree, falling back to the project directory", async ({ layout, worktree }) => {
-  const request = vi.fn(async () => ({ type: "ack" as const, id: null }));
+  const request = vi.fn(async (_body: { type: string }) => ({ type: "ack" as const, id: null }));
   const onOpen = vi.fn();
   const container = mountRows(
     <RowPathScope.Provider value={{ project: "p", worktree }}>
@@ -152,14 +143,15 @@ it.each([
     act(() => openIn().click());
     act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === label)!.click());
     await flush();
-    expect(request).toHaveBeenLastCalledWith({ type, project: "p", ...(worktree !== undefined && { worktree }), path: "src/alpha.ts" });
+    expect(request.mock.calls.filter(([body]) => body.type === type)).toHaveLength(1);
+    expect(request).toHaveBeenCalledWith({ type, project: "p", ...(worktree !== undefined && { worktree }), path: "src/alpha.ts" });
   }
-  expect(request).toHaveBeenCalledTimes(2);
+  expect(request.mock.calls.filter(([body]) => body.type !== "get_project_source")).toHaveLength(2);
   expect(onOpen).not.toHaveBeenCalled();
 });
 
 it.each(["open_project_path", "reveal_project_path"] as const)("sends %s with the live scope and wire path even without a clipboard", async (type) => {
-  const request = vi.fn(async () => ({ type: "ack" as const, id: null }));
+  const request = vi.fn(async (_body: { type: string }) => ({ type: "ack" as const, id: null }));
   const container = mountRows(
     <RowPathScope.Provider value={{ project: "p", worktree: "w" }}>
       <RowActions path="src/caf%C3%A9.ts" name="café.ts" />
@@ -167,20 +159,20 @@ it.each(["open_project_path", "reveal_project_path"] as const)("sends %s with th
     { request, notifications },
   );
   act(() => actionsOf(container).click());
-  expect([...document.querySelectorAll<HTMLElement>("[role=menuitem]")].map((entry) => entry.textContent)).toEqual(["Copy", "Open in"]);
+  expect([...document.querySelectorAll<HTMLElement>("[role=menuitem]")].map((entry) => entry.textContent)).toEqual(["Copy relative path", "Copy absolute path", "Open in"]);
   act(() => openIn().click());
   const entries = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")];
   const entry = entries.find((item) => item.textContent === (type === "open_project_path" ? "Default application" : "File manager"))!;
   expect(entry).toBeDefined();
   act(() => entry.click());
   await flush();
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type, project: "p", worktree: "w", path: "src/caf%C3%A9.ts" });
+  expect(request).toHaveBeenCalledWith({ type, project: "p", worktree: "w", path: "src/caf%C3%A9.ts" });
 });
 
 const openInItems = () => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].map((entry) => entry.textContent);
 
 it.each([undefined, "w"])("offers a folder File manager and Terminal in worktree %s, and no Default application", async (worktree) => {
-  const request = vi.fn(async () => ({ type: "ack" as const, id: null }));
+  const request = vi.fn(async (_body: { type: string }) => ({ type: "ack" as const, id: null }));
   const openTerminal = vi.fn();
   const container = mountRows(
     <OpenShellTerminal.Provider value={openTerminal}>
@@ -190,25 +182,25 @@ it.each([undefined, "w"])("offers a folder File manager and Terminal in worktree
   );
   act(() => actionsOf(container).click());
   act(() => openIn().click());
-  expect(openInItems()).toEqual(["Copy", "Open in", "File manager", "Terminal"]);
+  expect(openInItems()).toEqual(["Copy relative path", "Copy absolute path", "Open in", "File manager", "Terminal"]);
   act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "Terminal")!.click());
   await flush();
   expect(openTerminal).toHaveBeenCalledExactlyOnceWith({ project: "p", ...(worktree !== undefined && { worktree }), path: "src/ui" });
-  expect(request).not.toHaveBeenCalled();
+  expect(request.mock.calls.every(([body]) => body.type === "get_project_source")).toBe(true);
 });
 
 it("sends reveal_project_path for a folder's File manager", async () => {
-  const request = vi.fn(async () => ({ type: "ack" as const, id: null }));
+  const request = vi.fn(async (_body: { type: string }) => ({ type: "ack" as const, id: null }));
   const container = mountRows(
     <RowPathScope.Provider value={{ project: "p" }}><RowActions path="src/ui" name="ui" directory /></RowPathScope.Provider>,
     { request, notifications },
   );
   act(() => actionsOf(container).click());
   act(() => openIn().click());
-  expect(openInItems()).toEqual(["Copy", "Open in", "File manager"]);
+  expect(openInItems()).toEqual(["Copy relative path", "Copy absolute path", "Open in", "File manager"]);
   act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "File manager")!.click());
   await flush();
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "reveal_project_path", project: "p", path: "src/ui" });
+  expect(request).toHaveBeenCalledWith({ type: "reveal_project_path", project: "p", path: "src/ui" });
 });
 
 it("leaves Terminal out of a file's Open in", () => {
@@ -220,7 +212,7 @@ it("leaves Terminal out of a file's Open in", () => {
   );
   act(() => actionsOf(container).click());
   act(() => openIn().click());
-  expect(openInItems()).toEqual(["Copy", "Open in", "File manager", "Default application"]);
+  expect(openInItems()).toEqual(["Copy relative path", "Copy absolute path", "Open in", "File manager", "Default application"]);
 });
 
 it("gives the tree layout's folder row the actions button, reserved and reached by the arrow keys, with a menu for the folder's path", async () => {
@@ -240,7 +232,6 @@ it("gives the tree layout's folder row the actions button, reserved and reached 
   press(folder, "ArrowRight");
   expect(document.activeElement).toBe(actionsOf(folder));
   act(() => actionsOf(folder).click());
-  openCopy();
   await flush();
   act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Copy relative path")!.click());
   await flush();
@@ -267,7 +258,7 @@ it.each(["flat", "tree"] as const)("%s: opens a change row's menu on right-click
   const { container, onOpen } = render(layout, { writeText: async () => {} });
   const row = rowOf(container, "alpha.ts");
   act(() => row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 20, clientY: 30 })));
-  expect(document.querySelector<HTMLElement>("[role=menuitem]")!.textContent).toBe("Copy");
+  expect(document.querySelector<HTMLElement>("[role=menuitem]")!.textContent).toBe("Copy relative path");
   expect(onOpen).not.toHaveBeenCalled();
 });
 
@@ -292,7 +283,6 @@ it.each([
     { request, clipboard: { writeText }, notifications },
   );
   act(() => actionsOf(container).click());
-  openCopy();
   await flush();
   act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Copy absolute path")!.click());
   await flush();
@@ -321,7 +311,6 @@ it.each([
     { request, clipboard: { writeText }, notifications, state: { host: { os: "windows", path_style: "windows", file_links: true, trash: "recycle_bin", settings: "settings" } } },
   );
   act(() => actionsOf(container).click());
-  openCopy();
   await flush();
   act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Copy absolute path")!.click());
   await flush();
@@ -335,7 +324,6 @@ it("keeps relative copying available when the absolute path cannot be resolved",
     { request: async () => { throw new Error("The project is unavailable"); }, clipboard: { writeText }, notifications },
   );
   act(() => actionsOf(container).click());
-  openCopy();
   await flush();
   const absolute = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent?.startsWith("Copy absolute path"))!;
   expect(absolute.getAttribute("aria-disabled")).toBe("true");
@@ -344,4 +332,26 @@ it("keeps relative copying available when the absolute path cannot be resolved",
   await flush();
   expect(writeText).toHaveBeenCalledExactlyOnceWith("src/a.ts");
   expect(notifications.error).not.toHaveBeenCalled();
+});
+
+
+it("opens immediately with a disabled absolute path and usable relative path while resolving", async () => {
+  const writeText = vi.fn(async () => {});
+  const request = vi.fn(() => new Promise<never>(() => {}));
+  const container = mountRows(
+    <RowPathScope.Provider value={{ project: "p" }}><RowActions path="src/a.ts" name="a.ts" /></RowPathScope.Provider>,
+    { request, clipboard: { writeText }, notifications },
+  );
+  expect(request).not.toHaveBeenCalled();
+  act(() => actionsOf(container).click());
+  const menu = document.querySelector('[role="menu"]')!;
+  expect([...menu.children].map((element) => element.getAttribute("role") === "separator" ? "-" : element.textContent)).toEqual([
+    "Copy relative path", "Copy absolute path", "-", "Open in",
+  ]);
+  const [relative, absolute] = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  expect(absolute.getAttribute("aria-disabled")).toBe("true");
+  expect(absolute.textContent).toBe("Copy absolute path");
+  act(() => relative.click());
+  await flush();
+  expect(writeText).toHaveBeenCalledExactlyOnceWith("src/a.ts");
 });

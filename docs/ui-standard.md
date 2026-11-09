@@ -1886,6 +1886,13 @@ acting on the selected tab. Reordering by dragging has a keyboard counterpart in
 ("Move earlier" / "Move later", never left and right, which swap in a right-to-left layout), and the moved item gets
 focus back once it lands.
 
+### Copy actions in menus
+
+Copy actions are top-level items in a group of their own, separated from other actions. A menu shows the items
+immediately; an item awaiting asynchronous data stays disabled until that data arrives, without holding back the
+menu or replacing its other items with a loading state. The temporary disabled state carries no reason; a failed
+lookup leaves the affected item disabled with a reason, and reopening the menu retries it.
+
 ### Two sentences in one paragraph
 
 VoiceOver drops a text node that is only whitespace, so two sentences separated by one run together when read

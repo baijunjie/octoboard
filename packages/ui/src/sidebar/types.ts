@@ -1,4 +1,4 @@
-import type { ActionMenuEntry } from "../components/menus/menuEntries";
+import type { ActionMenuEntry, ActionMenuItem } from "../components/menus/menuEntries";
 import type { DialogRequest, NewSessionRequest } from "../dialogs/dialogRequest";
 import type { PanelKind } from "../layout/panelKind";
 import type { Console, ConsoleSessionColour, Project, Session } from "../protocol";
@@ -50,7 +50,7 @@ export interface SidebarHandlers {
   onOpenSystemTerminal: (project: Project) => void;
   /** Opens a validated repository web URL; absent without browser-link support. */
   onOpenRepository?: (url: string) => void;
-  onLoadProjectCopyItems: (project: Project) => Promise<ActionMenuEntry[]>;
+  onLoadProjectCopyPathItem: (project: Project) => Promise<ActionMenuItem>;
   onCopyProjectName: (project: Project) => void;
   onCopySessionId: (session: Session) => void;
   /** Checks the project against its remote and fast-forwards it now, whatever the automatic pull

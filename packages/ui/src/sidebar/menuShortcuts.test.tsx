@@ -2,6 +2,9 @@
 import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { Copy } from "lucide-react";
+
+import type { ActionMenuItem } from "../components/menus/menuEntries";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { consoleOf, projectOf } from "../fixtures/builders";
 import { translatorFor } from "../i18n/catalog";
@@ -39,7 +42,7 @@ it.each([
   const menu = await open("Project actions");
   expect(item(menu, label).querySelector("kbd")?.textContent).toBe(letter);
   expect(item(menu, label).getAttribute("aria-keyshortcuts")).toBe(letter);
-  for (const label of ["View archive", "Copy", "Open in", "Open panel", "Git"]) {
+  for (const label of ["View archive", "Open in", "Open panel", "Git"]) {
     expect(item(menu, label).querySelector("kbd")).toBeNull();
     expect(item(menu, label).getAttribute("aria-keyshortcuts")).toBeNull();
   }
@@ -72,4 +75,31 @@ describe("console menu letters", () => {
     expect(handlers.onOpenDialog).toHaveBeenLastCalledWith({ kind: "edit-console", console });
     expect(handlers.onOpenDialog).toHaveBeenCalledTimes(2);
   });
+});
+
+
+it("keeps the project's copy group available while resolving its absolute path, then enables its letter", async () => {
+  let resolve!: (item: ActionMenuItem) => void;
+  const onCopyProjectName = vi.fn();
+  const onCopyAbsolute = vi.fn();
+  const onLoadProjectCopyPathItem = vi.fn(() => new Promise<ActionMenuItem>((done) => { resolve = done; }));
+  const handlers = { onCopyProjectName, onLoadProjectCopyPathItem } as unknown as SidebarHandlers;
+  const host = mountHost(<ActionMenu label="Project actions" items={() => projectMenu(t, handlers, project, [])} />);
+  expect(onLoadProjectCopyPathItem).not.toHaveBeenCalled();
+  await act(async () => host.querySelector("button")!.click());
+  const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
+  const absolute = item(menu, "Copy absolute path");
+  expect(absolute.getAttribute("aria-disabled")).toBe("true");
+  expect(item(menu, "Copy project name").getAttribute("aria-disabled")).not.toBe("true");
+  const children = [...menu.children];
+  const nameIndex = children.indexOf(item(menu, "Copy project name"));
+  expect(children[nameIndex - 1].getAttribute("role")).toBe("separator");
+  expect(children[nameIndex + 2].getAttribute("role")).toBe("separator");
+  await act(async () => resolve({ label: "Copy absolute path", icon: Copy, onClick: onCopyAbsolute }));
+  expect(absolute.getAttribute("aria-disabled")).not.toBe("true");
+  expect(absolute.getAttribute("aria-keyshortcuts")).toBe("A");
+  act(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "a", bubbles: true, cancelable: true })));
+  expect(onCopyAbsolute).toHaveBeenCalledOnce();
+  expect(onCopyProjectName).not.toHaveBeenCalled();
+  expect(onLoadProjectCopyPathItem).toHaveBeenCalledExactlyOnceWith(project);
 });

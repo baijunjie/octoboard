@@ -353,6 +353,8 @@ export interface Fixture {
   /** A restore refusal or explicit post-restore repository and file tree, keyed by project.
    * Without a result the fixture refuses to acknowledge a destructive change it cannot model. */
   projectRestores?: Record<string, FixtureError | { git: FixtureGit; files: FixtureFiles }>;
+  /** Per-project source lookups kept pending or refused; otherwise the repository's live source. */
+  projectSources?: Record<string, FixtureError | "pending">;
   /** Per-project local branch listings kept pending or refused; otherwise the repository's branches. */
   projectBranches?: Record<string, FixtureError | "pending">;
   /** Per-project, per-branch switch refusals or explicit post-switch repository, files and badge.

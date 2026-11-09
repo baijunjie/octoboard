@@ -80,18 +80,17 @@ the console session above them (see "A project's focus mode" below and "The bind
 `docs/product/sidebar-session-rows.md`).
 
 **Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all: the
-archive preview described in "The archive view" in `docs/product/archive-view.md`, each row showing its agent's icon
-and its title on one compact line, with the relative archive time and its tooltip of the archive and creation dates
-at the trailing end as described there; the row's accessible description carries both dates. The heading
-counts every archived session in the view's scope, including those the preview leaves out. Clicking a row selects
-it while leaving it archived. Its action menu offers **Reopen**, which selects and resumes the session, then **Copy
-session ID** (see "Session rows" in `docs/product/sidebar-session-rows.md`), and after a separator **Delete**, disabled
-while locked.
-A Delete shortcut immediately before the action-menu button appears for an unlocked unused session that is not still
-starting, under the same rules as "Session rows" in `docs/product/sidebar-session-rows.md`. It takes the same deletion
-action as the menu (see "Deleting archived sessions" in `docs/product/deleting-sessions.md` for the confirmation rules).
-The menu and an available shortcut show with the row's other controls as described in "Rows, names and keyboard focus"
-in `docs/product/sidebar.md`. Reopening follows "Archiving, interruption and resuming" in
+archive preview described in "The archive view" in `docs/product/archive-view.md`, each row showing its agent's icon and
+its title on one compact line, with the relative archive time and its tooltip of the archive and creation dates at the
+trailing end as described there; the row's accessible description carries both dates. The heading counts every archived
+session in the view's scope, including those the preview leaves out. Clicking a row selects it while leaving it
+archived. Its action menu offers **Reopen**, which selects and resumes the session, **Copy session ID** (see "Session
+rows" in `docs/product/sidebar-session-rows.md`) and **Delete**, disabled while locked, each in its own group separated
+from the others. A Delete shortcut immediately before the action-menu button appears for an unlocked unused session that
+is not still starting, under the same rules as "Session rows" in `docs/product/sidebar-session-rows.md`. It takes the
+same deletion action as the menu (see "Deleting archived sessions" in `docs/product/deleting-sessions.md` for the
+confirmation rules). The menu and an available shortcut show with the row's other controls as described in "Rows, names
+and keyboard focus" in `docs/product/sidebar.md`. Reopening follows "Archiving, interruption and resuming" in
 `docs/product/archiving-and-resuming-sessions.md`. Whenever any archived session is left out — one under an archived
 owner, or one beyond the first ten — **View all** follows the preview as a row with the same alignment, hover feedback
 and keyboard focus treatment as the session rows; it opens the archive view and carries no count. When every archived

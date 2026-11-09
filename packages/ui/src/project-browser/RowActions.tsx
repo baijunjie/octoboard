@@ -35,18 +35,19 @@ export function RowActions({ path, name, directory = false, reserve = false, con
   const scope = useContext(RowPathScope);
   const hostAction = useHostPathActions();
   const openTerminal = useContext(OpenShellTerminal);
-  const relative = { label: t("common.copyRelativePath"), icon: Copy, onClick: () => copyPath(path) };
-  const items: ActionMenuEntry[] = [{
-    label: t("common.copy"), icon: Copy,
-    items: [relative],
-    ...(scope ? { loadItems: async () => {
-      const absoluteItem = await resolveAbsolutePath({ ...scope, path }).then(
-        (absolute) => ({ label: t("common.copyAbsolutePath"), icon: Copy, onClick: () => copyPath(absolute) }),
-        () => ({ label: t("common.copyAbsolutePath"), icon: Copy, disabled: true, reason: { state: t("common.copyFailed") }, onClick: () => {} }),
-      );
-      return [relative, absoluteItem];
-    } } : {}),
-  }];
+  const items: ActionMenuEntry[] = [
+    { label: t("common.copyRelativePath"), icon: Copy, onClick: () => copyPath(path) },
+    ...(scope ? [{
+      label: t("common.copyAbsolutePath"), icon: Copy, onClick: () => {},
+      load: {
+        key: JSON.stringify([scope.project, scope.worktree, path, t("common.copyAbsolutePath")]),
+        run: () => resolveAbsolutePath({ ...scope, path }).then(
+          (absolute) => ({ label: t("common.copyAbsolutePath"), icon: Copy, onClick: () => copyPath(absolute) }),
+          () => ({ label: t("common.copyAbsolutePath"), icon: Copy, disabled: true, reason: { state: t("common.copyFailed") }, onClick: () => {} }),
+        ),
+      },
+    }] : []),
+  ];
   if (scope) {
     const run = (type: "open_project_path" | "reveal_project_path") => hostAction(type, { ...scope, path });
     const fileManager = { label: t("common.fileManager"), icon: FolderOpen, onClick: () => run("reveal_project_path") };
@@ -55,7 +56,7 @@ export function RowActions({ path, name, directory = false, reserve = false, con
     const openIn: ActionMenuEntry[] = directory
       ? [fileManager, ...(terminal ? [terminal] : [])]
       : [fileManager, { label: t("common.defaultApplication"), icon: SquareArrowOutUpRight, onClick: () => run("open_project_path") }];
-    items.push({ label: t("common.openIn"), icon: SquareArrowOutUpRight, items: openIn });
+    items.push("separator", { label: t("common.openIn"), icon: SquareArrowOutUpRight, items: openIn });
   }
   // The tree takes focus to the row as a menu closes, while a menu opened from the keyboard is to
   // give it back to its Actions button.

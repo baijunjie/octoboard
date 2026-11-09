@@ -20,6 +20,9 @@ export interface ActionMenuItem {
   iconClassName?: string;
   /** Runs when the item is chosen. */
   onClick: () => void;
+  /** Resolves this item when its menu opens; the item stays visible and disabled until it settles.
+   * `key` identifies the input, so changing the target drops an earlier answer. */
+  load?: { key: string; run: () => Promise<ActionMenuItem> };
   destructive?: boolean;
   closeOnSelect?: boolean;
   disabled?: boolean;

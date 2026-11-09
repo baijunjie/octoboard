@@ -2,6 +2,7 @@
 // a listing or a read can end in, over the files the fixture daemon serves for a project's browser
 // (`sampleFiles.ts`).
 import type { Ui } from "../../fixtures/interact";
+import { isolate } from "../../i18n/isolate";
 import type { Scenario } from "../scenario";
 import { SAMPLE, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 import { SAMPLE_FILES, sourceUnavailable, type FixtureFile, type FixtureFiles } from "../../fixtures/sampleFiles";
@@ -207,7 +208,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project focus actions with its files already visible",
-    description: "In Website's focus mode with its files visible, the header's actions menu starts with Copy, Open in and Open panel in that order. Open panel is open here and offers Processes and Terminal; Files is already on screen. The managing group below holds Rename and Project settings.",
+    description: "In Website's focus mode with its files visible, the header's actions menu starts with a group holding Copy project name and Copy absolute path, followed by the Open in and Open panel submenus. Open panel is open here and offers Processes and Terminal; Files is already on screen. The managing group below holds Rename and Project settings.",
     state,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${web.id}` },
     steps: [...openFiles, (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name })), (ui) => ui.press(ui.t("sidebar.project.openPanel"))],
@@ -217,25 +218,35 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Copying a project's name or absolute path",
-    description: "The project's Copy submenu offers Copy project name followed by Copy absolute path. Copy leads the middle group before Open in and Open panel, followed by Git when available, with one copy icon and a submenu chevron. Rename and Project settings form the managing group below. Copy absolute path has keyboard focus once its directory is resolved.",
+    description: "Copy project name and Copy absolute path are direct actions in their own group, between the project-level actions and Open in, Open panel and Git. Rename and Project settings form the managing group below. Copy absolute path has keyboard focus once its directory is resolved.",
     state,
-    steps: [(ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name })), (ui) => ui.press(ui.t("common.copy")), (ui) => ui.focusControl(ui.t("common.copyAbsolutePath"))],
+    steps: [(ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name })), (ui) => ui.focusControl(ui.t("common.copyAbsolutePath"))],
   },
   {
     id: "files-copy-menu",
     group: GROUP,
     category: "normal",
     title: "Copying a file's relative or absolute path",
-    description: "The file's Copy submenu offers Copy relative path followed by Copy absolute path. The parent menu groups both under Copy, beside Open in. Copy absolute path has keyboard focus once its directory is resolved. The same choices are offered by folder rows and by changes in the Git view.",
+    description: "Copy relative path and Copy absolute path are direct actions in their own group above Open in. Copy absolute path has keyboard focus once its directory is resolved. The same choices are offered by folder rows and by changes in the Git view.",
     state,
-    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.contextMenu("main.ts"), (ui) => ui.press(ui.t("common.copy")), (ui) => ui.focusControl(ui.t("common.copyAbsolutePath"))],
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.contextMenu("main.ts"), (ui) => ui.focusControl(ui.t("common.copyAbsolutePath"))],
+  },
+  {
+    id: "files-copy-menu-pending",
+    group: GROUP,
+    category: "normal",
+    title: "Copy actions while the absolute path is being resolved",
+    description: "The file menu is already complete: Copy relative path is available, Copy absolute path is disabled without a spinner or reason, and Open in is available below a divider. The pending lookup holds only the absolute-path action.",
+    state,
+    projectSources: { [web.id]: "pending" },
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.contextMenu("main.ts")],
   },
   {
     id: "files-row-menu",
     group: GROUP,
     category: "normal",
     title: "A file’s context menu",
-    description: "Right-clicking main.ts opens its menu at the pointer without opening the viewer. Copy opens a submenu for relative and absolute paths. Open in groups File manager, which reveals and selects the file, and Default application.",
+    description: "Right-clicking main.ts opens its menu at the pointer without opening the viewer. Copy relative path and Copy absolute path form their own group above Open in. Open in groups File manager, which reveals and selects the file, and Default application.",
     state,
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.contextMenu("main.ts"), (ui) => ui.press(ui.t("common.openIn"))],
   },
@@ -244,7 +255,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A folder’s context menu",
-    description: "Right-clicking the src folder opens its menu at the pointer. Copy opens a submenu for relative and absolute paths. Open in groups File manager, which opens the folder, and Terminal, which starts a shell in it, beside the framed terminal icon; there is no Default application for a folder.",
+    description: "Right-clicking the src folder opens its menu at the pointer. Copy relative path and Copy absolute path form their own group above Open in. Open in groups File manager, which opens the folder, and Terminal, which starts a shell in it, beside the framed terminal icon; there is no Default application for a folder.",
     state,
     steps: [...openFiles, (ui) => ui.contextMenu("src"), (ui) => ui.press(ui.t("common.openIn"))],
   },
@@ -266,6 +277,16 @@ export const projectFilesScenarios: Scenario[] = [
       "The viewer opened over the project's files, on a file pressed in the tree. Its path uses the same code icon as the file tree. Previous file and Next file sit to the left of its title, leaving the bottom edge for content. File manager and Default application end the header row, with the same icons as the row menu's.",
     state,
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
+  },
+  {
+    id: "files-project-copy-menu-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Copying a project whose absolute path cannot be resolved",
+    description: "Copy project name remains available in the separate copy group. Copy absolute path is disabled with its failure reason below the label; Open in and the other groups remain available. Reopening the menu retries the lookup.",
+    state,
+    projectSources: { [web.id]: sourceUnavailable(web.path, "missing", "No such file or directory (os error 2)") },
+    steps: [(ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name })), (ui) => ui.focusControl(ui.t("menu.nameWithReason", { name: isolate(ui.t("common.copyAbsolutePath")), reason: ui.t("common.copyFailed") }))],
   },
   {
     id: "files-states",

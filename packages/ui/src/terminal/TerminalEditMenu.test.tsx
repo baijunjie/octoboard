@@ -204,7 +204,7 @@ it("offers the file manager first, then a separator, over a path link, and revea
   await open();
   expect(controller.pathLinkAt).toHaveBeenLastCalledWith(30, 40);
   const entries = [...document.querySelectorAll<HTMLElement>("[role=menuitem], [role=separator]")];
-  expect(entries.map((entry) => entry.getAttribute("role") === "separator" ? "-" : entry.textContent)).toEqual(["Open in file manager", "-", "Copy", "Paste", "Select all"]);
+  expect(entries.map((entry) => entry.getAttribute("role") === "separator" ? "-" : entry.textContent)).toEqual(["Open in file manager", "-", "Copy", "-", "Paste", "Select all"]);
   await choose("Open in file manager");
   expect(controller.revealPathLink).toHaveBeenCalledExactlyOnceWith({ path: "/r/a.ts" });
 });
