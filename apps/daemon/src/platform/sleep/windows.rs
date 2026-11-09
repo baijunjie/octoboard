@@ -1,7 +1,9 @@
 //! The hold on Windows: a power request that asks for the system and the display to stay on, which
 //! `powercfg /requests` lists under the reason. A power request belongs to the process, not to a
 //! thread as `SetThreadExecutionState`'s flags do, so it needs no thread of its own to live on,
-//! and closing its handle is what releases it.
+//! and closing its handle is what releases it. The display part is best effort: a session with no
+//! display (a service, an SSH session in Session 0) refuses it with error 50 while still granting
+//! the system part, and keeping the machine from sleeping is what the setting is for.
 
 use anyhow::{bail, Result};
 use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE, INVALID_HANDLE_VALUE};
@@ -39,14 +41,21 @@ impl Held {
             let error = unsafe { GetLastError() };
             bail!("the power request was refused (error {error})");
         }
-        for kind in [PowerRequestDisplayRequired, PowerRequestSystemRequired] {
-            // SAFETY: `request` is the handle just created.
-            if unsafe { PowerSetRequest(request, kind) } == 0 {
-                // SAFETY: as above; the closed handle is not used again.
-                let error = unsafe { GetLastError() };
-                unsafe { CloseHandle(request) };
-                bail!("the power request was refused (error {error})");
-            }
+        // SAFETY: `request` is the handle just created.
+        if unsafe { PowerSetRequest(request, PowerRequestSystemRequired) } == 0 {
+            // SAFETY: reads the calling thread's last error; the closed handle is not used again.
+            let error = unsafe { GetLastError() };
+            unsafe { CloseHandle(request) };
+            bail!("the power request was refused (error {error})");
+        }
+        // SAFETY: `request` is the handle just created, still open.
+        if unsafe { PowerSetRequest(request, PowerRequestDisplayRequired) } == 0 {
+            // SAFETY: reads the calling thread's last error.
+            let error = unsafe { GetLastError() };
+            tracing::warn!(
+                error,
+                "keeping the display on was refused; holding the system only"
+            );
         }
         Ok(Self { request })
     }

@@ -57,7 +57,9 @@ computer awake".
   does not lock, while the user is idle either. `pmset -g assertions` lists both under the daemon's process,
   `octoboardd`.
 - **Windows**: one power request for the display and the system, so the display does not turn off either, as
-  `powercfg /requests` lists it.
+  `powercfg /requests` lists it. The display part is best effort: a session with no display (a service, or an SSH
+  session in Session 0) refuses it, and the request then holds the system alone, which still counts as held; the
+  daemon's log records the refusal.
 - **Linux**: a logind inhibitor lock on `idle`, in `block` mode, taken over the system bus under the name Octoboard,
   as `systemd-inhibit --list` lists it. Besides it, when a session bus is reachable and something on it serves
   `org.freedesktop.ScreenSaver`, the daemon inhibits that screen saver too, under the same name and reason: that is

@@ -1315,10 +1315,11 @@ setting is on, `working` only while some session, in any console or project, is 
 at work). The daemon holds from its start, with no client connected, and releases at once when the answer turns false;
 the system releases a hold with the process. What it holds is the system's idle sleep and, where the host ties the two
 together, its idle display sleep: on macOS the IOKit assertions `PreventUserIdleDisplaySleep` and
-`PreventUserIdleSystemSleep`, on Windows a power request for the system and the display, on Linux a logind inhibitor
-lock on idle (`idle`, `block`, so a suspend the user asks for or a closed lid still sleeps the machine) taken over the
-system bus and, when a session bus has a screen saver service (`org.freedesktop.ScreenSaver`), an inhibition of it as
-well, whose failure is ignored. Every hold is named "Octoboard is keeping the computer awake". Only a host that can hold
+`PreventUserIdleSystemSleep`, on Windows a power request for the system and, best effort, the display (a session with no
+display refuses that part, and the system alone still counts as held), on Linux a logind inhibitor lock on idle (`idle`,
+`block`, so a suspend the user asks for or a closed lid still sleeps the machine) taken over the system bus and, when a
+session bus has a screen saver service (`org.freedesktop.ScreenSaver`), an inhibition of it as well, whose failure is
+ignored. Every hold is named "Octoboard is keeping the computer awake". Only a host that can hold
 offers the setting (`snapshot.host.keep_awake`); elsewhere the values are stored and do nothing. When the host refuses
 the hold the daemon logs it and holds nothing, and does not ask again until the answer has gone false and true again.
 Whether it holds now is `snapshot.keep_awake_held`, kept current by `keep_awake_held_updated`. Both settings are carried
