@@ -126,6 +126,8 @@ fn owner_process_fixture() {
         "descendant" => record_identity(&directory, "descendant"),
         "server" | "unready-server" => {
             record_identity(&directory, "server");
+            // Deliberately left running: the test checks that the owner's death ends it.
+            #[allow(clippy::zombie_processes)]
             let _child = spawn_fixture("descendant", &directory);
             if role == "server" {
                 println!("{READY}4321");
