@@ -134,7 +134,7 @@ it("retains request-refusal metadata for rich model descriptions in the mark's p
 it("directs inherited model and effort badges without selecting or submitting their display values", () => {
   const inherited = { model: "model/中文-مراجعة", effort: "effort/مراجعة-中文" };
   const changed = vi.fn();
-  const launch: LaunchModels = { agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure: undefined };
+  const launch: LaunchModels = { agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelFailure: undefined };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -157,7 +157,7 @@ it("takes the effort levels from the default model while neither the pair nor it
     { id: "fable", name: "Fable", efforts: ["low", "max"] },
     { id: "opus", name: "Opus", efforts: ["medium"] },
   ];
-  const launch: LaunchModels = { agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: "fable", defaultModelSource: "best_available", loading: false, listed: true, models, modelText: undefined, modelDescription: undefined, modelFailure: undefined };
+  const launch: LaunchModels = { agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: "fable", defaultModelSource: "best_available", loading: false, listed: true, models, modelText: undefined, modelFailure: undefined };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -173,7 +173,7 @@ it("takes the effort levels from the default model while neither the pair nor it
 
 it("says the agent's own setting, not Best available, for a default model Claude Code's configuration names, and names it as a session reads it", () => {
   const launchOf = (defaultModel: string, defaultModelSource: LaunchModels["defaultModelSource"]): LaunchModels =>
-    ({ agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel, defaultModelSource, loading: false, listed: true, models: [{ id: "fable", name: "Fable", efforts: [], version: "Fable 5.1" }], modelText: undefined, modelDescription: undefined, modelFailure: undefined });
+    ({ agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel, defaultModelSource, loading: false, listed: true, models: [{ id: "fable", name: "Fable", efforts: [], version: "Fable 5.1" }], modelText: undefined, modelFailure: undefined });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -192,7 +192,7 @@ it("says the agent's own setting, not Best available, for a default model Claude
 });
 
 it("hands focus to the Model trigger when the mark that holds it goes, and leaves other focus alone", async () => {
-  const launchOf = (modelFailure?: string): LaunchModels => ({ agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
+  const launchOf = (modelFailure?: string): LaunchModels => ({ agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelFailure });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -214,7 +214,7 @@ it("hands focus to the Model trigger when the mark that holds it goes, and leave
 });
 
 it("hands focus to the console's Model trigger when the console matrix's mark that holds it goes", async () => {
-  const launchOf = (modelFailure?: string): LaunchModels => ({ agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
+  const launchOf = (modelFailure?: string): LaunchModels => ({ agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelFailure });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -232,7 +232,7 @@ it("hands focus to the console's Model trigger when the console matrix's mark th
 });
 
 it("turns the focus ring on only when the console matrix's mark hands focus on, not when the whole matrix goes with it", async () => {
-  const launchOf = (modelFailure?: string): LaunchModels => ({ agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
+  const launchOf = (modelFailure?: string): LaunchModels => ({ agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [], modelText: undefined, modelFailure });
   const modality = getInteractionModality();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -371,30 +371,29 @@ function mountAsking(replies: Record<"claude" | "codex", Reply[]>) {
       </DaemonProvider>,
     ),
   );
-  const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  const settle = () => act(async () => {});
   const trigger = () => container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
   const options = () => [...container.querySelectorAll("option")].map((option) => option.value);
   return { render, settle, trigger, options, container, request, marks };
 }
 
-// A form switching between agents would otherwise lock its pickers and add the loading note under the Model
-// picker for every round trip, moving every field below it down and back.
+// A form returning to a loaded agent keeps its last choices available while refreshing them.
 it("shows the list an agent was last given while asking again on going back to it, and locks the pickers only on the first ask", async () => {
-  const { render, settle, trigger, options, container, request } = mountAsking({ claude: ["list", "hang"], codex: ["list"] });
-  const loadingNote = "Loading the models this agent offers…";
+  const { render, settle, trigger, options, request } = mountAsking({ claude: ["list", "hang"], codex: ["list"] });
+  const loadingPlaceholder = "Loading…";
   render("claude");
   expect(trigger().disabled).toBe(true);
   await settle();
   expect(trigger().disabled).toBe(false);
   render("codex");
   expect(trigger().disabled).toBe(true);
-  expect(container.textContent).toContain(loadingNote);
+  expect(trigger().textContent).toBe(loadingPlaceholder);
   await settle();
 
   render("claude");
   await settle();
   expect(trigger().disabled).toBe(false);
-  expect(container.textContent).not.toContain(loadingNote);
+  expect(trigger().textContent).not.toBe(loadingPlaceholder);
   expect(options()).toContain("claude-model");
   expect(request.mock.calls.filter(([body]) => body.agent === "claude")).toHaveLength(2);
 });
@@ -402,7 +401,7 @@ it("shows the list an agent was last given while asking again on going back to i
 it.each([
   ["going away and back", false],
   ["collapsing and opening the section", true],
-] as const)("locks the pickers and shows the loading note again when a pair that has had only refusals is asked again, after %s", async (_, collapse) => {
+] as const)("locks the pickers and shows the loading placeholder again when a pair that has had only refusals is asked again, after %s", async (_, collapse) => {
   const { render, settle, trigger, container, marks } = mountAsking({ claude: ["refuse", "hang"], codex: ["list"] });
   render("claude");
   await settle();
@@ -416,7 +415,7 @@ it.each([
   expect(marks.slice(before)).not.toHaveLength(0);
   expect(marks.slice(before)).not.toContain(true);
   expect(trigger().disabled).toBe(true);
-  expect(container.textContent).toContain("Loading the models this agent offers…");
+  expect(trigger().textContent).toBe("Loading…");
 });
 
 it.each([
@@ -444,7 +443,7 @@ it.each([
 });
 
 it("keeps the mark clear of the Model field's own press: pressing it neither opens the list nor clears the value", () => {
-  const launch: LaunchModels = { agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [{ id: "alpha", name: "alpha" }] as LaunchModels["models"], modelText: undefined, modelDescription: undefined, modelFailure: "Why" };
+  const launch: LaunchModels = { agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: false, listed: true, models: [{ id: "alpha", name: "alpha" }] as LaunchModels["models"], modelText: undefined, modelFailure: "Why" };
   const changed = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -454,4 +453,22 @@ it("keeps the mark clear of the Model field's own press: pressing it neither ope
   expect(document.querySelector("[data-status-mark-popover]")).not.toBeNull();
   expect(container.querySelector("[data-slot=select-trigger]")!.getAttribute("aria-expanded")).toBe("false");
   expect(changed).not.toHaveBeenCalled();
+});
+
+
+it("shows loading inside all four console launch selectors without a note below the model selectors", () => {
+  const launch: LaunchModels = { agent: "claude", display: providerModelDisplay(TEST_PROVIDERS, "claude"), defaultModel: null, defaultModelSource: null, loading: true, listed: false, models: [], modelText: "Loading the models this agent offers…", modelFailure: undefined };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  act(() => root.render(<LaunchMatrix launch={launch} consoleSessions={{ model: null, effort: null }} projectSessions={{ model: null, effort: null }} onConsoleChange={() => {}} onProjectChange={() => {}} />));
+  const triggers = [...container.querySelectorAll<HTMLButtonElement>("[data-slot=select-trigger]")];
+  expect(triggers).toHaveLength(4);
+  for (const trigger of triggers) {
+    expect(trigger.textContent).toBe("Loading…");
+    expect(trigger.disabled).toBe(true);
+    expect(trigger.getAttribute("aria-busy")).toBe("true");
+    expect(trigger.querySelector("[data-slot=spinner]")).not.toBeNull();
+  }
+  for (const field of container.querySelectorAll("[data-slot=select]")) expect(field.querySelector("[data-slot=description]")).toBeNull();
 });

@@ -36,6 +36,7 @@ export const en = {
   "common.browse": "Browse",
   "common.cancel": "Cancel",
   "common.clear": "Clear",
+  "common.loading": "Loading…",
   "common.close": "Close",
   "tabs.scroll.up": "Scroll tabs up",
   "tabs.scroll.down": "Scroll tabs down",

@@ -8,6 +8,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { InlineReference } from "../../i18n/InlineReference";
 
+import { currentLanguage, setLanguage } from "../../i18n/language";
+
 import { OptionSelect } from "./OptionSelect";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -252,4 +254,57 @@ it("closes only an option's tooltip on Escape, leaving the list open with focus 
 
   await escape();
   expect(document.querySelector('[role="listbox"]')).toBeNull();
+});
+
+
+it("replaces an empty select's placeholder and badge with localized loading text and restores both when ready", () => {
+  const language = currentLanguage();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); act(() => setLanguage(language)); });
+  act(() => setLanguage("zh-Hans"));
+  const render = (isLoading: boolean) => act(() => root.render(
+    <OptionSelect label="Model" value={null} onChange={() => {}} options={[]} placeholder="Same as console" placeholderBadge="Inherited model" isLoading={isLoading} />,
+  ));
+  render(true);
+  const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  expect(trigger.textContent).toBe("加载中…");
+  expect(trigger.disabled).toBe(true);
+  expect(trigger.getAttribute("aria-busy")).toBe("true");
+  expect(trigger.querySelector("[data-slot=spinner]")).not.toBeNull();
+  expect(trigger.querySelector("[data-slot=select-default-indicator]")).toBeNull();
+  expect(container.querySelector("[data-slot=description]")).toBeNull();
+  render(false);
+  expect(trigger.textContent).toContain("Same as console");
+  expect(trigger.textContent).toContain("Inherited model");
+  expect(trigger.disabled).toBe(false);
+  expect(trigger.hasAttribute("aria-busy")).toBe(false);
+  expect(trigger.querySelector("[data-slot=spinner]")).toBeNull();
+  expect(trigger.querySelector("[data-slot=select-default-indicator]")).not.toBeNull();
+});
+
+it("preserves a stored choice while loading and blocks the clear button and clearing keys", () => {
+  const changed = vi.fn();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  const render = (isLoading: boolean) => act(() => root.render(
+    <OptionSelect label="Model" value="saved" onChange={changed} options={[{ value: "saved", label: "Saved model" }]} placeholder="Agent default" isLoading={isLoading} />,
+  ));
+  render(true);
+  const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  const clear = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) => button !== trigger)!;
+  expect(trigger.textContent).toBe("Saved model");
+  expect(trigger.disabled).toBe(true);
+  expect(clear.disabled).toBe(true);
+  act(() => {
+    clear.click();
+    for (const key of ["Backspace", "Delete"]) trigger.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  });
+  expect(changed).not.toHaveBeenCalled();
+  expect(container.querySelector<HTMLSelectElement>("select")!.value).toBe("saved");
+  render(false);
+  expect(trigger.textContent).toBe("Saved model");
+  expect(trigger.disabled).toBe(false);
+  expect(clear.disabled).toBe(false);
 });

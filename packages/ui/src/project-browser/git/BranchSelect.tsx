@@ -26,6 +26,7 @@ export function BranchSelect({
   value,
   gone,
   isDisabled,
+  isLoading,
   selectedSessionId,
   onChange,
 }: {
@@ -36,6 +37,7 @@ export function BranchSelect({
   /** For a repository that has no branches to offer: a selector that could only open on an empty
    * list is a control with nothing behind it. */
   isDisabled?: boolean;
+  isLoading?: boolean;
   selectedSessionId: string | undefined;
   onChange: (branch: string) => void;
 }): React.ReactElement {
@@ -51,6 +53,7 @@ export function BranchSelect({
       fullWidth
       variant="secondary"
       disabled={isDisabled}
+      loading={isLoading}
       value={value ?? null}
       onChange={(key) => key !== null && onChange(key)}
       className="col-span-2 grid grid-cols-subgrid items-center gap-x-2"
@@ -61,7 +64,7 @@ export function BranchSelect({
         valueClassName="flex min-w-0 items-center gap-2"
         value={
           <>
-            <GitBranch aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
+            {!(isLoading && name === undefined) && <GitBranch aria-hidden="true" className="size-4 shrink-0 text-app-muted" />}
             <FadeOverflow
               as="span"
               dir={name === undefined ? undefined : "ltr"}
@@ -69,7 +72,7 @@ export function BranchSelect({
               className="min-w-0 flex-1"
               titleWhenClipped={title}
             >
-              {name ?? t("git.branch.choose")}
+              {name ?? t(isLoading ? "common.loading" : "git.branch.choose")}
             </FadeOverflow>
             {name !== undefined && gone && <StatusBadge>{t("git.branch.goneStatus")}</StatusBadge>}
           </>

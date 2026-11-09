@@ -39,8 +39,8 @@ const IDLE: AgentModels = { status: "idle", ...NONE };
  *
  * The last answer for each agent and account stays with the hook, and is what a question asked again
  * shows in place of `loading` while it is out, and in place of `failed` when the ask is refused: a form that
- * switches back to an agent it showed before would otherwise lock its pickers and add the loading note under
- * its Model pickers for the round trip, moving every field below them down and back on each switch.
+ * switches back to an agent it showed before would otherwise lock its pickers again and replace their
+ * empty-state hints with loading placeholders for every round trip.
  */
 export function useAgentModels(
   request: RequestSender,

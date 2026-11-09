@@ -604,3 +604,29 @@ it.each(["together", "loading", "failed"] as const)("keeps the commit grouping c
   expect(onChange).toHaveBeenCalledWith(state === "together");
   if (state === "failed") expect(committedHeading(container).closest("[role=row]")?.querySelector("[data-status-mark]")).not.toBeNull();
 });
+
+
+it("puts a pending branch list's loading state inside its selector", () => {
+  const container = mountRows(
+    <GitView
+      source={{ state: "loaded", source: source("/r", "/r"), sentAt: 0 }}
+      branches={{ state: "loading" }}
+      branch={undefined}
+      onBranchChange={() => {}}
+      uncommitted={{ state: "none" }}
+      committed={{ state: "none" }}
+      items={[]}
+      selectedChange={undefined}
+      onOpen={() => {}}
+      onRetry={() => {}}
+      listRef={() => {}}
+      selectorsRef={{ current: null }}
+      changeView={changeViewFixture()}
+      selectedSessionId={undefined}
+    />,
+  );
+  const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  expect(trigger.textContent).toBe("Loading…");
+  expect(trigger.disabled).toBe(true);
+  expect(trigger.querySelector("[data-slot=spinner]")).not.toBeNull();
+});

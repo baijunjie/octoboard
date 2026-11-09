@@ -16,6 +16,7 @@ export const hi: Translation<"one" | "other"> = {
   "common.browse": "ब्राउज़ करें",
   "common.cancel": "रद्द करें",
   "common.clear": "साफ़ करें",
+  "common.loading": "लोड हो रहा है…",
   "common.close": "बंद करें",
   "tabs.scroll.up": "टैब ऊपर स्क्रॉल करें",
   "tabs.scroll.down": "टैब नीचे स्क्रॉल करें",

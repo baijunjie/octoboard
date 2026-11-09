@@ -17,6 +17,7 @@ export const id: Translation<"other"> = {
   "common.browse": "Telusuri",
   "common.cancel": "Batal",
   "common.clear": "Kosongkan",
+  "common.loading": "Memuat…",
   "common.close": "Tutup",
   "tabs.scroll.up": "Gulir tab ke atas",
   "tabs.scroll.down": "Gulir tab ke bawah",

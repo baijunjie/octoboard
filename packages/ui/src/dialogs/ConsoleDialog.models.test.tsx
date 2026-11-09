@@ -59,9 +59,17 @@ it("ignores a late answer for an agent the form has moved off", async () => {
 it("locks the pickers and says so while the list is out, with the stored value in view", async () => {
   render(stored, [], () => new Promise(() => {}));
   await openAdvanced();
-  expect(document.body.textContent).toContain("Loading the models this agent offers");
-  expect(locked("Model")).toBe(true);
-  expect(locked("Reasoning effort")).toBe(true);
+  for (const group of ["Console sessions", "Project sessions"]) {
+    for (const setting of ["Model", "Reasoning effort"]) {
+      const trigger = groupPicker(group, setting) as HTMLButtonElement;
+      expect(trigger.disabled).toBe(true);
+      expect(trigger.getAttribute("aria-busy")).toBe("true");
+      expect(trigger.querySelector("[data-slot=spinner]")).not.toBeNull();
+      expect(trigger.closest("[data-slot=select]")!.querySelector("[data-slot=description]")).toBeNull();
+    }
+  }
+  expect(groupPicker("Project sessions", "Model").textContent).toBe("Loading…");
+  expect(groupPicker("Project sessions", "Reasoning effort").textContent).toBe("Loading…");
   expect(pickerNamed("Model").textContent).toContain("alpha");
   expect(pickerNamed("Reasoning effort").textContent).toContain("high");
 });

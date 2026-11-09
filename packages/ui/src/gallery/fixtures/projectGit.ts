@@ -725,6 +725,17 @@ const reviewScenarios: Scenario[] = [
     steps: openGit,
   },
   {
+    id: "git-changes-branches-loading",
+    group: GROUP,
+    category: "normal",
+    title: "The branch selector while its list loads",
+    description: "The Branch selector is locked while its options load. Its known branch stays visible beside a spinner that replaces the trailing chevron, with no loading note below the field.",
+    state,
+    preferences,
+    projectBranches: { [web.id]: "pending" },
+    steps: openGit,
+  },
+  {
     id: "git-changes-unborn",
     group: GROUP,
     category: "normal",

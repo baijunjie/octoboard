@@ -17,6 +17,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "common.browse": "استعراض",
   "common.cancel": "إلغاء",
   "common.clear": "إفراغ",
+  "common.loading": "جارٍ التحميل…",
   "common.close": "إغلاق",
   "tabs.scroll.up": "تمرير علامات التبويب لأعلى",
   "tabs.scroll.down": "تمرير علامات التبويب لأسفل",

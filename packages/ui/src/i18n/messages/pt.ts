@@ -16,6 +16,7 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "common.browse": "Explorar",
   "common.cancel": "Cancelar",
   "common.clear": "Limpar",
+  "common.loading": "Carregando…",
   "common.close": "Fechar",
   "tabs.scroll.up": "Rolar abas para cima",
   "tabs.scroll.down": "Rolar abas para baixo",

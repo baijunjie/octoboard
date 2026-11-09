@@ -2,6 +2,7 @@
 import { act } from "react";
 import { expect, it } from "vitest";
 
+import { FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { press } from "../components/alerts/detailsTestSupport";
 import { projectOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
@@ -66,6 +67,9 @@ it("shows an unset launch setting as its placeholder, and names what the account
   // The console refers to the first account.
   expect(accountPicker()?.textContent).toContain("Same as console, Work");
   await click(buttonText("Advanced"));
+  expect(pickerNamed("Model").textContent).toBe("Loading…");
+  expect(pickerNamed("Reasoning effort").textContent).toBe("Loading…");
+  await answerModels(pending);
   expect(pickerNamed("Model").textContent).toContain(PLACEHOLDER);
   expect(pickerNamed("Reasoning effort").textContent).toContain(PLACEHOLDER);
 });
@@ -412,17 +416,26 @@ it("keeps a stored model the list lacks, and says why when there is no list", as
   expect(optionTexts()).toEqual(["Alpha", "Beta", "retired, Not in the list"]);
 });
 
-it("offers the stored model alone and the reason when the agent cannot list its models", async () => {
+it.each([0, FIRST_WRITE_DELAY_MS])("offers the stored model alone and the reason when the agent cannot list its models, after %s ms before the answer", async (beforeAnswer) => {
   const pending = render(projectOf("p-2", "c-1", "Site", { default_agent: "claude", launch: { claude: { model: "retired" } } }));
   await click(buttonText("Advanced"));
-  expect(document.body.textContent).toContain("Loading the models this agent offers");
+  for (const setting of ["Model", "Reasoning effort"]) {
+    const trigger = pickerNamed(setting) as HTMLButtonElement;
+    expect(trigger.disabled).toBe(true);
+    expect(trigger.getAttribute("aria-busy")).toBe("true");
+    expect(trigger.querySelector("[data-slot=spinner]")).not.toBeNull();
+    expect(trigger.closest("[data-slot=select]")!.querySelector("[data-slot=description]")).toBeNull();
+  }
+  expect(pickerNamed("Model").textContent).toBe("retired");
+  expect(pickerNamed("Reasoning effort").textContent).toBe("Loading…");
+  await settle(beforeAnswer);
   await answerModels(pending, { code: "models_timed_out", params: { agent: "claude" }, message: "" });
   // The reason is a mark inside the Model field, not text under it, and nothing describes the field by it.
   expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
   const mark = pickerNamed("Model").closest("[data-slot=select]")!.querySelector<HTMLElement>("button[data-status-mark]")!;
   expect(mark.getAttribute("aria-label")).toBe("Could not load the models");
   expect(pickerNamed("Model").getAttribute("aria-describedby")).toBeNull();
-  await settle(200);
+  await settle(FIRST_WRITE_DELAY_MS);
   // The form's other regions (the announcement of fields changed elsewhere) stay empty.
   const status = [...document.body.querySelectorAll('[role="status"]')].map((region) => region.textContent).find(Boolean);
   press(mark);
@@ -440,14 +453,17 @@ it("offers the stored model alone and the reason when the agent cannot list its 
 });
 
 it("names the console's project session value on the unset launch pickers, each value on its own", async () => {
-  render(projectOf("p-2", "c-1", "Site"), [], { project_session_launch: { claude: { model: "opus" } } });
+  const pending = render(projectOf("p-2", "c-1", "Site"), [], { project_session_launch: { claude: { model: "opus" } } });
   await click(buttonText("Advanced"));
+  expect(pickerNamed("Model").textContent).toBe("Loading…");
+  expect(pickerNamed("Reasoning effort").textContent).toBe("Loading…");
+  await answerModels(pending);
   expect(pickerNamed("Model").textContent).toContain("Same as console, Opus");
   expect(pickerNamed("Reasoning effort").textContent).toContain("Same as console, The agent's own setting");
 });
 
 it("lets the project's own value replace the inherited one and names the console's pair for the agent shown", async () => {
-  render(
+  const pending = render(
     projectOf("p-2", "c-1", "Site", { launch: { claude: { effort: "high" } } }),
     [],
     { project_session_launch: { claude: { effort: "low" }, codex: { model: "gpt-x" } } },
@@ -455,5 +471,8 @@ it("lets the project's own value replace the inherited one and names the console
   await click(buttonText("Advanced"));
   expect(pickerNamed("Reasoning effort").textContent).toContain("high");
   expect(pickerNamed("Reasoning effort").textContent).not.toContain("Same as console");
+  expect(pickerNamed("Model").textContent).toBe("Loading…");
+  await answerModels(pending);
+  expect(pickerNamed("Reasoning effort").textContent).toContain("high");
   expect(pickerNamed("Model").textContent).toContain("Same as console, The agent's own setting");
 });

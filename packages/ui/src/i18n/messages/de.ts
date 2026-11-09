@@ -17,6 +17,7 @@ export const de: Translation<"one" | "other"> = {
   "common.browse": "Durchsuchen",
   "common.cancel": "Abbrechen",
   "common.clear": "Leeren",
+  "common.loading": "Wird geladen…",
   "common.close": "Schließen",
   "tabs.scroll.up": "Tabs nach oben scrollen",
   "tabs.scroll.down": "Tabs nach unten scrollen",

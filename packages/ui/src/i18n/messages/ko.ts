@@ -19,6 +19,7 @@ export const ko: Translation<"other"> = {
   "common.browse": "찾아보기",
   "common.cancel": "취소",
   "common.clear": "지우기",
+  "common.loading": "로드 중…",
   "common.close": "닫기",
   "tabs.scroll.up": "탭 위로 스크롤",
   "tabs.scroll.down": "탭 아래로 스크롤",

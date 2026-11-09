@@ -17,6 +17,7 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "common.browse": "Parcourir",
   "common.cancel": "Annuler",
   "common.clear": "Vider",
+  "common.loading": "Chargement…",
   "common.close": "Fermer",
   "tabs.scroll.up": "Faire défiler les onglets vers le haut",
   "tabs.scroll.down": "Faire défiler les onglets vers le bas",

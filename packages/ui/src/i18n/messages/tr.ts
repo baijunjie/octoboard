@@ -17,6 +17,7 @@ export const tr: Translation<"one" | "other"> = {
   "common.browse": "Göz at",
   "common.cancel": "İptal",
   "common.clear": "Temizle",
+  "common.loading": "Yükleniyor…",
   "common.close": "Kapat",
   "tabs.scroll.up": "Sekmeleri yukarı kaydır",
   "tabs.scroll.down": "Sekmeleri aşağı kaydır",

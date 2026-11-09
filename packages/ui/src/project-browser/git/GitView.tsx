@@ -363,6 +363,7 @@ function ChangesView({
             value={branch}
             gone={gone}
             isDisabled={noBranches}
+            isLoading={branches.state === "loading"}
             selectedSessionId={selectedSessionId}
             onChange={onBranchChange}
           />

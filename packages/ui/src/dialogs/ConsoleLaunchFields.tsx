@@ -119,8 +119,8 @@ export function ConsoleLaunchFields({
  * it the cells stack under a heading for each kind, and each picker shows the name of its setting
  * above it. The headers are for the eye alone, hidden from assistive technology: each picker is
  * named by the two it sits under, its kind first. The project pickers are also described by their
- * override note below the table. Both Model pickers are described by the model list note while it loads,
- * which they carry; why there is none is a warning mark after the Model setting's name, in the row header
+ * override note below the table. The pickers show their loading state inside their triggers;
+ * why there is no model list is a warning mark after the Model setting's name, in the row header
  * (stacked, above each picker).
  */
 export function LaunchMatrix({

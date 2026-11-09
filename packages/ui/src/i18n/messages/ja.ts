@@ -18,6 +18,7 @@ export const ja: Translation<"other"> = {
   "common.browse": "参照",
   "common.cancel": "キャンセル",
   "common.clear": "消去",
+  "common.loading": "読み込み中…",
   "common.close": "閉じる",
   "tabs.scroll.up": "タブを上にスクロール",
   "tabs.scroll.down": "タブを下にスクロール",

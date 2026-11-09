@@ -19,6 +19,7 @@ export const zhHant: Translation<"other"> = {
   "common.browse": "瀏覽",
   "common.cancel": "取消",
   "common.clear": "清除",
+  "common.loading": "正在載入…",
   "common.close": "關閉",
   "tabs.scroll.up": "向上捲動分頁",
   "tabs.scroll.down": "向下捲動分頁",

@@ -2124,6 +2124,14 @@ A form control on a surface — in a dialog, a popover, a card — takes HeroUI'
 `Input`, `Select`, `Checkbox` alike), HeroUI's own variant for that case. The default variant leaves it blending into
 the surface in both appearances.
 
+### Selects while their options load
+
+A select shows its options loading inside the control: a decorative spinner replaces the trailing chevron, and
+`aria-busy` marks the trigger. With no chosen value, a localized "Loading…" replaces the placeholder and its badge;
+a chosen value stays visible and is never cleared by loading. The select and its clear action are disabled until
+the options arrive. There is no loading description below the field. Explanatory notes and failure marks keep their
+own treatments. This state belongs to the shared Select and OptionSelect components, including custom branch pickers.
+
 ### Clear buttons
 
 The clear action inside a search field or an optional select uses the shared `FieldClearButton`: the application's

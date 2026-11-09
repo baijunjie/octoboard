@@ -1,9 +1,13 @@
 import { Select as HeroSelect } from "@heroui/react";
-import React from "react";
+import React, { createContext, useContext, useEffect } from "react";
 
+import { useObjectRef } from "./focus";
+import { Spinner } from "./Spinner";
 import { useDisabled } from "./busy";
 import { FieldClearContext, type FieldVariant, OutsideFieldParts } from "./Field";
 import { type DataAttributes, definedProps } from "./props";
+
+const SelectLoadingContext = createContext(false);
 
 /** HeroUI's select: the field around a `Label`, a `SelectTrigger`, a `SelectPopover` holding a `ListBox` of the
  * options (keyed by their ids), a `Description` and a `FieldError`. `value` is the id of the chosen option, or `null`
@@ -13,7 +17,7 @@ import { type DataAttributes, definedProps } from "./props";
  * cannot be chosen, so the reason it cannot be picked is not hidden from anyone not reading the list by mouse: react-
  * aria's default skips it. And, as `TextField`, an invalid select never hands a submit to the browser's constraint
  * validation: whether a form goes ahead is its own decision. */
-export function Select({ value, onChange, placeholder, label, labelledBy, describedBy, disabled, invalid, variant, fullWidth, className, children }: {
+export function Select({ value, onChange, placeholder, label, labelledBy, describedBy, disabled, loading = false, invalid, variant, fullWidth, className, children }: {
   value: string | null;
   onChange: (value: string | null) => void;
   placeholder?: string;
@@ -23,6 +27,8 @@ export function Select({ value, onChange, placeholder, label, labelledBy, descri
   labelledBy?: string;
   describedBy?: string;
   disabled?: boolean;
+  /** Locks the field while its options load and replaces the trigger indicator with a spinner. */
+  loading?: boolean;
   invalid?: boolean;
   variant?: FieldVariant;
   fullWidth?: boolean;
@@ -37,7 +43,7 @@ export function Select({ value, onChange, placeholder, label, labelledBy, descri
       aria-label={label}
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
-      isDisabled={useDisabled(disabled)}
+      isDisabled={useDisabled(disabled || loading)}
       isInvalid={invalid}
       validationBehavior="aria"
       variant={variant}
@@ -48,26 +54,35 @@ export function Select({ value, onChange, placeholder, label, labelledBy, descri
       // `useSelectState` passes its props through to react-stately's `useListState`, which reads it.
       {...({ disabledBehavior: "selection" } as object)}
     >
-      {children}
+      <SelectLoadingContext.Provider value={loading}>{children}</SelectLoadingContext.Provider>
     </HeroSelect>
   );
 }
 
 /** The button of a `Select` that opens its options, showing `value` (what the caller draws for the chosen option, or
  * for the placeholder) in a box classed `valueClassName`, then `children` (room kept for what is laid over the
- * trigger), then HeroUI's chevron. */
-export function SelectTrigger({ ref, value, valueClassName, className, children, ...data }: DataAttributes & {
+ * trigger), then HeroUI's chevron or a decorative spinner while the options load. */
+export function SelectTrigger({ ref: forwarded, value, valueClassName, className, children, ...data }: DataAttributes & {
   ref?: React.Ref<HTMLButtonElement>;
   value: React.ReactNode;
   valueClassName?: string;
   className?: string;
   children?: React.ReactNode;
 }): React.ReactElement {
+  const loading = useContext(SelectLoadingContext);
+  const ref = useObjectRef(forwarded);
+  // React Aria's button filters out `aria-busy`, so it has to be applied to the mounted trigger.
+  useEffect(() => {
+    if (!loading) return;
+    const element = ref.current;
+    element?.setAttribute("aria-busy", "true");
+    return () => element?.removeAttribute("aria-busy");
+  }, [loading, ref]);
   return (
     <HeroSelect.Trigger {...data} ref={ref} {...definedProps({ className })}>
       <HeroSelect.Value className={valueClassName}>{() => value}</HeroSelect.Value>
       {children}
-      <HeroSelect.Indicator />
+      {loading ? <Spinner size="sm" color="current" className="size-4 shrink-0" /> : <HeroSelect.Indicator />}
     </HeroSelect.Trigger>
   );
 }

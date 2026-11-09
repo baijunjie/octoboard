@@ -17,6 +17,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "common.browse": "Обзор",
   "common.cancel": "Отмена",
   "common.clear": "Очистить",
+  "common.loading": "Загрузка…",
   "common.close": "Закрыть",
   "tabs.scroll.up": "Прокрутить вкладки вверх",
   "tabs.scroll.down": "Прокрутить вкладки вниз",

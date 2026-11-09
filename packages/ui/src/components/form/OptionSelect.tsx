@@ -1,5 +1,6 @@
 import React, { useId, useRef } from "react";
 
+import { useT } from "../../i18n/react";
 import { FieldErrorMessage } from "./FieldErrorMessage";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { FieldClearButton } from "../controls/FieldClearButton";
@@ -126,6 +127,7 @@ export function OptionSelect<T extends string>({
   joined,
   hideLabel,
   isDisabled,
+  isLoading = false,
   description,
   describedBy,
   labelledBy,
@@ -142,6 +144,8 @@ export function OptionSelect<T extends string>({
   joined?: "start" | "end";
   hideLabel?: boolean;
   isDisabled?: boolean;
+  /** Locks the select while its options load; an empty value shows the loading placeholder. */
+  isLoading?: boolean;
   /** Extra explanation shown under the field. */
   description?: React.ReactNode;
   /** The id of an element elsewhere on the page that also describes the field. */
@@ -167,12 +171,14 @@ export function OptionSelect<T extends string>({
   | { value: T; onChange: (value: T) => void; placeholder?: undefined }
   | { value: T | null; onChange: (value: T | null) => void; placeholder: string }
 )): React.ReactElement {
+  const t = useT();
+  const shownPlaceholder = isLoading ? t("common.loading") : placeholder;
   const descriptionId = useId();
   const markId = useId();
   const labelMarkId = useId();
   const trigger = useRef<HTMLButtonElement | null>(null);
   const current = options.find((option) => option.value === value);
-  const badge = current ? current.badge : placeholderBadge;
+  const badge = current ? current.badge : isLoading ? undefined : placeholderBadge;
   const badgeInLabel = current ? current.badgeInLabel : true;
   const invalid = isInvalid === true || (errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "");
   const hasReason = options.some((option) => option.reason);
@@ -195,9 +201,10 @@ export function OptionSelect<T extends string>({
       // children alone change. Keep the association stable for notes that appear dynamically.
       describedBy={[description ? descriptionId : undefined, describedBy].filter(Boolean).join(" ") || undefined}
       disabled={isDisabled}
+      loading={isLoading}
       invalid={invalid}
       value={value}
-      placeholder={placeholder}
+      placeholder={shownPlaceholder}
       // Clearing arrives as a `null` key. Without a placeholder the caller has no way to take it,
       // so it is dropped there, as it always was.
       onChange={(key) => {
@@ -235,7 +242,7 @@ export function OptionSelect<T extends string>({
           valueClassName="flex min-w-0 flex-1 items-center gap-2 text-clip"
           value={<>
             {current?.icon && <span aria-hidden="true" className="flex shrink-0">{current.icon}</span>}
-            <FadeLabel as="span" lang={current?.lang} className={!badge || badgeInLabel ? "min-w-0 flex-1" : "min-w-0"} label={current?.labelContent ?? current?.label ?? placeholder} badge={badgeInLabel ? badge : undefined} />
+            <FadeLabel as="span" lang={current?.lang} className={!badge || badgeInLabel ? "min-w-0 flex-1" : "min-w-0"} label={current?.labelContent ?? current?.label ?? shownPlaceholder} badge={badgeInLabel ? badge : undefined} />
             {badge && !badgeInLabel && <StatusBadge>{badge}</StatusBadge>}
           </>}
         >
@@ -246,7 +253,7 @@ export function OptionSelect<T extends string>({
         {placeholder !== undefined && (
           // The shared ghost button, as HeroUI's clear action, beside the trigger.
           <SelectClearButton onClear={() => trigger.current?.focus()}>
-            <FieldClearButton disabled={isDisabled} className="absolute end-7 top-1/2 -translate-y-1/2 ui-empty:invisible" />
+            <FieldClearButton disabled={isDisabled || isLoading} className="absolute end-7 top-1/2 -translate-y-1/2 ui-empty:invisible" />
           </SelectClearButton>
         )}
         {mark && (

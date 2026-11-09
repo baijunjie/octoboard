@@ -30,8 +30,8 @@ function modelOption(t: Translate, model: AgentModel): LaunchSettingOption {
 
 /** What the launch pickers of one agent and account need to know of the models it offers, asked of the
  * daemon while `enabled` (see `useAgentModels`). While the first answer for the agent and account is out
- * the pickers are locked, showing what is stored; when the daemon has no list the model picker offers the
- * stored value alone and `modelFailure` says why, which the picker draws as a warning mark after the
+ * the pickers are locked, showing stored values or a loading placeholder; when the daemon has no list the model
+ * picker offers the stored value alone and `modelFailure` says why, which the picker draws as a warning mark after the
  * field's label (the dialog goes on without the list). `listed` is whether the list is known, which is
  * when a stored value missing from it is marked "Not in the list": not while it loads, not when it could
  * not be read, and not when it came back empty, which the daemon treats as no list. `modelText` is what
@@ -54,10 +54,9 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
   // details belong in the popover.
   const reasonText = useDaemonStore((s) => (reason === undefined ? undefined : failureSummaryText(t, language, reason, s)));
   const modelText = loading ? t("dialog.agentSettings.modelsLoading") : reasonText;
-  const modelDescription = loading ? modelText : undefined;
   const modelFailure = loading ? undefined : reason;
   const listed = status === "ready" && !unavailable && models.length > 0;
-  return { agent, display, loading, listed, models, defaultModel, defaultModelSource, modelText, modelDescription, modelFailure };
+  return { agent, display, loading, listed, models, defaultModel, defaultModelSource, modelText, modelFailure };
 }
 
 export type LaunchModels = ReturnType<typeof useLaunchModels>;
@@ -110,8 +109,8 @@ type PickerProps = {
   }
 );
 
-/** The Model picker of one pair of settings, empty while unset. It carries the note on the model list
- * while it loads; why there is none is `LaunchModels.modelFailure`, a warning mark after the field's label
+/** The Model picker of one pair of settings, empty while unset. While its options load it shows a spinner and a loading
+ * placeholder; why there is none is `LaunchModels.modelFailure`, a warning mark after the field's label
  * (`ModelsFailureMark`, which a caller that hides the label places beside its own). */
 export function ModelPicker({
   launch,
@@ -151,8 +150,8 @@ export function ModelPicker({
       onChange={onChange}
       placeholder={unset?.placeholder ?? t("dialog.agentSettings.placeholder")}
       placeholderBadge={unset?.placeholderBadge}
-      isDisabled={isDisabled || launch.loading}
-      description={launch.modelDescription}
+      isDisabled={isDisabled}
+      isLoading={launch.loading}
       describedBy={describedBy}
       labelMark={launch.modelFailure === undefined ? undefined : (markId) => <ModelsFailureMark launch={launch} markId={markId} />}
     />
@@ -187,8 +186,9 @@ export function EffortPicker({
       onChange={onChange}
       placeholder={inheritedText?.placeholder ?? t("dialog.agentSettings.placeholder")}
       placeholderBadge={inheritedText?.placeholderBadge}
-      isDisabled={isDisabled || launch.loading}
-      description={none ? t("dialog.agentSettings.noEffort") : undefined}
+      isDisabled={isDisabled}
+      isLoading={launch.loading}
+      description={!launch.loading && none ? t("dialog.agentSettings.noEffort") : undefined}
       describedBy={describedBy}
     />
   );

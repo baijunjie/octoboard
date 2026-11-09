@@ -16,6 +16,7 @@ export const vi: Translation<"other"> = {
   "common.browse": "Duyệt",
   "common.cancel": "Hủy",
   "common.clear": "Xóa nội dung",
+  "common.loading": "Đang tải…",
   "common.close": "Đóng",
   "tabs.scroll.up": "Cuộn thẻ lên",
   "tabs.scroll.down": "Cuộn thẻ xuống",

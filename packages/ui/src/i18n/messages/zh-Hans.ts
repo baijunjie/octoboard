@@ -23,6 +23,7 @@ export const zhHans: Translation<"other"> = {
   "common.browse": "浏览",
   "common.cancel": "取消",
   "common.clear": "清除",
+  "common.loading": "加载中…",
   "common.close": "关闭",
   "tabs.scroll.up": "向上滚动标签页",
   "tabs.scroll.down": "向下滚动标签页",

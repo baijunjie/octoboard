@@ -1989,7 +1989,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "New console while the model list is out",
-    description: "The model and effort pickers are locked and the model field says the list is loading.",
+    description: "All four Model and Reasoning effort pickers are locked. Each empty picker says Loading… inside its trigger, with a spinner in place of its trailing chevron and no loading note underneath.",
     state: dialogState,
     agentModels: { claude: "pending" },
     steps: [

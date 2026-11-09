@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act } from "react";
-import { expect, it } from "vitest";
+import { act, useState } from "react";
+import { expect, it, vi } from "vitest";
 
 import type { BranchInfo } from "../../protocol";
 import { BranchSelect } from "./BranchSelect";
@@ -32,4 +32,37 @@ it("lays every branch name out left to right, in the list as on the trigger", ()
     expect(branches.map((branch) => branch.name)).toContain(name.textContent);
     expect(name.getAttribute("dir")).toBe("ltr");
   }
+});
+
+
+it("shows loading in place of an empty branch choice and returns to its normal prompt when ready", () => {
+  let setLoading!: (loading: boolean) => void;
+  function Field() {
+    const [loading, update] = useState(true);
+    setLoading = update;
+    return <BranchSelect label="From" branches={[]} value={undefined} gone={false} isLoading={loading} selectedSessionId={undefined} onChange={() => {}} />;
+  }
+  const container = mountRows(<Field />);
+  const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  expect(trigger.textContent).toBe("Loading…");
+  expect(trigger.disabled).toBe(true);
+  expect(trigger.getAttribute("aria-busy")).toBe("true");
+  expect(trigger.querySelector("[data-slot=spinner]")).not.toBeNull();
+  expect(trigger.querySelector("[data-slot=select-default-indicator]")).toBeNull();
+  act(() => setLoading(false));
+  expect(trigger.textContent).toBe("Choose a branch");
+  expect(trigger.disabled).toBe(false);
+  expect(trigger.querySelector("[data-slot=spinner]")).toBeNull();
+  expect(trigger.querySelector("[data-slot=select-default-indicator]")).not.toBeNull();
+});
+
+it("retains a branch name while its choices load and does not allow changing it", () => {
+  const changed = vi.fn();
+  const container = mountRows(<BranchSelect label="From" branches={branches} value={RTL_BRANCH} gone={false} isLoading selectedSessionId={undefined} onChange={changed} />);
+  const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  expect(trigger.textContent).toBe(RTL_BRANCH);
+  expect(trigger.disabled).toBe(true);
+  act(() => trigger.click());
+  expect(document.querySelector("[role=listbox]")).toBeNull();
+  expect(changed).not.toHaveBeenCalled();
 });

@@ -17,6 +17,7 @@ export const th: Translation<"other"> = {
   "common.browse": "เลือกหา",
   "common.cancel": "ยกเลิก",
   "common.clear": "ล้าง",
+  "common.loading": "กำลังโหลด…",
   "common.close": "ปิด",
   "tabs.scroll.up": "เลื่อนแท็บขึ้น",
   "tabs.scroll.down": "เลื่อนแท็บลง",

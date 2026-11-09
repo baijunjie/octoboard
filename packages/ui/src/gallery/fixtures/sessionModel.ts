@@ -93,7 +93,7 @@ export const sessionModelScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Change model while the model list is out",
-    description: "Both pickers are locked with the values the session chose, shown as the raw id sonnet and medium, and a note under the Model field says the models are loading. Neither value carries a Not in the list badge, since nothing is known yet of what the agent lists; Change model stays greyed out.",
+    description: "Both pickers are locked with the values the session chose, shown as the raw id sonnet and medium. A spinner replaces each trailing chevron, with no loading note below the Model field. Neither value carries a Not in the list badge, since nothing is known yet of what the agent lists; Change model stays greyed out.",
     state,
     agentModels: { claude: "pending" },
     steps: openDialog(running.title),

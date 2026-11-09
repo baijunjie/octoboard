@@ -17,6 +17,7 @@ export const it: Translation<"one" | "many" | "other"> = {
   "common.browse": "Sfoglia",
   "common.cancel": "Annulla",
   "common.clear": "Svuota",
+  "common.loading": "Caricamento…",
   "common.close": "Chiudi",
   "tabs.scroll.up": "Scorri le schede verso l’alto",
   "tabs.scroll.down": "Scorri le schede verso il basso",
