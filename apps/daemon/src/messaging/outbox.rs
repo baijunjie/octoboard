@@ -1057,8 +1057,8 @@ mod tests {
     #[test]
     fn a_refused_message_fails_alone_and_the_queue_goes_on() {
         let outbox = Outbox::default();
-        let refused = outbox.push("s", "refused");
-        let next = outbox.push("s", "next");
+        let refused = outbox.push("s", "refused").expect("accepted");
+        let next = outbox.push("s", "next").expect("accepted");
         let mut attempts = Vec::new();
         let outcome = outbox.drain_with(
             "s",
@@ -1570,7 +1570,7 @@ mod tests {
                 "s",
                 &mut |_, text, _| {
                     written.push(text.to_string());
-                    Ok(())
+                    Ok(Route::Terminal)
                 },
                 &StopsAfterFirst(Cell::new(0))
             ),
@@ -2190,7 +2190,7 @@ mod tests {
         for written in [1, 0] {
             for released_by_prompt in [true, false] {
                 let outbox = Outbox::default();
-                let first = outbox.push("s", "first");
+                let first = outbox.push("s", "first").expect("accepted");
                 outbox.push("s", "second");
                 let agent = UncertainQueue::default();
                 let mut attempts = Vec::new();

@@ -743,7 +743,7 @@ fn write_unverifiable(registry_dir: &Path, port: u16) {
 async fn a_link_that_drops_to_a_holder_that_runs_is_opened_again_with_its_terminals() {
     let dir = ScratchDir::new("client-relink");
     // Only the path goes in, so that the registry stays until the test ends.
-    let into = registry_dir.clone();
+    let into = dir.join("holders");
     let (holders, held, link) = tokio::task::spawn_blocking(move || {
         let holders = in_process(into).expect("holders");
         let mut spec = spec();

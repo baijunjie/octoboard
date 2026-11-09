@@ -432,9 +432,15 @@ async fn a_project_removal_carried_out_takes_no_fresh_snapshot_for_a_missing_git
         fresh_git: || unreachable!("a removal carried out took a fresh snapshot"),
         ..host_tools()
     });
-    let left =
-        project::carry_out_once_stopped(fixture.state.clone(), Vec::new(), removal, Vec::new())
-            .await;
+    let admitted = fixture.state.admit_change().unwrap();
+    let left = project::carry_out_once_stopped(
+        fixture.state.clone(),
+        Vec::new(),
+        removal,
+        Vec::new(),
+        &admitted,
+    )
+    .await;
     assert!(!left.is_empty(), "{left:?}");
     assert!(left
         .iter()

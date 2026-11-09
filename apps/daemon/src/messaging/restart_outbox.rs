@@ -285,7 +285,7 @@ mod tests {
     async fn a_saved_message_is_queued_again_under_its_ticket() {
         let (state, dir) = app_state("restart-outbox-ticket");
         let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
-        state.register_live(live);
+        state.register_live(live.clone());
         let one = state.outbox.push("s", "one").expect("accepted");
         let kept = state.outbox.push_kept("s", "kept", 7).expect("accepted");
         let two = state.outbox.push("s", "two").expect("accepted");
