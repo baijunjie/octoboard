@@ -4,7 +4,7 @@
 // then keeps the normal step (and so its stamp). The narrowed steps carry `stamp: false`: their pass
 // says nothing about the content as a whole, so it is never recorded as the suite's pass.
 import path from "node:path";
-import { matchingRules, SWEEP_SHARED } from "./scope.mjs";
+import { matches, matchingRules, SWEEP_SHARED } from "./scope.mjs";
 import { checkSteps } from "./steps.mjs";
 
 const UI_ROOT = "packages/ui/";
@@ -41,7 +41,8 @@ export const UI_DISK_TESTS = [
 ];
 
 // UI tests that use the file system without reading UI sources: they read files outside the package
-// that a rule of `scope.mjs` names (so a change to those runs the whole suite), or only a scratch directory.
+// that a rule of `scope.mjs` names (a change to those runs what `UI_READERS` gives them, or the whole suite), or only a
+// scratch directory.
 export const UI_DISK_TESTS_COVERED = [
   "src/appConfig.test.ts",
   "src/daemonCodes.test.ts",
@@ -49,6 +50,22 @@ export const UI_DISK_TESTS_COVERED = [
   "src/i18n/bundleLocalizations.test.ts",
   "scripts/generate-licenses.test.mjs",
 ];
+
+// Files outside the package that UI tests read, with the tests that read them (paths relative to the package), so a
+// change to one runs those tests instead of the full suite. The first entry a file matches decides; an entry is a
+// prefix (ending in "/") or an exact path. The rest of the protocol sources reach the UI only through
+// `protocol.generated.ts`, which a daemon test holds to them and `vitest related` traces when it changes, so they add
+// no test. A file another rule of `scope.mjs` gives to the UI and no entry names runs the full suite.
+// `quick.test.mjs` fails when a UI file reads or imports a file outside the package that its run would then skip.
+export const UI_READERS = [
+  { match: "apps/daemon/src/protocol/codes.rs", tests: ["src/daemonCodes.test.ts"] },
+  { match: "apps/daemon/src/protocol/", tests: [] },
+  { match: "apps/daemon/src/providers/", tests: ["src/daemonCodes.test.ts", "src/fixtures/fixtureProviders.test.ts"] },
+  { match: "apps/desktop/src-tauri/Info.template.plist", tests: ["src/i18n/bundleLocalizations.test.ts"] },
+  { match: "LICENSE", tests: ["src/appConfig.test.ts"] },
+];
+
+const uiReaders = (file) => UI_READERS.find(({ match }) => matches(match, file))?.tests;
 
 // The UI test run for `files`: `{ mode: "skip" }`, `{ mode: "full", why }` or `{ mode: "related", files }`.
 // A file that no longer exists cannot be traced and is left out (what imported it changed too).
@@ -64,6 +81,11 @@ export function uiTests(files, exists = () => true) {
     }
     const rules = matchingRules(file);
     if (rules.length === 0 ? file.endsWith(".md") : !rules.some((rule) => rule.consumers.includes("ui"))) continue;
+    const readers = uiReaders(file);
+    if (readers) {
+      related.push(...readers);
+      continue;
+    }
     if (!SWEEP_SHARED.includes(file)) return { mode: "full", why: `${file} is read by the UI's tests without being imported` };
     if (exists(file)) related.push(path.posix.relative(UI_ROOT, file));
   }
@@ -90,6 +112,15 @@ export const CRATE_WIDE_TESTS = {
   native: [],
 };
 
+// Markdown a crate reads with `include_str!`, as the module filters of the files that read it (null for a file bound to
+// no module, which runs the crate in full), so a change to one runs those modules' tests instead of the crate's.
+// `quick.test.mjs` fails when a read is missing or a filter is not its reader's module.
+export const RUST_MARKDOWN_READERS = {
+  "apps/daemon/PROTOCOL.md": { crate: "daemon", filters: ["session_tools::"] },
+  "apps/daemon/src/adapter/claude/compatibility.md": { crate: "daemon", filters: ["adapter::"] },
+  "apps/daemon/src/adapter/codex/compatibility.md": { crate: "daemon", filters: ["adapter::"] },
+};
+
 const CRATES = {
   daemon: { dir: "apps/daemon/", pkg: "octoboardd" },
   native: { dir: "apps/desktop/src-tauri/", pkg: "octoboard" },
@@ -107,7 +138,7 @@ export function moduleFilter(relative) {
 }
 
 // What each crate's tests need for `files`: null (nothing), "full" or the list of module filters.
-export function rustChanges(files) {
+export function rustChanges(files, markdownReaders = RUST_MARKDOWN_READERS) {
   const need = { daemon: null, native: null };
   const add = (crate, change) => {
     if (need[crate] === "full") return;
@@ -115,6 +146,11 @@ export function rustChanges(files) {
     else need[crate] = [...new Set([...(need[crate] ?? []), change])];
   };
   for (const file of files) {
+    const markdown = markdownReaders[file];
+    if (markdown) {
+      markdown.filters.forEach((filter) => add(markdown.crate, filter ?? "full"));
+      continue;
+    }
     const crate = Object.keys(CRATES).find((name) => file.startsWith(CRATES[name].dir));
     const module = crate && file.endsWith(".rs") ? moduleFilter(file.slice(CRATES[crate].dir.length)) : null;
     if (module) {

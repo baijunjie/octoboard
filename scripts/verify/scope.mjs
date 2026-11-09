@@ -2,7 +2,7 @@
 // matched against every rule of `RULES` and the results are unioned, so a file that several packages
 // read selects each of them without pulling in unrelated ones. A file no rule matches is unknown and
 // selects every package; only when none does, a Markdown file is read by no check and selects nothing
-// (a rule can therefore make a Markdown file count, as the wire protocol document does).
+// (a rule can therefore make a Markdown file count, as `DAEMON_READS_MARKDOWN` does).
 //
 // Packages: `verify` is this command's own code, hook scripts and the tests of the scripts directory;
 // `daemon` and `native` are the two Rust crates, which the Rust steps always check together (one
@@ -51,8 +51,15 @@ export const MENU_KEYS_FILE = "packages/ui/src/i18n/messages/en.ts";
 export const SWEEP_SHARED = ["scripts/verify/lock.mjs"];
 
 // `protocol.generated.ts` is written by a daemon test from the Rust types (`protocol/bindings.rs`) and re-exported
-// by `protocol.ts`, through which the UI reads it.
-export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protocol/", "packages/ui/src/protocol.ts", "packages/ui/src/protocol.generated.ts"];
+// by `protocol.ts`, through which the UI reads it. The desktop shell is not a consumer: it does not depend on the
+// daemon crate and talks to the daemon only over its WebSocket.
+export const WIRE_PROTOCOL = ["apps/daemon/src/protocol/", "packages/ui/src/protocol.ts", "packages/ui/src/protocol.generated.ts"];
+
+// Markdown the daemon reads with `include_str!`, which the daemon rule's Markdown exclusion would otherwise leave
+// unchecked: the agent instructions compiled into the compatibility sources, and the protocol document, whose table of
+// each role's tools a test (`session_tools/catalogue/tests.rs`) compares with the catalogues. `scope.test.mjs` fails
+// when a Markdown file a package reads that way is not named.
+export const DAEMON_READS_MARKDOWN = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/adapter/claude/compatibility.md", "apps/daemon/src/adapter/codex/compatibility.md"];
 
 // Files another package reads: from disk in a test, or through its bundler's imports. Found by searching for
 // `include_str!`, `readFileSync(new URL(...))`, relative imports and relative paths that leave a package root;
@@ -113,7 +120,7 @@ export const RULES = [
 
   // Cross-package reads. Each also selects `verify`, whose tests check that the paths named here exist.
   { match: [...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS, ...WEB_RESOLVES_UI], consumers: ["verify", "ui", "web"], why: "the website imports these modules, builds its preview from them, or resolves the package through its `exports` map" },
-  { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon", "native"], why: "the wire protocol is kept in step across the daemon, the UI and the desktop shell: the UI reads the generated types, which the daemon writes from its own, and a UI test (`daemonCodes.test.ts`) reads the daemon's code registry from `protocol/codes.rs`" },
+  { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon"], why: "the wire protocol is kept in step across the daemon and the UI: the UI reads the generated types, which the daemon writes from its own, and a UI test (`daemonCodes.test.ts`) reads the daemon's code registry from `protocol/codes.rs`" },
   { match: DESKTOP_CONTRACT, consumers: ["verify", "ui", "native"], why: "the UI side of the contract with the desktop shell" },
   { match: SWEEP_SHARED, consumers: ["verify", "ui"], why: "the UI's gallery sweep, which its tests run, imports it" },
   { match: DAEMON_READS_UI, consumers: ["verify", "ui", "daemon"], why: "a daemon test parses it" },
@@ -123,14 +130,14 @@ export const RULES = [
   { match: UI_READS_ELSEWHERE, consumers: ["verify", "ui"], why: "a UI test reads it" },
   { match: VERIFY_READS_UI, consumers: ["verify", "ui"], why: "a verify test reads it" },
   { match: UI_IMPORTS_NATIVE, consumers: ["verify", "ui", "web"], builds: ["ui"], why: "the UI bundle inlines it, and the website's preview of the app is built from that bundle" },
-  { match: ["apps/daemon/src/adapter/claude/compatibility.md"], consumers: ["daemon"], why: "compiled into the daemon with `include_str!`" },
+  { match: DAEMON_READS_MARKDOWN, consumers: ["verify", "daemon"], why: "read by the daemon with `include_str!`, compiled in or as a test's input" },
 
   // The UI build runs only for changes to what it reads besides `src/`. The gallery and benchmark
   // scripts and pages are not among them, and the website's preview build has no step of its own.
   { match: ["packages/ui/vite.config.ts", "packages/ui/index.html", "packages/ui/typography.mjs", "packages/ui/scripts/generate-licenses.mjs", "packages/ui/package.json", "packages/ui/tsconfig.json", "packages/ui/tsconfig.app.json", "Cargo.lock", "pnpm-lock.yaml", "scripts/lib/env.mjs", "scripts/lib/git.mjs"], consumers: [], builds: ["ui"], why: "the inputs of `pnpm build` of the UI: the bundler configuration, the page, and the lock files and manifests the license generator reads" },
 ];
 
-const matches = (matcher, file) => matcher instanceof RegExp ? matcher.test(file) : matcher.endsWith("/") ? file.startsWith(matcher) : file === matcher;
+export const matches = (matcher, file) => matcher instanceof RegExp ? matcher.test(file) : matcher.endsWith("/") ? file.startsWith(matcher) : file === matcher;
 
 export const matchingRules = (file) => RULES.filter((rule) => rule.match.some((matcher) => matches(matcher, file)));
 

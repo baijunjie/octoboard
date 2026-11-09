@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { CRATE_WIDE_TESTS, moduleFilter, quickSteps, rustChanges, rustTests, UI_DISK_TESTS, UI_DISK_TESTS_COVERED, UI_UNTRACEABLE, uiTests } from "./quick.mjs";
+import { CRATE_WIDE_TESTS, moduleFilter, quickSteps, RUST_MARKDOWN_READERS, rustChanges, rustTests, UI_DISK_TESTS, UI_DISK_TESTS_COVERED, UI_READERS, UI_UNTRACEABLE, uiTests } from "./quick.mjs";
 import { planScope } from "./scope.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (file) => readFileSync(path.join(root, file), "utf8");
+const tracked = (prefix) => execFileSync("git", ["ls-files", "-z", "--", prefix], { cwd: root, encoding: "utf8" }).split("\0").filter((file) => file && existsSync(path.join(root, file)));
 const walk = (directory) => readdirSync(path.join(root, directory), { withFileTypes: true }).flatMap((entry) => {
   if (entry.name === "node_modules") return [];
   const file = `${directory}/${entry.name}`;
@@ -67,11 +69,30 @@ test("UI changes are traced by their source and test files", () => {
 test("UI changes that imports do not show run the full suite", () => {
   for (const file of [
     "packages/ui/vite.config.ts", "packages/ui/src/test/setup.ts", "packages/ui/src/test/failedFilesReporter.ts", "packages/ui/package.json",
-    "packages/ui/tsconfig.json", "packages/ui/src/data.txt", "pnpm-lock.yaml", "config/app.json", "LICENSE",
-    "apps/desktop/src-tauri/Info.template.plist", "unknown/file.txt",
+    "packages/ui/tsconfig.json", "packages/ui/src/data.txt", "pnpm-lock.yaml", "config/app.json", "unknown/file.txt",
   ]) {
     assert.equal(uiTests(["packages/ui/src/a/X.tsx", file]).mode, "full", file);
   }
+});
+
+test("a file outside the package that UI tests read runs those tests, and the protocol sources only through the generated types", () => {
+  assert.deepEqual(uiTests(["apps/daemon/src/protocol/codes.rs"]), { mode: "related", files: ["src/daemonCodes.test.ts", ...UI_DISK_TESTS] });
+  assert.deepEqual(uiTests(["apps/daemon/src/providers/claude.rs"]), {
+    mode: "related", files: ["src/daemonCodes.test.ts", "src/fixtures/fixtureProviders.test.ts", ...UI_DISK_TESTS],
+  });
+  assert.deepEqual(uiTests(["LICENSE"]), { mode: "related", files: ["src/appConfig.test.ts", ...UI_DISK_TESTS] });
+  assert.deepEqual(uiTests(["apps/desktop/src-tauri/Info.template.plist"]), { mode: "related", files: ["src/i18n/bundleLocalizations.test.ts", ...UI_DISK_TESTS] });
+  assert.deepEqual(uiTests(["apps/daemon/src/protocol/requests.rs"]), { mode: "skip" });
+  assert.deepEqual(uiTests(["apps/daemon/src/protocol/requests.rs", "packages/ui/src/protocol.generated.ts"]), {
+    mode: "related", files: ["src/protocol.generated.ts", ...UI_DISK_TESTS],
+  });
+});
+
+test("Markdown a crate reads runs the reading module's tests, and nothing of the UI", () => {
+  assert.deepEqual(rustTests(["apps/daemon/PROTOCOL.md"]), { mode: "related", args: ["--", "session_tools::", ...WIDE].sort() });
+  assert.deepEqual(rustTests(["apps/daemon/src/adapter/codex/compatibility.md"]), { mode: "related", args: ["--", "adapter::", ...WIDE].sort() });
+  assert.deepEqual(uiTests(["apps/daemon/PROTOCOL.md"]), { mode: "skip" });
+  assert.deepEqual(labels(["apps/daemon/PROTOCOL.md"]), ["identity check", "verify lint", "verify tests", "rustfmt check", "rust clippy", "rust related tests"]);
 });
 
 test("a deleted UI file is not passed to vitest, and nothing is run when only deletions remain", () => {
@@ -188,4 +209,62 @@ test("the desktop crate has no whole-crate test the module filters would skip", 
 
 test("a change that selects no UI or Rust tests adds no test step", () => {
   assert.deepEqual(labels(["apps/desktop/scripts/bundle.mjs"]), ["identity check", "desktop lint", "desktop script tests"]);
+});
+
+test("every Markdown file a crate reads with include_str is mapped to the readers' modules", () => {
+  const crateDirs = { daemon: "apps/daemon/", native: "apps/desktop/src-tauri/" };
+  const found = {};
+  for (const [crate, dir] of Object.entries(crateDirs)) {
+    for (const file of tracked(dir).filter((name) => name.endsWith(".rs"))) {
+      for (const [, target] of read(file).matchAll(/include_str!\(\s*"([^"]+\.md)"/g)) {
+        const entry = (found[path.posix.normalize(path.posix.join(path.posix.dirname(file), target))] ??= { crate, filters: [] });
+        const filter = moduleFilter(file.slice(dir.length));
+        if (!entry.filters.includes(filter)) entry.filters.push(filter);
+      }
+    }
+  }
+  assert.ok(found["apps/daemon/PROTOCOL.md"], "the scan no longer finds the daemon's read of its protocol document; its pattern is stale");
+  assert.deepEqual(RUST_MARKDOWN_READERS, found);
+});
+
+test("a Markdown file read from a file bound to no module runs its crate in full", () => {
+  assert.deepEqual(rustChanges(["test/x.md"], { "test/x.md": { crate: "daemon", filters: [null] } }), { daemon: "full", native: null });
+});
+
+// What `vitest related` cannot trace: a UI file reading a file outside the package from disk, or importing one. Each
+// such read must leave the reader in the run its target selects: the whole suite, the reading test, or (for an import
+// the bundler follows) the target itself.
+test("every file outside the package that a UI file reads or imports selects the reader", () => {
+  for (const { tests } of UI_READERS) for (const test of tests) assert.ok(UI_DISK_TESTS_COVERED.includes(test), test);
+  const patterns = [/new URL\(\s*[`"']((?:\.\.\/)+[^`"'$]+)[`"']/g, /(?:from|import)\s*\(?\s*["']((?:\.\.\/)+[^"'?]*)(?:\?[^"']*)?["']/g];
+  const reads = [];
+  for (const file of tracked("packages/ui/").filter((name) => /\.(?:[cm]?[jt]sx?)$/.test(name))) {
+    const text = read(file);
+    for (const [index, pattern] of patterns.entries()) {
+      for (const [, target] of text.matchAll(pattern)) {
+        const joined = path.posix.normalize(path.posix.join(path.posix.dirname(file), target));
+        // An import names a module without its extension, or a directory by its index.
+        const candidates = index === 1 ? ["", ".ts", ".tsx", ".mjs", "/index.ts", "/index.tsx"].map((suffix) => joined + suffix) : [joined];
+        reads.push([file, candidates.find((candidate) => existsSync(path.join(root, candidate)) && statSync(path.join(root, candidate)).isFile()) ?? joined]);
+      }
+    }
+  }
+  // A read through a helper that builds the path from the repository root. `scope.test.mjs` cannot see it, so its
+  // target has to give the UI its tests as well.
+  const helperReads = [...read("packages/ui/src/appConfig.test.ts").matchAll(/repository\("([^"]+)"\)/g)].map(([, target]) => target);
+  for (const target of helperReads) {
+    assert.ok(planScope([target]).packages.includes("ui"), `packages/ui/src/appConfig.test.ts reads ${target}, which does not select the UI`);
+    reads.push(["packages/ui/src/appConfig.test.ts", target]);
+  }
+  assert.ok(reads.some(([file, target]) => file === "packages/ui/src/daemonCodes.test.ts" && target === "apps/daemon/src/protocol/codes.rs"), "the scan's patterns are stale");
+  assert.ok(reads.some(([, target]) => target === "LICENSE"), "the helper scan is stale");
+  for (const [file, target] of reads) {
+    if (target.startsWith("packages/ui/") || target.startsWith("..") || !planScope([target]).packages.includes("ui")) continue;
+    const decision = uiTests([target]);
+    const relative = (name) => path.posix.relative("packages/ui", name);
+    assert.ok(
+      decision.mode === "full" || (decision.mode === "related" && (decision.files.includes(relative(file)) || decision.files.includes(relative(target)))),
+      `${file} reads ${target}, whose quick run leaves it out`,
+    );
+  }
 });

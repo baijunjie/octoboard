@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
-  ALL_PACKAGES, DAEMON_READS_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, MENU_KEYS_FILE, matchingRules, planScope, RULES, SWEEP_SHARED, UI_READS_DAEMON, UI_READS_ELSEWHERE,
+  ALL_PACKAGES, DAEMON_READS_MARKDOWN, DAEMON_READS_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, MENU_KEYS_FILE, matchingRules, planScope, RULES, SWEEP_SHARED, UI_READS_DAEMON, UI_READS_ELSEWHERE,
   UI_IMPORTS_NATIVE, UI_READS_NATIVE, VERIFY_READS_UI, WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, WIRE_PROTOCOL,
 } from "./scope.mjs";
 
@@ -69,7 +69,8 @@ const CASES = [
   ["packages/ui/src/website-preview/main.tsx", ["verify", "ui", "web"]],
   ["packages/ui/src/fixtures/fixtureDaemon.ts", ["verify", "ui", "web"]],
   ["packages/ui/src/gallery/scenario.ts", ["ui"]],
-  ["apps/daemon/PROTOCOL.md", ["verify", "ui", "daemon", "native"]],
+  ["apps/daemon/PROTOCOL.md", ["verify", "daemon"]],
+  ["apps/daemon/src/protocol/requests.rs", ["verify", "ui", "daemon"]],
   ["packages/ui/src/platform/tauri.ts", ["verify", "ui", "native"]],
   ["scripts/verify/lock.mjs", ["verify", "ui"]],
   ["packages/ui/src/i18n/languages.ts", ["verify", "ui", "web", "daemon"]],
@@ -83,7 +84,8 @@ const CASES = [
   ["apps/web/site.config.ts", ["web"]],
   ["packages/ui/src/test/failedFilesReporter.ts", ["verify", "ui"]],
   ["apps/desktop/src-tauri/icons/128x128.png", ["verify", "ui", "web", "native"], ["ui"]],
-  ["apps/daemon/src/adapter/claude/compatibility.md", ["daemon"]],
+  ["apps/daemon/src/adapter/claude/compatibility.md", ["verify", "daemon"]],
+  ["apps/daemon/src/adapter/codex/compatibility.md", ["verify", "daemon"]],
   ["packages/ui/vite.config.ts", ["ui"], ["ui"]],
   ["packages/ui/index.html", ["ui"], ["ui"]],
   ["packages/ui/scripts/generate-licenses.mjs", ["ui"], ["ui"]],
@@ -121,8 +123,8 @@ test("every rule has a case, so a new rule cannot go untested", () => {
 test("a rule overrides the Markdown fallback, and a Markdown file no rule names selects nothing", () => {
   assert.equal(mode(["docs/plans/x/README.md", "CLAUDE.md", ".claude/skills/a/SKILL.md", "packages/ui/README.md"]), "unread");
   assert.equal(mode([]), "unread");
-  assert.deepEqual(planScope(["apps/daemon/PROTOCOL.md"]).packages, ["verify", "ui", "daemon", "native"]);
-  assert.deepEqual(planScope(["packages/ui/src/protocol.generated.ts"]).packages, ["verify", "ui", "daemon", "native"]);
+  assert.deepEqual(planScope(["apps/daemon/PROTOCOL.md"]).packages, ["verify", "daemon"]);
+  assert.deepEqual(planScope(["packages/ui/src/protocol.generated.ts"]).packages, ["verify", "ui", "daemon"]);
 });
 
 test("several changed packages select a union, in package order, without unrelated consumers", () => {
@@ -136,7 +138,7 @@ test("the menu keys select the shell only when the caller reports a change to th
 });
 
 // Every relation list, so a new one is added in one place.
-const RELATION_LISTS = [WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI, UI_IMPORTS_NATIVE];
+const RELATION_LISTS = [WEB_IMPORTS_FROM_UI, WEB_PREVIEW_INPUTS, WEB_RESOLVES_UI, DESKTOP_CONTRACT, DESKTOP_READS_NATIVE, SWEEP_SHARED, WIRE_PROTOCOL, DAEMON_READS_MARKDOWN, DAEMON_READS_UI, UI_READS_DAEMON, UI_READS_NATIVE, UI_READS_ELSEWHERE, VERIFY_READS_UI, UI_IMPORTS_NATIVE];
 
 test("every file named in a relation list selects verify, so these tests run when it changes", () => {
   for (const file of RELATION_LISTS.flat()) assert.ok(planScope([file]).packages.includes("verify"), file);
@@ -148,12 +150,13 @@ test("every path the relations name still exists", () => {
   }
 });
 
-// The relation lists are kept by hand: this finds reads that leave a package root, so a new one fails
-// here instead of going unnoticed. A test that reads a directory (a `new URL("../x/", ...)` with a trailing slash,
-// then `new URL(name, directory)`) reads its files, so a directory counts for a test file only. Rust
-// `include_str!`/`include_bytes!` and `new URL("../../..")` reads in sources and tests are resolved against the reading
-// file and must land in the reader's own package or in a path the table names. So must a relative `import` of a source
-// or test, an asset with a query (`?inline`, `?raw`) included, since the bundler reads it as surely as a test reads a file.
+// The relation lists are kept by hand: this finds reads that leave a package root, and reads of Markdown (which no rule
+// selects by default) inside one, so a new one fails here instead of going unnoticed. A test that reads a directory (a
+// `new URL("../x/", ...)` with a trailing slash, then `new URL(name, directory)`) reads its files, so a directory
+// counts for a test file only. Rust `include_str!`/`include_bytes!` and `new URL("../../..")` reads in sources and
+// tests are resolved against the reading file and must land in the reader's own package or in a path the table names.
+// So must a relative `import` of a source or test, an asset with a query (`?inline`, `?raw`) included, since the
+// bundler reads it as surely as a test reads a file.
 test("cross-package file reads are all named by a rule", () => {
   const tracked = execFileSync("git", ["ls-files", "-z", "--", "apps", "packages"], { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean);
   const packageOf = (file) => file.split("/").slice(0, file.startsWith("apps/desktop/") ? 3 : 2).join("/");
@@ -173,7 +176,9 @@ test("cross-package file reads are all named by a rule", () => {
         const resolved = candidates.find((candidate) => existsSync(path.join(root, candidate)) && statSync(path.join(root, candidate)).isFile()) ?? joined;
         // Outside tests only files are reads: a directory is an output (the preview build writes into the website).
         const isTest = /\.test\.[a-z]+$/.test(file);
-        if (!resolved.startsWith("..") && packageOf(resolved) !== packageOf(file) && existsSync(path.join(root, resolved)) && (statSync(path.join(root, resolved)).isFile() || (isTest && target.endsWith("/")))) reads.push([file, resolved]);
+        // Markdown is read by no check unless a rule says so, so a package reading its own Markdown counts as well.
+        const crosses = packageOf(resolved) !== packageOf(file) || resolved.endsWith(".md");
+        if (!resolved.startsWith("..") && crosses && existsSync(path.join(root, resolved)) && (statSync(path.join(root, resolved)).isFile() || (isTest && target.endsWith("/")))) reads.push([file, resolved]);
       }
     }
   }
@@ -186,6 +191,7 @@ test("cross-package file reads are all named by a rule", () => {
     assert.ok(own.every((name) => reader.includes(name)) || own.length === 0, `${file} reads ${target}, which does not select ${own.join(", ")}`);
   }
   assert.ok(reads.length > 0, "the scan found no cross-package read; its patterns are stale");
+  assert.ok(reads.some(([, target]) => target === "apps/daemon/PROTOCOL.md"), "the scan no longer finds the daemon's read of its protocol document; its patterns are stale");
 });
 
 // `WEB_IMPORTS_FROM_UI` is kept by hand: this finds what `apps/web` imports from `packages/ui/src`,
