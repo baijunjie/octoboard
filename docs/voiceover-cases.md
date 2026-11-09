@@ -147,6 +147,7 @@ commands. Native accessibility trees were read separately (VoiceOver off or on) 
 | E10 | Local main `287dec4a61d1cc57f4ad1b3c09c8211210320a11`, source of `docs/voiceover-relisten` | Packaged `Octoboard Verification`, build-time identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo10-20261027-relisten`; SA-D, SA-E and FOCUS-1 on the current accounts table and account details dialog; real daemon with a credential-free Grok CLI fixture. |
 | E11 | An unmerged local wrapper-verification build based on main `9ee45c135` | Packaged `Octoboard Wrapper Verify Fixed`, identifier and scratch signing identifier `dev.octoboard.verify.wrappers.fixed-20261107`; normal production entry, real isolated daemon and credential-free Claude fixture records/processes. FOCUS-5 uses native caption-panel screenshots, not AppleScript speech reads. |
 | E12 | Branch `fix/window-focus-refresh` at `7c717c35d` | Packaged `Octoboard Verification`, build-time identifier `dev.octoboard.verify.fr1108b`; SA-L with a human listener, real daemon and throwaway HOME, no agent CLIs. The branch's later commits `dba8e528d` and `2ff384292` change only tests, comments and polling, not the announcer path. |
+| E13 | Local main `6e8b8845bf5fd988c4fc72d923e0c1bff4423c5d`, source of `docs/voiceover-removal-git-retry` | Packaged `Octoboard Verification`, build-time identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo13-20261109-retry`; SA-O and SA-P, real daemon with isolated HOME/TMPDIR/shell and agent configuration directories, throwaway Git repositories, no agent CLI or login. |
 
 
 E4's tree equals main `429be4556`. E1 to E3 and the build commits behind them were unmerged local-only builds, so they
@@ -232,6 +233,33 @@ daemon with a throwaway HOME and no agent CLIs. The Screen Recording permission 
 grant was made in System Settings by the listener, and the application was reached again with Command-Tab, with no
 minimizing and no click.
 
+E13 used macOS 26.2 (25C56), English application text, mixed English/Simplified Chinese VoiceOver output and
+light appearance, confirmed from the verification window. It was built with `pnpm build:app --bundles app` and only
+the identifier/product-name overrides. In the scratch bundle, a shell wrapper forwarded the real daemon's stdout
+through `tee` to a scratch file for control-socket setup; neither the UI nor the daemon's implementation was patched.
+The running scratch executable, database, lock, port and identifier-specific WebKit content-rule storage were checked;
+the daemon's executable text section matched the fresh build (whole-file hashes differ after ad-hoc signing).
+The daemon's login shell used a scratch PATH without Git; its `binary_not_found` status and removal-inspection refusal
+were confirmed. For the other failure, Git was made available only in that scratch PATH and the second throwaway
+repository's config was deliberately malformed: the real inspection refused with `internal_error`, detail
+`fatal: bad config line 1 in file ./config`.
+
+E13 used no human listener or caption reading. Native speech came from AppleScript `content of last phrase`, requested
+at 25 ms intervals; the maximum observed sample gap in the five formal recordings was 345 ms, including AppleEvent
+latency. A separate native observer, requested at 50 ms intervals, captured focus and effective live-region attributes
+and descendant text; its maximum observed gap was 163 ms. The formal recordings lasted 10 seconds each, except the
+non-missing-Git tick/untick recording (12 seconds). These are sampled observations, not an audio recording or an exact
+measurement of daemon-response-to-write latency; identical consecutive replays remain indistinguishable as described
+under "Evidence and its limits". Native trees before/after actions supplied hierarchy and mark/checkbox wiring;
+literal DOM IDs and HTML were not extracted. Initial process-targeted CGEvent input attempts did not establish an
+action and supplied no listening result. The successful setup used accessibility focus/press actions and global pointer
+input, guarded before each input by the verification application's frontmost PID. No synthetic VoiceOver `output`
+command was used. The user authorized VoiceOver on/read/off, then instructed continuation after the global-input
+question. VoiceOver was initially off, enabled with Command-F5 and restored off with the same shortcut; no permission
+or speech preference was changed. Both removals were cancelled. The temporary malformed config was restored before
+cleanup; the verification app, its processes, scratch data and identifier-specific storage were removed afterwards.
+Raw scratch captures were reviewed for this transcription and are not retained in the repository.
+
 Every `StatusAnnouncer` in the SA cases renders an unnamed `sr-only` `role="status"` with no explicit `aria-live`,
 `aria-atomic` or `aria-relevant` props. For E1 to E5 and E10, the captured effective native mapping is a group with the
 application-status subrole (empty-group subrole while empty), role description "application status", empty own name,
@@ -266,6 +294,8 @@ mapping.
 | [SA-L Section status written after an attended wait, tab focus retained](#sa-l-section-status-written-after-an-attended-wait-tab-focus-retained) | section `StatusAnnouncer` fed by a caller wait | Pass; direct opening untested |
 | [SA-M Region mounted with each opening of a disclosure](#sa-m-region-mounted-with-each-opening-of-a-disclosure) | `StatusAnnouncer` mounted per opening | Pass |
 | [SA-N Viewer notice after paint, then an empty status](#sa-n-viewer-notice-after-paint-then-an-empty-status) | `FileNotice` through `StatusAnnouncer`, then clear; first-paint large-file notice without an announcement region | Pass for the recorded branches and focus handoff; native live attributes not sampled |
+| [SA-O Project-removal inspection failure after tick and retry](#sa-o-project-removal-inspection-failure-after-tick-and-retry) | `DelayedAnnouncer` before `StatusAnnouncer`, per-failure wait inside the removal dialog | Pass: missing Git tick/retry; malformed config tick and untick (E13) |
+| [SA-P Project Git retry beside a row button](#sa-p-project-git-retry-beside-a-row-button) | `useGitRetryAnnouncement` through `AttendedStatusAnnouncer`, alternating trailing no-break space | Pass: two still-missing-Git retries in the sidebar (E13) |
 | [FOCUS-1 Focus after the login dialog closes](#focus-1-focus-after-the-login-dialog-closes) | explicit focus handoff | Pass: current table and account details; transient web-area phrase still observed (E10) |
 | [FOCUS-2 Focus after an expansion takes the pressed control away](#focus-2-focus-after-an-expansion-takes-the-pressed-control-away) | caller-told focus restore and code-frame handoff | Pass |
 | [FOCUS-3 Status mark and quota popover focus and reading paths](#focus-3-status-mark-and-quota-popover-focus-and-reading-paths) | shared hover/press popover, focus and item chooser | Pass for quota Enter/Escape focus paths, the mark's focus return on Escape and item-chooser reachability; the bare-mark Enter naming failed, see KNW-9 and FOCUS-4 |
@@ -798,6 +828,116 @@ mapping.
   itself establish this clear. Other image failures, patch fallbacks and notice replacements were not heard.
   `SpotNotice` has not been listened to; the shared `SpokenSentence` is a candidate only when all matching conditions
   hold. No general match is claimed for callers whose native live attributes were not captured here.
+
+### SA-O Project-removal inspection failure after tick and retry
+
+- **Location and state change.** Remove project, with no sessions: tick **Also move the project folder to the Trash**
+  while the verification daemon cannot find Git. After the sentence is announced, open **Other worktrees unknown**,
+  focus **Try again** and press it, still without Git. In a second throwaway project, make Git available but leave its
+  config malformed, open Remove project, tick Trash, wait for the sentence, then untick. Cancel both removals.
+- **Mechanism.** `packages/ui/src/dialogs/BranchCleanupOptions.tsx`, `DelayedAnnouncer`, mounted by
+  `useProjectRemovalCleanup`, feeding `packages/ui/src/components/announce/StatusAnnouncer.tsx`, `StatusAnnouncer`.
+  The region mounts empty with the Trash option and remains for the dialog's lifetime. Every failure waits
+  `AFTER_FOCUS_MOVE_DELAY_MS` (1500 ms) before writing; the first-write gate of `StatusAnnouncer` has already elapsed.
+  There is no attention gate or `clearAfterRead`. A pending retry clears the text, allowing the same sentence to be
+  written again; unticking clears it too. The retry closes the mark's popover and restores focus to the mark.
+- **ARIA wiring as rendered.** The dialog was an `AXGroup` with `AXApplicationAlertDialog`, title/description
+  `Remove project`, live assertive, atomic 0, relevant additions text. The status was a separate unnamed `AXGroup`
+  inside that modal's form/project-folder subtree, outside the checkbox and the mark: empty own title, description,
+  help and value; role description `application status`, polite, atomic 1, relevant `additions text`. It changed from
+  `AXEmptyGroup` to `AXApplicationStatus` with the full sentence in descendant static text. No nested status or alert
+  was observed in that region. Source wiring is the unnamed, `sr-only` `div role="status"` with no explicit live,
+  atomic or relevant props; native values are WebKit's mapping, not literal HTML. The checkbox's title stayed
+  `Also move the project folder to the Trash`, with value 0/1 and empty own description/help. The separate button
+  `Other worktrees unknown` followed its label and preceded its hint; the sentence did not join the checkbox name.
+  The missing-Git mark used `RetryStatusMark` and offered Download Git/Try again; the malformed-config mark used the
+  plain `StatusMark`.
+- **Result.** Pass for all three failure writes. The exact automatic phrase was:
+
+  ```text
+  Worktrees of the repository outside the project folder may be moved to the Trash with it, and its branches deleted permanently.
+  ```
+
+  It appeared once in last-phrase changes after the missing-Git tick, once again after its failed retry, and once
+  after the malformed-config tick, each corroborated by one native status-text transition. These were automatic
+  announcements without moving the VoiceOver cursor onto the sentence. Focus stayed on the checked checkbox for
+  each initial write; on retry it passed briefly through the web area and returned to `Other worktrees unknown`
+  before the delayed sentence. Approximate sampled gaps from final focus/check-state observation to native text were
+  1.53 s (missing-Git tick), 1.23 s (retry mark restoration) and 1.51 s (malformed-config tick); these are not timings
+  from the daemon's reply. Unticking the malformed-config case returned the checkbox to 0 and emptied the status;
+  no further risk sentence appeared during the remaining approximately six seconds.
+- **Other automatic speech.** Before the delayed sentence, the dialog also announced its changed consequence and
+  the mark's name twice. The malformed-config capture read exactly:
+
+  ```text
+  Its sessions are deleted with it, and its folder is moved to the Trash. Other worktrees unknown Other worktrees unknown
+  ```
+
+  This was a separate earlier utterance, not a second reading of the risk sentence. The missing-Git capture had the
+  same words with one leading space. The mark's press-opened explanation was setup for retry, not evidence for the
+  automatic status announcement.
+- **Capture.** E13 AppleScript speech polling and separate native focus/live-region/text observation, plus settled
+  native trees. The real daemon refused the first inspection with `binary_not_found` for `git` and the malformed
+  one with `internal_error`; no fabricated daemon reply was used.
+- **Environment.** E13.
+- **Date.** 2026-11-09.
+- **Reuse scope.** Covers the per-failure delayed, empty-first status inside this removal modal, both missing-Git and
+  other inspection failures, same-words repetition after a pending retry, and clear on untick, with the recorded
+  checkbox/mark focus relation. It does not cover a background window, dialog closure during the delay, rapid retries
+  before a write, another language, other cleanup warnings, or executing the removal. It supplements WARN-4's mark
+  reading; it does not recheck WARN-4's running-session layout.
+
+### SA-P Project Git retry beside a row button
+
+- **Location and state change.** In the sidebar, open the branch badge's Git-missing mark for **Missing Git
+  verification**, focus **Try again** and press it. Wait for the announcement and automatic clear, then open the
+  mark and repeat, with Git still absent from the verification daemon's PATH. The real daemon's project status was
+  `repository: true`, `activity: idle`, `error_code: binary_not_found`.
+- **Mechanism.** `packages/ui/src/sidebar/useGitRetryAnnouncement.tsx`, `useGitRetryAnnouncement`, mounted by
+  `packages/ui/src/sidebar/ProjectNode.tsx`, `ProjectNode`, through
+  `packages/ui/src/components/announce/AttendedStatusAnnouncer.tsx`, `AttendedStatusAnnouncer`, and
+  `packages/ui/src/components/announce/StatusAnnouncer.tsx`, `StatusAnnouncer`. One region remains mounted empty for
+  the project placement's lifetime, as a sibling after `TreeRow`, outside its `role="button"`. The request's answer
+  feeds a 1500 ms attended wait for every retry, with `clearAfterRead` (5000 ms). The second failing answer appends
+  U+00A0, a no-break space, making a new text without changing the words.
+- **ARIA wiring as rendered.** Before the action, the unnamed region was exposed as a sibling of the project
+  `AXButton`, not its child: `AXGroup`, role description `application status`, `AXEmptyGroup`, empty own title,
+  description, help and value, polite, atomic 1, relevant `additions text`. Each write changed its subrole to
+  `AXApplicationStatus`, with the phrase in descendant static text; the sampled own attributes stayed the same.
+  Source wiring is the `sr-only` `div role="status"` with no explicit live/atomic/relevant props. No enclosing modal
+  or nested status/alert affected the write. The project button's title/description was
+  `Missing Git verification, Git check failed`. The popover was a separate native web dialog named `Git check failed`;
+  its recovery button was `Try again`. Mark icons were decorative in source; no separate icon text was present in
+  the sampled native row/region. This records native effective attributes, not a literal HTML extraction.
+- **Result.** Pass. Each retry returned focus from Try again to the project row before the delayed automatic status.
+  The first speech sequence was exactly:
+
+  ```json
+  [
+    "Try again button Git check failed web dialog",
+    "Missing Git verification, Git check failed 已折叠 button Sessions navigation",
+    "Git check failed"
+  ]
+  ```
+
+  The second sequence had the same first two phrases, then:
+
+  ```json
+  "Git check failed\u00a0"
+  ```
+
+  The final phrase in each sequence was a separate automatic utterance, not the row's focus name or a manual
+  VoiceOver cursor read. Each appeared once in last-phrase changes, with one native write. Native text contained no
+  trailing space on the first write and U+00A0 on the second. Sampled row-focus-to-write gaps were approximately
+  1.48 s and 1.49 s. Each region emptied approximately 5.0 s after its write while focus remained on the row.
+- **Capture.** E13 AppleScript speech polling, native live-region/text/focus sampling and settled native trees. Each
+  formal retry recording lasted 10 seconds; the two retries were separated by the first write and clear.
+- **Environment.** E13.
+- **Date.** 2026-11-09.
+- **Reuse scope.** Covers the sidebar's durable sibling-of-row-button placement, a still-missing-Git request answer,
+  return of focus to that row, the attended delay and alternating-space repeat, and automatic clear. The window stayed
+  visible and frontmost. It does not establish the focus-mode header/group placements, leaving/returning to the window,
+  switching projects during a request, timeout/success, or multiple answers arriving within one wait.
 
 ### FOCUS-1 Focus after the login dialog closes
 
@@ -1392,7 +1532,8 @@ mapping.
 - **Joins in the heard text.** "removed.Its" and "Codex (Default)Fixture turn" have the same cause and the same
   source change as in WARN-3; the new phrases were not heard.
 - **Since recorded.** The source now also writes the mark's sentence into a status region `AFTER_FOCUS_MOVE_DELAY_MS`
-  after the failure arrives (just after the tick); it was not heard.
+  after the failure arrives (just after the tick); SA-O heard that mechanism in E13, including the missing-Git
+  retry and a malformed-config failure, without running sessions.
 - **Capture.** As WARN-3. The ticked checkbox and the mark were focused again from Cancel first, so an unchanged focus
   could not leave a stale last phrase.
 - **Environment.** E9.
@@ -1622,16 +1763,16 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `dialogs/SessionRequestForms.tsx`, `IncompleteSharingAnnouncer` | an account's unfinished sharing change marked after the dialog opened | none | none | Mounted with the request dialog; text appears after the opening. Not heard. |
 | `dialogs/HandoffDialog.tsx` | branch check failed (`firstWriteDelayMs` of `AFTER_FOCUS_MOVE_DELAY_MS`) | none | none | Region mounted with the dialog; a failure arrives after it opened and again on each failed retry. Not heard. |
 | `report/ReportPanel.tsx` | list failure mark's words | none | none | Region mounted through every state of the panel. Not heard. |
-| `sidebar/useGitRetryAnnouncement.tsx`, through `AttendedStatusAnnouncer` | "Git check failed" after a Try again on the branch badge's Git-missing mark that still finds no Git | SA-D is the nearest recorded mechanism (a caller timer of `AFTER_FOCUS_MOVE_DELAY_MS`, attended wait); no complete match established | none | One region per placement, mounted empty for the placement's lifetime outside the row's `role="button"` (beside `TreeRow` in `ProjectNode`, after the focus header, after a focus project group's header); written from the request's answer, `clearAfterRead`, a repeat made distinct by alternating a trailing no-break space. Focus has moved from the mark to the row or header before the answer. Not heard; the sibling-of-a-row-button placement has no recorded case. |
-| `dialogs/BranchCleanupOptions.tsx`, `DelayedAnnouncer` | the sentence of the project-removal dialog's "Other worktrees unknown" mark, whatever failure brought it, at its arrival and, for a missing Git, after a retry that fails again, in whatever words | none | none | Region mounted with the Trash option; each failure written `AFTER_FOCUS_MOVE_DELAY_MS` after it arrives (after a checkbox tick or a retry that closed the mark's popover), emptied while a retry is out so a repeat in the same words is written again. Not heard. |
+| `sidebar/useGitRetryAnnouncement.tsx`, through `AttendedStatusAnnouncer` | "Git check failed" after a Try again on the branch badge's Git-missing mark that still finds no Git | SA-P for the sidebar `ProjectNode` placement (E13); other placements have no complete match | Heard | Mounted empty outside the row button; two request-answer writes after the attended wait, alternating trailing no-break space, row focus restored and automatic clear heard. Focus-mode header/group placements and window-attention transitions were not heard. |
+| `dialogs/BranchCleanupOptions.tsx`, `DelayedAnnouncer` | the sentence of the project-removal dialog's "Other worktrees unknown" mark after inspection fails, and after a still-failing missing-Git retry | SA-O for the recorded tick/retry/untick paths (E13) | Heard | Region mounted empty with the Trash option; each failure delayed 1500 ms, pending retry empties it for a same-words repeat. Missing Git tick/retry and malformed config tick were heard; untick cleared it. Unattended windows and other focus relations were not heard. |
 
-Totals: of 34 callers, 13 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
+Totals: of 34 callers, 15 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
 `AccountLoginAnnouncer`, `PermissionsSection`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
-`ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`), 5 are candidates (`ImportReview`, `ChangeList`,
-`FilesPanel`, `TerminalPane`, `ShellTerminalView`) and 16 have no complete match (`ShellTerminalPanel`, `SpotNotice`,
-`BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the twelve callers listed after it). Of
+`ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`, `useGitRetryAnnouncement`, `DelayedAnnouncer`), 5 are candidates (`ImportReview`, `ChangeList`,
+`FilesPanel`, `TerminalPane`, `ShellTerminalView`) and 14 have no complete match (`ShellTerminalPanel`, `SpotNotice`,
+`BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the ten unmatched callers listed after it). Of
 the heard callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer` matches the E10
-table and owned-account details paths recorded in SA-D; the other eleven match for some writes only, with SA-N's
+table and owned-account details paths recorded in SA-D; the other thirteen match for some writes only, with SA-N's
 native-capture limits stated in that case. Of the candidates, `ImportReview` matches for every write it makes;
 `ChangeList`, `FilesPanel`, `TerminalPane` and `ShellTerminalView` for some.
 
@@ -1664,6 +1805,9 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   notice, which has no announcement region (no `speak`), stayed silent. It did not hear a later patch fallback, other
   image failure or replacement sequence, nor `SpotNotice`. Its native live politeness, atomicity and relevance were not
   captured; it is not a complete native-attribute record for matching other callers.
+- SA-O and SA-P (E13) heard the removal-inspection failure and sidebar Git-retry mechanisms. The earlier immediate
+  consequence utterance after ticking Trash repeated the mark name twice; the delayed risk sentence appeared once.
+  Focus-mode header/group Git-retry placements, attention loss/return and rapid overlapping retries remain untested.
 - Import result dialog rename: not yet listened to (OPEN-1).
 - Startup failure page alert (daemon-failed and crash pages): not yet listened to (OPEN-2). No case matches an alert
   inserted after the first paint on a page the window opens on, with no focus move.
