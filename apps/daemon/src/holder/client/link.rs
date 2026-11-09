@@ -145,6 +145,8 @@ pub struct Welcome {
     /// The holder runs companions ([`Link::open_endpoint`], [`Link::start_companion`],
     /// [`Link::end_companion`]).
     pub companions: bool,
+    /// The holder accepts no new terminals.
+    pub draining: bool,
     /// When the daemon read the welcome, which the ages of output since a handover's mark count
     /// back from.
     pub received_at: Instant,
@@ -485,6 +487,7 @@ impl Link {
                         answers_offline,
                         handover,
                         companions,
+                        draining,
                         ..
                     }) = serde_json::from_str(&text)
                     else {
@@ -500,6 +503,7 @@ impl Link {
                         answers_offline,
                         handover,
                         companions,
+                        draining,
                         received_at: Instant::now(),
                     };
                     return Ok((wire_out, wire_in, welcome));

@@ -669,6 +669,7 @@ impl Holder {
             },
             handover: true,
             companions: true,
+            draining: self.draining.load(Ordering::Acquire),
         }
     }
 

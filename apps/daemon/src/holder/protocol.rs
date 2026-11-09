@@ -515,6 +515,9 @@ pub enum FromHolder {
         /// of those frames.
         #[serde(default)]
         companions: bool,
+        /// The holder accepts no new terminals, including after another daemon takes it over.
+        #[serde(default)]
+        draining: bool,
     },
     Spawned {
         id: String,

@@ -585,7 +585,7 @@ impl Holders {
         let mut current = locked(&self.current);
         for link in &links {
             let own_build = link.welcome().build_id == super::build_id();
-            if own_build && current.is_none() {
+            if own_build && !link.welcome().draining && current.is_none() {
                 self.set_current(&mut current, link.clone());
             } else {
                 // Told again if the link drops before it takes this.

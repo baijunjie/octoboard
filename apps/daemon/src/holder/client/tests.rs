@@ -43,6 +43,7 @@ fn welcome_text_of(version: &str) -> String {
         answers_offline: Vec::new(),
         handover: false,
         companions: false,
+        draining: false,
     };
     serde_json::to_string(&welcome).unwrap()
 }
@@ -136,6 +137,93 @@ fn spec() -> SpawnSpec {
         meta: serde_json::Value::Null,
         companion: false,
     }
+}
+
+/// In-process holders of this client's build, so an adopted holder is eligible for new terminals
+/// unless its welcome says it is draining.
+fn holders_of_current_build(registry_dir: PathBuf) -> Holders {
+    Holders::new(ClientConfig {
+        registry_dir,
+        exe: std::env::current_exe().expect("the test executable"),
+        builds: None,
+        range: Range::current(),
+        relay: Arc::new(Unavailable),
+        launch: Box::new(|_, holder_id, registry_dir| {
+            let config = crate::holder::server::HolderConfig {
+                registry_dir: registry_dir.to_path_buf(),
+                holder_id: holder_id.to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                build_id: crate::holder::build_id().to_string(),
+                exe: std::env::current_exe()?,
+                first_link_deadline: PATIENCE,
+                relay_deadline: PATIENCE,
+            };
+            std::thread::spawn(move || {
+                tokio::runtime::Builder::new_multi_thread()
+                    .worker_threads(2)
+                    .enable_all()
+                    .build()
+                    .expect("the holder's runtime")
+                    .block_on(crate::holder::server::run(config))
+                    .expect("the holder runs");
+            });
+            Ok(())
+        }),
+    })
+    .expect("holders")
+}
+
+/// Drain is permanent for a holder, even across daemon runs. Taking its terminals over must not
+/// select it for new launches just because it is from the same build.
+#[test]
+fn an_adopted_draining_holder_of_this_build_keeps_old_terminals_but_gets_no_new_ones() {
+    let dir = ScratchDir::new("client-adopt-draining-build");
+    let registry_dir = dir.join("holders");
+    let previous = holders_of_current_build(registry_dir.clone());
+    let mut old_spec = spec();
+    old_spec.command = crate::test_support::programs::sleep(60).term_command();
+    let old = previous.spawn(old_spec).expect("the old terminal starts");
+    let old_pid = old.pid().0 as i32;
+    let _old_guard = crate::test_support::KillOnDrop(vec![old_pid]);
+    let old_holder = old.held_at().holder_id;
+    let link = locked(&previous.current).clone().expect("the current link");
+    link.retire();
+    // An answer after Drain establishes that the holder has processed it before the takeover.
+    old.size()
+        .expect("the draining holder still serves its terminal");
+    std::mem::forget(old);
+    drop(previous);
+
+    let next = holders_of_current_build(registry_dir.clone());
+    let mut adoption = next.adopt_existing(unresolved());
+    assert_eq!(adoption.found.len(), 1);
+    let mut adopted = adoption.found.remove(0);
+    assert_eq!(adopted.holder_id, old_holder);
+    assert_eq!(adopted.build_id, crate::holder::build_id());
+    assert_eq!(adopted.terminals.len(), 1);
+    assert!(crate::test_support::is_running(old_pid));
+
+    let mut new_spec = spec();
+    new_spec.id = "new".to_string();
+    new_spec.command = crate::test_support::programs::sleep(60).term_command();
+    let fresh = next
+        .spawn(new_spec)
+        .expect("a new holder takes the new terminal");
+    let _fresh_guard = crate::test_support::KillOnDrop(vec![fresh.pid().0 as i32]);
+    assert_ne!(fresh.held_at().holder_id, old_holder);
+    assert_eq!(registry::list(&registry_dir).len(), 2);
+
+    adopted.terminals.remove(0).held.end();
+    wait_for(
+        "the drained holder did not exit after its last terminal ended",
+        || registry::read(&registry_dir, &old_holder).is_none(),
+    );
+    assert!(
+        fresh.size().is_ok(),
+        "the new holder still serves its terminal"
+    );
+    fresh.end();
+    drop(next);
 }
 
 /// Runs the spawn on a thread, as the daemon's launch does, and says whether it has returned.
