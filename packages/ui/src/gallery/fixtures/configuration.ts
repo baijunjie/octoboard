@@ -1314,7 +1314,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, result where the settings could not be applied",
-    description: "With Application settings ticked, the import's result has a tab for it: it carries a warning glyph and is the one open, as the only tab with a failure: a danger Alert holds the settings failure's title and short reason, with Details on its right for the raw text, and no settings cards follow. The other two tabs have no glyph (the next scenario shows what they say).",
+    description: "With Application settings ticked, the import's result has a tab for it: it carries a warning glyph and is the one open, as the only tab with a failure: a danger Alert holds the settings failure's title and short reason, with Details at its end for the raw text, and no settings cards follow. The other two tabs have no glyph (the next scenario shows what they say).",
     state: autoPulling,
     configuration: { file: FILE, inspection: WITH_ACCOUNTS_SETTING_OFF, imported: SETTINGS_FAILED_RESULT },
     steps: [
@@ -1345,7 +1345,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import result, the clone directory kept although the settings failed",
-    description: "A document of application settings alone, so there is no tab bar: the settings could not be applied, but the default clone directory had been written before they failed. A danger Alert holds the settings failure's title and short reason, with Details on its right, and below it a Git card holds one line, Default clone directory, \"Matches the file\", with the note \"Set before the other application settings failed to apply.\" and the file's directory under it as plain monospace text.",
+    description: "A document of application settings alone, so there is no tab bar: the settings could not be applied, but the default clone directory had been written before they failed. A danger Alert holds the settings failure's title and short reason, with Details at its end, and below it a Git card holds one line, Default clone directory, \"Matches the file\", with the note \"Set before the other application settings failed to apply.\" and the file's directory under it as plain monospace text.",
     state,
     configuration: { file: FILE, inspection: CLONE_DIR_SETTINGS, imported: CLONE_DIR_KEPT_RESULT },
     steps: [
@@ -1447,7 +1447,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import result, the agent account settings could not be applied",
-    description: "A document of accounts alone, so there is no tab bar: the cards of the accounts, none failed (the totals, \"2 accounts created · 2 accounts already existed\", do not add \"Nothing failed\" beside an alert about the settings), are followed by a danger Alert holding the title \"Could not import agent account settings\" and the short reason, with Details on its right for the raw text, and no Agent account settings card. The note that the new accounts are not logged in stays below the Alert.",
+    description: "A document of accounts alone, so there is no tab bar: the cards of the accounts, none failed (the totals, \"2 accounts created · 2 accounts already existed\", do not add \"Nothing failed\" beside an alert about the settings), are followed by a danger Alert holding the title \"Could not import agent account settings\" and the short reason, with Details at its end for the raw text, and no Agent account settings card. The note that the new accounts are not logged in stays below the Alert.",
     state: accountsMachine,
     configuration: { file: FILE, inspection: ACCOUNTS_ONLY_SETTINGS, imported: AGENT_SETTINGS_FAILED_RESULT },
     steps: [

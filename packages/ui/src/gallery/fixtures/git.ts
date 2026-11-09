@@ -218,14 +218,14 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-transfer-badges", group: GROUP, category: "normal",
     title: "Push and pull count indicators",
-    description: "Each transfer keeps a spinning loader on the left. Pushing scrolls only ↑ beside 3 upward, with the opposite ↓ arrow and both numbers still; pulling shows only ↓2, because it has no commits ahead of upstream, and scrolls that arrow downward. The zero-count push shows only the loader and branch.",
+    description: "Each transfer keeps a spinning loader at the start. Pushing scrolls only ↑ beside 3 upward, with the opposite ↓ arrow and both numbers still; pulling shows only ↓2, because it has no commits ahead of upstream, and scrolls that arrow downward. The zero-count push shows only the loader and branch.",
     state: transferState,
     preferences: { sidebarWidth: 480 },
   },
   {
     id: "git-pull-focus", group: GROUP, category: "normal",
     title: "Pulling in project focus",
-    description: "The focus header keeps the left loader spinning while only the ↓ count arrow scrolls downward; the zero ahead count is omitted.",
+    description: "The focus header keeps the leading loader spinning while only the ↓ count arrow scrolls downward; the zero ahead count is omitted.",
     state: transferState,
     preferences: { sidebarWidth: 480, sidebarConsole: console_.id, sidebarFocus: `project:${pullPreview.id}` },
   },
@@ -399,7 +399,7 @@ export const gitScenarios: Scenario[] = [
     title: "Long title and branch sharing the project focus header",
     state: badgesState,
     preferences: { sidebarWidth: 400, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
-    description: "The title (console over project name) and the branch each take half of the header's free width. The branch fades at its start and shows its end, and the title fades at its end; hover either for its own marquee, while the glyph and both counts stay visible. The left loading glyph spins during pushing, and the always-visible ahead-count arrow scrolls upward; hover the glyph for the pushing status. Hovering the console subtitle or header controls leaves both still.",
+    description: "The title (console over project name) and the branch each take half of the header's free width. The branch fades at its start and shows its end, and the title fades at its end; hover either for its own marquee, while the glyph and both counts stay visible. The leading loading glyph spins during pushing, and the always-visible ahead-count arrow scrolls upward; hover the glyph for the pushing status. Hovering the console subtitle or header controls leaves both still.",
   },
   {
     id: "git-push-accepted",

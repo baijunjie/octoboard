@@ -375,7 +375,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "The project folder's branch with unpushed commits",
     description:
-      "main is two commits ahead of origin/main: the line above the list says it forked from origin/main at the commit that remote-tracking branch is at, and Committed lists what main changed since, which is what has not been pushed. Uncommitted changes are listed above it. Group by commit sits at the right of the Committed heading; with grouping off, there is no bulk expansion button.",
+      "main is two commits ahead of origin/main: the line above the list says it forked from origin/main at the commit that remote-tracking branch is at, and Committed lists what main changed since, which is what has not been pushed. Uncommitted changes are listed above it. Group by commit sits at the end of the Committed heading; with grouping off, there is no bulk expansion button.",
     state,
     preferences,
     git: UNPUSHED_GIT,
@@ -437,7 +437,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "A branch's commits listed one by one",
     description:
-      "Group by commit is on: Show commits together sits at the right of the Committed heading, with Collapse all commits immediately to its left. Both stay beside the heading when it pins above the scrolling list. The Committed band holds one row per commit, newest first, each with its chevron, short hash (muted monospace text, no chip), subject and change count, and its changes one level in, their content starting a chevron's width past the hash. The whole history is listed, so nothing is said under the list. Open a change to see it against its commit's parent.",
+      "Group by commit is on: Show commits together sits at the end of the Committed heading, with Collapse all commits immediately before it. Both stay beside the heading when it pins above the scrolling list. The Committed band holds one row per commit, newest first, each with its chevron, short hash (muted monospace text, no chip), subject and change count, and its changes one level in, their content starting a chevron's width past the hash. The whole history is listed, so nothing is said under the list. Open a change to see it against its commit's parent.",
     state,
     preferences: gitMode({ byCommit: true }),
     steps: selecting(rankingSession),
@@ -448,7 +448,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "All commit rows collapsed",
     description:
-      "Every commit is folded to its hash, subject and change count. The Committed section stays open, with Expand all commits immediately to the left of Show commits together; use it to restore the changes under every displayed commit.",
+      "Every commit is folded to its hash, subject and change count. The Committed section stays open, with Expand all commits immediately before Show commits together; use it to restore the changes under every displayed commit.",
     state,
     preferences: gitMode({ byCommit: true }),
     steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("git.commits.collapseAll")), (ui) => ui.wait(300)],

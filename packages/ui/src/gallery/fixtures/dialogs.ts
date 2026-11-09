@@ -647,7 +647,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Menu of a session that was never used",
-    description: "Dividers separate Lock and Pin, Rename, Copy session ID, Hand off, and the final Delete, with Copy session ID in its own group and no group headings. Lock, Pin and Copy session ID show the fixed single-letter shortcuts L, P and C at the right edge; Delete has no archive shortcut hint. Copy session ID has its own group after Rename, with the UUID in smaller muted monospace text on one line beneath its label; overflow fades at the end without wrapping, and the pointer rests on the ID line, whose tooltip shows the full ID, left to right (hovering the line also scrolls it while the label and icon stay still, inside the same clickable item). The last entry is the destructive Delete in place of Archive. Close the menu and hover or focus the unused row: its Delete shortcut sits immediately before the actions menu, and the untouched Claude Code, Codex and Grok sessions all delete immediately, moving any native records to the Trash without confirmation.",
+    description: "Dividers separate Lock and Pin, Rename, Copy session ID, Hand off, and the final Delete, with Copy session ID in its own group and no group headings. Lock, Pin and Copy session ID show the fixed single-letter shortcuts L, P and C at the end edge; Delete has no archive shortcut hint. Copy session ID has its own group after Rename, with the UUID in smaller muted monospace text on one line beneath its label; overflow fades at the end without wrapping, and the pointer rests on the ID line, whose tooltip shows the full ID, left to right (hovering the line also scrolls it while the label and icon stay still, inside the same clickable item). The last entry is the destructive Delete in place of Archive. Close the menu and hover or focus the unused row: its Delete shortcut sits immediately before the actions menu, and the untouched Claude Code, Codex and Grok sessions all delete immediately, moving any native records to the Trash without confirmation.",
     state: unusedState,
     sessionRecords: { [unusedSession.id]: "absent", [unusedCodex.id]: "unknown", [unusedGrok.id]: "present" },
     steps: [openUnusedMenu, (ui) => ui.hoverMenuLabel(ui.t("sidebar.session.copyId"), unusedSession.id, unusedSession.id)],
@@ -710,7 +710,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch, every failure shares one remedy",
-    description: "Both failed sessions say the target account no longer exists, so the alert gives that one remedy once, under the two rows, and its footer carries a Manage accounts button, left of OK; the rows carry no button of their own. The alert has no Error details and no paragraph about a bug. Compare the partial failure above, whose different remedies each come once after the list and whose footer has no Manage accounts.",
+    description: "Both failed sessions say the target account no longer exists, so the alert gives that one remedy once, under the two rows, and its footer carries a Manage accounts button, before OK; the rows carry no button of their own. The alert has no Error details and no paragraph about a bug. Compare the partial failure above, whose different remedies each come once after the list and whose footer has no Manage accounts.",
     state: switchAccountState,
     sessionAccountSwitches: {
       "s-switch-bound": { code: "unknown_account", params: { account: "a-removed" }, message: "unknown account a-removed" },
@@ -799,7 +799,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "Console settings with differing default agents",
-    description: "Console sessions run on Claude Code and project sessions on Codex, which is no longer installed: that picker keeps it, with a grey Not installed badge after the name. The \"Agent default accounts\" rows sit on the same two columns as the Default agent pickers above, each agent's name on the left and its account picker on the right: Claude Code (with its named accounts), Grok Build (only \"Default\") and Codex with the badge, which stays because the console still pins its account. In Advanced the agent tabs include Codex with the badge, which stays while the console stores a project session model for it. \"Codex installed\" among the \"Live changes\" buttons is the machine finding it: its tab loses the badge and moves up to its own place before Grok Build, the tabs sliding to make room, and \"Codex uninstalled\" puts the badge back and the tab at the end again.",
+    description: "Console sessions run on Claude Code and project sessions on Codex, which is no longer installed: that picker keeps it, with a grey Not installed badge after the name. The \"Agent default accounts\" rows sit on the same two columns as the Default agent pickers above, each agent's name at the start and its account picker at the end: Claude Code (with its named accounts), Grok Build (only \"Default\") and Codex with the badge, which stays because the console still pins its account. In Advanced the agent tabs include Codex with the badge, which stays while the console stores a project session model for it. \"Codex installed\" among the \"Live changes\" buttons is the machine finding it: its tab loses the badge and moves up to its own place before Grok Build, the tabs sliding to make room, and \"Codex uninstalled\" puts the badge back and the tab at the end again.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),
@@ -962,7 +962,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Adding a new folder on a machine without Git",
-    description: "Add was pressed for a folder that does not exist yet, which Octoboard creates with git init, and the machine has no Git: the danger error alert is titled \"Could not add the project\", says Git is not installed or not on PATH, then the remedy to install it where sessions run, put it on PATH and try again, with no Report issue link. Its footer holds a Download Git link button (external-link icon), left of OK; the Add dialog stays behind it.",
+    description: "Add was pressed for a folder that does not exist yet, which Octoboard creates with git init, and the machine has no Git: the danger error alert is titled \"Could not add the project\", says Git is not installed or not on PATH, then the remedy to install it where sessions run, put it on PATH and try again, with no Report issue link. Its footer holds a Download Git link button (external-link icon), before OK; the Add dialog stays behind it.",
     directories: {
       ...dialogFixture.directories,
       "/Users/dev/code/new-project": {
@@ -1049,7 +1049,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Session resume, looking for the conversation",
-    description: "With a valid ID typed and no answer yet, a small spinner sits at the right end of the Session ID field, nothing else appears under it, and the footer button is disabled.",
+    description: "With a valid ID typed and no answer yet, a small spinner sits at the end of the Session ID field, nothing else appears under it, and the footer button is disabled.",
     conversationLocation: "pending",
     steps: resumeLookup,
   },
@@ -1129,7 +1129,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session launch refused, the agent is not added",
-    description: "The daemon finds Claude Code off the added list, which the window has not heard yet. The danger alert says the session cannot be opened with it, with the remedy in words and an Add agent button in the footer, left of OK; the dialog stays behind it. An account removed meanwhile is refused in the same alert, with Manage accounts as its button.",
+    description: "The daemon finds Claude Code off the added list, which the window has not heard yet. The danger alert says the session cannot be opened with it, with the remedy in words and an Add agent button in the footer, before OK; the dialog stays behind it. An account removed meanwhile is refused in the same alert, with Manage accounts as its button.",
     sessionOpenError: { code: "agent_not_added", params: { agent: "Claude Code" }, message: "Claude Code is not added. Add it in Settings → Agent accounts to open a session with it." },
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),

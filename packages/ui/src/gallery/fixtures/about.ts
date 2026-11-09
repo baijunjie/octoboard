@@ -100,7 +100,7 @@ export const aboutScenarios: Scenario[] = [
     category: "normal",
     title: "Third-party licenses, the whole list",
     description:
-      "The dialog has the search field, a muted count of 13 packages and one closed row per package: a right-pointing chevron, name and version, its license, and whether it is an npm package or a Rust crate. The package with the very long name wraps in its row instead of widening the dialog, its license and npm label dropping to a second line; the licenses written as expressions (OR, AND) stay on one line each.",
+      "The dialog has the search field, a muted count of 13 packages and one closed row per package: a chevron pointing along the reading direction, name and version, its license, and whether it is an npm package or a Rust crate. The package with the very long name wraps in its row instead of widening the dialog, its license and npm label dropping to a second line; the licenses written as expressions (OR, AND) stay on one line each.",
     licensesDialog: LICENSES,
   },
   {

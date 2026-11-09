@@ -265,7 +265,7 @@ export const connectionScenarios: Scenario[] = [
     title: "A path with a line opens its code file in the viewer",
     description:
       "Clicking src/summary/Summary.tsx:42:7 opened Summary.tsx in the file viewer over the window, with the terminal left as it was behind it: line 42 is marked and scrolled into view, and the column is ignored. " +
-      "There are no Previous and Next buttons. At the far right of the header row, after the copy and wrap buttons, are File manager and Default application. A Markdown file opens in its source view the same way, and so does a file that exists only in a side worktree.",
+      "There are no Previous and Next buttons. At the far end of the header row, after the copy and wrap buttons, are File manager and Default application. A Markdown file opens in its source view the same way, and so does a file that exists only in a side worktree.",
     ...PATH_LINK_SCENARIO,
     steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/summary/Summary.tsx:42:7")],
   },
