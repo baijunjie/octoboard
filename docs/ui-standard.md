@@ -2254,10 +2254,11 @@ A Terminal panel tab's close mark is drawn at 16 and hit at 24 through such an `
 shortcut, hidden from assistive technology, with its tooltip anchored beside it since a tab cannot hold a trigger; the
 keyboard reaches the same action as Close terminal in the panel's tab-row menu and the tab's context menu.
 
-The right pane's resize handles (the width handle and the separator between stacked panel cards) and the floating
-sidebar's width handle take a 24-pixel pointer target centred on their gap, reaching into the cards' edges where the
-gap is narrower. The docked sidebar's width handle stays narrower, as a wider one would take the sidebar's scrollbar
-and its rows' trailing buttons.
+Floating pane width handles and the separators between stacked panel cards take a 24-pixel pointer target centred
+on their gap, reaching into the cards' edges where the gap is narrower. Docked pane width handles are 6px wide to
+leave adjacent scrollbars and controls reachable. The sidebar's sits immediately to the physical right of its seam,
+clear of either scroller's right-hand scrollbar. The right pane's sits inside the cards' inner edge, keeping the
+terminal's 14px scrollbar area clear.
 
 Where the drawn size has to stay under 24, extend the target rather than the drawing: an absolutely positioned `::after`
 with a negative inset enlarges what the pointer hits and changes nothing visible. The pressable part of a checkbox whose

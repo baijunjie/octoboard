@@ -40,11 +40,12 @@ function motionOf(shown: boolean, preparing: boolean): "shown" | "away" | "prepa
  * The aside, the pane at the end side: a column of panel cards (`panels/PanelStack.tsx`), each
  * rounded, edged and shadowed by itself. The pane has no surface of its own: it pads the cards by
  * `--peek-gap`, the gap the sidebar's floating card keeps from its surroundings, on the top, end
- * and bottom, and by `--panel-grip-gap` on the terminal side, which holds the width grip. It shows
+ * and bottom, and by `--panel-grip-gap` on the terminal side. It shows
  * nothing in that gap but what is behind it, the agent terminal's background, so the cards read as
  * lying on the content.
  *
- * While docked it is a row sibling of the terminal that takes its room from it
+ * While docked its start margin offsets the grip padding, so that gap shares the terminal's
+ * outer inset instead of widening it. It is a row sibling of the terminal that takes its room from it
  * and shrinks to the row's available room down to `minWidth` (320px by default), and docking (and
  * going, when its last panel closes) is at once. In a window too narrow for that (`overlay`, a phone)
  * it floats over the terminal's area instead, holding one panel at a time
@@ -110,7 +111,7 @@ export function AsidePane({ layout, children, resizeHandle }: { layout: AsideLay
             ? "h-full"
             : floating
               ? `pointer-events-none absolute inset-y-0 end-0 z-35 max-w-[calc(100%-var(--rail-width))] max-phone:max-w-[calc(100%-24px)] transition-opacity duration-240 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${fade.shown ? "opacity-100" : "opacity-0"}${fade.preparing ? " transition-none" : ""}`
-              : "h-full shrink"
+              : "pointer-events-none z-1 h-full shrink -ms-(--panel-grip-gap)"
       }`}
     >
       {typeof children === "function" ? children(peek) : children}

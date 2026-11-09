@@ -139,8 +139,10 @@ program's next copy replaces it.
   Keyboard-protocol enhancements an agent asked for (the kitty keyboard flags) are not restored.
 - A reattach always redraws from the replay rather than appending to what is on screen, so scrollback older than the
   replay window is lost on every reconnect.
-- Once fitted, the character grid has equal visible space on its left and right, accounting for the scrollbar and
-  the gap beside docked panels; the scrollbar remains clear of the panel's resize handle in either reading direction.
+- The character grid has a 14px base gutter on each physical side, in either reading direction. The right gutter is
+  the terminal's internal scrollbar area, reserved even while the scrollbar is hidden or the agent uses a full-screen
+  interface; it has no additional outer padding. Docked panels add no extra gap beside the terminal, and resize handles
+  add no terminal padding. Any space left after fitting whole character columns is shared between the two sides.
 - Whatever changes the terminal pane's size resizes the agent's terminal: resizing the window, resizing the sidebar or
   the right pane, hiding or showing the sidebar, and the right pane coming or going as its panels open and close all do;
   a pane floating in or the sidebar's drawer opening over the terminal does not (see `docs/product/pane-docking.md` and

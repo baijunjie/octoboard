@@ -65,12 +65,14 @@ Above 768 px, each pane has a resize handle on its inner edge while it is shown,
 docked handle runs from below the top bar to above the connection banner; a floating handle follows the card's inset
 edge:
 
-- the **docked sidebar's** on its right edge, drawn on hover and keyboard focus as a line along the whole edge;
+- the **docked sidebar's** immediately to the physical right of its inner seam in either reading direction, clear of
+  both scrollbars, drawn on hover and keyboard focus as a line along the whole edge;
 - the **floating sidebar's** in the 8 px gap outside its inner edge, drawn as the same grip as the right pane's;
-- the **right pane's** in the 8 px gap between the terminal and the cards, drawn as a **grip**: a short rounded bar
-  in the middle of the gap's height, light grey while the pointer or keyboard focus is on the handle, and strong only
-  while it is pressed or dragged. While a mouse pointer rests on it, a tooltip saying "Resize" opens beside the grip,
-  toward the pane. It is named "Resize panel area". The floating sidebar's grip has the same tooltip, facing into
+- the **right pane's** just inside the cards' inner edge while docked, and in the 8 px gap beside the cards while
+  floating, drawn as a **grip**: a short rounded bar in the middle of the handle's height, light grey while the pointer
+  or keyboard focus is on the handle, and strong only while it is pressed or dragged. While a mouse pointer rests on
+  it, a tooltip saying "Resize" opens beside the grip, toward the pane. It is named "Resize panel area". The floating
+  sidebar's grip has the same tooltip, facing into
   the sidebar; it mirrors with the layout under a right-to-left language. Both vertical grips are 4×40 px.
 
 The handles work the same way:
@@ -87,16 +89,17 @@ The handles work the same way:
   the pointer shows the resize cursor wherever it is.
 
 The sidebar's handle is available while docked and while floating, including a hover preview or an automatically
-floating sidebar. Its pointer target is 6 px wide while docked and 24 px wide while floating, centred on the 8 px gap
-outside the floating card's inner edge. It is absent while the docked column is easing and at 768 px and below. The
-floating sidebar uses the same remembered width as the docked sidebar, within **260–480 px**, with a default of **280
-px**.
+floating sidebar. Its pointer target is 6 px wide immediately to the physical right of its inner seam while docked and
+24 px wide while floating, centred on the 8 px gap outside the floating card's inner edge. It is absent while the
+docked column is easing and at 768 px and below. The floating sidebar uses the same remembered width as the docked sidebar, within
+**260–480 px**, with a default of **280 px**.
 
 The right pane's handle is available while docked and while its whole group floats, including when it floats
 automatically. It remains reachable at the floating group's inner edge and changes the group's total width. It is
 absent for a single-card preview of an empty docked column, a mobile panel and a column folded away under a
-maximized panel (see "Maximizing a panel" in `docs/product/right-pane-panels.md`). Its pointer target is 24 px wide,
-centred on the 8 px gap. Resizing a floating sidebar or right group keeps it revealed throughout the drag and does
+maximized panel (see "Maximizing a panel" in `docs/product/right-pane-panels.md`). Its pointer target is 6 px wide just
+inside the cards' inner edge while docked, clear of the terminal's scrollbar, and 24 px wide while floating, centred
+on the 8 px gap. Resizing a floating sidebar or right group keeps it revealed throughout the drag and does
 not resize the agent terminal.
 
 **A floating right pane can widen to the sidebar's content-side edge**, keeping the cards' usual insets. Its maximum

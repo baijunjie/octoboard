@@ -497,7 +497,7 @@ export function App(): React.ReactElement {
   }
 
   return (
-    <div data-sidebar-dockable={!isNarrow} data-aside-docked={asideDocked} data-pane-docked={(!isNarrow && panes.sidebarDocked) || asideDocked} className="relative flex h-full flex-col">
+    <div data-sidebar-dockable={!isNarrow} data-pane-docked={(!isNarrow && panes.sidebarDocked) || asideDocked} className="relative flex h-full flex-col">
       <Toasts focusTerminal={focusTerminal} />
       <TitleBar
         sidebarShown={panes.sidebarShown}
@@ -627,9 +627,9 @@ export function App(): React.ReactElement {
               <main className="relative flex min-w-0 flex-1 overflow-x-auto pane-docked:shadow-(--panel-shadow)">
                 {/* The flex basis matches the width allocator's 400px floor, so the pane keeps its
                     allocated width and the terminal grows into the remaining space. Phone mode removes the floor. */}
-                {/* Keep the agent area above the docked pane's positioned content and below resize
-                    handles and floating cards. The scroll container casts the sidebar shadow; the
-                    right pane's cards sit across an unpainted gap of the terminal's background. */}
+                {/* The agent area and docked pane share a layer below resize handles and floating
+                    cards, so the cards' edges and shadows can paint over the terminal's outer inset.
+                    The scroll container casts the sidebar shadow. */}
                 <div ref={agentAreaRef} inert={covered || floatingShown} className={`relative flex min-h-0 ${asideFloats ? "min-w-0 flex-1" : "min-w-[400px] flex-[1_1_400px]"} pane-docked:z-1`}>
                   <ArchiveLayer
                     focusTerminal={focusTerminal}

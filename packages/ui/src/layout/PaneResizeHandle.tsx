@@ -11,8 +11,9 @@ import { ResizeSeparator } from "../components/panel/ResizeSeparator";
  * pointer and the arrow keys work in physical directions, so `ResizeSeparator` turns it into
  * +1 (right) or -1 (left) for the direction in force. `offset` is how far the pane's own edge is
  * from the window's: the sidebar starts where the left rail ends, the aside is flush with
- * the window. The sidebar's edge is a line on a seam; the aside's is the gap its cards leave
- * (`--panel-grip-gap`), so the handle is centred in that gap (`centre` inside the edge) and draws a grip. */
+ * the window. The docked sidebar's handle sits on the physical right of its seam, clear of either
+ * scroller's right-hand scrollbar. The docked aside's handle sits inside the cards' edge.
+ * Floating handles sit in their gap. */
 const SIDES = {
   sidebar: {
     label: "pane.resizeSidebar",
@@ -21,21 +22,21 @@ const SIDES = {
     grow: 1,
     centre: "0px",
     appearance: "line",
-    layout: "hidden sidebar-docked:block w-1.5",
+    layout: "hidden sidebar-docked:block w-1.5 translate-x-[3px]",
   },
   aside: {
     label: "pane.resizeAside",
     edge: "insetInlineEnd",
     offset: "0px",
     grow: -1,
-    centre: "calc(var(--panel-grip-gap) / 2)",
+    centre: "calc(var(--panel-grip-gap) + 3px)",
     appearance: "grip",
-    layout: "w-6",
+    layout: "w-1.5",
   },
 } as const;
 
 /** The width of the hit area of each side's handle, in px, `layout`'s `w-*`. */
-const HIT_WIDTH = { sidebar: 6, aside: 24 } as const;
+const HIT_WIDTH = { sidebar: 6, aside: 6 } as const;
 
 /**
  * The drag handle on a docked pane's inner edge (the sidebar's end, the aside's start): a
@@ -82,8 +83,7 @@ export function PaneResizeHandle({
       appearance={appearance}
       tooltip={appearance === "grip" ? t("pane.resize") : undefined}
       tooltipPlacement={side === "sidebar" ? "start" : "end"}
-      // Centred on the pane's inner edge, or in the gap it leaves, anchored to the logical side the
-      // pane is on.
+      // Docked handles follow the pane's logical inner edge; floating handles straddle its gap.
       style={floating ? side === "sidebar" ? { insetInlineEnd: "calc((var(--panel-grip-gap) + 24px) / -2)" } : { insetInlineStart: "calc((var(--panel-grip-gap) - 24px) / 2)" } : { [edge]: `calc(${width - HIT_WIDTH[side] / 2}px - ${centre} + ${offset})` }}
       className={floating ? "absolute inset-y-0 z-50 w-6 pointer-events-auto" : `absolute top-(--top-chrome-height) bottom-(--bottom-chrome-height) z-10 ${layout}`}
     />

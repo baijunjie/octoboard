@@ -65,18 +65,16 @@ function measureArea(area: HTMLElement): AreaBox {
  * width handle (`z-10`) and every overlay (the floating cards and the sidebar's drawer, `z-40`). */
 const MAXIMIZED_LAYER_CLASS = "absolute z-5";
 
-/** The backdrop the maximized card lies on: the whole area, in the agent terminal's background, so
- * the card keeps its gaps and nothing of the covered terminal shows in them. */
+/** The backdrop covers the whole terminal, including its scrollbar, while a card is maximized. */
 function backdropStyle(box: AreaBox): React.CSSProperties {
   return { left: box.left, top: box.top, width: box.width, height: box.height };
 }
 
-/** The maximized card: the area inset by `--peek-gap` on every side, as a docked card is from the top
- * bar and the window's edges, except on the end side while the pane's column is beside it, whose
- * own grip gap already parts the two. */
+/** The maximized card keeps the window's edge gaps and the grip gap beside any remaining column,
+ * whose padding overlaps the terminal's area. */
 function cardStyle(box: AreaBox, columnShown: boolean): React.CSSProperties {
   const gap = "var(--peek-gap)";
-  const end = columnShown ? "0px" : gap;
+  const end = columnShown ? "var(--panel-grip-gap)" : gap;
   return {
     top: `calc(${box.top}px + ${gap})`,
     height: `calc(${box.height}px - 2 * ${gap})`,
@@ -259,7 +257,9 @@ export function PanelStack({
 
   return (
     <div ref={containerRef} className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] gap-x-(--panel-stack-gap)" style={{ gridTemplateColumns: columns.length === 2 ? `minmax(0, ${leadingShare}fr) minmax(0, ${1 - leadingShare}fr)` : "minmax(0, 1fr)" }}>
-      {maximized !== undefined && area && <div aria-hidden="true" className={`${MAXIMIZED_LAYER_CLASS} bg-panel`} style={backdropStyle(area)} />}
+      {/* A docked pane's own layer puts the backdrop above the terminal but below the cards' shadows.
+          A folded pane has no such layer, so its backdrop uses the maximized card's layer. */}
+      {maximized !== undefined && area && <div aria-hidden="true" className={`${stacked.length > 0 ? "absolute z-0" : MAXIMIZED_LAYER_CLASS} bg-panel`} style={backdropStyle(area)} />}
       {kinds.map((kind) => {
         const entry = PANEL_ENTRIES[kind as PanelKind];
         const Content = entry.Content;

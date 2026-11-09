@@ -30,11 +30,13 @@ in `docs/product/pane-docking.md`.
 The right pane has **no frame or surface of its own**: it is its cards. Each card looks exactly like the sidebar's
 floating card (see "A hidden pane floats in on hover" in `docs/product/pane-docking.md`): rounded corners, the hairline
 edge, the light card shadow and the sidebar's background, docked and floating alike. Above 768 px the cards keep **8
-px** from the top bar, from the window's end edge and from its bottom (or the connection banner), **8 px** from the
-terminal and **10 px** from each other; the gaps on the terminal's side and between cards hold the resize grips (see
-"Resizing the sidebar and the right pane" in `docs/product/pane-docking.md` and "Resizing panels" below). At 768 px and
-below the gaps are in "At 768 px and below: one panel floats over the terminal" below. What shows around and between the
-cards is the terminal's area, in the terminal's own background, so the cards read as lying on the content. A single
+px** from the top bar, from the window's end edge and from its bottom (or the connection banner), and **10 px** from
+each other. A floating group also keeps an **8 px** gap on its terminal side, holding its width grip. Docked cards add
+no gap beyond the terminal's gutter; their width grip sits just inside the cards' inner edge (see "Resizing the sidebar
+and the right pane" in `docs/product/pane-docking.md`). The gaps between cards hold their resize grips (see "Resizing
+panels" below). At 768 px and below the gaps are in "At 768 px and below: one panel floats over the terminal" below.
+What shows around and between the cards is the terminal's area, in the terminal's own background, so the cards read
+as lying on the content. A single
 panel in a column takes that column's full height. Columns divide the pane's chosen total width, with a 10 px gap
 between them; their widths start equal and can be adjusted in that gap (see "Resizing panels" below). Changing their
 proportion does not change the pane's total width.
