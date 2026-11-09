@@ -164,7 +164,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         shell_env: &shell_env,
         config_dir: config_dir.as_deref(),
         settings: &settings,
-        compatibility_source: adapter::compatibility_source_of(agent, &settings),
+        compatibility_sources: adapter::compatibility_sources_of(agent, &settings),
         shared_default_dir: shared_default_dir.as_deref(),
         model: model.as_deref(),
         effort: effort.as_deref(),

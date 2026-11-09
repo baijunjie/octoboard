@@ -733,13 +733,13 @@ describe("the fixture daemon's deletion of archived sessions", () => {
 });
 
 
-/** Every provider's every setting in effect: Codex's Claude compatibility off and Grok Build's on, no permission approval
- * chosen, except what `compatibility` and the approvals say. */
+/** Every provider's every setting in effect: every compatibility switch off, no permission approval chosen, except what
+ * `compatibility` and the approvals say. */
 function providerSettings(compatibility: { codex?: boolean; grok?: boolean } = {}, claude: { approval_mode?: string } = {}, codex: { approval_reviewer?: string } = {}, grok: { approval_mode?: string } = {}): Settings["provider_settings"] {
   return {
-    claude: { approval_mode: claude.approval_mode ?? null },
+    claude: { approval_mode: claude.approval_mode ?? null, codex_compatibility: false },
     codex: { approval_reviewer: codex.approval_reviewer ?? null, claude_compatibility: compatibility.codex ?? false },
-    grok: { approval_mode: grok.approval_mode ?? null, claude_compatibility: compatibility.grok ?? true },
+    grok: { approval_mode: grok.approval_mode ?? null, claude_compatibility: compatibility.grok ?? false, codex_compatibility: false },
   };
 }
 
@@ -824,25 +824,25 @@ describe("the fixture daemon's settings and trusted folders", () => {
   it("exports only the exported provider settings the user chose with the accounts, refuses what a provider does not take and leaves the choices unchanged", async () => {
     const daemon = createFixtureDaemon({ state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", accounts: [] } }) });
     const exported = async () => ((await daemon.request({ type: "export_configuration", include_accounts: true })) as { document: ReturnType<typeof exportedDocument> }).document.accounts?.agent_settings?.provider_settings;
-    // The values in effect follow the added agents; none has been chosen, so the export carries none.
-    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true }));
+    // Every compatibility switch is off; none has been chosen, so the export carries none.
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings());
     expect(await exported()).toEqual({});
-    await daemon.request({ type: "set_provider_setting", agent: "grok", setting: "claude_compatibility", value: false });
-    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true, grok: false }));
-    expect(await exported()).toEqual({ grok: { claude_compatibility: false } });
+    await daemon.request({ type: "set_provider_setting", agent: "grok", setting: "claude_compatibility", value: true });
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ grok: true }));
+    expect(await exported()).toEqual({ grok: { claude_compatibility: true } });
     // A permission choice only becomes a launch flag, so it is exported like the others.
     await daemon.request({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: "manual" });
-    expect(await exported()).toEqual({ claude: { approval_mode: "manual" }, grok: { claude_compatibility: false } });
+    expect(await exported()).toEqual({ claude: { approval_mode: "manual" }, grok: { claude_compatibility: true } });
     await expect(daemon.request({ type: "set_provider_setting", agent: "claude", setting: "claude_compatibility", value: true })).rejects.toMatchObject({ code: "unreadable_request" });
     await expect(daemon.request({ type: "set_provider_setting", agent: "codex", setting: "claude_compatibility", value: "on" })).rejects.toMatchObject({ code: "unreadable_request" });
     await expect(daemon.request({ type: "set_provider_setting", agent: "claude", setting: "approval_mode", value: "sometimes" })).rejects.toMatchObject({ code: "unreadable_request" });
-    expect(await exported()).toEqual({ claude: { approval_mode: "manual" }, grok: { claude_compatibility: false } });
+    expect(await exported()).toEqual({ claude: { approval_mode: "manual" }, grok: { claude_compatibility: true } });
     // A refusal of the rest of an `update_settings` leaves the choices as they were.
     await expect(daemon.request({ type: "update_settings", default_clone_dir: "relative/dir" })).rejects.toMatchObject({ code: "path_not_absolute" });
-    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true, grok: false }, { approval_mode: "manual" }));
-    // A null clears the choice, which goes back to the default rule.
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ grok: true }, { approval_mode: "manual" }));
+    // A null clears the choice, which goes back to the default.
     await daemon.request({ type: "set_provider_setting", agent: "grok", setting: "claude_compatibility", value: null });
-    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true }, { approval_mode: "manual" }));
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({}, { approval_mode: "manual" }));
     expect(await exported()).toEqual({ claude: { approval_mode: "manual" } });
   });
 });
@@ -1429,23 +1429,23 @@ describe("the fixture daemon's Claude compatibility", () => {
   const daemonOf = (added: Agent[], choices?: Settings["provider_settings"]) => createFixtureDaemon({ state: snapshotState({ settings: settings(added, choices) }) });
   const setCompatibility = (daemon: ReturnType<typeof daemonOf>, agent: Agent, value: boolean) => daemon.request({ type: "set_provider_setting", agent, setting: "claude_compatibility", value });
 
-  it("reports Codex on only while Claude Code is added, and Grok Build on, until the user chooses", () => {
+  it("reports every compatibility switch off whatever agents are added, until the user chooses", () => {
     const daemon = daemonOf(["codex", "grok"]);
     expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings());
     daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: ["claude", "codex", "grok"] } });
-    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true }));
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings());
     daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: null } });
     expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings());
   });
 
   it("keeps the user's choice whatever agents are added, and reads a scenario's value as a choice", async () => {
-    const daemon = daemonOf(["codex"], { grok: { claude_compatibility: false } });
-    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ grok: false }));
+    const daemon = daemonOf(["codex"], { grok: { claude_compatibility: true } });
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ grok: true }));
     await setCompatibility(daemon, "codex", true);
-    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true, grok: false }));
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true, grok: true }));
     daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: ["claude"] } });
     daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: [] } });
-    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true, grok: false }));
+    expect(daemon.store.getState().settings.provider_settings).toEqual(providerSettings({ codex: true, grok: true }));
   });
 });
 

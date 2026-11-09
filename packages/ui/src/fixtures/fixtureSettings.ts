@@ -7,11 +7,13 @@ import { effectiveProviderSettings } from "./builders";
 import { HOME, neverReplied, normalizedPath, normalizeTags, type Ack, type FixtureContext, type Handlers } from "./fixtureContext";
 
 /** Keeps the window's settings in step with the user's explicit choices (`providerSettingChoices`): what the window is
- * told is the value in effect, which follows the added agents while a switch's default rule says so. */
+ * told is the value in effect: the choice, or the setting's default where there is none. A scenario's own state carries
+ * only the explicit choices, and so can anything else that replaces `settings` or `providers` as a whole, so the store
+ * is watched rather than written once. */
 export function keepProviderSettingsInEffect({ store, providerSettingChoices }: FixtureContext): void {
   const syncProviderSettings = () => {
     const { settings, providers } = store.getState();
-    const effective = effectiveProviderSettings(providerSettingChoices.current, settings.added_agents, providers);
+    const effective = effectiveProviderSettings(providerSettingChoices.current, providers);
     if (JSON.stringify(settings.provider_settings) !== JSON.stringify(effective)) {
       store.setState({ settings: { ...settings, provider_settings: effective } });
     }
@@ -78,7 +80,7 @@ export function createSettingsReplies({ scenario, store, fail, providerSettingCh
       const kept = Object.entries(providerSettingChoices.current[body.agent] ?? {}).filter(([setting]) => setting !== body.setting);
       providerSettingChoices.current = { ...providerSettingChoices.current, [body.agent]: Object.fromEntries(body.value === null ? kept : [...kept, [body.setting, body.value]]) };
       const current = store.getState();
-      store.setState({ settings: { ...current.settings, provider_settings: effectiveProviderSettings(providerSettingChoices.current, current.settings.added_agents, current.providers) } });
+      store.setState({ settings: { ...current.settings, provider_settings: effectiveProviderSettings(providerSettingChoices.current, current.providers) } });
       return { type: "ack", id: null };
     },
     add_agent: (body) => {

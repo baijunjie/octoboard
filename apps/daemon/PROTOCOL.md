@@ -265,7 +265,7 @@ the request id as if it were a record id.
 | `reorder_accounts` | `agent`, `accounts: (string|null)[]` | Sets `Settings.account_order[agent]`, the order clients list the agent's accounts in. The list must name every owned account of the agent and its default (`null`), each exactly once; missing, repeated, unknown or other-agent accounts are refused with `account_order_invalid`. A changed order broadcasts `settings_updated`; an unchanged order answers with `ack` only. Automatic account selection takes the accounts in this order (see `Settings.account_order`) |
 | `set_default_account_name` | `agent`, `name` | Names the agent's default account (`Settings.default_account_names`). `name` is trimmed; a blank name, or `Default` in any letter case, clears it, back to the client's own word for the default. Refused with `account_name_taken` when another account of the `agent` has the name (trimmed, case-insensitive); the same check refuses `create_account` and `update_account` a name the default account has been given. The word the daemon reserves for the default (`Default`) stays refused to accounts either way. Broadcasts `settings_updated` only when the stored name changed. The directory of the default account is not editable |
 | `set_account_disabled` | `agent`, `account` (id or `null`), `disabled` | Turns an account off for new work, or back on; a null `account` names the agent's default account (`Settings.disabled_default_accounts`, by wire name), a stored one is `Account.disabled`. A disabled account is skipped by automatic account selection and refused by `open_session`, the handoff and `switch_session_account` as `account_disabled`; sessions already on it are untouched, and nothing turns it back on but this request. No usage window is started automatically on a disabled account (see `auto_start_quota_windows`); no quota is read for it either, unless a session is running on it (see "Account quotas" below), so turning it off drops its held reading when none is, which may broadcast `account_quotas_updated`, and turning it back on reads it at once with its failure backoff reset, which, with that setting on, also starts the window the reading shows unstarted. Refused with `unknown_account` for an id that is no account of the `agent`. Broadcasts `settings_updated` only when the flag changed |
-| `set_provider_setting` | `agent`, `setting`, `value` (`true`/`false` for a switch, the choice's text for a choice setting, or `null`) | Sets the user's choice for one setting a provider declares (`ProviderInfo.settings`), whichever of the provider's accounts a session uses, the default account included. A null value clears the choice: a switch goes back to its default rule, a choice setting leaves the setting to the agent's native launch and resume behavior; Codex resumes retain saved permissions. A `setting` the provider does not declare, a value of the other kind, or a choice the setting does not offer is refused with `unreadable_request`. Answered with `ack`; broadcasts `settings_updated` only when the stored choice changed. Takes effect on the next launch or resume; running sessions keep what they started with. The daemon does not itself ask for the confirmation a choice declares (`SettingChoice.confirm`, such as Claude Code's `bypass` or Codex's `full_access`); the client does (see "Approval modes" in `docs/product/per-agent-settings.md`) |
+| `set_provider_setting` | `agent`, `setting`, `value` (`true`/`false` for a switch, the choice's text for a choice setting, or `null`) | Sets the user's choice for one setting a provider declares (`ProviderInfo.settings`), whichever of the provider's accounts a session uses, the default account included. A null value clears the choice: a switch goes back to its default, a choice setting leaves the setting to the agent's native launch and resume behavior; Codex resumes retain saved permissions. A `setting` the provider does not declare, a value of the other kind, or a choice the setting does not offer is refused with `unreadable_request`. Answered with `ack`; broadcasts `settings_updated` only when the stored choice changed. Takes effect on the next launch or resume; running sessions keep what they started with. The daemon does not itself ask for the confirmation a choice declares (`SettingChoice.confirm`, such as Claude Code's `bypass` or Codex's `full_access`); the client does (see "Approval modes" in `docs/product/per-agent-settings.md`) |
 | `set_account_sharing` | `account` (id or `null`), `share` | Sets whether the account shares the agent's default configuration (`Account.share_default_config`; see "Sharing the default configuration" below) and carries the change out at once, answering `ack` when it has ended. A null account names the default account, which is refused with `default_account_not_shareable`, as is turning sharing on for an account whose directory resolves to the default account's; an unknown account is `unknown_account`. Refused, with nothing recorded or stopped: `account_in_use` while sessions of the account work under its directory (see `account_sharing`'s `in_use`), or one of its idle sessions turned working before the change ended it, or it is being signed in (its login, or a sign-in to or sign-out of one of its MCP servers is running), and `account_sharing_in_progress` while a change of it runs. Otherwise the account is locked, its idle sessions' processes are ended (what they started is carried over to the resumed process, as for `switch_session_account`; see "Process trees"), the choice is recorded with `Account.share_default_config_incomplete` set and `settings_updated` broadcast, the change runs, and those sessions are resumed on their conversations, whatever its outcome, before the account is let go; `account_sharing` tells the progress throughout (see "Sharing the default configuration" below). A change that fails part-way is answered with `account_sharing_failed`; nothing is rolled back and the account stays incomplete. Asking again for the value recorded retries an incomplete change and does nothing otherwise. Broadcasts `settings_updated` again when the change completes |
 | `delete_account` | `account`, `trash_directory?` | Clears the reference of every console and project that refers to this account — putting each console back on its agent's default account and each project back to inheriting its console's, while a project whose reference is `default` names no account and is left as it is — then removes the account. An account that shares the default configuration, or whose last change of it is incomplete, has its sharing turned off first, at once and under the account's lock as `set_account_sharing` does; that is refused with `account_still_sharing` while sessions of it run or start or it is being signed in (its login, or a sign-in to or sign-out of one of its MCP servers is running), with `account_sharing_in_progress` while a change of it runs, and with `account_sharing_failed` (sharing then stays turned off, incomplete) when it does not complete, each leaving the account in place. A session holding it is left alone: it already carries its own copy of the directory it launches with. Touches the account's config directory only when `trash_directory` (absent means false) is true: the directory is then moved to the system Trash (recoverable, never deleted outright) after sharing is turned off and before the record is removed, so when the move fails the request fails with `account_directory_trash_failed` and the account is kept for a retry. Judged once before anything is changed, so a refusal leaves everything as it was, and again under the account's lock, since the account can be repointed or the file system change between the first judgement and the lock (a refusal then leaves sharing turned off). Refused with: `account_has_running_sessions` while a session of the account has a process or is being launched, resumed or switched; `account_directory_protected` for the home directory, the root of a disk or a directory holding Octoboard's data; `account_directory_shared` while the directory is, holds or lies inside an agent's default configuration directory or another account's directory, or holds a registered project's folder (an account directory inside a project's folder is allowed); and `account_directory_trash_failed` when a path that decides it cannot be looked at (`cause` `unanswered`, `unreadable` or `other_unlooked`) or a sign-in could still write into the directory (`cause` `signing_in`: its login, or a sign-in to or sign-out of one of its MCP servers does not end within five seconds, or a sign-in of another account pointed at the same directory is running). A directory that no longer exists is skipped and the account removed as usual; a symlinked directory is moved as the link. Once the pre-check has passed, `start_account_login`, `sign_in_account_mcp_server` and `sign_out_account_mcp_server` for the account are refused with `account_being_removed` until the request ends (a login or MCP sign-in or sign-out started during the pre-check is ended later, not refused). Before the move the removal holds back the agent CLIs' short reads under the directory, which would recreate it, and waits for those running to end (without a time limit, a quota kick can take a minute), then judges the directory a last time immediately before the move. A short read held back meanwhile checks the directory again once the hold ends and, finding it moved, runs nothing: a quota read answers `quota_config_dir_missing`, a quota kick fails, a model listing is `models_command_failed`. Each look at a path is given five seconds. Broadcasts `settings_updated`, a `console_upserted` for every console whose reference was cleared, and a `project_upserted` for every project whose reference was cleared |
 | `inspect_account_trash` | `account` | Replies with `account_trash_inspected`: what `delete_account` with `trash_directory` would do with the account's config directory now, judged before anything is changed exactly as that request judges it, and answered as data rather than a refusal; only quick looks are made, so one that outruns half a second leaves it `undecided`. Running sessions are not counted (`delete_account` still refuses them with `account_has_running_sessions`), and `delete_account` keeps all its refusals as the check for a state that changed since. `unknown_account` for an unknown account |
@@ -663,7 +663,7 @@ ModelDisplay { family_version: bool,                 // whether an id `<prefix><
                aliases: string[],                    // aliases shown capitalized (`opus` as "Opus")
                retired: string[] }                   // stored spellings that read as no model (a retired alias)
 SettingDescriptor { id, kind: SettingKind, exported: bool, shown_to_agents: bool, compatibility_with: string|null }
-SettingKind       { type: "choice", choices: { value, confirm: bool }[] } | { type: "switch", default: "on"|"off"|{ while_added: <provider id> } }
+SettingKind       { type: "choice", choices: { value, confirm: bool }[] } | { type: "switch", default: "on"|"off" }
 GitWorkflowSettings { development: "in_place"|"branch"|"worktree", squash_before_delivery: bool, rebase_before_delivery: bool,
                       delivery: "ask"|"merge"|"pull_request", revert_gate: bool }
                       // both preparation flags apply before delivering finished work by merge, push or pull request,
@@ -930,15 +930,13 @@ a list the user emptied stays empty. The list is not part of a configuration exp
 `ProviderInfo.settings` (`SettingDescriptor`: `id`, unique within the provider; `kind`; `exported`; `shown_to_agents`;
 `compatibility_with`). `kind` is `{"type": "choice", "choices": [{"value", "confirm"}]}`, one of the choices in the
 order a client lists them (`confirm` marks one a client asks the user to confirm before saving), or
-`{"type": "switch", "default": "on" | "off" | {"while_added": "<provider>"}}`, a boolean whose default rule is on, off,
-or on while the named provider is among the added agents (an undecided `added_agents` counts as not containing it).
+`{"type": "switch", "default": "on" | "off"}`, a boolean with the default it has until the user chooses.
 `exported` says whether a configuration export carries the user's choice; `shown_to_agents` whether the agents'
 `get_settings` returns the value in effect; `compatibility_with` names the provider whose configuration (MCP servers,
 instructions) the provider reads while the switch is on. The daemon stores only the user's explicit choices, set by
 `set_provider_setting` (and by a configuration import for the exported ones), and `Settings.provider_settings` gives
 the value in effect of every setting of every registered provider, `provider_settings[provider][setting]`: a switch is
-its choice, else the value its default rule gives now, evaluated live, so adding or removing an agent moves an unset
-`while_added` switch; a choice setting is its choice, else `null`, which leaves the setting to the agent's native launch and resume behavior. A
+its choice, else its default; a choice setting is its choice, else `null`, which leaves the setting to the agent's native launch and resume behavior. A
 stored value the setting no longer takes reads as unset, and one naming a provider or setting this build does not
 declare is kept and ignored. The values are read at every launch, resume and account switch, so a running process keeps
 what it started with.
@@ -966,25 +964,27 @@ The declared settings are:
   Always-approve mode. Sandboxed Grok launches are refused.
 - `codex` and `grok` `claude_compatibility`, a switch with `compatibility_with` `claude`, exported and shown to agents:
   whether the provider's sessions load Claude Code's instructions (CLAUDE.md and rules), skills, agents, commands, MCP
-  servers, hooks and permissions. Grok Build's default is on (Grok's own default); Codex's is `while_added` `claude`,
-  on while Claude Code is among the added agents and off otherwise. Claude Code has no such setting.
+  servers, hooks and permissions. Off until chosen, for both; for Grok Build, off leaves it to Grok's own
+  configuration. Claude Code has no such setting.
+- `claude` and `grok` `codex_compatibility`, a switch with `compatibility_with` `codex`, off until chosen, exported and
+  shown to agents: whether the provider's sessions load Codex's instructions (AGENTS.md and rules), skills, custom
+  prompts and MCP servers, and follow its hooks. For Grok Build the custom prompts are left to the instructions (see
+  below).
 
 A provider that declares `compatibility_source` offers its MCP servers and its instructions to the providers made
 compatible with it, through an interface of its own (`CompatibilitySource` in `src/adapter/mod.rs`; Claude Code's is
-`src/adapter/claude/compatibility.rs`). A launch whose provider has such a switch on is handed that source, and the
-consuming provider reads the source only through it. A Codex launch with it on appends the source's instructions, with
-Codex named as the consumer (`src/adapter/claude/compatibility.md`), to the `developer_instructions` it already
-passes, telling Codex to read the user-level Claude Code configuration, in the directory Claude Code's default account
-resolves to (`CLAUDE_CONFIG_DIR` of the launch's shell snapshot, else `~/.claude`), and the project's `.claude/`
-before working.
+`src/adapter/claude/compatibility.rs`, Codex's `src/adapter/codex/compatibility.rs`), and may offer skill directories
+and custom prompt files too, which only a consumer that can load them takes. A launch is handed the source of each
+switch of its provider that is on (`LaunchSpec::compatibility_sources`, one per source provider, read through
+`LaunchSpec::compatibility_source(<provider>)`), and the consuming provider reads a source only through it. In what a
+source gives, a `${` in an `args` entry, an `env` value or a header value is always a reference to an environment
+variable of the consumer's process; a source leaves out a server whose literal value holds one, and a consumer refuses
+a server whose `command`, an `args` entry or `url` holds `${`, since it cannot tell a literal from a reference there.
 
-`Settings.agent_tags` is the tags the user put on each agent, keyed by provider id: short free-form labels that
-tell a session choosing an agent what the agent is good for. They belong to the agent, not to an account or a model,
-apply to every account of the agent and are application-wide, so every client sees the same ones. The daemon keeps them
-with the application settings, sends them in the connect snapshot's `settings` and broadcasts `settings_updated` when
-`update_settings` changes them; an agent without tags has no entry. They are kept for an agent removed from
-`added_agents` and come back when it is added again; it is for the client to offer and show only the added agents'
-tags. Octoboard selects nothing by them.
+A Codex launch with `claude_compatibility` on appends the source's instructions, with Codex named as the consumer
+(`src/adapter/claude/compatibility.md`), to the `developer_instructions` it already passes, telling Codex to read the
+user-level Claude Code configuration, in the directory Claude Code's default account resolves to (`CLAUDE_CONFIG_DIR`
+of the launch's shell snapshot, else `~/.claude`), and the project's `.claude/` before working.
 
 It also passes the MCP servers the source has for the session's working directory (for Claude Code: user, local and
 approved project scope; the translation, stdio and streamable HTTP, is `src/adapter/codex/claude_mcp.rs`) as `-c mcp_servers.<name>.…` overrides,
@@ -1003,9 +1003,95 @@ launch sets after the shell; when its `env` names a variable that steers Codex i
 `SSL_CERT_DIR`, `NODE_OPTIONS`, `DYLD_*`, `LD_*`) at any value other than the one it already holds; or when its `url`
 takes a value from a variable or carries credentials or a query string.
 
-A Grok Build launch sets `GROK_CLAUDE_SKILLS_ENABLED`, `GROK_CLAUDE_RULES_ENABLED`, `GROK_CLAUDE_AGENTS_ENABLED`,
-`GROK_CLAUDE_MCPS_ENABLED` and `GROK_CLAUDE_HOOKS_ENABLED` to `true`. Off, neither agent is given anything and each
-follows its own configuration.
+A Grok Build launch with `claude_compatibility` on sets `GROK_CLAUDE_SKILLS_ENABLED`, `GROK_CLAUDE_RULES_ENABLED`,
+`GROK_CLAUDE_AGENTS_ENABLED`, `GROK_CLAUDE_MCPS_ENABLED` and `GROK_CLAUDE_HOOKS_ENABLED` to `true`, except
+`GROK_CLAUDE_MCPS_ENABLED` in the case below. Off, Octoboard passes nothing for either agent and each follows its own
+configuration; Grok's own Claude support is on unless its configuration turns it off.
+
+Grok reads Claude Code's MCP servers from `$HOME/.claude.json` and ignores `CLAUDE_CONFIG_DIR`. When the global config
+file Claude Code reads for the launch (`CLAUDE_CONFIG_DIR/.claude.json` the shell snapshot exports) is another file than
+`$HOME/.claude.json` of that snapshot, Octoboard adds Claude Code's servers from `ClaudeCompatibility` to the session's
+copy of Grok's `config.toml`, under the rules of the Codex servers below with `OCTOBOARD_CLAUDE_MCP_<n>_<m>` for the
+values (their `${…}` references are left to Grok to expand, not settled), and sets `GROK_CLAUDE_MCPS_ENABLED=false`
+(the other four variables stay `true`) only once they are in the copy: a copy that cannot be read, parsed or replaced leaves the variable `true`, so Grok keeps reading the servers itself.
+Where it reads the same file, or the shell exports no directory, nothing is added and Grok reads them itself; then a
+name both Claude Code and Codex give is Claude Code's too, since the Codex server of that name is not added. Grok's own
+`.mcp.json` source is left on in both cases (it does not apply Claude Code's approvals of project servers), so a
+project's `.mcp.json` server can reach Grok from there as well as from the copy. With `claude_compatibility` off,
+Octoboard does not try to hide any of Grok's native Claude, Cursor or `.mcp.json` servers from the Codex ones.
+
+A Claude Code launch with `codex_compatibility` on takes three things from Codex's source, each built afresh at every
+launch, resume and account switch:
+
+- Its MCP servers, read from `config.toml` in the Codex home (`CODEX_HOME` of the launch's shell snapshot, else
+  `~/.codex`), layered under the project's `.codex/config.toml` files from the repository root down to the working
+  directory. A directory's file counts only where Codex trusts that directory, decided for each directory from the
+  repository root down to the working directory on its own, as Codex decides it and before any file is read: the home's
+  `config.toml` entry `projects."<directory>"`, else the entry of the repository's top (the nearest directory holding
+  `.git`; a linked worktree's own top), else the entry of the main repository's root (the parent of the common git
+  directory, whatever it is named). The first entry with a `trust_level` string decides, only `"trusted"` trusting; an
+  entry without one is skipped, no entry is untrusted, and a trusted directory above the repository covers nothing, so a
+  repository trusted with an untrusted subdirectory loads the repository's layer only. A file in play that cannot be
+  read leaves no server. They are added to the launch's `--mcp-config` beside Octoboard's own server. A
+  server is left out whole when Claude Code defines the name itself (a same-named `--mcp-config` server would replace
+  it; with Claude Code's own files unreadable none is added), when the name is `octoboard` or holds anything but ASCII
+  letters, digits, `-` and `_`, when it is `enabled = false`, has a `cwd`, `enabled_tools` or `disabled_tools`, is
+  neither stdio nor streamable HTTP, or has a field of the wrong type; when its `command`, `args` or `url` holds `${`;
+  when a literal `env` or header value holds `${` (Claude Code would expand it, Codex does not); when an `env_vars` or
+  `env_http_headers` variable name cannot be an environment variable's; or when it needs a variable the launch lacks,
+  as `bearer_token_env_var` does. A literal `env` or header value is put in the Claude Code process's environment as
+  `OCTOBOARD_CODEX_MCP_<n>_<m>` and referred to as `${OCTOBOARD_CODEX_MCP_<n>_<m>}`, so no secret is on the command
+  line; `<n>` is the server's position among all of the source's servers, sorted by name with the left-out ones
+  included, and `<m>` the entry's within its `env` or headers. `env_vars`, `env_http_headers` and
+  `bearer_token_env_var` become `${NAME}` references to the user's own environment (the launch's shell snapshot): an
+  `env_vars` entry or an `env_http_headers` header whose variable is unset is dropped, as Codex would not forward it.
+- Its skills and custom prompts, as the plugin `codex-compat` (a directory `codex-compat/` of the session's scratch
+  space, passed with `--plugin-dir` only when it holds an entry; not `codex`, the name of the plugin OpenAI ships for
+  Claude Code): skills are `skills/<name>`, links to every directory holding a `SKILL.md` in `.codex/skills` and
+  `.agents/skills` from the working directory up to the repository root (nearest first, and a directory's only where
+  Codex trusts that directory, as for its `config.toml` layers: an untrusted repository injects no skill; Codex itself
+  loads project skills with or without trust, so this is a narrower offer), then the Codex home's `skills` and
+  `~/.agents/skills`, one per directory name, dot-directories skipped. A skill the home's
+  `[[skills.config]]` disables is left out without hiding a farther one of the same name. Codex 0.166 differs in
+  finding a `SKILL.md` at any depth under a root, listing two skills of one name both and taking a skill's name from its
+  front matter; the `[[skills.config]]` entries of a project's own `config.toml` are not read. Prompts are
+  `commands/<name>.md`, links to (or, where the host makes no file links, copies of) the Markdown files of the Codex
+  home's `prompts`. They are invoked as `codex-compat:<skill>` and `/codex-compat:<name>`; Codex's named `$KEY`
+  placeholders are not substituted, and the instructions tell the agent to ask for or supply them.
+- Its instructions (`src/adapter/codex/compatibility.md`), appended to the `--append-system-prompt` role text.
+
+A Grok Build launch with `codex_compatibility` on edits the session's own copy of `config.toml` (never the user's file;
+what it adds is not written back by the shared-config writeback), as a TOML document replaced whole, and appends to
+`--rules`:
+
+- Its MCP servers, from the same source as above, as `[mcp_servers.<name>]` tables (`command`, `args`, `env`, or `url`
+  and `headers`; a server of type `sse`, which only Claude Code's source can give, is written as `url` and `headers`
+  too). Grok expands `${NAME}` in `args`, `env` values and `headers` values, so a literal `env` or header value goes
+  into the Grok process's environment as `OCTOBOARD_CODEX_MCP_<n>_<m>` (`<n>` the server's position among all of the
+  source's servers, `<m>` the entry's) and the table refers to it; no value that may be a secret is written, though the
+  literal parts of a value that mixes text with a reference and the default of a `${NAME:-default}` stay in the
+  owner-only copy. `${NAME}` and `${NAME:-default}`, both of which Grok expands, are kept, and any other `${` leaves the
+  server out. References to unset variables are settled as for Claude Code. A server is left out for the reasons above,
+  and when Grok defines the name itself: in the copy of the user's configuration, or in a `.grok/config.toml` from the
+  working directory up to the repository root; with such a project file unreadable none is added. A copy that cannot be
+  parsed is left as it is.
+- Its skills, as `codex-skills/<name>` links in the session's scratch space (directories are linked on every host),
+  whose directory is appended to `[skills] paths` (created if absent, after the user's paths). The skills under an
+  `.agents/skills` root, the project's and `~/.agents/skills`, are left out, since Grok reads those roots itself. Its
+  custom prompts are not offered as commands: a `commands/` directory under a `[skills] paths` root is not loaded
+  (Grok 1.0.77: `grok inspect` lists no such command), so the instructions tell the agent to read a prompt's file when
+  the user asks for it by name.
+- Its instructions, appended to the `--rules` role text, with Grok Build named as the consumer. Grok keeps the `--rules`
+  of a session as it first got them, so turning `codex_compatibility` on or off changes the servers and skills of a
+  resumed session but not its instructions.
+
+`Settings.agent_tags` is the tags the user put on each agent, keyed by provider id: short free-form labels that
+tell a session choosing an agent what the agent is good for. They belong to the agent, not to an account or a model,
+apply to every account of the agent and are application-wide, so every client sees the same ones. The daemon keeps them
+with the application settings, sends them in the connect snapshot's `settings` and broadcasts `settings_updated` when
+`update_settings` changes them; an agent without tags has no entry. They are kept for an agent removed from
+`added_agents` and come back when it is added again; it is for the client to offer and show only the added agents'
+tags. Octoboard selects nothing by them.
 
 `Account.share_default_config` is whether the account shares the agent's default configuration, and
 `Account.share_default_config_incomplete` whether the last change toward that choice did not finish: it is set when a

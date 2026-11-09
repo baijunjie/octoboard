@@ -122,7 +122,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         weekly_all_models: false,
     },
     model_display: ModelDisplay::PLAIN,
-    compatibility_source: false,
+    compatibility_source: true,
     settings: &[
         SettingDescriptor {
             id: "approval_reviewer",
@@ -151,7 +151,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         SettingDescriptor {
             id: "claude_compatibility",
             kind: SettingKind::Switch {
-                default: SwitchDefault::WhileAdded("claude"),
+                default: SwitchDefault::Off,
             },
             exported: true,
             shown_to_agents: true,

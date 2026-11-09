@@ -475,7 +475,7 @@ async fn provider_settings_round_trip_with_the_accounts_approval_settings_includ
         &target,
         AgentId::GROK,
         "claude_compatibility",
-        SettingValue::Switch(false),
+        SettingValue::Switch(true),
     );
     set(
         &target,
@@ -529,7 +529,7 @@ async fn provider_settings_round_trip_with_the_accounts_approval_settings_includ
     let current = &inspected.current_provider_settings;
     assert_eq!(
         current["grok"]["claude_compatibility"],
-        Some(SettingValue::Switch(false))
+        Some(SettingValue::Switch(true))
     );
     assert_eq!(
         current["codex"]["claude_compatibility"],
@@ -577,8 +577,13 @@ async fn provider_settings_round_trip_with_the_accounts_approval_settings_includ
     .unwrap();
     assert!(!on(AgentId::CODEX));
     // The document makes no valid choice for Grok Build, so the target's stays.
-    assert!(!on(AgentId::GROK));
+    assert!(on(AgentId::GROK));
     let choices = target.store.provider_setting_choices().unwrap();
+    // The imported `false` is a stored choice, not the setting's default.
+    assert_eq!(
+        choices["codex"]["claude_compatibility"],
+        SettingValue::Switch(false)
+    );
     assert_eq!(
         choices["codex"]["approval_reviewer"],
         SettingValue::Choice("auto_review".into())
@@ -844,11 +849,11 @@ async fn a_version_1_document_is_upgraded_and_applies_its_agent_account_settings
     assert!(!target.store.auto_switch_on_usage_limit().unwrap());
     assert!(target.store.auto_start_quota_windows().unwrap());
     assert_eq!(target.store.agent_tags().unwrap()["codex"], ["review"]);
-    assert!(!target
-        .store
-        .provider_settings_of(AgentId::CODEX)
-        .unwrap()
-        .switch("claude_compatibility"));
+    // The document's explicit `false` is stored as a choice, not left to the setting's default.
+    assert_eq!(
+        target.store.provider_setting_choices().unwrap()["codex"]["claude_compatibility"],
+        SettingValue::Switch(false)
+    );
     assert!(imported.accounts.unwrap().agent_settings_applied.is_some());
 }
 

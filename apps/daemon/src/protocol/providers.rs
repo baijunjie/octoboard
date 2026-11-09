@@ -132,12 +132,25 @@ mod tests {
         let compatibility = &grok["settings"][1];
         assert_eq!(
             compatibility["kind"],
-            serde_json::json!({"type": "switch", "default": "on"})
+            serde_json::json!({"type": "switch", "default": "off"})
         );
         assert_eq!(compatibility["compatibility_with"], "claude");
-        assert_eq!(
-            serde_json::to_value(&served[1]).unwrap()["settings"][1]["kind"]["default"],
-            serde_json::json!({"while_added": "claude"})
-        );
+        let codex_compatibility = |provider: &serde_json::Value| {
+            provider["settings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|setting| setting["id"] == "codex_compatibility")
+                .cloned()
+                .unwrap()
+        };
+        for provider in [&claude, &grok] {
+            let setting = codex_compatibility(provider);
+            assert_eq!(
+                setting["kind"],
+                serde_json::json!({"type": "switch", "default": "off"})
+            );
+            assert_eq!(setting["compatibility_with"], "codex");
+        }
     }
 }

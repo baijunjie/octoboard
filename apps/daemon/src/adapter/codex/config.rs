@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use crate::adapter::files::{
-    is_agent_config_dir, read_bounded_text, read_regular_text, SMALL_FILE_LIMIT,
+    is_agent_config_dir, project_dirs, read_bounded_text, read_regular_text, SMALL_FILE_LIMIT,
 };
 use crate::providers::codex;
 use crate::records::line_file::JSON_FILE_LIMIT;
@@ -76,27 +76,22 @@ pub(super) fn server_names(config: &toml::Table) -> BTreeSet<String> {
         .collect()
 }
 
-/// The names of the MCP servers the project's `.codex/config.toml` files define, layered over the
-/// account's own: the one in the session's working directory and in each directory above it up to
-/// the repository root (the nearest one holding `.git`; the working directory alone outside a
-/// repository). `None` when one of them exists and cannot be read or parsed. `project` is the
-/// canonical working directory; a `.codex` that is `codex_home`, as in a home directory opened as
-/// the project, holds the user's own `config.toml` rather than the project's.
-pub(super) fn project_server_names(project: &Path, codex_home: &Path) -> Option<BTreeSet<String>> {
-    let mut dirs = Vec::new();
-    let mut found = false;
-    for dir in project.ancestors() {
-        dirs.push(dir);
-        if dir.join(".git").exists() {
-            found = true;
-            break;
+/// The project's `.codex/config.toml` files that exist, parsed, from the repository root down to
+/// the working directory (the nearest last), those of the directories `include` accepts; a
+/// directory it refuses is not touched. `None` when a file it reads exists and cannot be read
+/// or parsed. `project` is the canonical working directory; a `.codex` that is `codex_home`, as in a
+/// home directory opened as the project, holds the user's own `config.toml` rather than the
+/// project's.
+pub(super) fn project_configs(
+    project: &Path,
+    codex_home: &Path,
+    include: impl Fn(&Path) -> bool,
+) -> Option<Vec<toml::Table>> {
+    let mut configs = Vec::new();
+    for dir in project_dirs(project).into_iter().rev() {
+        if !include(dir) {
+            continue;
         }
-    }
-    if !found {
-        dirs.truncate(1);
-    }
-    let mut names = BTreeSet::new();
-    for dir in dirs {
         let path = dir.join(".codex/config.toml");
         let read = if is_agent_config_dir(&dir.join(".codex"), codex_home) {
             read_regular_text(&path, SMALL_FILE_LIMIT)
@@ -112,12 +107,23 @@ pub(super) fn project_server_names(project: &Path, codex_home: &Path) -> Option<
             }
         };
         match text.parse::<toml::Table>() {
-            Ok(parsed) => names.extend(server_names(&parsed)),
+            Ok(parsed) => configs.push(parsed),
             Err(err) => {
                 tracing::warn!(path = %path.display(), %err, "could not parse a project Codex config");
                 return None;
             }
         }
     }
-    Some(names)
+    Some(configs)
+}
+
+/// The names of the MCP servers the project's `.codex/config.toml` files define, layered over the
+/// account's own (see [`project_configs`]); `None` when one of them cannot be read or parsed.
+pub(super) fn project_server_names(project: &Path, codex_home: &Path) -> Option<BTreeSet<String>> {
+    Some(
+        project_configs(project, codex_home, |_| true)?
+            .iter()
+            .flat_map(server_names)
+            .collect(),
+    )
 }

@@ -64,6 +64,7 @@ pub(crate) mod accounts;
 mod app_server;
 mod claude_compatibility;
 mod claude_mcp;
+mod compatibility;
 mod config;
 mod conversation;
 mod hooks;
@@ -217,6 +218,10 @@ impl AgentProvider for CodexProvider {
 
     fn catalogue(&self) -> &'static dyn crate::agents::models::ModelCatalogue {
         &models::CodexCatalogue
+    }
+
+    fn compatibility_source(&self) -> Option<&'static dyn super::CompatibilitySource> {
+        Some(&compatibility::CodexCompatibility)
     }
 
     fn records(&self) -> &'static dyn crate::records::RecordStore {
@@ -401,7 +406,7 @@ impl AgentProvider for CodexProvider {
         // directory. A server of the same name in the account's own `config.toml` or the project's
         // `.codex/config.toml` stays as it is, and an unreadable one leaves nothing to compare
         // with, so then none is added.
-        if let Some(source) = spec.compatibility_source {
+        if let Some(source) = spec.compatibility_source(AgentId::CLAUDE) {
             let project_names = project_server_names(&canonical_project(spec.cwd), &home);
             let taken = |name: &str| {
                 project_names
@@ -451,7 +456,7 @@ impl AgentProvider for CodexProvider {
             AgentId::CODEX,
             &spec.role_options(),
         );
-        if let Some(source) = spec.compatibility_source {
+        if let Some(source) = spec.compatibility_source(AgentId::CLAUDE) {
             instructions.push_str("\n\n");
             instructions.push_str(&source.instructions(AgentId::CODEX.label(), spec.shell_env));
         }

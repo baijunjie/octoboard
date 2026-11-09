@@ -127,11 +127,20 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         SettingDescriptor {
             id: "claude_compatibility",
             kind: SettingKind::Switch {
-                default: SwitchDefault::On,
+                default: SwitchDefault::Off,
             },
             exported: true,
             shown_to_agents: true,
             compatibility_with: Some("claude"),
+        },
+        SettingDescriptor {
+            id: "codex_compatibility",
+            kind: SettingKind::Switch {
+                default: SwitchDefault::Off,
+            },
+            exported: true,
+            shown_to_agents: true,
+            compatibility_with: Some("codex"),
         },
     ],
     codes: &[HOME_NOT_INITIALIZED, SANDBOX_UNSUPPORTED],

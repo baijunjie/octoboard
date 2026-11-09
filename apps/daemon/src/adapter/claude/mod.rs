@@ -43,6 +43,7 @@
 
 pub(crate) mod accounts;
 mod compatibility;
+mod compatibility_consumer;
 mod conversation;
 mod hooks;
 mod login;
@@ -236,19 +237,22 @@ impl ClaudeProvider {
     }
 
     /// The `--mcp-config` JSON. Merged with the project's and the user's servers, which is why
-    /// `--strict-mcp-config` must never be passed alongside it.
-    fn mcp_config_json(spec: &LaunchSpec<'_>) -> String {
+    /// `--strict-mcp-config` must never be passed alongside it. `source_servers` are a
+    /// compatibility source's, none of which may take Octoboard's own key.
+    fn mcp_config_json(
+        spec: &LaunchSpec<'_>,
+        mut source_servers: serde_json::Map<String, serde_json::Value>,
+    ) -> String {
         let (command, args) = super::mcp_server_command(spec);
-        json!({
-            "mcpServers": {
-                session_tools::catalogue::SERVER_KEY: {
-                    "type": "stdio",
-                    "command": command,
-                    "args": args,
-                }
-            }
-        })
-        .to_string()
+        source_servers.insert(
+            session_tools::catalogue::SERVER_KEY.to_string(),
+            json!({
+                "type": "stdio",
+                "command": command,
+                "args": args,
+            }),
+        );
+        json!({ "mcpServers": source_servers }).to_string()
     }
 }
 
@@ -437,15 +441,33 @@ impl AgentProvider for ClaudeProvider {
         }
         args.push("--settings".to_string());
         args.push(Self::settings_json(spec, pinned));
+        // What the compatibility source (Codex's) gives: its servers beside Octoboard's own, its
+        // skills and prompts as a plugin directory built afresh for every launch, and its
+        // instructions after the role text.
+        let source = spec.compatibility_source(AgentId::CODEX);
+        let source_servers = source
+            .map(|source| compatibility_consumer::servers(source, spec, pinned))
+            .unwrap_or_default();
         args.push("--mcp-config".to_string());
-        args.push(Self::mcp_config_json(spec));
-        args.push("--append-system-prompt".to_string());
-        args.push(session_tools::role::role_description(
+        args.push(Self::mcp_config_json(spec, source_servers.servers));
+        if let Some(dir) =
+            source.and_then(|source| compatibility_consumer::plugin_dir(source, spec))
+        {
+            args.push("--plugin-dir".to_string());
+            args.push(dir.to_string_lossy().into_owned());
+        }
+        let mut role = session_tools::role::role_description(
             spec.kind,
             spec.owner.as_ref(),
             AgentId::CLAUDE,
             &spec.role_options(),
-        ));
+        );
+        if let Some(source) = source {
+            role.push_str("\n\n");
+            role.push_str(&source.instructions(AgentId::CLAUDE.label(), spec.shell_env));
+        }
+        args.push("--append-system-prompt".to_string());
+        args.push(role);
         // Last, after every list-valued flag has closed. All are global flags, so they sit
         // alongside `--resume` too.
         let permission_mode = match spec.settings.choice("approval_mode") {
@@ -473,7 +495,7 @@ impl AgentProvider for ClaudeProvider {
             args.push(effort.to_string());
         }
 
-        let mut env = Vec::new();
+        let mut env = source_servers.env;
         if let Some(dir) = pinned {
             env.push((
                 claude::LAYOUT.config_dir_var.to_string(),
@@ -1101,6 +1123,218 @@ mod tests {
                 &fixture.spec().role_options(),
             )
         );
+    }
+
+    /// A scratch home holding Codex's configuration: a server of each transport, a name Claude
+    /// Code defines itself, a skill and a prompt, with the launch's shell snapshot at that home.
+    fn codex_world() -> crate::adapter::tests::SpecFixture {
+        let mut fixture = spec_fixture();
+        let home = fixture.scratch.join("home");
+        let write = |path: std::path::PathBuf, text: &str| {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        };
+        write(
+            home.join(".codex/config.toml"),
+            r#"
+[mcp_servers.local]
+command = "npx"
+args = ["-y", "server"]
+env = { SECRET = "s3cret-value" }
+env_vars = ["FORWARDED"]
+
+[mcp_servers.remote]
+url = "https://example.com/mcp"
+http_headers = { "X-Plain" = "plain-header-value" }
+bearer_token_env_var = "TOKEN_VAR"
+
+[mcp_servers.octoboard]
+command = "impostor"
+
+[mcp_servers.taken]
+command = "codex-taken"
+
+[mcp_servers.expands]
+command = "run-${HOME}"
+
+[mcp_servers."bad name"]
+command = "x"
+"#,
+        );
+        write(
+            home.join(".codex/skills/review/SKILL.md"),
+            "---\nname: review\n---\n",
+        );
+        write(home.join(".codex/prompts/fix.md"), "Fix $1");
+        write(
+            home.join(".claude.json"),
+            r#"{"mcpServers": {"taken": {"command": "claude-taken"}}}"#,
+        );
+        fixture
+            .shell_env
+            .insert("HOME".to_string(), home.to_string_lossy().into_owned());
+        // The variables Codex's servers name, so that the servers naming them are kept.
+        for var in ["FORWARDED", "TOKEN_VAR"] {
+            fixture.shell_env.insert(var.to_string(), "set".to_string());
+        }
+        fixture.compatibility_sources = vec![(
+            AgentId::CODEX,
+            crate::adapter::provider(AgentId::CODEX)
+                .compatibility_source()
+                .unwrap(),
+        )];
+        fixture
+    }
+
+    fn value_after(args: &[String], flag: &str) -> Option<String> {
+        let at = args.iter().position(|arg| arg == flag)?;
+        Some(args[at + 1].clone())
+    }
+
+    /// With the switch on, Codex's servers join Octoboard's own in `--mcp-config` (the variables
+    /// are numbered by the server's place among all of Codex's, those left out included, and the
+    /// entry's within its server), a name Claude Code defines or Octoboard owns is not taken, no
+    /// literal value is on argv, its skills and prompts come as the plugin `codex-compat`, and its
+    /// guidance follows the role text.
+    #[test]
+    fn codex_compatibility_adds_servers_a_plugin_directory_and_instructions() {
+        let mut fixture = codex_world();
+        fixture.settings = ProviderSettings::new([(
+            "approval_mode".to_string(),
+            Some(SettingValue::Choice("plan".to_string())),
+        )]);
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        let config: serde_json::Value =
+            serde_json::from_str(&value_after(&plan.args, "--mcp-config").unwrap()).unwrap();
+        let servers = config["mcpServers"].as_object().unwrap();
+        let mut names: Vec<_> = servers.keys().map(String::as_str).collect();
+        names.sort();
+        assert_eq!(names, ["local", "octoboard", "remote"]);
+        assert_eq!(servers["octoboard"]["command"], fixture.self_exe);
+        assert_eq!(
+            servers["local"],
+            json!({"type": "stdio", "command": "npx", "args": ["-y", "server"],
+                   "env": {"FORWARDED": "${FORWARDED}", "SECRET": "${OCTOBOARD_CODEX_MCP_2_0}"}})
+        );
+        assert_eq!(
+            servers["remote"],
+            json!({"type": "http", "url": "https://example.com/mcp",
+                   "headers": {"Authorization": "Bearer ${TOKEN_VAR}",
+                               "X-Plain": "${OCTOBOARD_CODEX_MCP_4_0}"}})
+        );
+        let mut env = plan.env.clone();
+        env.sort();
+        assert_eq!(
+            env,
+            [
+                (
+                    "OCTOBOARD_CODEX_MCP_2_0".to_string(),
+                    "s3cret-value".to_string()
+                ),
+                (
+                    "OCTOBOARD_CODEX_MCP_4_0".to_string(),
+                    "plain-header-value".to_string()
+                )
+            ]
+        );
+        for secret in ["s3cret-value", "plain-header-value"] {
+            assert!(
+                !plan.args.iter().any(|arg| arg.contains(secret)),
+                "{secret}"
+            );
+        }
+
+        let plugin = std::path::PathBuf::from(value_after(&plan.args, "--plugin-dir").unwrap());
+        assert_eq!(plugin, fixture.scratch.join("codex-compat"));
+        assert!(plugin.join("skills/review/SKILL.md").is_file());
+        assert_eq!(
+            std::fs::read_to_string(plugin.join("commands/fix.md")).unwrap(),
+            "Fix $1"
+        );
+        let role = session_tools::role::role_description(
+            fixture.kind,
+            fixture.owner.as_ref(),
+            AgentId::CLAUDE,
+            &fixture.spec().role_options(),
+        );
+        let prompt = value_after(&plan.args, "--append-system-prompt").unwrap();
+        assert!(prompt.starts_with(&format!("{role}\n\n# Codex compatibility")));
+        assert!(prompt.contains("Honor Codex workflows in Claude Code"));
+        // Every list-valued flag has closed before the permission flags.
+        let at = |flag: &str| plan.args.iter().position(|arg| arg == flag).unwrap();
+        assert!(at("--mcp-config") < at("--plugin-dir"));
+        assert!(at("--plugin-dir") < at("--permission-mode"));
+    }
+
+    /// A reference to a variable the launch lacks is settled as Codex would have settled it: an
+    /// `env` entry or header that is only the reference is dropped, and a server whose other value
+    /// holds one is left out.
+    #[test]
+    fn a_reference_to_a_variable_the_launch_lacks_is_settled_as_codex_would() {
+        let mut fixture = codex_world();
+        fixture.shell_env.remove("FORWARDED");
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        let config: serde_json::Value =
+            serde_json::from_str(&value_after(&plan.args, "--mcp-config").unwrap()).unwrap();
+        assert_eq!(
+            config["mcpServers"]["local"]["env"],
+            json!({"SECRET": "${OCTOBOARD_CODEX_MCP_2_0}"})
+        );
+        fixture.shell_env.remove("TOKEN_VAR");
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        let config: serde_json::Value =
+            serde_json::from_str(&value_after(&plan.args, "--mcp-config").unwrap()).unwrap();
+        assert!(config["mcpServers"].get("remote").is_none());
+        assert!(config["mcpServers"].get("local").is_some());
+    }
+
+    /// The directory is rebuilt on every launch, so an entry gone from Codex's configuration is
+    /// gone from it, and with nothing to offer no flag is passed.
+    #[test]
+    fn the_plugin_directory_is_rebuilt_per_launch_and_omitted_when_empty() {
+        let fixture = codex_world();
+        let home = fixture.scratch.join("home/.codex");
+        let first = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        assert!(value_after(&first.args, "--plugin-dir").is_some());
+        std::fs::remove_file(home.join("prompts/fix.md")).unwrap();
+        let second = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        let plugin = fixture.scratch.join("codex-compat");
+        assert!(plugin.join("skills/review").exists());
+        assert!(!plugin.join("commands/fix.md").exists());
+        assert!(value_after(&second.args, "--plugin-dir").is_some());
+        std::fs::remove_dir_all(home.join("skills")).unwrap();
+        let third = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        assert!(value_after(&third.args, "--plugin-dir").is_none());
+        assert!(!plugin.exists());
+    }
+
+    #[test]
+    fn with_the_switch_off_none_of_codexs_configuration_is_added() {
+        let mut fixture = codex_world();
+        fixture.compatibility_sources.clear();
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        let config: serde_json::Value =
+            serde_json::from_str(&value_after(&plan.args, "--mcp-config").unwrap()).unwrap();
+        assert_eq!(config["mcpServers"].as_object().unwrap().len(), 1);
+        assert!(value_after(&plan.args, "--plugin-dir").is_none());
+        assert!(!value_after(&plan.args, "--append-system-prompt")
+            .unwrap()
+            .contains("Codex"));
+        assert!(plan.env.is_empty());
+        assert!(!fixture.scratch.join("codex-compat").exists());
+    }
+
+    /// Claude Code's own definitions are replaced by a same-named `--mcp-config` server, so with
+    /// them unknown no server of Codex's is added.
+    #[test]
+    fn an_unreadable_claude_configuration_adds_no_server_of_codexs() {
+        let fixture = codex_world();
+        std::fs::write(fixture.scratch.join("home/.claude.json"), "{ not json").unwrap();
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        let config: serde_json::Value =
+            serde_json::from_str(&value_after(&plan.args, "--mcp-config").unwrap()).unwrap();
+        assert_eq!(config["mcpServers"].as_object().unwrap().len(), 1);
+        assert!(plan.env.is_empty());
     }
 
     #[test]

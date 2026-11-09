@@ -4861,11 +4861,11 @@ export type Settings = {
    * The value in effect of every setting of every provider (see `ProviderInfo::settings`), by
    * provider id and then setting id: each provider the daemon registers has an entry and each of
    * its settings a key, and the type is `Partial` only because a client may index it by an id
-   * the daemon does not serve. A switch holds the user's choice, else the value its default rule
-   * gives now; a choice holds the user's, else `null`, which follows each account's own
-   * configuration. Read when a session starts, resumes or switches account. The choices of a
-   * setting its provider does not export (`exported` false) are kept local to this machine; an
-   * exported one travels with a configuration export.
+   * the daemon does not serve. A switch holds the user's choice, else its default; a choice
+   * holds the user's, else `null`, which follows each account's own configuration. Read when a
+   * session starts, resumes or switches account. The choices of a setting its provider does not
+   * export (`exported` false) are kept local to this machine; an exported one travels with a
+   * configuration export.
    */
   provider_settings: Partial<Record<Agent, Record<string, boolean | string | null>>>,
   /**
@@ -5071,9 +5071,7 @@ export type SideVersion = {
 /**
  * What a switch is while the user has made no choice for it.
  */
-export type SwitchDefault = "on" | "off" | {
-  "while_added": string
-};
+export type SwitchDefault = "on" | "off";
 
 /**
  * Client-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY input

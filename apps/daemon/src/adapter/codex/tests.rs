@@ -216,9 +216,15 @@ fn the_role_text_is_added_as_a_developer_message_not_a_replaced_system_prompt() 
     assert!(!overrides.iter().any(|o| o.starts_with("instructions=")));
 }
 
-/// The compatibility source Claude compatibility reads from.
-fn claude_source() -> Option<&'static dyn crate::adapter::CompatibilitySource> {
-    crate::adapter::provider(AgentId::CLAUDE).compatibility_source()
+/// The compatibility sources Claude compatibility reads from.
+fn claude_sources() -> Vec<(AgentId, &'static dyn crate::adapter::CompatibilitySource)> {
+    crate::adapter::compatibility_sources_of(
+        AgentId::CODEX,
+        &crate::providers::ProviderSettings::new([(
+            "claude_compatibility".to_string(),
+            Some(crate::providers::SettingValue::Switch(true)),
+        )]),
+    )
 }
 
 fn permission_settings(mode: &str) -> crate::providers::ProviderSettings {
@@ -248,7 +254,7 @@ fn claude_compatibility_appends_the_instructions_naming_the_claude_config_dir() 
     assert!(!off.contains("Claude Code compatibility"));
 
     let mut spec = fixture.spec();
-    spec.compatibility_source = claude_source();
+    spec.compatibility_sources = claude_sources();
     let on = instructions(&CodexProvider.plan(&spec).unwrap());
     let description = toml_string(&session_tools::role::role_description(
         fixture.kind,
@@ -300,7 +306,7 @@ fn claude_compatibility_passes_claude_codes_mcp_servers_without_secrets_on_argv(
         .any(|o| o.starts_with("mcp_servers.remote")));
 
     let mut spec = fixture.spec();
-    spec.compatibility_source = claude_source();
+    spec.compatibility_sources = claude_sources();
     let plan = CodexProvider.plan(&spec).unwrap();
     let all = overrides(&plan.args);
     assert!(all.contains(&"mcp_servers.remote.url=\"https://x.example/mcp\"".to_string()));
@@ -350,7 +356,7 @@ fn claude_compatibility_skips_servers_that_set_what_the_launch_or_codex_owns() {
     fixture.config_dir = Some(codex_home);
 
     let mut spec = fixture.spec();
-    spec.compatibility_source = claude_source();
+    spec.compatibility_sources = claude_sources();
     let plan = CodexProvider.plan(&spec).unwrap();
     let all = overrides(&plan.args);
     for skipped in ["home", "gitcfg", "octo", "log", "proxy"] {
@@ -403,7 +409,7 @@ fn claude_compatibility_leaves_servers_the_projects_codex_config_defines() {
         .insert("HOME".to_string(), home.to_string_lossy().into_owned());
     fixture.cwd = cwd.clone();
     let mut spec = fixture.spec();
-    spec.compatibility_source = claude_source();
+    spec.compatibility_sources = claude_sources();
     let all = overrides(&CodexProvider.plan(&spec).unwrap().args);
     assert!(all.contains(&"mcp_servers.free.command=\"c\"".to_string()));
     assert!(!all.iter().any(|o| o.starts_with("mcp_servers.near.")));
@@ -411,7 +417,7 @@ fn claude_compatibility_leaves_servers_the_projects_codex_config_defines() {
 
     std::fs::write(cwd.join(".codex/config.toml"), "= not toml").unwrap();
     let mut spec = fixture.spec();
-    spec.compatibility_source = claude_source();
+    spec.compatibility_sources = claude_sources();
     let all = overrides(&CodexProvider.plan(&spec).unwrap().args);
     assert!(!all.iter().any(|o| o.starts_with("mcp_servers.free.")));
 }

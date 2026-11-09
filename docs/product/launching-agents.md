@@ -170,11 +170,11 @@ with.
 
 The model and reasoning effort resolved for the session are passed on the launch as well (see "The model and reasoning
 effort" below), as is an explicit permission preset or mode chosen for the agent (see
-"Approval modes" in `docs/product/per-agent-settings.md`), and, for Codex and Grok Build while the agent's Claude
-compatibility is on, what has the session load Claude Code's configuration: for Codex, a section appended to its
-developer instructions and Claude Code's MCP servers, for Grok Build, its own switches for Claude Code's configuration
-(see "Claude compatibility" in `docs/product/per-agent-settings.md`). These are the user's choices carried to the agent,
-separate from the injected capabilities.
+"Approval modes" in `docs/product/per-agent-settings.md`), and, while one of the agent's compatibility switches is on,
+what has the session load another agent's configuration: Claude Code's for Codex and Grok Build, Codex's for Claude
+Code and Grok Build — MCP servers, skills and a section added to the role description (see "Claude compatibility" and
+"Codex compatibility" in `docs/product/per-agent-settings.md`, and `docs/product/compatibility-between-agents.md`).
+These are the user's choices carried to the agent, separate from the injected capabilities.
 
 ### The console session's instruction file
 
@@ -400,10 +400,15 @@ Besides the terminal type, the variables set over the snapshot are:
 - for every Grok Build session, `GROK_THEME`, which picks Grok's own colour theme to match the session terminal (see
   "Grok Build's theme" in `docs/product/per-agent-launch-specifics.md`);
 - for a Grok Build session while Grok Build's Claude compatibility is on, the five `GROK_CLAUDE_*_ENABLED` variables, set
-  to `true` (see "Claude compatibility for Grok Build" in `docs/product/per-agent-launch-specifics.md`);
+  to `true`, except `GROK_CLAUDE_MCPS_ENABLED`, set to `false` where Octoboard gives Claude Code's MCP servers itself,
+  together with the `OCTOBOARD_CLAUDE_MCP_<n>_<m>` variables that carry those servers' literal header and `env` values
+  (see "Claude compatibility for Grok Build" in `docs/product/compatibility-between-agents.md`);
 - for a Codex session while Codex's Claude compatibility is on, the variables that carry the passed Claude Code MCP
   servers' header and `env` values (see "Claude compatibility for Codex" in
-  `docs/product/per-agent-launch-specifics.md`);
+  `docs/product/compatibility-between-agents.md`);
+- for a Claude Code or Grok Build session while the agent's Codex compatibility is on, the `OCTOBOARD_CODEX_MCP_<n>_<m>`
+  variables that carry the passed Codex MCP servers' literal header and `env` values (see "Codex's MCP servers" in
+  `docs/product/compatibility-between-agents.md`);
 - for a Claude Code session whose account's directory shares the default configuration, `CLAUDE_CODE_REMOTE_MEMORY_DIR`
   (when exactly, an account whose last change of sharing is incomplete included, is in "Claude Code's auto memory" in
   `docs/product/sharing-the-default-configuration.md`).

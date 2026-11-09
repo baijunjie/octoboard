@@ -22,6 +22,25 @@ pub(super) fn canonical_project(cwd: &Path) -> PathBuf {
     crate::hostfs::canonical(cwd).unwrap_or_else(|_| cwd.to_path_buf())
 }
 
+/// The directories whose project configuration an agent layers for a session in `project`
+/// (canonical): the working directory and each directory above it up to the repository root (the
+/// nearest one holding `.git`; the working directory alone outside a repository), nearest first.
+pub(super) fn project_dirs(project: &Path) -> Vec<&Path> {
+    let mut dirs = Vec::new();
+    let mut found = false;
+    for dir in project.ancestors() {
+        dirs.push(dir);
+        if dir.join(".git").exists() {
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        dirs.truncate(1);
+    }
+    dirs
+}
+
 /// Whether `dir`, a directory in the project's tree, is the agent configuration directory
 /// `config_dir` in effect: a home directory opened as the project holds the agent's own, whose
 /// files are the agent's and read with `read_regular_text`, not as the project's. Compared as

@@ -79,7 +79,7 @@ function settingsOf(source: string): SettingDescriptor[] {
     const compatibility = required(setting, /compatibility_with: (None|Some\("[^"]*"\))/, "compatibility_with");
     const kind: SettingDescriptor["kind"] = setting.includes("SettingKind::Choice")
       ? { type: "choice", choices: [...setting.matchAll(/value: "([^"]+)",\s*confirm: (true|false)/g)].map(([, value, confirm]) => ({ value, confirm: confirm === "true" })) }
-      : { type: "switch", default: switchDefault(required(setting, /default: SwitchDefault::(\w+(?:\("[^"]*"\))?)/, "default")) };
+      : { type: "switch", default: switchDefault(required(setting, /default: SwitchDefault::(\w+)/, "default")) };
     return {
       id: required(setting, /\bid: "([a-z_]+)"/, "setting id"),
       kind,
@@ -93,7 +93,7 @@ function settingsOf(source: string): SettingDescriptor[] {
 function switchDefault(rule: string): Extract<SettingDescriptor["kind"], { type: "switch" }>["default"] {
   if (rule === "On") return "on";
   if (rule === "Off") return "off";
-  return { while_added: required(rule, /^WhileAdded\("([^"]*)"\)$/, "WhileAdded id") };
+  throw new Error(`unknown switch default ${rule}`);
 }
 
 describe.each(FIXTURE_PROVIDERS.map((provider) => [provider.id, provider] as const))("the fixture provider %s", (id, served) => {

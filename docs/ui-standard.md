@@ -1093,10 +1093,11 @@ the Permission approval label of the agent's own setting row, in the agent's set
 tab's menu); the row's visible description
 says only that the choice applies to every account of the agent.
 
-So is the Claude compatibility row in the same dialog (Codex and Grok Build): what the agent's sessions load and follow
-when it is on or off, how Octoboard brings it about for that agent, and when a change takes effect sit in a `HelpTip`
-beside the row's label; the visible description says only that the switch applies to every account of the agent. That
-line states the scope, not the switch's state, so it stays the same whichever way the switch is set.
+So are the compatibility rows in the same dialog — Claude compatibility (Codex and Grok Build) and Codex compatibility
+(Claude Code and Grok Build): what the agent's sessions load and follow when it is on or off, how Octoboard brings it
+about for that agent, and when a change takes effect sit in a `HelpTip` beside the row's label; the visible
+description says only that the switch applies to every account of the agent. That line states the scope, not the
+switch's state, so it stays the same whichever way the switch is set.
 
 So is the share-default-config explanation in an owned account's settings dialog: what sharing links, and that idle
 sessions are ended and resumed by a change, sit in a `HelpTip` beside the row's visible label, under which a one-line

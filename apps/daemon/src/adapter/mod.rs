@@ -42,6 +42,7 @@
 pub(crate) mod account_cli;
 pub mod claude;
 pub mod codex;
+mod compatibility_offer;
 pub(crate) mod files;
 pub mod grok;
 mod hooks;
@@ -57,7 +58,7 @@ pub use hooks::{
 };
 
 use std::collections::{BTreeMap, HashMap};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -125,10 +126,11 @@ pub struct LaunchSpec<'a> {
     /// The session's own provider's settings in effect when the launch was assembled
     /// (`Store::provider_settings_of`). A provider reads only the ids its descriptor declares.
     pub settings: &'a ProviderSettings,
-    /// The compatibility source this session's provider reads, when one of its compatibility
-    /// switches (`SettingDescriptor::compatibility_with`) is on: the MCP servers and instructions
-    /// of the provider the switch names, offered through its [`CompatibilitySource`].
-    pub compatibility_source: Option<&'static dyn CompatibilitySource>,
+    /// The compatibility sources this session's provider reads, one for each of its compatibility
+    /// switches (`SettingDescriptor::compatibility_with`) that is on, keyed by the agent the switch
+    /// names: the MCP servers and instructions of that provider, offered through its
+    /// [`CompatibilitySource`]. Read one through [`LaunchSpec::compatibility_source`].
+    pub compatibility_sources: Vec<(AgentId, &'static dyn CompatibilitySource)>,
     /// The default account's directory, fully resolved, when the session's account shares the
     /// default configuration (`crate::accounts::shared_config`); `None` for every other launch. An
     /// adapter whose agent keeps per-project memory in its conversation directory points that
@@ -160,6 +162,15 @@ pub struct LaunchSpec<'a> {
 }
 
 impl LaunchSpec<'_> {
+    /// The compatibility source of `agent` this launch reads: `Some` while the switch naming it is
+    /// on.
+    pub fn compatibility_source(&self, agent: AgentId) -> Option<&'static dyn CompatibilitySource> {
+        self.compatibility_sources
+            .iter()
+            .find(|(source, _)| *source == agent)
+            .map(|(_, source)| *source)
+    }
+
     /// What the launch adds to the role description beyond the role and owner.
     pub fn role_options(&self) -> crate::session_tools::role::RoleOptions<'_> {
         crate::session_tools::role::RoleOptions {
@@ -289,8 +300,12 @@ pub fn is_spinner(text: &str) -> bool {
 pub trait CompatibilitySource: Send + Sync {
     /// The source's MCP servers in effect for `cwd`, by name, as its own configuration declares
     /// them (scopes merged, approvals and disables applied), each in the common MCP configuration
-    /// format: `command`, `args` and `env` for a local server, `type: "http"` with `url` and
-    /// `headers` for a remote one.
+    /// format: `command`, `args` and `env` for a local server, `type: "http"` or `"sse"` with `url`
+    /// and `headers` for a remote one. A `${` in an `args` entry, an `env` value or a header value is
+    /// always a reference to an environment variable of the consumer's process (`${NAME}`, or
+    /// `${NAME:-default}` where the source's own agent expands that): a source leaves out a server
+    /// whose literal value holds one, which a consumer would otherwise expand where the source's
+    /// agent does not.
     fn mcp_servers(
         &self,
         shell_env: &HashMap<String, String>,
@@ -300,6 +315,19 @@ pub trait CompatibilitySource: Send + Sync {
     /// The guidance a consuming agent, named `consumer_label` in it, is given to read the source's
     /// instruction files, skills, rules and settings, in the source's own layout.
     fn instructions(&self, consumer_label: &str, shell_env: &HashMap<String, String>) -> String;
+
+    /// The directories of the source's skills in effect for `cwd`, each holding a `SKILL.md`, a
+    /// skill named once at its nearest place. Empty for a source that leaves skills to the consumer
+    /// to find (`instructions`).
+    fn skill_dirs(&self, _shell_env: &HashMap<String, String>, _cwd: &Path) -> Vec<PathBuf> {
+        Vec::new()
+    }
+
+    /// The source's custom prompts, one Markdown file each, named by the file. Empty for a source
+    /// that leaves them to the consumer to find (`instructions`).
+    fn command_files(&self, _shell_env: &HashMap<String, String>) -> Vec<PathBuf> {
+        Vec::new()
+    }
 }
 
 /// A provider's status line, the one its launch injects as `octoboardd status-line --provider <id>
@@ -469,21 +497,23 @@ pub(crate) fn starting_program(agent: AgentId, binary: ResolvedBinary) -> Result
     Ok(provider(agent).native_binary(&binary)?.unwrap_or(binary))
 }
 
-/// The compatibility source `agent` reads under `settings`: that of the first of its
-/// compatibility switches (`SettingDescriptor::compatibility_with`) that is on, `None` while none
-/// is.
-pub fn compatibility_source_of(
+/// The compatibility sources `agent` reads under `settings`: one for each of its compatibility
+/// switches (`SettingDescriptor::compatibility_with`) that is on, keyed by the agent it names;
+/// none while none is.
+pub fn compatibility_sources_of(
     agent: AgentId,
     settings: &ProviderSettings,
-) -> Option<&'static dyn CompatibilitySource> {
+) -> Vec<(AgentId, &'static dyn CompatibilitySource)> {
     agent
         .descriptor()
         .settings
         .iter()
         .filter(|setting| settings.switch(setting.id))
-        .find_map(|setting| {
-            provider(AgentId::from_wire_name(setting.compatibility_with?)?).compatibility_source()
+        .filter_map(|setting| {
+            let source = AgentId::from_wire_name(setting.compatibility_with?)?;
+            Some((source, provider(source).compatibility_source()?))
         })
+        .collect()
 }
 
 /// The facts of how a provider's CLI is installed and updated, from which an install's method is
@@ -654,7 +684,10 @@ pub mod tests {
         pub shell_env: HashMap<String, String>,
         pub config_dir: Option<PathBuf>,
         pub settings: crate::providers::ProviderSettings,
-        pub compatibility_source: Option<&'static dyn super::CompatibilitySource>,
+        pub compatibility_sources: Vec<(
+            crate::protocol::AgentId,
+            &'static dyn super::CompatibilitySource,
+        )>,
         pub shared_default_dir: Option<PathBuf>,
         pub model: Option<String>,
         pub effort: Option<String>,
@@ -682,7 +715,7 @@ pub mod tests {
                 shell_env: &self.shell_env,
                 config_dir: self.config_dir.as_deref(),
                 settings: &self.settings,
-                compatibility_source: self.compatibility_source,
+                compatibility_sources: self.compatibility_sources.clone(),
                 shared_default_dir: self.shared_default_dir.as_deref(),
                 model: self.model.as_deref(),
                 effort: self.effort.as_deref(),
@@ -746,7 +779,7 @@ pub mod tests {
             shell_env: HashMap::new(),
             config_dir: None,
             settings: Default::default(),
-            compatibility_source: None,
+            compatibility_sources: Vec::new(),
             shared_default_dir: None,
             model: None,
             effort: None,
@@ -793,7 +826,7 @@ pub mod tests {
         for agent in crate::protocol::AgentId::ALL {
             let none = ProviderSettings::default();
             assert!(
-                super::compatibility_source_of(agent, &none).is_none(),
+                super::compatibility_sources_of(agent, &none).is_empty(),
                 "{agent:?}"
             );
             let all_on = ProviderSettings::new(
@@ -809,7 +842,7 @@ pub mod tests {
                 .iter()
                 .any(|setting| setting.compatibility_with.is_some());
             assert_eq!(
-                super::compatibility_source_of(agent, &all_on).is_some(),
+                !super::compatibility_sources_of(agent, &all_on).is_empty(),
                 declares,
                 "{agent:?}"
             );

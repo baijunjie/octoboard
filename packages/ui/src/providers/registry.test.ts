@@ -88,6 +88,23 @@ describe("the settings the providers declare", () => {
   });
 });
 
+describe("the placeholders of the settings' messages", () => {
+  it.each(FIXTURE_AGENTS)("%s words no placeholder that neither the application nor the setting's references supply", (agent) => {
+    const module = providerPresentation(agent)!;
+    const brands = TEST_AGENTS.flatMap((id) => Object.keys(providerPresentation(id)!.params ?? {}));
+    for (const [language, messages] of Object.entries(module.messages) as [string, Record<string, string>][]) {
+      for (const [key, text] of Object.entries(messages)) {
+        const setting = key.match(new RegExp(`^provider\\.${agent}\\.setting\\.([a-z_]+)\\.`))?.[1];
+        if (setting === undefined) continue;
+        const supplied = new Set(["agent", ...CORE_PARAM_NAMES, ...brands, ...Object.keys(module.settingReferences?.[setting] ?? {})]);
+        for (const [, name] of text.matchAll(/\{([A-Za-z][A-Za-z0-9]*)\}/g)) {
+          expect(supplied.has(name!), `${language} ${key} uses {${name}}`).toBe(true);
+        }
+      }
+    }
+  });
+});
+
 describe("the codes the providers declare", () => {
   it.each(TEST_AGENTS)("%s words each remedy it names under its own id, in every language", (agent) => {
     const module = providerPresentation(agent)!;

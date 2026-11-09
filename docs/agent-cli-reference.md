@@ -243,6 +243,22 @@ handler that reads one.
 Precedence among permission rules is by rule *kind* rather than by source — `deny` > `ask` > `allow` — so an injected
 `allow` can never re-open something the project denies.
 
+**What Claude Code reads from other agents' layouts** (2.1.319, measured with `claude -p --model haiku
+--no-session-persistence` in scratch git repositories):
+
+- A project's `AGENTS.md` is read when the project has no `CLAUDE.md` (a fallback) and not when a `CLAUDE.md` exists;
+  `~/.codex/AGENTS.md` is never read. The executable carries an `instructionFiles` setting (`claude-md`,
+  `claude-md-or-agents-md` (the default), `claude-md-and-agents-md`, `managed-only`; short forms `claude`,
+  `agents-fallback`, `both`, `none`), but setting it through `--settings` or `.claude/settings.local.json` changed
+  nothing, so it is probably gated.
+- `.agents/skills` and `.codex/skills` are not read.
+- `--plugin-dir <dir>` loads a directory that has no plugin manifest: its `skills/*/SKILL.md` appear as
+  `<dirname>:<skill>`, and symlinked skill directories are followed.
+- In a `--mcp-config` JSON string, `${VAR}` and `${VAR:-default}` are expanded in a stdio server's `args` and `env`
+  values and in an HTTP server's `headers`. A `--mcp-config` server replaces a project `.mcp.json` server of the same
+  name, and the project one is never started.
+- It ships `/import codex|gemini|cursor`, which writes the other agent's configuration into Claude Code's own files.
+
 **An MCP server's tools are pre-approved by a rule naming the server alone** (Claude Code 2.1.310, real PTY, stub
 inference and stub stdio servers whose unannotated tools logged every `tools/call`). `"permissions":{"allow":
 ["mcp__<key>"]}` in the `--settings` JSON runs every tool of the server registered under `<key>` with no prompt, in
@@ -608,11 +624,17 @@ the hook's own stderr text is not shown — and a *synchronous* hook that hangs 
 
 **Project configuration layering**: project hooks in `<cwd>/.codex/hooks.json` merge with injected ones;
 `<cwd>/AGENTS.md` is concatenated *after* `~/.codex/AGENTS.md` inside a single instructions block, separated by a `---
-project-doc ---` line, so the user's global file survives; skills are discovered in both `<cwd>/.agents/skills/` and
-`<cwd>/.codex/skills/`. `<cwd>/.codex/config.toml` is layered over `CODEX_HOME/config.toml` once the project is trusted
+project-doc ---` line, so the user's global file survives; skills are discovered as set out below.
+`<cwd>/.codex/config.toml` is layered over `CODEX_HOME/config.toml` once the project is trusted
 and ignored before that (measured with `codex doctor --json`, 0.162.1), and a `-c` override outranks both: on 0.162.1 a
 trusted project's `[tui] terminal_title = []` stopped every terminal title, and `-c tui.terminal_title=[…]` brought them
 back.
+
+**Codex's skill discovery** (0.166.0, `codex debug prompt-input`): a skill is found at any depth under a root, is not
+deduplicated by name, and takes its name from its front matter. The roots are `<cwd>/.codex/skills`,
+`<cwd>/.agents/skills`, the repository root's `.codex/skills` and `.agents/skills`, `$CODEX_HOME/skills` (including
+`.system`) and `~/.agents/skills`; a `.agents/skills` above the git root is not read. `[[skills.config]]` with
+`enabled = false` removes only the skill it names. Project skills load whatever the project's trust.
 
 **An update prompt can come first**: when a newer version is out, Codex can open with an "Update now / Skip / Skip
 until next version" prompt (seen as an "Update available!" banner in the probe on 0.161.0). Octoboard passes
@@ -910,7 +932,24 @@ be tested.
 boolean cells, `skills`, `rules` (which covers `CLAUDE.md`), `agents`, `mcps` and `hooks`, each defaulting to true, and
 each overridden by an environment variable `GROK_CLAUDE_<CELL>_ENABLED` (`true` or `false`); Grok's user guide shipped
 under `~/.grok/docs/` and the 1.0.70 executable both name them, and like cells exist for Cursor (`GROK_CURSOR_*`) and
-Codex (`GROK_CODEX_*`). That the variable outranks the file is what the guide states; it was not measured.
+Codex (`GROK_CODEX_*`). That the variable outranks the file is what the guide states.
+
+Measured on **Grok Build 1.0.77** with `grok inspect --json` and `grok -p` under a scratch `HOME` and `GROK_HOME`
+(logged in through `GROK_AUTH_PATH`):
+
+- The Claude compatibility really starts the MCP servers of `$HOME/.claude.json`, both the user `mcpServers` and
+  `projects.<cwd>.mcpServers`; `GROK_CLAUDE_MCPS_ENABLED=false` turns them off. Grok ignores `CLAUDE_CONFIG_DIR` and
+  always reads `$HOME/.claude.json`. A project `.mcp.json` is a separate source (listed as `mcpJson`): the Claude cells
+  do not gate it, and Claude Code's `enabledMcpjsonServers` does not apply to it.
+- In `config.toml`'s `[mcp_servers]`, `${VAR}` and `${VAR:-default}` are expanded in `args`, `env` values and
+  `headers`, and a stdio server inherits Grok's environment. When Grok rewrites `config.toml` (appending
+  `[marketplace]`, say) it keeps the `${...}` references verbatim. An expanded value can still appear in the session's
+  `events.jsonl`, in the `target` of an `mcp_server_failed` event.
+- `[skills] paths` loads `<path>/<name>/SKILL.md`; a `commands/` directory under such a path is not loaded as slash
+  commands.
+- Grok reads `~/.agents/skills` (and, per its guide, the project's `.agents/skills`). It does not read
+  `~/.codex/AGENTS.md`, `~/.codex/skills`, `.codex/skills` or the servers in Codex's `config.toml`. The `[compat.codex]`
+  cells `skills`, `rules`, `agents`, `mcps` and `hooks` are documented as reserved and are inert; only `sessions` exists.
 
 ## Across the three agents
 
@@ -2406,7 +2445,8 @@ in `docs/product/per-agent-launch-specifics.md`.
   the rendered UI, and matching rendered text would need a VT emulator in the daemon (see "Claude Code" in
   `docs/product/per-agent-launch-specifics.md` for what it reads and when it warns).
 - **Each agent reads a different instruction filename, matched by exact spelling.** Claude Code reads `CLAUDE.md` and
-  `CLAUDE.local.md` and does **not** read `AGENTS.md` on its own; a line `@AGENTS.md` in `CLAUDE.md` imports it, with
+  `CLAUDE.local.md`, and falls back to a project's `AGENTS.md` only when the project has no `CLAUDE.md` (2.1.319; see
+  "Claude Code" above), so beside a `CLAUDE.md` it does not read `AGENTS.md` on its own; a line `@AGENTS.md` in `CLAUDE.md` imports it, with
   no confirmation for a file inside the working directory (its "Allow external CLAUDE.md file imports?" dialog is for
   files outside it), and the request then carries a block for each file with the text once (Claude Code 2.1.319, `-p`
   with Octoboard's `--settings`, `--append-system-prompt` and `--mcp-config` against a local stub); where it must be
@@ -2491,7 +2531,16 @@ What Octoboard sends to answer each is under "How a confirmation is pressed" in 
   cursor (`›`, U+203A) starts on option 1, and Enter alone accepts; any carriage return reaching the screen accepts.
   Codex records `[projects."<repository root>"] trust_level = "trusted"` in `$CODEX_HOME/config.toml`: from a
   subdirectory it records the repository root, and from a linked worktree the main repository's root, so the record can
-  cover more than the folder asked about. A trusted parent directory in that file does not cover a repository below it.
+  cover more than the folder asked about. A trusted directory above the repository covers nothing.
+  Trust is decided separately for each directory from the repository root down to the working directory (0.166.0,
+  `codex doctor --json` in a scratch `HOME`/`CODEX_HOME` with a repository, a subdirectory layer and a linked
+  worktree). For each directory the first entry that applies decides: its own `projects."<dir>"` entry, else that of the
+  nearest `.git` directory (a linked worktree's own top), else that of the main repository root (the parent of `git rev-parse
+  --git-common-dir`). Entries without `trust_level` are skipped, and only `"trusted"` trusts. Measured, with `M` the
+  main root, `M/sub` a layer below it and `L` a linked worktree: `M` trusted and `M/sub` untrusted trusts `M` only; `M`
+  trusted and an `M/sub` entry without `trust_level` trusts both; `M` untrusted and `M/sub` trusted trusts `M/sub` only;
+  only `M/sub` trusted trusts `M/sub` only; `L` trusted with the working directory `L/sub` trusts both of `L`'s layers;
+  `M` trusted and `L` untrusted trusts nothing.
   No hook fires before or right after the confirmation, and none at startup at all until the first prompt is submitted.
   Codex sets no terminal title before the confirmation or the sign-in screen that precedes it on an account's first
   launch; its first title (OSC 0/2) comes once its session starts (0.160.0–0.163.0), so that title marks it past both.

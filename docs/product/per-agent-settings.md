@@ -2,7 +2,8 @@
 
 Settings that apply to every account of one agent, the default account included, rather than to a single account: the
 agent's tags, and the settings each agent's provider declares for itself — how Claude Code, Codex and Grok Build handle
-permission requests, and whether Codex and Grok Build load Claude Code's configuration. Each is set in a row of the
+permission requests, whether Codex and Grok Build load Claude Code's configuration, and whether Claude Code and Grok
+Build load Codex's. Each is set in a row of the
 agent's **Agent settings** dialog, opened from the Settings entry of the agent's menu in Settings' **Agent accounts**
 section (see "The agent settings dialog" in `docs/product/agent-accounts.md`).
 
@@ -38,7 +39,7 @@ reaches them at once; they survive a restart. **Removing an agent keeps its tags
 again (see "Reordering and removing an agent" in `docs/product/agent-accounts.md`); a removed agent's tags are not
 offered for the other agents. Every session reads the tags of the agents a session could be opened on, with their
 accounts, through `list_agents`, which does not list a removed agent (see
-`docs/product/listing-agents-from-a-session.md`). Like Claude compatibility, a console session may read them but not
+`docs/product/listing-agents-from-a-session.md`). Like the compatibility switches, a console session may read them but not
 change them (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a
 configuration export that includes the accounts carries them (see "The agent account settings an export carries" in
 `docs/product/settings-in-a-configuration.md`).
@@ -51,10 +52,12 @@ every account of that agent, the default account included. Today they are:
 | Agent | Row | Setting id | Kind | Carried by a configuration export | Readable by sessions |
 |---|---|---|---|---|---|
 | Claude Code | **Permission approval** (see "Approval modes" below) | `approval_mode` | Choice of `auto`, `manual`, `accept_edits`, `plan` or `bypass` | Yes | No |
+| Claude Code | **Codex compatibility** (see "Codex compatibility" below) | `codex_compatibility` | Switch, off until chosen | Yes | Yes |
 | Codex | **Permission approval** (see "Approval modes" below) | `approval_reviewer` | Choice of `user`, `auto_review` or `full_access` | Yes | No |
-| Codex | **Claude compatibility** (see "Claude compatibility" below) | `claude_compatibility` | Switch, on while Claude Code is an added agent until chosen | Yes | Yes |
+| Codex | **Claude compatibility** (see "Claude compatibility" below) | `claude_compatibility` | Switch, off until chosen | Yes | Yes |
 | Grok Build | **Permission approval** (see "Approval modes" below) | `approval_mode` | Choice of `ask`, `auto` or `always_approve` | Yes | No |
-| Grok Build | **Claude compatibility** (see "Claude compatibility" below) | `claude_compatibility` | Switch, on until chosen | Yes | Yes |
+| Grok Build | **Claude compatibility** (see "Claude compatibility" below) | `claude_compatibility` | Switch, off until chosen | Yes | Yes |
+| Grok Build | **Codex compatibility** (see "Codex compatibility" below) | `codex_compatibility` | Switch, off until chosen | Yes | Yes |
 
 A setting is one of two kinds:
 
@@ -63,18 +66,17 @@ A setting is one of two kinds:
   option is the provider's own inheritance label where it has one, otherwise **Follow account configuration**. Codex's
   permission setting uses **Custom (config.toml)** (see "Approval modes" below). A declared choice may need the user's
   confirmation before it is saved.
-- **A switch** is on or off. Until the user turns it, it follows a default rule: on, off, or on while a named agent is
-  among the added agents (see "Added agents" in `docs/product/agent-accounts.md`). Such a rule is worked out afresh
-  whenever the value is read, so adding or removing that agent moves it; while the list of added agents is still
-  undecided, the named agent counts as not added. Once the user has turned the switch, that choice holds, whatever
-  agents are added or removed later.
+- **A switch** is on or off. Until the user turns it, it follows the default its provider declares, on or off,
+  whatever agents are added; every switch today is off until chosen. Once the user has turned the switch, that choice
+  holds.
 
 Octoboard keeps only the user's explicit choices, in the daemon, so every window shows the same and they survive a
 restart; every window is given the **value in effect** of every setting of every agent: a switch's choice or else its
 default, a choice setting's choice or else none. A stored choice the setting no longer takes is read as no choice.
 
 The agent's settings dialog has one row per setting, in the order the provider declares them, under the Tags row:
-Claude Code's shows Permission approval; Codex's and Grok Build's show Permission approval then Claude compatibility. A setting the
+Claude Code's shows Permission approval then Codex compatibility; Codex's shows Permission approval then Claude
+compatibility; Grok Build's shows Permission approval, Claude compatibility, then Codex compatibility. A setting the
 window has no wording for is not shown; a choice the window has no name for is offered by its value in words (a value
 `read_only` as "Read only"). Each row holds the setting's name with a "?" help tip saying what it does, a line saying
 that it applies to every account of the agent, and, at the row's end, a selector for a choice or a switch for a switch,
@@ -97,7 +99,7 @@ Octoboard writes none of the agents' configuration files for them. Whether sessi
 
 A program on the daemon's host sets a choice with the control request `set_provider_setting`, naming the agent, the
 setting id and the value — `true` or `false` for a switch, the choice's text for a choice setting, or `null` to clear
-the choice, a switch going back to its default rule and a choice setting to the agent's native configuration and resume
+the choice, a switch going back to its default and a choice setting to the agent's native configuration and resume
 behavior. A setting the agent's provider does not declare, a value of the other kind, or a choice the setting does not
 offer is refused as an unreadable request (`unreadable_request`). The confirmation a choice needs is asked for by the
 window, not by the daemon, so this request saves such a choice at once.
@@ -202,13 +204,42 @@ that Octoboard passes these in when a session starts or resumes, so a change tak
 Octoboard turns on the Claude support built into Grok Build, and that a change takes effect when a session next starts
 or resumes.
 
-**Until the user chooses** for an agent, its value follows a default: **Grok Build is on**, which is Grok's own default;
-**Codex is on while Claude Code is an added agent** and off otherwise.
+**Until the user chooses** for an agent, it is **off**, for Codex and Grok Build alike, whichever agents are added.
+Off, Octoboard passes Codex nothing for it. For Grok Build, off means Octoboard sets nothing either way and Grok follows
+its own configuration, whose own Claude Code support is on unless the user turns it off there; so a Grok Build session
+may load Claude Code's configuration with the switch off, and turning the switch on makes sure it does.
 
 What a launch is given for it is in "Claude compatibility for Codex" and "Claude compatibility for Grok Build" in
-`docs/product/per-agent-launch-specifics.md`.
+`docs/product/compatibility-between-agents.md`.
 
 A console session may read the value in effect, unlike the approval modes, but not change it (see "Application
 settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a configuration export
 that includes the accounts carries the explicit choices (see "The agent account settings an export carries" in
+`docs/product/settings-in-a-configuration.md`).
+
+## Codex compatibility
+
+Whether Claude Code and Grok Build have their sessions load Codex's configuration as well as their own: Codex's
+instructions (`AGENTS.md` and rules), skills, custom prompts and MCP servers, and following Codex's hooks. It is the
+**Codex compatibility** row of each one's settings dialog, a provider setting of the switch kind (see "Provider
+settings" above): under the Permission approval row for Claude Code, under the Claude compatibility row for Grok Build,
+and never in Codex's dialog, which has no such setting. The row is there whether or not Codex is an added agent.
+
+Its help tip ("About Codex compatibility") says what the setting does whatever the switch's position. For Claude Code:
+when on, its sessions load Codex's instructions, skills, custom prompts and MCP servers and follow Codex's hooks; when
+off, they follow only their own configuration; Octoboard passes these in when a session starts or resumes, so a change
+takes effect then. For Grok Build: when on, its sessions load Codex's instructions, skills and MCP servers, use Codex's
+custom prompts when asked for one by name and follow Codex's hooks; when off, they follow only their own configuration;
+Octoboard passes these in when a session starts, and a resumed session picks up a change to the MCP servers and skills
+only.
+
+**Until the user chooses** for an agent, it is **off**, for Claude Code and Grok Build alike, whichever agents are
+added. Off, Octoboard passes nothing for it.
+
+What a launch is given for it is in "Codex compatibility for Claude Code" and "Codex compatibility for Grok Build" in
+`docs/product/compatibility-between-agents.md`.
+
+Like Claude compatibility, a console session may read the value in effect but not change it (see "Application settings:
+`get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a configuration export that
+includes the accounts carries the explicit choices (see "The agent account settings an export carries" in
 `docs/product/settings-in-a-configuration.md`).

@@ -835,7 +835,7 @@ pub enum RequestBody {
     },
     /// Sets the user's choice for a setting of a provider (see `ProviderInfo::settings`). `value`
     /// is a switch's `true` or `false` or a choice's text, and null clears the choice: a switch
-    /// goes back to its default rule, a choice follows each account's own configuration. Takes
+    /// goes back to its default, a choice follows each account's own configuration. Takes
     /// effect on the next launch or resume. Refused with `unreadable_request` for a setting the
     /// provider does not declare, a value of the other kind, or a choice it does not offer.
     /// Broadcasts `settings_updated` only when the stored choice changed. The daemon does not

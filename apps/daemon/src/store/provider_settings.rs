@@ -5,7 +5,6 @@ use std::collections::BTreeMap;
 
 use rusqlite::{params, Connection};
 
-use super::agents::read_added_agents;
 use super::Result;
 use super::Store;
 use crate::protocol::AgentId;
@@ -22,7 +21,7 @@ impl Store {
     }
 
     /// The value in effect of every setting of every registered provider, by provider id and then
-    /// setting id: a switch is the user's choice or else its default rule's value, a choice setting
+    /// setting id: a switch is the user's choice or else its default, a choice setting
     /// the user's or else `None`.
     pub fn provider_settings(
         &self,
@@ -94,7 +93,6 @@ pub(super) fn read_provider_settings(
     conn: &Connection,
 ) -> Result<BTreeMap<String, BTreeMap<String, Option<SettingValue>>>> {
     let choices = read_choices(conn)?;
-    let added = read_added_agents(conn)?;
     Ok(descriptors()
         .map(|descriptor| {
             let chosen = choices.get(descriptor.id);
@@ -104,10 +102,7 @@ pub(super) fn read_provider_settings(
                 .map(|setting| {
                     (
                         setting.id.to_string(),
-                        setting.in_effect(
-                            chosen.and_then(|chosen| chosen.get(setting.id)),
-                            added.as_deref(),
-                        ),
+                        setting.in_effect(chosen.and_then(|chosen| chosen.get(setting.id))),
                     )
                 })
                 .collect();
@@ -133,23 +128,16 @@ mod tests {
         store.provider_settings().unwrap()[agent.wire_name()]["claude_compatibility"].clone()
     }
 
-    /// Until the user chooses, Grok Build's Claude compatibility is on and Codex's follows whether
-    /// Claude Code is an added agent; a choice is stored per provider and wins from then on;
-    /// Claude Code never has the setting.
+    /// Until the user chooses, the Claude compatibility of Codex and of Grok Build is off, whichever
+    /// agents are added; a choice is stored per provider and wins from then on; Claude Code never
+    /// has the setting.
     #[test]
-    fn the_claude_compatibility_follows_added_agents_until_chosen_and_round_trips_per_agent() {
+    fn the_claude_compatibility_is_off_until_chosen_and_round_trips_per_agent() {
         let path = temp_db("claude-compatibility");
         let store = Store::open(&path).expect("store");
         assert_eq!(compatibility(&store, AgentId::CODEX), Some(switch(false)));
-        assert_eq!(compatibility(&store, AgentId::GROK), Some(switch(true)));
+        assert_eq!(compatibility(&store, AgentId::GROK), Some(switch(false)));
         assert!(!store.provider_settings().unwrap()["claude"].contains_key("claude_compatibility"));
-
-        store
-            .set_added_agents_if_undecided(&[AgentId::CODEX])
-            .unwrap();
-        assert_eq!(compatibility(&store, AgentId::CODEX), Some(switch(false)));
-        store.add_added_agent(AgentId::CLAUDE).unwrap();
-        assert_eq!(compatibility(&store, AgentId::CODEX), Some(switch(true)));
         assert!(store.provider_setting_choices().unwrap().is_empty());
 
         let set = |agent, value: Option<SettingValue>| {
@@ -168,23 +156,21 @@ mod tests {
             .into()
         );
         assert_eq!(compatibility(&store, AgentId::CODEX), Some(switch(false)));
-        assert_eq!(compatibility(&store, AgentId::GROK), Some(switch(true)));
+        assert_eq!(compatibility(&store, AgentId::GROK), Some(switch(false)));
         assert_eq!(
             store.get_settings().unwrap().provider_settings["codex"]["claude_compatibility"],
             Some(switch(false))
         );
 
-        // A choice outlives the added agents, whichever way it went.
         assert!(set(AgentId::CODEX, Some(switch(true))));
-        store.remove_added_agent(AgentId::CLAUDE).unwrap();
         assert_eq!(compatibility(&store, AgentId::CODEX), Some(switch(true)));
-        assert!(set(AgentId::GROK, Some(switch(false))));
-        assert_eq!(compatibility(&store, AgentId::GROK), Some(switch(false)));
+        assert!(set(AgentId::GROK, Some(switch(true))));
+        assert_eq!(compatibility(&store, AgentId::GROK), Some(switch(true)));
 
-        // Clearing goes back to the default rule, and clearing twice changes nothing.
+        // Clearing goes back to the default, and clearing twice changes nothing.
         assert!(set(AgentId::GROK, None));
         assert!(!set(AgentId::GROK, None));
-        assert_eq!(compatibility(&store, AgentId::GROK), Some(switch(true)));
+        assert_eq!(compatibility(&store, AgentId::GROK), Some(switch(false)));
     }
 
     /// A choice setting reads as unset until chosen, round-trips across a reopen, and clears; a

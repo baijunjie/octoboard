@@ -14,7 +14,7 @@ fn identity(path: &std::path::Path, links: Links) -> crate::platform::fs::Identi
 }
 
 /// The write-back the plan leaves for after the exit.
-fn writeback_of(plan: &LaunchPlan) -> &SharedConfigWriteback {
+pub(super) fn writeback_of(plan: &LaunchPlan) -> &SharedConfigWriteback {
     plan.after_exit
         .as_ref()
         .expect("writeback")
@@ -23,7 +23,7 @@ fn writeback_of(plan: &LaunchPlan) -> &SharedConfigWriteback {
         .expect("the work after the exit is the write-back")
 }
 
-const SHARED_CONFIG: &str = "\
+pub(super) const SHARED_CONFIG: &str = "\
 # kept comment
 [models]
 default = \"kept-model\" # kept
@@ -40,7 +40,7 @@ mark = 'stay'
 ";
 
 /// Replaces the fixture's source `config.toml` with a link to a file holding `text`.
-fn link_config(fixture: &mut SpecFixture, text: &str) -> PathBuf {
+pub(super) fn link_config(fixture: &mut SpecFixture, text: &str) -> PathBuf {
     let account = with_default_home(fixture);
     let shared = fixture.scratch.join("default-home");
     std::fs::create_dir_all(&shared).expect("default directory");
@@ -51,7 +51,7 @@ fn link_config(fixture: &mut SpecFixture, text: &str) -> PathBuf {
     shared.join("config.toml")
 }
 
-fn session_config(plan: &LaunchPlan) -> PathBuf {
+pub(super) fn session_config(plan: &LaunchPlan) -> PathBuf {
     PathBuf::from(&plan.env[0].1).join("config.toml")
 }
 

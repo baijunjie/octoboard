@@ -232,7 +232,7 @@ badged as a switch of the application settings is (see "Application settings in 
 settings and the agent tags, each a setting made of several items, listed as such a setting is:
 
 - **The provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), one line per setting —
-  today **Permission approval** and **Claude compatibility** — present when the document carries a choice that this
+  today **Permission approval**, **Claude compatibility** and **Codex compatibility** — present when the document carries a choice that this
   machine's agents declare as carried and that the setting takes, the agents declaring a setting under the same id
   sharing its line, named as the agents' tabs name it. A setting the window has no wording for under any of those agents
   is a line of its own for each agent, named by the agent's name, a colon, then the setting's id in words (an id

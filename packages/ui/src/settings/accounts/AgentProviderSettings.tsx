@@ -134,8 +134,8 @@ function ChoiceSetting({ agent, descriptor, choices }: { agent: Agent; descripto
 }
 
 /** A switch setting, saved when toggled; the switch stays unavailable while the save is unanswered. It shows the value
- * the daemon carries in `settings.provider_settings`, which is the one in effect (a default that follows the added
- * providers included); a provider with no entry reads on unless the schema's default is off. */
+ * the daemon carries in `settings.provider_settings`, which is the one in effect (the user's choice, else the setting's
+ * default); a provider with no entry reads on unless the schema's default is off. */
 function SwitchSetting({ agent, descriptor, fallback }: { agent: Agent; descriptor: SettingDescriptor; fallback: boolean }): React.ReactElement | null {
   const { request } = useDaemon();
   const t = useT();

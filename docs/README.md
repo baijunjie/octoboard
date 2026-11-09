@@ -78,6 +78,9 @@ Where to start, by question:
   launch environment.
 - [Per-agent launch specifics](product/per-agent-launch-specifics.md) — what Claude Code, Codex and Grok Build each do
   differently at launch.
+- [Compatibility between agents](product/compatibility-between-agents.md) — what a launch is given while a
+  compatibility switch is on (Claude compatibility for Codex and Grok Build, Codex compatibility for Claude Code and
+  Grok Build): MCP servers, skills and prompts, and instructions, with the trust, naming and left-out rules.
 - [Model and reasoning effort](product/model-and-reasoning-effort.md) — the Advanced section's model and effort pickers
   and what a session shows running.
 - [Agent accounts](product/agent-accounts.md) — Settings' Agent accounts section: added agents, the default account,
@@ -85,7 +88,7 @@ Where to start, by question:
 - [Agent CLI versions and updates](product/agent-cli-updates.md) — when an agent CLI's installed and latest versions
   are checked, how its install method and update command are told, and how an update the user starts runs and ends.
 - [Per-agent settings](product/per-agent-settings.md) — settings that apply to every account of one agent: the settings
-  each provider declares (permission approval modes, Claude compatibility) and agent tags.
+  each provider declares (permission approval modes, Claude and Codex compatibility) and agent tags.
 - [Removing an account](product/removing-accounts.md) — what removing an account clears, its confirmation, and the option
   to move the account directory to the Trash.
 - [Logging an account in](product/logging-accounts-in.md) — the login dialog and how each agent signs in.

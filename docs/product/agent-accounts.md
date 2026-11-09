@@ -128,7 +128,8 @@ titled "Agent settings", whichever agent it is opened on; the first line of its 
 come the agent's **Tags** row (see "Agent tags" in `docs/product/per-agent-settings.md`) and a row for each setting its
 provider declares (see "Provider settings" in `docs/product/per-agent-settings.md`) — for all three agents, the
 agent's **Permission approval** row (see "Approval modes" there), then, for Codex and Grok Build, the agent's **Claude
-compatibility** row (see "Claude compatibility" there). It is offered for an agent that is not installed too.
+compatibility** row (see "Claude compatibility" there), then, for Claude Code and Grok Build, the agent's **Codex
+compatibility** row (see "Codex compatibility" there). It is offered for an agent that is not installed too.
 
 It has no footer: it closes on its close button, on Escape and on a press outside it. It follows the agent's settings as
 they change, from any window, and closes by itself when the agent is removed from the list of added agents.

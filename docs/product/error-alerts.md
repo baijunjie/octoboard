@@ -502,7 +502,7 @@ For example:
     access remedy; `other` and a cause the window does not know the remedy for any other cause.
   - **An action that writes only Octoboard's own data** fails for a recognized operating-system cause, denied access or
     a full disk: saving an application setting in Settings, saving an agent's settings (approvals, tags, Claude
-    compatibility), turning an account off or on, reordering accounts or agents, adding or removing an agent, removing
+    and Codex compatibility), turning an account off or on, reordering accounts or agents, adding or removing an agent, removing
     a trusted folder, or renaming the default account. An action that involves a folder the user chose keeps the
     folder's remedy.
 - A locked session asks the user to choose Unlock in that session's action menu, then retry.

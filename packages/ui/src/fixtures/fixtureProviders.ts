@@ -33,22 +33,24 @@ const MODEL_DISPLAY: Record<Agent, ModelDisplay> = {
   grok: PLAIN_MODELS,
 };
 
-const claudeCompatibility = (kind: Extract<SettingDescriptor["kind"], { type: "switch" }>): SettingDescriptor => ({ id: "claude_compatibility", kind, exported: true, shown_to_agents: true, compatibility_with: "claude" });
+const compatibilitySwitch = (id: string, source: Agent, kind: Extract<SettingDescriptor["kind"], { type: "switch" }>): SettingDescriptor => ({ id, kind, exported: true, shown_to_agents: true, compatibility_with: source });
 
 /** The settings each provider declares, as the daemon's registry does: the permission approval of every agent
- * (a choice an export carries, and no agent reads) and the Claude compatibility switch of Codex (on while Claude Code is
- * among the added agents) and Grok Build (on). */
+ * (a choice an export carries, and no agent reads) and the compatibility switches, all off until chosen: Claude
+ * compatibility of Codex and Grok Build, Codex compatibility of Claude Code and Grok Build. */
 const SETTINGS: Record<Agent, SettingDescriptor[]> = {
   claude: [
     { id: "approval_mode", kind: { type: "choice", choices: [{ value: "auto", confirm: false }, { value: "manual", confirm: false }, { value: "accept_edits", confirm: false }, { value: "plan", confirm: false }, { value: "bypass", confirm: true }] }, exported: true, shown_to_agents: false, compatibility_with: null },
+    compatibilitySwitch("codex_compatibility", "codex", { type: "switch", default: "off" }),
   ],
   codex: [
     { id: "approval_reviewer", kind: { type: "choice", choices: [{ value: "user", confirm: false }, { value: "auto_review", confirm: false }, { value: "full_access", confirm: true }] }, exported: true, shown_to_agents: false, compatibility_with: null },
-    claudeCompatibility({ type: "switch", default: { while_added: "claude" } }),
+    compatibilitySwitch("claude_compatibility", "claude", { type: "switch", default: "off" }),
   ],
   grok: [
     { id: "approval_mode", kind: { type: "choice", choices: [{ value: "ask", confirm: false }, { value: "auto", confirm: false }, { value: "always_approve", confirm: true }] }, exported: true, shown_to_agents: false, compatibility_with: null },
-    claudeCompatibility({ type: "switch", default: "on" }),
+    compatibilitySwitch("claude_compatibility", "claude", { type: "switch", default: "off" }),
+    compatibilitySwitch("codex_compatibility", "codex", { type: "switch", default: "off" }),
   ],
 };
 

@@ -626,8 +626,9 @@ async fn the_agent_account_settings_are_read_only_to_agents() {
     assert_eq!(
         before["provider_settings"],
         json!({
+            "claude": { "codex_compatibility": false },
             "codex": { "claude_compatibility": false },
-            "grok": { "claude_compatibility": true },
+            "grok": { "claude_compatibility": false, "codex_compatibility": false },
         })
     );
     state

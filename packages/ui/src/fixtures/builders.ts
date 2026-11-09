@@ -371,11 +371,10 @@ export const failureTitle = (key: PlainMessageKey) => (t: Translate) => t(key);
 
 /** The value in effect of every setting of every provider, as the daemon puts them in `Settings.provider_settings`: the
  * user's explicit choice (`choices`, the same shape) when there is one, otherwise what the setting follows without one.
- * A choice setting without a choice is `null`; a switch follows its default rule (Codex's Claude compatibility is on
- * only while Claude Code is among the added agents, an undecided list counting as not). The gallery's daemon keeps a
+ * A choice setting without a choice is `null`; a switch without a choice is its default. The gallery's daemon keeps a
  * scenario's `settings.provider_settings` as the explicit choices and reports this. By default the providers are the
  * registered ones; a scenario that serves another beside them passes the providers it serves. */
-export function effectiveProviderSettings(choices: Settings["provider_settings"], added: readonly Agent[] | null, providers: readonly ProviderInfo[] = FIXTURE_PROVIDERS): Settings["provider_settings"] {
+export function effectiveProviderSettings(choices: Settings["provider_settings"], providers: readonly ProviderInfo[] = FIXTURE_PROVIDERS): Settings["provider_settings"] {
   return Object.fromEntries(
     providers.map(({ id, settings }) => [
       id,
@@ -383,8 +382,7 @@ export function effectiveProviderSettings(choices: Settings["provider_settings"]
         settings.map(({ id: setting, kind }): [string, boolean | string | null] => {
           const chosen = choices[id]?.[setting] ?? null;
           if (kind.type === "choice" || chosen !== null) return [setting, chosen];
-          const rule = kind.default;
-          return [setting, rule === "on" ? true : rule === "off" ? false : (added?.some((agent) => agent === rule.while_added) ?? false)];
+          return [setting, kind.default === "on"];
         }),
       ),
     ]),

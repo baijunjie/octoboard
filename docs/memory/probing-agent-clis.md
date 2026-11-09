@@ -108,9 +108,16 @@ which way the two versions differ and that the table errs on the side the reimpl
 ## Settle it without spending a model turn, and ask before redirecting a logged-in client's traffic
 
 Before running a real session to find out what an agent does, try the free routes. The CLIs' own inspection
-subcommands answer most discovery questions outright and cost nothing: `grok inspect --json` lists every instruction
-file it found, `codex debug prompt-input` dumps the model-visible input list, `claude auth status` reports login state
-as JSON. Beyond those, pointing the agent's API base URL at a local HTTP server that dumps the request body and
+subcommands answer most discovery questions outright and cost nothing, with no login: `grok inspect --json` lists every
+instruction file, skill and MCP server it found, each with the source it came from; `codex debug prompt-input` dumps
+the model-visible input list, skills and `AGENTS.md` included; `codex doctor --json` names the project config layers
+Codex loads and whether each is trusted; `claude auth status` reports login state as JSON. Settle a discovery question
+by those listings even when a real turn is being run anyway, never by asking the model what skills or commands it has:
+its answer can include a file it merely read during the turn (Grok named a `commands/` prompt that it does not load as
+a command). A listing still says only what was found, not that an MCP server starts; that takes seeing the server's
+process, or a stub server that records its own launch.
+
+Beyond those, pointing the agent's API base URL at a local HTTP server that dumps the request body and
 returns an error (`ANTHROPIC_BASE_URL` for Claude Code; each CLI has its own) makes the prompt it assembled — system
 prompt, instruction-file blocks, tool definitions — readable with nothing reaching the provider, and provokes error
 paths that are otherwise unreachable.

@@ -21,6 +21,11 @@ place of the symlinked session store, or the probe's own session records land in
 still collects the run's residue, a live-session index, logs and caches among it, so include it in what you tell the
 user the probe left.
 
+Bring a login into a scratch directory by reference, never by copying the credential file: a token the CLI refreshes
+through a copy is written only to the copy, leaving the user's own file with a token the refresh may have retired. For
+Grok Build, `GROK_AUTH_PATH` set to the absolute path of the user's `~/.grok/auth.json` logs in a scratch `GROK_HOME`
+with nothing linked into it.
+
 **A throwaway `HOME` does not contain everything either**: some residue lands machine-wide whatever `HOME` and `TMPDIR`
 say, and one piece has to be prevented before the run rather than cleaned up after it. On macOS, Claude Code's first
 TUI run registers the throwaway `HOME`'s own `Applications/Claude Code URL Handler.app` with LaunchServices as the

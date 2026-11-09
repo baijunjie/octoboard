@@ -159,25 +159,66 @@ fn names(value: Option<&Value>) -> BTreeSet<String> {
 /// log. A file in the tree of `project` (canonical) is read as the project's, one Claude Code's own
 /// configuration holds (`None`) as a regular file wherever it lies.
 fn read_json(path: &Path, project: Option<&Path>, limit: usize) -> Option<Value> {
+    try_read_json(path, project, limit).ok().flatten()
+}
+
+/// [`read_json`], telling an absent file (`Ok(None)`) from one that cannot be read or parsed
+/// (`Err`).
+fn try_read_json(path: &Path, project: Option<&Path>, limit: usize) -> Result<Option<Value>, ()> {
     let read = match project {
         Some(project) => read_bounded_text(path, project, limit),
         None => read_regular_text(path, limit),
     };
     let text = match read {
         Ok(text) => text,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(err) => {
             tracing::warn!(path = %path.display(), %err, "could not read a Claude Code file");
-            return None;
+            return Err(());
         }
     };
     match serde_json::from_str(&text) {
-        Ok(value) => Some(value),
+        Ok(value) => Ok(Some(value)),
         Err(err) => {
             tracing::warn!(path = %path.display(), %err, "could not parse a Claude Code file");
-            None
+            Err(())
         }
     }
+}
+
+/// The names of every MCP server Claude Code itself defines for a session in `cwd`, in its global
+/// config file (user and local scopes) and in the `.mcp.json` files from the working directory
+/// upwards (the config file of `pinned`, the session's own configuration directory, when there is
+/// one), approved and enabled or not: a consumer must not put a server of the same name in
+/// their place. `None` when one of those files exists and cannot be read or parsed, so that the
+/// names are not known.
+pub(super) fn defined_server_names(
+    shell_env: &HashMap<String, String>,
+    pinned: Option<&Path>,
+    cwd: &Path,
+) -> Option<BTreeSet<String>> {
+    let project = canonical_project(cwd);
+    let mut names = BTreeSet::new();
+    let mut add = |from: Option<&Value>| {
+        if let Some(map) = from.and_then(|from| from.get("mcpServers")?.as_object()) {
+            names.extend(map.keys().cloned());
+        }
+    };
+    let global = try_read_json(
+        &global_config_file(shell_env, pinned),
+        None,
+        LARGE_FILE_LIMIT,
+    )
+    .ok()?;
+    add(global.as_ref());
+    if let Some(global) = &global {
+        add(project_entry(global, cwd).or_else(|| project_entry(global, &project)));
+    }
+    for dir in project.ancestors() {
+        let file = try_read_json(&dir.join(".mcp.json"), Some(&project), SMALL_FILE_LIMIT).ok()?;
+        add(file.as_ref());
+    }
+    Some(names)
 }
 
 #[cfg(test)]
@@ -359,6 +400,32 @@ mod tests {
         let servers = load(&env, &home);
         assert_eq!(servers["s"]["command"], "linked");
         assert_eq!(servers["p"]["command"], "approved");
+    }
+
+    #[test]
+    fn the_defined_names_include_every_scope_approved_or_not_and_none_while_a_file_is_unreadable() {
+        let (root, cwd, env) = world();
+        write(
+            &root.join(".claude.json"),
+            json!({
+                "mcpServers": {"user": {"command": "u"}},
+                "projects": {cwd.to_string_lossy(): {"mcpServers": {"local": {"command": "l"}}}}
+            }),
+        );
+        write(
+            &cwd.join(".mcp.json"),
+            json!({"mcpServers": {"unapproved": {"command": "p"}}}),
+        );
+        let names: Vec<_> = defined_server_names(&env, None, &cwd)
+            .unwrap()
+            .into_iter()
+            .collect();
+        assert_eq!(names, ["local", "unapproved", "user"]);
+        std::fs::write(cwd.join(".mcp.json"), "{ not json").unwrap();
+        assert!(defined_server_names(&env, None, &cwd).is_none());
+        std::fs::remove_file(cwd.join(".mcp.json")).unwrap();
+        std::fs::write(root.join(".claude.json"), "{ not json").unwrap();
+        assert!(defined_server_names(&env, None, &cwd).is_none());
     }
 
     #[test]

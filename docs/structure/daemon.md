@@ -264,7 +264,7 @@ and records tests replay.
   `model_display` (`ModelDisplay`, how its model ids are shown), whether other providers can be made compatible
   with it, its `settings` schema and its error and notice `codes`) and `descriptors()`
   in the registry's order. A `SettingDescriptor` declares one user setting of the provider: a choice (some choices
-  needing confirmation; unset follows the account's own configuration) or a switch with a default rule, whether a
+  needing confirmation; unset follows the account's own configuration) or a switch (on or off by default), whether a
   configuration export carries it (`exported`), whether the agents' `get_settings` shows it (`shown_to_agents`), and
   which provider's configuration it makes the provider read (`compatibility_with`); `ProviderSettings` and
   `SettingValue` are the values in effect, and the provider reads its own from `LaunchSpec.settings`. A `ProviderCode`
@@ -295,13 +295,19 @@ and records tests replay.
   (`catalogue()`, `ModelCatalogue`), how its CLI is installed and updated (`cli_packaging()`, `CliPackaging`, defined in
   `mod.rs`, read by `agents/cli/`), its status line (`status_line()`, `StatusLine`, defined in `mod.rs`) and what it
   offers a provider made compatible with it (`compatibility_source()`, `CompatibilitySource`, defined in `mod.rs`: the
-  MCP servers and the instructions to read the rest of its configuration; `compatibility_source_of` resolves which
-  source a provider's switches select)), registered by
+  MCP servers, skill directories and prompt files it has and the instructions to read the rest of its configuration;
+  `LaunchSpec::compatibility_sources` holds one source per compatibility switch that is on, looked up with
+  `LaunchSpec::compatibility_source(agent)` and resolved by `compatibility_sources_of`)), registered by
   `adapter::provider(agent)` and implemented by `ClaudeProvider`, `CodexProvider` and `GrokProvider` in `claude/`,
   `codex/` and `grok/` (each provider's `hooks.rs` there is its `HookInterpreter`, and `records.rs` its
   `RecordStore`, with `conversation.rs` and `switch_continue.rs` its readings of a conversation and of how its last
-  turn ended, and `screen.rs` its `ScreenReader`; `claude/stash.rs` is Claude Code's stash keybinding gate; `claude/compatibility.rs` (with
-  `compatibility.md`, the instruction text) is Claude Code's `CompatibilitySource`;
+  turn ended, and `screen.rs` its `ScreenReader`; `claude/stash.rs` is Claude Code's stash keybinding gate; `claude/compatibility.rs` and `codex/compatibility.rs` (each with
+  `compatibility.md`, the instruction text) are Claude Code's and Codex's `CompatibilitySource`; `claude/compatibility_consumer.rs`
+  and `grok/compatibility_consumer.rs` are Claude Code and Grok Build taking a source's servers, skills and prompts into
+  their own launch (Claude Code's through the launch's `--mcp-config` and a plugin directory, Grok's by editing its
+  per-session copy of `config.toml`; `grok/compatibility_tests.rs` is the latter's tests); `compatibility_offer.rs` is what those
+  consumers share (translating a source's MCP servers, keeping literal secrets in environment variables, linking offered
+  skill and prompt files);
   `claude/transcript_watch.rs` is the Claude Code rejection and interrupt watch, `claude/status_line.rs` its
   `StatusLine`, `codex/native_binary.rs` the native program of a package-manager-installed Codex that a shim
   launches (the one built for the machine's native architecture when it ships several, as on ARM64 Windows), `codex/rollout_watch.rs`
@@ -314,8 +320,9 @@ and records tests replay.
   and plugins left on), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`); Codex, Claude
   Code and Grok also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server, Claude Code's over
   `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`, servers only), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script, and `account_cli.rs` the account
-  directories, commands and short queries (running an agent CLI as an account) (`codex/claude_mcp.rs` only translates a
-  compatibility source's MCP servers into Codex's launch overrides). The instruction file, tool-name prefix, ask-question tool and detection markers are read from the
+  directories, commands and short queries (running an agent CLI as an account), and `files.rs` the bounded reads of the
+  files an adapter reads, with `project_dirs` (the directories whose project configuration is layered) (`codex/claude_mcp.rs`
+  only translates a compatibility source's MCP servers into Codex's launch overrides). The instruction file, tool-name prefix, ask-question tool and detection markers are read from the
   descriptors by `session_tools/`, `coordinator/console_workdir.rs` and `agents/detect.rs`.
 - `src/session_tools/` — the static description of the Octoboard MCP tools and what sessions are told of them:
   `catalogue/` the tool catalogue (`mod.rs` which tools a role sees, then one file per tool family and `schemas.rs`
@@ -489,7 +496,8 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Where an agent keeps its files | the descriptor's `layout` (`AgentLayout`, `src/providers/layout.rs`; each provider's value is its `LAYOUT` in `src/providers/<id>.rs`) |
 | A provider's settings, and the codes only it raises | the descriptor's `settings` and `codes` (`src/providers/mod.rs`); stored by `src/store/provider_settings.rs` |
 | Refuse an operation a provider does not offer (sign-in, MCP server sign-in, kick, reset credits, configuration sharing) | `CodedError::require_offered` (`src/protocol/errors.rs`), giving `provider_unsupported` |
-| What a provider offers one made compatible with it (MCP servers, instructions) | `CompatibilitySource` (`src/adapter/mod.rs`), reached through `adapter::compatibility_source_of`; Claude Code's is `src/adapter/claude/compatibility.rs` |
+| What a provider offers one made compatible with it (MCP servers, skills, prompts, instructions) | `CompatibilitySource` (`src/adapter/mod.rs`), reached through `LaunchSpec::compatibility_source` (the sources are set by `adapter::compatibility_sources_of`); Claude Code's is `src/adapter/claude/compatibility.rs`, Codex's `src/adapter/codex/compatibility.rs` |
+| A consumer's use of a compatibility source (translating its MCP servers, keeping secrets off argv, linking skills and prompts) | `src/adapter/compatibility_offer.rs`; each consumer's own part is its `compatibility_consumer.rs` |
 | A value for every provider (a setting per provider, a model and effort per provider) | `protocol::PerAgent<T>` (`src/protocol/agents.rs`), indexed by `AgentId` and serialised in registry order |
 | A provider's behavior (launch plan, installed version, titles, terminal screens and dialogs, accounts, model catalogue, status line) | `adapter::provider(agent)` giving the `AgentProvider` (`src/adapter/mod.rs`); its accounts through `AccountOps` (`src/accounts/ops.rs`), its models through `ModelCatalogue` (`src/agents/models.rs`) |
 | Codex's app-server handshake; reading a JSON-RPC reply | `src/adapter/codex/app_server.rs`; `src/agents/json_rpc.rs` |

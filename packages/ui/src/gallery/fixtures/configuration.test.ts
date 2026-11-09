@@ -93,7 +93,7 @@ it("reports the Agent accounts settings this machine has now as the scenario's o
     expect(settings.current_auto_switch_on_usage_limit, id).toBe(machine!.auto_switch_on_usage_limit ?? false);
     expect(settings.current_auto_start_quota_windows, id).toBe(machine!.auto_start_quota_windows ?? false);
     expect(settings.current_agent_tags, id).toEqual(machine!.agent_tags ?? {});
-    expect(settings.current_provider_settings, id).toEqual(currentExportedProviderSettings(effectiveProviderSettings(machine!.provider_settings ?? {}, machine!.added_agents, providers), providers));
+    expect(settings.current_provider_settings, id).toEqual(currentExportedProviderSettings(effectiveProviderSettings(machine!.provider_settings ?? {}, providers), providers));
   }
 });
 

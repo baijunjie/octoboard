@@ -4,7 +4,7 @@ use super::layout::AgentLayout;
 use super::{
     AgentId, Capabilities, DeliveryQuirks, DetectionMarkers, ModelDisplay, ProviderCode,
     ProviderDescriptor, QuotaWindowKind, QuotaWindowNaming, SessionWindowName, SettingChoice,
-    SettingDescriptor, SettingKind,
+    SettingDescriptor, SettingKind, SwitchDefault,
 };
 
 /// Claude Code is not yet trusted with the session's directory, so the project's own `allow`
@@ -104,38 +104,49 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         retired: &["best"],
     },
     compatibility_source: true,
-    settings: &[SettingDescriptor {
-        id: "approval_mode",
-        kind: SettingKind::Choice {
-            choices: &[
-                SettingChoice {
-                    value: "auto",
-                    confirm: false,
-                },
-                SettingChoice {
-                    value: "manual",
-                    confirm: false,
-                },
-                SettingChoice {
-                    value: "accept_edits",
-                    confirm: false,
-                },
-                SettingChoice {
-                    value: "plan",
-                    confirm: false,
-                },
-                SettingChoice {
-                    value: "bypass",
-                    confirm: true,
-                },
-            ],
+    settings: &[
+        SettingDescriptor {
+            id: "approval_mode",
+            kind: SettingKind::Choice {
+                choices: &[
+                    SettingChoice {
+                        value: "auto",
+                        confirm: false,
+                    },
+                    SettingChoice {
+                        value: "manual",
+                        confirm: false,
+                    },
+                    SettingChoice {
+                        value: "accept_edits",
+                        confirm: false,
+                    },
+                    SettingChoice {
+                        value: "plan",
+                        confirm: false,
+                    },
+                    SettingChoice {
+                        value: "bypass",
+                        confirm: true,
+                    },
+                ],
+            },
+            // The choice only becomes a launch flag, and no file is written to enable it, so it travels
+            // like any other setting; an agent never reads or changes it.
+            exported: true,
+            shown_to_agents: false,
+            compatibility_with: None,
         },
-        // The choice only becomes a launch flag, and no file is written to enable it, so it travels
-        // like any other setting; an agent never reads or changes it.
-        exported: true,
-        shown_to_agents: false,
-        compatibility_with: None,
-    }],
+        SettingDescriptor {
+            id: "codex_compatibility",
+            kind: SettingKind::Switch {
+                default: SwitchDefault::Off,
+            },
+            exported: true,
+            shown_to_agents: true,
+            compatibility_with: Some("codex"),
+        },
+    ],
     codes: &[WORKSPACE_UNTRUSTED],
 };
 

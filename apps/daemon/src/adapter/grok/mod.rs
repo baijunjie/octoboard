@@ -33,7 +33,9 @@
 //!   the theme, the plugin switches, and a model chosen in the session are written to that link's
 //!   canonical target after the process exits ([`writeback::SharedConfigWriteback`]), and the link
 //!   itself is left in place. The model and reasoning effort passed only for this launch are not
-//!   written there, and neither is the MCP block.
+//!   written there, and neither is the MCP block or what a compatibility source adds
+//!   (`compatibility_consumer`: its MCP servers and its skills path, edited into the copy as a
+//!   document).
 //! - `trusted_folders.toml`: Grok saves it by replacing the file, so against a symlink its write
 //!   would replace the link rather than reach the user's store, and no setting moves the store out
 //!   of `GROK_HOME`. The copy carries every folder the user already trusts, and Octoboard adds
@@ -91,6 +93,7 @@
 //! already begun.
 
 pub(crate) mod accounts;
+mod compatibility_consumer;
 mod conversation;
 mod home;
 mod hooks;
@@ -106,6 +109,8 @@ mod switch_continue;
 pub(crate) mod trust;
 mod writeback;
 
+#[cfg(test)]
+mod compatibility_tests;
 #[cfg(test)]
 mod home_tests;
 #[cfg(test)]
@@ -272,6 +277,7 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<Launch
     let GrokHome {
         dir: grok_home,
         env: home_env,
+        claude_mcps_supplied,
     } = build_grok_home(spec, &source_home)?;
 
     // Grok's leader mode (`[cli] use_leader = true` in the user's configuration, which the farm
@@ -301,12 +307,18 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<Launch
     // passed on every launch anyway, so a session whose record predates the current text is
     // not left without a role.
     args.push("--rules".to_string());
-    args.push(session_tools::role::role_description(
+    let mut rules = session_tools::role::role_description(
         spec.kind,
         spec.owner.as_ref(),
         AgentId::GROK,
         &spec.role_options(),
-    ));
+    );
+    // The guidance of the Codex compatibility source, after the role text.
+    if let Some(source) = spec.compatibility_source(AgentId::CODEX) {
+        rules.push_str("\n\n");
+        rules.push_str(&source.instructions(AgentId::GROK.label(), spec.shell_env));
+    }
+    args.push(rules);
 
     // Grok applies explicit permission modes to fresh sessions and resumes. Unset, its own
     // configuration and resume rules decide; the account's copied configuration stays intact.
@@ -364,9 +376,15 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<Launch
     env.extend(home_env);
     // Grok's own Claude compatibility is on unless its configuration or the user's shell turns it
     // off; these outrank both. Turned off in Octoboard, nothing is passed and Grok follows its own
-    // configuration.
+    // configuration. Grok reads Claude Code's MCP servers from `$HOME/.claude.json` and ignores
+    // `CLAUDE_CONFIG_DIR`, so where the user's Claude Code reads another file Grok's own reading
+    // is turned off and the servers are given from the right one instead
+    // (`compatibility_consumer`).
     if spec.settings.switch("claude_compatibility") {
-        env.extend(CLAUDE_COMPATIBILITY_VARS.map(|var| (var.to_string(), "true".to_string())));
+        env.extend(CLAUDE_COMPATIBILITY_VARS.map(|var| {
+            let on = !(claude_mcps_supplied && var == compatibility_consumer::CLAUDE_MCPS_VAR);
+            (var.to_string(), on.to_string())
+        }));
     }
     Ok(LaunchPlan {
         args,
@@ -443,7 +461,7 @@ const CLAUDE_COMPATIBILITY_VARS: [&str; 5] = [
     "GROK_CLAUDE_SKILLS_ENABLED",
     "GROK_CLAUDE_RULES_ENABLED",
     "GROK_CLAUDE_AGENTS_ENABLED",
-    "GROK_CLAUDE_MCPS_ENABLED",
+    compatibility_consumer::CLAUDE_MCPS_VAR,
     "GROK_CLAUDE_HOOKS_ENABLED",
 ];
 

@@ -36,6 +36,9 @@ pub(super) struct GrokHome {
     pub dir: PathBuf,
     /// [`LOGIN_STORE_VAR`] naming the user's own login, where the farm cannot link it.
     pub env: Vec<(String, String)>,
+    /// Whether the copy holds Claude Code's MCP servers, so that Grok's own reading of them is to
+    /// be turned off ([`super::compatibility_consumer::CLAUDE_MCPS_VAR`]).
+    pub claude_mcps_supplied: bool,
 }
 
 #[cfg(test)]
@@ -169,6 +172,8 @@ pub(super) fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Resu
     let config = farm.join(GROK_CONFIG_FILE);
     copy_private_file(&source_home.join(GROK_CONFIG_FILE), &config)?;
     append_mcp_server(&config, spec)?;
+    let added = super::compatibility_consumer::add_to_config(&config, source_home, spec);
+    let mut env = added.env;
 
     copy_if_present(
         &source_home.join(GROK_TRUST_STORE),
@@ -180,7 +185,6 @@ pub(super) fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Resu
     }
     write_hooks(&farm, spec.hook_script)?;
 
-    let mut env = Vec::new();
     // A login store the user's shell names already reaches Grok through the launch environment.
     if !file_links && !spec.shell_env.contains_key(LOGIN_STORE_VAR) {
         let login = source_home.join(GROK_SIGN_IN_FILE);
@@ -191,7 +195,11 @@ pub(super) fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Resu
             login.to_string_lossy().into_owned(),
         ));
     }
-    Ok(GrokHome { dir: farm, env })
+    Ok(GrokHome {
+        dir: farm,
+        env,
+        claude_mcps_supplied: added.claude_mcps_supplied,
+    })
 }
 
 /// Copies a source file the farm carries as a copy. A file that cannot be copied (gone meanwhile,

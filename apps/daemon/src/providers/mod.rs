@@ -291,7 +291,7 @@ pub struct SettingDescriptor {
 pub enum SettingKind {
     /// One of the choices; unset leaves configuration and resume behavior to the native agent.
     Choice { choices: &'static [SettingChoice] },
-    /// On or off, by the user's choice or else by its default rule.
+    /// On or off, by the user's choice or else by its default.
     Switch { default: SwitchDefault },
 }
 
@@ -312,9 +312,6 @@ pub struct SettingChoice {
 pub enum SwitchDefault {
     On,
     Off,
-    /// On while the provider with this id is among the added agents; the undecided list counts as
-    /// not containing it.
-    WhileAdded(&'static str),
 }
 
 /// The value of a provider setting: a switch's on or off, or the chosen choice.
@@ -339,13 +336,8 @@ impl SettingDescriptor {
     }
 
     /// The value in effect given the user's `chosen` one, if they made one this setting still
-    /// takes, and the `added` agents (`None` while undecided): a switch falls back to its default
-    /// rule, a choice to unset.
-    pub fn in_effect(
-        &self,
-        chosen: Option<&SettingValue>,
-        added: Option<&[AgentId]>,
-    ) -> Option<SettingValue> {
+    /// takes: a switch falls back to its default, a choice to unset.
+    pub fn in_effect(&self, chosen: Option<&SettingValue>) -> Option<SettingValue> {
         if let Some(value) = chosen.filter(|value| self.accepts(value)) {
             return Some(value.clone());
         }
@@ -354,8 +346,6 @@ impl SettingDescriptor {
             SettingKind::Switch { default } => Some(SettingValue::Switch(match default {
                 SwitchDefault::On => true,
                 SwitchDefault::Off => false,
-                SwitchDefault::WhileAdded(id) => AgentId::from_wire_name(id)
-                    .is_some_and(|agent| added.is_some_and(|added| added.contains(&agent))),
             })),
         }
     }
@@ -622,8 +612,7 @@ mod tests {
     }
 
     /// Setting ids are unique within a provider, a choice setting offers distinct choices, and a
-    /// compatibility switch names a registered source and is a switch whose default rule names a
-    /// registered provider.
+    /// compatibility switch names a registered source and is a switch.
     #[test]
     fn every_provider_setting_is_declared_consistently() {
         for descriptor in descriptors() {
@@ -639,28 +628,18 @@ mod tests {
                     "{which}: the id is not snake_case"
                 );
                 assert!(ids.insert(setting.id), "{which} declared twice");
-                match setting.kind {
-                    SettingKind::Choice { choices } => {
-                        assert!(!choices.is_empty(), "{which}: no choices");
-                        let values: HashSet<_> = choices.iter().map(|c| c.value).collect();
-                        assert_eq!(values.len(), choices.len(), "{which}: repeated choice");
-                        assert!(
-                            values.iter().all(|value| !value.is_empty()),
-                            "{which}: blank choice"
-                        );
-                        assert!(
-                            setting.compatibility_with.is_none(),
-                            "{which}: a choice cannot be a compatibility switch"
-                        );
-                    }
-                    SettingKind::Switch { default } => {
-                        if let SwitchDefault::WhileAdded(id) = default {
-                            assert!(
-                                AgentId::from_wire_name(id).is_some(),
-                                "{which}: defaults to the presence of unregistered {id}"
-                            );
-                        }
-                    }
+                if let SettingKind::Choice { choices } = setting.kind {
+                    assert!(!choices.is_empty(), "{which}: no choices");
+                    let values: HashSet<_> = choices.iter().map(|c| c.value).collect();
+                    assert_eq!(values.len(), choices.len(), "{which}: repeated choice");
+                    assert!(
+                        values.iter().all(|value| !value.is_empty()),
+                        "{which}: blank choice"
+                    );
+                    assert!(
+                        setting.compatibility_with.is_none(),
+                        "{which}: a choice cannot be a compatibility switch"
+                    );
                 }
                 if let Some(source) = setting.compatibility_with {
                     let source = AgentId::from_wire_name(source)
@@ -695,40 +674,32 @@ mod tests {
         }
     }
 
-    /// A switch with no choice of the user's follows its default rule over the added agents; a
-    /// value the setting does not take is not a choice at all.
+    /// A switch with no choice of the user's follows its default; a value the setting does not
+    /// take is not a choice at all.
     #[test]
-    fn a_switch_with_no_choice_follows_its_default_rule() {
+    fn a_switch_with_no_choice_follows_its_default() {
         let compatibility =
             |agent: AgentId| agent.descriptor().setting("claude_compatibility").unwrap();
-        let in_effect =
-            |agent: AgentId, chosen: Option<SettingValue>, added: Option<&[AgentId]>| {
-                compatibility(agent).in_effect(chosen.as_ref(), added)
-            };
+        let in_effect = |agent: AgentId, chosen: Option<SettingValue>| {
+            compatibility(agent).in_effect(chosen.as_ref())
+        };
         let on = Some(SettingValue::Switch(true));
         let off = Some(SettingValue::Switch(false));
-        assert_eq!(in_effect(AgentId::GROK, None, None), on);
-        assert_eq!(in_effect(AgentId::CODEX, None, None), off);
-        assert_eq!(
-            in_effect(AgentId::CODEX, None, Some(&[AgentId::CODEX])),
-            off
-        );
-        assert_eq!(
-            in_effect(AgentId::CODEX, None, Some(&[AgentId::CLAUDE])),
-            on
-        );
-        assert_eq!(in_effect(AgentId::GROK, off.clone(), None), off);
-        assert_eq!(in_effect(AgentId::CODEX, on.clone(), None), on);
+        assert_eq!(in_effect(AgentId::GROK, None), off);
+        assert_eq!(in_effect(AgentId::CODEX, None), off);
+        assert_eq!(in_effect(AgentId::GROK, on.clone()), on);
+        assert_eq!(in_effect(AgentId::CODEX, on.clone()), on);
+        assert_eq!(in_effect(AgentId::GROK, off.clone()), off);
         let wrong = Some(SettingValue::Choice("on".into()));
-        assert_eq!(in_effect(AgentId::GROK, wrong, None), on);
+        assert_eq!(in_effect(AgentId::GROK, wrong), off);
 
         let reviewer = AgentId::CODEX
             .descriptor()
             .setting("approval_reviewer")
             .unwrap();
-        assert_eq!(reviewer.in_effect(None, None), None);
+        assert_eq!(reviewer.in_effect(None), None);
         let user = SettingValue::Choice("user".into());
-        assert_eq!(reviewer.in_effect(Some(&user), None), Some(user));
+        assert_eq!(reviewer.in_effect(Some(&user)), Some(user));
         assert!(!reviewer.accepts(&SettingValue::Choice("nobody".into())));
         assert!(!reviewer.accepts(&SettingValue::Switch(true)));
     }

@@ -86,11 +86,11 @@ pub struct Settings {
     /// The value in effect of every setting of every provider (see `ProviderInfo::settings`), by
     /// provider id and then setting id: each provider the daemon registers has an entry and each of
     /// its settings a key, and the type is `Partial` only because a client may index it by an id
-    /// the daemon does not serve. A switch holds the user's choice, else the value its default rule
-    /// gives now; a choice holds the user's, else `null`, which follows each account's own
-    /// configuration. Read when a session starts, resumes or switches account. The choices of a
-    /// setting its provider does not export (`exported` false) are kept local to this machine; an
-    /// exported one travels with a configuration export.
+    /// the daemon does not serve. A switch holds the user's choice, else its default; a choice
+    /// holds the user's, else `null`, which follows each account's own configuration. Read when a
+    /// session starts, resumes or switches account. The choices of a setting its provider does not
+    /// export (`exported` false) are kept local to this machine; an exported one travels with a
+    /// configuration export.
     #[cfg_attr(
         test,
         ts(type = "Partial<Record<Agent, Record<string, boolean | string | null>>>")

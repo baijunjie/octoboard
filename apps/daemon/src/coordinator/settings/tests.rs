@@ -345,10 +345,10 @@ async fn a_provider_setting_request_is_refused_unless_the_provider_declares_it_a
     assert!(events.try_recv().is_err());
 }
 
-/// A switch is set per provider, null puts it back on its default rule, and only a change is
-/// broadcast. Codex starts off here, since Claude Code is not among the added agents.
+/// A switch is set per provider, null puts it back on its default, and only a change is
+/// broadcast. Every compatibility switch starts off.
 #[tokio::test]
-async fn a_switch_is_set_per_provider_and_cleared_to_its_default_rule() {
+async fn a_switch_is_set_per_provider_and_cleared_to_its_default() {
     let (state, _dir) = crate::test_support::app_state("coordinator-provider-switch");
     let on = |agent: AgentId| {
         state
@@ -359,7 +359,7 @@ async fn a_switch_is_set_per_provider_and_cleared_to_its_default_rule() {
     };
     let switch = |on| Some(SettingValue::Switch(on));
     assert!(!on(AgentId::CODEX));
-    assert!(on(AgentId::GROK));
+    assert!(!on(AgentId::GROK));
 
     let mut events = state.subscribe();
     set(&state, AgentId::CODEX, "claude_compatibility", switch(true))
@@ -369,23 +369,23 @@ async fn a_switch_is_set_per_provider_and_cleared_to_its_default_rule() {
         events.try_recv(),
         Ok(Event::SettingsUpdated { settings })
             if settings.provider_settings["codex"]["claude_compatibility"] == switch(true)
-                && settings.provider_settings["grok"]["claude_compatibility"] == switch(true)
+                && settings.provider_settings["grok"]["claude_compatibility"] == switch(false)
     ));
     assert!(on(AgentId::CODEX));
-    assert!(on(AgentId::GROK));
+    assert!(!on(AgentId::GROK));
     set(&state, AgentId::CODEX, "claude_compatibility", switch(true))
         .await
         .unwrap();
     assert!(events.try_recv().is_err(), "no change, no broadcast");
 
-    set(&state, AgentId::GROK, "claude_compatibility", switch(false))
-        .await
-        .unwrap();
-    assert!(!on(AgentId::GROK));
-    set(&state, AgentId::GROK, "claude_compatibility", None)
+    set(&state, AgentId::GROK, "claude_compatibility", switch(true))
         .await
         .unwrap();
     assert!(on(AgentId::GROK));
+    set(&state, AgentId::GROK, "claude_compatibility", None)
+        .await
+        .unwrap();
+    assert!(!on(AgentId::GROK));
 }
 
 /// Choices applied in bulk (a configuration import) are refused, applying none of the request,
