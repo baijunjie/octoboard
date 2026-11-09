@@ -132,24 +132,26 @@ program's next copy replaces it.
 
 ## Output, scrollback and size
 
-- **Attaching to a running session starts from a first paint of its terminal**, then follows live output, with no
-  byte lost or repeated between the two. The daemon keeps a continuously parsed copy of every running terminal, and
-  the first paint is that copy written out as escape sequences: it resets and clears the terminal, writes up to
-  **10,000 rows** of the normal screen's scrollback, then the screen's rows with their colours, styles and links —
-  on the alternate screen when the agent is on it — and then restores the scroll region, the saved and current cursor
-  with the attributes each draws with, the terminal modes (mouse reporting, focus reporting, bracketed paste,
-  application cursor and keypad keys, insert, newline and origin modes, a hidden cursor, disabled line wrap), the
-  cursor style the agent chose and the window title. Attaching covers selecting a session, reconnecting and reloading
-  the window. The terminal itself keeps 10,000 lines of scrollback. An interrupted session shows the saved preview
-  described in "Interrupted and archived sessions" below; an archived one shows its history instead.
+- **Attaching to a running session starts from a first paint of its terminal**, then follows live output, with no byte
+  lost or repeated between the two. The daemon keeps a continuously parsed copy of every running terminal, and the first
+  paint is that copy written out as escape sequences: it resets and clears the terminal, writes up to **10,000 rows** of
+  the normal screen's scrollback, then the screen's rows with their colours, styles and links — when the agent is on its
+  alternate screen, the normal screen's rows and cursor first, then the alternate screen's — and then restores the
+  scroll region, the saved and current cursor with the attributes each draws with, the terminal modes (mouse reporting,
+  focus reporting, bracketed paste, application cursor and keypad keys, insert, newline and origin modes, a hidden
+  cursor, disabled line wrap), the cursor style the agent chose and the window title. Attaching covers selecting a
+  session, reconnecting and reloading the window. The terminal itself keeps 10,000 lines of scrollback. An interrupted
+  session shows the saved preview described in "Interrupted and archived sessions" below; an archived one shows its
+  history instead.
 - **A newly attached or reconnecting terminal therefore shows the agent's exact current screen however much output it
   has written**, and a full-screen agent stays full-screen and keeps answering the mouse, the wheel included. Its
   scrollback is the daemon's parsed scrollback, up to 10,000 rows. Lines the output wrapped stay joined, so they reflow
   when the terminal is resized.
 - Not painted, and so missing on a terminal attached after the agent set them: the normal screen behind the alternate
-  screen (a terminal that attached while the agent was on its alternate screen gets no scrollback, and shows a blank
-  normal screen once the agent leaves the alternate one), character sets, tab stops, colour palette changes, and
-  keyboard-protocol enhancements an agent asked for (the kitty keyboard flags).
+  screen after the terminal's width changed while the agent was on its alternate screen, until the agent enters it again
+  (a terminal that attached then gets no scrollback, and shows a blank normal screen once the agent leaves the alternate
+  one), character sets, tab stops, colour palette changes, and keyboard-protocol enhancements an agent asked for (the
+  kitty keyboard flags).
 - The first paint is drawn at the size the agent's terminal has at that moment. The size the attaching client reports
   is applied after its paint, and an agent told a different size redraws for it over the painted screen. Attaching
   makes the client the most recently active one, which is what decides the size while several clients show the

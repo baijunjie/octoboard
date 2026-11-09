@@ -21,25 +21,25 @@ pub const FRESH_FOR: Duration = Duration::from_secs(1);
 
 /// A terminal's parsed screen saved at a planned restart, for the successor to restore before its
 /// reader starts (`PtyCore::restore_screen`). `bytes`, taken into a fresh parsed screen of `rows`
-/// by `cols`, rebuild it: the first paint with the whole scrollback
-/// (`TerminalSnapshot::paint`), with the titles the program pushed pushed again right after its
-/// reset, then what draws the character a repeat (REP) draws again and takes the screen back,
-/// where the paint did not leave it, then the program's status records as status reports, oldest
-/// updated first, then `CSI ? 2031 h` where the program subscribed to colour scheme updates, then
-/// the bytes of the escape sequence or UTF-8 character the output had begun and not ended, so the
-/// output that follows parses as it would have: what the parser had taken in of it, and what the
-/// query scanner held back. `drawn` says the screen had shown something since titles were
-/// reported, so that the restored one counts titles from the first byte after them, as this one
-/// did.
+/// by `cols`, rebuild it: the first paint with the whole scrollback (`TerminalSnapshot::paint`),
+/// with the titles the program pushed pushed again right after its reset and neither the rows of a
+/// blank normal screen nor a saved cursor as a reset leaves it written, then what draws the
+/// character a repeat (REP) draws again and takes the screen back, where the paint did not leave
+/// it, then the program's status records as status reports, oldest updated first, then
+/// `CSI ? 2031 h` where the program subscribed to colour scheme updates, then the bytes of the
+/// escape sequence or UTF-8 character the output had begun and not ended, so the output that
+/// follows parses as it would have: what the parser had taken in of it, and what the query scanner
+/// held back. `drawn` says the screen had shown something since titles were reported, so that the
+/// restored one counts titles from the first byte after them, as this one did.
 ///
 /// `inexact` says the bytes rebuild the screen only in part, which a restore marks, as it marks a
-/// screen rebuilt from a holder's tail: the screen was such a one already, or the terminal was in
-/// a state the bytes leave out (`TerminalSnapshot::save`) — the normal screen hidden behind the
-/// alternate one where anything was drawn on it, a character set, tab stops or palette colours
-/// changed, a title stack the paint does not push again, a cursor the paint cannot place, or a
-/// character to repeat it cannot draw. Not saved either, and of no matter to what follows: the
-/// display the program's colour queries were answered with, which the clients of the successor
-/// report again.
+/// screen rebuilt from a holder's tail: the screen was such a one already, or the terminal was in a
+/// state the bytes leave out (`TerminalSnapshot::save`) — the normal screen hidden behind the
+/// alternate one where anything was drawn on it and the width changed while the alternate one was
+/// shown, a character set, tab stops or palette colours changed, a title stack the paint does not
+/// push again, a cursor the paint cannot place, or a character to repeat it cannot draw. Not saved
+/// either, and of no matter to what follows: the display the program's colour queries were answered
+/// with, which the clients of the successor report again.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SavedScreen {
     pub rows: u16,

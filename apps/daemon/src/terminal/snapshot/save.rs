@@ -18,13 +18,20 @@ impl TerminalSnapshot {
     /// The bytes that take a fresh terminal of this one's size, which answers queries and keeps
     /// status reports as this one does, to the state this one is in, as [`SavedScreen`] describes
     /// them, with this terminal's size. Marked inexact where this terminal is in a state the bytes
-    /// do not rebuild ([`Self::left_out`]); the caller adds whether the screen was inexact
-    /// already. `None` while the output is in the middle of a sequence too long to keep.
-    pub fn save(&self) -> Option<SavedScreen> {
+    /// do not rebuild ([`Self::normal_behind_alternate`], [`Self::left_out`]); the caller adds
+    /// whether the screen was inexact already. `None` while the output is in the middle of a
+    /// sequence too long to keep.
+    ///
+    /// Takes `&mut self` only to read the normal screen behind the alternate one, which leaves the
+    /// terminal as it was.
+    pub fn save(&mut self) -> Option<SavedScreen> {
+        let (normal, normal_left_out) = self.normal_behind_alternate(usize::MAX);
         let unended = self.unended.bytes()?;
-        let mut bytes = self.write_paint(usize::MAX, true).into_bytes();
-        let left_out = self
-            .left_out()
+        let mut bytes = self
+            .write_paint(usize::MAX, true, normal.as_deref())
+            .into_bytes();
+        let left_out = normal_left_out
+            .or_else(|| self.left_out())
             .or_else(|| self.write_repeat(&mut bytes).err());
         if let Some(what) = left_out {
             tracing::info!(
@@ -50,8 +57,8 @@ impl TerminalSnapshot {
     }
 
     /// What of this terminal's state the saved bytes do not rebuild, and would change what later
-    /// output does or shows, if anything: the normal screen behind the alternate one, unless it is
-    /// known to be blank (`blank_normal`); a character set other than ASCII designated or in use;
+    /// output does or shows, if anything, besides the normal screen behind the alternate one
+    /// ([`Self::normal_behind_alternate`]): a character set other than ASCII designated or in use;
     /// tab stops changed; colours of the palette changed; a title stack the paint does not push
     /// again; a cursor outside the scroll region in origin mode, which the paint places on the
     /// region's edge; on the normal screen, a cursor the alternate screen keeps saved, which
@@ -59,9 +66,6 @@ impl TerminalSnapshot {
     fn left_out(&self) -> Option<&'static str> {
         let mode = *self.terminal.mode();
         let grid = self.terminal.grid();
-        if mode.contains(TermMode::ALT_SCREEN) && !self.blank_normal {
-            return Some("the normal screen behind the alternate one");
-        }
         if !mode.contains(TermMode::ALT_SCREEN) && self.unexposed.alternate_saved_cursor {
             return Some("the cursor the alternate screen keeps saved");
         }

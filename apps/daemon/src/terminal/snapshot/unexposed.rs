@@ -34,6 +34,9 @@ pub(super) struct Unexposed {
     /// The alternate screen was left (`CSI ? 1049 l`) since the owner last cleared this; a reset
     /// does not clear it.
     pub(super) left_alternate: bool,
+    /// The alternate screen was entered (`CSI ? 1049 h`) since the owner last cleared this; a
+    /// reset does not clear it.
+    pub(super) entered_alternate: bool,
     /// A cursor was saved (DECSC) while the alternate screen was shown, since the last reset: the
     /// alternate screen keeps it, hidden, for a restore (DECRC) once it is shown again.
     pub(super) alternate_saved_cursor: bool,
@@ -52,6 +55,7 @@ impl Unexposed {
             preceding: None,
             alternate: false,
             left_alternate: false,
+            entered_alternate: false,
             alternate_saved_cursor: false,
         }
     }
@@ -115,6 +119,7 @@ impl Handler for Unexposed {
             // Switching the column mode (DECCOLM) resets the scroll region.
             PrivateMode::Named(NamedPrivateMode::ColumnMode) => self.region = None,
             PrivateMode::Named(NamedPrivateMode::SwapScreenAndSetRestoreCursor) => {
+                self.entered_alternate |= !self.alternate;
                 self.alternate = true;
             }
             _ => {}
@@ -164,9 +169,11 @@ impl Handler for Unexposed {
     }
 
     fn reset_state(&mut self) {
-        let (preceding, left_alternate) = (self.preceding, self.left_alternate);
+        let (preceding, left_alternate, entered_alternate) =
+            (self.preceding, self.left_alternate, self.entered_alternate);
         *self = Self::new(self.lines);
         self.preceding = preceding;
         self.left_alternate = left_alternate;
+        self.entered_alternate = entered_alternate;
     }
 }

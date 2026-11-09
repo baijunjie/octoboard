@@ -407,8 +407,9 @@ on (see "Resuming the interrupted sessions at start" in `docs/product/archiving-
 ### Restarting
 
 Octoboard restarts itself only to apply an installed update, when the user presses **Restart now** (see "Restarting to
-apply an update" in `docs/product/in-app-updates.md`). **A restart is no quit: it hands every session and shell
-terminal over to the new version**, which takes them over running, with their screens exactly as they were. No session
+apply an update" in `docs/product/in-app-updates.md`). **A restart is no quit: it hands every session and shell terminal
+over to the new version**, which takes them over running, with their screens exactly as they were wherever the saved
+screen can reproduce them (see "The screen of a terminal handed over" in `docs/product/process-holders.md`). No session
 is interrupted, no preview is frozen, and nothing a session started is stopped.
 
 - **What it would not carry over.** Before every restart, the window asks the daemon which running sessions and shell

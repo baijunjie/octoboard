@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use alacritty_terminal::grid::{Cursor, Dimensions, Grid};
+use alacritty_terminal::grid::{Charsets, Cursor, Dimensions, Grid};
 use alacritty_terminal::index::{Column, Line};
 use alacritty_terminal::term::cell::{Cell, Flags};
 use alacritty_terminal::term::TermMode;
@@ -46,14 +46,18 @@ impl TerminalSnapshot {
     /// terminal of the same size to the screen this one shows now, so that the program's live
     /// output can follow it. It resets the client's terminal and clears it, then writes up to
     /// `history` of the normal screen's scrollback rows, which scroll into the client's own
-    /// scrollback, the screen's rows, entering the alternate screen first when the program is on
-    /// it, and then the scroll region, the saved and current cursor with the pen each draws with,
-    /// the modes, the cursor style and the title. It asks the client nothing.
+    /// scrollback, and the normal screen's rows and cursor, then, when the program is on the
+    /// alternate screen, enters it and writes its rows, and then the scroll region, the saved and
+    /// current cursor with the pen each draws with, the modes, the cursor style and the title. It
+    /// asks the client nothing.
+    ///
+    /// Takes `&mut self` only to read the normal screen behind the alternate one
+    /// ([`Self::normal_behind_alternate`]), which leaves the terminal as it was.
     ///
     /// Not painted, and so different on a client that attached after them:
-    /// - the normal screen hidden behind the alternate one, which `alacritty_terminal` does not
-    ///   expose, so such a client shows a blank normal screen once the program leaves the
-    ///   alternate one;
+    /// - the normal screen hidden behind the alternate one after the width changed while the
+    ///   alternate one was shown, until the program enters it again (`normal_reflowed`), so such
+    ///   a client shows a blank normal screen once the program leaves the alternate one;
     /// - the character sets, tab stops and colour palette changes, which programs leave at their
     ///   defaults when idle;
     /// - the kitty keyboard flags, which the daemon's parser does not keep;
@@ -61,16 +65,74 @@ impl TerminalSnapshot {
     ///   region's edge;
     /// - the titles the program pushed, which a saved screen restores
     ///   ([`Self::write_title_stack`]).
-    pub fn paint(&self, history: usize) -> Vec<u8> {
-        self.write_paint(history, false).into_bytes()
+    pub fn paint(&mut self, history: usize) -> Vec<u8> {
+        let (normal, _) = self.normal_behind_alternate(history);
+        self.write_paint(history, false, normal.as_deref())
+            .into_bytes()
+    }
+
+    /// The bytes that write the normal screen behind the alternate one, with up to `history` rows
+    /// of its scrollback, where it is shown and the normal one is not known to be blank
+    /// (`blank_normal`), for a paint or a saved screen to write before it enters the alternate
+    /// screen (see `write_normal_behind`), and what of it the bytes leave out, if anything: all of
+    /// it after a change of width (below) or where its saved cursor was lost, or only the character
+    /// sets of its cursor, which the bytes do not designate. Leaves the terminal as it was.
+    ///
+    /// `alacritty_terminal` keeps the hidden grid to itself, but lets the screens be swapped and
+    /// the shown grid be replaced: leaving the alternate screen keeps both as they are, and
+    /// entering it again clears the alternate grid, gives it the normal screen's cursor and saves
+    /// that cursor on the normal screen. The alternate grid copied beforehand puts back all of
+    /// that but the last, which entering the alternate screen did already and only a change of
+    /// width while it was shown can have undone since (reflow moves the cursor and only clamps
+    /// the saved one); after one (`normal_reflowed`) the normal screen is not read. Swapping also
+    /// swaps the kitty keyboard mode stacks and sets the mode from the top of the shown one, which
+    /// changes nothing only because `kitty_keyboard` stays off (see [`TerminalSnapshot::new`]).
+    pub(super) fn normal_behind_alternate(
+        &mut self,
+        history: usize,
+    ) -> (Option<String>, Option<&'static str>) {
+        if !self.terminal.mode().contains(TermMode::ALT_SCREEN) || self.blank_normal {
+            return (None, None);
+        }
+        if self.normal_reflowed {
+            return (
+                None,
+                Some("the normal screen behind the alternate one, reflowed"),
+            );
+        }
+        // Only the alternate grid, which has no scrollback, is copied; the normal one is written
+        // while it is shown.
+        let alternate = self.terminal.grid().clone();
+        self.terminal.swap_alt();
+        let normal = self.terminal.grid();
+        let lost_saved_cursor = normal.saved_cursor != normal.cursor;
+        let written = if lost_saved_cursor {
+            (None, Some("the normal screen's saved cursor"))
+        } else {
+            let mut output = String::new();
+            write_normal_behind(&mut output, normal, history);
+            let charsets = normal.cursor.charsets != Charsets::default();
+            (Some(output), charsets.then_some("the character sets"))
+        };
+        self.terminal.swap_alt();
+        *self.terminal.grid_mut() = alternate;
+        if lost_saved_cursor {
+            // Unreachable while `normal_reflowed` is kept right: entering again has just saved
+            // the cursor over the one the normal screen had saved.
+            tracing::warn!(
+                "reading the normal screen behind the alternate one lost its saved cursor"
+            );
+        }
+        written
     }
 
     /// [`Self::paint`], or where `saving`, the paint a saved screen starts with: the titles the
     /// program pushed are pushed again right after the reset, and neither the rows of a normal
     /// screen as a reset leaves it nor a saved cursor as a reset leaves it are written, so that the
     /// restored terminal is known to be in that state too (see `blank_normal`), which writing them
-    /// would hide.
-    pub(super) fn write_paint(&self, history: usize, saving: bool) -> String {
+    /// would hide. `normal` is what writes the normal screen behind the alternate one, written
+    /// before the alternate screen is entered ([`write_normal_behind`]).
+    pub(super) fn write_paint(&self, history: usize, saving: bool, normal: Option<&str>) -> String {
         let mode = *self.terminal.mode();
         let grid = self.terminal.grid();
         let mut output = String::from("\x1bc");
@@ -78,7 +140,18 @@ impl TerminalSnapshot {
             self.write_title_stack(&mut output);
         }
         let history = if mode.contains(TermMode::ALT_SCREEN) {
+            if let Some(normal) = normal {
+                output.push_str(normal);
+            }
             output.push_str("\x1b[?1049h");
+            if normal.is_some() {
+                // Entering gave the alternate screen the normal one's cursor, which its rows are
+                // not written from, and cleared it with that cursor's background, which the rows
+                // leave in the blanks they do not write: both are reset first.
+                output.push_str("\x1b[H");
+                write_pen(&mut output, &Cursor::default());
+                output.push_str("\x1b[2J");
+            }
             0
         } else {
             history.min(grid.history_size())
@@ -172,6 +245,17 @@ fn write_rows(output: &mut String, grid: &Grid<Cell>, history: usize) {
         output.push_str(&line);
         wrapped = next_wrapped;
     }
+}
+
+/// Writes the normal screen `normal`, hidden behind the alternate one, onto the normal screen of a
+/// reset terminal: up to `history` rows of its scrollback, its screen's rows and its cursor with
+/// its pen. Entering the alternate screen right after keeps them as they are, saving that cursor
+/// on the normal screen as entering it did there (`TerminalSnapshot::normal_behind_alternate` has
+/// made sure the two are still the same), and leaving it shows them again. The scroll region and
+/// origin mode are only written after this, so the cursor is placed from the screen's top.
+fn write_normal_behind(output: &mut String, normal: &Grid<Cell>, history: usize) {
+    write_rows(output, normal, history.min(normal.history_size()));
+    place(output, normal, &normal.cursor, 0);
 }
 
 /// Moves the client's cursor to where `cursor` is, rows counted from `origin`, and gives it the

@@ -56,9 +56,15 @@ manual runs. There is no server-form update path yet to route through
 **Open against the completion criteria.**
 - "Exact" is not yet unconditional: a saved screen is exact only for the states the checkpoint reproduces (below); the
   others are saved marked inexact: restored with the tail since the mark, marked, and redrawn (own choice: their content
-  beats a rebuild from the tail). A full checkpoint (both grids and the normal scrollback behind an alternate screen)
-  needs the terminal library to expose its hidden grid (alacritty_terminal 0.26 keeps it private) or a shadow of it;
-  milestone 04's exact-screen claim inherits this limit.
+  beats a rebuild from the tail). The normal screen behind an alternate one, scrollback included, is now saved: the save
+  reads the hidden grid by swapping the screens through `alacritty_terminal`'s public `swap_alt` and putting the
+  alternate grid back with `grid_mut` (`TerminalSnapshot::normal_behind_alternate`). The one case left out is a width
+  change while the alternate screen is shown, until the program enters it again: the reflow may move the hidden cursor
+  away from the one entering saved, which entering again in the successor cannot rebuild, and reading it would overwrite
+  the live saved cursor; the successor then shows a blank normal screen behind the program. A client's first paint reads
+  the hidden normal screen the same way (`TerminalSnapshot::paint`), under the same width-change limit, so a client
+  attached while the program is on the alternate screen shows it when the program leaves. Milestone 04's exact-screen
+  claim inherits the remaining limits.
 - Lossless handover is bounded by the tail: more than 1 MiB written after the mark (2 MiB with a welcome pin) loses
   exact eligibility. Unconditional no-loss would need a disk-backed post-mark spool with acknowledged offsets.
 - The systemd case stays blocked (see Handoff), and so does service key delivery: a manager-started successor makes a
@@ -88,12 +94,13 @@ manual runs. There is no server-form update path yet to route through
    `cli::`, `instance_lock`, `request_guard`, `protocol::`, `bindings` (the TypeScript `planned_stop` entries were
    written by hand), `layering_tests`, `platform::proc`.
 3. By hand on macOS (and Linux once built): `octoboardd start --port N`, sessions and a shell terminal writing output
-   (and asking device attributes and the cursor position), `octoboardd restart`: same port and key, every plain
-   screen exact and not marked inexact, an alternate-screen program over a non-blank shell marked inexact, the output
-   written meanwhile shown once, the queries answered once; a session already marked inexact stays so; a plain `stop`
-   still ends everything; `POST /planned-stop` then `start` restores exactly; `POST /restart` and `restart` refused
-   for a daemon started by the application; a restart through a symlink repointed to a new build starts the new
-   build. Windows: `restart` says it is not supported and `POST /restart` answers 409 `no_successor`.
+   (and asking device attributes and the cursor position), `octoboardd restart`: same port and key, every plain screen
+   exact and not marked inexact, an alternate-screen program over a non-blank shell exact too (the shell shown exactly
+   once the program leaves, in the daemon's screen and in every client), marked inexact only after a width change while
+   it was shown, the output written meanwhile shown once, the queries answered once; a session already marked inexact
+   stays so; a plain `stop` still ends everything; `POST /planned-stop` then `start` restores exactly; `POST /restart`
+   and `restart` refused for a daemon started by the application; a restart through a symlink repointed to a new build
+   starts the new build. Windows: `restart` says it is not supported and `POST /restart` answers 409 `no_successor`.
 
 **Decisions, with reasons.** The first set were made without the user; an independent review then kept some and
 changed others, and its changes were accepted as the decision. Where the review left a choice, the choice is marked
@@ -125,13 +132,15 @@ changed others, and its changes were accepted as the decision. Where the review 
   choice read the same value. A custom unit passing `--service-managed` must restart on status 75.
 - The saved screen is the first paint with the whole scrollback, the program status records as OSC 7501 reports, the
   colour-scheme-updates mode, the title stack, and the bytes of an escape sequence (or UTF-8 character) begun and not
-  ended (at most 64 KiB, else the approximate path), plus bytes that re-arm the character a REP would repeat. The
-  save marks it inexact when it cannot reproduce the state: an alternate screen over a normal screen not known to be
-  blank, a character set other than ASCII, tab stops set or cleared since the last reset, a changed palette entry, a
-  cursor outside the scroll region in origin mode, a cursor the alternate screen keeps saved while the normal one is
-  shown, a REP that cannot be re-armed. A normal screen known to be blank behind an alternate one is exact, including
-  when one chunk leaves and re-enters the alternate screen. The predecessor's inexact bit is
-  kept. The file carries a format version; an unsupported one takes the approximate path.
+  ended (at most 64 KiB, else the approximate path), plus bytes that re-arm the character a REP would repeat. The save
+  marks it inexact when it cannot reproduce the state: an alternate screen over a non-blank normal screen after the
+  width changed while it was shown (until it is entered again), a character set other than ASCII (on either screen's
+  cursor), tab stops set or cleared since the last reset, a changed palette entry, a cursor outside the scroll region in
+  origin mode, a cursor the alternate screen keeps saved while the normal one is shown, a REP that cannot be re-armed. A
+  normal screen behind an alternate one is written before the alternate screen is entered: rows, scrollback, cursor and
+  pen, with the saved cursor that entering sets; reading it leaves the live terminal unchanged. A normal screen known to
+  be blank is not read, and is exact as before. The predecessor's inexact bit is kept. The file carries a format
+  version; an unsupported one takes the approximate path.
 - A saved screen is used when its token matches the one the holder reports for the terminal's tail, the tail was not cut
   since the handover's mark, and the size matches; the holder's last parting is not consulted. The screens file is no
   longer deleted at start: entries are consumed at their terminals' committed adoption (once per holder, the remaining

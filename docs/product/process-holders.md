@@ -207,14 +207,19 @@ screen, then takes in only what was written since, as output it reads live:
 
 - The terminal is **not made to redraw**, and is **not marked inexact** unless the saved screen is, or it was marked
   before the handover, which stays.
-- **A saved screen is marked inexact when it cannot reproduce the terminal's state**: an alternate screen (a
-  full-screen program's) over a normal screen not known to be blank — anything drawn on it or kept in its scrollback
-  since the terminal started or was last reset, as under a full-screen program started from a shell's prompt — a
-  character set other than ASCII, tab stops set or cleared since the last reset, a colour of the palette the program
-  changed, a cursor outside the scroll region in origin mode, a cursor the alternate screen keeps saved while the normal
-  one is shown, a stack of pushed titles it cannot push again, or a character to repeat it cannot draw again. Such a
-  screen is restored all the same, with what was written since, marked inexact, and the program is asked to draw it
-  again, as for a screen rebuilt from the tail.
+- **The normal screen behind an alternate one is saved too**: under a full-screen program started from a shell's prompt,
+  the shell's screen and scrollback come back with it, in the daemon's screen of the terminal and in the first paint of
+  every terminal that attaches, so they are shown exactly as they were once the program leaves its alternate screen (see
+  "Output, scrollback and size" in `docs/product/session-terminal.md`).
+- **A saved screen is marked inexact when it cannot reproduce the terminal's state**: an alternate screen (a full-screen
+  program's) over a normal screen with anything drawn on it or kept in its scrollback, when the terminal's width changed
+  while the alternate screen was shown and the program has not entered it again since (the hidden normal screen was
+  reflowed, which can separate its cursor from the one the program's entry saved) — a character set other than ASCII,
+  tab stops set or cleared since the last reset, a colour of the palette the program changed, a cursor outside the
+  scroll region in origin mode, a cursor the alternate screen keeps saved while the normal one is shown, a stack of
+  pushed titles it cannot push again, or a character to repeat it cannot draw again. Such a screen is restored all the
+  same, with what was written since, marked inexact, and the program is asked to draw it again, as for a screen rebuilt
+  from the tail.
 - **The output written during the restart appears once**, after the restored screen, neither lost nor shown twice.
 - The program status reports in it move the status, as they would have had the stopping daemon read them.
 - **Each query is answered once.** The queries in the output before the handover are the stopping daemon's: until it

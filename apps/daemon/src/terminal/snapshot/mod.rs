@@ -142,11 +142,15 @@ pub struct TerminalSnapshot {
     /// title is no longer one that precedes any drawing ([`Self::report_titles`]).
     drawn: bool,
     /// The normal screen is known to be as a reset leaves it: nothing drawn on it, nothing in its
-    /// scrollback, its cursor home with the default pen. Behind the alternate screen, which
-    /// `alacritty_terminal` does not let be read, only such a normal screen is one a saved screen
-    /// rebuilds ([`Self::save`]). Watched while the normal screen is shown, and given up on the
-    /// first byte that changes it, until a reset may have made it blank again.
+    /// scrollback, its cursor home with the default pen. Such a normal screen behind the
+    /// alternate one is rebuilt by a paint or a saved screen without being read
+    /// ([`Self::paint`], [`Self::save`]). Watched while the normal screen is shown, and given up
+    /// on the first byte that changes it, until a reset may have made it blank again.
     blank_normal: bool,
+    /// The width changed while the alternate screen was shown, since the program last entered
+    /// it: reflowing the normal screen behind it may have moved its cursor away from the one
+    /// entering saved there, which reading it would lose (see `normal_behind_alternate`).
+    normal_reflowed: bool,
 }
 
 impl TerminalSnapshot {
@@ -179,6 +183,7 @@ impl TerminalSnapshot {
             answering: None,
             drawn: false,
             blank_normal: true,
+            normal_reflowed: false,
         }
     }
 
@@ -191,8 +196,13 @@ impl TerminalSnapshot {
     pub fn process(&mut self, bytes: &[u8]) {
         self.unended.advance(bytes);
         self.unexposed.left_alternate = false;
+        self.unexposed.entered_alternate = false;
         self.unexposed_parser.advance(&mut self.unexposed, bytes);
         let leaves_alternate = self.unexposed.left_alternate;
+        // A resize comes between chunks, so an entry in this one comes after it.
+        if self.unexposed.entered_alternate {
+            self.normal_reflowed = false;
+        }
         let mut rest = bytes;
         // A reset (RIS) may leave the normal screen blank again, which is looked for over the
         // whole screen right after each. One cut across two chunks is missed, and the screen then
@@ -327,6 +337,11 @@ impl TerminalSnapshot {
         };
         let changed =
             size.rows != self.terminal.screen_lines() || size.cols != self.terminal.columns();
+        if size.cols != self.terminal.columns()
+            && self.terminal.mode().contains(TermMode::ALT_SCREEN)
+        {
+            self.normal_reflowed = true;
+        }
         self.unexposed.resize(size.rows, changed);
         self.terminal.resize(size);
     }

@@ -379,8 +379,7 @@ fn adopt_session(
         ..
     } = found;
     // A saved screen the save marked inexact keeps its content but is drawn again, as a rebuilt
-    // one is: what it left out (the normal screen behind an alternate one, say) is the program's to
-    // bring back.
+    // one is: what it left out (the character sets in use, say) is the program's to bring back.
     let exact_screen = exact.as_ref().is_some_and(|exact| !exact.saved.inexact);
     // Read before any output, as what the program wrote since the screen was saved; otherwise the
     // tail is history, taken in below.
