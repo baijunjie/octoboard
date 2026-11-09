@@ -32,10 +32,10 @@ pub(super) fn run(holder_id: String, registry_dir: Option<PathBuf>) -> Result<()
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?
-        .block_on(crate::holder::server::run_until(
-            config,
-            crate::platform::proc::shutdown_requested(),
-        ))
+        .block_on(async move {
+            crate::holder::server::run_until(config, crate::platform::proc::shutdown_requested())
+                .await
+        })
 }
 
 /// Whether the log file `file` (`holder-<id>.log`, or one of its rotations) is of a holder that
