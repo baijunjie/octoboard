@@ -217,9 +217,17 @@ fn apply_status(
     prompt_sent: bool,
 ) {
     let interpreter = provider.hooks();
+    let still_waiting = interpreter
+        .tool_call_change(event, payload)
+        .is_some_and(|change| state.apply_tool_call_change(session_id, change));
     let Some(status) = interpreter.status(event, payload) else {
         return;
     };
+    // The end of one tool call, or the start of another, says nothing about a call of the same
+    // turn that still waits on the user: the hand stays up, and nothing is armed for work.
+    if status == SessionStatus::Working && still_waiting {
+        return;
+    }
     let status = suppress_auto_review_hook(state, session_id, status);
     // Before the status write, so the record it publishes already carries whether the turn that
     // ended left the session paused.

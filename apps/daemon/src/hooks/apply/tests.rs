@@ -622,6 +622,50 @@ async fn only_the_next_turns_own_interrupt_ends_it() {
     assert_eq!(status(), SessionStatus::Idle);
 }
 
+/// Claude Code's hook events of a turn whose one message started a background `Agent` call and
+/// then asked an `AskUserQuestion`, in auto mode, where the agent call is let through only once
+/// the question is up, so its `PostToolUse` comes while the question waits (2.1.319; see
+/// `testdata/claude-hook-captures.md`). Each line is given the transcript at `transcript`.
+fn question_beside_late_call(transcript: &std::path::Path) -> Vec<Vec<u8>> {
+    include_str!("../../../testdata/claude_hooks_question_beside_late_call.jsonl")
+        .lines()
+        .map(|line| {
+            let mut event: serde_json::Value = serde_json::from_str(line).unwrap();
+            event["transcript_path"] = serde_json::json!(transcript);
+            event.to_string().into_bytes()
+        })
+        .collect()
+}
+
+/// The end of another call of the same message does not lower a hand raised for a question that
+/// still waits; the question's own end does, and the turn then ends as usual.
+#[tokio::test]
+async fn a_question_waits_through_the_end_of_another_call() {
+    let (state, _dir, _live, path) =
+        claude_session_with_transcript("server-question-late-call", SessionStatus::Idle);
+    let events = question_beside_late_call(&path);
+    let answered = events
+        .iter()
+        .position(|event| {
+            let event = String::from_utf8_lossy(event);
+            event.contains(r#""hook_event_name":"PostToolUse""#)
+                && event.contains(r#""tool_name":"AskUserQuestion""#)
+        })
+        .expect("the capture answers the question");
+    for event in &events[..answered] {
+        apply_hook(&state, "s", event);
+    }
+    let session = state.store.get_session("s").unwrap().unwrap();
+    assert_eq!(session.status, SessionStatus::WaitingUser);
+
+    for event in &events[answered..] {
+        apply_hook(&state, "s", event);
+    }
+    let session = state.store.get_session("s").unwrap().unwrap();
+    assert_eq!(session.status, SessionStatus::Idle);
+    assert!(!session.paused);
+}
+
 /// A helper agent's tool events carry an `agent_id` and no `agent_type`: they are not the
 /// session's work, so an idle session stays idle.
 #[tokio::test]
@@ -1218,4 +1262,249 @@ async fn a_cancelled_codex_turn_starts_what_octoboard_left_in_its_queue() {
     }
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     assert_eq!(queue.0.load(std::sync::atomic::Ordering::Acquire), 1);
+}
+
+/// A Claude Code hook event about the tool call `id` (none for a permission request, which names
+/// no call), carrying `tool` and `input`.
+fn claude_call_hook(
+    event: &str,
+    id: Option<&str>,
+    tool: &str,
+    input: serde_json::Value,
+    transcript: &std::path::Path,
+) -> Vec<u8> {
+    let mut payload = serde_json::json!({
+        "hook_event_name": event,
+        "tool_name": tool,
+        "tool_input": input,
+        "transcript_path": transcript,
+    });
+    if let Some(id) = id {
+        payload["tool_use_id"] = serde_json::json!(id);
+    }
+    payload.to_string().into_bytes()
+}
+
+fn status_of(state: &Arc<AppState>) -> SessionStatus {
+    state.store.get_session("s").unwrap().unwrap().status
+}
+
+/// The end of another call does not take a session with a permission prompt up back to work; the
+/// prompted call's own end does.
+#[tokio::test]
+async fn a_permission_prompt_waits_through_the_end_of_another_call() {
+    let (state, _dir, _live, path) =
+        claude_session_with_transcript("server-prompt-late-call", SessionStatus::Idle);
+    let make = serde_json::json!({"command": "make"});
+    let agent = serde_json::json!({"prompt": "go"});
+    let hook = |event, id, tool, input| claude_call_hook(event, id, tool, input, &path);
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    apply_hook(
+        &state,
+        "s",
+        &hook("PreToolUse", Some("t1"), "Bash", make.clone()),
+    );
+    apply_hook(
+        &state,
+        "s",
+        &hook("PreToolUse", Some("t2"), "Agent", agent.clone()),
+    );
+    apply_hook(
+        &state,
+        "s",
+        &hook("PermissionRequest", None, "Bash", make.clone()),
+    );
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+
+    apply_hook(
+        &state,
+        "s",
+        &hook("PostToolUse", Some("t2"), "Agent", agent),
+    );
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+
+    apply_hook(&state, "s", &hook("PostToolUse", Some("t1"), "Bash", make));
+    assert_eq!(status_of(&state), SessionStatus::Working);
+}
+
+/// A failed call's end counts as an end as well.
+#[tokio::test]
+async fn a_failed_other_call_does_not_lower_a_waiting_questions_hand_either() {
+    let (state, _dir, _live, path) =
+        claude_session_with_transcript("server-question-failed-call", SessionStatus::Idle);
+    let questions = serde_json::json!({"questions": []});
+    let agent = serde_json::json!({"prompt": "go"});
+    let hook = |event, id, tool, input| claude_call_hook(event, id, tool, input, &path);
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    apply_hook(
+        &state,
+        "s",
+        &hook("PreToolUse", Some("t1"), "Agent", agent.clone()),
+    );
+    apply_hook(
+        &state,
+        "s",
+        &hook(
+            "PreToolUse",
+            Some("t2"),
+            "AskUserQuestion",
+            questions.clone(),
+        ),
+    );
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+
+    apply_hook(
+        &state,
+        "s",
+        &hook("PostToolUseFailure", Some("t1"), "Agent", agent),
+    );
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+
+    apply_hook(
+        &state,
+        "s",
+        &hook(
+            "PostToolUseFailure",
+            Some("t2"),
+            "AskUserQuestion",
+            questions,
+        ),
+    );
+    assert_eq!(status_of(&state), SessionStatus::Working);
+}
+
+/// The move to work an other call's end would bring is skipped whole: it arms no record watch,
+/// where the one that moves a waiting session back to work arms the interrupt watch.
+#[tokio::test]
+async fn a_skipped_move_to_work_arms_no_watch() {
+    let (state, _dir, _live, path) =
+        claude_session_with_transcript("server-question-no-watch", SessionStatus::Idle);
+    let questions = serde_json::json!({"questions": []});
+    let agent = serde_json::json!({"prompt": "go"});
+    let hook = |event, id, tool, input| claude_call_hook(event, id, tool, input, &path);
+    apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+    apply_hook(
+        &state,
+        "s",
+        &hook("PreToolUse", Some("t1"), "Agent", agent.clone()),
+    );
+    apply_hook(
+        &state,
+        "s",
+        &hook(
+            "PreToolUse",
+            Some("t2"),
+            "AskUserQuestion",
+            questions.clone(),
+        ),
+    );
+    // Retires the watch the question armed and stands in for the watch current now.
+    let current = state.begin_record_watch("s");
+
+    apply_hook(
+        &state,
+        "s",
+        &hook("PostToolUse", Some("t1"), "Agent", agent),
+    );
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+    assert!(state.record_watch_current("s", current));
+
+    apply_hook(
+        &state,
+        "s",
+        &hook("PostToolUse", Some("t2"), "AskUserQuestion", questions),
+    );
+    assert_eq!(status_of(&state), SessionStatus::Working);
+    assert!(!state.record_watch_current("s", current));
+}
+
+/// Whichever event ends the turn's calls, a hand raised for a call that never ended comes down
+/// with it, and a later call's end is then an ordinary move to work.
+#[tokio::test]
+async fn a_batch_prompt_or_turn_end_lowers_the_hand_of_a_call_still_waiting() {
+    for (event, expected) in [
+        ("PostToolBatch", SessionStatus::Working),
+        ("UserPromptSubmit", SessionStatus::Working),
+        ("Stop", SessionStatus::Idle),
+        ("StopFailure", SessionStatus::Idle),
+        ("SessionStart", SessionStatus::Idle),
+    ] {
+        let (state, _dir, _live, path) =
+            claude_session_with_transcript("server-question-ended-by", SessionStatus::Idle);
+        let questions = serde_json::json!({"questions": []});
+        let hook = |event, id, tool, input| claude_call_hook(event, id, tool, input, &path);
+        apply_hook(&state, "s", &claude_hook("UserPromptSubmit", &path));
+        apply_hook(
+            &state,
+            "s",
+            &hook("PreToolUse", Some("t1"), "AskUserQuestion", questions),
+        );
+        assert_eq!(status_of(&state), SessionStatus::WaitingUser, "{event}");
+
+        apply_hook(&state, "s", &claude_hook(event, &path));
+        assert_eq!(status_of(&state), expected, "{event}");
+
+        // Nothing is waiting any more, so another call's end is work again.
+        apply_hook(
+            &state,
+            "s",
+            &hook("PostToolUse", Some("t2"), "Agent", serde_json::json!({})),
+        );
+        assert_eq!(status_of(&state), SessionStatus::Working, "{event}");
+    }
+}
+
+/// A prompt for a call the daemon never saw start is lowered by the next call to end.
+#[tokio::test]
+async fn a_prompt_for_an_unseen_call_ends_with_the_next_call() {
+    let (state, _dir, _live, path) =
+        claude_session_with_transcript("server-prompt-unseen-call", SessionStatus::Working);
+    let hook = |event, id, tool, input| claude_call_hook(event, id, tool, input, &path);
+    apply_hook(
+        &state,
+        "s",
+        &hook(
+            "PermissionRequest",
+            None,
+            "Write",
+            serde_json::json!({"path": "/x"}),
+        ),
+    );
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+
+    apply_hook(
+        &state,
+        "s",
+        &hook("PostToolUse", Some("t9"), "Bash", serde_json::json!({})),
+    );
+    assert_eq!(status_of(&state), SessionStatus::Working);
+}
+
+/// Another agent's session does not tell its calls apart: a prompt is lowered by the end of any
+/// call, the ids its events carry or not.
+#[tokio::test]
+async fn another_agents_prompt_is_lowered_by_the_end_of_any_call() {
+    let (state, dir) = app_state("server-codex-prompt-any-end");
+    state
+        .store
+        .insert_console(&crate::test_support::console(&dir))
+        .unwrap();
+    let mut session = crate::test_support::console_session("s", SessionStatus::Working);
+    session.agent = AgentId::CODEX;
+    state.store.insert_session(&session).unwrap();
+    let hook = |event: &str, id: Option<&str>| {
+        serde_json::json!({
+            "hook_event_name": event,
+            "tool_name": "Bash",
+            "tool_input": {"command": "make"},
+            "tool_use_id": id,
+        })
+        .to_string()
+        .into_bytes()
+    };
+    apply_hook(&state, "s", &hook("PermissionRequest", None));
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+
+    apply_hook(&state, "s", &hook("PostToolUse", Some("other")));
+    assert_eq!(status_of(&state), SessionStatus::Working);
 }

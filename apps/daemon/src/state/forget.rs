@@ -54,6 +54,10 @@ impl AppState {
             .lock()
             .expect("background tasks lock poisoned")
             .remove(id);
+        self.tool_calls
+            .lock()
+            .expect("tool call lock poisoned")
+            .remove(id);
         self.record_watch_generations
             .lock()
             .expect("record watch lock poisoned")

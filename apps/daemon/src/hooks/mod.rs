@@ -126,6 +126,17 @@ pub trait HookInterpreter: Send + Sync {
         false
     }
 
+    /// What this event says about the agent's tool calls, for keeping a hand raised for one call
+    /// up while another call of the same turn ends (see [`ToolCallChange`]), or `None` when it says
+    /// nothing about them.
+    fn tool_call_change<'a>(
+        &self,
+        _event: &str,
+        _payload: &'a Value,
+    ) -> Option<ToolCallChange<'a>> {
+        None
+    }
+
     /// Whether [`Self::record_watch`] is to be given the status the agent was at before the event:
     /// reading it costs a store read before every status write, so only an interpreter that arms a
     /// watch on a move into a status, not on more of the same, asks for it.
@@ -203,6 +214,36 @@ pub enum BackgroundTasksChange {
     /// A named subagent started, or resumed (`SubagentStart` fires again on every resume): it
     /// is running, whether or not a `Stop` has listed it yet.
     SubagentStarted(String),
+}
+
+/// What one hook event says about the agent's tool calls. An agent can run several calls of one
+/// message at once, so the end of one call says nothing about another that waits on the user: the
+/// session's hand comes down only once every call waiting on the user has ended
+/// (`AppState::apply_tool_call_change`).
+#[derive(Debug, PartialEq, Eq)]
+pub enum ToolCallChange<'a> {
+    /// A call started: its id where the event names one, and whether it waits on the user from
+    /// the start (the agent's own ask-the-user tool).
+    Started {
+        id: Option<&'a str>,
+        call: CallShape<'a>,
+        waits_on_user: bool,
+    },
+    /// A started call is now waiting on the user, the event naming it only by its shape (a
+    /// permission prompt).
+    WaitsOnUser(CallShape<'a>),
+    /// A call ended, by its id where the event names one.
+    Ended { id: Option<&'a str> },
+    /// Every call of the turn has ended, or the turn has.
+    AllEnded,
+}
+
+/// What a call is, as far as telling it from the other calls of its turn without an id goes: its
+/// tool and the input it was given.
+#[derive(Debug, PartialEq, Eq)]
+pub struct CallShape<'a> {
+    pub tool: Option<&'a str>,
+    pub input: Option<&'a Value>,
 }
 
 /// Whether this payload belongs to a named subagent, which carries an `agent_type` for every

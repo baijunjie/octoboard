@@ -72,6 +72,7 @@ mod stop;
 #[cfg(test)]
 pub(crate) mod test_support;
 mod titles;
+mod tool_calls;
 mod turns;
 mod unlinked;
 
@@ -293,6 +294,10 @@ pub struct AppState {
     /// and goes with it, so nothing is worth keeping across a daemon restart. Dropped with the
     /// session's other bookkeeping.
     background_tasks: Mutex<HashMap<String, BackgroundWork>>,
+    /// The tool calls of each session's current turn its hooks have reported open or waiting on
+    /// the user (`tool_calls`). Held in memory only: they belong to the agent process's turn.
+    /// Dropped with the session's other bookkeeping.
+    tool_calls: Mutex<HashMap<String, tool_calls::ToolCalls>>,
     /// The effort each session's agent runs it at by itself (`Session::default_effort`), kept by
     /// the record collector for the sessions that have one. Held in memory only: it is read off
     /// the agent's own files again within a pass of the collector after a restart.
@@ -401,6 +406,7 @@ impl AppState {
             request_hands: Mutex::new(HashMap::new()),
             ended_turns: Mutex::new(HashMap::new()),
             background_tasks: Mutex::new(HashMap::new()),
+            tool_calls: Mutex::new(HashMap::new()),
             default_efforts: Mutex::new(HashMap::new()),
             next_tasks_ticket: std::sync::atomic::AtomicU64::new(0),
             record_watch_generations: Mutex::new(HashMap::new()),

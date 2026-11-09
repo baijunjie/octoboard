@@ -501,3 +501,140 @@ fn only_grok_stops_on_an_agent_error() {
         assert!(!of(agent).stopped_on_agent_error("StopFailure", &json!({})));
     }
 }
+
+/// What `payload`'s call comes to as a [`CallShape`].
+fn shape(payload: &Value) -> CallShape<'_> {
+    CallShape {
+        tool: payload["tool_name"].as_str(),
+        input: payload.get("tool_input"),
+    }
+}
+
+/// Claude Code's `PreToolUse` starts a call under its `tool_use_id`, and only its own
+/// ask-the-user tool starts one that waits on the user.
+#[test]
+fn a_claude_tool_start_opens_a_call_and_only_a_question_waits() {
+    let bash = json!({"tool_name": "Bash", "tool_input": {"command": "ls"}, "tool_use_id": "t1"});
+    assert_eq!(
+        of(AgentId::CLAUDE).tool_call_change("PreToolUse", &bash),
+        Some(ToolCallChange::Started {
+            id: Some("t1"),
+            call: shape(&bash),
+            waits_on_user: false,
+        })
+    );
+    let question = json!({
+        "tool_name": "AskUserQuestion",
+        "tool_input": {"questions": []},
+        "tool_use_id": "t2",
+    });
+    assert_eq!(
+        of(AgentId::CLAUDE).tool_call_change("PreToolUse", &question),
+        Some(ToolCallChange::Started {
+            id: Some("t2"),
+            call: shape(&question),
+            waits_on_user: true,
+        })
+    );
+    let unnamed = json!({});
+    assert_eq!(
+        of(AgentId::CLAUDE).tool_call_change("PreToolUse", &unnamed),
+        Some(ToolCallChange::Started {
+            id: None,
+            call: CallShape {
+                tool: None,
+                input: None
+            },
+            waits_on_user: false,
+        })
+    );
+}
+
+/// A `PermissionRequest` names no call, so it carries the call's tool and input to be told by.
+#[test]
+fn a_claude_permission_request_waits_on_the_call_of_its_tool_and_input() {
+    let request = json!({"tool_name": "Bash", "tool_input": {"command": "make"}});
+    assert_eq!(
+        of(AgentId::CLAUDE).tool_call_change("PermissionRequest", &request),
+        Some(ToolCallChange::WaitsOnUser(shape(&request)))
+    );
+}
+
+/// Either post event ends the call it names; one that names none ends an unnamed call.
+#[test]
+fn a_claude_post_event_ends_its_own_call() {
+    let named = json!({"tool_name": "Bash", "tool_use_id": "t1"});
+    for event in ["PostToolUse", "PostToolUseFailure"] {
+        assert_eq!(
+            of(AgentId::CLAUDE).tool_call_change(event, &named),
+            Some(ToolCallChange::Ended { id: Some("t1") }),
+            "{event}"
+        );
+        assert_eq!(
+            of(AgentId::CLAUDE).tool_call_change(event, &json!({})),
+            Some(ToolCallChange::Ended { id: None }),
+            "{event}"
+        );
+    }
+}
+
+/// The end of a batch, a new prompt, the turn's end and a session's start leave no call open.
+#[test]
+fn a_claude_batch_prompt_or_turn_end_ends_every_call() {
+    for event in [
+        "PostToolBatch",
+        "UserPromptSubmit",
+        "Stop",
+        "StopFailure",
+        "SessionStart",
+    ] {
+        assert_eq!(
+            of(AgentId::CLAUDE).tool_call_change(event, &json!({})),
+            Some(ToolCallChange::AllEnded),
+            "{event}"
+        );
+    }
+}
+
+/// An event that says nothing about tool calls says nothing about them.
+#[test]
+fn other_claude_events_say_nothing_of_tool_calls() {
+    for event in [
+        "Notification",
+        "SubagentStart",
+        "SubagentStop",
+        "PreCompact",
+    ] {
+        assert_eq!(
+            of(AgentId::CLAUDE).tool_call_change(event, &json!({})),
+            None,
+            "{event}"
+        );
+    }
+}
+
+/// Only Claude Code's hooks tell calls apart; every other agent's events leave its status mapping
+/// as it was.
+#[test]
+fn only_claude_code_reports_tool_call_changes() {
+    let payload = json!({"tool_name": "Bash", "tool_input": {}, "tool_use_id": "t1"});
+    for agent in [AgentId::CODEX, AgentId::GROK, AgentId::TEST] {
+        for event in [
+            "PreToolUse",
+            "PermissionRequest",
+            "PostToolUse",
+            "PostToolUseFailure",
+            "PostToolBatch",
+            "UserPromptSubmit",
+            "Stop",
+            "StopFailure",
+            "SessionStart",
+        ] {
+            assert_eq!(
+                of(agent).tool_call_change(event, &payload),
+                None,
+                "{agent:?} {event}"
+            );
+        }
+    }
+}

@@ -475,6 +475,14 @@ it goes on being held. There is no earlier signal to read: the delay is in what 
 Octoboard looks. Measured on Codex 0.160.0 and on Claude Code 2.1.274; Grok Build was not measured. A prompt the user
 *declines* is not delayed this way: the decline ends the turn, and the hand comes down right after the answer.
 
+**On Claude Code, the hand stays up until the call it was raised for has ended**, whatever another call of the same turn
+does meanwhile. Claude Code runs the calls of one message side by side, so the end of one of them can be reported while
+a question or a permission prompt from the same message is still on screen; in auto mode an agent call that waits for
+the safety check ends only once the question is already up. That end, or the start of another call, leaves the session
+*waiting for the user*. The end of the call the hand was raised for lowers it, as does the end of all the message's
+calls, the end of the turn or its next prompt. A prompt whose call Octoboard did not see start comes down with the next
+call to end.
+
 A hand raised for a folder-trust confirmation can be answered in its trust dialog or the terminal; see "What happens
 when a confirmation comes up" in `docs/product/folder-trust.md`.
 

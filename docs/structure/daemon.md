@@ -168,19 +168,18 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   write Octoboard's database the user can fix (read-only data folder, full disk, a file that cannot be opened or read)
   as `store_write_failed`.
 - `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,
-  titles, turns, sharing status, git status, requests, availability, hooks to the automatic account switch, whether the
-  host is held awake (`keep_awake.rs`), forgetting
-  a record, the adoption gate a holder's relayed requests wait on, the sessions claimed for a holder that cannot be
-  linked to (`unlinked.rs`), the stop asked for, its escalation and the refusals of a planned restart (`stop.rs`), the
-  barrier a planned stop raises against changes to terminals (`handover_barrier.rs`: `AppState::admit_change` and the
-  admission it returns), what the application says over stdin before it
-  quits, which tells a quit from a crash (`application_note.rs`), the screens a planned
-  stop saved, written and loaded with the versioned file and consumed per holder once the adoption is committed or a gone
-  holder's preview is written (`restart_screens.rs`), and
-  `field_versions.rs`, the version of each field
-  of the settings, consoles, projects and accounts a form edits, with the lock of checked writes;
-  `field_versions/paths.rs` lists the versioned paths), plus `bindings.rs` (the read-only walks over which session is
-  bound to which) and `refusals.rs` (the locked and archived refusals every operation on a session shares).
+  titles, turns, the tool calls a turn's hooks reported open or waiting on the user (`tool_calls.rs`), sharing status, git
+  status, requests, availability, hooks to the automatic account switch, whether the host is held awake
+  (`keep_awake.rs`), forgetting a record, the adoption gate a holder's relayed requests wait on, the sessions claimed
+  for a holder that cannot be linked to (`unlinked.rs`), the stop asked for, its escalation and the refusals of a
+  planned restart (`stop.rs`), the barrier a planned stop raises against changes to terminals (`handover_barrier.rs`:
+  `AppState::admit_change` and the admission it returns), what the application says over stdin before it quits, which
+  tells a quit from a crash (`application_note.rs`), the screens a planned stop saved, written and loaded with the
+  versioned file and consumed per holder once the adoption is committed or a gone holder's preview is written
+  (`restart_screens.rs`), and `field_versions.rs`, the version of each field of the settings, consoles, projects and
+  accounts a form edits, with the lock of checked writes; `field_versions/paths.rs` lists the versioned paths), plus
+  `bindings.rs` (the read-only walks over which session is bound to which) and `refusals.rs` (the locked and archived
+  refusals every operation on a session shares).
 - `src/agents/` — what the daemon knows about each agent CLI apart from launching it: availability (`availability.rs`;
   `redetermine` judges one agent again after an update changed what its binary resolves to), `cli/` (the installed
   CLI's version, how it was installed, the latest version published, and its update, described in "Agent CLI versions"

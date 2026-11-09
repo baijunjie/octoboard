@@ -38,8 +38,10 @@ kill leaves behind" says was read from the executable of, and measured on, **Cla
 the Grok Build section's "Leader mode leaves the TUI's stop to a `SIGKILL` of the leader" note says was measured on
 **Grok Build 1.0.70** on 2026-11-02. What "The agents on Windows" says was measured in November 2026 on Windows 11 23H2
 on **Claude Code 2.1.318** and **2.1.319**, **Codex 0.166.0** (the stop, the hook commands and the app server also on
-**0.163.0**) and **Grok Build 1.0.77**. All three rewrite their hook surface, their payload fields, their configuration
-layering and their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
+**0.163.0**) and **Grok Build 1.0.77**. What the Claude Code section says about the calls of one message overlapping was
+measured on **Claude Code 2.1.319** on 2026-11-10. All three rewrite their hook surface, their payload fields, their
+configuration layering and their on-disk layout on upgrade, so check a detail here against the installed version before
+relying on it.
 
 The permission-resume note below distinguishes the native implementations in **Claude Code 2.1.274** and **2.1.319**.
 Grok's permission-mode startup and resume behavior was measured on **Grok Build 1.0.77** with isolated configuration,
@@ -90,7 +92,9 @@ hold state against.
   400 whose body says the prompt is too long gives `invalid_request`, and a 529 gives `server_error` rather than
   `overloaded`.
 - `PermissionRequest` — carries **no `tool_use_id`**, even though the binary's own embedded documentation lists one.
-  The call the prompt belongs to has to be taken from the immediately preceding `PreToolUse`, which does carry it.
+  The call the prompt belongs to has to be taken from a `PreToolUse`, which does carry it; not simply the immediately
+  preceding one, since the calls of one message overlap (see "The calls of one message overlap" below), but the open
+  call with the same `tool_name` and `tool_input`.
 - `PostToolBatch` — when the call it covers was rejected by Claude Code's own pre-execution guard, the rejection is
   inside `tool_calls[0].tool_response`; that is the only place it is reported. Such a call fires only `PostToolBatch`,
   skipping `PreToolUse`, `PostToolUse` and `PostToolUseFailure`, so a mapping that pairs pre with post misses it.
@@ -113,6 +117,22 @@ passed as that flag; see "Permission mode" below). The running session then call
 matches neither the settings value nor the word "normal" — read the mode off the session's own transcript instead,
 where it is recorded unambiguously as `{"type":"permission-mode","permissionMode":"default"}` and
 `{"type":"mode","mode":"normal"}`.
+
+**The calls of one message overlap, and one can end while another waits on the user** (2.1.319, measured on
+2026-11-10 in a PTY against a local stand-in for the Messages API, with HTTP hooks; the capture is
+`apps/daemon/testdata/claude_hooks_question_beside_late_call.jsonl`). Claude Code starts a call as soon as its block
+has streamed: with a background `Agent` call and then an `AskUserQuestion` in one message, `PreToolUse` `Agent` fired
+on the first block, and in `default` mode the `Agent`'s `PostToolUse` followed within 80 ms, before the question's
+block arrived. In `auto` mode the `Agent` call waits for the safety check, which is asked only once the whole message
+has streamed, while the question is shown at once. The order was then `PreToolUse` `Agent`, `PreToolUse`
+`AskUserQuestion`, `PermissionRequest` `AskUserQuestion` (a question raises one too, also with no `tool_use_id`),
+and the `Agent`'s `PostToolUse` when the check answered, seconds later, with the question still waiting. The title
+stayed `✳` from the question's dialog to the answer, through that `PostToolUse`, the background agent's start, and
+90 s of its own tool calls and progress summaries. Answering fired the question's `PostToolUse` and then a
+`PostToolBatch` listing both calls. So a post event says only that its own call ended. Which call a hand was raised
+for has to be kept by `tool_use_id`, and a `PermissionRequest`'s call taken from the open calls by its `tool_name` and
+`tool_input`, which it does carry. A real transcript of a session in `auto` mode on 2.1.319 shows the same order: the
+`Agent` call's `tool_result` was written 1 s after the `AskUserQuestion` block, while the question waited.
 
 **A pending permission prompt** is `PermissionRequest`; a question put through the agent's own ask-the-user tool is also
 reported. A question asked as plain prose is not: the turn simply ends, and no payload field tells it from a finished

@@ -16,6 +16,11 @@
 //! session-wide registry and a subagent woken by its own background work runs with no `Stop` of
 //! the session's.
 //!
+//! A post event says only that its own call ended, and one message's calls overlap: a background
+//! `Agent` call held by auto mode's safety check can end while an `AskUserQuestion` from the same
+//! message waits on the user. So a hand raised for a call stays up until that call ends, which
+//! takes the calls told apart ([`HookInterpreter::tool_call_change`]).
+//!
 //! A user interrupt produces no event at all, and declining a permission prompt or its
 //! `AskUserQuestion` is silent in exactly the same way. Neither is left as a gap: a working session
 //! would read as working until its next `UserPromptSubmit`, and a waiting one would keep its raised
@@ -25,12 +30,17 @@
 use serde_json::Value;
 
 use crate::hooks::{
-    any_field_set, text_field, BackgroundTasksChange, HookInterpreter, RecordWatch, TurnEnd,
-    TurnOutcome,
+    any_field_set, text_field, BackgroundTasksChange, CallShape, HookInterpreter, RecordWatch,
+    ToolCallChange, TurnEnd, TurnOutcome,
 };
 use crate::protocol::{AgentId, BackgroundTask, SessionStatus};
 
 pub(super) struct ClaudeHooks;
+
+/// Whether `tool` is Claude Code's own ask-the-user tool, a question waiting on a person.
+fn is_question(tool: Option<&str>) -> bool {
+    tool.is_some() && tool == AgentId::CLAUDE.descriptor().ask_question_tool
+}
 
 /// The ids of every `<task-id>…</task-id>` in a prompt.
 fn task_ids(prompt: &str) -> Vec<String> {
@@ -52,14 +62,13 @@ impl HookInterpreter for ClaudeHooks {
             }
             // The tool name is in the payload rather than the event: Claude Code's own
             // ask-the-user tool is a question waiting on a person, every other tool is work.
-            "PreToolUse" => match payload.get("tool_name").and_then(Value::as_str) {
-                tool if tool.is_some()
-                    && tool == AgentId::CLAUDE.descriptor().ask_question_tool =>
-                {
+            "PreToolUse" => {
+                if is_question(payload.get("tool_name").and_then(Value::as_str)) {
                     Some(SessionStatus::WaitingUser)
+                } else {
+                    Some(SessionStatus::Working)
                 }
-                _ => Some(SessionStatus::Working),
-            },
+            }
             "PermissionRequest" => Some(SessionStatus::WaitingUser),
             "Notification" => match payload.get("notification_type").and_then(Value::as_str) {
                 Some("idle_prompt") => Some(SessionStatus::Idle),
@@ -178,6 +187,37 @@ impl HookInterpreter for ClaudeHooks {
                 let prompt = self.submitted_prompt(payload)?;
                 self.is_completion_notice(prompt)
                     .then(|| BackgroundTasksChange::Finished(task_ids(prompt)))
+            }
+            _ => None,
+        }
+    }
+
+    /// `PreToolUse` and the two post events name their call by `tool_use_id`; `PermissionRequest`
+    /// does not (2.1.274 and 2.1.319), so its call is told by its tool and input. One message's
+    /// calls overlap: in auto mode (2.1.319) a call the safety check holds, an `Agent` say, is let
+    /// through only once the rest of the message has streamed, so its `PostToolUse` can come while
+    /// an `AskUserQuestion` from the same message waits on the user. A batch's end, a prompt and a
+    /// turn's end leave no call open.
+    fn tool_call_change<'a>(&self, event: &str, payload: &'a Value) -> Option<ToolCallChange<'a>> {
+        let call = || CallShape {
+            tool: payload.get("tool_name").and_then(Value::as_str),
+            input: payload.get("tool_input"),
+        };
+        let id = || payload.get("tool_use_id").and_then(Value::as_str);
+        match event {
+            "PreToolUse" => {
+                let call = call();
+                let waits_on_user = is_question(call.tool);
+                Some(ToolCallChange::Started {
+                    id: id(),
+                    call,
+                    waits_on_user,
+                })
+            }
+            "PermissionRequest" => Some(ToolCallChange::WaitsOnUser(call())),
+            "PostToolUse" | "PostToolUseFailure" => Some(ToolCallChange::Ended { id: id() }),
+            "PostToolBatch" | "UserPromptSubmit" | "Stop" | "StopFailure" | "SessionStart" => {
+                Some(ToolCallChange::AllEnded)
             }
             _ => None,
         }
