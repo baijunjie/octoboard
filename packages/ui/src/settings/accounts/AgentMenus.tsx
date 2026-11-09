@@ -97,7 +97,7 @@ export function AgentTabActions({ agent, ...actions }: AgentMenuActions & { agen
     <ActionMenu
       label={t(update ? "settings.accounts.agentActionsUpdate" : "settings.accounts.agentActions", { agent: name })}
       tooltip={update ? t("settings.accounts.moreActionsUpdate") : undefined}
-      badge={update ? <Badge color="accent" placement={rtl ? "top-left" : "top-right"} /> : undefined}
+      badge={update ? <Badge color="accent" size="xs" placement={rtl ? "top-left" : "top-right"} /> : undefined}
       items={agentMenu(t, actions)}
     />
   );

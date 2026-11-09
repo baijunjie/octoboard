@@ -108,8 +108,10 @@ which reuses the default small bordered `StatusBadge`: green (`success`) in the 
 view chip.
 
 Rail counts, notification dots, the update badge on an agent tab's actions button and console avatar markers use
-HeroUI `Badge` with its default typography, sizing,
-border and colours, selected through its semantic props. Neither `Badge` nor `BadgeAnchor` has a style override.
+HeroUI `Badge` with its default typography, border and colours, selected through its semantic props. The wrapper
+extends its sizes with `size="xs"`, a 10px notification dot for marks without a count or glyph, such as the update
+mark on an agent tab's actions button; `sm` remains the default, and `sm`, `md` and `lg` keep HeroUI's sizing.
+`BadgeAnchor` has no style override.
 The anchor wraps the complete control, with the decorative badge beside the button so it does not inherit the
 button's pressed scale or descendant icon styles. The badges are inert, so they do not intercept interaction with
 the control underneath. Process counts are green (`success`); waiting counts are orange (`warning`). A control that

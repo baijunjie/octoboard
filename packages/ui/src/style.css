@@ -91,6 +91,7 @@
 @import "./terminal/history/sessionHistory.css";
 
 @import "./primitives/Field.css";
+@import "./primitives/Badge.css";
 
 @import "./terminal/TerminalSurface.css";
 
