@@ -453,7 +453,14 @@ Every button is the wrapper layer's `Button` (HeroUI's, through `primitives`). A
 band or row that is itself the control, uses the layer's `BareButton`, which marks the states React Aria's buttons
 mark (hovered, pressed, keyboard focus) for the caller's classes to draw through the `ui-hovered:`, `ui-pressed:` and
 `ui-keyboard-focus:` variants. A native `<button>` is allowed only where a custom button is needed that HeroUI's cannot be, with the reason in a comment
-there. A hand-built `role="button"` element needs `tabIndex={0}` and its own Enter / Space handling.
+there. A hand-built `role="button"` element needs `tabIndex={0}` and its own Enter / Space handling. When it holds
+any `<button>` element (the layer's `Button` and `BareButton` render one), `<select>` or button-like `<input>` (a row's
+shortcuts, marks or action menu), its first child is its own hidden plain `<button>` press target, as `TreeRow`'s
+`RowPressTarget` is: per WebKit's source (`AccessibilityNodeObject::actionElement`), an accessibility press on a
+`role="button"` element (VoiceOver's VO-Space) is sent as a click on the first such control among its descendants, which
+would otherwise be one of those actions — a session row's Delete shortcut would delete the session the user meant to
+open. The same may hold for the tab, menu item and list item roles, which has not been checked against the source;
+treat a control holding actions under one of those roles with the same care until it is. Build such a row on `TreeRow` rather than by hand.
 
 Files and Git tree chevrons are also an exception to HeroUI's `Button`: they are the layer's `TreeExpandButton`
 (React Aria's `Button` in `slot="chevron"`), drawn as a bare glyph with no hover fill, press shrink or tooltip,

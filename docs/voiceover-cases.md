@@ -1813,6 +1813,12 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 - SA-O and SA-P (E13) heard the removal-inspection failure and sidebar Git-retry mechanisms. The earlier immediate
   consequence utterance after ticking Trash repeated the mark name twice; the delayed risk sentence appeared once.
   Focus-mode header/group Git-retry placements, attention loss/return and rapid overlapping retries remain untested.
+- Accessibility press on a sidebar row: on 2026-11-10 a native AXPress on an unused session's row (an `AXButton`
+  named by the row) sent `delete_session` and deleted the session with no confirmation. Per WebKit's source
+  (`AccessibilityNodeObject::actionElement`), not reproduced in isolation, the press clicks the first native button
+  inside the `role="button"` row, here its Delete shortcut. `TreeRow` now leads with its own hidden press
+  target (`RowPressTarget`, see `docs/ui-standard.md`, "Buttons"). Neither the fixed row's AXPress nor VoiceOver's
+  VO-Space on a row has been tried on the packaged application yet.
 - Import result dialog rename: not yet listened to (OPEN-1).
 - Startup failure page alert (daemon-failed and crash pages): not yet listened to (OPEN-2). No case matches an alert
   inserted after the first paint on a page the window opens on, with no focus move.

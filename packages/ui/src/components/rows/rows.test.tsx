@@ -2,11 +2,13 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
-import { expect, it } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { Plus } from "lucide-react";
 import { InlineReference } from "../../i18n/InlineReference";
+import { Button } from "../../primitives";
 import { RowIconButton } from "./RowIconButton";
+import { accessibilityActionElement } from "./rowPressTestSupport";
 import { TreeRow } from "./TreeRow";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -51,4 +53,42 @@ it.each([undefined, "Quota is used up"])("preserves tooltip name suppression and
   } else expect(description).toBeFalsy();
   act(() => root.unmount());
   container.remove();
+});
+
+function mountRow(onActivate: () => void, onChildPress: () => void) {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  act(() =>
+    root.render(
+      <TreeRow ariaLabel="row" onActivate={onActivate}>
+        <Button onPress={onChildPress}>Child action</Button>
+      </TreeRow>,
+    ),
+  );
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  return container.querySelector<HTMLElement>("[role=button]")!;
+}
+
+it("answers an accessibility press with its own target, activating the row and none of its children", () => {
+  const onActivate = vi.fn();
+  const onChildPress = vi.fn();
+  const row = mountRow(onActivate, onChildPress);
+  const target = accessibilityActionElement(row)!;
+  expect(target).not.toBeNull();
+  expect(target.parentElement).toBe(row);
+  act(() => target.click());
+  expect(onActivate).toHaveBeenCalledTimes(1);
+  expect(onChildPress).not.toHaveBeenCalled();
+});
+
+it("keeps the row's press target out of the tab order and the accessibility tree", () => {
+  const row = mountRow(() => {}, () => {});
+  const target = accessibilityActionElement(row)!;
+  expect(target.hidden).toBe(true);
+  expect(target.getAttribute("aria-hidden")).toBe("true");
+  expect(target.tabIndex).toBe(-1);
+  expect(getComputedStyle(target).display).toBe("none");
 });

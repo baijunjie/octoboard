@@ -23,6 +23,20 @@ function rowKeyHandler(activate: () => void) {
   };
 }
 
+/** The row's own target for an accessibility press, always its first child. WebKit takes a `role="button"`
+ * element that holds a native control as an author hiding the real control inside it, and sends its
+ * accessibility press (AXPress, which VoiceOver's VO-Space performs) as a click on the first `<button>`,
+ * `<select>` or button-like `<input>` among its descendants. Without this one, that would be the row's first
+ * action: a Delete or Archive shortcut, a mark, a "+" or the action menu, so pressing a session row to open it
+ * would delete the session. A plain `<button>`: WebKit looks for that element, and the layer's buttons cannot
+ * stand in, since react-aria's press handling stops their click before it reaches the row. `hidden`, so it
+ * takes no layout, pointer or focus (WebKit's press focuses the button before clicking, which a hidden
+ * element ignores); `tabIndex` and `aria-hidden` keep it out of the tab order and the accessibility tree
+ * even if a style ever overrides `hidden`. Its click bubbles to the row and activates it. */
+function RowPressTarget(): React.ReactElement {
+  return <button type="button" hidden tabIndex={-1} aria-hidden="true" />;
+}
+
 /** Insets stay identical across flat animated lists and wrapped lists. Connectors overlap the
  * 2px row gap, and stop at the final child's centre instead of extending below the team. */
 export const NESTED_RAIL_CLASS = "ms-[17px]";
@@ -86,6 +100,7 @@ export function TreeRow({
       onClick={onActivate}
       onKeyDown={rowKeyHandler(onActivate)}
     >
+      <RowPressTarget />
       {children}
     </div>
   );
