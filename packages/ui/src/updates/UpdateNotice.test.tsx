@@ -197,6 +197,16 @@ it("asks the window to restart on Restart now, and never restarts by itself", as
   expect(restart).toHaveBeenCalledOnce();
 });
 
+it("holds Restart now pending from the press until the window's exit flow has answered", async () => {
+  const { container, store } = await installed();
+  let answer: () => void = () => {};
+  store()!.onRestartRequested(() => new Promise<void>((resolve) => (answer = resolve)));
+  await act(async () => button(container, "Restart now")!.click());
+  expect(button(container, "Restart now")!.getAttribute("aria-busy")).toBe("true");
+  await act(async () => answer());
+  expect(button(container, "Restart now")!.hasAttribute("aria-busy")).toBe(false);
+});
+
 it("only hides the notice on Later, and offers no further download", async () => {
   const { container, store } = await installed();
   await act(async () => button(container, "Later")!.click());

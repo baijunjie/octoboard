@@ -2,6 +2,7 @@ import type { Step } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { consoleOf, projectOf, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
 import { PROTOCOL_GENERATION } from "../../protocol";
+import { sessionHolderLink } from "./liveChanges";
 import { PATH_LINK_FILES, PATH_LINK_WORKTREE_FILES } from "./pathLinkFiles";
 
 const console_ = consoleOf("c-1", "Main");
@@ -14,6 +15,24 @@ const sessions = [
 ];
 const connected = (connectionState: "open" | "reconnecting" | "closed") =>
   snapshotState({ consoles: [console_], projects: [project], sessions, connectionState });
+
+// A session whose process a restarted daemon took over: its screen is rebuilt, so the daemon flags it (`screen_inexact`)
+// until the process ends.
+const recovered = sessionOf("s-recovered", console_.id, project.id, "Kept through a restart", "working", { screen_inexact: true });
+
+// Sessions whose process still runs but the daemon cannot reach (`holder_link: "pending"`), whatever status it last stored.
+const pending = sessionOf("s-pending", console_.id, project.id, "Kept running, out of reach", "working", { holder_link: "pending" });
+const pendingWaiting = sessionOf("s-pending-waiting", console_.id, project.id, "Review the release notes", "waiting_user", { holder_link: "pending" });
+const pendingRecovered = sessionOf("s-pending-recovered", console_.id, project.id, "Kept through a restart, out of reach", "working", {
+  screen_inexact: true,
+  holder_link: "pending",
+});
+
+/** The live changes of a session that is pending: the daemon finding its process again, and losing it once more. */
+const holderLinkChanges = (session: string) => [
+  sessionHolderLink("reach-process", "The daemon reaches the process again", session, "reachable"),
+  sessionHolderLink("lose-process", "The daemon loses the process again", session, "pending"),
+];
 
 const starting = sessionOf("s-starting", console_.id, project.id, "Just created, still launching", "starting");
 
@@ -228,6 +247,16 @@ export const connectionScenarios: Scenario[] = [
     steps: [pickSession, (ui) => ui.tapTopBarStatus()],
   },
   {
+    id: "terminal-recovered-display",
+    group: TERMINAL,
+    category: "normal",
+    title: "Session whose terminal display was recovered",
+    description:
+      "The selected session's process was taken over by a restarted daemon, so its screen was rebuilt and the daemon flags it: a note mark sits in the top bar right after the session's title, before its status glyph, and is no part of the status. Hover it, focus it with the keyboard or tap it to read what it says. Choose Phone (390px) or a narrow window to see a long breadcrumb fade out before the mark while the mark and the glyph stay whole, and RTL to see the order mirrored.",
+    state: snapshotState({ consoles: [console_], projects: [project], sessions: [...sessions, recovered] }),
+    steps: [pickSessionTitled(recovered.title)],
+  },
+  {
     id: "terminal-broken-url-hover",
     group: TERMINAL,
     category: "normal",
@@ -372,5 +401,27 @@ export const connectionScenarios: Scenario[] = [
     terminalRetriesImmediate: true,
     state: connected("open"),
     steps: [pickSession, (ui) => ui.wait(2000)],
+  },
+  {
+    id: "terminal-holder-pending",
+    group: TERMINAL,
+    category: "exceptional",
+    title: "Session whose process cannot be reached",
+    description:
+      "The selected session's process is still running but the daemon cannot reach it, so its terminal is covered by a spinner, \"Reconnecting to the session…\", and a line saying input is unavailable until the connection returns and that reconnection is automatic; there is no button and no way to type. In the top bar's breadcrumb and in the sidebar rows, the status glyph is the muted turning arc, named Reconnecting in its tooltip, in place of the stored status (Working here, Waiting for you on the other pending row, which is not selected); with reduced motion the arc holds still. \"The daemon reaches the process again\" among the \"Live changes\" buttons clears the cover: the terminal connects and draws, and the glyph returns to the stored status, with focus not pulled from where it was. \"The daemon loses the process again\" covers it once more, now over the output already drawn, which is no longer shown as live.",
+    state: snapshotState({ consoles: [console_], projects: [project], sessions: [...sessions, pending, pendingWaiting] }),
+    steps: [pickSessionTitled(pending.title)],
+    liveChanges: holderLinkChanges(pending.id),
+  },
+  {
+    id: "terminal-holder-pending-recovered-display",
+    group: TERMINAL,
+    category: "exceptional",
+    title: "Session out of reach whose display was also recovered",
+    description:
+      "Both flags are on the selected session: the note mark of a rebuilt display sits in the top bar right after the session's title, as in the recovered-display scenario, and the status glyph after it is the turning arc of Reconnecting. The two say different things and stay side by side; the terminal has the one cover. \"The daemon reaches the process again\" clears the cover and the arc while the note stays, and \"The daemon loses the process again\" brings them back.",
+    state: snapshotState({ consoles: [console_], projects: [project], sessions: [...sessions, pendingRecovered] }),
+    steps: [pickSessionTitled(pendingRecovered.title)],
+    liveChanges: holderLinkChanges(pendingRecovered.id),
   },
 ];

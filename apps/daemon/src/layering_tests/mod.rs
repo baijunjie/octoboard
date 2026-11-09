@@ -46,6 +46,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             "interface_language",
             "loopback",
             "platform",
+            "request_guard",
             "text",
             "time",
             "wire_path",
@@ -58,6 +59,7 @@ const LAYERS: &[(&str, &[&str])] = &[
         &[
             "env_shell",
             "git",
+            "holder",
             "host_open",
             "hostfs",
             "instance_lock",

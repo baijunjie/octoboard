@@ -1,11 +1,19 @@
 //! Plain shell terminals the daemon runs for a project, beside its agent sessions: each is the
 //! user's login shell on a PTY of its own (`crate::terminal::pty`), held in memory with its record
 //! until a client closes it, its project is removed or the daemon exits. A shell that exits on its
-//! own leaves its record behind, exited, with its output still replayed to a client that attaches.
+//! own leaves its record behind, exited, with its last screen still painted for a client that
+//! attaches.
 //!
-//! The records are live state, never stored: carried in `snapshot` and kept current by
+//! A shell terminal runs in a holder, so it outlives the daemon: the daemon that starts next puts
+//! it back from what its meta holds ([`ShellMeta`], [`restore`]), with the name the user gave it,
+//! which the store keeps by the terminal's id (`Store::shell_terminal_title`), or else the title
+//! the shell sets next. A planned stop leaves the terminals and their records alone: it hands each
+//! terminal over to its holder with its screen saved, which the next daemon restores.
+//!
+//! The records are live state, carried in `snapshot` and kept current by
 //! `shell_terminal_upserted` and `shell_terminal_deleted` (`apps/daemon/PROTOCOL.md`, "Shell
-//! terminals").
+//! terminals"); only the user's name for a terminal, and which holder runs it, are stored, and
+//! forgotten with the terminal.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -14,12 +22,17 @@ use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 
+use crate::holder::client::HeldTerminal;
 use crate::platform::proc::{Containment, Polite};
 use crate::platform::shell::ShellCommand;
 use crate::platform::term;
-use crate::protocol::{error_code, CodedError, Event, ShellTerminal, ShellTerminalState};
-use crate::state::AppState;
+use crate::protocol::{
+    error_code, CodedError, Event, HolderLink, ShellTerminal, ShellTerminalState,
+};
+use crate::state::{AppState, ExactScreen};
+use crate::terminal::backend::{self, Launching, Started};
 use crate::terminal::pty::{self, NewPty, PtyCore, PtyOwner};
 use crate::time::now_millis;
 
@@ -62,6 +75,14 @@ impl ShellTerminals {
         self.lock().get(id).map(|entry| entry.process.clone())
     }
 
+    /// Every terminal's process, for a planned stop to hand over.
+    pub fn processes(&self) -> Vec<Arc<ShellProcess>> {
+        self.lock()
+            .values()
+            .map(|entry| entry.process.clone())
+            .collect()
+    }
+
     /// Whether `process` is still the one held under its id: not closed in the meantime.
     fn holds(&self, process: &Arc<ShellProcess>) -> bool {
         self.lock()
@@ -75,6 +96,39 @@ impl ShellTerminals {
 /// reads where the terminal cannot name its foreground job); it is not `prepare`d, so the shell's
 /// environment carries no process tag and a user's shell sees the environment it always did.
 const CONTAINMENT_INSTANCE: &str = "shell-terminal";
+
+/// What a shell terminal's holder keeps of it, which is what a daemon that adopts the terminal
+/// puts its record back from; the name the user gave it is the store's, not the holder's.
+/// It crosses builds: a daemon of an older build in the holder's compatible range writes it and a
+/// newer one reads it, so a field added later needs `#[serde(default)]`, and it is kept readable
+/// by every build in that range: `crate::holder::compat::FLOOR` only moves by the
+/// previous-stable release rule.
+#[derive(Serialize, Deserialize)]
+pub struct ShellMeta {
+    pub id: String,
+    pub project_id: String,
+    #[serde(default)]
+    pub worktree: Option<String>,
+    pub cwd: String,
+    #[serde(default)]
+    pub created_at: i64,
+    /// The shell's own name, which its title shows before it sets one.
+    #[serde(default)]
+    pub shell_name: Option<String>,
+}
+
+impl ShellMeta {
+    /// The `kind` of a shell terminal's meta.
+    pub const KIND: &'static str = "shell_terminal";
+
+    pub fn to_value(&self) -> serde_json::Value {
+        let mut meta = serde_json::to_value(self).unwrap_or_default();
+        if let Some(fields) = meta.as_object_mut() {
+            fields.insert("kind".to_string(), Self::KIND.into());
+        }
+        meta
+    }
+}
 
 /// A shell running on its PTY. Everything about its process and PTY is its [`PtyCore`]'s, reached
 /// through it directly (it dereferences to it).
@@ -191,9 +245,11 @@ pub async fn create(
     };
 
     let id = uuid::Uuid::new_v4().to_string();
+    let created_at = now_millis();
     let tools = state.host_tools.get();
     let process = {
         let (id, cwd) = (id.clone(), cwd.clone());
+        let (project, worktree) = (project.clone(), worktree.clone());
         tokio::task::spawn_blocking(move || {
             // The agents' policy for the snapshot, but a shell does not need it to be of use: it
             // reads the user's profile itself as it starts.
@@ -208,7 +264,14 @@ pub async fn create(
                 Some((key.into_string().ok()?, value.into_string().ok()?))
             });
             launch(
-                &id,
+                ShellMeta {
+                    id: id.clone(),
+                    project_id: project,
+                    worktree,
+                    cwd: cwd.to_string_lossy().into_owned(),
+                    created_at,
+                    shell_name: None,
+                },
                 &cwd,
                 &(tools.shell)(),
                 shell_environment(snapshot, inherited),
@@ -226,7 +289,9 @@ pub async fn create(
         renamed: false,
         state: ShellTerminalState::Running,
         busy: false,
-        created_at: now_millis(),
+        created_at,
+        screen_inexact: false,
+        holder_link: None,
     };
     register(state, &process, record);
 
@@ -262,9 +327,10 @@ fn shell_environment(
     env
 }
 
-/// Starts `shell` in `cwd` on a PTY of its own, over exactly `env`. **Blocks** on the fork.
+/// Starts `shell` in `cwd` on a PTY of its own, over exactly `env`, for the terminal `meta`
+/// describes. **Blocks** on the fork.
 fn launch(
-    id: &str,
+    mut meta: ShellMeta,
     cwd: &Path,
     shell: &ShellCommand,
     env: HashMap<String, String>,
@@ -287,14 +353,124 @@ fn launch(
         command.env(key, value);
     }
     command.cwd(cwd);
-    let containment = Containment::create(CONTAINMENT_INSTANCE, id)
+    let id = meta.id.clone();
+    let containment = Containment::create(CONTAINMENT_INSTANCE, &id)
         .context("creating the shell's process containment")?;
-    let spawned = term::spawn(command, pty::INITIAL_SIZE, Some(&containment))
-        .with_context(|| format!("starting the shell `{}`", shell.program.display()))?;
     let shell_name = shell.program.file_name().map_or_else(
         || shell.program.to_string_lossy().into_owned(),
         |name| name.to_string_lossy().trim_start_matches('-').to_string(),
     );
+    meta.shell_name = Some(shell_name.clone());
+    let spawned = backend::start(Launching {
+        command,
+        size: pty::INITIAL_SIZE,
+        containment: &containment,
+        instance: CONTAINMENT_INSTANCE,
+        launch: &id,
+        kill_session_leftovers: false,
+        meta: meta.to_value(),
+        helpers: None,
+    })
+    .with_context(|| format!("starting the shell `{}`", shell.program.display()))?;
+    Ok(run(&id, spawned, containment, shell_name, Seed::Nothing))
+}
+
+/// Puts a shell terminal the holders kept running back among the terminals: `meta` is what its
+/// holder kept of it, `held` the terminal, `exited` whether its shell has exited already, and
+/// `tail` the output the holder kept. With `exact`, the screen the previous daemon saved at its
+/// planned stop, the screen is restored from it and the tail, which is then only what was written
+/// since, is replayed over it as the shell's output; without, the screen and replay are rebuilt
+/// from the tail (and so marked inexact). A running shell is made to draw again over a rebuilt
+/// screen, and over a saved one marked inexact.
+/// A name the user gave it is read back from the store before it is registered, so no title the
+/// shell sets, in the tail or after, takes its place. Called by the daemon at start, or once a
+/// holder it could not link to then is, once the terminal's project is known to be on record.
+pub fn restore(
+    state: &Arc<AppState>,
+    meta: &ShellMeta,
+    held: HeldTerminal,
+    exited: bool,
+    tail: Vec<u8>,
+    exact: Option<ExactScreen>,
+) {
+    // The shell was put in the containment when it started; the host that lists a containment's
+    // members still has it, and one that does not has nothing to list.
+    let containment = Containment::reopen(CONTAINMENT_INSTANCE, &meta.id)
+        .map_or_else(|| Containment::create(CONTAINMENT_INSTANCE, &meta.id), Ok);
+    let containment = match containment {
+        Ok(containment) => containment,
+        Err(err) => {
+            tracing::warn!(terminal = %meta.id, %err, "the shell's process containment could not be made; ending the terminal");
+            held.end();
+            return;
+        }
+    };
+    let shell_name = meta
+        .shell_name
+        .clone()
+        .unwrap_or_else(|| "shell".to_string());
+    let user_title = state
+        .store
+        .shell_terminal_title(&meta.id)
+        .unwrap_or_else(|err| {
+            tracing::warn!(terminal = %meta.id, %err, "reading the name the user gave the shell terminal failed");
+            None
+        });
+    // A saved screen marked inexact is drawn again over its restored content, as a rebuilt one is.
+    let exact_screen = exact.as_ref().is_some_and(|exact| !exact.saved.inexact);
+    let seed = match exact {
+        Some(exact) => {
+            // Read before any output, as what the shell wrote since the screen was saved.
+            held.replay_first(tail);
+            Seed::Exact(exact)
+        }
+        None => Seed::Tail(tail),
+    };
+    let process = run(&meta.id, Started::Held(held), containment, shell_name, seed);
+    let record = ShellTerminal {
+        id: meta.id.clone(),
+        project_id: meta.project_id.clone(),
+        worktree: meta.worktree.clone(),
+        cwd: meta.cwd.clone(),
+        renamed: user_title.is_some(),
+        title: user_title.unwrap_or_default(),
+        state: ShellTerminalState::Running,
+        busy: false,
+        created_at: meta.created_at,
+        screen_inexact: process.screen_inexact(),
+        holder_link: None,
+    };
+    register(state, &process, record);
+    watch(state.clone(), process.clone());
+    // Once the terminal is registered and watched, so what the shell draws in answer reaches
+    // everything that follows its output. A screen restored exact is the shell's own already.
+    if !exited && !exact_screen {
+        if let Err(err) = process.nudge_repaint() {
+            tracing::warn!(terminal = %meta.id, %err, "asking the shell to redraw its screen failed");
+        }
+    }
+}
+
+/// What the screen of a shell process starts from, before its reader runs.
+enum Seed {
+    /// Nothing: a shell this daemon starts.
+    Nothing,
+    /// The output a holder kept, which the screen and the replay are rebuilt from, inexact.
+    Tail(Vec<u8>),
+    /// The screen the previous daemon saved, restored as it was, with the rule the output its
+    /// reader replays first is taken under.
+    Exact(ExactScreen),
+}
+
+/// The shell process around the terminal `spawned`, its reader started once its screen is set up
+/// from `seed`.
+fn run(
+    id: &str,
+    spawned: Started,
+    containment: Containment,
+    shell_name: String,
+    seed: Seed,
+) -> Arc<ShellProcess> {
     let pty = PtyCore::new(NewPty {
         label: id.to_string(),
         spawned,
@@ -306,6 +482,17 @@ fn launch(
     if host_renders {
         pty.report_titles();
     }
+    match seed {
+        Seed::Nothing => {}
+        Seed::Tail(tail) => {
+            pty.seed_output(&tail);
+            pty.mark_screen_inexact();
+        }
+        Seed::Exact(ExactScreen { saved, rule }) => {
+            pty.restore_screen(&saved);
+            pty.begin_replay(rule);
+        }
+    }
     let process = Arc::new(ShellProcess {
         id: id.to_string(),
         containment,
@@ -315,16 +502,44 @@ fn launch(
         host_renders: AtomicBool::new(host_renders),
     });
     pty::spawn_reader_thread(process.clone(), pty::READ_BUF);
-    Ok(process)
+    process
 }
 
-/// Holds the terminal and broadcasts it, with the title the shell has already set, if any.
+/// Holds the terminal and broadcasts it, with the title the shell has already set, if any, unless
+/// the user named it. Records which holder runs it.
 fn register(state: &Arc<AppState>, process: &Arc<ShellProcess>, mut record: ShellTerminal) {
     process.enter_crash_cleanup();
+    if let Some(held_at) = process.held_at() {
+        let held = crate::store::HeldTerminalRecord {
+            kind: crate::store::HeldKind::ShellTerminal,
+            owner_id: record.id.clone(),
+            holder_id: held_at.holder_id,
+            terminal_id: held_at.terminal_id,
+            launch_id: record.id.clone(),
+        };
+        if let Err(err) = state.store.record_held_terminal(&held) {
+            tracing::warn!(terminal = %record.id, %err, "recording where the shell terminal runs failed");
+        }
+    }
+    // Its holder can be out of reach for a while, the shell going on: clients are told. Read when
+    // the record is changed, under its lock, so the last change leaves what holds now; asked for
+    // before the record is held, which reads it under the same lock, so no change goes unseen.
+    let (weak_state, weak_process) = (Arc::downgrade(state), Arc::downgrade(process));
+    process.on_link_changed(move || {
+        let (Some(state), Some(process)) = (weak_state.upgrade(), weak_process.upgrade()) else {
+            return;
+        };
+        update(&state, &process.id, |record| {
+            record.holder_link = process.holder_unlinked().then_some(HolderLink::Pending);
+        });
+    });
     let mut titles = process.titles.lock().expect("title watch lock poisoned");
     titles.state = Arc::downgrade(state);
-    record.title = shown_title(&process.shell_name, titles.latest.as_deref());
+    if !record.renamed {
+        record.title = shown_title(&process.shell_name, titles.latest.as_deref());
+    }
     let mut entries = state.shell_terminals.lock();
+    record.holder_link = process.holder_unlinked().then_some(HolderLink::Pending);
     entries.insert(
         record.id.clone(),
         Entry {
@@ -334,6 +549,19 @@ fn register(state: &Arc<AppState>, process: &Arc<ShellProcess>, mut record: Shel
     );
     state.broadcast(Event::ShellTerminalUpserted {
         shell_terminal: record,
+    });
+    // Its holder's link dropping loses what the shell prints meanwhile: the screen is no longer
+    // exact, which clients are told, and the shell is made to draw it again.
+    let (weak_state, weak_process) = (Arc::downgrade(state), Arc::downgrade(process));
+    process.on_resumed(move || {
+        let (Some(state), Some(process)) = (weak_state.upgrade(), weak_process.upgrade()) else {
+            return;
+        };
+        process.mark_screen_inexact();
+        update(&state, &process.id, |record| record.screen_inexact = true);
+        if let Err(err) = process.nudge_repaint() {
+            tracing::warn!(terminal = %process.id, %err, "asking the shell to redraw its screen failed");
+        }
     });
 }
 
@@ -354,15 +582,23 @@ fn update(state: &AppState, id: &str, change: impl FnOnce(&mut ShellTerminal)) {
 }
 
 /// Names terminal `id` `title` (already trimmed and checked not blank), which the shell's own
-/// titles no longer change.
+/// titles no longer change. The name is stored before it is published, under the terminals'
+/// lock, so a daemon that puts the terminal back from its holder shows it again, and a close
+/// cannot slip in between and leave it stored for a terminal that is gone.
 pub fn rename(state: &AppState, id: &str, title: String) -> Result<()> {
-    if state.shell_terminals.process(id).is_none() {
+    let mut entries = state.shell_terminals.lock();
+    let Some(entry) = entries.get_mut(id) else {
         return Err(CodedError::unknown_shell_terminal(id));
+    };
+    state.store.set_shell_terminal_title(id, &title)?;
+    let before = entry.record.clone();
+    entry.record.title = title;
+    entry.record.renamed = true;
+    if entry.record != before {
+        state.broadcast(Event::ShellTerminalUpserted {
+            shell_terminal: entry.record.clone(),
+        });
     }
-    update(state, id, |record| {
-        record.title = title;
-        record.renamed = true;
-    });
     Ok(())
 }
 
@@ -405,19 +641,30 @@ pub async fn close_projects(state: &AppState, projects: &[&str]) {
         .filter(|entry| projects.contains(&entry.record.project_id.as_str()))
         .map(|entry| entry.record.id.clone())
         .collect();
-    end_all(state, ids).await;
+    end_all(state, ids, |_| true).await;
 }
 
 /// Ends every terminal, as the daemon exits. Returns once their shells are gone.
 pub async fn close_all(state: &AppState) {
-    let ids: Vec<String> = state.shell_terminals.lock().keys().cloned().collect();
-    end_all(state, ids).await;
+    close_all_ending(state, |_| true).await;
 }
 
-async fn end_all(state: &AppState, ids: Vec<String>) {
+/// [`close_all`] for an ordinary stop that escalates a planned stop already begun: every terminal
+/// is taken out and forgotten, but only those `ends` picks are ended here. The others are held by
+/// a holder the planned stop handed terminals over from or parted from, which nothing is sent to
+/// terminal by terminal any more: their shells end with that holder, which the caller ends.
+pub async fn close_all_ending(state: &AppState, ends: impl Fn(&ShellProcess) -> bool) {
+    let ids: Vec<String> = state.shell_terminals.lock().keys().cloned().collect();
+    end_all(state, ids, ends).await;
+}
+
+/// Takes each terminal of `ids` out of the terminals and forgets it, and ends those `ends` picks.
+/// Returns once their shells are gone.
+async fn end_all(state: &AppState, ids: Vec<String>, ends: impl Fn(&ShellProcess) -> bool) {
     let ending: Vec<_> = ids
         .iter()
         .filter_map(|id| remove(state, id))
+        .filter(|process| ends(process))
         .map(|process| tokio::spawn(end(process)))
         .collect();
     for ended in ending {
@@ -425,9 +672,13 @@ async fn end_all(state: &AppState, ids: Vec<String>) {
     }
 }
 
+/// Takes terminal `id` out of the terminals, and forgets its stored name and where it runs.
 fn remove(state: &AppState, id: &str) -> Option<Arc<ShellProcess>> {
     let mut entries = state.shell_terminals.lock();
     let entry = entries.remove(id)?;
+    if let Err(err) = state.store.forget_shell_terminal(id) {
+        tracing::warn!(terminal = %id, %err, "forgetting the shell terminal's name failed");
+    }
     state.broadcast(Event::ShellTerminalDeleted {
         shell_terminal: id.to_string(),
     });
@@ -457,7 +708,9 @@ fn watch(state: Arc<AppState>, process: Arc<ShellProcess>) {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(POLL_INTERVAL).await;
-            if !state.shell_terminals.holds(&process) {
+            // A terminal handed over is the next daemon's to watch: an exit seen from here on is
+            // its to find.
+            if !state.shell_terminals.holds(&process) || state.is_handing_over() {
                 return;
             }
             if process.poll_exit() {

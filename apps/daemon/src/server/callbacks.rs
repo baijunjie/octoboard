@@ -1,17 +1,129 @@
 //! The HTTP routes the daemon's own helper processes and the agents' hooks call: the hook events
 //! (queued here, applied by `crate::hooks::apply`), the branches a session's git created, the
 //! revert gate's question, the context window a status line reports, the MCP tool calls, and the
-//! request to shut down.
+//! requests to stop: to shut down, to make a planned restart, and to make a planned stop.
+//!
+//! What each helper route does is [`handle`], which takes the route by name: the HTTP routes call
+//! it, and so do the requests a holder relays from the helpers of the programs it runs
+//! (`super::relay`), which come with the same bodies.
 
 use std::sync::Arc;
 
 use axum::extract::{Path, State};
-use axum::response::IntoResponse;
+use axum::http::{header, HeaderValue, StatusCode};
+use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 
+use crate::holder::protocol::RelayRoute;
 use crate::hooks;
 use crate::hooks::queue::Push;
 use crate::state::AppState;
+
+/// What a helper route answers: a status, and a body that is JSON or empty.
+pub(super) struct Reply {
+    pub(super) status: StatusCode,
+    pub(super) body: String,
+}
+
+impl Reply {
+    fn status(status: StatusCode) -> Self {
+        Self {
+            status,
+            body: String::new(),
+        }
+    }
+
+    fn json(value: &impl serde::Serialize) -> Self {
+        Self {
+            status: StatusCode::OK,
+            body: serde_json::to_string(value).expect("a reply is JSON"),
+        }
+    }
+}
+
+impl IntoResponse for Reply {
+    fn into_response(self) -> Response {
+        let json = !self.body.is_empty();
+        let mut response = (self.status, self.body).into_response();
+        if json {
+            response.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json"),
+            );
+        }
+        response
+    }
+}
+
+/// Runs the helper route `route`, whose path parameter is `param` (the session id, or for
+/// [`RelayRoute::Mcp`] the session's token) and whose body is `body`.
+pub(super) async fn handle(
+    state: Arc<AppState>,
+    route: RelayRoute,
+    param: String,
+    body: Bytes,
+) -> Reply {
+    match route {
+        RelayRoute::Hook | RelayRoute::GitRef | RelayRoute::ContextWindow => {
+            report(state, route, param, body)
+        }
+        RelayRoute::RevertGate => revert_gate(state, param, body).await,
+        RelayRoute::Mcp => mcp(state, param, body).await,
+        RelayRoute::Unknown => Reply::status(StatusCode::NOT_FOUND),
+    }
+}
+
+/// Runs a helper route that only reports (the hook, the git refs, the context window): it never
+/// waits, so it is handled in the order the requests arrive. Anything else is not found. Starts
+/// tasks, so it has to run inside the daemon's runtime.
+pub(super) fn report(state: Arc<AppState>, route: RelayRoute, param: String, body: Bytes) -> Reply {
+    match route {
+        RelayRoute::Hook => hook(state, param, body),
+        RelayRoute::GitRef => git_ref(state, param, body),
+        RelayRoute::ContextWindow => context_window(&state, &param, &body),
+        _ => Reply::status(StatusCode::NOT_FOUND),
+    }
+}
+
+pub(super) async fn hook_callback(
+    Path(session_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    body: Bytes,
+) -> Reply {
+    handle(state, RelayRoute::Hook, session_id, body).await
+}
+
+pub(super) async fn git_ref_callback(
+    Path(session_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    body: Bytes,
+) -> Reply {
+    handle(state, RelayRoute::GitRef, session_id, body).await
+}
+
+pub(super) async fn revert_gate_callback(
+    Path(session_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    body: Bytes,
+) -> Reply {
+    handle(state, RelayRoute::RevertGate, session_id, body).await
+}
+
+pub(super) async fn context_window_callback(
+    Path(session_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    body: Bytes,
+) -> Reply {
+    handle(state, RelayRoute::ContextWindow, session_id, body).await
+}
+
+pub(super) async fn mcp_call(
+    Path(token): Path<String>,
+    State(state): State<Arc<AppState>>,
+    body: Bytes,
+) -> Reply {
+    handle(state, RelayRoute::Mcp, token, body).await
+}
 
 /// The hook callback. It answers `200` with an empty body at once whatever happens, and applies the
 /// event afterwards on the session's own queue, in the order the events arrived. Every registered
@@ -20,11 +132,7 @@ use crate::state::AppState;
 /// waited would also hold the turn, and one that never came (an unreachable daemon, the hook's
 /// timeout) shows a non-blocking error notice in the transcript. An empty `200` is read there as
 /// "no decision", so the event cannot steer the turn either.
-pub(super) async fn hook_callback(
-    Path(session_id): Path<String>,
-    State(state): State<Arc<AppState>>,
-    body: Bytes,
-) -> impl IntoResponse {
+fn hook(state: Arc<AppState>, session_id: String, body: Bytes) -> Reply {
     match state.hook_queues.push(&session_id, body) {
         Push::StartWorker => {
             // Applying an event is blocking work on the store, so the drain runs on the blocking
@@ -38,7 +146,7 @@ pub(super) async fn hook_callback(
             tracing::warn!(session = %session_id, "the hook queue is full; the last event in line was replaced")
         }
     }
-    axum::http::StatusCode::OK
+    Reply::status(StatusCode::OK)
 }
 
 /// A session's git reporting the branches it created and whether it moved refs a branch header
@@ -46,13 +154,9 @@ pub(super) async fn hook_callback(
 /// files and writes the store; a move schedules a re-read of the repository's projects
 /// (`crate::project_git::ref_moves`). The reply carries nothing, and the process that posted it
 /// exits whatever it is.
-pub(super) async fn git_ref_callback(
-    Path(session_id): Path<String>,
-    State(state): State<Arc<AppState>>,
-    body: Bytes,
-) -> impl IntoResponse {
+fn git_ref(state: Arc<AppState>, session_id: String, body: Bytes) -> Reply {
     let Ok(report) = serde_json::from_slice::<crate::branch_origin::RefReport>(&body) else {
-        return axum::http::StatusCode::BAD_REQUEST;
+        return Reply::status(StatusCode::BAD_REQUEST);
     };
     tokio::task::spawn_blocking(move || {
         if report.moved {
@@ -66,22 +170,18 @@ pub(super) async fn git_ref_callback(
             crate::branch_origin::ref_created(&state, &session_id, &report);
         }
     });
-    axum::http::StatusCode::OK
+    Reply::status(StatusCode::OK)
 }
 
 /// A session's git asking whether the revert gate applies to the update or push it is running a
 /// hook for, and what the gate is to know (`octoboardd gate-hook`). The reply is the gate's inputs,
 /// or `null` to skip it. Answered on the blocking pool, since it reads the store and runs `git`;
 /// the hook is waiting on the answer, so nothing else is done here.
-pub(super) async fn revert_gate_callback(
-    Path(session_id): Path<String>,
-    State(state): State<Arc<AppState>>,
-    body: Bytes,
-) -> axum::response::Response {
+async fn revert_gate(state: Arc<AppState>, session_id: String, body: Bytes) -> Reply {
     let Ok(request) =
         serde_json::from_slice::<crate::session_git_hooks::gate_inputs::GateRequest>(&body)
     else {
-        return axum::http::StatusCode::BAD_REQUEST.into_response();
+        return Reply::status(StatusCode::BAD_REQUEST);
     };
     let inputs = tokio::task::spawn_blocking(move || {
         crate::session_git_hooks::gate_inputs::inputs(&state, &session_id, &request)
@@ -89,42 +189,34 @@ pub(super) async fn revert_gate_callback(
     .await
     .ok()
     .flatten();
-    axum::Json(inputs).into_response()
+    Reply::json(&inputs)
 }
 
 /// A Claude Code session's status line reporting the session's context window (`octoboardd
 /// status-line`). Held for the record collector, which stores it with the session's context; the
 /// reply carries nothing, and the reporter ignores it.
-pub(super) async fn context_window_callback(
-    Path(session_id): Path<String>,
-    State(state): State<Arc<AppState>>,
-    body: Bytes,
-) -> impl IntoResponse {
+fn context_window(state: &AppState, session_id: &str, body: &[u8]) -> Reply {
     #[derive(serde::Deserialize)]
     struct Report {
         window: u64,
     }
-    match serde_json::from_slice::<Report>(&body) {
+    match serde_json::from_slice::<Report>(body) {
         Ok(Report { window }) if window > 0 => {
-            state.context_windows.report(&session_id, window);
-            axum::http::StatusCode::OK
+            state.context_windows.report(session_id, window);
+            Reply::status(StatusCode::OK)
         }
-        _ => axum::http::StatusCode::BAD_REQUEST,
+        _ => Reply::status(StatusCode::BAD_REQUEST),
     }
 }
 
 /// One MCP tool call, forwarded here by the session's own MCP server. The token is what says which
 /// session is calling: the child never names its own session, so one that rewrote its arguments
 /// still cannot act on another.
-pub(super) async fn mcp_call(
-    Path(token): Path<String>,
-    State(state): State<Arc<AppState>>,
-    body: Bytes,
-) -> impl IntoResponse {
+async fn mcp(state: Arc<AppState>, token: String, body: Bytes) -> Reply {
     let Some(session_id) = state.session_for_mcp_token(&token) else {
         // No token, no session — and no detail either: an unrecognised token is either a stale
         // child or something that has no business here.
-        return axum::Json(serde_json::json!({
+        return Reply::json(&serde_json::json!({
             "ok": false,
             "error": "this session's Octoboard connection is no longer valid",
         }));
@@ -133,7 +225,7 @@ pub(super) async fn mcp_call(
     let request: McpCall = match serde_json::from_slice(&body) {
         Ok(request) => request,
         Err(err) => {
-            return axum::Json(serde_json::json!({
+            return Reply::json(&serde_json::json!({
                 "ok": false,
                 "error": format!("unreadable tool call: {err}"),
             }))
@@ -157,7 +249,7 @@ pub(super) async fn mcp_call(
     if let Ok(session) = state.session_record(&session_id) {
         answer["worker"] = serde_json::json!(session.is_worker());
     }
-    axum::Json(answer)
+    Reply::json(&answer)
 }
 
 #[derive(serde::Deserialize)]
@@ -174,6 +266,35 @@ struct McpCall {
 pub(super) async fn shutdown(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     state.request_shutdown();
     axum::http::StatusCode::ACCEPTED
+}
+
+/// The request to make a planned restart: `main` hands every terminal over to its holder, and the
+/// next daemon comes up on the same address and adopts them. It answers `202` at once and does not
+/// wait for that; a refusal (`AppState::planned_restart_refusal`) is `409` with a JSON body naming
+/// the reason, and stops nothing.
+pub(super) async fn restart(State(state): State<Arc<AppState>>) -> Reply {
+    match state.request_planned_restart() {
+        Ok(()) => Reply::status(StatusCode::ACCEPTED),
+        Err(refusal) => {
+            tracing::info!(reason = refusal.code(), "a planned restart was refused");
+            Reply {
+                status: StatusCode::CONFLICT,
+                body: serde_json::json!({
+                    "reason": refusal.code(),
+                    "message": refusal.message(),
+                })
+                .to_string(),
+            }
+        }
+    }
+}
+
+/// The request to make a planned stop with no successor: `main` hands every terminal over to its
+/// holder and exits, leaving the sessions to whichever daemon starts next. It answers `202` at once
+/// and is never refused.
+pub(super) async fn planned_stop(State(state): State<Arc<AppState>>) -> Reply {
+    state.request_planned_stop();
+    Reply::status(StatusCode::ACCEPTED)
 }
 
 #[cfg(test)]

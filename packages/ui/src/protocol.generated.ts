@@ -51,6 +51,11 @@ export type Account = {
    * `set_account_disabled`, until the user turns it back on.
    */
   disabled: boolean,
+  /**
+   * The version of each field a form edits, by path (`crate::state::FieldVersions`): always
+   * every path of the record once a client is sent it, as part of `Settings::accounts`.
+   */
+  versions: Record<string, number>,
 };
 
 /**
@@ -843,6 +848,11 @@ export type Console = {
    */
   console_session_prompt: string | null,
   created_at: number,
+  /**
+   * The version of each field a form edits, by path (`crate::state::FieldVersions`): always
+   * every path of the record. A write names the version it was based on in `base_versions`.
+   */
+  versions: Record<string, number>,
 };
 
 /**
@@ -1631,6 +1641,11 @@ export type Event = {
   settings_sections: Array<SettingsSection>,
   accounts: InspectedAccounts | null,
   consoles: Array<InspectedConsole>,
+  /**
+   * The version of every settings field as it was read before the current values the
+   * reply shows, for `import_configuration`'s `settings_versions`.
+   */
+  settings_versions: Record<string, number>,
 }
 | {
   "type": "configuration_imported",
@@ -1837,6 +1852,14 @@ export type Event = {
   id: string | null,
 }
 | {
+  "type": "handover_check",
+  id: string | null,
+  known: boolean,
+  sessions: Array<string>,
+  shell_terminals: Array<string>,
+  unreached_shell_terminals: Array<string>,
+}
+| {
   "type": "error",
   id: string | null,
   code: string,
@@ -2019,6 +2042,12 @@ export type HistoryMessage = {
  * Who said a message in a session's history.
  */
 export type HistorySpeaker = "user" | "octoboard" | "agent";
+
+/**
+ * How a holder that runs a session's process or a shell terminal's shell stands, when it cannot
+ * be reached.
+ */
+export type HolderLink = "pending";
 
 export type Host = {
   id: string,
@@ -2741,6 +2770,11 @@ export type Project = {
    * value in `Settings::git_workflow`.
    */
   git_workflow: GitWorkflowOverride,
+  /**
+   * The version of each field a form edits, by path (`crate::state::FieldVersions`): always
+   * every path of the record. A write names the version it was based on in `base_versions`.
+   */
+  versions: Record<string, number>,
 };
 
 /**
@@ -3025,6 +3059,14 @@ export type Request = {
    * Absent leaves the addition alone; an explicit `null` (or a blank string) clears it.
    */
   console_session_prompt?: string | null,
+  /**
+   * The version of each field this request changes that the client read it at (the
+   * record's `versions`), by path. Absent or empty means the write is not checked. A path
+   * that is not a versioned field of the record is refused with `unreadable_request`; any
+   * path whose version is no longer current refuses the whole request with
+   * `write_conflict`, applying nothing.
+   */
+  base_versions?: Record<string, number>,
 }
   | {
   "type": "delete_console",
@@ -3117,6 +3159,14 @@ export type Request = {
    * and a value sets the project's own. An unknown `development` or `delivery` is refused.
    */
   git_workflow?: GitWorkflowOverrideChanges,
+  /**
+   * The version of each field this request changes that the client read it at (the
+   * record's `versions`), by path. Absent or empty means the write is not checked. A path
+   * that is not a versioned field of the record is refused with `unreadable_request`; any
+   * path whose version is no longer current refuses the whole request with
+   * `write_conflict`, applying nothing.
+   */
+  base_versions?: Record<string, number>,
 }
   | {
   "type": "delete_project",
@@ -3226,6 +3276,14 @@ export type Request = {
    * settings come to.
    */
   apply_clone_dir?: boolean,
+  /**
+   * The settings versions the client's `configuration_inspected` reply carried
+   * (`settings_versions`). Given, an import that writes settings is refused with
+   * `write_conflict`, before anything is created, when any settings field it would write
+   * has changed since; the settings write itself is checked again as it is applied, and a
+   * conflict then is reported as that write's failure. Absent means unchecked.
+   */
+  settings_versions?: Record<string, number>,
 }
   | {
   "type": "open_session",
@@ -3508,6 +3566,14 @@ export type Request = {
    * is refused.
    */
   agent_tags?: Partial<Record<Agent, Array<string>>>,
+  /**
+   * The version of each field this request changes that the client read it at (the
+   * record's `versions`), by path. Absent or empty means the write is not checked. A path
+   * that is not a versioned field of the record is refused with `unreadable_request`; any
+   * path whose version is no longer current refuses the whole request with
+   * `write_conflict`, applying nothing.
+   */
+  base_versions?: Record<string, number>,
 }
   | {
   "type": "create_account",
@@ -3520,6 +3586,14 @@ export type Request = {
   account: string,
   name?: string,
   config_dir?: string,
+  /**
+   * The version of each field this request changes that the client read it at (the
+   * record's `versions`), by path. Absent or empty means the write is not checked. A path
+   * that is not a versioned field of the record is refused with `unreadable_request`; any
+   * path whose version is no longer current refuses the whole request with
+   * `write_conflict`, applying nothing.
+   */
+  base_versions?: Record<string, number>,
 }
   | {
   "type": "delete_account",
@@ -3705,7 +3779,18 @@ export type Request = {
   project: string,
 }
   | {
+  "type": "ping"
+}
+  | {
   "type": "shutdown"
+}
+  | {
+  "type": "planned_stop"
+}
+  | {
+  "type": "handover_check",
+  holder_floor: string | null,
+  target_version: string | null,
 });
 
 export type RequestBody = {
@@ -3778,6 +3863,14 @@ export type RequestBody = {
    * Absent leaves the addition alone; an explicit `null` (or a blank string) clears it.
    */
   console_session_prompt?: string | null,
+  /**
+   * The version of each field this request changes that the client read it at (the
+   * record's `versions`), by path. Absent or empty means the write is not checked. A path
+   * that is not a versioned field of the record is refused with `unreadable_request`; any
+   * path whose version is no longer current refuses the whole request with
+   * `write_conflict`, applying nothing.
+   */
+  base_versions?: Record<string, number>,
 }
 | {
   "type": "delete_console",
@@ -3870,6 +3963,14 @@ export type RequestBody = {
    * and a value sets the project's own. An unknown `development` or `delivery` is refused.
    */
   git_workflow?: GitWorkflowOverrideChanges,
+  /**
+   * The version of each field this request changes that the client read it at (the
+   * record's `versions`), by path. Absent or empty means the write is not checked. A path
+   * that is not a versioned field of the record is refused with `unreadable_request`; any
+   * path whose version is no longer current refuses the whole request with
+   * `write_conflict`, applying nothing.
+   */
+  base_versions?: Record<string, number>,
 }
 | {
   "type": "delete_project",
@@ -3979,6 +4080,14 @@ export type RequestBody = {
    * settings come to.
    */
   apply_clone_dir?: boolean,
+  /**
+   * The settings versions the client's `configuration_inspected` reply carried
+   * (`settings_versions`). Given, an import that writes settings is refused with
+   * `write_conflict`, before anything is created, when any settings field it would write
+   * has changed since; the settings write itself is checked again as it is applied, and a
+   * conflict then is reported as that write's failure. Absent means unchecked.
+   */
+  settings_versions?: Record<string, number>,
 }
 | {
   "type": "open_session",
@@ -4261,6 +4370,14 @@ export type RequestBody = {
    * is refused.
    */
   agent_tags?: Partial<Record<Agent, Array<string>>>,
+  /**
+   * The version of each field this request changes that the client read it at (the
+   * record's `versions`), by path. Absent or empty means the write is not checked. A path
+   * that is not a versioned field of the record is refused with `unreadable_request`; any
+   * path whose version is no longer current refuses the whole request with
+   * `write_conflict`, applying nothing.
+   */
+  base_versions?: Record<string, number>,
 }
 | {
   "type": "create_account",
@@ -4273,6 +4390,14 @@ export type RequestBody = {
   account: string,
   name?: string,
   config_dir?: string,
+  /**
+   * The version of each field this request changes that the client read it at (the
+   * record's `versions`), by path. Absent or empty means the write is not checked. A path
+   * that is not a versioned field of the record is refused with `unreadable_request`; any
+   * path whose version is no longer current refuses the whole request with
+   * `write_conflict`, applying nothing.
+   */
+  base_versions?: Record<string, number>,
 }
 | {
   "type": "delete_account",
@@ -4458,7 +4583,18 @@ export type RequestBody = {
   project: string,
 }
 | {
+  "type": "ping"
+}
+| {
   "type": "shutdown"
+}
+| {
+  "type": "planned_stop"
+}
+| {
+  "type": "handover_check",
+  holder_floor: string | null,
+  target_version: string | null,
 };
 
 /**
@@ -4596,6 +4732,23 @@ export type Session = {
    * absent otherwise.
    */
   prompt_on_launch?: boolean,
+  /**
+   * Whether the screen a client is first painted was rebuilt, after a restart of the daemon
+   * that left the session's process running, from the last of the raw output a holder kept of
+   * it, rather than followed from the start: it may differ from what the agent has on its own
+   * screen until the agent redraws it. It lasts as long as the process does. Never stored: it
+   * is filled in on the record a client receives (`AppState::wire_session`), and absent
+   * otherwise.
+   */
+  screen_inexact?: boolean,
+  /**
+   * Whether the holder that runs the session's process can be reached: `pending` while it runs
+   * but cannot be linked to, and absent while it can, or no holder runs the process. While
+   * pending, the process goes on and the session stays claimed: it is neither interrupted nor
+   * resumed, and what is asked of its process fails. Never stored: it is filled in on the
+   * record a client receives (`AppState::wire_session`).
+   */
+  holder_link?: HolderLink,
   /**
    * Whether this session has a conversation on the agent's side: a turn taken, or one resumed
    * at open. Until it has, the agent has stored no conversation to resume: `claude --resume`
@@ -4982,6 +5135,11 @@ export type Settings = {
    * `Project::git_workflow`).
    */
   git_workflow: GitWorkflowSettings,
+  /**
+   * The version of each field a form edits, by path (`crate::state::FieldVersions`): always
+   * every path of the record. A write names the version it was based on in `base_versions`.
+   */
+  versions: Record<string, number>,
 };
 
 /**
@@ -5072,8 +5230,8 @@ export type SharingProgress = {
 
 /**
  * A plain shell the daemon runs in a project's directory, beside its agent sessions. Live state
- * held in memory only, never stored in SQLite: the shell is a process of this daemon's and ends
- * with it, so the record does too.
+ * held in memory, not stored in SQLite but for the name the user gave it: the record lasts as
+ * long as the shell, which its holder keeps running across a restart of the daemon.
  */
 export type ShellTerminal = {
   id: string,
@@ -5109,6 +5267,18 @@ export type ShellTerminal = {
    * this order.
    */
   created_at: number,
+  /**
+   * The screen a client is first painted was rebuilt, after a restart of the daemon that left
+   * the shell running, from the last of the raw output a holder kept of it, rather than
+   * followed from the start: it may differ from what the shell has on its own screen until it
+   * redraws it. Absent otherwise; it lasts as long as the terminal does.
+   */
+  screen_inexact?: boolean,
+  /**
+   * Whether the holder that runs the shell can be reached: `pending` while it runs but cannot
+   * be linked to, the shell going on unreachable, and absent while it can.
+   */
+  holder_link?: HolderLink,
 };
 
 /**
@@ -5184,6 +5354,21 @@ export type TermControl = {
   "type": "reply",
   data: string,
   offset: number,
+}
+| {
+  "type": "display",
+  foreground: string,
+  background: string,
+  cursor: string,
+  cell_width?: number,
+  cell_height?: number,
+}
+| {
+  "type": "ack",
+  bytes: number,
+}
+| {
+  "type": "activate"
 };
 
 /**

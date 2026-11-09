@@ -45,7 +45,7 @@ export function isButtonlessMotion(data: string): boolean {
 }
 
 /** The most a single `write` hands xterm. xterm parses one write as one task, and a session's whole
- * replay arrives as one frame, which would hold the main thread for tens of milliseconds; between
+ * first paint arrives as one frame, which would hold the main thread for tens of milliseconds; between
  * writes it yields, and its decoders keep their state across them, so a character or an escape
  * sequence cut by a slice is still read whole. */
 const WRITE_SLICE_BYTES = 64 * 1024;
@@ -60,8 +60,8 @@ interface PlannedWrite {
 /**
  * Splits a frame of a connection's output into the writes to make, each with the point in the output
  * it ends at for the answers xterm gives while parsing it, and returns the point the output ends at
- * after the frame. `mark` is the replay mark still waiting for its replay: the replay is written in
- * two, the output whose queries were answered already and the rest. `outputEnd` is the point the
+ * after the frame. `mark` is the replay mark still waiting for the first frame it describes, which is
+ * written in two, the output whose queries were answered already and the rest. `outputEnd` is the point the
  * connection's last frame ended at, unknown before the replay mark.
  */
 export function planOutputWrites(

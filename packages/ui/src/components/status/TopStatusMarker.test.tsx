@@ -18,6 +18,7 @@ const STATUS_TEXT: Array<[Exclude<ShownStatusKind, "archived">, string]> = [
   ["working", "Working"],
   ["starting", "Starting"],
   ["switching", "Switching account"],
+  ["reconnecting", "Reconnecting"],
   ["interrupted", "Interrupted"],
 ];
 
@@ -36,10 +37,11 @@ it.each(STATUS_TEXT)("says the %s status in words when the pointer rests on its 
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it("draws every status its own glyph, starting and switching account sharing the turning arc", () => {
+it("draws every status its own glyph, starting, switching account and reconnecting sharing the turning arc", () => {
   const glyphs = STATUS_TEXT.map(([status]) => trigger(mountForTooltip(<TopStatusMarker status={status} />)).firstElementChild!.outerHTML);
-  expect(new Set(glyphs).size).toBe(STATUS_TEXT.length - 1);
+  expect(new Set(glyphs).size).toBe(STATUS_TEXT.length - 2);
   expect(glyphs[STATUS_TEXT.findIndex(([status]) => status === "starting")]).toBe(glyphs[STATUS_TEXT.findIndex(([status]) => status === "switching")]);
+  expect(glyphs[STATUS_TEXT.findIndex(([status]) => status === "starting")]).toBe(glyphs[STATUS_TEXT.findIndex(([status]) => status === "reconnecting")]);
 });
 
 it("adds nothing to the accessible name of the row or chip the marker sits in", () => {
@@ -69,7 +71,7 @@ describe("AvatarStatusBadge", () => {
     expect(element?.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it.each([undefined, "archived", "starting", "switching", "dormant", "delegated", "background", "working", "interrupted"] as const)("draws none for %s", (status) => {
+  it.each([undefined, "archived", "starting", "switching", "reconnecting", "dormant", "delegated", "background", "working", "interrupted"] as const)("draws none for %s", (status) => {
     expect(badge(status)).toBeNull();
   });
 

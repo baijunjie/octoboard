@@ -360,6 +360,9 @@ const CORE_CODES = {
   unshared_state_database: { origin: "daemon", codeParams: ["path"], nameParams: ["name"] },
   unsupported_file_type: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { unmerged: { codeParams: ["path"] } }, variantOf: (params) => params.file_type === "unmerged" ? "unmerged" : undefined },
   upstream_not_a_remote: { origin: "daemon", recovery: "gitFailure" },
+  // Raised by every checked write (a settings control, a form dialog, an import); its `fields` and `versions` params
+  // are for the window's own reconciliation, not for the sentence.
+  write_conflict: { origin: "daemon", recovery: "none", recoveryLine: true },
   worktree_unavailable: { origin: "daemon", recovery: "branch" },
 } satisfies Record<string, CodeRecord>;
 

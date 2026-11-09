@@ -3,12 +3,13 @@ import { useEffect, useRef } from "react";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";
 import { sessionWithLocation } from "../sessions/sessionLabel";
-import { useWaitingIds } from "../store";
+import { useShownWaitingCount, useWaitingIds } from "../store";
 import { useDaemon } from "../store";
 
 /**
  * Fires a system notification and keeps the Dock badge at the number of sessions currently
- * `waiting_user`, per the "The raised hand" section of docs/product/session-statuses.md.
+ * `waiting_user` (the badge leaving out one whose process cannot be reached, which shows *reconnecting*
+ * instead: `useShownWaitingCount`), per the "The raised hand" section of docs/product/session-statuses.md.
  *
  * Only a transition into `waiting_user` notifies, each session once: comparing against the
  * previous pass's waiting set (rather than, say, a per-session "already notified" flag that never
@@ -33,6 +34,7 @@ export function useWaitingNotifications(ready: boolean): void {
   const { notifications, badge } = usePlatform();
   const { store } = useDaemon();
   const waitingList = useWaitingIds();
+  const badgeCount = useShownWaitingCount();
   const previousWaitingRef = useRef<Set<string> | undefined>(undefined);
   const lastBadgeCountRef = useRef<number | undefined>(undefined);
 
@@ -43,11 +45,11 @@ export function useWaitingNotifications(ready: boolean): void {
     const previousIds = previousWaitingRef.current;
     previousWaitingRef.current = waitingIds;
 
-    if (badge && waitingIds.size !== lastBadgeCountRef.current) {
-      lastBadgeCountRef.current = waitingIds.size;
+    if (badge && badgeCount !== lastBadgeCountRef.current) {
+      lastBadgeCountRef.current = badgeCount;
       void (async () => {
         try {
-          await badge.set(waitingIds.size);
+          await badge.set(badgeCount);
         } catch {
           // Best-effort — see the function doc.
         }
@@ -76,5 +78,5 @@ export function useWaitingNotifications(ready: boolean): void {
         }
       }
     })();
-  }, [waitingList, ready, notifications, badge]);
+  }, [waitingList, badgeCount, ready, notifications, badge]);
 }

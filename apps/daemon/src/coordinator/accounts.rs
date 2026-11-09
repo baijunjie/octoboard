@@ -1,7 +1,7 @@
 //! The accounts and the agent list: names, directories, sign-ins, quotas, and adding, removing
 //! and ordering them.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -15,10 +15,8 @@ use crate::adapter;
 use crate::agents::availability;
 use crate::hostfs;
 use crate::hostfs::dir_key;
-use crate::protocol::{
-    error_code, Account, AgentId, Availability, CodedError, Console, Event, Project,
-};
-use crate::state::{broadcast_settings, AppState};
+use crate::protocol::{error_code, Account, AgentId, Availability, CodedError, Console, Project};
+use crate::state::{broadcast_settings, AppState, RecordKey};
 use crate::store::ReorderOutcome;
 
 use super::validate::required_text;
@@ -325,6 +323,7 @@ pub(crate) fn insert_new_account(
         share_default_config: false,
         share_default_config_incomplete: false,
         disabled,
+        versions: Default::default(),
     };
     {
         // The checks and the insert are one step: another create or update cannot slip between.
@@ -387,11 +386,18 @@ fn update_account(
 }
 
 /// Renames or repoints `account` as an `update_account` request asks.
+///
+/// With `base`, the versions the write was based on (see [`AppState::checked_write`]), it is
+/// refused with `write_conflict` when another write moved one of those fields on. The repoint
+/// first lets go of a sharing account's directory, which waits, so the versions are looked at
+/// before that to refuse a stale write without touching it, and checked again under the lock of
+/// the checked writes right before the write, which is the check that decides it.
 pub(super) async fn update_account_requested(
     state: &Arc<AppState>,
     account: String,
     name: Option<String>,
     config_dir: Option<String>,
+    base: &BTreeMap<String, u64>,
 ) -> Result<()> {
     // A sharing account's directory is brought back to its own before it is let go, once
     // the new directory is known to be acceptable.
@@ -404,10 +410,14 @@ pub(super) async fn update_account_requested(
                 let name = normalize_account_name(name)?;
                 check_account_name_unique(state, agent, &name, Some(&account))?;
             }
+            state.check_versions(&RecordKey::Account(account.clone()), base)?;
             super::account_sharing::before_repoint(state, &account, &dir).await?
         }
         None => None,
     };
+    let _checked = state
+        .checked_write(&RecordKey::Account(account.clone()), base)
+        .await?;
     update_account(state, &account, name, config_dir)?;
     Ok(())
 }
@@ -436,14 +446,10 @@ fn delete_account(state: &Arc<AppState>, id: &str) -> Result<()> {
         .cancel(account.agent, Some(id.to_string()));
     state.mcp_server_auths.cancel_account(account.agent, id);
     for console_id in affected_consoles {
-        if let Some(console) = state.store.get_console(&console_id)? {
-            state.broadcast(Event::ConsoleUpserted { console });
-        }
+        state.publish_console(&console_id)?;
     }
     for project_id in affected_projects {
-        if let Some(project) = state.store.get_project(&project_id)? {
-            state.broadcast(Event::ProjectUpserted { project });
-        }
+        state.publish_project(&project_id)?;
     }
     broadcast_settings(state)?;
     Ok(())

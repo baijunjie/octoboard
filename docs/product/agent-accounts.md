@@ -529,7 +529,9 @@ occupied and `~/.claude-1` free, the next Claude Code account starts with `~/.cl
 
 The generated directory follows the agent choice until the user types a directory or chooses one in the picker;
 after that, changing the agent or finishing the directory lookup keeps what the user entered, even if it is blank.
-Editing an account keeps its existing directory. While the home directory is being read, a new account's directory
+Editing an account keeps its existing directory, and saves only the name or the directory the user changed; either
+one changed elsewhere while the form is open shows the current value (see "A form while its record changes elsewhere"
+in `docs/product/concurrent-edits.md`). While the home directory is being read, a new account's directory
 field is empty and can be filled manually. If that lookup fails, the field stays empty and a compact error alert
 offers a retry; entering or choosing a directory dismisses that alert and lets the user continue without the lookup.
 

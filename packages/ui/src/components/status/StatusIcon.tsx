@@ -27,10 +27,10 @@ type Naming = { "aria-hidden": true } | { role: "img"; "aria-label": string };
  * bubble for idle (waiting to be told), a ring with a dot in its centre for delegated (the sessions under
  * it are working) and a hollow ring for working in the background; the solid blue working dot, the session
  * itself busy; and, in the muted ink, a bare pause sign for interrupted (stopped where it was, and can be
- * resumed from there) and a turning arc for starting. Every status has a shape of its own, so colour is
- * never the only cue. Each is drawn inside `StatusSlot`, one size for every status (`small` the compact one), which
- * holds the accessible name and centres the drawing; the bubble and the hand are moved a little in it
- * (`opticalCentring.ts`), their ink being lopsided by design. */
+ * resumed from there) and a turning arc for starting, switching account and reconnecting. Every status has a
+ * shape of its own, so colour is never the only cue. Each is drawn inside `StatusSlot`, one size for every status
+ * (`small` the compact one), which holds the accessible name and centres the drawing; the bubble and the hand are
+ * moved a little in it (`opticalCentring.ts`), their ink being lopsided by design. */
 function statusGlyph(status: ShownStatusKind, naming: Naming, small: boolean): React.ReactElement {
   return (
     <StatusSlot {...naming} small={small}>
@@ -44,8 +44,9 @@ function statusDrawing(status: ShownStatusKind, small: boolean): React.ReactElem
   const iconClass = small ? SMALL_ICON_CLASS : ICON_CLASS;
   switch (status) {
     case "switching":
+    case "reconnecting":
     case "starting":
-      // An arc turning in the muted ink: coming up, with nothing to answer for yet. The arc's
+      // An arc turning in the muted ink: coming up or coming back, with nothing to answer for yet. The arc's
       // shape tells it from the other glyphs where the system asks for reduced motion.
       return <LoaderCircle className={`${iconClass} text-app-muted motion-safe:animate-spin`} />;
     case "working":

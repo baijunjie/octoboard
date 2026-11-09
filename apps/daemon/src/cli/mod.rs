@@ -1,8 +1,16 @@
-//! The command line: the daemon itself when no mode is named, and the modes other processes start
-//! it in — an agent's hook, a session's git hooks, a provider's status line and the MCP server —
-//! each of which runs in a process of its own and calls the running daemon.
+//! The command line: the daemon itself when no mode is named; `start`, `stop`, `restart` and
+//! `status`, which a user runs to keep the daemon in the background; the modes other processes
+//! start it in — an agent's hook, a session's git hooks, a provider's status line and the MCP
+//! server — each of which runs in a process of its own and calls the running daemon; and the
+//! holder, which the running daemon calls instead.
 
+mod background;
+mod holder;
 pub(crate) mod hook;
+mod installation;
+
+pub(crate) use background::start_successor;
+pub(crate) use installation::launch_path;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -11,19 +19,55 @@ use crate::protocol::AgentId;
 use crate::{adapter, mcp, protocol, revert_gate, session_git_hooks};
 
 #[derive(Parser)]
-#[command(name = "octoboardd")]
+#[command(name = "octoboardd", args_conflicts_with_subcommands = true)]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) command: Option<Command>,
 
-    /// Exit once this process is gone. The application passes its own pid, so closing or crashing
-    /// it never leaves the daemon and its agent processes behind.
+    /// Stop once this process is gone. The application passes its own pid, so closing or crashing
+    /// it never leaves the daemon running with no application: a quit it wrote to the daemon's
+    /// stdin first ends every session, anything else hands them over for the next launch.
     #[arg(long)]
     pub(crate) parent_pid: Option<u32>,
+
+    /// Listen on this loopback port instead of one the system assigns, so the address stays the
+    /// same across restarts: what a service definition runs, and what `start` starts.
+    #[arg(long, value_parser = clap::value_parser!(u16).range(1..))]
+    pub(crate) port: Option<u16>,
+
+    /// Read the key the daemon requires of every connection from the first line of stdin instead
+    /// of generating one: what a daemon passes the successor it starts after a planned restart, so
+    /// that the address and the key stay the same for its clients. The key is never in arguments
+    /// or the environment, which other processes can read.
+    #[arg(long, hide = true)]
+    pub(crate) key_stdin: bool,
+
+    /// Exit with status 75 after a planned restart, for the service manager to start the next
+    /// daemon, instead of starting it itself. Pass it only from a service that restarts the daemon
+    /// on status 75 (the maintained systemd unit does). Ignored on Windows.
+    #[arg(long)]
+    pub(crate) service_managed: bool,
 }
 
 #[derive(Subcommand)]
 pub(crate) enum Command {
+    /// Start the daemon in the background on a fixed loopback port and return once it is
+    /// listening; it keeps running after the terminal closes, until `stop`.
+    Start {
+        /// The loopback port the daemon listens on, and keeps across restarts.
+        #[arg(long, value_parser = clap::value_parser!(u16).range(1..))]
+        port: u16,
+    },
+    /// Stop the daemon running against this data directory, which ends every session it runs
+    /// as interrupted.
+    Stop,
+    /// Restart the daemon running against this data directory on the same address, keeping every
+    /// session it runs running, with its screen, under the daemon that takes over. Refused for a
+    /// daemon that follows the desktop application.
+    Restart,
+    /// Say whether a daemon runs against this data directory, and where it listens; exits 3 when
+    /// none does.
+    Status,
     /// Forward one agent hook payload to the daemon. This is what the per-session hook script
     /// execs; it is not meant to be run by hand.
     Hook {
@@ -89,6 +133,17 @@ pub(crate) enum Command {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Own the terminals the daemon starts programs on, and serve them to the daemon over a local
+    /// link. This is what the daemon starts; it is not meant to be run by hand.
+    Holder {
+        /// The id the holder leaves its registry file under, for the daemon that started it to
+        /// find it by.
+        #[arg(long)]
+        holder_id: String,
+        /// The directory of the registry file; the data directory's own when absent.
+        #[arg(long)]
+        registry_dir: Option<std::path::PathBuf>,
+    },
     /// Serve the Octoboard MCP tools for one session over stdio. This is what the adapters
     /// register as the session's MCP server; it is not meant to be run by hand.
     Mcp {
@@ -129,6 +184,10 @@ impl From<McpKind> for protocol::SessionKind {
 /// Runs the mode `command` names, in place of the daemon.
 pub(crate) fn run(command: Command) -> Result<()> {
     match command {
+        Command::Start { port } => std::process::exit(background::start(port)?),
+        Command::Stop => std::process::exit(background::stop()?),
+        Command::Restart => std::process::exit(background::restart()?),
+        Command::Status => std::process::exit(background::status()?),
         // The hook path must stay silent and must not pay for a runtime: it is on the agent's
         // turn critical path, several times per turn.
         Command::Hook { session, port, key } => {
@@ -169,6 +228,11 @@ pub(crate) fn run(command: Command) -> Result<()> {
             &key,
             &args,
         )),
+        // Logs to a file of its own: it has no one to read its stdout and stderr.
+        Command::Holder {
+            holder_id,
+            registry_dir,
+        } => holder::run(holder_id, registry_dir),
         // The MCP child owns its stdout for the protocol, so it installs no log subscriber either.
         Command::Mcp {
             session,
@@ -210,6 +274,69 @@ mod tests {
     use clap::Parser;
 
     use super::*;
+
+    fn parse(args: &[&str]) -> Result<Cli, clap::Error> {
+        Cli::try_parse_from(["octoboardd"].into_iter().chain(args.iter().copied()))
+    }
+
+    #[test]
+    fn the_daemon_takes_a_port_only_when_one_is_given() {
+        assert_eq!(parse(&[]).unwrap().port, None);
+        assert_eq!(parse(&["--port", "7531"]).unwrap().port, Some(7531));
+        assert!(parse(&["--port", "70000"]).is_err());
+        assert!(parse(&["--port", "0"]).is_err());
+    }
+
+    #[test]
+    fn the_daemon_options_do_not_combine_with_a_mode() {
+        assert!(parse(&["--port", "1", "status"]).is_err());
+        assert!(parse(&["--parent-pid", "1", "stop"]).is_err());
+        assert_eq!(parse(&["--parent-pid", "1"]).unwrap().parent_pid, Some(1));
+    }
+
+    #[test]
+    fn the_key_is_read_from_stdin_only_when_asked_and_with_no_mode() {
+        assert!(!parse(&[]).unwrap().key_stdin);
+        let cli = parse(&["--port", "7531", "--key-stdin"]).unwrap();
+        assert!(cli.key_stdin);
+        assert_eq!(cli.port, Some(7531));
+        assert!(parse(&["--key-stdin", "status"]).is_err());
+    }
+
+    #[test]
+    fn the_service_managed_mode_is_asked_for_and_does_not_combine_with_a_mode() {
+        assert!(!parse(&[]).unwrap().service_managed);
+        let cli = parse(&["--port", "7531", "--service-managed"]).unwrap();
+        assert!(cli.service_managed);
+        assert!(parse(&["--service-managed", "status"]).is_err());
+    }
+
+    #[test]
+    fn restart_takes_no_option() {
+        assert!(matches!(
+            parse(&["restart"]).unwrap().command,
+            Some(Command::Restart)
+        ));
+        assert!(parse(&["restart", "--port", "7531"]).is_err());
+    }
+
+    #[test]
+    fn start_needs_a_port_and_stop_and_status_take_none() {
+        assert!(parse(&["start"]).is_err());
+        assert!(parse(&["start", "--port", "0"]).is_err());
+        assert!(matches!(
+            parse(&["start", "--port", "7531"]).unwrap().command,
+            Some(Command::Start { port: 7531 })
+        ));
+        assert!(matches!(
+            parse(&["stop"]).unwrap().command,
+            Some(Command::Stop)
+        ));
+        assert!(matches!(
+            parse(&["status"]).unwrap().command,
+            Some(Command::Status)
+        ));
+    }
 
     fn status_line(args: &str) -> (Option<String>, Vec<String>) {
         let cli = Cli::try_parse_from(["octoboardd"].into_iter().chain(args.split(' '))).unwrap();

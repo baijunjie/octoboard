@@ -1,5 +1,6 @@
-//! Spawning the `octoboardd` sidecar, parsing its startup output, starting it with retries, and
-//! stopping it for a restart. What happens when it ends by itself is `recovery.rs`.
+//! Spawning the `octoboardd` sidecar, parsing its startup output and starting it with retries.
+//! Stopping it for a restart or a quit is `stop.rs`, telling it the application is quitting is
+//! `quit_note.rs`; what happens when it ends by itself is `recovery.rs`.
 
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -12,6 +13,14 @@ use tauri_plugin_shell::ShellExt;
 
 use crate::diagnostics::diagnostic;
 use crate::recovery::{self, ExitAction, RestartBudget};
+
+mod quit_note;
+mod stop;
+
+pub use quit_note::{note_quit, skip_quit_note};
+use quit_note::{QuitNote, QUIT_NOTE};
+use stop::kill_child;
+pub use stop::{stop_daemon, stop_daemon_at_session_end, StopKind};
 
 /// How long to wait for `octoboardd` to print its startup line before giving up on that attempt.
 /// Generous: this is a cold process start (including, on first launch, SQLite schema setup), not a
@@ -30,7 +39,8 @@ const ATTEMPT_KILL_WAIT: Duration = Duration::from_secs(5);
 const STDERR_TAIL_BYTES: usize = 16 * 1024;
 
 /// The sidecar's state: whether the daemon is gone, where it is now, the handle `stop_daemon` ends
-/// it through, and what the recovery in `recovery.rs` keeps between its attempts.
+/// it through and the quit note is written to, and what the recovery in `recovery.rs` keeps between
+/// its attempts.
 #[derive(Default)]
 pub struct DaemonState {
     /// Whether the daemon failed to start or has exited. With no session left to keep running, the
@@ -42,37 +52,54 @@ pub struct DaemonState {
     /// How many recovery threads are running, which a restart waits out before it launches the next
     /// instance.
     pub(crate) recovering: AtomicUsize,
+    /// Whether a daemon of this application may have holders of its own to end at a quit
+    /// (`note_quit`): one was up during this run, or one that started was killed while it still
+    /// ran (a timeout, a quit meanwhile), which may have adopted holders before. The exception is a
+    /// daemon that exited on its own before its startup line, as one does when another daemon
+    /// holds the instance lock: it has none, and leaves no record.
+    may_hold_holders: AtomicBool,
     /// Where the daemon is now, or how it ended, for a window that opens later to be built from,
     /// and for a page that loads in the window to ask whether the shell gave up on it.
     status: Mutex<DaemonStatus>,
     /// The number of the latest daemon spawned, or retired by `retire_and_kill`. What a daemon's
     /// events say about it counts only while its own number is this one.
     generation: AtomicU64,
-    /// The running sidecar, for `stop_daemon` to end when it does not exit by itself.
-    child: Mutex<Option<CommandChild>>,
+    /// The running sidecar, for `stop_daemon` to end when it does not exit by itself and for the
+    /// quit note to be written to, with whether that note is due: both under one lock, so a daemon
+    /// stored while a quit is noted gets the note whichever comes first (`ChildSlot`).
+    child: Mutex<ChildSlot>,
     pub(crate) restarts: Mutex<RestartBudget>,
 }
 
-/// How long a restart waits for the daemon to exit on its own after the UI asked it to shut down,
-/// before it sends its own request.
-const DAEMON_EXIT_GRACE: Duration = Duration::from_secs(2);
+/// The running sidecar and whether the quit note is due, behind one lock: `note_quit` writes to
+/// whichever daemon the slot holds, and a daemon stored after it (a recovery or the first start
+/// spawning around a quit) is written the note by `store`, so no daemon is left that missed it.
+#[derive(Default)]
+struct ChildSlot {
+    child: Option<CommandChild>,
+    note: QuitNote,
+}
 
-/// How long the shutdown request itself may take, connecting, sending and reading the answer.
-const SHUTDOWN_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
+impl ChildSlot {
+    /// Holds `child` as the running sidecar, and tells it the quit when one has been noted already.
+    fn store(&mut self, child: CommandChild) {
+        let owed = self.note.owed_to_new_daemon();
+        let child = self.child.insert(child);
+        if owed {
+            let _ = child.write(QUIT_NOTE);
+        }
+    }
+}
 
-/// How long a restart waits for the daemon to exit after the shutdown request, or SIGTERM where the
-/// request could not be made, either of which has it stop its sessions' processes first, before it
-/// kills it.
-const DAEMON_TERM_GRACE: Duration = Duration::from_secs(5);
+/// Waits up to `timeout` for the recovery threads under way to end, which they do once they see
+/// `stopping` and have ended the daemon they were starting; says whether none is left.
+pub fn wait_for_recoveries(app: &AppHandle, timeout: Duration) -> bool {
+    let state = app.state::<DaemonState>();
+    wait_for(timeout, || state.recovering.load(Ordering::SeqCst) == 0)
+}
 
-/// How long a restart waits for the daemon to be gone after killing it.
-const DAEMON_KILL_WAIT: Duration = Duration::from_secs(2);
-
-/// How long a restart waits for the recoveries under way to notice it and end the daemon they
-/// started.
-const RECOVERY_END_WAIT: Duration = Duration::from_secs(15);
-
-/// Polls `condition` every few milliseconds until it holds or `timeout` has passed; says whether it held.
+/// Polls `condition` every few milliseconds until it holds or `timeout` has passed; says whether it
+/// held.
 pub fn wait_for(timeout: Duration, condition: impl Fn() -> bool) -> bool {
     let deadline = Instant::now() + timeout;
     loop {
@@ -85,143 +112,6 @@ pub fn wait_for(timeout: Duration, condition: impl Fn() -> bool) -> bool {
         std::thread::sleep(Duration::from_millis(20));
     }
 }
-
-/// Makes sure the daemon has exited before a restart launches a new instance, whose own daemon refuses to
-/// start while this one still holds the instance lock (`instance_lock` in the daemon). The UI has asked it to
-/// shut down before confirming the restart, so this normally returns at once or within moments. One that has
-/// not exited within `DAEMON_EXIT_GRACE` is sent the shutdown request (`POST /shutdown`), which the daemon
-/// handles like the UI's and like SIGTERM; one that could not be sent it gets SIGTERM on macOS instead
-/// (Windows has no such signal, so the request is the only ask), and one still running
-/// `DAEMON_TERM_GRACE` after either is killed (`TerminateProcess` on Windows). Blocks the
-/// calling thread: call it off the main thread.
-pub fn stop_daemon(app: &AppHandle) {
-    let state = app.state::<DaemonState>();
-    state.stopping.store(true, Ordering::SeqCst);
-    // A recovery under way sees the flag and ends the daemon it was starting; the daemon is not stopped
-    // until it has.
-    wait_for(RECOVERY_END_WAIT, || {
-        state.recovering.load(Ordering::SeqCst) == 0
-    });
-    escalate_stop(
-        || daemon_stopped(app),
-        || match current_address(app) {
-            Some(address) => request_shutdown(&address),
-            None => false,
-        },
-        || {
-            if let Some(child) = app
-                .state::<DaemonState>()
-                .child
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .as_ref()
-            {
-                terminate(child.pid());
-            }
-        },
-        || {
-            let child = app
-                .state::<DaemonState>()
-                .child
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .take();
-            if let Some(child) = child {
-                let _ = child.kill();
-            }
-        },
-        [DAEMON_EXIT_GRACE, DAEMON_TERM_GRACE, DAEMON_KILL_WAIT],
-    );
-}
-
-/// The escalation of `stop_daemon`: waits for `stopped` for `exit_grace`, then runs `request`, which says
-/// whether the daemon accepted it; one it did not accept is followed by `terminate`, which asks the same of
-/// the daemon by signal, so either way the daemon is asked once. Then it waits `term_grace`, runs `kill` and
-/// waits `kill_wait`. Stops at the first wait that sees `stopped`.
-fn escalate_stop(
-    stopped: impl Fn() -> bool,
-    request: impl FnOnce() -> bool,
-    terminate: impl FnOnce(),
-    kill: impl FnOnce(),
-    [exit_grace, term_grace, kill_wait]: [Duration; 3],
-) {
-    if wait_for(exit_grace, &stopped) {
-        return;
-    }
-    if !request() {
-        terminate();
-    }
-    if wait_for(term_grace, &stopped) {
-        return;
-    }
-    kill();
-    wait_for(kill_wait, &stopped);
-}
-
-/// Asks the daemon at `address` to shut down with `POST /shutdown`, and says whether it answered that it
-/// will. The one HTTP request the shell makes to the daemon, so it is written out over a socket rather than
-/// through a client the rest of the shell has no use for. Bounded by `SHUTDOWN_REQUEST_TIMEOUT` in each of its
-/// steps, so it cannot hold a restart up.
-fn request_shutdown(address: &DaemonAddress) -> bool {
-    use std::io::{BufRead, BufReader, Write};
-    use std::net::{Ipv4Addr, SocketAddr, TcpStream};
-
-    let attempt = || -> std::io::Result<bool> {
-        let target = SocketAddr::from((Ipv4Addr::LOCALHOST, address.port));
-        let mut stream = TcpStream::connect_timeout(&target, SHUTDOWN_REQUEST_TIMEOUT)?;
-        stream.set_read_timeout(Some(SHUTDOWN_REQUEST_TIMEOUT))?;
-        stream.set_write_timeout(Some(SHUTDOWN_REQUEST_TIMEOUT))?;
-        write!(
-            stream,
-            "POST /shutdown?key={} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-            address.key, address.port
-        )?;
-        let mut status_line = String::new();
-        BufReader::new(stream).read_line(&mut status_line)?;
-        Ok(accepted(&status_line))
-    };
-    match attempt() {
-        Ok(accepted) => accepted,
-        Err(err) => {
-            diagnostic!("the shutdown request to the daemon failed: {err}");
-            false
-        }
-    }
-}
-
-/// Whether an HTTP status line is a success.
-fn accepted(status_line: &str) -> bool {
-    status_line
-        .split_whitespace()
-        .nth(1)
-        .is_some_and(|status| status.starts_with('2'))
-}
-
-#[cfg(target_os = "macos")]
-mod macos {
-    /// Sends SIGTERM to `pid`, the signal the daemon's `platform::proc::shutdown_requested` waits
-    /// for.
-    pub fn terminate(pid: u32) {
-        // SAFETY: `kill` only sends a signal; a pid that is no longer the daemon's fails with `ESRCH`.
-        unsafe {
-            libc::kill(pid as libc::pid_t, libc::SIGTERM);
-        }
-    }
-}
-#[cfg(target_os = "macos")]
-use macos as platform;
-
-/// Every target but macOS, Linux included.
-#[cfg(not(target_os = "macos"))]
-mod windows {
-    /// There is no signal to send on Windows: the daemon's stop is the shutdown request, then the
-    /// kill. Linux, which builds this half, stops its daemon the same way.
-    pub fn terminate(_pid: u32) {}
-}
-#[cfg(not(target_os = "macos"))]
-use windows as platform;
-
-use platform::terminate;
 
 pub fn daemon_stopped(app: &AppHandle) -> bool {
     app.state::<DaemonState>().stopped.load(Ordering::SeqCst)
@@ -407,14 +297,16 @@ impl fmt::Display for AttemptFailure {
 }
 
 /// Spawns the `octoboardd` sidecar with `--parent-pid` set to this process, so the daemon's own
-/// watchdog exits it when this app does — a backstop for a crash, not the normal quit path (that
-/// is the explicit `shutdown` request the exit flow sends before confirming the quit). Blocks (via
-/// a channel, off the async runtime) until the daemon's startup line appears on stdout, it ends,
-/// or the timeout elapses; the spawned task itself keeps running for as long as the daemon does,
-/// so one that dies later is noticed too (see `watch_daemon`). A daemon that did not report its
-/// port in time, or that reports it while a restart or a quit is under way, is killed and waited
-/// for, so the next attempt does not find its instance lock held. The daemon counts as running, and
-/// is what a window opened from then on is given, only once this returns its address.
+/// watchdog notices when this app is gone: it makes an ordinary stop after the quit note
+/// (`note_quit`) and a planned one without it, which is how a crash leaves the sessions running for
+/// the next launch. The normal quit path is the explicit `shutdown` request the exit flow sends
+/// before confirming the quit. Blocks (via a channel, off the async runtime) until the daemon's
+/// startup line appears on stdout, it ends, or the timeout elapses; the spawned task itself keeps
+/// running for as long as the daemon does, so one that dies later is noticed too (see
+/// `watch_daemon`). A daemon that did not report its port in time, or that reports it while a
+/// restart or a quit is under way, is killed and waited for, so the next attempt does not find its
+/// instance lock held. The daemon counts as running, and is what a window opened from then on is
+/// given, only once this returns its address.
 pub(crate) fn start_attempt(app: &AppHandle) -> Result<DaemonAddress, AttemptFailure> {
     let state = app.state::<DaemonState>();
     let pid = std::process::id();
@@ -429,7 +321,11 @@ pub(crate) fn start_attempt(app: &AppHandle) -> Result<DaemonAddress, AttemptFai
         .spawn()
         .map_err(|err| AttemptFailure::Spawn(err.to_string()))?;
 
-    *state.child.lock().unwrap_or_else(|e| e.into_inner()) = Some(child);
+    state
+        .child
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .store(child);
 
     let (tx, rx) = mpsc::channel();
     let exited = Arc::new(AtomicBool::new(false));
@@ -458,11 +354,17 @@ pub(crate) fn start_attempt(app: &AppHandle) -> Result<DaemonAddress, AttemptFai
                 let mut status = state.status.lock().unwrap_or_else(|e| e.into_inner());
                 if !exited.load(Ordering::SeqCst) {
                     state.stopped.store(false, Ordering::SeqCst);
+                    state.may_hold_holders.store(true, Ordering::SeqCst);
                     *status = DaemonStatus::Up(address.clone());
                 }
                 return Ok(address);
             }
-            Ok(Err(failure)) => return Err(failure),
+            Ok(Err(failure)) => {
+                // It exited on its own, so it has no holders; it is taken out of the slot, where a
+                // stored child would make a later quit leave the record.
+                kill_child(app);
+                return Err(failure);
+            }
             Err(mpsc::RecvTimeoutError::Disconnected) => break AttemptFailure::OutputEnded,
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 if state.stopping.load(Ordering::SeqCst) {
@@ -474,6 +376,8 @@ pub(crate) fn start_attempt(app: &AppHandle) -> Result<DaemonAddress, AttemptFai
             }
         }
     };
+    // Killed while it still ran: it may have adopted holders before.
+    state.may_hold_holders.store(true, Ordering::SeqCst);
     retire_and_kill(app);
     wait_for(ATTEMPT_KILL_WAIT, || exited.load(Ordering::SeqCst));
     Err(failure)
@@ -484,10 +388,7 @@ pub(crate) fn start_attempt(app: &AppHandle) -> Result<DaemonAddress, AttemptFai
 fn retire_and_kill(app: &AppHandle) {
     let state = app.state::<DaemonState>();
     state.generation.fetch_add(1, Ordering::SeqCst);
-    let child = state.child.lock().unwrap_or_else(|e| e.into_inner()).take();
-    if let Some(child) = child {
-        let _ = child.kill();
-    }
+    kill_child(app);
 }
 
 /// Reads one daemon's output for as long as it lives, rather than returning the moment the port
@@ -508,7 +409,8 @@ async fn watch_daemon(
                 if !port_sent {
                     if let Some(address) = parse_startup_line(&String::from_utf8_lossy(&line)) {
                         port_sent = true;
-                        // Only what the daemon says before its port is kept, for a start that fails.
+                        // Only what the daemon says before its port is kept, for a start that
+                        // fails.
                         stderr = StderrTail::new(0);
                         let _ = tx.send(Ok(address));
                     }
@@ -660,149 +562,6 @@ fn describe_termination(code: Option<i32>) -> String {
 }
 
 #[cfg(test)]
-mod wait_tests {
-    use super::*;
-    use std::sync::atomic::AtomicUsize;
-
-    #[test]
-    fn a_condition_that_holds_ends_the_wait_at_once() {
-        assert!(wait_for(Duration::from_secs(5), || true));
-    }
-
-    #[test]
-    fn a_condition_that_comes_true_is_waited_for() {
-        let polls = AtomicUsize::new(0);
-        assert!(wait_for(Duration::from_secs(5), || polls
-            .fetch_add(1, Ordering::SeqCst)
-            >= 3));
-    }
-
-    const SHORT: [Duration; 3] = [Duration::from_millis(30); 3];
-
-    /// Which steps of `escalate_stop` ran, in order, for a daemon that is `stopped` once the step
-    /// named `exits_after` has run (`None` for one that never is) and whose request is `accepted`
-    /// or not.
-    fn steps(exits_after: Option<&'static str>, accepted: bool) -> Vec<&'static str> {
-        let order = Mutex::new(Vec::new());
-        let stopped = || exits_after.is_some_and(|step| order.lock().unwrap().contains(&step));
-        escalate_stop(
-            stopped,
-            || {
-                order.lock().unwrap().push("request");
-                accepted
-            },
-            || order.lock().unwrap().push("terminate"),
-            || order.lock().unwrap().push("kill"),
-            SHORT,
-        );
-        order.into_inner().unwrap()
-    }
-
-    #[test]
-    fn a_daemon_that_exits_by_itself_is_not_signalled() {
-        let signalled = AtomicUsize::new(0);
-        escalate_stop(
-            || true,
-            || {
-                signalled.fetch_add(1, Ordering::SeqCst);
-                true
-            },
-            || {
-                signalled.fetch_add(1, Ordering::SeqCst);
-            },
-            || {
-                signalled.fetch_add(1, Ordering::SeqCst);
-            },
-            SHORT,
-        );
-        assert_eq!(signalled.load(Ordering::SeqCst), 0);
-    }
-
-    #[test]
-    fn a_daemon_that_exits_on_the_request_is_not_signalled() {
-        assert_eq!(steps(Some("request"), true), ["request"]);
-    }
-
-    #[test]
-    fn a_request_that_is_refused_falls_back_to_sigterm_at_once() {
-        assert_eq!(steps(Some("terminate"), false), ["request", "terminate"]);
-    }
-
-    #[test]
-    fn a_daemon_that_ignores_an_accepted_request_is_killed_without_sigterm() {
-        assert_eq!(steps(None, true), ["request", "kill"]);
-    }
-
-    #[test]
-    fn a_daemon_that_ignores_everything_is_killed_last() {
-        assert_eq!(steps(None, false), ["request", "terminate", "kill"]);
-    }
-
-    #[test]
-    fn only_a_success_status_accepts_the_shutdown_request() {
-        assert!(accepted("HTTP/1.1 202 Accepted\r\n"));
-        assert!(accepted("HTTP/1.1 200 OK\r\n"));
-        assert!(!accepted("HTTP/1.1 401 Unauthorized\r\n"));
-        assert!(!accepted("HTTP/1.1 404 Not Found\r\n"));
-        assert!(!accepted(""));
-    }
-
-    #[test]
-    fn the_shutdown_request_is_posted_with_the_key_and_a_refusal_is_not_an_acceptance() {
-        use std::io::{Read, Write};
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let server = std::thread::spawn(move || {
-            let mut requests = Vec::new();
-            for status in ["202 Accepted", "401 Unauthorized"] {
-                let (mut stream, _) = listener.accept().unwrap();
-                // The request may arrive in more than one read; its head ends at the blank line.
-                let mut request = Vec::new();
-                let mut buffer = [0u8; 1024];
-                while !request.ends_with(b"\r\n\r\n") {
-                    let read = stream.read(&mut buffer).unwrap();
-                    if read == 0 {
-                        break;
-                    }
-                    request.extend_from_slice(&buffer[..read]);
-                }
-                requests.push(String::from_utf8_lossy(&request).into_owned());
-                write!(stream, "HTTP/1.1 {status}\r\nContent-Length: 0\r\n\r\n").unwrap();
-            }
-            requests
-        });
-        let address = DaemonAddress {
-            port,
-            key: "ab12".to_string(),
-        };
-        assert!(request_shutdown(&address));
-        assert!(!request_shutdown(&address));
-        let requests = server.join().unwrap();
-        assert!(requests[0].starts_with("POST /shutdown?key=ab12 HTTP/1.1\r\n"));
-        assert!(requests[0].contains(&format!("Host: 127.0.0.1:{port}\r\n")));
-    }
-
-    #[test]
-    fn a_request_to_nothing_listening_is_not_an_acceptance() {
-        // Port 1 (tcpmux) has no listener on a development machine or CI runner. A port freed by
-        // binding and dropping a listener would not do: a test running alongside may be handed it.
-        let address = DaemonAddress {
-            port: 1,
-            key: "ab12".to_string(),
-        };
-        assert!(!request_shutdown(&address));
-    }
-
-    #[test]
-    fn a_condition_that_never_holds_gives_up_at_the_timeout() {
-        let started = Instant::now();
-        assert!(!wait_for(Duration::from_millis(100), || false));
-        assert!(started.elapsed() >= Duration::from_millis(100));
-        assert!(started.elapsed() < Duration::from_secs(2));
-    }
-}
-
-#[cfg(test)]
 mod startup_tests {
     use super::*;
 
@@ -897,5 +656,31 @@ mod startup_tests {
         ] {
             assert_eq!(status.exit_detail(), None);
         }
+    }
+}
+
+#[cfg(test)]
+mod wait_tests {
+    use super::*;
+
+    #[test]
+    fn a_condition_that_holds_ends_the_wait_at_once() {
+        assert!(wait_for(Duration::from_secs(5), || true));
+    }
+
+    #[test]
+    fn a_condition_that_comes_true_is_waited_for() {
+        let polls = AtomicUsize::new(0);
+        assert!(wait_for(Duration::from_secs(5), || polls
+            .fetch_add(1, Ordering::SeqCst)
+            >= 3));
+    }
+
+    #[test]
+    fn a_condition_that_never_holds_gives_up_at_the_timeout() {
+        let started = Instant::now();
+        assert!(!wait_for(Duration::from_millis(100), || false));
+        assert!(started.elapsed() >= Duration::from_millis(100));
+        assert!(started.elapsed() < Duration::from_secs(2));
     }
 }

@@ -154,15 +154,25 @@ impl AppState {
 
     pub fn register_live(self: &Arc<Self>, session: Arc<LiveSession>) {
         session.enter_crash_cleanup();
+        // Its holder can be out of reach for a while, the program going on: clients are told
+        // (`Session::holder_link`, read when the record is published). Asked for before the
+        // session is registered, so that no change between the two goes unpublished.
+        let (state, live) = (Arc::downgrade(self), Arc::downgrade(&session));
+        session.on_link_changed(move || {
+            if let (Some(state), Some(live)) = (state.upgrade(), live.upgrade()) {
+                state.publish_session_by_id(&live.id);
+            }
+        });
         self.process_ledger
-            .launch_started(&session.launch_id, &session.id, session.handle());
+            .launch_started(&session.launch_id, &session.id, session.process_id());
         let mut live = self.live.write().expect("live sessions lock poisoned");
         live.sessions.insert(session.id.clone(), session.clone());
         drop(live);
         // A launch that was past its claim when the daemon began to shut down: the stop of the
         // sessions has listed the running ones already, so this one is ended here. The exit
-        // watcher records it interrupted, as for the rest.
-        if self.shutting_down.load(Ordering::Acquire) {
+        // watcher records it interrupted, as for the rest. A planned stop ends nothing: the
+        // session's terminal is left running in its holder for the next daemon.
+        if self.shutting_down.load(Ordering::Acquire) && !self.is_handing_over() {
             let (late, ledger) = (session.clone(), Arc::clone(&self.process_ledger));
             std::thread::spawn(move || {
                 ledger.scan_before_ending();
@@ -203,6 +213,33 @@ impl AppState {
                     }
                 }),
             });
+        }
+        // Its holder's link dropping loses what the program prints meanwhile: the screen is no
+        // longer exact, which clients are told, and the program is made to draw it again.
+        let (state, live) = (Arc::downgrade(self), Arc::downgrade(&session));
+        session.on_resumed(move || {
+            let (Some(state), Some(live)) = (state.upgrade(), live.upgrade()) else {
+                return;
+            };
+            live.mark_screen_inexact();
+            state.publish_session_by_id(&live.id);
+            if let Err(err) = live.nudge_repaint() {
+                tracing::warn!(session = %live.id, %err, "asking the program to redraw its screen failed");
+            }
+        });
+        // Where it runs, for a start that cannot link to its holder to know the holder runs this
+        // launch of the session.
+        if let Some(held_at) = session.held_at() {
+            let record = crate::store::HeldTerminalRecord {
+                kind: crate::store::HeldKind::Session,
+                owner_id: session.id.clone(),
+                holder_id: held_at.holder_id,
+                terminal_id: held_at.terminal_id,
+                launch_id: session.launch_id.clone(),
+            };
+            if let Err(err) = self.store.record_held_terminal(&record) {
+                tracing::warn!(session = %session.id, %err, "recording where the session's launch runs failed");
+            }
         }
     }
 

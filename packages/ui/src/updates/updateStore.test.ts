@@ -336,7 +336,21 @@ describe("restarting", () => {
     const handler = vi.fn();
     store.onRestartRequested(handler);
     store.restart();
-    expect(handler).toHaveBeenCalledOnce();
+    expect(handler).toHaveBeenCalledExactlyOnceWith(null, FOUND.version);
+  });
+
+  it("hands the exit flow the installed update's holder floor and version", async () => {
+    const context = setup();
+    let done = context.store.check("automatic");
+    context.checks[0].settle({ ...FOUND, holderFloor: "0.2.0" });
+    await done;
+    done = context.store.install();
+    context.installs[0].settle();
+    await done;
+    const handler = vi.fn();
+    context.store.onRestartRequested(handler);
+    context.store.restart();
+    expect(handler).toHaveBeenCalledExactlyOnceWith("0.2.0", FOUND.version);
   });
 
   it("asks for nothing before an update is installed, or once the handler is gone", async () => {
@@ -351,6 +365,37 @@ describe("restarting", () => {
     ready.store.restart();
     expect(later).not.toHaveBeenCalled();
     off();
+  });
+
+  it("is restarting from the ask until the exit flow has opened its confirmation or started the relaunch", async () => {
+    const { store } = await installed();
+    let answer: () => void = () => {};
+    const handler = vi.fn(() => new Promise<void>((resolve) => (answer = resolve)));
+    store.onRestartRequested(handler);
+    expect(store.getState().restarting).toBe(false);
+    const asked = store.restart();
+    expect(store.getState().restarting).toBe(true);
+    // A second press while the first is waiting asks for nothing more.
+    await store.restart();
+    expect(handler).toHaveBeenCalledOnce();
+    answer();
+    await asked;
+    expect(store.getState().restarting).toBe(false);
+    void store.restart();
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
+  it("stops restarting when the exit flow fails", async () => {
+    const { store } = await installed();
+    store.onRestartRequested(async () => { throw new Error("closed"); });
+    await expect(store.restart()).resolves.toBeUndefined();
+    expect(store.getState().restarting).toBe(false);
+  });
+
+  it("is not restarting when there is nothing to ask", async () => {
+    const { store } = setup();
+    void store.restart();
+    expect(store.getState().restarting).toBe(false);
   });
 
   it("hides the restart notice with Later", async () => {

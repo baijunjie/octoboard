@@ -11,7 +11,7 @@ use tauri::{AppHandle, Manager, RunEvent, WebviewWindow, Window};
 use crate::apple_event::{current_enum_code, Slot};
 use crate::background::{hidden_by_close, hide, show_main_window, BackgroundState};
 use crate::diagnostics::diagnostic;
-use crate::exit::{should_let_quit_through, system_quit_without_asking};
+use crate::exit::{end_session, quit_let_through, should_let_quit_through, way_out_under_way};
 
 /// How long after a Dock show a Dock hide has to wait. tao drops a Dock hide that comes less than
 /// a second after a Dock show, because macOS gives no signal for the change having finished and
@@ -235,13 +235,18 @@ static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 /// Cmd+Q and the app menu's `MenuItem` both reach `on_menu_event` instead.
 ///
 /// One override for every `terminate:` this selector is asked about — a Dock Quit, but equally a
-/// system-initiated one from a logout, restart, or shutdown. Both ask for the confirmation, which
-/// can hold up a logout or restart until the user answers it, except that a system-initiated one
-/// (`system_is_ending`: the quit event's reason) is let through without asking while the UI has
-/// said so (`system_quit_without_asking`): the sessions it leaves interrupted are resumed at the
-/// next start. A quit the user starts is told apart by carrying none of the system's reasons, and
-/// one that carries no reason at all asks. No announcement of the power-off is used instead, as a
-/// logout can be cancelled after it.
+/// system-initiated one from a logout, restart, or shutdown. A Dock Quit asks for the confirmation
+/// like any quit. A system-initiated one (`system_is_ending`: the quit event's reason) never asks,
+/// whatever the settings: the daemon makes its ordinary stop first (`end_session`), also over an
+/// update restart's planned stop under way, which it ends, freezing each session's preview, and the
+/// sessions it leaves interrupted keep their last screen as the preview. A quit
+/// the user starts is told apart by carrying none of the system's reasons, and one that carries no
+/// reason at all asks. No announcement of the power-off is used instead, as a logout can be
+/// cancelled after it.
+///
+/// A Dock Quit while an update restart or an installing quit is under way
+/// (`way_out_under_way`) is cancelled: that way out ends the process itself, and letting this one
+/// through would end it mid-restart.
 ///
 /// tao 0.35.3's `TaoAppDelegateParent` does not implement this selector (verified against its
 /// source: it registers `applicationDidFinishLaunching:`, `applicationWillTerminate:`, and a
@@ -328,9 +333,17 @@ unsafe extern "C-unwind" fn application_should_terminate(
             // `terminate:` that early.
             return NSApplicationTerminateReply::TerminateNow;
         };
-        // The system's own termination, when the UI has said it needs no confirmation, is not put
-        // through the exit flow at all: nothing is deferred or recorded for it.
-        if (system_is_ending() && system_quit_without_asking(app)) || should_let_quit_through(app) {
+        // The system's own termination is not put through the exit flow at all: nothing is deferred
+        // or recorded for it. The daemon is stopped before the system goes on, on this (the main)
+        // thread, which blocks the logout for as long as the stop takes, bounded.
+        if system_is_ending() {
+            end_session(app);
+            NSApplicationTerminateReply::TerminateNow
+        } else if way_out_under_way(app) {
+            // The restart or install under way ends the process by itself when it is done.
+            NSApplicationTerminateReply::TerminateCancel
+        } else if should_let_quit_through(app) {
+            quit_let_through(app);
             NSApplicationTerminateReply::TerminateNow
         } else {
             // `should_let_quit_through` has already emitted `exit-requested`; nothing left to do

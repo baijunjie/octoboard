@@ -223,3 +223,41 @@ it("keeps failed suggestions retryable and returns retry focus to the filled dir
   expect(field.getAttribute("aria-describedby")).not.toContain(failureId);
   expect(document.body.textContent).not.toContain("Could not list this directory");
 });
+
+it("sends only the field that changed, with the version the form read", async () => {
+  const { request } = render(work, () => Promise.resolve({ type: "ack", id: null }));
+  type("Name", "Other");
+  await submit();
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_account", account: "a-work", name: "Other", base_versions: { name: 1 } });
+});
+
+it("puts a conflicting field back to the account's current value and bases the retry on its version", async () => {
+  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+  const answers: Array<() => Promise<unknown>> = [
+    () => Promise.reject(new CodedError("changed elsewhere", "write_conflict", { fields: "name", versions: '{"name":6}' })),
+    () => Promise.resolve({ type: "ack", id: null }),
+  ];
+  const { store, request } = render(work, () => answers.shift()!());
+  type("Name", "Mine");
+  type("Config directory", "/home/dev/.claude-mine");
+  await submit();
+  expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not save the account"]);
+  expect(input("Name").value).toBe("Mine");
+  act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...work, name: "Theirs", versions: { ...work.versions, name: 6 } }] } }));
+  expect(input("Name").value).toBe("Theirs");
+  expect(input("Config directory").value).toBe("/home/dev/.claude-mine");
+  await submit();
+  expect(request).toHaveBeenLastCalledWith({ type: "update_account", account: "a-work", config_dir: "/home/dev/.claude-mine", base_versions: { config_dir: 1 } });
+  type("Name", "Mine again");
+  await submit();
+  expect(request).toHaveBeenLastCalledWith(expect.objectContaining({ name: "Mine again", base_versions: { name: 6, config_dir: 1 } }));
+});
+
+it("names the account by its current name in the subject line, and puts an untouched name field to it too", () => {
+  const { store } = render(work, () => Promise.resolve({ type: "ack", id: null }));
+  expect(document.body.textContent).toContain(work.name);
+  act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...work, name: "Renamed elsewhere", versions: { ...work.versions, name: 6 } }] } }));
+  expect(input("Name").value).toBe("Renamed elsewhere");
+  expect(document.body.querySelector("p")?.textContent).toContain("Renamed elsewhere");
+  expect(document.body.querySelector("p")?.textContent).not.toContain(work.name);
+});

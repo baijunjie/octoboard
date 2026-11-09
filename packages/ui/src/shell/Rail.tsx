@@ -25,7 +25,7 @@ import { TitledControl } from "../components/hint/TitledControl";
 import { FadedScroller } from "../components/scroll/scrollFade";
 import { BadgeAnchor, Button } from "../primitives";
 
-const TOOLTIP_STATUSES: readonly ShownStatusKind[] = ["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working", "starting", "switching", "interrupted"];
+const TOOLTIP_STATUSES: readonly ShownStatusKind[] = ["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working", "starting", "switching", "reconnecting", "interrupted"];
 
 const NEW_CONSOLE_ID = "rail-new-console";
 

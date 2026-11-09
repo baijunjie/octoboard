@@ -14,6 +14,8 @@ node_modules/
 __pycache__/
 *.py[cod]
 dist/
+# Hand-written distribution files, not build output.
+!apps/daemon/dist/
 dist-preview/
 build/
 out/

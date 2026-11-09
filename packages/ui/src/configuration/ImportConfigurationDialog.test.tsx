@@ -8,6 +8,7 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { CodedError } from "../errors/codedError";
 import { MIXED_RESULT, REVIEW } from "../fixtures/configurationReview";
 import { press as pressElement } from "../components/alerts/detailsTestSupport";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { accessibleName } from "../components/dialog/dialogTestSupport";
 import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
@@ -283,8 +284,138 @@ it("sends the document unchanged with a resolution for every project that is pla
         { console: 1, project: 0, choice: { kind: "clone" } },
       ],
       apply_settings: [],
+      settings_versions: REVIEW.settings_versions,
     },
   ]);
+});
+
+it("is back at choosing the file when the import conflicts with a setting changed since the preview", async () => {
+  const conflict = new CodedError("changed elsewhere", "write_conflict", { fields: "auto_pull_repositories", versions: '{"auto_pull_repositories":9}' });
+  const mounted = await reviewing({ reply: (body) => (body.type === "import_configuration" ? Promise.reject(conflict) : reply(body)) });
+  await press("Import");
+  expect(mounted.sent().filter((body) => body.type === "import_configuration")).toHaveLength(1);
+  expect(document.body.querySelector('[role="alertdialog"]')!.textContent).toContain("Settings changed after the file was read");
+  expect(text()).toContain("Choose an exported configuration file");
+  expect(text()).not.toContain("Work laptop");
+});
+
+/** A daemon whose later inspections read the setting `auto_pull_repositories` at version 2. */
+function inspectingNewerSettings() {
+  let inspections = 0;
+  return (body: ClientRequestBody): Promise<Event> => {
+    if (body.type !== "inspect_configuration") return reply(body);
+    inspections += 1;
+    const versions = { ...REVIEW.settings_versions, ...(inspections > 1 && { auto_pull_repositories: 2 }) };
+    return Promise.resolve({ type: "configuration_inspected", ...REVIEW, settings_versions: versions });
+  };
+}
+const movePastPreview = (store: ReturnType<typeof mount>["store"]) =>
+  act(() => store.setState({ settings: { ...store.getState().settings, versions: { ...store.getState().settings.versions, auto_pull_repositories: 2 } } }));
+
+it("reads the preview again, keeping the review's choices, when a setting the import writes moves past the preview", async () => {
+  const mounted = await reviewing({ reply: inspectingNewerSettings() });
+  await choose("Website", "Default clone directory");
+  await checkSettings();
+  const before = fields("Website")["Placed in"];
+  movePastPreview(mounted.store);
+  await act(async () => {});
+  expect(mounted.sent().filter((body) => body.type === "inspect_configuration")).toEqual([
+    { type: "inspect_configuration", document: DOCUMENT },
+    { type: "inspect_configuration", document: DOCUMENT },
+  ]);
+  expect(fields("Website")["Placed in"]).toBe(before);
+  await press("Import");
+  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", settings_versions: { auto_pull_repositories: 2 } });
+});
+
+const moveTo = (store: ReturnType<typeof mount>["store"], version: number) =>
+  act(() => store.setState({ settings: { ...store.getState().settings, versions: { ...store.getState().settings.versions, auto_pull_repositories: version } } }));
+// An unavailable button carries its reason as hidden text, so its text is more than its name.
+const importButton = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent?.endsWith("Import"))!;
+
+it("reads the preview again when a setting moves while a refresh is in flight, holding Import pending meanwhile", async () => {
+  const pending: Array<(versions: number) => void> = [];
+  let inspections = 0;
+  const mounted = await reviewing({
+    reply: (body) => {
+      if (body.type !== "inspect_configuration") return reply(body);
+      inspections += 1;
+      if (inspections === 1) return reply(body);
+      return new Promise((resolve) => pending.push((version) => resolve({ type: "configuration_inspected", ...REVIEW, settings_versions: { ...REVIEW.settings_versions, auto_pull_repositories: version } })));
+    },
+  });
+  await checkSettings();
+  moveTo(mounted.store, 2);
+  expect(pending).toHaveLength(1);
+  expect(importButton().getAttribute("aria-busy")).toBe("true");
+  // The setting moves again while the second read is out: it reads version 2, the store is at 3.
+  moveTo(mounted.store, 3);
+  expect(pending).toHaveLength(1);
+  await act(async () => pending[0]!(2));
+  expect(pending).toHaveLength(2);
+  expect(importButton().getAttribute("aria-busy")).toBe("true");
+  await act(async () => pending[1]!(3));
+  expect(inspections).toBe(3);
+  expect(importButton().getAttribute("aria-busy")).not.toBe("true");
+  await press("Import");
+  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", settings_versions: { auto_pull_repositories: 3 } });
+});
+
+it("shows a refresh that fails as an Alert in the review with its own Try again, and reads again on it", async () => {
+  let inspections = 0;
+  const mounted = await reviewing({
+    reply: (body) => {
+      if (body.type !== "inspect_configuration") return reply(body);
+      inspections += 1;
+      if (inspections === 2) return Promise.reject(new Error("offline"));
+      return Promise.resolve({ type: "configuration_inspected", ...REVIEW, settings_versions: { ...REVIEW.settings_versions, ...(inspections > 2 && { auto_pull_repositories: 2 }) } });
+    },
+  });
+  await checkSettings();
+  moveTo(mounted.store, 2);
+  await act(async () => {});
+  expect(text()).toContain("Could not read the file again");
+  expect(document.body.querySelector('[role="alertdialog"]')).toBeNull();
+  // Import waits while the review is behind: unavailable, and pressing it sends nothing.
+  expect(importButton().getAttribute("aria-disabled")).toBe("true");
+  await act(async () => importButton().click());
+  expect(mounted.sent().some((body) => body.type === "import_configuration")).toBe(false);
+  // The press explained by taking focus to the Alert's button.
+  expect(document.activeElement?.textContent).toBe("Try again");
+  // It is not tried again by itself.
+  expect(inspections).toBe(2);
+  await act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Try again")!.click());
+  expect(inspections).toBe(3);
+  expect(text()).not.toContain("Could not read the file again");
+  expect(importButton().getAttribute("aria-disabled")).toBeNull();
+  // The file's new reading is said once focus has settled.
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, AFTER_FOCUS_MOVE_DELAY_MS + 150)); });
+  expect(Array.from(document.body.querySelectorAll("[role=status]")).map((region) => region.textContent)).toContain("The file was read again because settings changed.");
+});
+
+it("offers to choose the file again where a failed refresh cannot be retried", async () => {
+  let inspections = 0;
+  const mounted = await reviewing({
+    reply: (body) => {
+      if (body.type !== "inspect_configuration") return reply(body);
+      inspections += 1;
+      if (inspections === 2) return Promise.reject(new CodedError("Not a valid path.", "invalid_path", {}));
+      return reply(body);
+    },
+  });
+  await checkSettings();
+  moveTo(mounted.store, 2);
+  await act(async () => {});
+  expect(text()).toContain("Choose the file again.");
+  expect(Array.from(document.body.querySelectorAll("button")).some((b) => b.textContent === "Try again")).toBe(false);
+  expect(importButton().getAttribute("aria-disabled")).toBe("true");
+});
+
+it("does not read the preview again for a setting the import does not write", async () => {
+  const mounted = await reviewing({ reply: inspectingNewerSettings() });
+  movePastPreview(mounted.store);
+  await act(async () => {});
+  expect(mounted.sent().filter((body) => body.type === "inspect_configuration")).toHaveLength(1);
 });
 
 it("applies the settings of the sections checked and no other", async () => {

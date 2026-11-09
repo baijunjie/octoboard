@@ -154,6 +154,7 @@ fn a_project_session_binds_only_to_an_unbound_or_bound_coordinator_of_its_own_pr
                 tags: Vec::new(),
                 description: None,
                 git_workflow: Default::default(),
+                versions: Default::default(),
             })
             .unwrap();
     }

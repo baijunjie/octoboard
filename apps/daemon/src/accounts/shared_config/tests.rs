@@ -169,6 +169,7 @@ async fn sharing_is_refused_for_a_provider_without_the_capability() {
                 share_default_config: false,
                 share_default_config_incomplete: false,
                 disabled: false,
+                versions: Default::default(),
             })
             .unwrap();
         let err = set(&fixture.state, Some(id.clone()), true)
@@ -471,6 +472,11 @@ async fn only_a_sharing_accounts_launch_is_given_the_shared_directory() {
 #[tokio::test]
 async fn a_change_that_fails_part_way_says_what_it_left_where_and_stays_incomplete() {
     use std::os::unix::fs::PermissionsExt;
+    // SAFETY: a plain query of this process's effective user. Permissions do not stop the
+    // superuser, so the change never fails there.
+    if unsafe { libc::geteuid() } == 0 {
+        return;
+    }
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
     // Nothing can be renamed or created in the account's directory.
@@ -988,6 +994,7 @@ async fn repointing_a_sharing_account_turns_its_sharing_off_first() {
                 account: "claude-a".to_string(),
                 name: None,
                 config_dir: Some(elsewhere.to_string_lossy().into_owned()),
+                base_versions: None,
             },
         )
     };
@@ -999,6 +1006,7 @@ async fn repointing_a_sharing_account_turns_its_sharing_off_first() {
             account: "claude-a".to_string(),
             name: Some("Default".to_string()),
             config_dir: Some(elsewhere.to_string_lossy().into_owned()),
+            base_versions: None,
         },
     )
     .await
@@ -1858,6 +1866,7 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
                         .to_string_lossy()
                         .into_owned(),
                 ),
+                base_versions: None,
             },
         )
         .await
@@ -2012,6 +2021,11 @@ async fn a_launch_of_an_incomplete_account_skips_the_repair() {
 #[tokio::test]
 async fn an_incomplete_account_is_given_the_shared_directory_while_its_conversations_lead_there() {
     use std::os::unix::fs::PermissionsExt;
+    // SAFETY: a plain query of this process's effective user. Permissions do not stop the
+    // superuser, so the change never fails there.
+    if unsafe { libc::geteuid() } == 0 {
+        return;
+    }
     let fixture = Fixture::new();
     let (default, account) = claude_setup(&fixture);
     let session = fixture.session("s", AgentId::CLAUDE);
@@ -2285,6 +2299,11 @@ async fn an_idle_session_does_not_block_and_is_resumed_after_the_change() {
 #[tokio::test]
 async fn an_idle_session_is_resumed_after_a_change_that_failed() {
     use std::os::unix::fs::PermissionsExt;
+    // SAFETY: a plain query of this process's effective user. Permissions do not stop the
+    // superuser, so the change never fails there.
+    if unsafe { libc::geteuid() } == 0 {
+        return;
+    }
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
     let first = idle_session(&fixture, "idle", AgentId::CLAUDE);
@@ -2508,6 +2527,7 @@ async fn removing_or_repointing_restarts_idle_sessions_and_refuses_working_ones(
                 account: "claude-a".to_string(),
                 name: None,
                 config_dir: Some(fixture.dir.join(dir).to_string_lossy().into_owned()),
+                base_versions: None,
             },
         )
     };
@@ -2593,6 +2613,11 @@ async fn change_held_at_waiting(
 #[tokio::test]
 async fn a_retry_refused_before_it_started_keeps_the_earlier_failure() {
     use std::os::unix::fs::PermissionsExt;
+    // SAFETY: a plain query of this process's effective user. Permissions do not stop the
+    // superuser, so the change never fails there.
+    if unsafe { libc::geteuid() } == 0 {
+        return;
+    }
     let fixture = Fixture::new();
     let (_, account) = claude_setup(&fixture);
     std::fs::set_permissions(&account, std::fs::Permissions::from_mode(0o555)).unwrap();

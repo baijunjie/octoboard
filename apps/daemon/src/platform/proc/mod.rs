@@ -3,9 +3,12 @@
 //! is meant (a polite request to end, or a kill) rather than by a signal number, listing what a
 //! session left behind, the table that ends every process the daemon runs when it goes down on an
 //! internal failure ([`crash`]), and reading a child's pipes within bounds. It also holds what the
-//! daemon asks of the host about itself: the host asking it to end ([`shutdown_requested`]) and
-//! the application that started it going away ([`watch_parent`]). Which processes to end, when,
-//! and with what grace are for the callers to decide; this module only does what it is asked.
+//! daemon asks of the host about itself: the host asking it to end ([`shutdown_requested`]) or to
+//! make a planned restart ([`restart_requested`], which [`request_restart`] asks for), whether a
+//! service manager restarts it on the status a planned restart ends it with
+//! ([`restarted_by_service_manager`]), the image it runs ([`running_image`]), and the application
+//! that started it going away ([`watch_parent`]). Which processes to end, when, and with what grace
+//! are for the callers to decide; this module only does what it is asked.
 //!
 //! A group or a session is told by its id, which is the leader's pid, so it is signalled or swept
 //! only while the leader is unreaped: until then its pid, and with it that id, cannot pass to
@@ -20,12 +23,38 @@ use std::process::Command;
 use std::sync::mpsc;
 use std::time::Duration;
 
+use serde::{Deserialize, Serialize};
+
 use super::proc_table;
 
 pub(crate) mod crash;
 
+/// The path of the executable this process is running, with every symlink resolved (and, on
+/// Windows, without the verbatim prefix), so that it names the image itself: what the build
+/// identity hashes and the holders are copied from. Where the host reports a path it cannot
+/// resolve, that path as it is. Resolved by the first call, which the daemon makes at its start,
+/// and the same afterwards: a link repointed later does not change which image this process is.
+pub(crate) fn running_image() -> io::Result<std::path::PathBuf> {
+    static IMAGE: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    if let Some(image) = IMAGE.get() {
+        return Ok(image.clone());
+    }
+    let exe = std::env::current_exe()?;
+    let resolved = super::names::canonical(&exe).unwrap_or(exe);
+    Ok(IMAGE.get_or_init(|| resolved).clone())
+}
+
 #[cfg(test)]
 mod contract_tests;
+
+#[cfg(target_os = "linux")]
+mod cgroup;
+
+#[cfg(all(unix, not(target_os = "linux")))]
+mod cgroup_stub;
+
+#[cfg(all(unix, not(target_os = "linux")))]
+use cgroup_stub as cgroup;
 
 #[cfg(unix)]
 mod unix;
@@ -129,7 +158,8 @@ impl SetEnv for Command {
 }
 
 /// How a process is asked to end before it is killed, by what it means on every host.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Polite {
     /// To finish what it is doing and exit: what an agent is asked, since its own shutdown work
     /// (a hook that fires on a clean teardown, a state file written through a rename) runs only

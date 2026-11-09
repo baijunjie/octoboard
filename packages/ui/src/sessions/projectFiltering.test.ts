@@ -16,7 +16,7 @@ const project = (name: string, tags: string[]): Project => ({
   tags,
   accounts: { claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } },
   launch: { claude: { model: null, effort: null }, codex: { model: null, effort: null }, grok: { model: null, effort: null } },
-  git_workflow: FOLLOWING_GIT_WORKFLOW, default_agent: null, remote_url: null, description: null,
+  git_workflow: FOLLOWING_GIT_WORKFLOW, default_agent: null, remote_url: null, description: null, versions: {},
 });
 
 describe("effectiveTags", () => {

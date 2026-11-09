@@ -8,7 +8,7 @@ import { sessionOf } from "../fixtures/builders";
 import type { ExitCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { SessionStatus, ShellTerminal } from "../protocol";
-import { quitHolders, useAppExit } from "./useAppExit";
+import { quitHolders, useAppExit, type HandoverCheck } from "./useAppExit";
 import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -56,21 +56,40 @@ describe("quitHolders", () => {
 });
 
 describe("restarting", () => {
-  function mount(sessions: Parameters<typeof quitHolders>[0], confirmQuit: ExitCapability["confirmQuit"] = async () => {}) {
+  const shell = (id: string, busy: boolean): ShellTerminal => ({ id, project_id: "p", worktree: null, cwd: "/p", title: "zsh", renamed: false, state: "running", busy, created_at: 0 });
+  /** What the daemon answers with a proven answer that lists `lists`. */
+  const known = (lists: Partial<HandoverCheck> = {}): HandoverCheck => ({ known: true, sessions: [], shellTerminals: [], unreachedShellTerminals: [], ...lists });
+  const unknown: HandoverCheck = { known: false, sessions: [], shellTerminals: [], unreachedShellTerminals: [] };
+
+  function mount(
+    sessions: Parameters<typeof quitHolders>[0],
+    options: { confirmQuit?: ExitCapability["confirmQuit"]; handover?: HandoverCheck | Error | "never"; terminals?: ShellTerminal[]; withoutCheck?: boolean } = {},
+  ) {
+    const { confirmQuit = async () => {}, handover = known(), terminals = [], withoutCheck = false } = options;
     let quitGesture = () => {};
+    const order: string[] = [];
     const exit: ExitCapability = {
       register: ({ onQuitRequested }) => {
         quitGesture = onQuitRequested;
         return () => {};
       },
       heartbeat: async () => {},
-      setSystemQuitWithoutAsking: async () => {},
-      confirmQuit: vi.fn(confirmQuit),
+      beginQuit: vi.fn(async () => void order.push("beginQuit")),
+      confirmQuit: vi.fn(async (...args: Parameters<ExitCapability["confirmQuit"]>) => {
+        order.push("confirmQuit");
+        return confirmQuit(...args);
+      }),
     };
-    const requestShutdown = vi.fn(async () => {});
+    const requestShutdown = vi.fn(async () => void order.push("shutdown"));
+    const requestPlannedStop = vi.fn(async () => {});
+    const checkHandover = vi.fn(async (_floor: string | null, _version: string | null): Promise<HandoverCheck> => {
+      if (handover === "never") return new Promise(() => {});
+      if (handover instanceof Error) throw handover;
+      return handover;
+    });
     let current!: ReturnType<typeof useAppExit>;
     const Host = () => {
-      current = useAppExit({ getSessions: () => [...sessions], requestShutdown });
+      current = useAppExit({ getSessions: () => [...sessions], getShellTerminals: () => [...terminals], requestShutdown, requestPlannedStop, checkHandover: withoutCheck ? undefined : checkHandover });
       return null;
     };
     const container = document.body.appendChild(document.createElement("div"));
@@ -80,39 +99,210 @@ describe("restarting", () => {
       container.remove();
     });
     act(() => root.render(createElement(PlatformProvider, { value: { kind: "tauri", host: BROWSER_HOST, exit } }, createElement(Host))));
-    return { exit, requestShutdown, hook: () => current, quit: () => quitGesture() };
+    return { exit, order, requestShutdown, requestPlannedStop, checkHandover, hook: () => current, quit: () => quitGesture() };
   }
 
-  it("relaunches at once when nothing is running, after shutting the daemon down", async () => {
-    const { exit, requestShutdown, hook } = mount([]);
-    await act(async () => hook().requestRestart());
-    expect(requestShutdown).toHaveBeenCalledOnce();
+  it("asks the daemon even when nothing is running, and relaunches at once on an answer that lists nothing", async () => {
+    const { exit, requestShutdown, requestPlannedStop, checkHandover, hook } = mount([]);
+    await act(async () => hook().requestRestart(null, null));
+    expect(checkHandover).toHaveBeenCalledOnce();
+    expect(requestPlannedStop).toHaveBeenCalledOnce();
+    expect(requestShutdown).not.toHaveBeenCalled();
     expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: true });
   });
 
-  it("asks first when a session is running, and relaunches only once confirmed", async () => {
-    const { exit, hook } = mount([sessionOf("s", "c", "p", "S", "working")]);
-    await act(async () => hook().requestRestart());
-    expect(hook()).toMatchObject({ exitConfirmOpen: true, exitRestarts: true });
-    expect(exit.confirmQuit).not.toHaveBeenCalled();
-    await act(async () => hook().confirmExit());
+  it("hands the update's holder floor and version to the daemon's check", async () => {
+    const { checkHandover, hook } = mount([sessionOf("s", "c", "p", "S", "working")]);
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+    expect(checkHandover).toHaveBeenCalledExactlyOnceWith("0.2.0", "0.3.0");
+  });
+
+  it("relaunches without asking when a proven answer lists nothing, whatever is running", async () => {
+    const { exit, requestPlannedStop, hook } = mount([sessionOf("s", "c", "p", "S", "working"), sessionOf("i", "c", "p", "I", "idle")], { terminals: [shell("t", true)] });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+    expect(hook().exitConfirmOpen).toBe(false);
+    expect(requestPlannedStop).toHaveBeenCalledOnce();
     expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: true });
+  });
+
+  it("asks for an idle session the daemon lists, which a quit would not ask for", async () => {
+    const { exit, hook } = mount([sessionOf("i", "c", "p", "I", "idle")], { handover: known({ sessions: ["i"] }) });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+    expect(hook()).toMatchObject({ exitConfirmOpen: true, exitRestarts: true, exitHolders: { sessions: true, terminals: false }, exitKeepsRest: true });
+    expect(hook().exitInterrupted.map((s) => s.id)).toEqual(["i"]);
+    expect(hook().exitRestartDetail).toEqual({ uncertain: false, unnamedSessions: 0, unreachedTerminals: 0 });
+    expect(exit.confirmQuit).not.toHaveBeenCalled();
+  });
+
+  it("names the idle incompatible session beside a compatible busy one the daemon does not list", async () => {
+    const { hook } = mount([sessionOf("w", "c", "p", "W", "working"), sessionOf("i", "c", "p", "I", "idle")], { handover: known({ sessions: ["i"] }) });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+    expect(hook().exitConfirmOpen).toBe(true);
+    expect(hook().exitInterrupted.map((s) => s.id)).toEqual(["i"]);
+  });
+
+  it("asks first, naming the sessions the daemon lists, and relaunches only once confirmed", async () => {
+    const working = sessionOf("s", "c", "p", "S", "working");
+    const { exit, requestPlannedStop, hook } = mount([working, sessionOf("o", "c", "p", "O", "working"), sessionOf("i", "c", "p", "I", "idle")], { handover: known({ sessions: ["s", "i"] }) });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+    expect(hook()).toMatchObject({ exitConfirmOpen: true, exitRestarts: true, exitHolders: { sessions: true, terminals: false } });
+    expect(hook().exitInterrupted.map((s) => s.id)).toEqual(["s", "i"]);
+    expect(hook().exitKeepsRest).toBe(true);
+    expect(exit.confirmQuit).not.toHaveBeenCalled();
+    expect(requestPlannedStop).not.toHaveBeenCalled();
+    await act(async () => hook().confirmExit());
+    expect(requestPlannedStop).toHaveBeenCalledOnce();
+    expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: true });
+  });
+
+  it("keeps the ids the daemon lists that this window does not know, as a count", async () => {
+    const { hook } = mount([sessionOf("s", "c", "p", "S", "working")], { handover: known({ sessions: ["s", "gone-1", "gone-2"] }) });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+    expect(hook().exitInterrupted.map((s) => s.id)).toEqual(["s"]);
+    expect(hook().exitRestartDetail.unnamedSessions).toBe(2);
+    const onlyUnknown = mount([], { handover: known({ sessions: ["gone"] }) });
+    await act(async () => onlyUnknown.hook().requestRestart("0.2.0", "0.3.0"));
+    expect(onlyUnknown.hook()).toMatchObject({ exitConfirmOpen: true, exitHolders: { sessions: true, terminals: false }, exitInterrupted: [] });
+    expect(onlyUnknown.hook().exitRestartDetail.unnamedSessions).toBe(1);
+  });
+
+  it("asks for a listed busy shell terminal, and for no other one", async () => {
+    const terminals = [shell("busy", true), shell("other", true), shell("idle", false)];
+    const asked = mount([], { handover: known({ shellTerminals: ["busy"] }), terminals });
+    await act(async () => asked.hook().requestRestart("0.2.0", "0.3.0"));
+    expect(asked.hook()).toMatchObject({ exitConfirmOpen: true, exitHolders: { sessions: false, terminals: true } });
+    const idle = mount([sessionOf("w", "c", "p", "W", "working")], { handover: known({ shellTerminals: ["idle"] }), terminals });
+    await act(async () => idle.hook().requestRestart("0.2.0", "0.3.0"));
+    expect(idle.hook().exitConfirmOpen).toBe(false);
+  });
+
+  it("cannot say everything else keeps running when a listed terminal at its prompt would end unmentioned", async () => {
+    const terminals = [shell("busy", true), shell("idle", false)];
+    const { hook } = mount([], { handover: known({ shellTerminals: ["busy", "idle"] }), terminals });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+    expect(hook()).toMatchObject({ exitConfirmOpen: true, exitKeepsRest: false });
+  });
+
+  it("asks for terminals of an unreached holder, whose busy state is not known, and cannot say the rest keeps running", async () => {
+    const { hook } = mount([], { handover: known({ unreachedShellTerminals: ["p1", "p2"] }) });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+    expect(hook()).toMatchObject({ exitConfirmOpen: true, exitHolders: { sessions: false, terminals: false }, exitKeepsRest: false });
+    expect(hook().exitRestartDetail.unreachedTerminals).toBe(2);
+  });
+
+  it("counts a listed terminal this window does not hold as a busy one, not as unreached", async () => {
+    const { hook } = mount([], { handover: known({ shellTerminals: ["gone"] }) });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+    expect(hook()).toMatchObject({ exitConfirmOpen: true, exitHolders: { sessions: false, terminals: true }, exitKeepsRest: true });
+    expect(hook().exitRestartDetail.unreachedTerminals).toBe(0);
+  });
+
+  it("names an idle listed session beside a busy listed terminal", async () => {
+    const { hook } = mount([sessionOf("i", "c", "p", "I", "idle")], { handover: known({ sessions: ["i"], shellTerminals: ["busy"] }), terminals: [shell("busy", true)] });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+    expect(hook()).toMatchObject({ exitConfirmOpen: true, exitHolders: { sessions: true, terminals: true }, exitKeepsRest: true });
+    expect(hook().exitInterrupted.map((s) => s.id)).toEqual(["i"]);
+  });
+
+  describe("without a proven answer", () => {
+    const sessions = [
+      sessionOf("w", "c", "p", "W", "working"),
+      sessionOf("i", "c", "p", "I", "idle"),
+      { ...sessionOf("p", "c", "p", "P", "idle"), holder_link: "pending" as const },
+      sessionOf("x", "c", "p", "X", "interrupted"),
+      sessionOf("a", "c", "p", "A", "archived"),
+    ];
+
+    it.each([
+      ["failure", new Error("closed")],
+      ["a answer that is not known", unknown],
+    ] as const)("warns, with uncertain copy, for every session with a running process on %s", async (_name, handover) => {
+      const { exit, hook } = mount(sessions, { handover });
+      await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+      expect(hook()).toMatchObject({ exitConfirmOpen: true, exitRestarts: true, exitKeepsRest: false });
+      expect(hook().exitInterrupted.map((s) => s.id)).toEqual(["w", "i", "p"]);
+      expect(hook().exitRestartDetail).toEqual({ uncertain: true, unnamedSessions: 0, unreachedTerminals: 0 });
+      expect(exit.confirmQuit).not.toHaveBeenCalled();
+    });
+
+    it("keeps the terminals the daemon could not reach from an answer that is not known, and asks for them alone", async () => {
+      const { hook } = mount([], { handover: { ...unknown, unreachedShellTerminals: ["p1", "p2"] } });
+      await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+      expect(hook()).toMatchObject({ exitConfirmOpen: true, exitHolders: { sessions: false, terminals: false }, exitKeepsRest: false });
+      expect(hook().exitRestartDetail).toEqual({ uncertain: true, unnamedSessions: 0, unreachedTerminals: 2 });
+    });
+
+    it("warns for an idle session alone, and for a busy shell terminal alone", async () => {
+      const idle = mount([sessionOf("i", "c", "p", "I", "idle")], { handover: unknown });
+      await act(async () => idle.hook().requestRestart("0.2.0", "0.3.0"));
+      expect(idle.hook()).toMatchObject({ exitConfirmOpen: true, exitHolders: { sessions: true, terminals: false } });
+      const busy = mount([], { handover: unknown, terminals: [shell("b", true), shell("i", false)] });
+      await act(async () => busy.hook().requestRestart("0.2.0", "0.3.0"));
+      expect(busy.hook()).toMatchObject({ exitConfirmOpen: true, exitHolders: { sessions: false, terminals: true } });
+    });
+
+    it("warns when the daemon does not answer in time, and when there is no check to ask", async () => {
+      vi.useFakeTimers();
+      onTestFinished(() => void vi.useRealTimers());
+      const slow = mount([sessionOf("i", "c", "p", "I", "idle")], { handover: "never" });
+      const pending = act(async () => slow.hook().requestRestart("0.2.0", "0.3.0"));
+      await act(async () => vi.advanceTimersByTimeAsync(2000));
+      await pending;
+      expect(slow.hook()).toMatchObject({ exitConfirmOpen: true, exitRestartDetail: { uncertain: true } });
+      const none = mount([sessionOf("i", "c", "p", "I", "idle")], { withoutCheck: true });
+      await act(async () => none.hook().requestRestart("0.2.0", "0.3.0"));
+      expect(none.hook()).toMatchObject({ exitConfirmOpen: true, exitRestartDetail: { uncertain: true } });
+    });
+
+    it("relaunches without asking when nothing has a running process or is busy", async () => {
+      const { exit, hook } = mount([sessionOf("x", "c", "p", "X", "interrupted")], { handover: new Error("closed"), terminals: [shell("t", false)] });
+      await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+      expect(hook().exitConfirmOpen).toBe(false);
+      expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: true });
+    });
+  });
+
+  it("tells the shell the quit has begun, then shuts the daemon down, without asking the handover check", async () => {
+    const { exit, order, requestShutdown, requestPlannedStop, checkHandover, hook, quit } = mount([sessionOf("s", "c", "p", "S", "working")]);
+    await act(async () => quit());
+    expect(hook()).toMatchObject({ exitConfirmOpen: true, exitRestarts: false, exitInterrupted: [] });
+    await act(async () => hook().confirmExit());
+    expect(checkHandover).not.toHaveBeenCalled();
+    expect(order).toEqual(["beginQuit", "shutdown", "confirmQuit"]);
+    expect(requestShutdown).toHaveBeenCalledOnce();
+    expect(requestPlannedStop).not.toHaveBeenCalled();
+    expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: false });
+  });
+
+  it("does not tell the shell a quit has begun for a restart", async () => {
+    const { exit, hook } = mount([]);
+    await act(async () => hook().requestRestart(null, null));
+    expect(exit.beginQuit).not.toHaveBeenCalled();
+  });
+
+  it("quits even when the shell cannot record the quit", async () => {
+    const { exit, hook } = mount([]);
+    vi.mocked(exit.beginQuit).mockRejectedValueOnce(new Error("no"));
+    await act(async () => hook().requestQuit());
+    expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: false });
   });
 
   it("leaves everything running when the user cancels the confirmation", async () => {
-    const { exit, requestShutdown, hook } = mount([sessionOf("s", "c", "p", "S", "working")]);
-    await act(async () => hook().requestRestart());
+    const { exit, requestShutdown, requestPlannedStop, hook } = mount([sessionOf("s", "c", "p", "S", "working")], { handover: known({ sessions: ["s"] }) });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
     act(() => hook().closeExitConfirm());
     expect(hook().exitConfirmOpen).toBe(false);
     expect(requestShutdown).not.toHaveBeenCalled();
+    expect(requestPlannedStop).not.toHaveBeenCalled();
     expect(exit.confirmQuit).not.toHaveBeenCalled();
   });
 
   it("turns an open restart confirmation into a quit when a quit is asked for meanwhile", async () => {
-    const { exit, hook, quit } = mount([sessionOf("s", "c", "p", "S", "working")]);
-    await act(async () => hook().requestRestart());
+    const { exit, hook, quit } = mount([sessionOf("s", "c", "p", "S", "working")], { handover: known({ sessions: ["s"] }) });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
     await act(async () => quit());
     expect(hook().exitRestarts).toBe(false);
+    expect(hook().exitInterrupted).toEqual([]);
     await act(async () => hook().confirmExit());
     expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: false });
   });
@@ -121,8 +311,8 @@ describe("restarting", () => {
     ["restart", "Could not restart", "Octoboard kept running instead of relaunching. Quit it and open it again."],
     ["quit", "Could not quit", "Octoboard kept running instead of ending. Try quitting it again."],
   ] as const)("says in its own words that a %s did not happen, with the shell's text behind Details", async (action, title, message) => {
-    const { hook, quit } = mount([], async () => { throw new Error("ipc: no such window"); });
-    await act(async () => (action === "restart" ? hook().requestRestart() : quit()));
+    const { hook, quit } = mount([], { confirmQuit: async () => { throw new Error("ipc: no such window"); } });
+    await act(async () => (action === "restart" ? hook().requestRestart(null, null) : quit()));
     const [alert] = errorAlerts.getSnapshot();
     onTestFinished(() => act(() => errorAlerts.acknowledge()));
     expect(alert.title).toBe(title);
@@ -143,7 +333,7 @@ describe("the daemon exiting by itself", () => {
         return () => {};
       },
       heartbeat: async () => {},
-      setSystemQuitWithoutAsking: async () => {},
+      beginQuit: async () => {},
       confirmQuit: async () => {},
     };
     const Host = () => {

@@ -19,7 +19,7 @@ use crate::messaging::texts;
 use crate::processes::ledger::HeldForLaunch;
 use crate::protocol::{AgentId, ProcessTree, Session, SessionStatus};
 use crate::records::switch_continue;
-use crate::state::AppState;
+use crate::state::{AppState, ChangeAdmission};
 
 use super::launch::{
     came_up, stop_process_listing_trees, wait_until_down_within, SWITCH_STOP_TIMEOUT,
@@ -65,6 +65,10 @@ pub(super) async fn wait_until_stopped(state: &Arc<AppState>, id: &str) -> Resul
 pub(crate) struct Failed {
     pub error: anyhow::Error,
     pub ended_process: bool,
+    /// The restart's admission past the handover barrier, still held when it ended the process:
+    /// the caller that brings the session back up (a restore) steps with it, and a planned stop
+    /// goes on waiting for it. `None` when the process was not ended.
+    pub admission: Option<ChangeAdmission>,
 }
 
 impl<E: Into<anyhow::Error>> From<E> for Failed {
@@ -72,6 +76,7 @@ impl<E: Into<anyhow::Error>> From<E> for Failed {
         Self {
             error: error.into(),
             ended_process: false,
+            admission: None,
         }
     }
 }
@@ -91,9 +96,29 @@ pub(crate) async fn run<T, Fut>(
 where
     Fut: Future<Output = Result<T>>,
 {
+    // Refused before the process is ended once a planned stop has raised its handover barrier.
+    let admission = state.admit_change()?;
+    run_admitted(state, admission, id, did_not_stop, after_stop).await
+}
+
+/// [`run`] under `admission`, which the caller took past the handover barrier before the steps of
+/// its own that commit it to the restart. Held through the relaunch, so that a planned stop waits
+/// for the whole restart rather than leave the session down, and handed back with a failure that
+/// left it down, for the restore.
+pub(crate) async fn run_admitted<T, Fut>(
+    state: &Arc<AppState>,
+    admission: ChangeAdmission,
+    id: &str,
+    did_not_stop: impl FnOnce(anyhow::Error) -> anyhow::Error,
+    after_stop: impl FnOnce(bool, Vec<ProcessTree>) -> Fut,
+) -> Result<T, Failed>
+where
+    Fut: Future<Output = Result<T>>,
+{
     let not_ended = |error| Failed {
         error,
         ended_process: false,
+        admission: None,
     };
     let (held, ended_a_process, running) = stop_carrying_processes(state, id)
         .await
@@ -111,6 +136,7 @@ where
     restarted.map_err(|error| Failed {
         error,
         ended_process: ended_a_process,
+        admission: ended_a_process.then_some(admission),
     })
 }
 

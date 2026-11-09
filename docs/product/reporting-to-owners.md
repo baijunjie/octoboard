@@ -52,7 +52,10 @@ Reporting is refused, or fails without accepting the report, when:
   report a second time;
 - the session is a coordinator with a parent, the report has `status: done` and no open items (whatever owner items it
   has), and a session bound to it is not archived, unless a lock blocks automatic archiving (see "Automatic archiving"
-  below). The reason names those sessions. Its other reports go through, and none of them archives it.
+  below). The reason names those sessions. Its other reports go through, and none of them archives it;
+- the report would archive the session and the daemon has begun a planned stop: it is refused whole with
+  `daemon_shutting_down`, nothing in it delivered, to be made again once the daemon is back (see "While the terminals
+  are handed over" in `docs/product/application-lifecycle.md`).
 
 If a Codex owner's own queue may have accepted the report but cannot confirm it, reporting returns the error
 `message_acceptance_unconfirmed` and the reporting session is not archived. The error tells the reporting session that

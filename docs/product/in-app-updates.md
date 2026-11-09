@@ -61,10 +61,15 @@ manifests for good: they hold only the `darwin` entries, and existing users neve
 released before the Windows application existed is offered later releases from them as any other is. Windows, which
 has its own pair, is never mixed into them.
 
-A manifest holds the version it announces, its release notes, its publication date and the address and signature of
-the update for its platform: the macOS manifests, under both `darwin-aarch64` and `darwin-x86_64`, those of the same
-update archive (a release is one universal build serving both Mac architectures); the Windows manifests, under
-`windows-x86_64`, those of the NSIS installer, which is the Windows update itself. The update's address is its file on
+A manifest holds the version it announces, its release notes, its publication date, its holder floor and the address
+and signature of the update for its platform: the macOS manifests, under both `darwin-aarch64` and `darwin-x86_64`,
+those of the same update archive (a release is one universal build serving both Mac architectures); the Windows
+manifests, under `windows-x86_64`, those of the NSIS installer, which is the Windows update itself. The **holder
+floor**, `holder_floor`, is the oldest version whose process holders the announced version's daemon takes over (see
+"Holders of other builds" in `docs/product/process-holders.md`), as the release names it; the running application
+reads it with the update and, with the announced version, tells which sessions a restart into the update would
+interrupt (see "Restarting" in `docs/product/application-lifecycle.md`). A manifest that names none, or names it as anything but text, gives no holder
+floor. The update's address is its file on
 the versioned release (below), fetched over HTTPS as the manifest is, and its signature is checked against the update
 key built into the application, one key for both platforms (see "Downloading and installing" below). Every release is
 written to a platform's beta manifest, and a release without a prerelease suffix to its stable manifest too, which is
@@ -196,7 +201,8 @@ already the new version's; the window says so and asks for the restart (see "Sta
 a daemon that ends unexpectedly is started again under the same rules as when no update is waiting.
 
 The restart is suggested, never forced: **Restart now** applies it at once, and quitting Octoboard in any ordinary way
-and starting it again later applies it just the same. On Windows every quit of Octoboard while it holds a downloaded
+and starting it again later applies it just the same, except that only **Restart now** keeps the sessions running (see
+"Restarting to apply an update" below): a quit interrupts them as any quit does. On Windows every quit of Octoboard while it holds a downloaded
 update installs it on the way out, without starting Octoboard again: a quit it confirms itself (its Quit, or closing the
 window when it does not run in the background), and equally a quit that skips the confirmation — one made while the
 daemon is not running, the second quit gesture within 2 seconds that forces a quit through (see "Quitting when the
@@ -204,7 +210,8 @@ window has stopped responding" in `docs/product/application-lifecycle.md`), or o
 enough to ask. Each stops the daemon first, then runs the installer in its passive mode, which shows its progress; a quit
 made while the installer is being started waits for it. If the installer cannot be started, Octoboard just ends and the
 update stays unapplied, offered again by a later check. The system ending the user's session — signing out or shutting
-down Windows — is not a quit and installs nothing: Octoboard just ends, and the update is offered again by the
+down Windows — is not a quit and installs nothing: Octoboard stops its daemon as the session ends (see "When the system
+ends the session" in `docs/product/application-lifecycle.md`) and ends, and the update is offered again by the
 automatic check after the next start (see "When the application checks" above).
 
 An update is never installed twice: Download and install does nothing while a check or a download is under way, or once
@@ -212,10 +219,15 @@ an update is installed.
 
 ## Restarting to apply an update
 
-**Restart now**, in the notice or in Settings, exists only once an update is installed. It ends Octoboard the way a
-confirmed quit does, asking the same confirmation when sessions or busy terminals would be ended, and starts it again
-(see "Restarting" in `docs/product/application-lifecycle.md`). On Windows the daemon is stopped first and the passive
-installer then starts the new version itself.
+**Restart now**, in the notice or in Settings, exists only once an update is installed. It restarts Octoboard into the
+new version and hands every session and shell terminal over to it, running, instead of ending them: it asks for
+confirmation whenever the new version would not take over a running session, idle ones included, a busy shell
+terminal or a shell terminal that cannot be reached — one whose process holder is older than the update's holder
+floor, say — or when that cannot be checked and something running may be interrupted, and names the sessions it would
+or may interrupt (see "Restarting" in `docs/product/application-lifecycle.md`). From the press until the confirmation is open
+or the restart is under way, while the window asks the daemon what the restart would not carry over, the button shows
+a pending spinner and a second press does nothing. On Windows the daemon is stopped first, with its planned stop, and
+the passive installer then starts the new version itself.
 
 ## When something fails
 
@@ -258,7 +270,8 @@ Settings' About section holds two rows for updates, in the desktop application o
 
 Beside it one button moves the update on: **Check for updates** until a newer version is found, showing a pending
 spinner while a check runs; then **Download and install**, showing the spinner while a check or the download is under
-way; then **Restart now** once the update is installed.
+way; then **Restart now** once the update is installed, showing the spinner as "Restarting to apply an update" above
+says.
 
 Before that button, a **What is new** link, drawn as a button, opens in the browser the GitHub release page of the
 version the row's sentence is about, `https://github.com/baijunjie/octoboard/releases/tag/desktop-v<version>` (see

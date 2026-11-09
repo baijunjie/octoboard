@@ -1,5 +1,8 @@
 //! The daemon's log file, `daemon.log` under `paths::logs_dir()`: a writer for the tracing
 //! subscriber that rotates by size, so the log of a daemon that runs for months stays bounded.
+//! The holders log the same way, each to a file of its own (`holder-<id>.log`,
+//! [`LogFile::open_named`]); the files of holders long gone are removed by
+//! [`LogFile::remove_stale`], never one of a holder that still runs.
 //!
 //! Nothing here ever reports a failure. The log is also how a failure is told, so a log that cannot
 //! be written (a full disk, a directory that cannot be created, a file removed underneath it) is
@@ -36,6 +39,8 @@ struct State {
     /// Whether writes reach the file. They are dropped while it is `false`.
     enabled: bool,
     dir: PathBuf,
+    /// The live file's name, which the rotated files extend with `.1`, `.2`, ….
+    name: String,
     max_bytes: u64,
     rotated_files: u32,
     /// The open live file and its size, or `None` before the first write and after a failure.
@@ -46,6 +51,39 @@ impl LogFile {
     /// The daemon's log, in `paths::logs_dir()`, writing nothing until [`LogFile::enable`].
     pub fn open() -> Self {
         Self::new(crate::paths::logs_dir(), MAX_BYTES, ROTATED_FILES).disabled()
+    }
+
+    /// The log of a process other than the daemon, `name` in `paths::logs_dir()`, writing nothing
+    /// until [`LogFile::enable`].
+    pub fn open_named(name: &str) -> Self {
+        let log = Self::new(crate::paths::logs_dir(), MAX_BYTES, ROTATED_FILES).disabled();
+        log.state().name = name.to_string();
+        log
+    }
+
+    /// Removes the log files in `paths::logs_dir()` whose names start with `prefix` and that have
+    /// not been written for `age`, for the logs of processes that come and go under names of their
+    /// own, except those `in_use` says (by file name) belong to a process that still runs: one
+    /// that is quiet is not gone, and a log removed under its writer is opened again empty. A
+    /// file that cannot be removed is left.
+    pub fn remove_stale(prefix: &str, age: std::time::Duration, in_use: impl Fn(&str) -> bool) {
+        let Ok(entries) = fs::read_dir(crate::paths::logs_dir()) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let stale = name.starts_with(prefix)
+                && !in_use(&name)
+                && entry
+                    .metadata()
+                    .and_then(|metadata| metadata.modified())
+                    .ok()
+                    .and_then(|modified| modified.elapsed().ok())
+                    .is_some_and(|elapsed| elapsed > age);
+            if stale {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
     }
 
     /// Starts writing to the file; the writes before it are not kept.
@@ -63,6 +101,7 @@ impl LogFile {
             state: Arc::new(Mutex::new(State {
                 enabled: true,
                 dir,
+                name: FILE_NAME.to_string(),
                 max_bytes,
                 rotated_files,
                 file: None,
@@ -78,8 +117,8 @@ impl LogFile {
 impl State {
     fn path(&self, rotation: u32) -> PathBuf {
         match rotation {
-            0 => self.dir.join(FILE_NAME),
-            n => self.dir.join(format!("{FILE_NAME}.{n}")),
+            0 => self.dir.join(&self.name),
+            n => self.dir.join(format!("{}.{n}", self.name)),
         }
     }
 

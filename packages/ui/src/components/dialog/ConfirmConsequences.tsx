@@ -21,8 +21,9 @@ function SessionStatusIcon({ session }: { session: Session }): React.ReactElemen
 }
 
 /** The sessions a confirmation names, each with its agent's icon and title, plus a status glyph for live
- * sessions; archived sessions are already identified by the wording of what heads the list. */
-export function SessionList({ sessions }: { sessions: Session[] }): React.ReactElement {
+ * sessions; archived sessions are already identified by the wording of what heads the list. `more` is a last row, such
+ * as for the sessions left out, set level with the titles above it. */
+export function SessionList({ sessions, more }: { sessions: Session[]; more?: string }): React.ReactElement {
   const t = useT();
   const sessionsRef = useListMotion<HTMLUListElement>();
   const accounts = useDaemonStore((s) => s.settings.accounts);
@@ -43,6 +44,8 @@ export function SessionList({ sessions }: { sessions: Session[] }): React.ReactE
           </FadeOverflow>
         </li>
       ))}
+      {/* Level with the titles: past a status glyph and an agent icon, or the icon alone for archived sessions. */}
+      {more && <li data-list-motion="more" className={sessions.some((session) => session.status !== "archived") ? "ps-12" : "ps-6"}>{more}</li>}
     </ul>
   );
 }
@@ -60,17 +63,17 @@ export function ConsequenceLines({ lines }: { lines: ConsequenceLine[] }): React
 
 /** What a confirmation says it is about to take along or take away, as body text under its options:
  * `title` when there is one, over the list of sessions when there is one to show (`SessionList`),
- * and `lines`: further consequences, such as one for each option the user has ticked.
- * Nothing at all when there is neither a title nor a line. `titleId` names the title for a control it describes, and
- * `announceTitle` speaks it once as the consequences appear, after the move of focus or the state change that brought
- * them (`ErrorAlert`'s `announceDelayMs`). */
-export function ConfirmConsequences({ title, titleId, announceTitle = false, sessions, lines = [] }: { title?: string; titleId?: string; announceTitle?: boolean; sessions?: Session[]; lines?: ConsequenceLine[] }): React.ReactElement | null {
+ * and `lines`: further consequences, such as one for each option the user has ticked; `sessionsMore` ends the list
+ * of sessions with a row of its own. Nothing at all when there is no title, session or line. `titleId` names the title
+ * for a control it describes, and `announceTitle` speaks it once as the consequences appear, after the move of focus or
+ * the state change that brought them (`ErrorAlert`'s `announceDelayMs`). */
+export function ConfirmConsequences({ title, titleId, announceTitle = false, sessions, sessionsMore, lines = [] }: { title?: string; titleId?: string; announceTitle?: boolean; sessions?: Session[]; sessionsMore?: string; lines?: ConsequenceLine[] }): React.ReactElement | null {
   const announcement = useAlertAnnouncement(announceTitle, undefined, announceTitle ? AFTER_FOCUS_MOVE_DELAY_MS : undefined);
-  if (!title && lines.length === 0) return null;
+  if (!title && lines.length === 0 && !sessions?.length) return null;
   return (
     <div className="flex min-w-0 flex-col gap-2 text-sm">
       {title && <p id={titleId} key={announceTitle ? announcement.key : undefined} role={announceTitle ? announcement.role : undefined}>{title}</p>}
-      {sessions && <SessionList sessions={sessions} />}
+      {sessions && <SessionList sessions={sessions} more={sessionsMore} />}
       <ConsequenceLines lines={lines} />
     </div>
   );

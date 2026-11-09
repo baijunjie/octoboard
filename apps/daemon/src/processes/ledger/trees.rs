@@ -12,11 +12,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use super::attribute::{keep, Attributed, Launch, ENDED};
+use super::attribute::{keep, Attributed, Book, Launch, ENDED};
 use super::looks::Roots;
 use super::table::{self, Cwd, Identity, Table};
 use super::ProcessLedger;
-use crate::platform::proc::{self, ContainerId, ProcessId};
+use crate::platform::proc::{self, ContainerId, Containment, ProcessId};
 use crate::protocol::{ProcessCount, ProcessTree, UnkeepableReason, UnstoppedProcess};
 
 /// The longest command a tree reports, in bytes.
@@ -108,11 +108,12 @@ impl ProcessLedger {
     ///
     /// Left behind in a set of directories — a project's, its worktrees included — is a process
     /// of the daemon's user that no launch being followed has and that is not kept, working in a
-    /// directory under one of them that has been removed. The daemon's own direct children (the
-    /// user's shell terminals among them) and what runs in the terminal sessions they lead are
-    /// the user's, and never left behind. Kept under a project is a process the user kept from a
-    /// tree of one of its sessions or left behind in it, or one that descends from such a process
-    /// or sits in its terminal session. Neither is stopped unless asked to.
+    /// directory under one of them that has been removed. The direct children of the daemon and of
+    /// the holders (the user's shell terminals among them) and what runs in the terminal
+    /// sessions they lead are the user's, and never left behind. Kept under a project is a
+    /// process the user kept from a tree of one of its sessions or left behind in it, or one that
+    /// descends from such a process or sits in its terminal session. Neither is stopped unless
+    /// asked to.
     pub fn trees_of_project(
         &self,
         sessions: &[String],
@@ -410,6 +411,7 @@ impl ProcessLedger {
             Some(&roots),
         );
         let mut kept = Vec::new();
+        let mut kept_members: Vec<Identity> = Vec::new();
         let mut book = self.book();
         for (id, members) in named {
             // Checked again under the lock the keep is made under: a launch that began ending
@@ -443,6 +445,7 @@ impl ProcessLedger {
             for member in members {
                 if let Some(proc) = table.get(member.pid).filter(|proc| proc.id == member) {
                     keep(&mut book, &table, proc, Some(project.clone()));
+                    kept_members.push(member);
                 }
             }
             kept.push(id);
@@ -451,11 +454,26 @@ impl ProcessLedger {
             book.dirty = true;
         }
         drop(book);
+        self.release_kept(&kept_members);
         if !kept.is_empty() {
             self.forget_lists();
         }
         self.persist(true);
         Ok(kept)
+    }
+
+    /// Moves the processes `ids`, just kept, out of the groups of every launch the book follows,
+    /// those of ended launches included: so that what they start from here on is not born in a
+    /// group and the end of one does not reach them. **Blocks**, for a moment.
+    pub(super) fn release_kept(&self, ids: &[Identity]) {
+        if ids.is_empty() {
+            return;
+        }
+        // Listed first, so the book is not locked while the processes are moved.
+        let containments = all_containments(&self.book());
+        for containment in containments {
+            containment.release(ids, None);
+        }
     }
 
     /// Stops the processes of the project `project`, the trees no session owns: those left behind
@@ -553,7 +571,17 @@ impl ProcessLedger {
         for (launch, members) in &by_launch {
             book.transfer(launch, &receiving, Some((members, &table)));
         }
+        let into = book
+            .launches
+            .get(&receiving)
+            .and_then(|launch| launch.containments.first().cloned());
         drop(book);
+        // Into the receiving launch's group, so that what they start from here on is born in it
+        // and the end of the launch they came from does not reach them.
+        if let Some(into) = into {
+            let moved: Vec<Identity> = by_launch.values().flatten().copied().collect();
+            into.adopt(&moved);
+        }
         tracing::info!(
             from,
             to,
@@ -929,6 +957,14 @@ impl ProcessLedger {
     }
 }
 
+/// The containments of every launch the book follows, those of ended launches included.
+fn all_containments(book: &Book) -> Vec<Arc<Containment>> {
+    book.launches
+        .values()
+        .flat_map(|launch| launch.containments.iter().cloned())
+        .collect()
+}
+
 /// `members` grouped into trees by `table`'s parent chains: each member under the furthest
 /// ancestor whose chain down to it is all members.
 fn group(members: &HashSet<Identity>, table: &Table) -> BTreeMap<Identity, Vec<Identity>> {
@@ -1051,6 +1087,40 @@ mod tests {
         {
             let mut book = ledger.book();
             for proc in [&helper, &task] {
+                book.kept.insert(proc.id);
+                book.kept_projects.insert(proc.id, "project".to_string());
+            }
+        }
+        assert_eq!(
+            ledger.kept_members(&table, Some("project")),
+            HashSet::from([task.id])
+        );
+    }
+
+    #[test]
+    fn a_previously_kept_internal_of_a_holder_is_not_listed_as_a_project_process() {
+        let dir = crate::test_support::ScratchDir::new("ledger-kept-holder-internal");
+        let ledger = ProcessLedger::new(&dir);
+        let proc = |pid: u32, ppid: u32, sid: u32| Proc {
+            id: Identity {
+                pid: ProcessId(pid),
+                start_micros: 1000 + pid as u64,
+            },
+            ppid: ProcessId(ppid),
+            sid: Some(ContainerId(sid)),
+            comm: String::new(),
+        };
+        let holder = proc(250, 1, 250);
+        // A shell terminal the holder runs, what it started, and a task in a session of its own.
+        let shell = proc(300, 250, 300);
+        let helper = proc(301, 300, 300);
+        let task = proc(302, 300, 302);
+        let table =
+            Table::from_procs([holder.clone(), shell.clone(), helper.clone(), task.clone()])
+                .with_holders([holder.id]);
+        {
+            let mut book = ledger.book();
+            for proc in [&shell, &helper, &task] {
                 book.kept.insert(proc.id);
                 book.kept_projects.insert(proc.id, "project".to_string());
             }

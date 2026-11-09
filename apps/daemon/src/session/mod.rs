@@ -15,6 +15,7 @@ mod draft;
 pub(crate) mod input_box;
 pub(crate) mod interrupt;
 mod paste_apart;
+mod program_status;
 pub(crate) mod screen;
 mod swap;
 pub(crate) mod term;
@@ -35,7 +36,7 @@ use std::time::{Duration, Instant};
 pub(crate) use swap::{HeldFragment, RecoveryPhase};
 
 use crate::platform::proc::Polite;
-use crate::platform::term::{Input, PartialWrite, Spawned};
+use crate::platform::term::{Input, PartialWrite};
 use crate::protocol::AgentId;
 use crate::session::trust::{TrustCarrier, TrustState};
 use crate::terminal::input_class::is_terminal_protocol;
@@ -157,6 +158,11 @@ pub struct LiveSession {
     /// this process's end: the end is recorded and the owner, if it was to be told, has been sent
     /// the notice (written to it or queued for it) or could not be.
     exit_settled: AtomicBool,
+    /// The agent's hooks and signals give no status, so the program's own reports (OSC 7501) do;
+    /// see [`program_status`].
+    status_from_reports: bool,
+    /// The moves of the program's root status record on their way to the session's status.
+    status_reports: Arc<program_status::StatusReports>,
 }
 
 impl std::ops::Deref for LiveSession {
@@ -184,7 +190,7 @@ pub struct NewSession {
     pub agent: AgentId,
     /// See `LiveSession::launch_id`.
     pub launch_id: String,
-    pub spawned: Spawned,
+    pub spawned: crate::terminal::backend::Started,
     pub transport: Option<Arc<dyn term::MessageTransport>>,
     /// Real agents have a composer; stand-in PTYs can explicitly opt out of its screen check.
     pub checks_composer: bool,
@@ -208,6 +214,10 @@ impl LiveSession {
             kill_session_leftovers: true,
             before_scratch_removal: session.before_scratch_removal,
         });
+        // Every session's terminal supports the protocol: it keeps the reports and answers their
+        // support query. Only an agent with no status of its own takes its status from them.
+        pty.keep_program_status();
+        let status_from_reports = !crate::adapter::provider(session.agent).has_status_integration();
         let host_renders = crate::platform::term::facts().host_renders;
         if host_renders {
             pty.report_titles();
@@ -245,6 +255,8 @@ impl LiveSession {
             ended_on_purpose: AtomicBool::new(false),
             watched_under_claim: AtomicBool::new(false),
             exit_settled: AtomicBool::new(false),
+            status_from_reports,
+            status_reports: Arc::default(),
         }
     }
 
@@ -275,6 +287,9 @@ impl LiveSession {
         observer.state = Arc::downgrade(state);
         observer.runtime = tokio::runtime::Handle::try_current().ok();
         observer.publish(self);
+        drop(observer);
+        // Reports the program made before then are applied now.
+        self.apply_program_status();
     }
 
     /// Consult hook and lifecycle holds without retaining the observer lock across state reads.
@@ -373,8 +388,7 @@ impl LiveSession {
         self.action_required.swap(waiting, Ordering::AcqRel) != waiting
     }
 
-    /// Called from the PTY reader thread for every chunk read. Blocks while a slow client catches
-    /// up; see [`PtyCore::push_output`].
+    /// Called from the PTY reader thread for every chunk read; see [`PtyCore::push_output`].
     pub fn on_output(&self, data: &[u8]) {
         // Where the host renders, the title the chunk completes is known once the parsed screen
         // has taken it in, which is still before any client is handed the chunk.
@@ -406,6 +420,7 @@ impl LiveSession {
         if titled {
             self.trust.note_title();
         }
+        self.note_program_status();
         self.schedule_input_recovery();
     }
 
@@ -495,7 +510,7 @@ impl LiveSession {
         if self.pty.is_frozen() {
             return Err(swap::archived_refusal());
         }
-        self.pty.write_locked(&input, data)
+        self.pty.write_reply_locked(&input, data)
     }
 
     fn write_raw_input(&self, data: &[u8], user: bool) -> Result<(), PartialWrite> {

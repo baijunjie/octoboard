@@ -17,12 +17,15 @@ import { ErrorAlert, type AlertStatus } from "./ErrorAlert";
  * keeps the button where it is, unavailable, while the retry runs, so focus on it is not lost; the failure stays shown
  * until the retry answers. `announce`, `announceDelayMs` and `attempt` (which makes a failure that repeats itself in
  * the same words announce again) are `ErrorAlert`'s. The button never takes focus from a press, so a retry started with
- * the pointer leaves focus where it was. */
+ * the pointer leaves focus where it was. `otherwise` is what the Alert says and offers in place of Try again where
+ * there is none, because no retry can change the failure or `onRetry` is not given: the one thing to do about it, and
+ * the button that does it, after any link out. */
 export function FailureAlert({
   textId,
   title,
   message,
   onRetry,
+  otherwise,
   pending = false,
   announce,
   attempt,
@@ -35,6 +38,7 @@ export function FailureAlert({
   title: React.ReactNode;
   message: ErrorPresentation;
   onRetry?: () => void;
+  otherwise?: { remedy: React.ReactNode; action: React.ReactNode };
   pending?: boolean;
   announce: boolean;
   attempt?: number;
@@ -60,9 +64,9 @@ export function FailureAlert({
       announceKey={attempt}
       announceDelayMs={announceDelayMs}
       status={status}
-      remedy={errorRemedy(message)}
+      remedy={retry || !otherwise ? errorRemedy(message) : otherwise.remedy}
       details={errorDetails(message)}
-      actions={(link || retry) && <>{link}{retry}</>}
+      actions={retry || !otherwise ? (link || retry) && <>{link}{retry}</> : <>{link}{otherwise.action}</>}
     >
       <DaemonErrorMessage error={message} part="summary" />
     </ErrorAlert>

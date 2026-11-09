@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { describe, expect, it } from "vitest";
 
-import { gitStatusOf, projectOf, shellTerminalOf, snapshotState } from "./builders";
+import { SETTINGS_VERSIONS, gitStatusOf, projectOf, shellTerminalOf, snapshotState } from "./builders";
 
 describe("snapshotState", () => {
   it("carries the git statuses map through, keyed by project id", () => {
@@ -18,14 +18,15 @@ describe("snapshotState", () => {
     expect(windows.homeDir).toBe("C:\\Users\\dev");
   });
 
-  it("defaults to an empty git statuses map and auto-pull off, and threads a given settings object through", () => {
+  it("defaults to an empty git statuses map and auto-pull off, and threads a given settings object through with every field's version", () => {
     const empty = snapshotState({});
     expect(empty.gitStatuses).toEqual(new Map());
-    expect(empty.settings).toEqual({ ...DEFAULT_SETTINGS, added_agents: null, default_clone_dir: "/Users/dev/Projects", accounts: [] });
+    expect(empty.settings).toEqual({ ...DEFAULT_SETTINGS, added_agents: null, default_clone_dir: "/Users/dev/Projects", accounts: [], versions: SETTINGS_VERSIONS });
 
     expect(
       snapshotState({ settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: [], default_clone_dir: "/p", accounts: [] } }).settings,
-    ).toEqual({ ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: [], default_clone_dir: "/p", accounts: [] });
+    ).toEqual({ ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: [], default_clone_dir: "/p", accounts: [], versions: SETTINGS_VERSIONS });
+    expect(snapshotState({ settings: { ...DEFAULT_SETTINGS, versions: { default_clone_dir: 7 } } }).settings?.versions).toEqual({ ...SETTINGS_VERSIONS, default_clone_dir: 7 });
   });
 
   it("carries the shell terminals map through, keyed by terminal id, and defaults to none", () => {

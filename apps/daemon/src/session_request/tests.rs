@@ -43,6 +43,7 @@ fn console(id: &str, dir: &ScratchDir) -> Console {
         icon: None,
         console_session_prompt: None,
         created_at: 0,
+        versions: Default::default(),
     }
 }
 
@@ -63,6 +64,7 @@ fn project(id: &str, console_id: &str, name: &str) -> Project {
         tags: Vec::new(),
         description: None,
         git_workflow: Default::default(),
+        versions: Default::default(),
     }
 }
 

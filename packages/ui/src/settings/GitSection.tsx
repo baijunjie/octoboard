@@ -8,27 +8,27 @@ import { OptionSelect } from "../components/form/OptionSelect";
 import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES, GIT_WORKFLOW_ITEMS } from "../git/gitWorkflow";
 import { Message, useT } from "../i18n/react";
 import type { GitDelivery, GitDevelopment, GitWorkflowSettingsChanges } from "../protocol";
-import { useDaemon, useDaemonStore } from "../store";
+import { useDaemonStore } from "../store";
 import { CloneDirSetting } from "./CloneDirSetting";
 import { DaemonSwitchSetting } from "./DaemonSwitchSetting";
 import { SettingRow, SwitchSettingRow } from "./SettingRow";
 import { SettingsGroup } from "./SettingsGroup";
-import { alertAppDataFailure } from "../components/alerts/raiseError";
+import { useSettingsWrite } from "./useSettingsWrite";
 
 /** The Git settings, in three groups: the repository (where clones go, whether branches are pulled), development (see
  * `Settings.git_workflow` in protocol.generated.ts: where a project session develops, then how it merges and delivers finished
- * work) and protection (the revert gate). Each workflow change sends only its own item. A project may hold its own
+ * work) and protection (the revert gate). Each workflow change sends only its own item, based on that item's version in
+ * the store, so another client's change to it is refused as a conflict and the control shows it. A project may hold its own
  * value for any of the workflow items, which the project dialog sets. */
 export function GitSection(): React.ReactElement {
   const t = useT();
-  const { request } = useDaemon();
+  const write = useSettingsWrite();
   const listRef = useListMotion<HTMLDivElement>({ fitHeight: true });
   const gitWorkflow = useDaemonStore((s) => s.settings.git_workflow);
   // Another window, or an agent's update, can put development on the current branch while focus is on a row it hides.
   const handoff = useFocusHandoff(() => listRef.current?.querySelector("button")?.focus());
 
-  const change = (changes: GitWorkflowSettingsChanges) =>
-    request({ type: "update_settings", git_workflow: changes }).catch(alertAppDataFailure(t("settings.saveFailedTitle")));
+  const change = (changes: GitWorkflowSettingsChanges) => write({ git_workflow: changes }, Object.keys(changes).map((item) => `git_workflow.${item}`));
 
   return (
     <>

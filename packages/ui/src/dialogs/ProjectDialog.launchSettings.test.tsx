@@ -100,10 +100,8 @@ it("sends only what changed when editing", async () => {
   expect(sentOf(pending, "update_project")).toEqual({
     type: "update_project",
     project: "p-1",
-    name: "Site",
-    default_agent: "claude",
     launch: { claude: { effort: "low" } },
-    tags: [],
+    base_versions: { "launch.claude.effort": 1 },
   });
 });
 
@@ -222,10 +220,9 @@ it("keeps an edit to an agent that is no longer the selected one", async () => {
   expect(sentOf(pending, "update_project")).toEqual({
     type: "update_project",
     project: "p-1",
-    name: "Site",
     default_agent: "codex",
     accounts: { claude: { kind: "account", id: "a-personal" } },
-    tags: [],
+    base_versions: { default_agent: 1, "accounts.claude": 1 },
   });
 });
 
@@ -426,7 +423,8 @@ it("offers the stored model alone and the reason when the agent cannot list its 
   expect(mark.getAttribute("aria-label")).toBe("Could not load the models");
   expect(pickerNamed("Model").getAttribute("aria-describedby")).toBeNull();
   await settle(200);
-  const status = document.body.querySelector('[role="status"]')?.textContent;
+  // The form's other regions (the announcement of fields changed elsewhere) stay empty.
+  const status = [...document.body.querySelectorAll('[role="status"]')].map((region) => region.textContent).find(Boolean);
   press(mark);
   const sentence = document.querySelector("[data-status-mark-popover] p")!;
   expect(sentence.textContent).toBe("claude took too long to list its models.");

@@ -18,12 +18,18 @@
 //!
 //! A complete write missing its prompt acknowledgement briefly holds later messages. Its payload
 //! never goes back into the queue; the running session owns the bounded submit-key retry.
+//! At a planned stop the drainers are stopped before the terminals are handed over: no write starts
+//! once the handover barrier is raised ([`PromptSignal::writes_stopped`]), and what is still queued
+//! at the end is taken whole ([`Outbox::seal`]) and saved for the next daemon
+//! (`super::restart_outbox`); from then on the outbox takes no message
+//! ([`Outbox::push_unless_sealed`]).
+//!
 //! For the delivery contract see docs/product/message-delivery.md's
 //! "Messages held until a session can take them" section, and for a fragment written while the
 //! draft was stashed its "A message only partly written while the draft is stashed" section.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -124,6 +130,11 @@ pub trait PromptSignal {
     fn input_held(&self) -> bool {
         false
     }
+    /// Whether no write may start any more: a planned stop is handing the terminals over, and
+    /// what is still queued goes to the next daemon. Read before each message.
+    fn writes_stopped(&self) -> bool {
+        false
+    }
 }
 
 /// A screen watch that ends when it is dropped, so no return from a drain leaves it on.
@@ -171,6 +182,13 @@ pub struct Outbox {
     /// The messages whose draft grace a hold of the session's own server has already started
     /// again, which it does once a message.
     grace_restarted: Mutex<HashSet<Ticket>>,
+    /// Set by [`Self::seal`] first: no new message is accepted, but a drain still writing may put
+    /// back the message it could not write, to be taken with the rest. Changed under the queues'
+    /// lock.
+    sealed: AtomicBool,
+    /// Set by [`Self::seal`] once it has taken the queues for the next daemon: nothing put on a
+    /// queue from then on is ever written. Changed under the queues' lock.
+    taken: AtomicBool,
 }
 
 /// A message the agent's own queue refused outright.
@@ -185,6 +203,10 @@ struct Refusal {
 /// runs: the sender waiting on it takes it right after the drain that met it, however long that
 /// drain goes on writing, so one left longer had no sender waiting.
 const REFUSAL_KEPT: Duration = Duration::from_secs(60);
+
+/// What [`Outbox::seal`] took for one session, oldest first: each message's ticket, text and the
+/// row it is kept in, if it is.
+pub type SealedQueue = (String, Vec<(Ticket, String, Option<i64>)>);
 
 /// A session's drain claim, from [`Outbox::claim`].
 struct DrainClaim<'a> {
@@ -227,16 +249,95 @@ struct Keeps {
 }
 
 impl Outbox {
-    /// Accepts a message for a session, to be written as soon as it can take one.
-    pub fn push(&self, id: &str, text: &str) -> Ticket {
+    /// Accepts a message for a session, to be written as soon as it can take one; `None`, with
+    /// nothing queued, once [`Self::seal`] has taken the queues for the next daemon, since nothing
+    /// queued from then on would ever be written: the caller says what became of the message.
+    /// Unlike [`Self::push_unless_sealed`] it still takes a message while the seal waits for the
+    /// drains, as a handoff ending then forwards what it held, which is taken with the rest.
+    pub fn push(&self, id: &str, text: &str) -> Option<Ticket> {
         // Taken under the queue's lock, so that tickets follow the order messages are queued in.
         let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        if self.taken.load(Ordering::Acquire) {
+            return None;
+        }
         let ticket = self.next_ticket.fetch_add(1, Ordering::Relaxed);
         queues
             .entry(id.to_string())
             .or_default()
             .push_back((ticket, text.to_string(), None));
-        ticket
+        Some(ticket)
+    }
+
+    /// [`Self::push`], unless the queues have been sealed for the next daemon ([`Self::seal`]):
+    /// then `None`, and nothing is queued. Judged under the queues' lock, so a message either is
+    /// among those sealed or is refused.
+    pub fn push_unless_sealed(&self, id: &str, text: &str) -> Option<Ticket> {
+        let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        if self.sealed.load(Ordering::Acquire) {
+            return None;
+        }
+        let ticket = self.next_ticket.fetch_add(1, Ordering::Relaxed);
+        queues
+            .entry(id.to_string())
+            .or_default()
+            .push_back((ticket, text.to_string(), None));
+        Some(ticket)
+    }
+
+    /// Whether the queues have been sealed for the next daemon ([`Self::seal`]).
+    #[cfg(test)]
+    pub fn is_sealed(&self) -> bool {
+        self.sealed.load(Ordering::Acquire)
+    }
+
+    /// Takes every queue, each with its messages oldest first and the row each is kept in, and
+    /// takes no message from then on: what a planned stop saves for the next daemon, once no drain
+    /// begins another write. A message is accepted no more from the first step on
+    /// ([`Self::push_unless_sealed`], [`Self::push_kept`], [`Self::push_first`]); then a drain
+    /// still writing is waited for, for at most `drains`, so that the message whose write the
+    /// handover refused, which it puts back, is taken with the rest rather than lost. The rows
+    /// stay in the store, for the next daemon's queue to keep them as this one did. Sessions come
+    /// in no particular order. Once the queues are taken, [`Self::push`] refuses too. **Blocks**
+    /// for up to `drains`.
+    pub fn seal(&self, drains: Duration) -> Vec<SealedQueue> {
+        {
+            let _queues = self.queues.lock().expect("outbox lock poisoned");
+            self.sealed.store(true, Ordering::Release);
+        }
+        let deadline = Instant::now() + drains;
+        while !self
+            .draining
+            .lock()
+            .expect("outbox claim lock poisoned")
+            .is_empty()
+        {
+            if Instant::now() >= deadline {
+                tracing::error!("a drain was still writing when the queues were saved for the next daemon; a message it puts back is lost");
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        self.taken.store(true, Ordering::Release);
+        let taken = std::mem::take(&mut *queues);
+        drop(queues);
+        let mut kept = self.kept.lock().expect("outbox kept lock poisoned");
+        taken
+            .into_iter()
+            .map(|(id, queue)| {
+                let messages = queue
+                    .into_iter()
+                    .map(|(ticket, text, _)| {
+                        let row = kept.queued.remove(&ticket);
+                        if let Some(row) = row {
+                            kept.tickets.remove(&row);
+                        }
+                        (ticket, text, row)
+                    })
+                    .collect();
+                (id, messages)
+            })
+            .collect()
     }
 
     /// Reserves the first ticket without queuing a placeholder that could be delivered or lost.
@@ -263,6 +364,14 @@ impl Outbox {
             "a reserved first message requires its queue pause"
         );
         let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        if self.sealed.load(Ordering::Acquire) {
+            return Err(crate::protocol::CodedError::raised(
+                crate::protocol::error_code::DAEMON_SHUTTING_DOWN,
+                "the daemon is stopping and has saved the queued messages for the next daemon, so \
+                 this message is not accepted",
+                &[],
+            ));
+        }
         let queue = queues.entry(first.id).or_default();
         anyhow::ensure!(
             queue
@@ -283,9 +392,14 @@ impl Outbox {
 
     /// [`Self::push`] for a message kept in the store as row `row`, which goes once it is written.
     /// A row that already has a message queued or being written is not queued again, whatever
-    /// session it is asked for: a queue held across a restart still has it.
+    /// session it is asked for: a queue held across a restart still has it. Nor is one once the
+    /// queues have been sealed for the next daemon ([`Self::seal`]): the row stays in the store,
+    /// for the session's next resume.
     pub fn push_kept(&self, id: &str, text: &str, row: i64) -> Option<Ticket> {
         let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        if self.sealed.load(Ordering::Acquire) {
+            return None;
+        }
         let ticket = {
             let mut kept = self.kept.lock().expect("outbox kept lock poisoned");
             if kept.tickets.contains_key(&row) {
@@ -454,6 +568,11 @@ impl Outbox {
                 || prompts.submission_uncertain()
                 || prompts.trust_holds_writes()
             {
+                return Drain::Pending;
+            }
+            // Left for the next daemon, whole: a message cut by the handover's mark half-way would
+            // be lost, and one never begun is not.
+            if prompts.writes_stopped() {
                 return Drain::Pending;
             }
             // Asked afresh for every message: once one is sent the agent reads as working, and what
@@ -780,6 +899,9 @@ impl Outbox {
         next
     }
 
+    /// Puts a message a drain could not write back at the front of its queue. Accepted after the
+    /// queues were sealed, while [`Self::seal`] waits for the drains, so that the message is taken
+    /// with the rest; one put back once they were taken is lost, and said so in the log.
     fn push_front(
         &self,
         id: &str,
@@ -787,9 +909,11 @@ impl Outbox {
         text: String,
         protection_started: Option<Instant>,
     ) {
-        self.queues
-            .lock()
-            .expect("outbox lock poisoned")
+        let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        if self.taken.load(Ordering::Acquire) {
+            tracing::error!(session = %id, "a message that could not be written was put back after the queues were saved for the next daemon; it is lost");
+        }
+        queues
             .entry(id.to_string())
             .or_default()
             .push_front((ticket, text, protection_started));
@@ -1152,7 +1276,7 @@ mod tests {
             outbox.reserve_first("s").is_err(),
             "the first place is already reserved"
         );
-        let report = outbox.push("s", "child report");
+        let report = outbox.push("s", "child report").unwrap();
         let bootstrap = outbox.push_first(first, "bootstrap").unwrap();
         assert!(bootstrap < report);
         outbox.resume("s");
@@ -1299,6 +1423,140 @@ mod tests {
         let mut rows = outbox.take_written();
         rows.sort();
         assert_eq!(rows, [1, 2]);
+    }
+
+    /// [`MidTurn`] once a planned stop has stopped the writes, after the first message written.
+    struct StopsAfterFirst(Cell<u32>);
+
+    impl PromptSignal for StopsAfterFirst {
+        fn sent(&self) -> u64 {
+            0
+        }
+        fn expects_send(&self) -> bool {
+            false
+        }
+        fn wait_past(&self, _before: u64) -> bool {
+            unreachable!("nothing is waited on mid-turn")
+        }
+        fn mark_unsent(&self, _before: u64) {
+            unreachable!("nothing is checked mid-turn")
+        }
+        fn mark_not_submitted(&self, _before: u64) {
+            unreachable!("nothing is checked mid-turn")
+        }
+        fn unsent_waiting(&self) -> bool {
+            false
+        }
+        fn sighting(&self) -> Sighting {
+            Sighting::default()
+        }
+        fn watch_screen(&self, _on: bool) {
+            unreachable!("nothing is checked mid-turn")
+        }
+        fn trust_holds_writes(&self) -> bool {
+            false
+        }
+        fn writes_stopped(&self) -> bool {
+            let looked = self.0.get();
+            self.0.set(looked + 1);
+            looked > 0
+        }
+    }
+
+    /// A drain under way when a planned stop stops the writes finishes the message it is writing
+    /// and begins no other: the rest stays queued, whole and in order, for the next daemon.
+    #[test]
+    fn a_drain_stops_between_messages_once_the_writes_are_stopped() {
+        let outbox = Outbox::default();
+        outbox.push("s", "first");
+        outbox.push("s", "second");
+        outbox.push("s", "third");
+        let mut written = Vec::new();
+        assert_eq!(
+            outbox.drain_with(
+                "s",
+                &mut |_, text, _| {
+                    written.push(text.to_string());
+                    Ok(())
+                },
+                &StopsAfterFirst(Cell::new(0))
+            ),
+            Drain::Pending
+        );
+        assert_eq!(written, vec!["first"]);
+        let sealed = outbox.seal(Duration::ZERO);
+        assert_eq!(sealed.len(), 1);
+        let texts: Vec<&str> = sealed[0]
+            .1
+            .iter()
+            .map(|(_, text, _)| text.as_str())
+            .collect();
+        assert_eq!(texts, ["second", "third"]);
+    }
+
+    /// Sealing takes every queue whole, kept rows with them, and leaves the rows unqueued for the
+    /// next daemon to keep; from then on the outbox takes no message by the sealed push.
+    #[test]
+    fn sealing_takes_every_queue_and_refuses_what_comes_after() {
+        let outbox = Outbox::default();
+        let first = outbox.push("s", "first").unwrap();
+        outbox.push_kept("s", "kept", 7);
+        outbox.push("u", "other");
+        assert!(!outbox.is_sealed());
+        let mut sealed = outbox.seal(Duration::ZERO);
+        sealed.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(sealed[0].0, "s");
+        assert_eq!(sealed[0].1[0], (first, "first".to_string(), None));
+        assert_eq!(sealed[0].1[1].1, "kept");
+        assert_eq!(sealed[0].1[1].2, Some(7));
+        assert_eq!(sealed[1].0, "u");
+        assert!(outbox.is_sealed());
+        assert!(!outbox.is_row_queued(7));
+        assert_eq!(outbox.len("s"), 0);
+        assert_eq!(outbox.push_unless_sealed("s", "late"), None);
+        assert_eq!(outbox.push_kept("s", "kept late", 8), None);
+        // Nor by the plain push, once the queues are taken: nothing would ever write it.
+        assert_eq!(outbox.push("s", "after"), None);
+        assert!(!outbox.is_row_queued(8));
+        assert_eq!(outbox.len("s"), 0);
+    }
+
+    /// A message whose write the handover refused while the queues were being sealed is put back
+    /// and taken with the rest, since the seal waits for the drain still writing.
+    #[test]
+    fn a_message_put_back_while_the_seal_waits_is_taken_with_the_rest() {
+        let outbox = Outbox::default();
+        outbox.push("s", "first");
+        outbox.push("s", "second");
+        // Borrowed, so that the drain's thread takes the borrow and the channel's sender with it.
+        let outbox = &outbox;
+        let (writing, being_written) = std::sync::mpsc::channel();
+        let sealed = std::thread::scope(|scope| {
+            let draining = scope.spawn(move || {
+                outbox.drain_with(
+                    "s",
+                    &mut |_, _, _| {
+                        // The message is off the queue and being written: the seal starts now.
+                        writing.send(()).ok();
+                        std::thread::sleep(Duration::from_millis(200));
+                        Err(partial(0))
+                    },
+                    &MidTurn,
+                )
+            });
+            being_written
+                .recv_timeout(crate::test_support::PATIENCE)
+                .expect("the drain never began its write");
+            let sealed = outbox.seal(crate::test_support::PATIENCE);
+            assert_eq!(draining.join().unwrap(), Drain::Pending);
+            sealed
+        });
+        let texts: Vec<&str> = sealed[0]
+            .1
+            .iter()
+            .map(|(_, text, _)| text.as_str())
+            .collect();
+        assert_eq!(texts, ["first", "second"]);
     }
 
     /// Nothing went in, so the session could not take it: it stays at the front, and the one behind
@@ -1486,7 +1744,7 @@ mod tests {
     #[test]
     fn a_message_the_agent_does_not_send_holds_the_queue_until_the_next_prompt() {
         let outbox = Outbox::default();
-        let first = outbox.push("s", "first");
+        let first = outbox.push("s", "first").unwrap();
         outbox.push("s", "second");
         let agent = AtPrompt::new(false);
         let mut written = Vec::new();
@@ -1514,7 +1772,7 @@ mod tests {
     #[test]
     fn a_message_left_in_the_box_by_its_submit_key_is_unsent_and_holds_the_queue() {
         let outbox = Outbox::default();
-        let first = outbox.push("s", "first");
+        let first = outbox.push("s", "first").unwrap();
         outbox.push("s", "second");
         let agent = AtPrompt::new(false);
         agent.busy.set(true);
@@ -1590,7 +1848,7 @@ mod tests {
     #[test]
     fn a_message_a_dialog_threw_away_goes_back_at_the_front() {
         let outbox = Outbox::default();
-        let first = outbox.push("s", "first");
+        let first = outbox.push("s", "first").unwrap();
         outbox.push("s", "second");
         let agent = AtPrompt::new(false);
         agent
@@ -1620,7 +1878,7 @@ mod tests {
     #[test]
     fn a_message_a_view_took_is_not_put_back() {
         let outbox = Outbox::default();
-        let first = outbox.push("s", "first");
+        let first = outbox.push("s", "first").unwrap();
         outbox.push("s", "second");
         let agent = AtPrompt::new(false);
         agent
@@ -1649,7 +1907,7 @@ mod tests {
     #[test]
     fn a_message_left_as_a_draft_by_a_dialog_is_unsent() {
         let outbox = Outbox::default();
-        let first = outbox.push("s", "first");
+        let first = outbox.push("s", "first").unwrap();
         let agent = AtPrompt::new(false);
         agent
             .dialog_on_wait
@@ -1821,7 +2079,7 @@ mod tests {
     #[test]
     fn draft_wait_expires_for_the_same_ticket_across_retries() {
         let outbox = Outbox::default();
-        let ticket = outbox.push("s", "automatic");
+        let ticket = outbox.push("s", "automatic").unwrap();
         let mut allowances = Vec::new();
         let mut write = |seen, _: &str, allow_mixed| {
             assert_eq!(seen, ticket);

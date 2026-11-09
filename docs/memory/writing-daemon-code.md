@@ -37,7 +37,10 @@ user — is held in its own map on `AppState` (`apps/daemon/src/state/mod.rs`), 
 What is wrong is a field the record carries but some write path has to fill. Every `*_upserted` event carries the
 whole record (`apps/daemon/PROTOCOL.md`, section "Daemon to client"), so such a field is blanked in the client the
 moment an upsert built without it is applied — for state that changes on a schedule of its own, that means every write
-path in the coordinator. `Console` and `Project` have no `wire_session` counterpart, so they get the event shape.
+path in the coordinator. `Console` and `Project` do have a single route to clients, `AppState::publish_console` and
+`AppState::publish_project` (the only senders of `console_upserted` and `project_upserted`, which re-read the stored
+row under the publication lock and stamp its field versions; `snapshot` stamps them too), but that route exists for the
+versions and fills in no derived state, so state about a console or a project still gets the event shape.
 
 Neither shape gets a deletion of its own, so the cleanups are written by hand: the daemon drops its map entry wherever
 the record itself is removed, and with the event shape the client's reducer also drops it on that record's
@@ -259,10 +262,21 @@ daemon code below, since a clean run on macOS says nothing about it:
 So run `cargo test -p octoboardd`, and `cargo clippy --all-targets` for the Linux-only code, inside a Linux container
 (Docker). Start the container with `docker run --init`: without an init that reaps, orphans reparented to PID 1 (here
 cargo) stay zombies, and every test that waits for a process to be gone (`test_support::assert_gone_by`, which waits for
-`ESRCH`) fails, on `main` as on the change.
+`ESRCH`) fails, on `main` as on the change. Give cargo there a target directory of its own (a Docker volume), not the
+worktree's `target/` that the host's builds use, and set `CARGO_PROFILE_DEV_DEBUG=0`: building the daemon's test binary
+with debug info takes several GiB of memory, enough for a Docker VM's memory limit to kill it, and the tests behave the
+same without it.
 
 To exercise a fallback for a refused system call (the browse reads' `openat2` refused as `ENOSYS` or `EPERM`), run
 the container with a seccomp profile that returns that errno for the call.
+
+A plain container's `/sys/fs/cgroup` is read-only, so it exercises only the fallback of the launch cgroup groups
+(`apps/daemon/src/platform/proc/cgroup.rs`): the tests of the groups themselves return early and pass, their "skipped" line hidden
+with the rest of a passing test's output. When a change
+can affect those groups — the cgroup code, the Unix `Containment`, the process ledger — run the suite a second time in a
+container with a writable cgroup v2 hierarchy: `--privileged --cgroupns=private`, with `/sys/fs/cgroup` remounted
+read-write inside it if it comes up read-only. The `Delegate=yes` path of a systemd unit needs a container with systemd
+as PID 1 and a user manager instead.
 
 Without a container runtime, Linux-only code gets a compile check only: copy the Linux-only functions into a scratch
 crate outside the repository that depends only on what they use (typically `libc`), and run

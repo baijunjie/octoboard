@@ -25,14 +25,14 @@ stop of its own on the row, and pressing it does not fold the project; the row's
 while it shows.
 
 A collapsed project shows a **status marker** for its sessions that are not archived, so a waiting session can be found
-with its project collapsed: the glyph, at the compact 14 px size, of their top status — the status of the one that
-comes first in the status order (see "The top status" in `docs/product/session-statuses.md`). Every status has its own
-glyph there, interrupted, starting and switching account included, so a project whose unarchived sessions are all
-interrupted shows the pause sign; a project with no unarchived session shows none. The glyphs follow "Status glyphs" in
-`docs/product/session-statuses.md`. **The marker carries a tooltip** saying that status in the same words as everywhere
-else it is said (see "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`). The row's accessible name says
-it too, expanded or collapsed: the project's name followed by its top status, with "pinned" between them for a pinned
-project.
+with its project collapsed: the glyph, at the compact 14 px size, of their top status — the status of the one that comes
+first in the status order (see "The top status" in `docs/product/session-statuses.md`). Every status has its own glyph
+there, interrupted, starting, switching account and reconnecting included, so a project whose unarchived sessions are
+all interrupted shows the pause sign; a project with no unarchived session shows none. The glyphs follow "Status glyphs"
+in `docs/product/session-statuses.md`. **The marker carries a tooltip** saying that status in the same words as
+everywhere else it is said (see "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`). The row's accessible
+name says it too, expanded or collapsed: the project's name followed by its top status, with "pinned" between them for a
+pinned project.
 
 At the row's end are its pin button while the project is pinned (see "Pinning" in
 `docs/product/order-of-projects-and-sessions.md`), then a **+** button, **New session**, which opens the new-session

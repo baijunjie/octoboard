@@ -244,6 +244,14 @@ export interface Fixture {
   /** The process ledger behind the Processes panel and the archive confirmation's processes. Without it
    * no session has a process. */
   processes?: ProcessesFixture;
+  /** What `handover_check` answers when a restart into an update asks which running work it would not carry over: the
+   * ids of those running sessions and shell terminals (the daemon lists only what runs, and the fixture daemon refuses
+   * an id that does not), `known: false` for an answer that is everything running rather than a proven one, and the
+   * ids of shell terminals of a pending holder, which the daemon does not register, as unreached, and the ids of
+   * running sessions the daemon lists that the window holds no object for (it has not been told of them), which the
+   * confirmation can only fold into its "and N more" row, or count when it can name none. Without it the answer is a
+   * proven one that nothing would be interrupted. */
+  handover?: { known?: boolean; sessions?: string[]; unnamedSessions?: string[]; shellTerminals?: string[]; unreachedShellTerminals?: string[] };
   /** What `inspect_project_removal` finds per project: the worktrees and branches its removal with
    * the folder in the Trash takes along, or the error the inspection fails with. A project not
    * listed has none. `{ items, inspection }` is an answer that holds worktrees back (items with a `cause`), carrying the

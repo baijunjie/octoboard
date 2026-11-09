@@ -131,6 +131,7 @@ impl Fixture {
                 icon: None,
                 console_session_prompt: None,
                 created_at: 0,
+                versions: Default::default(),
             })
             .unwrap();
         Self { state, _dir: dir }
@@ -156,6 +157,7 @@ impl Fixture {
                 tags: Vec::new(),
                 description: None,
                 git_workflow: Default::default(),
+                versions: Default::default(),
             })
             .unwrap();
         id.to_string()

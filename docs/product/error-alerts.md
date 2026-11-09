@@ -61,7 +61,9 @@ Once a submit has passed the form's own validation, anything that goes wrong aft
 and opens the error alert, with the form left open and its values intact. This includes a refusal by the daemon about
 a single field's value, such as an account directory another account of the agent already uses (see "Adding, editing
 and removing an account" in `docs/product/agent-accounts.md`) or a conversation the session dialog cannot resume (see
-`docs/product/resuming-a-conversation-by-its-session-id.md`).
+`docs/product/resuming-a-conversation-by-its-session-id.md`). The one exception is a field that was changed elsewhere:
+it shows the current value instead, both while the form is open and after a save refused because of that change, the
+user's other edits staying (see "A form while its record changes elsewhere" in `docs/product/concurrent-edits.md`).
 
 ## The error alert
 
@@ -660,7 +662,8 @@ is handled by the Change model dialog's failure modal (see "Changing a session's
 no request to report an issue and nothing but its acknowledgement button. It is used for a switch confirmed onto an
 account that was used up after the confirmation opened (see "Confirming a switch" in
 `docs/product/switching-session-accounts.md`) and for a request the daemon refuses because it is shutting down
-(`daemon_shutting_down`; see "Quitting" in `docs/product/application-lifecycle.md`), and for a second push of a project
+(`daemon_shutting_down`; see "Quitting" in `docs/product/application-lifecycle.md`), as for typing a planned stop
+dropped (see "While the terminals are handed over" in the same document), and for a second push of a project
 whose push is still running (`push_in_progress`; see "Pushing the current branch" in
 `docs/product/project-git-actions.md`), and it is the form of every failure modal (see "The failure modal" above). A
 switch confirmed onto an account turned off, or found not logged in, after the confirmation opened is not a plain alert:

@@ -47,6 +47,7 @@ async fn an_unavailable_agent_refuses_the_console_sessions_own_open_session_tool
             tags: Vec::new(),
             description: None,
             git_workflow: Default::default(),
+            versions: Default::default(),
         })
         .unwrap();
     let owner = console_session("owner");

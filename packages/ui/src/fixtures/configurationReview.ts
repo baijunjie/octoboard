@@ -6,6 +6,7 @@ import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
 import { SETTINGS_SECTIONS } from "../configuration/settingsSections";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
+import { SETTINGS_VERSIONS } from "./builders";
 import { type AccountFallback, type Agent, type GitWorkflowSettings, type InspectedProject } from "../protocol";
 
 /** A reference to an account this machine has none by that name of. The inspection lists it whether or not the document's
@@ -35,7 +36,14 @@ const THIS_CLONE_DIR = "/Users/dev/Projects";
  * does not carry are `null`, as the daemon sends them. Settings given without `settings_sections` are taken to carry
  * every section. */
 export function inspected(parts: Pick<Inspection, "consoles"> & Partial<Omit<Inspection, "type" | "consoles">>): Omit<Inspection, "type"> {
-  return { id: null, settings: null, settings_sections: parts.settings ? [...SETTINGS_SECTIONS] : [], accounts: null, ...parts };
+  return {
+    id: null,
+    settings: null,
+    settings_sections: parts.settings ? [...SETTINGS_SECTIONS] : [],
+    accounts: null,
+    settings_versions: SETTINGS_VERSIONS,
+    ...parts,
+  };
 }
 
 /** An import's result that applied no settings and no accounts unless `parts` says it did, likewise. */

@@ -175,6 +175,19 @@ it("downloads from Settings, then offers the restart, which asks the window's ex
   expect(restart).toHaveBeenCalledOnce();
 });
 
+it("holds Restart now pending from the press until the window's exit flow has answered", async () => {
+  const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(async () => FOUND, async () => {}) });
+  await act(async () => {});
+  await act(async () => button(container, "Check for updates")!.click());
+  await act(async () => button(container, "Download and install")!.click());
+  let answer: () => void = () => {};
+  store().onRestartRequested(() => new Promise<void>((resolve) => (answer = resolve)));
+  await act(async () => button(container, "Restart now")!.click());
+  expect(button(container, "Restart now")!.getAttribute("aria-busy")).toBe("true");
+  await act(async () => answer());
+  expect(button(container, "Restart now")!.hasAttribute("aria-busy")).toBe(false);
+});
+
 it("keeps the install button enabled while a check runs, so focus on it is not dropped", async () => {
   let settle: (found: AvailableUpdate | undefined) => void = () => {};
   const check = vi.fn<UpdaterCapability["check"]>().mockResolvedValueOnce(FOUND).mockImplementation(() => new Promise((resolve) => (settle = resolve)));

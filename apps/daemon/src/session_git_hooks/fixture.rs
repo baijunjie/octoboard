@@ -137,6 +137,7 @@ pub(crate) fn project(id: &str, path: &Path) -> Project {
         tags: Vec::new(),
         description: None,
         git_workflow: Default::default(),
+        versions: Default::default(),
     }
 }
 
@@ -171,6 +172,7 @@ impl Fixture {
                 icon: None,
                 console_session_prompt: None,
                 created_at: 0,
+                versions: Default::default(),
             })
             .unwrap();
         let repo = repo_with("branch-origin-repo", &[(b"a", b"a")]);

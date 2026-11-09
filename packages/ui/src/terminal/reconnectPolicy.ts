@@ -3,9 +3,8 @@
  * capped, and stops after `MAX_AUTO_RECONNECT_ATTEMPTS` so a terminal that keeps failing to connect
  * does not retry forever — the cover's Reconnect covers that case instead. The attempt counter only
  * resets once a connection has *stayed* open for `STABLE_CONNECTION_MS` — resetting it on every
- * `open` would mean a connection that opens and drops again within a few seconds (a backpressure
- * drop recurs roughly that often under sustained output) always sees attempt 0, so the delay would
- * never grow past the base value and the cap would never engage.
+ * `open` would mean a connection that opens and drops again within a few seconds always sees
+ * attempt 0, so the delay would never grow past the base value and the cap would never engage.
  */
 export const MAX_AUTO_RECONNECT_ATTEMPTS = 5;
 export const STABLE_CONNECTION_MS = 10000;

@@ -20,14 +20,15 @@ clients through the first paint.
 ## Key design decisions
 
 - **A separate holder process owns the PTYs** and is the parent of every agent process, so the daemon can stop and
-  start while programs keep running. The holder does not parse output; it keeps a raw tail per terminal. On start the
-  daemon reconnects to every holder. The handshake says whether the last parting was a planned handover or a crash,
-  and lists the terminals the holder runs. This holds on macOS, Linux and Windows; Windows is tested first (milestone
-  01), since whether a pseudoconsole can outlive the daemon under a holder, and how an update replaces files that
-  running holders keep open, are not yet known there. macOS and Linux go ahead whatever milestone 01 finds. If a
-  pseudoconsole cannot outlive the daemon under a holder, Windows gets no holders and keeps today's behavior
-  throughout. If only the update's file replacement fails, Windows holders still cover a crash and a planned restart,
-  and an update interrupts every session there.
+  start while programs keep running. The holder keeps no authoritative screen; it keeps a raw tail per terminal, and
+  runs a bounded streaming query recogniser on the output so that, while no daemon is linked, it answers the fixed
+  queries whose answer needs no screen with the daemon's own answer (in the first phase the primary device attributes
+  only; the cursor position and other screen-dependent queries go unanswered, a stated limit). On start the daemon
+  reconnects to every holder; a holder it cannot link to yet is never ended for that, and what it runs stays claimed
+  until it is linked to or known to be gone. The handshake says whether the last parting was a planned handover or a
+  crash, and lists the terminals the holder runs. This holds on macOS, Linux and Windows: on Windows a pseudoconsole
+  created by a detached holder outlives the daemon with either console host, and an update replaces the installation
+  while holders run from their build's copy (see "Process holders on Windows" in `docs/architecture.md`).
 - **On Linux each holder is a systemd user service that delegates its cgroup subtree** (`Delegate=yes`), and makes a
   group per launch inside it. Where no writable subtree is available, or no systemd user manager runs the daemon,
   holders are detached processes as on macOS and the per-launch process ledger (tag, lineage and session-id
@@ -75,8 +76,8 @@ clients through the first paint.
   the old holder exits once its last one ends, while new terminals go to a holder of the current build.
 - **A desktop update keeps sessions running, on macOS and Windows.** Restarting the application to apply an update
   makes a planned stop, and the new version's daemon adopts the holders, the previous build's included. The restart
-  asks for confirmation only when some session would be interrupted (a holder outside the compatible range, or
-  Windows if it keeps interrupting), and names those sessions.
+  asks for confirmation only when some session would be interrupted (a holder outside the compatible range), and
+  names those sessions.
 - **An application crash keeps sessions running too**: the daemon finding the application gone makes a planned stop,
   and the next launch adopts the holders.
 - **A plain quit and a system shutdown still interrupt every session.** Every quit counts, the ones that do not wait
@@ -87,8 +88,10 @@ clients through the first paint.
   session's preview, and the system goes on. On Windows, where the system ends the daemon with no notice, the
   application passes the system's end-session notice on, and the stop is only as complete as the time the system
   allows.
-- **Programs may report their own status** through OSC 7501, the Program Status Protocol, as a source of status for
-  agents with no other integration. Where hooks or an agent's own signals give a status, they win over OSC 7501.
+- **Programs may report their own status** through OSC 7501, the Program Status Protocol. Supporting the protocol and
+  taking the status from it are separate: every session's terminal receives the reports and answers the support
+  query, while only an agent with no other integration takes its status from them. Where hooks or an agent's own
+  signals give a status, they win over OSC 7501.
 - **A write several clients can make carries the version it was read at.** A stale write is refused as a conflict
   with the current version, and the client reads again before retrying. Versions are kept per field, so two
   clients changing different fields do not conflict. Every record a client edits through a form is checked:
@@ -103,16 +106,15 @@ clients through the first paint.
 
 ## Milestones
 
-- [01 Windows holder feasibility](01-windows-holder-feasibility.md)
-- [02 Process holders](02-process-holders.md) — needs the daemon's first paint on attach, which does not exist
-  yet; its Windows parts need 01; its Linux systemd parts also need the daemon running on Linux as a systemd user
-  service, which does not exist yet
-- [03 Planned restart handover](03-planned-restart-handover.md) — needs 02; also needs daemon-side answering of
-  terminal queries, which exists only in part; its `restart` command needs the daemon's command-line start, stop and
-  status commands, which do not exist yet; its systemd case needs the daemon running on Linux as a systemd user
-  service, which does not exist yet
-- [04 Desktop updates keep sessions running](04-desktop-update-handover.md) — needs 03; its Windows part needs 01
-- [05 Program status reports](05-program-status-reports.md) — needs daemon-side answering of terminal queries, which
-  exists only in part
+- 01 Windows holder feasibility (closed)
+- [02 Process holders](02-process-holders.md) — its Linux systemd parts need the daemon running on Linux as a
+  systemd user service, which does not exist yet
+- [03 Planned restart handover](03-planned-restart-handover.md) — needs 02, and the daemon-side answering of
+  terminal queries that multi-client terminal milestone 04 brought; its `restart` command sits beside the
+  command-line `start`, `stop` and `status` of Linux daemon run milestone 01, none of which runs a daemon in the
+  background on Windows; its systemd case needs the daemon running on Linux as a systemd user service, which does
+  not exist yet
+- [04 Desktop updates keep sessions running](04-desktop-update-handover.md) — needs 03
+- [05 Program status reports](05-program-status-reports.md)
 - [06 Conflict-checked writes](06-conflict-checked-writes.md)
-- [07 Control-channel heartbeat](07-control-channel-heartbeat.md)
+- 07 Control-channel heartbeat (closed)

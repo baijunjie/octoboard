@@ -266,7 +266,9 @@ set or remove the avatar but never reads the image back (see "The console's own 
 `docs/product/agent-settings-tools.md`).
 
 An account, a model and an effort are saved only when they are changed: saving a console with a picker untouched
-succeeds regardless of what has happened to the account it refers to since. Removing an account in Settings puts every
+succeeds regardless of what has happened to the account it refers to since. The same holds for every field of the
+dialog, and a field changed elsewhere while the dialog is open shows the current value (see "A form while its record
+changes elsewhere" in `docs/product/concurrent-edits.md`). Removing an account in Settings puts every
 console that referred to it back on the agent's default account, and every project that named it back to inheriting
 its console's reference.
 
@@ -286,8 +288,12 @@ project's list cannot be read, the section shows that confirmation's warning tha
 stopped, over the rows of the lists that were read, and leaves the count out.
 
 Deleting a console is **refused while any of its sessions still has a running process**, or is being launched or
-resumed at that moment — those must be archived (or the application restarted, which interrupts them) first. The
-error names the reason.
+resumed at that moment — those must be archived (or Octoboard quit, which interrupts them) first. The error names the
+reason. Once a planned stop has begun, deleting a console is refused with `daemon_shutting_down`, with nothing changed
+(see "While the terminals are handed over" in `docs/product/application-lifecycle.md`); a deletion still under way when
+the planned stop stops waiting for it deletes the records all the same but ends none of its projects' shell terminals
+and stops none of their processes, leaving them running for the next daemon, which ends the shell terminals of
+projects no longer on record.
 
 When it goes through, deleting a console also deletes every project association under it, every session record belonging
 to it, archived sessions included, with the last output Octoboard kept for each, and every page its sessions pushed to

@@ -35,8 +35,9 @@ and a credential lets its holder do everything the owner can — so a credential
 this version's design boundary, not a gap left for later; what several users would take is in "Why the daemon is
 split out".
 
-The server form is **not built yet**. Today the daemon binds to loopback on a port the operating system assigns, has
-no credential of any kind, does not serve the UI, and the Linux build is not established. What the form asks of the
+The server form is **not built yet**. Today the daemon binds to loopback only, on a fixed port when it is given one
+(`--port`) and runs in the background from the command line or as a systemd user service, but it has no credential
+of any kind and does not serve the UI. What the form asks of the
 design is stated below, where each constraint comes up.
 
 "Server" names where the daemon lives: a machine kept running for others to reach over the network, with nobody
@@ -126,11 +127,73 @@ daemon's WebSocket endpoints.
 
 ## Why the daemon is split out
 
-Session processes are owned by the daemon rather than by the window. That is what lets the daemon run with no window
+Session processes are owned by the daemon's side rather than by the window: the daemon runs them in process holders
+(below). That is what lets the daemon run with no window
 at all — the server form, where there is no application to start or stop it — and, in the desktop form, what would
 let it outlive the application (background operation; today it exits with the application there). **Remote hosts** —
 a daemon reaching a second host to run sessions there — are **not built yet**, and no workflow for them is settled.
 They are not the server form: the server is a single host, and what is remote in that form is the clients.
+
+### Process holders
+
+A **holder** is a process, a mode of the daemon binary, that owns the terminals and is the parent of every agent and
+shell-terminal program, so the daemon can go down and come back while the programs keep running. The daemon drives
+it over a WebSocket link on loopback; the holder keeps no screen, it forwards the output and keeps a raw tail per
+terminal. These choices are not visible from any one module:
+
+- **Holders, not a handover of PTY handles between daemons.** One mechanism covers a crash, a planned restart and an
+  update: a handle handover covers only the planned moment (a crash closes the master), and on Windows a
+  pseudoconsole lives as long as the process that created it, with no API to move it. The cost is a holder protocol
+  that later builds must keep speaking, and one more local hop per byte.
+- **One holder per build, as the usual allocation.** New terminals go to a holder of the daemon's own build; a holder
+  of another build keeps the terminals it runs, gets no new ones and exits after its last. It is not an invariant: a
+  start keeps one holder of its build for new terminals and drains any other, and a holder that cannot be linked to
+  for a while is replaced by a new one for new terminals. One holder carries many terminals over one link, so a
+  terminal whose output nobody takes (its reader stopped) holds up the link, and with it the other terminals of that
+  holder and the replies to the daemon, until it is read again: a stated limit. A daemon adopts holders from the
+  previous stable release up to its own build and ends any other with its programs: a session whose helpers could not
+  reach the new daemon would be silently broken. The protocol ignores message types and fields it does not know, so
+  builds within that range keep talking; it is kept compatible within that promised range, and the range's floor only
+  moves by the previous-stable release rule (`apps/daemon/src/holder/compat.rs`).
+- **Helpers reach the daemon through their holder.** A session's hooks, MCP bridge, git gate and status line get the
+  holder's port and a key per launch, which stay valid as long as the holder, and the holder relays to whichever
+  daemon is linked. Reports wait for a daemon; a call its caller waits on waits up to a deadline that covers an
+  ordinary restart. A helper and its holder come from the same build, so the only interface that crosses builds is
+  the holder link. Persisting the daemon's port and key instead would lose what is sent during the restart and leave
+  a port another program could take.
+- **Holders and helpers run from a copy of their build** under the data directory (`builds/<build>`), removed once no
+  holder of that build runs. Helpers start afresh on every call, so without the copy an update replacing the
+  installation would run new helpers against an old holder; on Windows the copy also leaves the installation folder
+  free for the installer.
+- **Adoption is approximate, except after a planned stop.** A daemon that starts adopts what the holders run, rebuilds
+  each screen from the raw tail, marks it inexact (`screen_inexact` on the wire) and resizes the program by one row and
+  back so a full-screen program repaints. Terminals no record claims are ended, sessions no holder runs are
+  interrupted. Only an ordinary stop ends every session. A planned stop (a planned restart, or a stop with no
+  successor) instead has each holder mark where its output to the stopping daemon ends, saves each screen once it has
+  read up to that mark, and leaves everything running; the next daemon restores a saved screen it verifies (the same
+  handover token, a whole tail since the mark, the same size) and replays only the tail after the mark, with no mark
+  and no redraw, and never clears the mark of a process already inexact. Anything it cannot verify falls back to the
+  approximate path.
+- **A transport failure never ends a holder.** A refused connection, a handshake that times out and a link that keeps
+  dropping say nothing of whether a holder can go on, and one holder carries many terminals. While its registry file is
+  there and its verified process runs, the daemon keeps trying to link to it with a growing pause (up to 30 seconds),
+  its terminals running unreachable and its sessions claimed (`holder_link: "pending"` on the wire): not interrupted,
+  resumed or cleaned up after. To know exactly which sessions such a holder runs, the daemon records which holder runs
+  each launch (`Store::held_terminals`); a session no record places stays claimed too while such a holder is left, and
+  resuming the interrupted sessions waits for that. Only a holder known to be gone (no registry file, or its process
+  gone), one outside the compatible range, one whose welcome cannot be read, and the daemon's ordinary stop end what it
+  runs.
+- **The holder answers a few queries itself while no daemon is linked.** A program waits on its terminal's answer to a
+  query, and the bundled Windows console host holds it until one comes. The holder keeps no screen, so it runs a
+  bounded streaming recogniser on the output and answers, while no daemon is linked, only fixed queries whose answer
+  needs no screen, with the daemon's own answer: the primary device attributes, for now. The cursor position and every
+  other screen-dependent query go unanswered and wait out the host's hold, a stated limit. Which side answers a query
+  is decided in output order, under the same lock a link attaches under: what is read while a daemon is linked is that
+  daemon's, and a tail handed to a daemon is never answered from, except the part after a planned stop's mark when its
+  screen is restored exactly: there only the queries still fresh (about a second) are answered, and never a kind the
+  holder answers itself.
+- **A holder's crash is the limit of crash survival**: its programs end with it, through its own crash table and the
+  terminals closing.
 
 **Constraint: the UI and the daemon interact only over the network protocol (`apps/daemon/PROTOCOL.md`) — no Tauri
 IPC, no shared state.** Hooks and the MCP server of a session point at the daemon on the host the session runs on. The
@@ -236,9 +299,9 @@ decided once from the files present before any terminal starts:
 - The **bundled host** is byte-identical and in order, one read per program write. It forwards every query to the output
   and holds the console, about half a second for each, until it is answered; its own start-up queries and its requests
   for focus events and win32 input mode (`ESC[1t ESC[c ESC[?1004h ESC[?9001h`, sent again after a program turns them
-  off) are for the client side. A query nobody answers stalls the agent, and Codex then loses the submit of every
-  message sent to it, so while no client is attached the daemon answers the device attributes and the cursor position
-  from its own emulator (`TermFacts::host_waits_on_queries`), and with one attached it leaves the answer to that client.
+  off) are for the client side, except the device attributes query, which the daemon answers like any other. A query nobody answers stalls the agent, and Codex then loses the submit of every
+  message sent to it. The daemon answers the queries its own emulator can answer the moment it reads them, attached or
+  not (see "Answers to the program's queries" in `apps/daemon/PROTOCOL.md`), which keeps that stall short.
 - A `conpty.dll` with no `OpenConsole.exe` in its own directory or in the subdirectory named for the machine's native
   architecture silently starts the system's host instead and behaves exactly as it. The daemon therefore looks at which
   host it started and warns when it is not the one the facts were decided for. The layout the installer ships is in
@@ -257,6 +320,53 @@ twice, 650 ms apart, and a wait of six seconds ("Stopping an agent on a pseudoco
 `docs/agent-cli-reference.md`). `CTRL_BREAK_EVENT` is not sent: it behaves like the close, and it needs the daemon to
 attach to the console, which is process-wide state in a multi-threaded process. macOS ignores the keys and keeps its
 signal.
+
+### Process holders on Windows
+
+What follows records how holders (see "Process holders" above) were measured to behave on Windows, which settled the
+detach and the file location they use. The holder is started as measured: detached and breaking away from the
+daemon's jobs, and where breakaway is refused, created with the desktop application as its parent process; with no
+application to name, it starts inside the job and its terminals end with it, which is logged. That survival inside
+the job is not guaranteed, and neither is the parent fallback's when the desktop application is itself in the same
+outer job. The evidence below comes from an OpenSSH session standing in for a desktop logon: confirming it from a
+standard user's desktop logon, with the daemon started by the desktop application, is a verification item before
+release.
+
+A pseudoconsole lives as long as the process that created it and its handles, not as long as the process that started
+that process, so a holder that owns the pseudoconsoles can keep a session's programs running while the daemon is gone.
+This was measured with a throwaway harness on Windows 11 (ARM64, the x64 binaries under emulation), run over an
+OpenSSH session (session 0, with no desktop logon), not from the desktop application. Its daemon stand-in was started
+with a hidden console of its own, as the sidecar is. With both the bundled and the system's console host, a daemon
+that exited normally and a daemon terminated outright each left the holder, the host and the agent running, cmd.exe and
+Claude Code alike, and the agent still took input and gave output through the holder afterwards.
+
+- **The detach.** A holder started with `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` and no inherited handles has no
+  console to lose when the daemon's hidden console closes, and the console host its pseudoconsole starts is its child,
+  in its jobs rather than the daemon's. It also has to leave every job of the daemon's, since a kill-on-close job that
+  closes ends its members. Where the job allows breakaway (the job an OpenSSH session runs its processes in does),
+  `CREATE_BREAKAWAY_FROM_JOB` did it. Where it does not, that flag is refused with access denied, and a holder created
+  with `PROC_THREAD_ATTRIBUTE_PARENT_PROCESS` naming a process outside the job inherited that process's job membership
+  instead, so it was in none of the daemon's; the parent named was a stand-in, since no `explorer.exe` ran without a
+  desktop logon. Both holders kept running after the daemon's job closed. With no process outside the job to name, a
+  holder cannot outlive it. The daemon's launches themselves still never ask to break away (see "A daemon inside a
+  kill-on-close job" in "Known pitfalls of the Tauri / Rust approach").
+- **A holder's own death ends its programs.** Terminating a holder closes its pseudoconsoles, and every process on them
+  gets `CTRL_CLOSE_EVENT`: cmd.exe and the host were gone within about 0.4 to 1.5 seconds, Claude Code, which answers
+  the event, within about 6 to 7 seconds. A holder's crash is therefore the limit of crash survival on Windows, as
+  closing a console is for a launch today.
+- **The installer and files in use.** The NSIS installer cannot replace a file a running process holds: an executable
+  being run (`octoboardd.exe` as the MCP bridge, and so a holder in that binary too; `OpenConsole.exe` as a running
+  host) or a DLL being loaded (`conpty.dll` in the holder). It killed none of them; it stopped on an "Error opening
+  file for writing" box with Abort, Retry and Ignore, which in the updater's passive mode (`/P /UPDATE`) waits for an
+  answer, and Ignore left the old file in place, a mix of two builds, with exit code 0. Hooks and the git gate are
+  started afresh from the binary on every call, so they run whichever build is in the folder at that moment. With the
+  holder, its host and the MCP bridge running from a copy of the build outside the installation folder
+  (`octoboardd.exe`, `conpty.dll` and both `OpenConsole.exe` in their subdirectories, as the installer lays them out),
+  the installer replaced every file it ships with no box, and the copy's holder, host and agent kept running and kept
+  relaying input and output, and its MCP bridge kept running. No daemon ran during the install, so hooks and the git
+  gate called from the copy during and after it showed only that the binary could be started from the copy
+  throughout. The copy was measured under the data directory (`builds\<version>` in `%USERPROFILE%\.octoboard`), which
+  the installer does not touch.
 
 ## Orchestration design decisions
 
@@ -470,8 +580,9 @@ Each has an established solution unless noted; any outstanding manual verificati
   (closing its window ends its children and it exits with code 0), but a process that has loaded `user32.dll` or
   `gdi32.dll`, as the daemon has, is sent neither the logoff nor the shutdown notice (Microsoft's documentation of
   `SetConsoleCtrlHandler` says so, and Windows 11 behaved as documented in a real logoff and a real shutdown). The
-  system ends the user's processes, the daemon's log shows no orderly stop, and the sidecar of the desktop app ends the
-  same way: whether it stopped its sessions in order cannot be shown. What is left is dealt with at the next start, as
+  system ends the user's processes and the daemon's log shows no orderly stop. The desktop app's sidecar is the
+  exception as far as time allows: the app passes the system's end of session on and asks it for its ordinary stop,
+  which has about four seconds before the system ends everything. What is left is dealt with at the next start, as
   after a crash ("Crashes and forced termination" in `docs/product/application-lifecycle.md`), and the process ledger's
   start-up reconciliation stops the attributed processes its records name that are still running. A held update is not
   installed at such an exit, and the next start offers it again.
@@ -486,10 +597,13 @@ Each has an established solution unless noted; any outstanding manual verificati
   one stall of 12.5 s, where a native echo through the same host took 0.6 s.
 - **End-to-end terminal latency was never measured.** Only the daemon-to-WebSocket path was (well under a
   millisecond); the time from key press to glyph on screen was not.
-- **PTY output backpressure.** Under heavy output the daemon's PTY reader must take backpressure from the broadcast
-  channel rather than running ahead of it: a reader that always runs ahead fills any bounded channel within a fraction
-  of a second and the client gets dropped, and neither framing nor batching addresses that. The size of the daemon's own
-  read buffer (4 KiB to 256 KiB) made no measurable difference to throughput, so output frame size is not worth tuning.
+- **PTY output and slow clients.** Under heavy output a reader that always runs ahead fills any bounded channel to a
+  client within a fraction of a second, and neither framing nor batching addresses that. So the daemon's PTY reader
+  never waits on a client and keeps no channel: each client has its own backlog, sent as its credit window (bytes it has
+  acknowledged) allows, and a client that falls more than 4 MiB behind gets a fresh paint without history in place of
+  its backlog instead of being dropped (`apps/daemon/PROTOCOL.md`, "`GET /ws/term/:session` — terminal stream"). The
+  size of the daemon's own read buffer (4 KiB to 256 KiB) made no measurable difference to throughput, so output frame
+  size is not worth tuning.
 
 ## Data model
 

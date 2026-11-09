@@ -14,6 +14,16 @@ impl AppState {
         token
     }
 
+    /// Puts back the token an adopted launch's MCP server authenticates with, which the daemon that
+    /// started the launch issued and its holder kept bound to the launch's key. The launch's
+    /// process is the same one, so the token is as good as it was; any other this session had is
+    /// retired, as issuing one does.
+    pub fn restore_mcp_token(&self, session_id: &str, token: &str) {
+        let mut tokens = self.mcp_tokens.write().expect("mcp token lock poisoned");
+        tokens.retain(|_, owner| owner != session_id);
+        tokens.insert(token.to_string(), session_id.to_string());
+    }
+
     /// Retires this session's token without waiting for its process to go away. Used where no
     /// process ever started, so nothing will ever observe the exit that would otherwise retire it.
     pub fn revoke_mcp_tokens(&self, session_id: &str) {
@@ -37,6 +47,20 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use crate::test_support::app_state;
+
+    /// An adopted launch gets its own token back, and with it no other of the session's.
+    #[test]
+    fn a_restored_token_replaces_the_sessions_others() {
+        let (state, _dir) = app_state("state-tokens-restored");
+        let issued = state.issue_mcp_token("s");
+        state.restore_mcp_token("s", "kept-by-the-holder");
+        assert!(state.session_for_mcp_token(&issued).is_none());
+        assert_eq!(
+            state.session_for_mcp_token("kept-by-the-holder").as_deref(),
+            Some("s")
+        );
+        assert!(state.session_for_mcp_token("other").is_none());
+    }
 
     /// A token is per launch: the previous process is gone, and a token that outlived it would let
     /// a stale child act on the session.

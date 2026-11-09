@@ -17,7 +17,7 @@ use crate::protocol::{
     Session, SessionBranchItem, SessionBranchKind, SessionBranchState, SessionBranchTarget,
     SessionStatus,
 };
-use crate::state::AppState;
+use crate::state::{AppState, ChangeAdmission};
 
 /// How long removal waits for the sessions' processes to end before going ahead anyway. Far above
 /// the graceful period an ending process gets; past it, a process that would not die is left to
@@ -29,10 +29,16 @@ pub(super) const STOP_TIMEOUT: Duration = Duration::from_secs(30);
 /// is left, each item with the reason. What cannot be done at all — no `git` to run, the removal
 /// not finishing — leaves every bound item as `failed`; only a store that cannot be read leaves
 /// nothing to name, and is logged.
+///
+/// A planned stop waits for the removal through `covered`, counted by the caller while its own
+/// operation was still admitted past the handover barrier. Once the wait for the processes is
+/// over, nothing is removed if the planned stop has stopped waiting, as a terminal handed over
+/// may work in what would go: every bound item is left, as `failed`.
 pub async fn remove_once_stopped(
     state: Arc<AppState>,
     sessions: Vec<Session>,
     forced: Vec<SessionBranchTarget>,
+    covered: &ChangeAdmission,
 ) -> Vec<SessionBranchItem> {
     let ids: Vec<String> = sessions.iter().map(|session| session.id.clone()).collect();
     wait_until_stopped(&state, &ids).await;
@@ -58,6 +64,12 @@ pub async fn remove_once_stopped(
     };
     if bound.is_empty() {
         return Vec::new();
+    }
+    if covered.still_covered().is_err() {
+        return all_failed(
+            &bound,
+            "the daemon is stopping to hand its terminals over to the next daemon",
+        );
     }
     let unfinished = bound.clone();
     let removed = tokio::task::spawn_blocking(move || {
@@ -124,20 +136,31 @@ pub(super) async fn wait_until_stopped(state: &Arc<AppState>, ids: &[String]) {
 }
 
 /// [`remove_once_stopped`] with nothing forced, logging what is left rather than telling any
-/// client: for an archive or a deletion no one waits on the removal of.
-pub async fn remove_logging_left(state: Arc<AppState>, sessions: Vec<Session>) {
-    let left = remove_once_stopped(state, sessions, Vec::new()).await;
+/// client: for an archive or a deletion no one waits on the removal of. `covered` is counted by the
+/// caller while its operation was still admitted.
+pub async fn remove_logging_left(
+    state: Arc<AppState>,
+    sessions: Vec<Session>,
+    covered: ChangeAdmission,
+) {
+    let left = remove_once_stopped(state, sessions, Vec::new(), &covered).await;
     if !left.is_empty() {
         tracing::info!(left = ?lines(&left), "branches of an archived or deleted session were left");
     }
 }
 
-/// [`remove_logging_left`] off the caller's path.
-pub fn remove_in_background(state: &Arc<AppState>, sessions: Vec<Session>) {
+/// [`remove_logging_left`] off the caller's path, through `covered`, which the caller counted while
+/// the archive or deletion was still admitted past the handover barrier, so that a planned stop
+/// waits for the removal from then on, not from when the task is first polled.
+pub fn remove_in_background(
+    state: &Arc<AppState>,
+    sessions: Vec<Session>,
+    covered: ChangeAdmission,
+) {
     if sessions.is_empty() {
         return;
     }
-    tokio::spawn(remove_logging_left(Arc::clone(state), sessions));
+    tokio::spawn(remove_logging_left(Arc::clone(state), sessions, covered));
 }
 
 pub(super) fn all_failed(bound: &[Bound], detail: &str) -> Vec<SessionBranchItem> {

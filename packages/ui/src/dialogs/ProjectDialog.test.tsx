@@ -364,7 +364,7 @@ it("keeps legacy overlong fields while saving other settings, but rejects change
   const legacy = projectOf("p-long", "c-1", "中".repeat(101), { description: "😀".repeat(2001) });
   const pending = render(legacy);
   await click(buttonText("Save"));
-  expect(sentOf(pending, "update_project")).toMatchObject({ name: legacy.name });
+  expect(sentOf(pending, "update_project")).not.toHaveProperty("name");
   expect(sentOf(pending, "update_project")).not.toHaveProperty("description");
   await act(async () => pending.find((p) => p.body.type === "update_project")!.resolve({ type: "project_upserted", project: legacy }));
   typeDescription(`${legacy.description}a`);

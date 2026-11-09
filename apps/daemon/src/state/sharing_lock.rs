@@ -89,14 +89,8 @@ impl AccountSharingLock {
                 claimed.insert(id.clone());
                 self.holds
                     .insert(id.clone(), self.state.hold_outbox_for_sharing(&id));
-                self.claims.insert(
-                    id.clone(),
-                    LaunchClaim {
-                        state: self.state.clone(),
-                        id,
-                        watches_launch: false,
-                    },
-                );
+                self.claims
+                    .insert(id.clone(), LaunchClaim::new(self.state.clone(), id));
             }
         }
         if let Some(entry) = live.sharing_locks.get_mut(&self.account) {
@@ -181,11 +175,13 @@ impl AppState {
     /// [`Self::queue_message`] for a session a change of its account's sharing is restarting, and
     /// `None` for any other. The check and the push are one step under the `live` lock, which
     /// [`AccountSharingLock::end_restart`] takes to let the session go before it ends the hold, so
-    /// a message is never pushed after the hold has dropped what it held.
+    /// a message is never pushed after the hold has dropped what it held. `Some(None)` for such a
+    /// session once a planned stop has saved the queues for the next daemon, which takes nothing
+    /// more (`crate::messaging::outbox::Outbox::push_unless_sealed`).
     ///
     /// [`AccountSharingLock::end_restart`]: AccountSharingLock::end_restart
-    pub(crate) fn queue_if_restarting(&self, id: &str, text: &str) -> Option<Ticket> {
-        self.queue_if_restarting_with(id, || self.outbox.push(id, text))
+    pub(crate) fn queue_if_restarting(&self, id: &str, text: &str) -> Option<Option<Ticket>> {
+        self.queue_if_restarting_with(id, || self.outbox.push_unless_sealed(id, text))
     }
 
     /// Keeps a pre-reserved first message in the same atomic restart check as ordinary input.

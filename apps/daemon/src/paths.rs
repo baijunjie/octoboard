@@ -52,6 +52,22 @@ pub fn logs_dir() -> PathBuf {
     data_dir().join("logs")
 }
 
+/// The registry files of the holders that run terminals for the daemon; see `crate::holder`.
+pub fn holders_dir() -> PathBuf {
+    holders_dir_in(&data_dir())
+}
+
+/// The registry files' directory of the daemon whose data directory is `data`.
+pub fn holders_dir_in(data: &Path) -> PathBuf {
+    data.join("holders")
+}
+
+/// The copies of the daemon's builds that holders run from, one directory per build; see
+/// `crate::holder::build`.
+pub fn builds_dir() -> PathBuf {
+    data_dir().join("builds")
+}
+
 pub fn db_path() -> PathBuf {
     data_dir().join("octoboard.db")
 }
@@ -82,6 +98,27 @@ pub fn saved_output_dir() -> PathBuf {
 /// is cleared at startup, because a package is read by a session that may be resumed long after.
 pub fn handoff_dir() -> PathBuf {
     data_dir().join("handoff")
+}
+
+/// The screens a planned stop saved for the next daemon, which that daemon loads as it starts and
+/// rewrites as it takes each; see `crate::state::restart_screens`.
+pub fn restart_screens_path() -> PathBuf {
+    data_dir().join("restart-screens.json")
+}
+
+/// The messages a planned stop left queued for the next daemon, which that daemon queues again and
+/// deletes as it starts; see `crate::messaging::restart_outbox`.
+pub fn restart_outbox_path() -> PathBuf {
+    data_dir().join("restart-outbox.json")
+}
+
+/// The record the desktop application creates when it quits (`{"version":1}`, or an empty file
+/// from an older application): the holders it left are ended by the next daemon, which scopes the
+/// record to those the registry lists and removes each target as it is gone (see
+/// `crate::holder::quit_targets`). Created by the application (`apps/desktop/src-tauri`), which
+/// has to place it at this same path.
+pub fn application_quit_record() -> PathBuf {
+    data_dir().join("application-quit")
 }
 
 /// The output of the last update run of each agent's CLI, one file per agent, overwritten by each

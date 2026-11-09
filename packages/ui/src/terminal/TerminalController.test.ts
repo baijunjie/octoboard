@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
+// Loaded first, as `main.tsx` loads it, so a guard that swallows the window's focus events fails this test.
+import "../input/focusGuard";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { windowAttention } from "../components/announce/windowTestSupport";
 import type { HostFacts } from "../platform/host";
 import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { TerminalController } from "./TerminalController";
@@ -211,6 +214,10 @@ vi.mock("@xterm/addon-web-links", () => ({ WebLinksAddon: class {} }));
 vi.mock("@xterm/addon-webgl", () => ({ WebglAddon: class { onContextLoss(): void {} dispose(): void {} } }));
 
 const url = (session: string) => `ws://daemon/ws/term/${session}`;
+/** The display frame a connection of a dark terminal not laid out yet sends once it is open. */
+const DARK_DISPLAY = JSON.stringify({ type: "display", foreground: "#e4e4e6", background: "#1e1f22", cursor: "#808080" });
+/** The acknowledgement a connection sends once it is open, which opts into the daemon's credit window. */
+const OPENING_ACK = JSON.stringify({ type: "ack", bytes: 0 });
 const lastSocket = () => FakeSocket.all[FakeSocket.all.length - 1];
 const framesPending = new Set<ReturnType<typeof setTimeout>>();
 /** Lets every write queued so far be parsed, and every frame requested so far run, including those
@@ -275,7 +282,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("a live session's replay", () => {
+describe("a live session's first paint", () => {
+  it("is asked for with as much scrollback as the terminal keeps", () => {
+    controller.attach("a", `${url("a")}?key=k`, false);
+    expect(lastSocket().url).toBe(`${url("a")}?key=k&history=10000`);
+  });
+
   it("is written to xterm in slices, in order, and the screen counts as painted once the last is parsed", async () => {
     const write = vi.spyOn(term, "write");
     controller.attach("a", url("a"), false);
@@ -381,6 +393,8 @@ describe("a process-less session's saved output", () => {
     expect(live.sent).toEqual([
       JSON.stringify({ type: "resize", cols: 80, rows: 24 }),
       new TextEncoder().encode("x"),
+      DARK_DISPLAY,
+      OPENING_ACK,
     ]);
   });
 
@@ -396,6 +410,8 @@ describe("a process-less session's saved output", () => {
     expect(live.sent).toEqual([
       JSON.stringify({ type: "resize", cols: 80, rows: 24 }),
       new TextEncoder().encode("x"),
+      DARK_DISPLAY,
+      OPENING_ACK,
     ]);
   });
 
@@ -460,7 +476,7 @@ describe("xterm's answers to queries in the output", () => {
     term.userTypes("x");
     live.receive("more\x1b[c");
     await settle();
-    expect(live.sent.slice(1)).toEqual([reply("\x1b[?1;2c", 103), new TextEncoder().encode("x"), reply("\x1b[?1;2c", 110)]);
+    expect(live.sent.slice(3)).toEqual([reply("\x1b[?1;2c", 103), new TextEncoder().encode("x"), reply("\x1b[?1;2c", 110)]);
   });
 
   it("are given for the replay only past what was answered already", async () => {
@@ -499,6 +515,144 @@ describe("xterm's answers to queries in the output", () => {
     await settle();
     fresh.dispose();
     expect([...replies(first), ...replies(second)]).toEqual([]);
+  });
+});
+
+describe("the output acknowledged to the daemon", () => {
+  const acks = (socket: FakeSocket) =>
+    socket.sent.filter((frame) => typeof frame === "string" && frame.includes('"ack"') && frame !== OPENING_ACK);
+
+  it("starts with an empty one as the connection opens", () => {
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    expect(live.sent).toContain(OPENING_ACK);
+  });
+
+  it("is counted once parsed and sent in batches, paints included", async () => {
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    live.mark({ length: 20_000, offset: 0, answered: 20_000 });
+    live.receive("p".repeat(20_000));
+    live.receive("x".repeat(30_000));
+    await settle();
+    expect(acks(live)).toEqual([]);
+    live.receive("y".repeat(20_000));
+    expect(acks(live)).toEqual([]);
+    await settle();
+    expect(acks(live)).toEqual([JSON.stringify({ type: "ack", bytes: 70_000 })]);
+  });
+
+  it("is never sent on a later connection for output of an earlier one", async () => {
+    controller.attach("a", url("a"), false);
+    const first = lastSocket();
+    first.open();
+    first.receive("x".repeat(100_000));
+    controller.attach("a", url("a"), false);
+    const second = lastSocket();
+    second.open();
+    await settle();
+    expect([...acks(first), ...acks(second)]).toEqual([]);
+  });
+});
+
+describe("the display the terminal reports", () => {
+  const displays = (socket: FakeSocket) => socket.sent.filter((frame) => typeof frame === "string" && frame.includes('"display"'));
+
+  it("is sent once the connection is open, and again only when it changes", () => {
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    controller.setColorTheme("light");
+    expect(displays(live)).toEqual([]);
+    live.open();
+    controller.setColorTheme("light");
+    controller.setColorTheme("dark");
+    controller.setColorTheme("dark");
+    expect(displays(live)).toEqual([
+      JSON.stringify({ type: "display", foreground: "#383a42", background: "#fafafa", cursor: "#808080" }),
+      DARK_DISPLAY,
+    ]);
+  });
+
+  it("carries a cell's size in whole pixels once the screen is laid out", () => {
+    const screen = term.element!.querySelector<HTMLElement>(".xterm-screen")!;
+    screen.getBoundingClientRect = () => ({ width: 723, height: 410, left: 0, top: 0, right: 723, bottom: 410, x: 0, y: 0, toJSON: () => ({}) });
+    controller.attach("a", url("a"), false);
+    lastSocket().open();
+    expect(displays(lastSocket())).toEqual([
+      JSON.stringify({ type: "display", foreground: "#e4e4e6", background: "#1e1f22", cursor: "#808080", cell_width: 9, cell_height: 17 }),
+    ]);
+  });
+
+  it("is sent anew on every connection", () => {
+    controller.attach("a", url("a"), false);
+    lastSocket().open();
+    controller.attach("b", url("b"), false);
+    lastSocket().open();
+    expect(FakeSocket.all.map(displays)).toEqual([[DARK_DISPLAY], [DARK_DISPLAY]]);
+  });
+});
+
+describe("telling the daemon the person turned to the terminal", () => {
+  const ACTIVATE = JSON.stringify({ type: "activate" });
+  const activations = (socket: FakeSocket) => socket.sent.filter((frame) => frame === ACTIVATE);
+  /** The terminal shown, in a window whose attention `attend` moves. */
+  const shown = () => {
+    Object.defineProperty(container, "offsetWidth", { configurable: true, value: 800 });
+    return windowAttention();
+  };
+
+  it("happens as a session the user picked connects, but not on a reconnect in the background or in a window the user is not in", () => {
+    const attend = shown();
+    controller.attach("a", url("a"), true);
+    const picked = lastSocket();
+    picked.open();
+    expect(activations(picked)).toHaveLength(1);
+    controller.attach("a", url("a"), false);
+    const healed = lastSocket();
+    healed.open();
+    expect(activations(healed)).toEqual([]);
+    attend(false);
+    controller.attach("a", url("a"), true);
+    const elsewhere = lastSocket();
+    elsewhere.open();
+    expect(activations(elsewhere)).toEqual([]);
+  });
+
+  it("happens on a press on the terminal, and on coming back to its window while it is shown", () => {
+    const attend = shown();
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    container.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    expect(activations(live)).toHaveLength(1);
+    attend(false);
+    expect(activations(live)).toHaveLength(1);
+    attend(true);
+    expect(activations(live)).toHaveLength(2);
+  });
+
+  it("follows a size changed in the window the person works in, and not one changed in the background", async () => {
+    const attend = shown();
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    const sent = live.sent.length;
+    attend(false);
+    term.cols = 100;
+    term.rows = 30;
+    controller.syncSize();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(live.sent.slice(sent)).toEqual([JSON.stringify({ type: "resize", cols: 100, rows: 30 })]);
+
+    attend(true);
+    expect(activations(live)).toHaveLength(1);
+    term.cols = 120;
+    controller.syncSize();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    // The size first, so the activation applies it rather than the one asked for before.
+    expect(live.sent.slice(sent + 2)).toEqual([JSON.stringify({ type: "resize", cols: 120, rows: 30 }), ACTIVATE]);
   });
 });
 
@@ -578,6 +732,16 @@ describe("text a program asks to copy (OSC 52)", () => {
     await settle();
     expect(copied).toEqual(["选中的文本"]);
     expect(controller.programCopiedText).toBe("选中的文本");
+  });
+
+  it("is no longer on offer once a fresh paint replaces the screen it was copied from", async () => {
+    await liveCopy("旧的");
+    expect(controller.programCopiedText).toBe("旧的");
+    const paint = "\x1bcpainted";
+    lastSocket().mark({ length: paint.length, offset: 100, answered: paint.length });
+    lastSocket().receive(paint);
+    await settle();
+    expect(controller.programCopiedText).toBeUndefined();
   });
 
   it("is ignored in a process-less session's saved output", async () => {
@@ -713,5 +877,90 @@ describe("a selection made under mouse reporting, when the program re-asserts it
     lastSocket().receive(reassert);
     await settle();
     expect(term.getSelectionPosition()).toEqual(kept ? { start: { x: 3, y: 1 }, end: { x: 10, y: 1 } } : undefined);
+  });
+});
+
+describe("holding the input while the process cannot be reached", () => {
+  const frames = (socket: FakeSocket) => socket.sent.filter((frame) => ArrayBuffer.isView(frame)).map((frame) => new TextDecoder().decode(frame as Uint8Array));
+  const controls = (socket: FakeSocket, type: string) => socket.sent.filter((frame) => typeof frame === "string" && JSON.parse(frame).type === type);
+
+  it("sends no key, input method text, paste or mouse report, and names no input destination", () => {
+    Object.defineProperty(container, "offsetWidth", { configurable: true, value: 800 });
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    const sent = live.sent.length;
+    controller.holdInput(true);
+    expect(controller.inputSessionId).toBeUndefined();
+    term.press("a", "a");
+    term.userTypes("日本語");
+    term.keyDown("c");
+    term.keyHandler?.(new KeyboardEvent("keydown", { key: "c", ctrlKey: true }));
+    controller.paste("pasted", "a");
+    term.binary("\x1b[M !!");
+    term.userTypes("\x1b[<0;1;1M");
+    expect(live.sent.slice(sent)).toEqual([]);
+  });
+
+  it("sends no resize or activation, and answers no query, from the held terminal", async () => {
+    Object.defineProperty(container, "offsetWidth", { configurable: true, value: 800 });
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    const sent = live.sent.length;
+    controller.holdInput(true);
+    term.cols = 100;
+    controller.syncSize();
+    container.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+    live.receive("\x1b[c");
+    await settle();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(live.sent.slice(sent)).toEqual([]);
+  });
+
+  it("does not send a resize that was waiting to settle", async () => {
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    const sent = live.sent.length;
+    term.cols = 100;
+    controller.syncSize();
+    controller.holdInput(true);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(live.sent.slice(sent)).toEqual([]);
+  });
+
+  it("drops input typed while connecting instead of sending it when the socket opens", () => {
+    controller.attach("a", url("a"), false);
+    term.press("a", "typed");
+    controller.holdInput(true);
+    lastSocket().open();
+    expect(frames(lastSocket())).toEqual([]);
+  });
+
+  it("holds a paste whose clipboard read ended after the hold began", () => {
+    controller.attach("a", url("a"), false);
+    lastSocket().open();
+    const destination = controller.inputSessionId!;
+    controller.holdInput(true);
+    controller.paste("late", destination);
+    expect(frames(lastSocket())).toEqual([]);
+  });
+
+  it("replays nothing once released, and sends input and the activation of a new attach again", () => {
+    Object.defineProperty(container, "offsetWidth", { configurable: true, value: 800 });
+    windowAttention();
+    controller.attach("a", url("a"), false);
+    lastSocket().open();
+    controller.holdInput(true);
+    term.press("a", "held");
+    controller.holdInput(false);
+    controller.attach("a", url("a"), true);
+    const again = lastSocket();
+    again.open();
+    expect(frames(again)).toEqual([]);
+    expect(controls(again, "activate")).toHaveLength(1);
+    term.press("b", "b");
+    expect(frames(again)).toEqual(["b"]);
   });
 });

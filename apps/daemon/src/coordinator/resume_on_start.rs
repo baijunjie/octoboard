@@ -11,6 +11,7 @@
 //! each failure where the resume left the session: interrupted, with the reason in the log and no
 //! alert, since nobody asked for this resume.
 
+use std::collections::HashSet;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,30 +31,60 @@ const WIDTH: usize = 3;
 /// How long a resume waits to start after the previous one started.
 const START_GAP: Duration = Duration::from_millis(400);
 
-/// Starts the task that resumes the interrupted sessions, unless the setting is off (or cannot be
-/// read, which counts as off). Call it once the start has marked the sessions the previous run left
-/// running as interrupted. The setting is read now, at the daemon's start; a change afterwards
-/// applies to the next one.
-pub fn spawn(state: &Arc<AppState>) {
-    spawn_with(state, |state, id| async move {
+/// Whether the user asked for the interrupted sessions to be resumed at start: the setting, read
+/// now, at the daemon's start, so that a change afterwards applies to the next one; one that
+/// cannot be read counts as off.
+pub fn wanted(state: &AppState) -> bool {
+    match state.store.resume_sessions_on_start() {
+        Ok(wanted) => wanted,
+        Err(err) => {
+            tracing::warn!(%err, "reading Resume sessions on start failed; no session is resumed");
+            false
+        }
+    }
+}
+
+/// The sessions interrupted now, for a start that puts its resume off to resume these and no
+/// session interrupted later in the run ([`spawn_among`]).
+pub fn interrupted_now(state: &AppState) -> HashSet<String> {
+    match state.store.list_interrupted_sessions() {
+        Ok(sessions) => sessions.into_iter().map(|session| session.id).collect(),
+        Err(err) => {
+            tracing::warn!(%err, "listing the interrupted sessions failed; no session is resumed");
+            HashSet::new()
+        }
+    }
+}
+
+/// Starts the task that resumes the sessions interrupted now, those of `among` alone when it is
+/// given, whatever the setting says now: the caller read it at the start ([`wanted`]). Called once
+/// the start has marked the sessions the previous run left running as interrupted
+/// (`crate::coordinator::unlinked::start_resume_and_reconcile`).
+pub fn spawn_among(state: &Arc<AppState>, among: Option<HashSet<String>>) {
+    spawn_with_among(state, among, |state, id| async move {
         resume_if_still_interrupted(&state, &id).await
     });
 }
 
-/// [`spawn`] with the resume of one session supplied by the caller.
+/// What the start does when the setting is on, with the resume of one session supplied by the
+/// caller.
+#[cfg(test)]
 fn spawn_with<F, Fut>(state: &Arc<AppState>, resume: F)
 where
     F: Fn(Arc<AppState>, String) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Result<()>> + Send + 'static,
 {
-    match state.store.resume_sessions_on_start() {
-        Ok(true) => {}
-        Ok(false) => return,
-        Err(err) => {
-            tracing::warn!(%err, "reading Resume sessions on start failed; no session is resumed");
-            return;
-        }
+    if wanted(state) {
+        spawn_with_among(state, None, resume);
     }
+}
+
+/// [`spawn_among`] with the resume of one session supplied by the caller.
+fn spawn_with_among<F, Fut>(state: &Arc<AppState>, among: Option<HashSet<String>>, resume: F)
+where
+    F: Fn(Arc<AppState>, String) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<()>> + Send + 'static,
+{
     let interrupted = match state.store.list_interrupted_sessions() {
         Ok(sessions) => sessions,
         Err(err) => {
@@ -61,6 +92,14 @@ where
             return;
         }
     };
+    let interrupted = interrupted
+        .into_iter()
+        .filter(|session| {
+            among
+                .as_ref()
+                .is_none_or(|among| among.contains(&session.id))
+        })
+        .collect();
     let ids = in_resume_order(interrupted);
     if ids.is_empty() {
         return;

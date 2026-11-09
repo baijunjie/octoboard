@@ -25,6 +25,9 @@ Where to start, by question:
   badge and rail count for a session waiting on the user.
 - [Turns the agents' hooks do not report](product/turns-hooks-do-not-report.md) — the turn endings no hook event
   announces and how the status copes.
+- [Program status reports](product/program-status-reports.md) — OSC 7501 reports a program in a session's terminal
+  makes about itself, which every session's terminal supports: the support query, how long records last, and how they
+  become the status of a session whose agent has no hooks.
 - [Session titles](product/session-titles.md) — created names, displayed names and how a title follows the agent's.
 - [Session context size](product/session-context.md) — how the context size is measured, refreshed and shown as a chip.
 - [Session history](product/session-history.md) — the read-only history shown for an archived session.
@@ -171,6 +174,9 @@ Where to start, by question:
 - [Right-to-left layout](product/right-to-left-layout.md) — what is mirrored under a right-to-left language.
 - [Dialogs](product/dialogs.md) — dialog titles, initial focus, what Enter and confirm buttons do, and where an unasked question stands among other dialogs.
 - [Error alerts](product/error-alerts.md) — where a failure, warning or note is shown, by how it arises.
+- [Concurrent edits](product/concurrent-edits.md) — the same setting, console, project or account changed from several
+  places at once: which writes are checked against field versions, which are not, and how an open form follows a
+  change made elsewhere.
 - [Issue reports](product/issue-reports.md) — what Report issue prefills into a new Issue and what is removed from
   it first.
 - [Toasts](product/toasts.md) — the notices that need no answer.
@@ -185,6 +191,10 @@ Where to start, by question:
 - [The session terminal](product/session-terminal.md) — the terminal showing the selected session: typing, copying,
   scrollback, reconnecting and states.
 - [Links in terminal output](product/terminal-links.md) — how web addresses and file paths in terminals become links.
+- [Answers to a program's queries](product/terminal-queries.md) — which terminal queries Octoboard answers itself, the
+  colours and sizes a program reads, and the queries the clients answer.
+- [A terminal shown on several clients](product/terminals-on-several-clients.md) — which client counts as most
+  recently active, how a terminal's size is decided while several clients show it, and where its colours come from.
 - [Terminal panel](product/terminal-panel.md) — the right pane's Terminal panel: tabs, actions and the shell terminal.
 - [Shell terminals](product/shell-terminals.md) — plain shells the daemon runs for a project: ownership, title and
   closing.
@@ -211,6 +221,9 @@ Where to start, by question:
   Windows installer).
 - [Application lifecycle](product/application-lifecycle.md) — startup, daemon connection and its key, restarting a
   daemon that dies, closing, quitting, crashes, logs and owned files.
+- [Process holders](product/process-holders.md) — the processes that run sessions and shell terminals so they outlive
+  a daemon that goes down without stopping: what a daemon start takes over, the inexact screen, helpers through the
+  holder, holder builds and their copies.
 - [Launch at login](product/launch-at-login.md) — opening Octoboard when the user logs in: the system entry it reflects,
   waiting for approval on macOS, and the hidden start at a login launch.
 - [Keeping the computer awake](product/keeping-the-computer-awake.md) — Prevent sleep, held by the daemon on its host:
@@ -318,7 +331,8 @@ Where to start, by question:
   jsdom test pitfalls.
 - [Writing daemon tests](memory/writing-daemon-tests.md) — fixtures that are real processes: sharing one exec'd script,
   bounding waits by `PATIENCE` and waiting for the condition itself, signal windows in fixtures, stand-in markers,
-  seeded model lists, keeping tests off the real agent CLI, testing budgets by lowering them.
+  seeded model lists, keeping tests off the real agent CLI and the user's live data directory, testing budgets by
+  lowering them.
 - [Writing daemon code](memory/writing-daemon-code.md) — which session state is stored and which lives in memory, where
   live state lives, store writes, raising versions only between releases, timing, threads, process cleanup, linting,
   and provider interface defaults that claim nothing.

@@ -56,6 +56,10 @@ pub(super) struct Persisted {
     /// The terminal sessions recorded for the launches, whose members a restart stops.
     #[serde(default)]
     pub sessions: Vec<PersistedSession>,
+    /// The sessions of `sessions` that belong to a launch other than an ended one, with the launch,
+    /// for a daemon that adopts that launch to take them back.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub launch_sessions: Vec<PersistedLaunchSession>,
     /// The project each kept process is listed under, for those that have one.
     #[serde(default)]
     pub kept_projects: Vec<PersistedKeptProject>,
@@ -97,6 +101,20 @@ impl Persisted {
                     leader_start,
                 })
                 .collect(),
+            launch_sessions: book
+                .launches
+                .iter()
+                .filter(|(launch_id, _)| launch_id.as_str() != ENDED)
+                .flat_map(|(launch_id, launch)| {
+                    launch.sessions.iter().map(move |(&sid, &leader_start)| {
+                        PersistedLaunchSession {
+                            sid: sid.0 as i32,
+                            leader_start,
+                            launch: launch_id.clone(),
+                        }
+                    })
+                })
+                .collect(),
             kept_projects: book
                 .kept_projects
                 .iter()
@@ -121,6 +139,10 @@ impl Persisted {
     /// are listed under, its sessions to be proven by the first scan (see
     /// [`Book::read_back_sessions`]), and every process it attributed and did not keep as an
     /// ended launch's. Answers the processes held for an ended launch from then on.
+    ///
+    /// A launch the book follows already was adopted from the run that wrote the file, which it
+    /// outlived: what the file attributed to it, and the sessions it recorded for it, go back to
+    /// it instead.
     pub fn read_back(&self, book: &mut Book) -> HashSet<Identity> {
         book.kept.extend(self.kept.iter().copied());
         let sessions = |sessions: &[PersistedSession]| {
@@ -154,6 +176,33 @@ impl Persisted {
                 book.kept_session_projects
                     .entry(sid)
                     .or_insert_with(|| session.project.clone());
+            }
+        }
+        for process in &self.attributed {
+            let id = process.identity();
+            if process.launch != ENDED
+                && book.launches.contains_key(&process.launch)
+                && !book.kept.contains(&id)
+            {
+                book.attributed.insert(
+                    id,
+                    Attributed {
+                        launch: process.launch.clone(),
+                        sid: process.session(),
+                    },
+                );
+            }
+        }
+        for session in &self.launch_sessions {
+            if session.launch == ENDED || !book.launches.contains_key(&session.launch) {
+                continue;
+            }
+            let sid = ContainerId(session.sid as u32);
+            if let Some(ended) = book.launches.get_mut(ENDED) {
+                ended.sessions.remove(&sid);
+            }
+            if let Some(launch) = book.launches.get_mut(&session.launch) {
+                launch.sessions.entry(sid).or_insert(session.leader_start);
             }
         }
         for process in &self.attributed {
@@ -195,6 +244,15 @@ pub(super) struct PersistedSessionProject {
 pub(super) struct PersistedSession {
     pub sid: i32,
     pub leader_start: Option<u64>,
+}
+
+/// A terminal session recorded for the launch `launch`, as [`PersistedSession`] is for a launch
+/// in general.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(super) struct PersistedLaunchSession {
+    pub sid: i32,
+    pub leader_start: Option<u64>,
+    pub launch: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

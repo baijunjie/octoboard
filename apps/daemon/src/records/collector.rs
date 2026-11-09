@@ -689,6 +689,7 @@ mod tests {
             icon: None,
             console_session_prompt: None,
             created_at: 0,
+            versions: Default::default(),
         };
         state.store.insert_console(&console).unwrap();
         let root = directory.join("account");

@@ -8,10 +8,10 @@ use anyhow::Result;
 use crate::accounts::quotas;
 use crate::project_git;
 use crate::protocol::{
-    error_code, AgentId, CodedError, Event, GitWorkflowSettingsChanges, KeepAwakeWhen,
+    error_code, AgentId, CodedError, GitWorkflowSettingsChanges, KeepAwakeWhen, GIT_WORKFLOW_ITEMS,
 };
 use crate::providers::{SettingDescriptor, SettingValue};
-use crate::state::{broadcast_settings, AppState};
+use crate::state::{broadcast_settings, AppState, RecordKey, SETTINGS_FIELDS};
 
 use super::validate::{absolute_path, normalise_tags};
 
@@ -92,6 +92,89 @@ pub struct SettingsChanges {
     /// By agent wire name, replacing that agent's tags, which are normalised as a project's are;
     /// an agent left out is left alone. Refused for a name that is no agent.
     pub agent_tags: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+impl SettingsChanges {
+    /// The versioned settings paths these changes write (see `crate::state::FieldVersions`), in no
+    /// particular order, named by the constants that list the paths of a settings record.
+    fn paths(&self) -> Vec<String> {
+        // Each in the order of `SETTINGS_FIELDS` and `GIT_WORKFLOW_ITEMS`; the tests pair every
+        // flag with its name.
+        let fields: [bool; SETTINGS_FIELDS.len()] = [
+            self.auto_close_idle_shell_terminals.is_some(),
+            self.auto_pull_repositories.is_some(),
+            self.auto_delete_unresumable_archives.is_some(),
+            self.auto_approve_session_requests.is_some(),
+            self.auto_approve_resume_requests.is_some(),
+            self.auto_approve_account_switches.is_some(),
+            self.auto_approve_handoffs.is_some(),
+            self.ask_questions_as_choices.is_some(),
+            self.interface_language.is_some(),
+            self.keep_awake.is_some(),
+            self.keep_awake_when.is_some(),
+            self.auto_select_account.is_some(),
+            self.auto_switch_on_usage_limit.is_some(),
+            self.auto_start_quota_windows.is_some(),
+            self.default_clone_dir.is_some(),
+            self.resume_sessions_on_start.is_some(),
+        ];
+        let git = &self.git_workflow;
+        let git_items: [bool; GIT_WORKFLOW_ITEMS.len()] = [
+            git.development.is_some(),
+            git.squash_before_delivery.is_some(),
+            git.rebase_before_delivery.is_some(),
+            git.delivery.is_some(),
+            git.revert_gate.is_some(),
+        ];
+        let mut paths: Vec<String> = SETTINGS_FIELDS
+            .into_iter()
+            .zip(fields)
+            .filter(|(_, set)| *set)
+            .map(|(name, _)| name.to_string())
+            .collect();
+        paths.extend(
+            GIT_WORKFLOW_ITEMS
+                .into_iter()
+                .zip(git_items)
+                .filter(|(_, set)| *set)
+                .map(|(item, _)| format!("git_workflow.{item}")),
+        );
+        for (agent, settings) in &self.provider_settings {
+            paths.extend(
+                settings
+                    .keys()
+                    .map(|setting| format!("provider_settings.{agent}.{setting}")),
+            );
+        }
+        paths.extend(
+            self.agent_tags
+                .keys()
+                .map(|agent| format!("agent_tags.{agent}")),
+        );
+        paths
+    }
+
+    /// Of `versions` (the settings versions a client read), those of the paths these changes
+    /// write.
+    pub fn versions_read(&self, versions: &BTreeMap<String, u64>) -> BTreeMap<String, u64> {
+        let paths = self.paths();
+        versions
+            .iter()
+            .filter(|(path, _)| paths.contains(path))
+            .map(|(path, version)| (path.clone(), *version))
+            .collect()
+    }
+}
+
+/// [`update_settings`] for a write based on the versions `base` (none: unchecked), checked and
+/// applied under the lock of the checked writes (see [`AppState::checked_write`]).
+pub(crate) async fn update_settings_checked(
+    state: &Arc<AppState>,
+    changes: SettingsChanges,
+    base: &BTreeMap<String, u64>,
+) -> Result<()> {
+    let _checked = state.checked_write(&RecordKey::Settings, base).await?;
+    update_settings(state, changes)
 }
 
 /// Applies `changes`: absent means "leave it alone", as in `update_project`. Broadcasts
@@ -217,9 +300,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     if !changed {
         return Ok(());
     }
-    state.broadcast(Event::SettingsUpdated {
-        settings: state.store.get_settings()?,
-    });
+    broadcast_settings(state)?;
     // Turning the automatic pull on takes effect at once rather than at the client's next
     // five-minute sweep: the branches already known to be behind are fast-forwarded now (see
     // `project_git::status::pull_behind_projects`).

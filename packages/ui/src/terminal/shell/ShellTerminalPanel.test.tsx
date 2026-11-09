@@ -9,7 +9,9 @@ import { setGitModeWorktree } from "../../project-browser/gitModeWorktree";
 import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { presence, stubListMotion } from "../../components/motion/listMotionTestSupport";
+import { tap, press as pressMark } from "../../components/hint/tooltipTestSupport";
 import { isolate } from "../../i18n/isolate";
+import { currentLanguage, setLanguage } from "../../i18n/language";
 import { PanelFrameProvider, type PanelFrame } from "../../components/panel/PanelHeader";
 import { PlatformProvider } from "../../platform/react";
 import type { Event, Project, ClientRequestBody, ShellTerminal } from "../../protocol";
@@ -504,4 +506,88 @@ it("leaves focus where the confirmation put it back, with no ring, when the daem
   expect(document.activeElement).toBe(view);
   expect(getInteractionModality()).not.toBe("keyboard");
   expect(panel.tabs()).toHaveLength(2);
+});
+
+const RECOVERED = "Recovered terminal display";
+const BODY = "The display was rebuilt after a connection interruption. Earlier output and parts of the screen may be missing.";
+const marks = (panel: ReturnType<typeof mount>) => Array.from(panel.container.querySelectorAll<HTMLButtonElement>("button[data-status-mark]"));
+const popover = () => document.querySelector('[role="dialog"]');
+const setTerminals = (panel: ReturnType<typeof mount>, terminals: ShellTerminal[]) =>
+  act(() => panel.store.setState({ shellTerminals: new Map(terminals.map((terminal) => [terminal.id, terminal])) }));
+
+it("draws no note while the flag is false or absent", () => {
+  expect(marks(mount([shell("a", 1), shell("b", 2, { screen_inexact: false })]))).toEqual([]);
+});
+
+it("draws one note, outside every tab, for the shown terminal alone, named for that terminal", () => {
+  const panel = mount([shell("older", 1, { screen_inexact: true }), shell("newer", 2)]);
+  // `newer` is shown, so `older`'s flag draws nothing.
+  expect(marks(panel)).toEqual([]);
+  setTerminals(panel, [shell("older", 1, { screen_inexact: true }), shell("newer", 2, { screen_inexact: true })]);
+  const [mark, ...rest] = marks(panel);
+  expect(rest).toEqual([]);
+  expect(mark.getAttribute("aria-label")).toBe(`${RECOVERED} (${isolate("shell newer")})`);
+  expect(mark.querySelector("svg.lucide-info")).not.toBeNull();
+  expect(mark.closest("[role=tab]")).toBeNull();
+  expect(panel.tabs().some((tab) => tab.querySelector("[data-status-mark]"))).toBe(false);
+});
+
+it("keeps the note while the flag stays true across a redraw of the record, and drops it when the flag goes", () => {
+  const panel = mount([shell("a", 1, { screen_inexact: true })]);
+  const mark = marks(panel)[0];
+  setTerminals(panel, [shell("a", 1, { screen_inexact: true, busy: true, title: "renamed" })]);
+  expect(marks(panel)).toHaveLength(1);
+  expect(marks(panel)[0].getAttribute("aria-label")).toBe(`${RECOVERED} (${isolate("renamed")})`);
+  expect(mark.isConnected).toBe(true);
+  setTerminals(panel, [shell("a", 1, { screen_inexact: false })]);
+  expect(marks(panel)).toEqual([]);
+});
+
+it("opens the explanation from the keyboard and from a touch", () => {
+  const panel = mount([shell("a", 1, { screen_inexact: true })]);
+  const mark = marks(panel)[0];
+  act(() => mark.focus());
+  tap(mark, "Enter");
+  expect(popover()?.getAttribute("aria-label")).toBe(`${RECOVERED} (${isolate("shell a")})`);
+  expect(popover()?.textContent).toBe(BODY);
+  act(() => void popover()!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(popover()).toBeNull();
+  pressMark(mark, "touch");
+  expect(popover()?.textContent).toBe(BODY);
+});
+
+it("words the note in the interface language and places it by flow, not by a physical side, under right-to-left", () => {
+  const before = currentLanguage();
+  setLanguage("ar");
+  onTestFinished(() => setLanguage(before));
+  const panel = mount([shell("a", 1, { screen_inexact: true })]);
+  const mark = marks(panel)[0];
+  expect(mark.getAttribute("aria-label")).toContain("تمت استعادة عرض الوحدة الطرفية");
+  const box = mark.parentElement!;
+  expect(`${box.className} ${mark.className}`).not.toMatch(/(^|\s)(ml|mr|left|right|pl|pr)-/);
+});
+
+it("hands focus to the shown tab, with the focus ring, when the note goes while the mark holds focus", async () => {
+  const panel = mount([shell("a", 1, { screen_inexact: true })]);
+  act(() => marks(panel)[0].focus());
+  pointerModality();
+  setTerminals(panel, [shell("a", 1, { screen_inexact: false })]);
+  expect(marks(panel)).toEqual([]);
+  await vi.waitFor(() => expect(document.activeElement).toBe(panel.tabs()[0]));
+  expect(getInteractionModality()).toBe("keyboard");
+});
+
+it("leaves focus alone when the note goes while focus is elsewhere", () => {
+  const panel = mount([shell("a", 1, { screen_inexact: true })]);
+  const button = panel.container.querySelector<HTMLButtonElement>('button[aria-label="New terminal"]')!;
+  act(() => button.focus());
+  setTerminals(panel, [shell("a", 1, { screen_inexact: false })]);
+  expect(document.activeElement).toBe(button);
+});
+
+it("draws no mark or state for a terminal whose process cannot be reached, which stays a running tab among the others", () => {
+  const panel = mount([shell("a", 1), shell("b", 2, { holder_link: "pending" })]);
+  expect(panel.tabs().map((tab) => tab.textContent)).toEqual(["shell a", "shell b"]);
+  expect(panel.container.querySelectorAll("[data-status-mark-id]")).toHaveLength(0);
+  expect(panel.container.querySelectorAll("[data-view]")).toHaveLength(2);
 });

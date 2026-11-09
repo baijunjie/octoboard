@@ -12,12 +12,25 @@
 //! rules in `attribute.rs`. A process is told by its pid and start time ([`crate::platform::proc::ProcessIdentity`]), and
 //! every signal checks the start time again just before it is sent.
 //!
+//! A launch whose agent a starting daemon adopts is followed from the start, before the reconcile,
+//! so what the previous run recorded for it stays its own and is stopped with it, not as an ended
+//! launch's. Until the reconcile has read the previous run's file
+//! ([`ProcessLedger::await_reconcile`]), the scanner stops nothing and nothing is written, and the
+//! stop of a launch that ends meanwhile waits for it, so that file is read as it was left.
+//!
 //! The processes of a launch are stopped when its agent process ends ([`ProcessLedger::end_launch`],
 //! called before the session reads as stopped, and so before an archive removes its worktree), when
 //! one of them has worked in a removed directory for [`CWD_GRACE`], and, after a restart or crash
 //! of the daemon, by [`ProcessLedger::reconcile`] from what the previous run wrote down. What the
-//! user chose to keep is never stopped, and neither is the daemon, one of its ancestors or one of
-//! its direct children.
+//! user chose to keep is never stopped, and neither is the daemon, one of its ancestors, a holder
+//! process (see [`crate::holder`]) or a direct child of the daemon or of a holder.
+//!
+//! Where the host keeps a launch's processes in a container the ledger can end as a whole (on
+//! Linux, a cgroup v2 group, when the daemon's cgroup lets it make one), a launch's containment
+//! lists its members, which a scan attributes to it, and the end of the launch kills what is still
+//! in it once the rounds of signals are through, and removes it: nothing a launch started escapes
+//! it, however it detached. Kept processes, and those moved to another launch, are moved out of
+//! it when kept or moved, and again just before it is ended.
 //!
 //! A launch's processes can change hands instead ([`attribute::Book::transfer`]): all of them when
 //! its agent ends after a handoff, an account switch, a model change or a change of an account's
@@ -59,7 +72,7 @@ use std::time::{Duration, Instant};
 use attribute::{Book, Launch, ENDED};
 use table::{EnvTag, Identity};
 
-use crate::platform::proc::{ChildHandle, ContainerId, Containment, ProcessId};
+use crate::platform::proc::{ContainerId, Containment, ProcessId};
 use crate::protocol::{ProcessCount, ProcessTree};
 
 pub use crate::platform::proc::TAG_VARIABLE;
@@ -97,6 +110,7 @@ pub fn forget_inherited_tag() {
 /// as [`TAG_VARIABLE`], and the containment the host keeps them in where it lists their members.
 #[derive(Debug, Clone)]
 pub struct ProcessTag {
+    instance: String,
     launch: String,
     containment: Arc<Containment>,
 }
@@ -104,6 +118,12 @@ pub struct ProcessTag {
 impl ProcessTag {
     pub fn launch_id(&self) -> &str {
         &self.launch
+    }
+
+    /// The id of the daemon instance the launch belongs to, which names its containment together
+    /// with [`Self::launch_id`].
+    pub fn instance_id(&self) -> &str {
+        &self.instance
     }
 
     /// What the launch's process is started in and taken into once started.
@@ -196,9 +216,31 @@ struct Scans {
 /// (see [`trees`]).
 type Listings = HashMap<Identity, HashSet<Identity>>;
 
+/// Whether the stop of what the previous run left waits ([`ProcessLedger::hold_previous_run`]).
+#[derive(Default)]
+struct PreviousRun {
+    /// The stop waits.
+    holding: bool,
+    /// What the reconcile found left by the previous run while the stop waited: neither these
+    /// nor what descends from them is stopped until [`ProcessLedger::release_previous_run`].
+    held: HashSet<Identity>,
+    /// The launch the previous run's file attributed each process to, for a launch no one
+    /// followed when the reconcile read it back (the file's launch, not [`ENDED`]): a launch
+    /// followed later, its agent adopted from a holder linked to late, takes them back
+    /// ([`ProcessLedger::take_back_previous`]).
+    recorded: HashMap<Identity, String>,
+    /// The terminal sessions the file recorded for such launches, with their leaders' start
+    /// times, by launch.
+    sessions: HashMap<String, Vec<(ContainerId, Option<u64>)>>,
+    /// The processes taken back so far, with the launch each went to, so that at the release
+    /// what descends from them goes along.
+    taken_back: HashMap<Identity, String>,
+}
+
 pub struct ProcessLedger {
     instance: String,
-    /// The daemon's own pid, which with its ancestors and direct children is never attributed.
+    /// The daemon's own pid, which with its ancestors, its direct children, and the holders and
+    /// their direct children is never attributed.
     own: ProcessId,
     file: PathBuf,
     book: Mutex<Book>,
@@ -213,6 +255,15 @@ pub struct ProcessLedger {
     reconcile_asked: AtomicBool,
     /// The reconcile was asked for and has not run yet; the scanner thread runs it.
     reconcile_pending: AtomicBool,
+    /// The previous run's file has not been read back yet: no tick scans or stops anything and
+    /// nothing is written until the reconcile has (see [`Self::await_reconcile`]).
+    awaiting_reconcile: AtomicBool,
+    /// The launches whose end came while the reconcile was awaited: marked ending, and stopped
+    /// once the reconcile has read the file ([`Self::reconciled`]). Held across the check of
+    /// `awaiting_reconcile` that queues one, and across the release that takes them.
+    deferred_ends: Mutex<Vec<String>>,
+    /// What the previous run left that is not stopped yet ([`Self::hold_previous_run`]).
+    previous: Mutex<PreviousRun>,
     /// The daemon is shutting down: nothing is carried over any more ([`Self::close`]).
     closing: AtomicBool,
     listings: Mutex<Listings>,
@@ -246,6 +297,9 @@ pub struct ProcessLedger {
     /// What reads the system's report of a working directory in place of the system, for a test.
     #[cfg(test)]
     cwd_read: Mutex<Option<looks::CwdRead>>,
+    /// Where the holders' registry files are: the processes of the holders, and of what they run,
+    /// are the daemon's own to the ledger, as the daemon's direct children are.
+    holders_dir: PathBuf,
 }
 
 /// A look at a working directory a test puts in place of the file system's.
@@ -268,6 +322,9 @@ impl ProcessLedger {
             scanner: OnceLock::new(),
             reconcile_asked: AtomicBool::new(false),
             reconcile_pending: AtomicBool::new(false),
+            awaiting_reconcile: AtomicBool::new(false),
+            deferred_ends: Mutex::new(Vec::new()),
+            previous: Mutex::new(PreviousRun::default()),
             closing: AtomicBool::new(false),
             listings: Mutex::new(Listings::new()),
             lists: Mutex::new(HashMap::new()),
@@ -286,6 +343,7 @@ impl ProcessLedger {
             cwd_look: Mutex::new(None),
             #[cfg(test)]
             cwd_read: Mutex::new(None),
+            holders_dir: crate::paths::holders_dir_in(dir),
         })
     }
 
@@ -314,6 +372,14 @@ impl ProcessLedger {
             .expect("process ledger scans lock poisoned")
     }
 
+    /// The session the book follows the launch `launch_id` for, if it follows it.
+    #[cfg(test)]
+    pub(crate) fn followed_session(&self, launch_id: &str) -> Option<String> {
+        let book = self.book();
+        let launch = book.followed_as(launch_id)?;
+        book.launches.get(launch)?.session_id.clone()
+    }
+
     fn book(&self) -> MutexGuard<'_, Book> {
         self.book.lock().expect("process ledger lock poisoned")
     }
@@ -324,6 +390,15 @@ impl ProcessLedger {
             return grace;
         }
         CWD_GRACE
+    }
+
+    /// Keeps the ledger from scanning for stops and from writing its file until the reconcile has
+    /// run, which [`Self::start`] with `reconcile` asks for. The daemon calls it before anything
+    /// registers a launch, since a launch followed earlier than the reconcile starts the scanner
+    /// thread, whose first tick would otherwise stop what the previous run's file says was kept
+    /// and write the file over with a book that has not read it.
+    pub fn await_reconcile(&self) {
+        self.awaiting_reconcile.store(true, Ordering::Release);
     }
 
     /// Starts the scanner thread unless it runs already, and with `reconcile` has it stop what a
@@ -340,6 +415,7 @@ impl ProcessLedger {
                 .spawn(move || scan::run_scanner(ledger));
             if let Err(err) = spawned {
                 tracing::warn!(%err, "starting the process ledger's thread failed; processes agents leave running are stopped only when their launch ends");
+                self.reconciled();
             }
         });
     }
@@ -348,8 +424,11 @@ impl ProcessLedger {
     /// environment, with the containment its processes are kept in.
     pub fn begin_launch(self: &Arc<Self>, session_id: &str) -> std::io::Result<PendingLaunch> {
         let launch = uuid::Uuid::new_v4().to_string();
-        let containment = Arc::new(Containment::create(&self.instance, &launch)?);
-        self.book().launches.insert(
+        // Made under the lock, so that the reconcile, which takes in what an earlier run left
+        // under the lock too, never finds this containment before the book has the launch.
+        let mut book = self.book();
+        let containment = Arc::new(Containment::for_launch(&self.instance, &launch)?);
+        book.launches.insert(
             launch.clone(),
             Launch {
                 session_id: Some(session_id.to_string()),
@@ -360,22 +439,181 @@ impl ProcessLedger {
         Ok(PendingLaunch {
             ledger: self.clone(),
             tag: ProcessTag {
+                instance: self.instance.clone(),
                 launch,
                 containment,
             },
         })
     }
 
-    /// Follows the launch `launch_id` of the session `session_id`, whose agent process `agent` has
+    /// Takes into the launch `launch_id`, which a daemon that has since gone started and whose
+    /// agent a daemon adopts, the containment the host still keeps for it, where the host lists
+    /// one's members. Done before [`Self::launch_started`] follows the launch, and before the
+    /// reconcile reads the previous run's file back.
+    pub fn containment_adopted(&self, launch_id: &str) {
+        let Some(containment) = Containment::reopen(&self.instance, launch_id)
+            .filter(|containment| containment.members().is_some())
+        else {
+            return;
+        };
+        let mut book = self.book();
+        let launch = book.launches.entry(launch_id.to_string()).or_default();
+        // Taken in already while its holder could not be linked to (`Self::launch_unlinked`).
+        if launch.containments.is_empty() {
+            launch.containments.push(Arc::new(containment));
+        }
+        self.take_back_previous(&mut book, launch_id);
+    }
+
+    /// Has the reconcile keep, rather than stop, what the previous run left: a holder the daemon
+    /// cannot link to yet may run the agent of a launch no record places, which would otherwise
+    /// read as ended. The previous run's file is read back and this run's launches are followed,
+    /// scanned, ended and written down as ever; only what the reconcile finds left, and what
+    /// descends from it, waits for [`Self::release_previous_run`]. Called before
+    /// [`Self::start`] asks for the reconcile.
+    pub fn hold_previous_run(&self) {
+        self.previous_run().holding = true;
+    }
+
+    /// Lets what [`Self::hold_previous_run`] kept be stopped, by the next scan, as an ended
+    /// launch's: no holder is left that may run it. What a launch followed now was recorded for
+    /// goes to that launch instead, and so does what descends from what it took back, attributed
+    /// to an ended launch while it was held. **Blocks** on a read of the process table, unless
+    /// the reconcile has kept nothing yet, which then stops as ever.
+    pub fn release_previous_run(&self) {
+        {
+            let mut previous = self.previous_run();
+            if previous.held.is_empty() {
+                *previous = PreviousRun::default();
+                return;
+            }
+        }
+        let table = self.read_table();
+        let mut book = self.book();
+        self.take_back_followed(&mut book);
+        let mut previous = self.previous_run();
+        if let Some(table) = table {
+            let ended: Vec<Identity> = book
+                .attributed
+                .iter()
+                .filter(|(_, attributed)| attributed.launch == ENDED)
+                .map(|(id, _)| *id)
+                .collect();
+            for id in ended {
+                let Some(proc) = table.get(id.pid).filter(|proc| proc.id == id) else {
+                    continue;
+                };
+                let heir = table
+                    .ancestors(proc)
+                    .find_map(|ancestor| previous.taken_back.get(&ancestor.id).cloned());
+                if let (Some(launch), Some(attributed)) = (heir, book.attributed.get_mut(&id)) {
+                    attributed.launch = launch;
+                    book.dirty = true;
+                }
+            }
+        }
+        *previous = PreviousRun::default();
+    }
+
+    /// [`Self::take_back_previous`] for every launch something held was recorded for that the
+    /// book follows now. Called with the book's lock held.
+    fn take_back_followed(&self, book: &mut Book) {
+        let launches: HashSet<String> = self.previous_run().recorded.values().cloned().collect();
+        for launch in launches {
+            if let Some(followed) = book.followed_as(&launch).map(str::to_string) {
+                self.take_back_previous_as(book, &launch, &followed);
+            }
+        }
+    }
+
+    /// Moves to the launch `launch_id`, which the book follows from now on, what the reconcile
+    /// kept of the previous run as that launch's while the stop was held: the processes the
+    /// previous run's file attributed to it, which the read-back gave an ended launch, and its
+    /// terminal sessions. They stay held, with what descends from them, until
+    /// [`Self::release_previous_run`]. Called with the book's lock held.
+    fn take_back_previous(&self, book: &mut Book, launch_id: &str) {
+        self.take_back_previous_as(book, launch_id, launch_id);
+    }
+
+    /// [`Self::take_back_previous`] of what was recorded for `recorded`, which the book follows
+    /// as `followed` (the same, or the launch it was carried over to).
+    fn take_back_previous_as(&self, book: &mut Book, recorded: &str, followed: &str) {
+        let mut previous = self.previous_run();
+        let ids: Vec<Identity> = previous
+            .recorded
+            .iter()
+            .filter(|(_, launch)| launch.as_str() == recorded)
+            .map(|(id, _)| *id)
+            .collect();
+        for id in ids {
+            previous.recorded.remove(&id);
+            if let Some(attributed) = book.attributed.get_mut(&id) {
+                if attributed.launch == ENDED {
+                    attributed.launch = followed.to_string();
+                    book.dirty = true;
+                }
+            }
+            previous.taken_back.insert(id, followed.to_string());
+        }
+        for (sid, leader_start) in previous.sessions.remove(recorded).unwrap_or_default() {
+            if let Some(ended) = book.launches.get_mut(ENDED) {
+                ended.sessions.remove(&sid);
+            }
+            if let Some(launch) = book.launches.get_mut(followed) {
+                launch.sessions.entry(sid).or_insert(leader_start);
+                book.dirty = true;
+            }
+        }
+    }
+
+    fn previous_run(&self) -> MutexGuard<'_, PreviousRun> {
+        self.previous
+            .lock()
+            .expect("process ledger previous run lock poisoned")
+    }
+
+    /// Takes out of `doomed` what the previous run left while its stop waits, and what descends
+    /// from it in `table`.
+    fn spare_previous_run(&self, doomed: &mut HashSet<Identity>, table: &table::Table) {
+        let previous = self.previous_run();
+        if previous.held.is_empty() {
+            return;
+        }
+        doomed.retain(|id| {
+            !previous.held.contains(id)
+                && !table.get(id.pid).is_some_and(|proc| {
+                    table
+                        .ancestors(proc)
+                        .any(|ancestor| previous.held.contains(&ancestor.id))
+                })
+        });
+    }
+
+    /// Follows the launch `launch_id` of the session `session_id`, whose agent a holder the daemon
+    /// cannot link to yet runs, with the containment the host still keeps for it where the host
+    /// lists one's members: what the previous run's file attributed to the launch stays the
+    /// launch's rather than going to an ended launch, so the reconcile stops none of it. Once the
+    /// holder is linked to and the agent adopted, [`Self::launch_started`] follows it on; once the
+    /// holder is known to be gone, [`Self::end_launch`] ends it. Done before the reconcile reads
+    /// the previous run's file back.
+    pub fn launch_unlinked(&self, launch_id: &str, session_id: &str) {
+        let containment = Containment::reopen(&self.instance, launch_id)
+            .filter(|containment| containment.members().is_some())
+            .map(Arc::new);
+        let mut book = self.book();
+        let launch = book.launches.entry(launch_id.to_string()).or_default();
+        launch
+            .session_id
+            .get_or_insert_with(|| session_id.to_string());
+        // Its agent runs: a process carrying its tag is the launch's, not one left by an end.
+        launch.started = true;
+        launch.containments.extend(containment);
+    }
+
+    /// Follows the launch `launch_id` of the session `session_id`, whose agent process `pid` has
     /// just been started and is not reaped yet. A launch id not reserved before is followed all
     /// the same.
-    pub fn launch_started(
-        self: &Arc<Self>,
-        launch_id: &str,
-        session_id: &str,
-        agent: &ChildHandle,
-    ) {
-        let pid = agent.pid();
+    pub fn launch_started(self: &Arc<Self>, launch_id: &str, session_id: &str, pid: ProcessId) {
         let session = ContainerId(pid.0);
         let agent = table::start_of(pid).map(|start_micros| Identity { pid, start_micros });
         let mut book = self.book();
@@ -390,6 +628,9 @@ impl ProcessLedger {
         launch.session_id = Some(session_id.to_string());
         launch.started = true;
         launch.agent = agent;
+        // An agent adopted from a holder linked to after the reconcile: what the previous run
+        // recorded for its launch is its own again.
+        self.take_back_previous(&mut book, launch_id);
         if let Some(agent) = agent {
             book.horizon = Some(
                 book.horizon
@@ -442,13 +683,15 @@ impl ProcessLedger {
         if launch_id == ENDED {
             return;
         }
-        let heir = {
+        {
             let mut book = self.book();
             loop {
                 match book.launches.get_mut(launch_id) {
                     None => return,
                     // Carried over by an end before this one.
                     Some(launch) if launch.held => return,
+                    // Its end waits for the reconcile, which no caller is to wait for.
+                    Some(launch) if launch.ending && self.end_is_deferred(launch_id) => return,
                     Some(launch) if launch.ending => {
                         book = self
                             .launch_left
@@ -461,8 +704,20 @@ impl ProcessLedger {
                     }
                 }
             }
-            book.heir_of(launch_id).is_some()
-        };
+        }
+        // Before the reconcile has read the previous run's file, a scan or a stop would decide
+        // from a book that has not read it: the launch stays marked ending, and the reconcile
+        // ends it once it is through.
+        if self.defer_end(launch_id) {
+            return;
+        }
+        self.end_marked_launch(launch_id);
+    }
+
+    /// The rest of [`Self::end_launch`], for a launch marked ending: its carry-over if it has an
+    /// heir, else its stop. **Blocks.**
+    fn end_marked_launch(&self, launch_id: &str) {
+        let heir = self.book().heir_of(launch_id).is_some();
         // The scan attributes what the agent started since the last one, so it goes along.
         if heir && !self.closing.load(Ordering::Acquire) {
             self.scan(false);
@@ -471,6 +726,52 @@ impl ProcessLedger {
             }
         }
         self.stop_launch(launch_id);
+    }
+
+    /// Queues the end of the launch `launch_id` for [`Self::reconciled`] if the reconcile has not
+    /// read the previous run's file yet, and says whether it did.
+    fn defer_end(&self, launch_id: &str) -> bool {
+        {
+            let mut deferred = self
+                .deferred_ends
+                .lock()
+                .expect("process ledger deferred ends lock poisoned");
+            if !self.awaiting_reconcile.load(Ordering::Acquire) {
+                return false;
+            }
+            deferred.push(launch_id.to_string());
+        }
+        // A second call for the launch that is waiting on the first looks again. The book is
+        // taken first, so that a call between its look and its wait is not missed.
+        drop(self.book());
+        self.launch_left.notify_all();
+        true
+    }
+
+    /// Whether the end of the launch `launch_id` is queued for [`Self::reconciled`].
+    fn end_is_deferred(&self, launch_id: &str) -> bool {
+        self.deferred_ends
+            .lock()
+            .expect("process ledger deferred ends lock poisoned")
+            .iter()
+            .any(|queued| queued == launch_id)
+    }
+
+    /// The previous run's file has been read back, or never will be: the scanner may stop things
+    /// and the ledger write its file, and the ends of the launches that came meanwhile are carried
+    /// out. **Blocks**, for what they take.
+    fn reconciled(&self) {
+        let deferred = {
+            let mut deferred = self
+                .deferred_ends
+                .lock()
+                .expect("process ledger deferred ends lock poisoned");
+            self.awaiting_reconcile.store(false, Ordering::Release);
+            std::mem::take(&mut *deferred)
+        };
+        for launch_id in deferred {
+            self.end_marked_launch(&launch_id);
+        }
     }
 
     /// Stops what is attributed to the launch `launch_id`, which is marked ending, and stops
@@ -484,8 +785,10 @@ impl ProcessLedger {
         };
         // A read after the last round of signals too, which drops the sessions they emptied
         // before the file is written.
+        let mut unread = false;
         for pass in 0..=STOP_PASSES {
             let Some(table) = self.scan(false) else {
+                unread = true;
                 break;
             };
             // Read just before the signals, and never a kept process: a keep is refused once
@@ -502,6 +805,57 @@ impl ProcessLedger {
                 );
             }
             self.signal_round(&members);
+        }
+        // With the rounds cut short by a table that could not be read, a kill of everything in
+        // the containments would reach what was never asked to stop. They are left to the ended
+        // launch, as what is attributed still is, which the scanner stops with the rounds.
+        if unread {
+            tracing::warn!(
+                launch = launch_id,
+                "the process table could not be read; the launch's containments are left to the scanner"
+            );
+            return;
+        }
+        self.end_containments(launch_id);
+    }
+
+    /// Ends the containments of the launch `launch_id`, which is being stopped, where the host
+    /// ends one as a whole (on Linux, the launch's cgroup v2 group and the groups of the launches
+    /// carried over to it): what is still in them once the rounds of signals are through, which no
+    /// scan has attributed or which the rule for an agent's own terminal session leaves out, is
+    /// killed, and the groups are removed. A kept process, and one moved to another launch, is
+    /// moved out first, into that launch's group or into the cgroup the ended launch's group is in.
+    /// **Blocks**, for a moment.
+    fn end_containments(&self, launch_id: &str) {
+        let (containments, spared) = {
+            let book = self.book();
+            let Some(launch) = book.launches.get(launch_id) else {
+                return;
+            };
+            let mut spared: Vec<(Identity, Option<Arc<Containment>>)> =
+                book.kept.iter().map(|id| (*id, None)).collect();
+            spared.extend(
+                book.attributed
+                    .iter()
+                    .filter(|(_, attributed)| {
+                        attributed.launch != launch_id && attributed.launch != ENDED
+                    })
+                    .map(|(id, attributed)| {
+                        let into = book
+                            .launches
+                            .get(&attributed.launch)
+                            .and_then(|launch| launch.containments.first().cloned());
+                        (*id, into)
+                    }),
+            );
+            (launch.containments.clone(), spared)
+        };
+        let spared: Vec<(Identity, Option<&Containment>)> = spared
+            .iter()
+            .map(|(id, into)| (*id, into.as_deref()))
+            .collect();
+        for containment in containments {
+            containment.end(&spared);
         }
     }
 
@@ -543,20 +897,65 @@ impl ProcessLedger {
         // Into the book before anything that can fail: what the user kept must never be taken
         // for an ended launch's by a later scan. The first scan forgets what is gone, and drops
         // what would never be attributed and the sessions it cannot prove are the ones recorded.
-        let before = persisted.read_back(&mut self.book());
+        // What the file recorded for a launch the read-back found no one following, read under the
+        // same lock, so that a launch followed later (an agent adopted late) takes it back.
+        let (before, recorded, sessions) = {
+            let mut book = self.book();
+            let before = persisted.read_back(&mut book);
+            let unfollowed = |launch: &str| launch != ENDED && book.followed_as(launch).is_none();
+            let recorded: HashMap<Identity, String> = persisted
+                .attributed
+                .iter()
+                .filter(|process| unfollowed(&process.launch))
+                .map(|process| (process.identity(), process.launch.clone()))
+                .collect();
+            let mut sessions: HashMap<String, Vec<(ContainerId, Option<u64>)>> = HashMap::new();
+            for session in persisted
+                .launch_sessions
+                .iter()
+                .filter(|session| unfollowed(&session.launch))
+            {
+                sessions
+                    .entry(session.launch.clone())
+                    .or_default()
+                    .push((ContainerId(session.sid as u32), session.leader_start));
+            }
+            (before, recorded, sessions)
+        };
         self.reopen_containments(&persisted);
         let Some(table) = self.scan(true) else {
             tracing::warn!("listing processes failed; what a previous run left is not stopped");
+            self.reconciled();
             return;
         };
         if readable {
             let members = self.book().members_of(ENDED, &table);
-            if !members.is_empty() {
+            let stopped = {
+                let mut book = self.book();
+                let mut previous = self.previous_run();
+                if previous.holding && !members.is_empty() {
+                    tracing::info!(
+                        count = members.len(),
+                        "keeping what a previous run's agents left running until no holder the daemon cannot link to is left"
+                    );
+                    previous.held.extend(members);
+                    previous.recorded = recorded;
+                    previous.sessions = sessions;
+                    drop(previous);
+                    // A launch followed since the read-back, during the scan, takes back now
+                    // what was recorded for it.
+                    self.take_back_followed(&mut book);
+                    Vec::new()
+                } else {
+                    members
+                }
+            };
+            if !stopped.is_empty() {
                 tracing::info!(
-                    count = members.len(),
+                    count = stopped.len(),
                     "stopping what a previous run's agents left running"
                 );
-                self.stop_set(members, &table);
+                self.stop_set(stopped, &table);
             }
         } else {
             let mut book = self.book();
@@ -583,26 +982,34 @@ impl ProcessLedger {
                 );
             }
         }
+        // The file was read back above, so what is written from here on follows it.
+        self.reconciled();
         self.persist(true);
     }
 
-    /// Opens again the containments of the launches a previous run's ledger file attributed
-    /// processes to, for those the host lists the members of: what is in them is held for an
-    /// ended launch.
+    /// Opens again the containments of the launches of an earlier run, for those the host lists
+    /// the members of: the launches the previous run's ledger file attributed processes to, and
+    /// those whose containments the host still has ([`Containment::leftovers`]). What is in them
+    /// is held for an ended launch; one with nothing left in it is dropped, which on Linux removes
+    /// its group. A launch the book follows is never taken, an adopted one included, which keeps
+    /// its own containment ([`Self::containment_adopted`]): the lock is held throughout, as
+    /// [`Self::begin_launch`] holds it while it makes a launch's containment.
     fn reopen_containments(&self, persisted: &persist::Persisted) {
-        let launches: HashSet<&str> = persisted
+        let mut book = self.book();
+        let launches: HashSet<String> = persisted
             .attributed
             .iter()
-            .map(|process| process.launch.as_str())
-            .filter(|launch| *launch != ENDED)
+            .map(|process| process.launch.clone())
+            .chain(Containment::leftovers(&self.instance))
+            .filter(|launch| launch != ENDED && book.followed_as(launch).is_none())
             .collect();
         let reopened: Vec<Arc<Containment>> = launches
             .into_iter()
-            .filter_map(|launch| Containment::reopen(&self.instance, launch))
+            .filter_map(|launch| Containment::reopen(&self.instance, &launch))
             .filter(|containment| containment.members().is_some())
             .map(Arc::new)
             .collect();
-        if let Some(ended) = self.book().launches.get_mut(ENDED) {
+        if let Some(ended) = book.launches.get_mut(ENDED) {
             ended.containments.extend(reopened);
         }
     }
@@ -610,6 +1017,10 @@ impl ProcessLedger {
     /// Writes the ledger file if what a restart needs changed since it was last written; unless
     /// `now`, not sooner than [`WRITE_DEBOUNCE`] after the last write.
     fn persist(&self, now: bool) {
+        // What is not written now stays dirty, and the reconcile writes it.
+        if self.awaiting_reconcile.load(Ordering::Acquire) {
+            return;
+        }
         let mut last = self
             .writes
             .lock()

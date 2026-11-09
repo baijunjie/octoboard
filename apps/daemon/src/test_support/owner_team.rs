@@ -34,6 +34,7 @@ pub(crate) fn console() -> crate::protocol::Console {
         icon: None,
         console_session_prompt: None,
         created_at: 0,
+        versions: Default::default(),
     }
 }
 

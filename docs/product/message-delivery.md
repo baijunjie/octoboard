@@ -161,6 +161,19 @@ session is being handed off to another agent, whose queue is kept for the sessio
 for the original during a handoff" in `docs/product/handing-off-sessions.md`), or it is kept for an interrupted
 session, which stays kept for the next resume.
 
+**What is queued crosses a planned restart.** A planned stop (see "Planned restart and planned stop" in
+`docs/product/application-lifecycle.md`) leaves every session running, and with it what is queued for it. From the
+moment the stop begins nothing more is written into any session; a message sent meanwhile is queued, as for a session
+that cannot take one. Once the terminals are handed over, what is still queued for a running session — each message
+whole, in its order — is saved for the next daemon (`~/.octoboard/restart-outbox.json`, see "Files Octoboard owns" in
+`docs/product/application-lifecycle.md`), and from then on a message is refused with `daemon_shutting_down`, to be sent
+again once the daemon is back. The next daemon, once it has taken the sessions over, writes the saved messages into
+each session it took over still running the same process they were queued for, in order, each once. A session not
+running that process any more gets none of them, as a session whose process ended with messages queued gets none,
+apart from those kept for an interrupted session, which stay kept for its next resume; nor does a session whose
+process is taken over only later, once its holder can be connected to. A message written only in part when the stop
+began is not saved: it is reported lost, as a message cut short always is, and never written again whole.
+
 **Messages are also held while a session's trust confirmation may be up.** A message's trailing Enter would answer
 the agent's own folder-trust confirmation (see `docs/product/folder-trust.md`) — accepting it, and so trusting the
 folder, at Codex's and Grok Build's, and declining it, which exits the agent, at Claude Code's. So from every launch of

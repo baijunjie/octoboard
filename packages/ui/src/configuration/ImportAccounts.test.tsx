@@ -85,7 +85,7 @@ function mount(inspection: Omit<Inspection, "type">, sent?: (body: ClientRequest
   return mounted;
 }
 
-async function reviewing(inspection: Omit<Inspection, "type"> = { accounts: ACCOUNTS, consoles: CONSOLES, id: null, settings: null, settings_sections: [] }) {
+async function reviewing(inspection: Omit<Inspection, "type"> = { accounts: ACCOUNTS, consoles: CONSOLES, id: null, settings: null, settings_sections: [], settings_versions: {} }) {
   const mounted = mount(inspection);
   await press("Choose file");
   return mounted;
@@ -122,7 +122,7 @@ function type(input: HTMLInputElement, value: string): void {
 }
 
 it("has a tab for each region the document carries, and the accounts tab says it needs attention", async () => {
-  await reviewing({ accounts: ACCOUNTS, consoles: CONSOLES, settings: null, settings_sections: [], id: null });
+  await reviewing({ accounts: ACCOUNTS, consoles: CONSOLES, settings: null, settings_sections: [], settings_versions: {}, id: null });
   expect(tabs()).toEqual(["Consoles and projects, needs attention", "Agent accounts, needs attention"]);
 });
 
@@ -146,7 +146,7 @@ it("says each console is created as a new one at the top of the consoles panel, 
 });
 
 it("keeps the tab bar when the document carries only one region", async () => {
-  await reviewing({ accounts: ACCOUNTS, consoles: [], id: null, settings: null, settings_sections: [] });
+  await reviewing({ accounts: ACCOUNTS, consoles: [], id: null, settings: null, settings_sections: [], settings_versions: {} });
   expect(tabs()).toEqual(["Agent accounts, needs attention"]);
   // Importing that file is importing that region: nothing to check but the agents.
   expect(accountsBox()).toBeUndefined();
@@ -239,7 +239,7 @@ it("gives an agent with no account of its own a card of its default account's ch
 it("draws no card for an agent the file gives nothing", async () => {
   const [claude] = ACCOUNTS.agents;
   const idle = { agent: "codex" as const, default_name: null, default_name_applies: false, default_disabled: null, default_disabled_applies: false, accounts: [] };
-  await reviewing({ accounts: { ...ACCOUNTS, agents_to_add: [], agent_settings: { ...ACCOUNTS.agent_settings!, agent_tags: {} }, agents: [claude, idle] }, consoles: [], id: null, settings: null, settings_sections: [] });
+  await reviewing({ accounts: { ...ACCOUNTS, agents_to_add: [], agent_settings: { ...ACCOUNTS.agent_settings!, agent_tags: {} }, agents: [claude, idle] }, consoles: [], id: null, settings: null, settings_sections: [], settings_versions: {} });
   const headings = Array.from(document.body.querySelectorAll("section h3"), (heading) => heading.textContent);
   expect(headings).toContain("Claude Code");
   expect(headings).not.toContain("Codex");
@@ -333,7 +333,7 @@ it("tells an account whose directory is from another operating system so, and ne
     error: { code: "config_dir_not_absolute", params: { agent: "claude" }, message: "m" },
   });
   const named = account({ name: "Dup", foreign_directory: true, proposed_directory: null, status: "invalid", error: NAME_TAKEN });
-  await reviewing({ accounts: { ...ACCOUNTS, agents: [{ ...ACCOUNTS.agents[0], accounts: [foreign, named] }] }, consoles: [], id: null, settings: null, settings_sections: [] });
+  await reviewing({ accounts: { ...ACCOUNTS, agents: [{ ...ACCOUNTS.agents[0], accounts: [foreign, named] }] }, consoles: [], id: null, settings: null, settings_sections: [], settings_versions: {} });
   const notice = "The directory in the file was written on another operating system, so it cannot be used here.";
   // In the account's mark, never a loose line in the row.
   expect(row("Win").textContent).not.toContain(notice);
@@ -351,7 +351,7 @@ it("words the default account that holds a directory in the current language", a
   onTestFinished(() => setLanguage("en"));
   const [claude] = ACCOUNTS.agents;
   const inUse = account({ name: "Team", status: "directory_in_use", in_use_by: DEFAULT_ACCOUNT_NAME });
-  await reviewing({ accounts: { ...ACCOUNTS, agents: [{ ...claude, accounts: [inUse] }] }, consoles: [], id: null, settings: null, settings_sections: [] });
+  await reviewing({ accounts: { ...ACCOUNTS, agents: [{ ...claude, accounts: [inUse] }] }, consoles: [], id: null, settings: null, settings_sections: [], settings_versions: {} });
   await act(async () => setLanguage("zh-Hans"));
   const { text } = await markPopover(row("Team"));
   expect(text).toContain("该目录已被 默认 使用。");
@@ -364,7 +364,7 @@ it("offers only Leave out for an account whose name is the problem, and words th
   const codex = ACCOUNTS.agents[1];
   const dup = account({ name: "Dup", status: "invalid", error: NAME_TAKEN });
   const odd = account({ name: "Bad", status: "invalid", error: { code: "path_not_absolute", params: { path: "rel", tilde: "~" }, message: "m" } });
-  await reviewing({ accounts: { ...ACCOUNTS, agents: [ACCOUNTS.agents[0], { ...codex, accounts: [dup, odd] }] }, consoles: [], id: null, settings: null, settings_sections: [] });
+  await reviewing({ accounts: { ...ACCOUNTS, agents: [ACCOUNTS.agents[0], { ...codex, accounts: [dup, odd] }] }, consoles: [], id: null, settings: null, settings_sections: [], settings_versions: {} });
   await act(async () => row("Dup").querySelector<HTMLButtonElement>("button[aria-haspopup=listbox]")!.click());
   expect(Array.from(document.body.querySelectorAll("[role=option]")).map((o) => o.textContent)).toEqual(["Leave out"]);
   await act(async () => document.body.querySelector<HTMLElement>("[role=option]")!.click());
@@ -379,7 +379,7 @@ it("offers only Leave out for an account whose name is the problem, and words th
 
 it("keeps the fallback mark of a reference to an account that cannot be created for its name", async () => {
   const claude = { ...ACCOUNTS.agents[0], accounts: [account({ name: "Work", status: "invalid", error: NAME_TAKEN })] };
-  await reviewing({ accounts: { ...ACCOUNTS, agents: [claude] }, consoles: CONSOLES, id: null, settings: null, settings_sections: [] });
+  await reviewing({ accounts: { ...ACCOUNTS, agents: [claude] }, consoles: CONSOLES, id: null, settings: null, settings_sections: [], settings_versions: {} });
   const marks = () => Array.from(document.body.querySelectorAll("button[data-status-mark]")).map((mark) => mark.getAttribute("aria-label"));
   expect(marks()).toEqual(["Accounts not set up for ⁨Laptop⁩", "Accounts not set up for ⁨Site⁩"]);
 });
@@ -469,7 +469,7 @@ it("tells of each account's outcome in the result, with a note that the new ones
     (body) =>
       Promise.resolve(
         body.type === "inspect_configuration"
-          ? { type: "configuration_inspected", id: null, accounts: ACCOUNTS, consoles: [], settings: null, settings_sections: [] }
+          ? { type: "configuration_inspected", id: null, accounts: ACCOUNTS, consoles: [], settings: null, settings_sections: [], settings_versions: {} }
           : ({
             type: "configuration_imported",
             id: null,

@@ -221,44 +221,48 @@ fn load(captures: &[(&str, &str)]) -> String {
         .join("; ")
 }
 
-/// The device attributes and cursor position queries, which the daemon answers where
-/// `TermFacts::host_waits_on_queries`.
-const ANSWERED_QUERIES: [&str; 2] = ["\\e[c", "\\e[6n"];
+/// The queries in the captures that the daemon answers, each as `$'…'` spells it and as its
+/// bytes: the device attributes and the cursor position, unless the host answers those itself
+/// (`TermFacts::host_answers_queries`), and the foreground and background colours.
+static ANSWERED_QUERIES: [(&str, &[u8]); 4] = [
+    ("\\e[c", b"\x1b[c"),
+    ("\\e[6n", b"\x1b[6n"),
+    ("\\e]10;?\\e\\\\", b"\x1b]10;?\x1b\\"),
+    ("\\e]11;?\\e\\\\", b"\x1b]11;?\x1b\\"),
+];
 
-/// Reads the capture at `path`, quoted, into the variable `var`. Where the daemon answers the
-/// queries in [`ANSWERED_QUERIES`], the ones the agent printed are left out: the agent reads the
-/// answers apart from its keys, and the stand-in, which reads keys alone, would take them for keys.
+fn answered_queries() -> impl Iterator<Item = &'static (&'static str, &'static [u8])> {
+    let reports = !crate::platform::term::facts().host_answers_queries;
+    ANSWERED_QUERIES
+        .iter()
+        .filter(move |(_, bytes)| reports || bytes.starts_with(b"\x1b]"))
+}
+
+/// Reads the capture at `path`, quoted, into the variable `var`, leaving out the queries the
+/// agent printed that the daemon answers ([`ANSWERED_QUERIES`]): the agent reads the answers apart
+/// from its keys, and the stand-in, which reads keys alone, would take them for keys.
 fn read_capture(var: &str, path: &str) -> String {
     let read = format!("IFS= read -r -d '' {var} < {path}");
-    if !crate::platform::term::facts().host_waits_on_queries {
-        return read;
-    }
-    ANSWERED_QUERIES.iter().fold(read, |script, query| {
+    answered_queries().fold(read, |script, (query, _)| {
         format!("{script}; {var}=${{{var}//$'{query}'/}}")
     })
 }
 
 /// `capture` as a stand-in that read it with [`read_capture`] prints it.
 fn as_printed(capture: &[u8]) -> Vec<u8> {
-    if !crate::platform::term::facts().host_waits_on_queries {
-        return capture.to_vec();
-    }
-    ANSWERED_QUERIES
-        .iter()
-        .fold(capture.to_vec(), |bytes, query| {
-            let query = query.replace("\\e", "\x1b").into_bytes();
-            let mut kept = Vec::with_capacity(bytes.len());
-            let mut rest = &bytes[..];
-            while !rest.is_empty() {
-                if rest.starts_with(&query) {
-                    rest = &rest[query.len()..];
-                } else {
-                    kept.push(rest[0]);
-                    rest = &rest[1..];
-                }
+    answered_queries().fold(capture.to_vec(), |bytes, (_, query)| {
+        let mut kept = Vec::with_capacity(bytes.len());
+        let mut rest = &bytes[..];
+        while !rest.is_empty() {
+            if rest.starts_with(query) {
+                rest = &rest[query.len()..];
+            } else {
+                kept.push(rest[0]);
+                rest = &rest[1..];
             }
-            kept
-        })
+        }
+        kept
+    })
 }
 
 /// Codex's whole conversation: its screen, a read of the Enter, what replaces the screen, and
@@ -560,6 +564,7 @@ fn console() -> Console {
         icon: None,
         console_session_prompt: None,
         created_at: 0,
+        versions: Default::default(),
     }
 }
 
@@ -580,6 +585,7 @@ fn project(consent: bool) -> Project {
         tags: Vec::new(),
         description: None,
         git_workflow: Default::default(),
+        versions: Default::default(),
     }
 }
 

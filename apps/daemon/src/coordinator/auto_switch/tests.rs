@@ -84,6 +84,7 @@ impl Fixture {
                     share_default_config: false,
                     share_default_config_incomplete: false,
                     disabled: false,
+                    versions: Default::default(),
                 })
                 .unwrap();
         }
@@ -2027,6 +2028,7 @@ async fn a_grok_session_showing_its_usage_limit_dialog_passes_every_wait_check()
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled: false,
+            versions: Default::default(),
         })
         .unwrap();
     fixture.state.account_quotas.hold_in_dir_for_test(
@@ -2347,6 +2349,7 @@ async fn a_restore_waits_for_another_claim_on_the_session() {
         &fixture.state,
         &before,
         None,
+        None,
         move |request| stand_in_launch(&started, &launches, || {})(request),
     )
     .await
@@ -2368,6 +2371,7 @@ async fn a_restore_touches_nothing_of_a_session_that_is_not_down() {
     let err = crate::coordinator::account_switch::restore_after_failed_switch(
         &fixture.state,
         &before,
+        None,
         None,
         |_| anyhow::bail!("not reached"),
     )
@@ -2393,6 +2397,7 @@ async fn a_restore_touches_nothing_of_a_session_that_is_not_down() {
     let err = crate::coordinator::account_switch::restore_after_failed_switch(
         &fixture.state,
         &before,
+        None,
         None,
         |_| anyhow::bail!("not reached"),
     )
@@ -2429,6 +2434,7 @@ async fn a_restore_does_not_undo_an_account_change_somebody_else_made() {
         &fixture.state,
         &before,
         Some("claude-a"),
+        None,
         |_| anyhow::bail!("not reached"),
     )
     .await

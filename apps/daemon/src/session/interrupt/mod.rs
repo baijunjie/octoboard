@@ -140,9 +140,13 @@ const TOUCHED: &str = "Nothing was sent: something else wrote into the session's
      then. Check it with `get_session` before trying again.";
 
 /// Stops the turn session `id` is running. Refused, with nothing sent, for a session with no
-/// process or one still starting, one being switched, handed off or restarted, and one waiting
-/// for the user; a session not in a turn is answered with `interrupted: false` and nothing sent.
+/// process or one still starting, one being switched, handed off or restarted, one waiting
+/// for the user, and with `daemon_shutting_down` once a planned stop has raised its handover
+/// barrier; a session not in a turn is answered with `interrupted: false` and nothing sent.
 pub async fn interrupt_session(state: &Arc<AppState>, id: &str) -> Result<Interrupted> {
+    // Its keys go into the session's terminal, which a planned stop that has raised its handover
+    // barrier is handing over.
+    let _admission = state.admit_change()?;
     // An event the agent posted before this call may already have ended the turn.
     state.hook_queues.settled(id).await;
     let session = state.session_record(id)?;

@@ -8,9 +8,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { gitChecked, gitResult, runResult } from "../../../scripts/lib/git.mjs";
 import { windowsToolchainProblems } from "../../../scripts/lib/windows-toolchain.mjs";
-import { compareVersions, parsePlatforms, platformsTrailer, tag } from "./release-manifest.mjs";
+import { compareVersions, HOLDER_FLOOR_FILE, parsePlatforms, platformsTrailer, readHolderFloor, tag } from "./release-manifest.mjs";
 
 const VERSION_FILES = ["apps/desktop/package.json", "Cargo.toml", "Cargo.lock"];
+// A release is only made when the daemon's holder floor (`FLOOR`) names the previous stable release, or the initial
+// value while there is none.
+const INITIAL_HOLDER_FLOOR = "0.0.0";
 const NUMBER = "(?:0|[1-9][0-9]*)";
 const IDENTIFIER = `(?:${NUMBER}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)`;
 const VERSION = new RegExp(`^${NUMBER}\\.${NUMBER}\\.${NUMBER}(?:-${IDENTIFIER}(?:\\.${IDENTIFIER})*)?$`);
@@ -32,6 +35,25 @@ export function versionFiles(root, version) {
     files["Cargo.lock"] = files["Cargo.lock"].replace(record, (_all, before, _old, after) => `${before}${version}${after}`);
   }
   return { current, files };
+}
+
+// The versions of the stable releases already tagged, locally or on origin.
+function stableTaggedVersions(root) {
+  const local = gitChecked(root, "tag", "--list", "desktop-v*").split("\n");
+  const remote = gitChecked(root, "ls-remote", "--tags", "--refs", "origin", "refs/tags/desktop-v*").split("\n").map((line) => line.split("\t")[1]?.replace("refs/tags/", ""));
+  const stable = /^desktop-v(\d+\.\d+\.\d+)$/;
+  return [...new Set([...local, ...remote])].map((name) => stable.exec(name ?? "")?.[1]).filter((found) => found !== undefined);
+}
+
+// Why `version` cannot be released with the floor the daemon names, or null when the floor is the greatest stable
+// release below `version` (the initial value when there is none). `tagged` lists the stable versions already tagged.
+export function holderFloorProblem(root, version, tagged) {
+  const floor = readHolderFloor(root);
+  if (floor === undefined) return `${HOLDER_FLOOR_FILE} has no FLOOR constant to check.`;
+  const below = tagged.filter((found) => compareVersions(found, version) < 0).sort(compareVersions);
+  const wanted = below.at(-1) ?? INITIAL_HOLDER_FLOOR;
+  if (floor === wanted) return null;
+  return `The holder floor in ${HOLDER_FLOOR_FILE} is ${floor}, but the greatest stable release below ${version} is ${wanted}${below.length === 0 ? " (the initial value: none is tagged)" : ""}. Set FLOOR to ${wanted} in its own commit first.`;
 }
 
 export function parseOptions(args, cwd = process.cwd()) {
@@ -64,6 +86,8 @@ export function releaseDesktop({ root, version, notes, platforms = parsePlatform
   cleanMain();
   if (!notes?.trim()) throw new Error("The release notes are empty.");
   const { current } = versionFiles(root, version);
+  const floorProblem = holderFloorProblem(root, version, stableTaggedVersions(root));
+  if (floorProblem) throw new Error(floorProblem);
   // The release checks end with the Windows cross-check; a machine that cannot run it is refused before any
   // file or ref changes, rather than after main has been fast-forwarded and every other check has run.
   const problems = toolchainProblems();
@@ -98,8 +122,11 @@ export function releaseDesktop({ root, version, notes, platforms = parsePlatform
     command(root, "git", ["merge", "--ff-only", remoteMain]);
   }
   cleanMain();
-  // A fast-forward can have changed the current version, so validate again before creating any release files.
+  // A fast-forward can have changed the current version and the floor, so validate both again before creating any
+  // release files.
   versionFiles(root, version);
+  const floorAfter = holderFloorProblem(root, version, stableTaggedVersions(root));
+  if (floorAfter) throw new Error(floorAfter);
   const start = git("rev-parse", "HEAD");
   mkdirSync(path.dirname(worktree), { recursive: true });
   command(root, "git", ["worktree", "add", "-b", branch, worktree, "main"]);

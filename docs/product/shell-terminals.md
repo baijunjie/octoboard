@@ -16,10 +16,22 @@ explicitly closing the Terminal panel can close idle terminals when its applicat
 panel" in `docs/product/terminal-panel.md`). A terminal otherwise lives on after every client view is closed, after a
 window is closed while the daemon keeps running, and across a lost and restored connection. A client that connects is
 given every shell terminal the daemon holds, running or exited, oldest first,
-and attaching to one replays its scrollback before live output follows, the same way a session's terminal is
-attached to.
+and attaching to a running one starts from a first paint of its screen and scrollback before live output follows, the
+same way a session's terminal is attached to (see "Output, scrollback and size" in `docs/product/session-terminal.md`);
+attaching to an exited one is in "When the shell exits on its own" below.
 
-Shell terminals are live state: they are held in memory only, never saved, and none survives the daemon.
+Shell terminals are live state: they are held in memory, and only the name the user gave one is saved, until the
+terminal is closed or its project removed. A shell terminal's shell runs in a process holder, not in the daemon (see
+`docs/product/process-holders.md`): an ordinary stop of the daemon ends every shell terminal (see "Closing a shell
+terminal" below), but a daemon that goes down without stopping — a crash, an internal failure, a kill — or makes a
+planned stop (see "Planned restart and planned stop" in `docs/product/application-lifecycle.md`) leaves the shells
+running, and the next daemon start restores each terminal whose project is still on record, under "What a daemon start
+takes over" in `docs/product/process-holders.md`. A restored terminal keeps its directory, worktree, place in the order
+and the name the user gave it, and its first paint is rebuilt from the output its holder kept (see "The screen of a
+terminal taken over" in the same document), or, after a planned stop, is the screen it had, restored as the stopping
+daemon saved it (see "The screen of a terminal handed over" in the same document). While its holder runs but cannot be connected to, the terminal
+is kept, its shell running unreachable, and its record says so (see "A holder that cannot be connected to" in the same
+document).
 
 A shell terminal and the processes in its terminal session are excluded from the agent background-process lists and
 cleanup (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`). Their lifecycle stays
@@ -68,7 +80,9 @@ sets a title, and whenever what it sets is blank under those rules, the title is
 (`pwsh.exe` on Windows).
 
 **Renaming** gives the terminal the user's own title, stored trimmed; a blank title is refused. From then on the
-shell's titles no longer change it.
+shell's titles no longer change it. The name is kept with the terminal: a daemon start that restores the terminal
+from its holder shows it again, and no title the shell set before or sets after takes its place. It is forgotten when
+the terminal is closed or its project removed.
 
 ## Busy shells
 
@@ -92,14 +106,17 @@ reads as busy, as on every host: what cannot be ruled out is asked about.
 ## When the shell exits on its own
 
 A shell that exits by itself (`exit`, a crash) does not take its terminal with it: the terminal stays, marked exited
-and not busy, with its final screen, until it is closed. Attaching to an exited terminal replays its output and then
-ends the attachment; it takes no input. A client attached at the moment the shell exits is let go once the shell's
-last output has reached it.
+and not busy, with its final screen, until it is closed. Attaching to an exited terminal shows a paint of that final
+screen and then ends the attachment; it takes no input. The paint is drawn from the daemon's parsed copy of the
+terminal as a running terminal's first paint is (see "Output, scrollback and size" in
+`docs/product/session-terminal.md`), with the scrollback the client asks for and its wrapped lines joined, so they
+reflow to the client's width. A client attached at the moment the shell exits is let go once the output still waiting
+for it has reached it.
 
 ## Closing a shell terminal
 
 Closing a terminal ends its shell if it still runs and removes the terminal; an exited terminal is removed the same
-way. Every client attached to it is let go.
+way. Every client attached to it is let go once the output still waiting for it has been sent.
 
 A shell still running is sent `SIGHUP`, the hangup a terminal closing sends, which an interactive shell passes on to
 its jobs. A shell still there 3 seconds later is killed together with its process group. Then the terminal itself is
@@ -119,9 +136,15 @@ The same ending happens, without anyone being asked, to:
 - **every shell terminal of a project that is removed** (see `docs/product/removing-projects.md`), and of every project
   of a console that is deleted (see "Deleting a console" in `docs/product/consoles.md`). A running shell never holds
   either up;
-- **every shell terminal when the daemon exits**: on a quit, and on a termination signal when the daemon runs on its
-  own (see "Quitting" and "The daemon on its own" in `docs/product/application-lifecycle.md`).
+- **every shell terminal when the daemon stops**: on a quit, and on a termination signal when the daemon runs on its
+  own (see "Quitting" and "The daemon on its own" in `docs/product/application-lifecycle.md`). A daemon that goes down
+  without stopping, or makes a planned stop, ends none (see "Who owns a shell terminal" above); once a planned stop has
+  begun, starting or closing a shell terminal is refused with `daemon_shutting_down`, and what is typed into a shell
+  terminal once it is handed over is dropped (see "While the terminals are handed over" in
+  `docs/product/application-lifecycle.md`). An ordinary stop asked for during a planned stop ends every shell terminal
+  after all (see "An ordinary stop during a planned stop" in the same document).
 
-If the daemon goes down on an internal failure, each shell is killed with its process group — not its whole terminal
-session, as an agent is (see "Crashes and forced termination" in `docs/product/application-lifecycle.md`) — and the
-jobs still on its terminal lose it as the daemon goes.
+If the process the shell terminals run in goes down on an internal failure — their holder, or the daemon where they run
+in it (see "When holders cannot be set up" in `docs/product/process-holders.md`) — each shell is killed with its process
+group, not its whole terminal session, as an agent is (see "Crashes and forced termination" in
+`docs/product/application-lifecycle.md`), and the jobs still on its terminal lose it as that process goes.

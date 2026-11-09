@@ -22,7 +22,7 @@ use crate::protocol::{
 };
 use crate::session::term::{Launch, LaunchRequest};
 use crate::state::session_as_left::SessionAsLeft;
-use crate::state::{AppState, AutoSwitchHooks};
+use crate::state::{AppState, AutoSwitchHooks, ChangeAdmission};
 
 /// How long after moving a session off an account for its usage limit the session is not moved
 /// back onto that account.
@@ -822,9 +822,15 @@ async fn switch_to_with_recovery(
                 "switching a session off the account whose usage limit it reached failed after its \
                  process was ended; bringing it back up on the account it had"
             );
-            return restore(state, session, target.as_deref(), launch)
-                .await
-                .map(|()| false);
+            return restore(
+                state,
+                session,
+                target.as_deref(),
+                failed.admission.as_ref(),
+                launch,
+            )
+            .await
+            .map(|()| false);
         }
     };
     let account_switch::Switched { continued, ended } = switched;
@@ -887,9 +893,12 @@ async fn restore(
     state: &Arc<AppState>,
     session: &Session,
     target: Option<&str>,
+    admission: Option<&ChangeAdmission>,
     launch: impl FnOnce(LaunchRequest) -> Result<Launch> + Send + 'static,
 ) -> Result<()> {
-    match account_switch::restore_after_failed_switch(state, session, target, launch).await {
+    match account_switch::restore_after_failed_switch(state, session, target, admission, launch)
+        .await
+    {
         Ok(()) => Ok(()),
         Err(err) if is_quiet(&err) || is_already_up(&err) || state.is_shutting_down() => Ok(()),
         Err(err) => {

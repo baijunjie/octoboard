@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
+use serde::{Deserialize, Serialize};
 
 use crate::protocol::trust_reason;
 use crate::session::trust::{CarryFailure, TrustCarrier};
@@ -35,6 +36,12 @@ const LOCK_TIMEOUT: Duration = Duration::from_secs(2);
 /// lands only in the session's copy and dies with it. Once the confirmation is accepted — by
 /// Octoboard's press or by the person in the terminal — that one entry is carried, unchanged, into
 /// the user's own store, every other entry there left as it is.
+///
+/// Kept in the terminal's holder meta for adoption (`super::adoption`), so it crosses builds: a
+/// field added later needs `#[serde(default)]`, and it is kept readable by every build in the
+/// compatible range: `crate::holder::compat::FLOOR` only moves by the previous-stable release
+/// rule.
+#[derive(Serialize, Deserialize)]
 pub struct CarriedTrust {
     /// The session's copy of the store, which Grok rewrites when its confirmation is pressed.
     pub session_store: PathBuf,

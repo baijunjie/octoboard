@@ -227,7 +227,10 @@ it changes nothing and runs no `git`. **Applying** takes the same document, toge
 import, which sections of its application settings and which agents of its accounts, the choice made for each project
 and each account, and whether to keep the host's own default clone directory, and creates. The consoles and projects
 are imported unless the import is told to leave them out; the accounts, with the agent account settings, and each
-section of the application settings only when it is asked for them.
+section of the application settings only when it is asked for them. The inspection also answers the version of every
+application setting as it read them, and applying carries those versions back, so that settings changed since the
+inspection are not overwritten (see "What is refused, and what is reported instead" below, and "The version check" in
+`docs/product/concurrent-edits.md`).
 The document is untrusted input: every path and URL in it is data the daemon's host checks, and nothing in it is acted
 on as it stands.
 
@@ -413,6 +416,9 @@ Refused before anything at all is created:
 - a request to apply a section of the application settings that a document does not carry
   (`import_settings_missing`, naming the section), to create accounts it does not carry (`import_accounts_missing`), or
   to import the accounts of an agent it carries nothing for (`import_agent_missing`, naming the agent);
+- an import that would write a setting — the application settings of the sections it applies, the default clone
+  directory or the agent account settings of the agents it applies — when one of the settings it would write has been
+  changed since the inspection read it (`write_conflict`);
 - anything creating a console by hand would refuse of any console in the document — an avatar that is not an image
   (`icon_not_an_image`), or one larger than 256 KiB (`icon_too_large`; see "Avatar" in `docs/product/consoles.md`).
   Since a document can carry several consoles, the refusal names the console whose avatar it is (the daemon gives its
@@ -426,14 +432,15 @@ exist and have already appeared:
 
 - an account that cannot be created is recorded as failed with the reason, and the remaining accounts, then the
   consoles, are imported as usual;
-- agent account settings that could not be applied are reported as such, with the accounts;
+- agent account settings that could not be applied are reported as such, with the accounts — among them, settings one
+  of which was changed elsewhere while the import ran, each settings write being checked again as it is applied;
 - a console that cannot be created is recorded as failed, every project of it as not attempted, and the next console of
   the document is imported;
 - a project that cannot be placed — the recorded path is gone, a clone fails or the directory it would create already
   exists, the directory pointed at is not there, the directory is already associated with that console — is recorded as
   failed with the reason, and the remaining projects are imported as usual;
-- application settings that could not be applied are reported as such, and the import stands; a default clone
-  directory written before them stays written, and the result says so.
+- application settings that could not be applied, a change made elsewhere while the import ran included, are reported
+  as such, and the import stands; a default clone directory written before them stays written, and the result says so.
 
 The result says, for every console and every project of the document when the consoles were imported, whether it was
 created, left out for want of a choice, failed and why, or never attempted; and, when the accounts were imported, for

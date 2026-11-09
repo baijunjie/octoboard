@@ -6,11 +6,13 @@
 //! - [`control`]: the control socket, `/ws/control`.
 //! - [`terminal`]: the terminal socket, `/ws/term/:session`.
 //! - [`callbacks`]: the HTTP routes the agents' hooks and the daemon's own helpers post to, and
-//!   the request to shut down.
+//!   the requests to stop: to shut down, to make a planned restart, and to make a planned stop.
+//! - [`relay`]: the same helper routes, for the requests a holder relays from its helpers.
 
 pub(crate) mod access;
 mod callbacks;
 mod control;
+pub(crate) mod relay;
 mod terminal;
 #[cfg(test)]
 mod test_support;
@@ -48,12 +50,14 @@ fn routes(state: Arc<AppState>) -> Router {
         )
         .route("/mcp/:token", post(callbacks::mcp_call))
         .route("/shutdown", post(callbacks::shutdown))
+        .route("/restart", post(callbacks::restart))
+        .route("/planned-stop", post(callbacks::planned_stop))
         .with_state(state)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::test_support::{keyed, serve, status_of};
+    use super::test_support::{keyed, response_of, serve, status_of};
     use super::*;
     use crate::test_support::{app_state, PATIENCE, TEST_KEY};
 
@@ -74,6 +78,8 @@ mod tests {
                 "POST /context-window/s",
                 "POST /mcp/x",
                 "POST /shutdown",
+                "POST /restart",
+                "POST /planned-stop",
             ];
             for route in routes {
                 let keyed = keyed(route);
@@ -149,8 +155,6 @@ mod tests {
 
         let waiter = state.clone();
         let mut shutdown = tokio::spawn(async move { waiter.await_shutdown().await });
-        // Lets the waiter reach its wait: a shutdown asked for before then is not remembered.
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         let refused = {
             let host = host.clone();
@@ -182,6 +186,85 @@ mod tests {
             .await
             .expect("the shutdown was asked for")
             .expect("the waiter ran");
+    }
+
+    /// A planned stop asked for over HTTP needs the key, answers `202` and reaches what `main`
+    /// waits on as a planned stop with no successor.
+    #[tokio::test]
+    async fn the_planned_stop_request_asks_for_a_planned_stop() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (state, _dir) = app_state("server-planned-stop");
+        let served = state.clone();
+        tokio::spawn(async move { axum::serve(listener, router(served)).await });
+        let host = format!("Host: 127.0.0.1:{port}");
+
+        let statuses = tokio::task::spawn_blocking(move || {
+            (
+                status_of(port, "POST /planned-stop", &[&host]),
+                status_of(port, &keyed("POST /planned-stop"), &[&host]),
+            )
+        })
+        .await
+        .expect("the requests ran");
+        assert_eq!(statuses, (401, 202));
+        let kind = tokio::time::timeout(PATIENCE, state.await_stop())
+            .await
+            .expect("the stop was asked for");
+        assert_eq!(kind, crate::state::StopKind::Planned { successor: false });
+    }
+
+    /// A planned restart a daemon that follows an application is asked for over HTTP is refused
+    /// with `409` and a body naming why, and asks for no stop.
+    #[tokio::test]
+    async fn a_refused_restart_request_says_why_and_stops_nothing() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (state, _dir) = app_state("server-restart-refused");
+        state.set_follows_application();
+        let served = state.clone();
+        tokio::spawn(async move { axum::serve(listener, router(served)).await });
+        let host = format!("Host: 127.0.0.1:{port}");
+
+        let (status, body) = tokio::task::spawn_blocking(move || {
+            response_of(port, &keyed("POST /restart"), &[&host])
+        })
+        .await
+        .expect("the request ran");
+        assert_eq!(status, 409);
+        let body: serde_json::Value = serde_json::from_str(&body).expect("a JSON body");
+        assert_eq!(body["reason"], "follows_application");
+        assert!(body["message"].is_string(), "{body}");
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(200), state.await_stop())
+                .await
+                .is_err(),
+            "a refused restart asked for a stop"
+        );
+    }
+
+    /// Where a planned restart is possible, the request answers `202` and asks for one.
+    #[tokio::test]
+    async fn the_restart_request_asks_for_a_planned_restart() {
+        let (state, _dir) = app_state("server-restart");
+        if state.planned_restart_refusal().is_some() {
+            return;
+        }
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let served = state.clone();
+        tokio::spawn(async move { axum::serve(listener, router(served)).await });
+        let host = format!("Host: 127.0.0.1:{port}");
+
+        let status =
+            tokio::task::spawn_blocking(move || status_of(port, &keyed("POST /restart"), &[&host]))
+                .await
+                .expect("the request ran");
+        assert_eq!(status, 202);
+        let kind = tokio::time::timeout(PATIENCE, state.await_stop())
+            .await
+            .expect("the stop was asked for");
+        assert_eq!(kind, crate::state::StopKind::Planned { successor: true });
     }
 
     /// The handshake a browser sends: a refusal must come before the upgrade, and an allowed
@@ -295,13 +378,9 @@ mod tests {
 
         let term_url = format!("ws://127.0.0.1:{port}/ws/term/{terminal}?key={TEST_KEY}");
         let (mut term, _) = tokio_tungstenite::connect_async(&term_url).await.unwrap();
+        // The cursor position queries the shell's line editor asks are the daemon's to answer,
+        // and never reach a client, unless the host answers them before the daemon sees them.
         async fn read_until(term: &mut Socket, needle: &str) -> String {
-            read_answering(term, needle, false).await
-        }
-        // With `answer`, answers the cursor position queries in what it reads, as the terminal of
-        // a client attached alone does: with a client attached the daemon leaves them to it, and
-        // a console host that waits on one unanswered can lose a key typed meanwhile.
-        async fn read_answering(term: &mut Socket, needle: &str, answer: bool) -> String {
             let mut seen = String::new();
             while !seen.contains(needle) {
                 let frame = tokio::time::timeout(PATIENCE, term.next())
@@ -309,14 +388,11 @@ mod tests {
                     .unwrap_or_else(|_| panic!("{needle:?} never arrived in {seen:?}"));
                 match frame {
                     Some(Ok(Frame::Binary(bytes))) => {
-                        let queries = bytes.windows(4).filter(|query| query == b"\x1b[6n");
-                        if answer {
-                            for _ in 0..queries.count() {
-                                term.send(Frame::Binary(b"\x1b[1;1R".to_vec()))
-                                    .await
-                                    .unwrap();
-                            }
-                        }
+                        assert!(
+                            crate::platform::term::facts().host_answers_queries
+                                || !bytes.windows(4).any(|query| query == b"\x1b[6n"),
+                            "a query the daemon answers reached the client"
+                        );
                         seen.push_str(&String::from_utf8_lossy(&bytes))
                     }
                     // The replay's mark, which `replay_mark` reads.
@@ -344,7 +420,7 @@ mod tests {
         term.send(Frame::Binary(b"echo $((6*7))\r".to_vec()))
             .await
             .unwrap();
-        read_answering(&mut term, "42", true).await;
+        read_until(&mut term, "42").await;
         term.send(Frame::Text(
             r#"{"type":"resize","cols":100,"rows":40}"#.into(),
         ))
@@ -353,10 +429,13 @@ mod tests {
         term.send(Frame::Binary(b"stty size\r".to_vec()))
             .await
             .unwrap();
-        read_answering(&mut term, "40 100", true).await;
+        read_until(&mut term, "40 100").await;
         drop(term);
 
-        let (mut again, _) = tokio_tungstenite::connect_async(&term_url).await.unwrap();
+        let history_url = format!("{term_url}&history=100");
+        let (mut again, _) = tokio_tungstenite::connect_async(&history_url)
+            .await
+            .unwrap();
         let replay = read_until(&mut again, "40 100").await;
         assert!(replay.contains("42"), "{replay}");
 
@@ -386,15 +465,12 @@ mod tests {
         assert!(answered.contains("got[first]"), "{answered}");
         drop(other);
 
-        // A client attaching later is told its replay has been answered up to that point.
+        // A client attaching later starts from a first paint, which asks nothing, so all of it is
+        // marked answered.
         let (mut third, _) = tokio_tungstenite::connect_async(&term_url).await.unwrap();
         let mark = replay_mark(&mut third).await;
-        let behind = mark["offset"].as_u64().unwrap() - answered_at;
-        assert_eq!(
-            mark["answered"].as_u64().unwrap(),
-            mark["length"].as_u64().unwrap() - behind,
-            "{mark}"
-        );
+        assert!(mark["offset"].as_u64().unwrap() > answered_at, "{mark}");
+        assert_eq!(mark["answered"], mark["length"], "{mark}");
         drop(third);
 
         let close = format!(

@@ -18,6 +18,7 @@ use crate::protocol::{error_code, AgentId, CodedError, Notice, SessionKind, Term
 use crate::providers::ProviderSettings;
 use crate::session::{self, LiveSession, NewSession};
 use crate::session_git_hooks;
+use crate::terminal::backend::{self, Helpers, Launching, LocalHelpers};
 use crate::terminal::pty;
 
 pub struct Launch {
@@ -67,9 +68,12 @@ pub struct LaunchRequest {
     /// to the default account, which resolved that account's directory from it to copy the
     /// conversation there and must launch against the same value.
     pub preresolved_shell_env: Option<HashMap<String, String>>,
+    /// The daemon's own port, which the launch's helpers call when the program runs in this
+    /// process; a program run by a holder is given the holder's instead (see `backend::Helpers`).
     pub daemon_port: u16,
-    /// See `LaunchSpec::daemon_key`.
+    /// The daemon's own key, which the launch's helpers carry; see `daemon_port`.
     pub daemon_key: String,
+    /// The daemon's own executable, which the launch's helpers run; see `daemon_port`.
     pub self_exe: String,
     pub mcp_token: String,
     /// What every process of this launch carries, whatever the agent and the session's kind; see
@@ -136,9 +140,27 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
 
     let adapter = adapter::provider(agent);
     let capabilities = adapter.descriptor().capabilities;
+    // Asked for before anything names it: the holder that is to run the program issues the key its
+    // helpers carry. Dropped unused if the launch fails before the program starts, which revokes
+    // the key.
+    let helpers = Helpers::issue(
+        session_id,
+        &mcp_token,
+        LocalHelpers {
+            port: daemon_port,
+            key: &daemon_key,
+            exe: &self_exe,
+        },
+    )?;
     let hook_script = if capabilities.hook_script {
-        adapter::write_hook_script(&scratch, &self_exe, session_id, daemon_port, &daemon_key)
-            .context("writing the session's hook script")?
+        adapter::write_hook_script(
+            &scratch,
+            &helpers.exe,
+            session_id,
+            helpers.port,
+            &helpers.key,
+        )
+        .context("writing the session's hook script")?
     } else {
         adapter::hook_script_path(&scratch)
     };
@@ -178,9 +200,9 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
                     )?)
                 })
         }),
-        self_exe: &self_exe,
-        daemon_port,
-        daemon_key: &daemon_key,
+        self_exe: &helpers.exe,
+        daemon_port: helpers.port,
+        daemon_key: &helpers.key,
         mcp_token: &mcp_token,
     };
     let plan = adapter.plan(&spec)?;
@@ -194,10 +216,10 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     if kind == SessionKind::Project {
         environment.extend(session_git_hooks::session_env(
             &shell_env,
-            &self_exe,
+            &helpers.exe,
             session_id,
-            daemon_port,
-            &daemon_key,
+            helpers.port,
+            &helpers.key,
         ));
     }
     process_tag.containment().prepare(&mut environment);
@@ -233,8 +255,34 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         cmd.quit_keys(keys);
     }
 
-    let spawned = host_term::spawn(cmd, pty::INITIAL_SIZE, Some(process_tag.containment()))
-        .with_context(|| format!("spawning `{}`", binary.program.display()))?;
+    // What a holder keeps of the session, so that a daemon that starts later can tell what the
+    // terminal is and rebuild the session around it (`crate::coordinator::adopt`).
+    let launch_prompt = task.as_deref().and_then(launch_prompt);
+    let meta = serde_json::json!({
+        "kind": "session",
+        "session_id": session_id,
+        "launch_id": process_tag.launch_id(),
+        "agent": agent,
+        "scratch": scratch.to_string_lossy(),
+        // What a daemon that adopts the terminal restores its map of MCP tokens from.
+        "mcp_token": mcp_token,
+        "resolves_approvals_itself": plan.resolves_approvals_itself,
+        "native_stash": native_stash,
+        "launch_prompt": launch_prompt,
+        "adoption": plan.adoption,
+    });
+    let spawned = backend::start(Launching {
+        command: cmd,
+        size: pty::INITIAL_SIZE,
+        containment: process_tag.containment(),
+        instance: process_tag.instance_id(),
+        launch: process_tag.launch_id(),
+        // As `LiveSession::new` has its terminal's core treat the process.
+        kill_session_leftovers: true,
+        meta,
+        helpers: Some(helpers),
+    })
+    .with_context(|| format!("spawning `{}`", binary.program.display()))?;
 
     let agent_session_id = match resume_agent_session_id {
         Some(id) => Some(id),
@@ -267,7 +315,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         },
     }));
     live.enable_native_stash(native_stash);
-    if let Some(prompt) = task.as_deref().and_then(launch_prompt) {
+    if let Some(prompt) = launch_prompt {
         live.note_launch_prompt(prompt);
     }
     session::spawn_reader_thread(live.clone(), pty::READ_BUF);

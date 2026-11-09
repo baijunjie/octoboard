@@ -74,7 +74,9 @@ failed, each only when there were any, and **Nothing failed** when no account fa
 not fail either. Only the agents that were checked count: nothing of an agent left unchecked is in the result.
 
 Then, when the agent account settings could not be applied, a red compact alert titled that they could not be
-imported, saying so with the reason, its remedy and **Details**; otherwise, when they were applied, the **Agent account
+imported, saying so with the reason, its remedy and **Details** — or, when they were refused because a setting changed
+while the import ran, saying that settings changed during the import, with the remedy to check them in Settings and
+change any that should match the file; otherwise, when they were applied, the **Agent account
 settings** card, its three switches badged **On** or **Off**.
 
 Then a card for each agent the import did something for, headed by the agent's name, in the review's order and with no
@@ -94,7 +96,10 @@ before a session uses it. The result has no **Log in** button: the accounts are 
 ### Settings in the result
 
 When the settings could not be applied, a red compact alert titled that the settings could not be imported, saying so
-with the reason, its remedy and **Details** (see "Failures shown on the screen" in `docs/product/error-alerts.md`). Beside it, when the file's default clone directory had been written before the rest
+with the reason, its remedy and **Details** (see "Failures shown on the screen" in `docs/product/error-alerts.md`). When
+they were refused because a setting changed while the import ran, it says that settings changed during the import
+instead, with the remedy to check them in Settings and change any that should match the file; the consoles, projects and
+accounts the import created stay. Beside it, when the file's default clone directory had been written before the rest
 failed, a **Git** card with its one line, **Default clone directory**, badged **Matches the file**, saying that it was
 set before the other settings failed to apply and giving the directory; and nothing else.
 

@@ -532,9 +532,10 @@ dialog counts reading a picked avatar image as busy too), and focus then stays o
 layer's components read the dialog's busy state themselves, so a dialog does not freeze its own fields, and a new
 interactive wrapper honours it too (`primitives/README.md`). The disabled controls stay in the page and are read by
 assistive technology, so the dialog is never made `inert`; they show their own disabled styling, and nothing is laid
-over the body. Two pending holds are not such a time and leave the dialog leavable, with its controls operable: waiting
-for the file picker of a configuration import, and a quick lookup that holds the confirm button pending before the
-action itself starts (`waiting` on `ConfirmDialog`); neither passes `busy`. (Export's save picker runs inside its
+over the body. Three pending holds are not such a time and leave the dialog leavable, with its controls operable: waiting
+for the file picker of a configuration import, a re-read of the import's file when settings changed (the
+Import button is pending, the dialog is not `busy`), and a quick lookup that holds the confirm button pending before the
+action itself starts (`waiting` on `ConfirmDialog`); none passes `busy`. (Export's save picker runs inside its
 action, so that dialog is busy while the picker is open.)
 
 ### A control inside a rendering library's shadow root
@@ -576,15 +577,16 @@ floating bar's Reopen. A control in the pane that goes away while it holds focus
 shown or deleted, Reconnect, a creation action) hands focus on as focus meant for the agent terminal, so a panel its
 press brings up over the agent area takes it rather than the inert terminal. A region whose focus goes through a method
 of its own rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside
-it, which is how the cycle tells the two apart.
+it, which is how the cycle tells the two apart. The agent terminal's method lands on its connection cover while the session's process cannot be
+reached (see "A per-session connection loss is shown at that session").
 At the `tablet` breakpoint and below the rail is out of the row and comes in only inside the sidebar's drawer card: while the
 drawer is closed the rail is `inert` and not a stop, and focus inside it when the drawer closes is handed on before the
 browser can drop it to `<body>` (a layout effect, since a swipe closes the drawer from a touch listener React does not
 flush before paint).
 
 A shell terminal in the Terminal panel keeps Tab the same way, so the same holds for it: the Terminal panel is its own
-region, and F6 lands on the shown terminal's input, on its cover's Reconnect while that is offered, or on New terminal
-when the panel has no tab. Unlike the agent terminal, a shell terminal also keeps Escape, in a floating pane too
+region, and F6 lands on the shown terminal's input, on its cover's Reconnect while that is offered, on its connection cover
+while its shell's process cannot be reached, or on New terminal when the panel has no tab. Unlike the agent terminal, a shell terminal also keeps Escape, in a floating pane too
 (vim, less and fzf need it): the floating-pane Escape handling in `packages/ui/src/layout/usePaneToggles.ts` stands
 aside for a target inside a shell terminal, and the pane is dismissed with Close panel or by moving the pointer away.
 A control in a shell terminal's view that xterm's Tab handling puts out of reach (the exited notice's Close terminal)
@@ -1283,7 +1285,8 @@ Where an error or a warning is shown follows from how it arises, not from the sc
 
 1. **An error the user's own action directly causes** — a submitted form, a Save or a confirm, a switch, a menu or row
    action, copying, opening — opens the dedicated error alert dialog, below. That includes a submit or a save failing
-   inside a dialog: the error alert dialog opens over it, and the dialog keeps its input.
+   inside a dialog: the error alert dialog opens over it, and the dialog keeps its input (except a field changed elsewhere,
+   see "A value changed elsewhere replaces the form's own" below).
    One more press opens it: an unavailable button whose press explains (see "Buttons") raises the refusal the daemon
    would give for the action it stands for, without sending it (Keep on a process that shares the agent's console).
 2. **An error located at one input field** is the exception to the first and to the third: its error text stands
@@ -1325,6 +1328,32 @@ quietly, with no error shown. A refusal that comes back from the operation is lo
 the reason then stands where the action is and the button is disabled, rather than the same alert answering a second
 confirm.
 
+**A value changed elsewhere replaces the form's own.** A form that edits a record another client, an agent or a single
+action can change at the same time (the console, project and account dialogs, a Settings field) is based on the field
+versions it read, not only on its values. As soon as the store shows a field at a newer version than the form is based
+on and holding a different value from the one the form read, the field shows the current value and the form is based on
+that version, whether or not the user had edited it: an input built on a value that is no longer there would overwrite a
+change the user never saw, so keeping it is not "keeping the input". A version that moves over the same value (every one
+does after a daemon restart) is only re-based: the user's edit stays. Only the race the window cannot foresee — the other
+change reaching the daemon before it reaches this window — is refused at submit (`write_conflict`); its error alert opens
+as for any other refusal, and once the store holds the versions the refusal names, each conflicting field whose stored
+value differs from what the form read shows the current value, the user's other edits staying as they were. This is the
+one exception to keeping a form's values intact under an error alert, below. A field the user had edited (its draft
+differs from what the form read) that is replaced is announced through a status region ("Announcing a change"), with no
+visible mark, naming the fields: "Changed elsewhere: Name and Claude Code model. The current values are shown." (the catalog's
+plural form, which agrees nothing with the labels, since many are plural nouns; the labels are the controls' own names,
+a launch setting by its kind of session or its agent, top-level ones for a group). A field the user had not touched is
+shown silently, as any field of a form that follows a change elsewhere is, since nothing the user did is lost. So is one
+replaced by a `write_conflict` refusal, since its error alert speaks for it, and one replaced while the form's own write
+is out, since the dialog reports that write's outcome itself and a second announcement beside it would talk over it. The
+import's review is read again by itself when any settings version moves past the one it read while a region other than
+the consoles is checked, keeping the choices made, with the Import button pending meanwhile and the status "The file was
+read again because settings changed."; a read that fails while the review is behind is an Alert at the top of the review
+with its own Try again (a failure no retry can change says to choose the file again, with a button that does), not an
+error alert dialog, as it is automatic behaviour, and Import is an unavailable button (see "Buttons") until the review
+is current again: the Alert's title is its tooltip and description, and a press explains by moving focus to the Alert's
+button (Try again, or Choose file), with the focus ring shown, instead of doing nothing.
+
 Once a submit has passed the form's own validation, anything that goes wrong afterwards that the window could not
 foresee — a refusal from the daemon included, even one about a single field's value — is a failure of the user's own
 action and opens the error alert dialog; the form stays open with its values intact, under it. Field validation never
@@ -1354,9 +1383,9 @@ alert without one announces its title and remedy; focus lands on the alert itsel
 it opens over a dialog that a press without a pointer opened (an assistive technology's press), where Enter on a first
 control such as Manage accounts would act. Distinct failures wait in a queue; repeated copies of a pending failure do
 not multiply it. An error above a form leaves that form available after acknowledgement, with its values and retry
-action intact. Acknowledging it returns focus to where it was (over a busy dialog, the pending button, from which focus
-then goes on to the control the busy dialog took it from or to the field the dialog names: see the busy dialog paragraph
-under "Buttons"); where that is gone, or the dialog under the alert never had focus (the alert came in the same moment
+action intact, except a field changed elsewhere (see "Where an error is shown"). Acknowledging it returns focus to where
+it was (over a busy dialog, the pending button, from which focus then goes on to the control the busy dialog took it
+from or to the field the dialog names: see the busy dialog paragraph under "Buttons"); where that is gone, or the dialog under the alert never had focus (the alert came in the same moment
 as the press that opened it), focus goes where that dialog's own opening focus goes — never to the page (see "The error
 alert" in `docs/product/error-alerts.md` for the full order). The control a dialog opens on is marked for this with
 `openingFocus` (`packages/ui/src/primitives/focus.ts`), which the wrapper layer's `Button`, text fields and search field
@@ -1579,7 +1608,12 @@ explicit exception in "Where an error is shown":
   "How a mark is drawn and opened" describes; a popover taller than the room beside its mark scrolls inside itself. A
   warning takes the triangle in the warning colour, an error the circled `!` in the danger colour, and a note, which
   only informs, the circled `i` in the note's accent colour; a circled `i` is never drawn in the warning colour, nor a
-  triangle in a note's. Nothing of it is written beside the mark as loose text, muted or coloured.
+  triangle in a note's. Nothing of it is written beside the mark as loose text, muted or coloured. A terminal view has
+  no title of its own, so a mark about what a terminal shows (the recovered display of a terminal a restarted daemon
+  took over) sits where that terminal is named: for an agent session right after the session's title in the title
+  bar's breadcrumb, before its status glyph; for a shell terminal in the panel's tab row after the tab strip, before
+  the row's own buttons and outside every tab (a mark inside a tab would nest a button in it), its name then carrying
+  the shown terminal's title, since it does not sit right after it.
 - **Several of those at one point** are one mark, never marks side by side: its popover lists each as a paragraph of
   its own, and its name covers them all. An error and a warning at one point are one mark in the more severe tone, the
   error's.
@@ -1603,6 +1637,32 @@ A whole page, pane or list whose subject failed is not placed by this rule: see 
 A menu has no room for a mark: a limit a menu hit is its last item, a note in the menu's muted text, lined up with the
 items' labels and carrying no glyph of the items' kind, that says why the rest is missing ("There are more branches
 than this list can show"), never worded as a failure.
+
+#### A per-session connection loss is shown at that session
+
+A session or a shell terminal whose process still runs but cannot be reached for now (`holder_link: "pending"`) is
+not an error to report and not a notification: it is shown only where that session is shown, and lasts exactly as
+long as the record says so. Nothing global stands for it — no bar, no toast, no error dialog, no extra badge or glyph
+in the sidebar, the rail or the menu bar.
+
+- **Its status slot** shows the derived status *Reconnecting* (`holdsPendingLink`, `sessionShownStatusKind`) in place
+  of the stored one — the muted turning arc, still under reduced motion, with its name as the slot's name and
+  tooltip — in the title bar's breadcrumb, sidebar rows and focus rows alike. Every place that draws a status gets it
+  from the shared derivation, never from a test of its own. Ordering keeps the stored status; the summaries (console
+  avatars, the menu bar list) go by the shown status, so a session shown reconnecting is in no summary status, and it is
+  counted as waiting for you nowhere.
+- **Its terminal** is covered by a cover of its own over that terminal only (`TerminalCover`'s `pending`): the
+  terminal background, a spinner, an in-progress title with an ellipsis and a short explanation, no button — the
+  retrying is not the user's to do. It is an in-progress cover like the loading cover, its title carrying an ellipsis,
+  not an empty state, so it is not an `EmptyPanel`. The covered terminal is `inert`; the cover is a focusable region
+  named by the session's name (a shell terminal's by its name, as its tab is), not by the title it holds, and described
+  by its title and body; it takes focus held in the terminal and is where F6 lands. Its message is spoken once through
+  the view's own `StatusAnnouncer`, and not while the cover holds focus, since the focused region's description already
+  reads the same copy.
+- **It is independent of display-fidelity marks.** The recovered-display note (`screen_inexact`) says how faithful the
+  screen is, the reconnecting status whether the process can be reached; both can show at once, each in its own
+  place, never folded into one mark. A note that would be announced while the cover is shown waits until the cover,
+  and the loading cover after it, are gone.
 
 #### How a mark is drawn and opened
 
@@ -1980,6 +2040,15 @@ element, an error from `role="alert"`.
   body: text that appears with its region, which VoiceOver does not say. Mounted with each opening, the region writes
   after its delay with the trigger still focused. The instance is `AdvancedSection` in
   `packages/ui/src/components/form/AdvancedSection.tsx`.
+- A change made under the user that nothing on the screen marks (a form field replaced because it changed elsewhere, an
+  import's file read again) is announced by `ChangeAnnouncer` (`packages/ui/src/components/announce/ChangeAnnouncer.tsx`),
+  built on `AttendedStatusAnnouncer`: the region is remounted per change, so a second change with the same words is said
+  again, its first write comes `AFTER_FOCUS_MOVE_DELAY_MS` of attended time after the change (one made while the window is
+  unattended is said once the user is back, and one that arrives with a focus move after it), and it is cleared
+  `READ_TIME_MS` after it was written, as the change is on the screen too. A change made while the window is unattended
+  and replaced by another before the wait is over is said only as the later one, so a form that names what changed
+  gathers the fields of the changes that arrive while one waits and starts afresh once the announcer has written
+  (`useCheckedEdit`, through `onSaid`). `ChangedElsewhereAnnouncer` words the replaced fields of a form.
 - A dialog step whose title says what happened announces it by moving focus to the dialog, wherever focus was, so the
   dialog is read out by its new name; it adds no `StatusAnnouncer`, which would say the same thing again. The import's
   result step is the instance: its title becomes "Import finished" and the step focuses the dialog itself

@@ -6,7 +6,8 @@ section and the project list" in `docs/product/sidebar.md`), or a project's sess
 
 A session row shows the session's status glyph (see `docs/product/session-statuses.md`; the *switching account* status
 takes its place while the session is shown as switching its account, see "While a session is switching" in
-`docs/product/switching-session-accounts.md`), its agent's icon, its displayed title (see "Displayed names" in
+`docs/product/switching-session-accounts.md`, and the *reconnecting* status takes the place of both while its process
+cannot be reached), its agent's icon, its displayed title (see "Displayed names" in
 `docs/product/session-titles.md`), and its pin button when it is pinned (see "Pinning" in
 `docs/product/order-of-projects-and-sessions.md`). Outside focus mode, every console and project session row, nested
 sessions included, shows its context-size chip immediately after its title when the context size is known and above zero

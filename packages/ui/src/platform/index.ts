@@ -98,14 +98,13 @@ export interface ExitCapability {
   register(handlers: ExitHandlers): () => void;
   /** Proof this webview is alive and answering; see `useAppExit` for when it is sent. */
   heartbeat(): Promise<void>;
-  /** Tells the shell whether a termination the system starts (logging out, restarting or shutting down the
-   * machine; macOS only, where Windows never asks) quits without the confirmation, which is right while the daemon
-   * brings the interrupted sessions back at its next start. The shell asks as for any quit until told. A quit the user
-   * starts is unaffected. */
-  setSystemQuitWithoutAsking(enabled: boolean): Promise<void>;
   /** Ends the process, or with `restart` relaunches the application in its place (how an installed update
-   * takes effect). Only after the daemon has been shut down. */
+   * takes effect). Only after the daemon has been told to stop. */
   confirmQuit(options?: { restart?: boolean }): Promise<void>;
+  /** Records that the user is quitting the application, before the daemon is told to shut down: the shell keeps the
+   * intent until the quit completes, so that the stop is finished at the next start if this one is cut short. Only
+   * for a plain quit, never a restart. */
+  beginQuit(): Promise<void>;
 }
 
 export type NotificationPermissionStatus = "granted" | "denied" | "undecided";
@@ -311,6 +310,10 @@ export type UpdateChannel = "stable" | "beta";
 /** A newer version a check found. */
 export interface AvailableUpdate {
   version: string;
+  /** The oldest process holder build that still carries its sessions and shell terminals over to this version's
+   * daemon: a restart into the update leaves the ones held by an older build interrupted. `null` when the shell does
+   * not say, which counts every running one as interrupted. */
+  holderFloor?: string | null;
   /** The release notes, when the release has any. */
   notes?: string;
 }

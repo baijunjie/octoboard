@@ -19,14 +19,21 @@ export interface UpdateState {
   updateChannel?: UpdateChannel;
   /** The download's progress, while `phase` is `downloading`. */
   progress?: UpdateProgress;
-  /** The version installed and waiting for a restart, once `phase` is `installed`. */
+  /** The version installed and waiting for a restart, once `phase` is `installed`; it is the version of the daemon the
+   * restart starts, which the restart's compatibility check measures holders against. */
   installedVersion?: string;
+  /** The holder floor of the installed update (see `AvailableUpdate`); `null` when unknown (this window never saw it,
+   * or the update gave none). */
+  installedHolderFloor?: string | null;
   /** How the last check ended, and when. */
   lastCheck?: { outcome: "upToDate" | "available" | "failed"; at: number };
   /** The notice about `update` was dismissed; a different version brings it back. Settings still offers it. */
   noticeDismissed: boolean;
   /** The notice that a restart is needed was hidden with Later; Settings still shows the pending restart. */
   restartNoticeHidden: boolean;
+  /** A restart was asked for and the window's exit flow has not yet opened its confirmation or started the
+   * relaunch; a button that asks holds itself pending meanwhile. */
+  restarting: boolean;
 }
 
 /** What went wrong in something the user started, for the UI to report; an automatic check's failure is not
@@ -55,10 +62,14 @@ export interface UpdateStore {
   dismissNotice(): void;
   /** Hides the notice that a restart is needed. */
   hideRestartNotice(): void;
-  /** Asks the window to restart, through its exit flow; does nothing until an update is installed. */
-  restart(): void;
-  /** Registers what answers `restart`, returning the function that unregisters it. */
-  onRestartRequested(handler: () => void): () => void;
+  /** Asks the window to restart, through its exit flow, and settles once that has opened its confirmation or started
+   * the relaunch (`restarting` is set until then), telling it the installed update's holder floor and version (`null`
+   * for either this window never saw); does nothing until an update is installed, or while an earlier
+   * ask is still being answered. */
+  restart(): Promise<void>;
+  /** Registers what answers `restart`, returning the function that unregisters it. The handler's promise settles when
+   * the confirmation is open or the relaunch is under way. */
+  onRestartRequested(handler: (holderFloor: string | null, targetVersion: string | null) => Promise<void>): () => void;
   /** Starts the automatic checks, the first `firstCheckDelayMs` after the call (`FIRST_CHECK_DELAY_MS` unless
    * given) and then every `CHECK_INTERVAL_MS`; returns the function that stops them. With `null` there are none. */
   start(firstCheckDelayMs?: number | null): () => void;
@@ -68,7 +79,8 @@ export interface UpdateStore {
  * The state of the application's updates, and the one place that decides what may happen next: a check and a
  * download never overlap, and once an update is installed nothing more is offered until the restart that applies
  * it. Restarting is only ever asked for, never done here: it goes through the window's exit confirmation
- * (`onRestartRequested`, answered by `useAppExit`), which asks the user first about the sessions it ends.
+ * (`onRestartRequested`, answered by `useAppExit`), which asks the user first only when the restart would interrupt
+ * a session or end a busy terminal.
  */
 export function createUpdateStore({
   updater,
@@ -82,9 +94,9 @@ export function createUpdateStore({
   reportFailure: (failure: UpdateFailure) => void;
   now?: () => number;
 }): UpdateStore {
-  let state: UpdateState = { phase: "idle", noticeDismissed: false, restartNoticeHidden: false };
+  let state: UpdateState = { phase: "idle", noticeDismissed: false, restartNoticeHidden: false, restarting: false };
   const listeners = new Set<() => void>();
-  let restartHandler: (() => void) | undefined;
+  let restartHandler: ((holderFloor: string | null, targetVersion: string | null) => Promise<void>) | undefined;
 
   const set = (change: Partial<UpdateState>) => {
     state = { ...state, ...change };
@@ -96,11 +108,12 @@ export function createUpdateStore({
     () => {},
   );
 
-  /** The state once an update is installed and waits for a restart; `version` is unknown when the shell only says
+  /** The state once an update is installed and waits for a restart; `found` is unknown when the shell only says
    * that one is already installed and this window never saw which. */
-  const installed = (version: string | undefined): Partial<UpdateState> => ({
+  const installed = (found: AvailableUpdate | undefined): Partial<UpdateState> => ({
     phase: "installed",
-    installedVersion: version,
+    installedVersion: found?.version,
+    installedHolderFloor: found?.holderFloor ?? null,
     update: undefined,
     updateChannel: undefined,
     progress: undefined,
@@ -141,7 +154,7 @@ export function createUpdateStore({
       }
       if (error instanceof UpdaterError && error.kind === "installed") {
         // An update was installed before this window knew of it: it only awaits the restart.
-        set(installed(state.update?.version));
+        set(installed(state.update));
         return;
       }
       // The shell is busy with something of its own: nothing was learned, and nothing went wrong.
@@ -162,12 +175,12 @@ export function createUpdateStore({
       await updater.install((progress) => {
         if (state.phase === "downloading") set({ progress });
       });
-      set(installed(update.version));
+      set(installed(update));
     } catch (error) {
       const kind = error instanceof UpdaterError ? error.kind : "failed";
       if (kind === "installed") {
         // Installed already, by an earlier press this window lost track of: it only awaits the restart.
-        set(installed(update.version));
+        set(installed(update));
       } else if (kind === "busy") {
         // The shell is busy with something of its own; the update stays offered for another press.
         set({ phase: "idle", progress: undefined });
@@ -193,8 +206,16 @@ export function createUpdateStore({
     install,
     dismissNotice: () => set({ noticeDismissed: true }),
     hideRestartNotice: () => set({ restartNoticeHidden: true }),
-    restart() {
-      if (state.phase === "installed") restartHandler?.();
+    async restart() {
+      if (state.phase !== "installed" || state.restarting || !restartHandler) return;
+      set({ restarting: true });
+      try {
+        await restartHandler(state.installedHolderFloor ?? null, state.installedVersion ?? null);
+      } catch {
+        // The exit flow reports its own failures; the press only stops being pending.
+      } finally {
+        set({ restarting: false });
+      }
     },
     onRestartRequested(handler) {
       restartHandler = handler;

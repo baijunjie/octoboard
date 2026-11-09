@@ -3,7 +3,8 @@
 //! the agent, independently of this preview.
 //!
 //! Nothing here is ever an error to the caller: a file that is missing, unreadable or unwritable
-//! only means there is no saved output to show, so failures are logged and swallowed.
+//! only means there is no saved output to show, so failures are logged and swallowed. A write says
+//! whether it kept the output, for a caller that may drop the source of it only once it did.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -27,11 +28,12 @@ impl SavedOutput {
         }
     }
 
-    /// Replaces the session's saved output. Written to a file of its own and renamed into place, so
-    /// a reader never sees half of it and a daemon killed mid-write leaves the previous one intact.
-    pub fn write(&self, id: &str, output: &[u8]) {
+    /// Replaces the session's saved output, and says whether it did. Written to a file of its own
+    /// and renamed into place, so a reader never sees half of it and a daemon killed mid-write
+    /// leaves the previous one intact.
+    pub fn write(&self, id: &str, output: &[u8]) -> bool {
         let Some(path) = self.file(id) else {
-            return;
+            return false;
         };
         let partial = self.dir.join(format!(
             "{PARTIAL_PREFIX}{}",
@@ -40,9 +42,10 @@ impl SavedOutput {
         // Terminal output can hold secrets, so it is the owner's alone.
         let written = std::fs::create_dir_all(&self.dir)
             .and_then(|()| replace_file(&path, &partial, output, Permissions::Private));
-        if let Err(err) = written {
+        if let Err(err) = &written {
             tracing::warn!(session = %id, path = %path.display(), %err, "saving the session's last output failed");
         }
+        written.is_ok()
     }
 
     pub fn read(&self, id: &str) -> Option<Vec<u8>> {

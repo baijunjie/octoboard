@@ -92,3 +92,46 @@ describe.each(switches)("$key", ({ key, label, help, onText }) => {
     expect(raiseError.mock.calls[0][0]).toMatchObject({ title: "Could not save the setting" });
   });
 });
+
+it("bases the write on the version of its own setting in the store, and on no other", async () => {
+  const container = mountHost(
+    <LanguageProvider>
+      <DaemonSwitchSetting field="auto_pull_repositories" />
+    </LanguageProvider>,
+    { daemon: testDaemon({ state: { settings: { ...DEFAULT_SETTINGS, versions: { auto_pull_repositories: 4, auto_close_idle_shell_terminals: 9 } } }, request }) },
+  );
+  await act(async () => {
+    container.querySelector<HTMLInputElement>("input[type=checkbox]")!.click();
+  });
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", auto_pull_repositories: true, base_versions: { auto_pull_repositories: 4 } });
+});
+
+it("sends no second write of a switch before the store shows the first, then bases the next on the new version", async () => {
+  const replies: (() => void)[] = [];
+  request.mockImplementation(() => new Promise<never>((resolve) => replies.push(() => resolve({} as never))));
+  const daemon = testDaemon({ state: { settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, versions: { auto_pull_repositories: 1 } } }, request });
+  const container = mountHost(<LanguageProvider><DaemonSwitchSetting field="auto_pull_repositories" /></LanguageProvider>, { daemon });
+  const toggle = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+  await act(async () => toggle.click());
+  // The switch still shows the store's value, so a second press asks for the same change, on the version about to be replaced.
+  await act(async () => toggle.click());
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(request).toHaveBeenCalledWith({ type: "update_settings", auto_pull_repositories: true, base_versions: { auto_pull_repositories: 1 } });
+  await act(async () => replies.splice(0).forEach((reply) => reply()));
+  // Answered, but the broadcast has not arrived: still nothing to base a write on.
+  await act(async () => toggle.click());
+  expect(request).toHaveBeenCalledTimes(1);
+  act(() => daemon.store.setState({ settings: { ...daemon.store.getState().settings, auto_pull_repositories: true, versions: { auto_pull_repositories: 2 } } }));
+  await act(async () => toggle.click());
+  expect(request).toHaveBeenLastCalledWith({ type: "update_settings", auto_pull_repositories: false, base_versions: { auto_pull_repositories: 2 } });
+});
+
+it("frees a switch whose write failed", async () => {
+  request.mockImplementationOnce(() => Promise.reject(new Error("refused")));
+  const daemon = testDaemon({ state: { settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, versions: { auto_pull_repositories: 1 } } }, request });
+  const container = mountHost(<LanguageProvider><DaemonSwitchSetting field="auto_pull_repositories" /></LanguageProvider>, { daemon });
+  const toggle = container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+  await act(async () => toggle.click());
+  await act(async () => toggle.click());
+  expect(request).toHaveBeenCalledTimes(2);
+});

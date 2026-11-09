@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use tokio::sync::broadcast;
 
-use super::{close, close_all, create, rename, shell_environment, ShellProcess};
+use super::{close, close_all, close_all_ending, create, rename, shell_environment, ShellProcess};
 use crate::protocol::{error_code, Event, Request, ShellTerminal, ShellTerminalState};
 use crate::state::AppState;
 use crate::terminal::pty::PtyCore;
@@ -188,7 +188,7 @@ async fn a_terminal_runs_a_shell_in_its_project_that_takes_input_and_ends_when_c
     output_containing(&shell, "40 100").await;
 
     // A client attaching again is given what scrolled past before it came.
-    let replay = shell.attach().replay;
+    let replay = shell.attach(10_000).opening;
     let replay = String::from_utf8_lossy(&replay);
     assert!(
         replay.contains("42") && replay.contains("40 100"),
@@ -362,7 +362,9 @@ async fn a_shell_that_exits_leaves_its_terminal_exited_with_its_output_until_clo
         .await
         .unwrap();
     let shell = process(&state, &created);
-    let mut attached = shell.attach().live;
+    let attached = shell.attach(0);
+    let client = attached.answering.as_ref().expect("a live client").client;
+    let wake = attached.live.clone().expect("a live client");
 
     shell
         .write(&typed(
@@ -380,13 +382,29 @@ async fn a_shell_that_exits_leaves_its_terminal_exited_with_its_output_until_clo
     assert!(!exited.busy, "an exited shell runs nothing");
 
     // The client attached before the exit is let go once the output has reached it.
-    let ended =
-        tokio::time::timeout(PATIENCE, async { while attached.recv().await.is_some() {} }).await;
+    let ended = tokio::time::timeout(PATIENCE, async {
+        loop {
+            match shell.take_output(client) {
+                crate::terminal::fan::Delivery::Send(frames) => {
+                    let sent: usize = frames.iter().map(|frame| frame.size()).sum();
+                    shell.acknowledge(client, sent as u64);
+                }
+                crate::terminal::fan::Delivery::Wait => wake.notified().await,
+                crate::terminal::fan::Delivery::Over => break,
+            }
+        }
+    })
+    .await;
     assert!(ended.is_ok(), "the attached client was never let go");
 
-    let crate::terminal::fan::Attached { replay, live, .. } = shell.attach();
-    assert!(String::from_utf8_lossy(&replay).contains("last-words"));
-    assert!(live.is_closed(), "an exited shell's replay is all there is");
+    let crate::terminal::fan::Attached {
+        opening: paint,
+        live,
+        ..
+    } = shell.attach(0);
+    assert!(paint.starts_with(b"\x1bc"), "an exited shell is painted");
+    assert!(String::from_utf8_lossy(&paint).contains("last-words"));
+    assert!(live.is_none(), "an exited shell's paint is all there is");
 
     close(&state, &created.id).await.unwrap();
     assert!(state.shell_terminals.list().is_empty());
@@ -444,6 +462,34 @@ async fn the_daemons_exit_ends_every_terminal() {
     for pid in pids {
         assert_gone_by(pid as i32, Instant::now() + PATIENCE);
     }
+}
+
+/// The stop that escalates a planned one forgets every terminal, asks about each whether it is
+/// to be ended here, and ends only those it picks: the others end with their holder.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_escalated_stop_forgets_every_terminal_and_ends_only_those_it_picks() {
+    let (state, _dir, _project) = with_project("shell-exit-picked");
+    let ended = create(&state, "p1".to_string(), None, String::new())
+        .await
+        .unwrap();
+    let left = create(&state, "p1".to_string(), None, String::new())
+        .await
+        .unwrap();
+    let (ended_pid, left_pid) = (process(&state, &ended).pid, process(&state, &left).pid);
+    let asked = std::sync::Mutex::new(Vec::new());
+    close_all_ending(&state, |shell| {
+        asked.lock().unwrap().push(shell.id.clone());
+        shell.id != left.id
+    })
+    .await;
+    assert!(state.shell_terminals.list().is_empty());
+    let mut asked = asked.into_inner().unwrap();
+    asked.sort();
+    let mut both = vec![ended.id.clone(), left.id.clone()];
+    both.sort();
+    assert_eq!(asked, both);
+    assert_gone_by(ended_pid as i32, Instant::now() + PATIENCE);
+    crate::test_support::kill(left_pid as i32);
 }
 
 #[test]

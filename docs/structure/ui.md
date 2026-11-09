@@ -93,8 +93,9 @@ their cascade order does not depend on which screen opened first.
 - `src/errors/` — turning a failure into words: `codedError.ts` (`CodedError`, the failure carrying a daemon or client
   code), `codes.ts` (the one record per error code, core codes and the providers' `PROVIDER_CODES` merged, with `Code` and `CODE`; `messageKey` maps a code to its catalog key), daemon wording (`daemonMessage.ts`, with
   `sharingFailure.ts` and `branchCleanupItems.ts` for the two items-bearing messages, and the folder rules the latter
-  applies), `causes.ts` (parsers for the structured causes a daemon failure carries), the shared `ErrorPresentation`,
-  recovery classification, issue-report address.
+  applies), `causes.ts` (parsers for the structured causes a daemon failure carries), `writeConflict.ts` (the `base_versions` a
+  checked write carries, and what a `write_conflict` names), the shared `ErrorPresentation`, recovery classification,
+  issue-report address.
 - `src/browse/` — browse requests to the daemon: `budget.ts` (the window's shares of the daemon's bound of outstanding
   browse requests, the shared slot names and the lanes every browse request goes through), the lane primitive
   (`lane.ts`), and how a failed browse request is treated and worded (`failure.ts`).
@@ -110,8 +111,9 @@ their cascade order does not depend on which screen opened first.
   heading), `focus/`, `announce/`, `panel/`, `host/`, `rows/` (the tree row, its icon and mark buttons, the
   hover-actions class), `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, lazy readiness for capture hosts,
   polling, window focus (`windowFocus.ts`), the latest-request hook,
-  `useLatest` and `useRenderLatest`, `useSerialPush` over `createSerialQueue` (`serialQueue.ts`), `settle`, a `try`/`finally` helper kept outside components because
-  the React Compiler skips a function holding one).
+  `useLatest` and `useRenderLatest`, `useSerialPush` over `createSerialQueue` (`serialQueue.ts`), `useCheckedEdit` (the
+  checked-write side of a form dialog), `settle`, a `try`/`finally` helper kept outside components because the React
+  Compiler skips a function holding one).
 - `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry`
   with its panels in `src/quota/`, and `RailProcessesEntry`, both on the shared popover wiring of `RailPanelEntry`),
   `NotificationsBell`, `ContentPanel`, `Toasts`, `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement
@@ -125,10 +127,13 @@ their cascade order does not depend on which screen opened first.
 - `src/layout/` — pane layout: panel kinds and widths, the resize handle, the sidebar drawer, swipes below `phone`.
 - `src/shortcuts/` — the central registry of keyboard shortcuts and its persisted overrides.
 - `src/navigation/` — Back and Forward through the locations the content area has shown.
-- `src/lifecycle/` — hooks tying the UI to the platform: exit flow, notifications, native menu, native
-  window theme, the two settings the desktop shell holds in its own file, run in background and menu bar icon visibility (`shellSettings.ts`: the store behind both preferences, started from the window's `settings` query, pushing changes through the platform capabilities, `connectShellSettings` called in `main.tsx`), keep awake (the daemon holds the computer awake itself;
-  `useKeepAwakeSync.ts` hands the shell the daemon's `keep_awake_held` for its menu bar icon), whether a system-initiated
-  quit needs no confirmation (`useSystemQuitSync.ts`), git status schedule, interface language report.
+- `src/lifecycle/` — hooks and parts tying the UI to the platform: exit flow (`useAppExit.ts`, its
+  confirmation `ExitConfirmDialog.tsx`), notifications, native menu, native window theme, the two settings the desktop
+  shell holds in its own file, run in background and menu bar icon visibility (`shellSettings.ts`: the store behind both
+  preferences, started from the window's `settings` query, pushing changes through the platform capabilities,
+  `connectShellSettings` called in `main.tsx`), keep awake (the daemon holds the computer awake itself;
+  `useKeepAwakeSync.ts` hands the shell the daemon's `keep_awake_held` for its menu bar icon), git status schedule,
+  interface language (`useInterfaceLanguage.ts`).
 - `src/statusItem/` — the menu-bar menu: its builder, quota submenus, icons and the hook that pushes it to the platform.
 - `src/sidebar/` — one console's sessions and projects: `Sidebar` picks the view over `SidebarFrame`, `ConsoleView` and
   `FocusView` list them with `ProjectNode` and `SessionRow` (their pin and lock buttons in `MarkButtons.tsx`, the row's
@@ -252,6 +257,10 @@ dependency).
   each of its settings, `planNames`, `params`), added to `BUILT_IN` in `src/providers/registry.ts`, whose keys type the
   catalogs. `providers/agentMarks.ts` and the website's marks are outside this bar, updated by hand when a provider is to
   be shown there. A provider the daemon serves with no module here is shown by its served label and a generic mark.
+- A settings control that saves a field the daemon versions sends its write through `useSettingsWrite`, naming the
+  paths it changes; a dialog that edits a console, a project or an account uses `useCheckedEdit` and sends only the
+  fields the user changed, with their `base_versions`. A field a form edits has its path in the daemon's versioned
+  paths (see the daemon structure doc).
 - A user-facing string goes through `i18n/` with its key in every catalog (typed `Translation<...>`, so a missing
   message fails type checking).
 - A new daemon error code needs its record in `errors/codes.ts` in the same change; a code only one provider raises
@@ -290,7 +299,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A block of code shown as text | `CodeBlock`, or `SurfaceCodeBlock` for a wrapping block on its own surface (`src/components/text/CodeBlock.tsx`); a flush `CodeBlock` built on a surface of its own, such as inside a scroller as `DiagnosticBlock` does, puts `CODE_SURFACE_CLASS` (the classes of the secondary `Surface` it sits on) on that surface |
 | Open an external address with the platform adapter and shared failure handling | `ExternalLink` (`src/components/text/ExternalLink.tsx`) for application links; `useExternalLinkAction` from the same module for document-owned link markup |
 | A settings section's lead paragraph and the rows under it | `SettingsLead` and `LeadRows` (`src/settings/SettingsLead.tsx`) |
-| An on/off switch in Settings that saves | `SettingSwitch` or `SwitchSettingRow` (`src/settings/SettingRow.tsx`); the `onChange` returns the save so the switch ignores presses until it settles |
+| An on/off switch in Settings that saves | `SettingSwitch` or `SwitchSettingRow` (`src/settings/SettingRow.tsx`); the `onChange` may return the save, so the switch ignores presses until it settles; `DaemonSwitchSetting` and `GitSection` return nothing and rely on `useSettingsWrite`'s version guard instead |
 | Pin and lock buttons of a session row; its derived state | `PinButton`, `LockButton` and `SessionMarkButtons` (`src/sidebar/MarkButtons.tsx`); `sessionRowModel` (`src/sessions/sessionRowModel.ts`) with the `useSessionRowModel` hook (`src/sidebar/`) |
 | Resolve the selected session's focus context for an action or shortcut | `selectedSessionFocusTarget` (`src/sidebar/focus.ts`), shared by `useFocusMode` and session menus; it resolves ownership through `consoleSessionAbove` and checks target availability through `resolveFocus` |
 | Let an open menu take an advertised window command | `ActionMenuItem.commandShortcut` (`src/components/menus/menuEntries.ts`) pairs its displayed binding with its matcher; `useWindowShortcut` (`src/shortcuts/`) delegates a matched, consumed command during a modal through `runMenuCommand` (`src/components/menus/menuCommands.ts`). `MenuItems` registers through `registerMenuCommand` and owns the active root menu's eligibility; components receive matchers from their callers and do not import `shortcuts/` |
@@ -299,6 +308,10 @@ New code uses these rather than a second implementation. None is enforced by a c
 | The Git workflow items a setting offers | `GIT_WORKFLOW_ITEMS` and `GIT_WORKFLOW_ITEM_KEYS` (`src/git/gitWorkflow.ts`) |
 | A test that mounts a component under the app's providers | `mountHost` (`src/test/mountHost.tsx`) over `testDaemon` (the real store, requests rejected unless the test gives a handler); the container it returns has `render(ui)` to render again under the same host |
 | A plain on/off application setting in Settings | `DaemonSwitchSetting` (`src/settings/DaemonSwitchSetting.tsx`) over the list in `src/configuration/booleanSettings.ts` |
+| A checked write of application settings from a control (the switches, the choice of when to prevent sleep, the Git section) | `useSettingsWrite` (`src/settings/useSettingsWrite.ts`): sends `update_settings` based on the versions the store holds of the paths it changes, and drops a press while the store still holds a path at the version this window last wrote it from |
+| The checked-write side of a form dialog for a console, a project or an account | `useCheckedEdit` (`src/components/hooks/useCheckedEdit.ts`) over `baseVersions` and `writeConflict` (`src/errors/writeConflict.ts`): the `base_versions` of the fields the user changed, and putting a field the store moved past back to its current value, announced through `ChangedElsewhereAnnouncer` when the user had edited it |
+| Wait for the store to reach a state from code that outlives its component (a checked write that goes on after its field has gone) | `whenState` (`src/store/whenState.ts`) |
+| Announce a change made under the user that nothing marks on screen (a form field replaced because it changed elsewhere, a review read again) | `ChangeAnnouncer` (`src/components/announce/ChangeAnnouncer.tsx`) over `AttendedStatusAnnouncer`; `ChangedElsewhereAnnouncer` for replaced fields, naming them |
 | An xterm terminal view | `useTerminalController` and `useTerminalReconnect`, with `TerminalSurface`, `TerminalCover` and `TerminalNoticeBar` in its `TerminalNoticeSlot` (`src/terminal/`), shared by the session pane and shell terminals |
 | The loading line of a panel | `LoadingState` (`src/components/panel/LoadingState.tsx`) |
 | A failure's status mark with its Try again | `RetryStatusMark` (`src/components/status/RetryStatusMark.tsx`) |
@@ -330,7 +343,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Which accounts a quota list shows | `listedQuotaAccounts` (`src/quota/quotaListing.ts`) |
 | The tags offered to a tag field (projects and agents) | `tagVocabulary` (`src/components/form/tagVocabulary.ts`) with `TagsInput` |
 | Platform capabilities (native menu, menu bar icon visibility, showing the daemon's keep-awake hold on the menu bar icon, launch at login, updater, clipboard, directory picker, permissions) | the `PlatformAdapter` through `src/platform/` |
-| Follow the user leaving the window and coming back (whether the window has focus, a change of it, a return to it, a loss of it) | `windowHasFocus`, `subscribeWindowFocus`, `onWindowFocusReturn` and `onWindowFocusLoss` (`src/components/hooks/windowFocus.ts`), which follow the webview's own window `focus` and `blur` and `document.hasFocus()` in the desktop app as in a browser; they arrive only because `src/input/focusGuard.ts` swallows window-targeted focus events solely between a press's mousedown and the tick after the next frame, then replays a swallowed change. Users of the return: `usePoll`, `useMacosPermissions`, `useNotificationPermission`, `LaunchAtLoginSetting`, `ImportConfigurationDialog`; of the loss: `useQuickCreateModifier`, `tabDrag`, `AgentTabList`, `accountDrag`, `useNavigationHistory`; `useWindowAttended` uses the subscription and `windowHasFocus` |
+| Follow the user leaving the window and coming back (whether the window has focus, a change of it, a return to it, a loss of it) | `windowHasFocus`, `subscribeWindowFocus`, `onWindowFocusReturn` and `onWindowFocusLoss` (`src/components/hooks/windowFocus.ts`), which follow the webview's own window `focus` and `blur` and `document.hasFocus()` in the desktop app as in a browser; they arrive only because `src/input/focusGuard.ts` swallows window-targeted focus events solely between a press's mousedown and the tick after the next frame, then replays a swallowed change. Users of the return: `usePoll`, `useMacosPermissions`, `useNotificationPermission`, `LaunchAtLoginSetting`, `ImportConfigurationDialog`, `terminal/TerminalController.ts`; of the loss: `useQuickCreateModifier`, `tabDrag`, `AgentTabList`, `accountDrag`, `useNavigationHistory`; `useWindowAttended` uses the subscription and `windowHasFocus`, which `terminal/TerminalController.ts` also asks before it activates its terminal |
 | A behaviour or a word that differs by operating system | on the client's machine, `PlatformAdapter.host` (`HostFacts`, `src/platform/host.ts`), read with `usePlatform()` or `useHost()`; on the daemon's machine (its paths, its Trash), `snapshot.host` in the store (`useHostPaths()`, the daemon's words in `platformTerms.ts`); never `navigator`, and a pure function takes the host as an argument |
 | The daemon's view of each agent's CLI version and update, and which updates this window started | `agentCliStatuses` and `cliUpdatesStartedHere` of the store state (`src/store/state.ts`; `trackAgentCliUpdate` in `src/store/actions.ts`); the Version dialog and `AgentCliUpdateAlerts` read them |
 | Hand focus back to an agent tab's actions button | `tabActionsTrigger` (`src/components/tabs/AgentTabList.tsx`) |

@@ -42,9 +42,7 @@ use tauri::{Emitter, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use background::BackgroundState;
 use diagnostics::diagnostic;
-use exit::{
-    confirm_quit, frontend_exit_heartbeat, request_quit, set_system_quit_without_asking, ExitState,
-};
+use exit::{begin_quit, confirm_quit, frontend_exit_heartbeat, request_quit, ExitState};
 use menu::{set_menu_labels, ui_event_for};
 use sidecar::{mark_daemon_stopping, start_daemon, window_params, DaemonState};
 
@@ -82,8 +80,8 @@ pub fn run() {
         .manage(updater::UpdaterState::default())
         .invoke_handler(tauri::generate_handler![
             frontend_exit_heartbeat,
+            begin_quit,
             confirm_quit,
-            set_system_quit_without_asking,
             sidecar::daemon_exit_detail,
             set_menu_labels,
             tray::set_tray_menu,
@@ -174,10 +172,10 @@ pub fn run() {
             // A recovery still running must not start a daemon the application would leave behind.
             mark_daemon_stopping(app_handle);
             window_state::save(app_handle);
-            // A held update is installed here only for a quit let through; the system ending the
-            // session on Windows reaches this with no `ExitRequested` and leaves it for the next
-            // start.
-            exit::install_on_exit(app_handle);
+            // Tells the daemon about a quit, or passes the system ending the session on to it (on
+            // Windows that reaches this with no `ExitRequested`). A held update is installed here
+            // only for a quit let through, and left for the next start otherwise.
+            exit::on_exit(app_handle);
         }
         _ => lifecycle::on_run_event(app_handle, &event),
     });

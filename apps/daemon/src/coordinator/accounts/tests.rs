@@ -427,7 +427,9 @@ async fn removing_an_agent_keeps_its_accounts() {
     assert!(matches!(
         events.try_recv(),
         Ok(Event::SettingsUpdated { settings })
-            if settings.added_agents == Some(vec![AgentId::CLAUDE]) && settings.accounts == [account]
+            if settings.added_agents == Some(vec![AgentId::CLAUDE])
+                && settings.accounts.len() == 1
+                && settings.accounts[0].id == account.id
     ));
 
     handle(
@@ -467,6 +469,7 @@ async fn an_account_can_be_created_renamed_repointed_and_removed_over_the_protoc
             account: created.id.clone(),
             name: Some("Work (renamed)".to_string()),
             config_dir: None,
+            base_versions: None,
         },
     )
     .await
@@ -486,6 +489,7 @@ async fn an_account_can_be_created_renamed_repointed_and_removed_over_the_protoc
             account: created.id.clone(),
             name: None,
             config_dir: Some(host_path("/home/u/.codex-work-2")),
+            base_versions: None,
         },
     )
     .await
@@ -661,6 +665,7 @@ async fn a_taken_account_directory_is_refused_within_its_agent_only() {
                 account: work.id.clone(),
                 name: None,
                 config_dir: Some(dir.to_string()),
+                base_versions: None,
             },
         )
         .await
@@ -674,6 +679,7 @@ async fn a_taken_account_directory_is_refused_within_its_agent_only() {
             account: work.id.clone(),
             name: Some("Work 2".to_string()),
             config_dir: Some(host_path("/home/u/.claude-work/")),
+            base_versions: None,
         },
     )
     .await
@@ -1020,6 +1026,7 @@ async fn deleting_or_repointing_an_account_ends_its_running_login_as_cancelled()
                 account: account.clone(),
                 name: None,
                 config_dir: Some(dir.join("elsewhere").to_string_lossy().into_owned()),
+                base_versions: None,
             }
         } else {
             RequestBody::DeleteAccount {
@@ -1091,6 +1098,7 @@ async fn repointing_or_deleting_an_account_drops_its_quota_reading() {
             account: account.clone(),
             name: Some("Renamed".to_string()),
             config_dir: None,
+            base_versions: None,
         },
     )
     .await
@@ -1104,6 +1112,7 @@ async fn repointing_or_deleting_an_account_drops_its_quota_reading() {
             account: account.clone(),
             name: None,
             config_dir: Some(host_path("/home/u/.codex-other")),
+            base_versions: None,
         },
     )
     .await

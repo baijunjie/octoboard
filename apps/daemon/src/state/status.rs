@@ -67,6 +67,10 @@ impl AppState {
         session.paused = self.shown_paused(&session, session.status);
         session.switching_account = self.is_switching_account(&session.id);
         session.prompt_on_launch = self.is_prompted_on_launch(&session.id);
+        session.screen_inexact = self
+            .live_session(&session.id)
+            .is_some_and(|live| live.screen_inexact());
+        session.holder_link = self.shown_holder_link(&session.id);
         session.default_effort =
             if session.observed_model.is_some() && session.observed_effort.is_none() {
                 self.default_effort_of(&session.id)

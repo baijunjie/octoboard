@@ -25,6 +25,7 @@ async fn an_exported_configuration_is_imported_as_it_is() {
         icon: None,
         console_session_prompt: None,
         created_at: 1,
+        versions: Default::default(),
     };
     source.store.insert_console(&exported_console).unwrap();
     let mut stored = Project {
@@ -43,6 +44,7 @@ async fn an_exported_configuration_is_imported_as_it_is() {
         tags: vec!["t".to_string()],
         description: Some("Round trip.".to_string()),
         git_workflow: Default::default(),
+        versions: Default::default(),
     };
     stored.default_agent = Some(AgentId::CODEX);
     source.store.insert_project(&stored).unwrap();
@@ -1676,6 +1678,53 @@ async fn idle_terminal_cleanup_round_trips_through_configuration() {
     .await
     .unwrap();
     assert!(target.store.auto_close_idle_shell_terminals().unwrap());
+}
+
+#[tokio::test]
+async fn a_setting_changed_after_the_preview_makes_the_import_conflict_and_creates_nothing() {
+    let (state, _dir) = app_state("import-settings-conflict");
+    let full = with_settings(document(vec![console("Hub", Vec::new())]), true, false);
+    let options = || ApplyOptions {
+        settings: carried_sections(&full),
+        accounts: None,
+        agents: None,
+        consoles: true,
+        clone_dir: true,
+    };
+    // The client holds the settings from its snapshot, which is what later changes are told from.
+    let mut held = state.store.get_settings().unwrap();
+    state
+        .field_versions
+        .stamp_settings(&mut held, crate::state::Stamp::Snapshot);
+    let preview = inspect(&state, &full).await.unwrap().settings_versions;
+
+    // Another client changes a setting the import would write.
+    crate::coordinator::settings::update_settings(
+        &state,
+        crate::coordinator::settings::SettingsChanges {
+            ask_questions_as_choices: Some(false),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
+    let err = apply_reporting(&state, &full, Vec::new(), options(), None, Some(preview))
+        .await
+        .unwrap_err();
+    let coded = err.downcast_ref::<CodedError>().unwrap();
+    assert_eq!(coded.code, error_code::WRITE_CONFLICT);
+    assert_eq!(coded.params["fields"], "ask_questions_as_choices");
+    assert!(state.store.list_consoles().unwrap().is_empty());
+    assert!(!state.store.auto_pull_repositories().unwrap());
+
+    // Previewing again reads the current versions, and the import then goes through.
+    let preview = inspect(&state, &full).await.unwrap().settings_versions;
+    let imported = apply_reporting(&state, &full, Vec::new(), options(), None, Some(preview))
+        .await
+        .unwrap();
+    assert!(imported.settings_applied.is_some());
+    assert_eq!(imported.consoles.len(), 1);
+    assert!(state.store.auto_pull_repositories().unwrap());
 }
 
 fn options(settings: Vec<SettingsSection>) -> ApplyOptions {

@@ -610,6 +610,7 @@ mod tests {
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled: false,
+            versions: Default::default(),
         };
 
         let projects = account.join("projects");

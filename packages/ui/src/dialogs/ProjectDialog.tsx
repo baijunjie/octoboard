@@ -3,7 +3,7 @@ import React, { useId, useMemo, useRef, useState } from "react";
 import { orderedAccounts } from "../accounts/accountOrder";
 import { accountDisabled } from "../accounts/choiceEntries";
 import { consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accounts/accountInheritance";
-import { changedLaunch, changedProjectAccounts, readLaunch, readProjectAccounts } from "../agents/agentFields";
+import { changedLaunch, changedProjectAccounts, readLaunch, readProjectAccounts, withAgent, withLaunchField } from "../agents/agentFields";
 import { consoleProjectLaunch, defaultAccountName, projectSessionAgent, servedAgents } from "../agents/agents";
 import { detectionMarkers, providerLabel } from "../agents/providers";
 import { agentIconPickerOptions, AgentIcon } from "../components/icons/AgentIcon";
@@ -17,9 +17,13 @@ import { changedGitWorkflowItems, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkf
 import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
+import type { Agent, GitWorkflowOverride, Launch, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore, useProviders } from "../store";
 import { useHostPaths } from "../components/hooks/useHostPaths";
+import { ChangedElsewhereAnnouncer } from "../components/announce/ChangedElsewhereAnnouncer";
+import { useCheckedEdit } from "../components/hooks/useCheckedEdit";
+import { agentFieldPaths, agentPaths } from "../errors/writeConflict";
+import { sameValue } from "../values/sameValue";
 import { offeredAccountOptions } from "./accountOptions";
 import { AdvancedSection, AdvancedTabs } from "../components/form/AdvancedSection";
 import { AgentAccountField } from "./AgentAccountField";
@@ -95,8 +99,16 @@ export function ProjectDialog({
   const path = source === "git" ? cloneDir : directory;
   const setPath = source === "git" ? setCloneDir : setDirectory;
   const [remoteUrl, setRemoteUrl] = useState(editing?.remote_url ?? "");
-  const [name, setName] = useState(editing?.name ?? "");
-  const [defaultAgent, setDefaultAgent] = useState<Agent | "" | "detect">(editing?.default_agent ?? "");
+  // What the form read of the project, which an edit is judged against: only a field the user changed is sent, so a
+  // change another client made to a field they left alone is not overwritten, nor conflicts.
+  const [read, setRead] = useState(() => ({
+    name: editing?.name ?? "",
+    default_agent: editing?.default_agent ?? null,
+    description: editing?.description ?? "",
+    tags: editing?.tags ?? [],
+  }));
+  const [name, setName] = useState(read.name);
+  const [defaultAgent, setDefaultAgent] = useState<Agent | "" | "detect">(read.default_agent ?? "");
   // `"detect"` is the choice only a parent directory offers: each repository found is detected on
   // its own. It is selected on arriving at that source and given up on leaving it.
   const changeSource = (next: ProjectSource) => {
@@ -108,18 +120,105 @@ export function ProjectDialog({
   // effort, `null` being unset (the agent's own), and the account, which may be inheriting the
   // console's. Kept per agent as the values are the agent's own, so a value set for one says nothing
   // about another.
-  const [initialLaunch] = useState(() => readLaunch(editing?.launch, served));
+  const [initialLaunch, setInitialLaunch] = useState(() => readLaunch(editing?.launch, served));
   const [launch, setLaunch] = useState(initialLaunch);
-  const [initialAccounts] = useState(() => readProjectAccounts(editing?.accounts, served));
+  const [initialAccounts, setInitialAccounts] = useState(() => readProjectAccounts(editing?.accounts, served));
   const [accountFields, setAccountFields] = useState(initialAccounts);
   // The project's own git workflow settings when the dialog opens, and the edits since; `null` follows the application-wide value.
-  const [initialGitWorkflow] = useState(() => editing?.git_workflow ?? FOLLOWING_GIT_WORKFLOW);
+  const [initialGitWorkflow, setInitialGitWorkflow] = useState(() => editing?.git_workflow ?? FOLLOWING_GIT_WORKFLOW);
   const [gitWorkflow, setGitWorkflow] = useState(initialGitWorkflow);
   // Whether the Advanced section is open, kept here so it stays open as the section with launch settings and the
   // one without them take each other's place.
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
-  const [description, setDescription] = useState(editing?.description ?? "");
-  const [tags, setTags] = useState<string[]>(editing?.tags ?? []);
+  const [description, setDescription] = useState(read.description);
+  const [tags, setTags] = useState<string[]>(read.tags);
+  const stored = useDaemonStore((s) => (editing ? s.projects.get(editing.id) : undefined));
+  // Whether the store holds `path` as the form read it: a version that moved over the same value (every one does after a
+  // daemon restart) changes nothing of what the form shows.
+  const sameAsRead = (path: string) => {
+    if (!stored) return true;
+    const [field, member = "", key = ""] = path.split(".");
+    if (field === "name") return stored.name === read.name;
+    if (field === "default_agent") return (stored.default_agent ?? "") === (read.default_agent ?? "");
+    if (field === "description") return (stored.description ?? "") === read.description;
+    if (field === "tags") return sameValue(stored.tags, read.tags);
+    if (field === "accounts") return sameValue(stored.accounts?.[member] ?? INHERIT, initialAccounts[member] ?? INHERIT);
+    if (field === "launch") return (stored.launch?.[member]?.[key as keyof Launch] ?? null) === (initialLaunch[member]?.[key as keyof Launch] ?? null);
+    if (field === "git_workflow") {
+      return (stored.git_workflow[member as keyof GitWorkflowOverride] ?? null) === (initialGitWorkflow[member as keyof GitWorkflowOverride] ?? null);
+    }
+    return true;
+  };
+  // Whether the user changed `path`'s field from what the form read, which is what makes its replacement worth announcing.
+  const editedFromRead = (path: string) => {
+    const [field, member = "", key = ""] = path.split(".");
+    if (field === "name") return name !== read.name;
+    if (field === "default_agent") return (defaultAgent === "" || defaultAgent === "detect" ? null : defaultAgent) !== read.default_agent;
+    if (field === "description") return description.trim() !== read.description;
+    if (field === "tags") return !sameValue(tags, read.tags);
+    if (field === "accounts") return !sameValue(accountFields[member] ?? INHERIT, initialAccounts[member] ?? INHERIT);
+    if (field === "launch") return (launch[member]?.[key as keyof Launch] ?? null) !== (initialLaunch[member]?.[key as keyof Launch] ?? null);
+    if (field === "git_workflow") return (gitWorkflow[member as keyof GitWorkflowOverride] ?? null) !== (initialGitWorkflow[member as keyof GitWorkflowOverride] ?? null);
+    return false;
+  };
+  // The label of the field a path belongs to, as the dialog shows it.
+  const fieldLabel = (path: string) => {
+    const [field, member = "", key = ""] = path.split(".");
+    if (field === "name") return t("common.name");
+    if (field === "default_agent") return t("dialog.project.defaultAgent");
+    if (field === "description") return t("dialog.project.description");
+    if (field === "tags") return t("dialog.project.tags");
+    if (field === "accounts") return t("dialog.agentSettings.account", { agent: isolate(providerLabel(t, providers, member)) });
+    // Named with its agent, since the form shows one agent's launch settings and a replaced one may be another's.
+    if (field === "launch") return t(key === "effort" ? "dialog.agentSettings.agentEffort" : "dialog.agentSettings.agentModel", { agent: isolate(providerLabel(t, providers, member)) });
+    return t("dialog.project.gitWorkflow.title");
+  };
+  const resetToStored = (paths: readonly string[]) => {
+    if (!stored) return;
+    let nextRead = read;
+    let nextInitialLaunch = initialLaunch;
+    let nextLaunch = launch;
+    let nextInitialAccounts = initialAccounts;
+    let nextAccounts = accountFields;
+    let nextInitialGitWorkflow = initialGitWorkflow;
+    let nextGitWorkflow = gitWorkflow;
+    for (const path of paths) {
+      // The path names the field, then the agent (or the git workflow item) and, for a launch setting, its key.
+      const [field, member = "", key = ""] = path.split(".");
+      if (field === "name") {
+        setName(stored.name);
+        nextRead = { ...nextRead, name: stored.name };
+      } else if (field === "default_agent") {
+        setDefaultAgent(stored.default_agent ?? "");
+        nextRead = { ...nextRead, default_agent: stored.default_agent };
+      } else if (field === "description") {
+        setDescription(stored.description ?? "");
+        nextRead = { ...nextRead, description: stored.description ?? "" };
+      } else if (field === "tags") {
+        setTags(stored.tags);
+        nextRead = { ...nextRead, tags: stored.tags };
+      } else if (field === "accounts") {
+        const account = stored.accounts?.[member] ?? INHERIT;
+        nextInitialAccounts = withAgent(nextInitialAccounts, member, account);
+        nextAccounts = withAgent(nextAccounts, member, account);
+      } else if (field === "launch") {
+        const value = stored.launch?.[member]?.[key as keyof Launch] ?? null;
+        nextInitialLaunch = withLaunchField(nextInitialLaunch, member, key as keyof Launch, value);
+        nextLaunch = withLaunchField(nextLaunch, member, key as keyof Launch, value);
+      } else if (field === "git_workflow") {
+        const value = stored.git_workflow[member as keyof GitWorkflowOverride] ?? null;
+        nextInitialGitWorkflow = { ...nextInitialGitWorkflow, [member]: value };
+        nextGitWorkflow = { ...nextGitWorkflow, [member]: value };
+      }
+    }
+    setRead(nextRead);
+    setInitialLaunch(nextInitialLaunch);
+    setLaunch(nextLaunch);
+    setInitialAccounts(nextInitialAccounts);
+    setAccountFields(nextAccounts);
+    setInitialGitWorkflow(nextInitialGitWorkflow);
+    setGitWorkflow(nextGitWorkflow);
+  };
   // The tags to offer are the ones this console's projects carry now; there is no registry of them.
   const projects = useDaemonStore((s) => s.projects);
   const knownTags = useMemo(
@@ -128,6 +227,7 @@ export function ProjectDialog({
   );
   const directoryBrowse = useDirectoryBrowse(path, setPath);
   const { busy, run } = useDialogAction(undefined, t(editing ? "dialog.project.saveFailedTitle" : "dialog.project.addFailedTitle"));
+  const edit = useCheckedEdit(editing?.versions ?? {}, stored?.versions, { same: sameAsRead, edited: editedFromRead, reset: resetToStored, writing: busy });
 
   // A single directory's agent is read as its path is entered, a git remote's by probing it, which
   // also checks the remote can be read. A parent directory has no pre-read: each repository found
@@ -186,8 +286,8 @@ export function ProjectDialog({
   // used (the field is genuinely optional on creation), but here blanking it out and saving would
   // silently keep the old name instead of doing what the empty field visually suggests.
   const nameError = addsParent ? undefined : editing && !name.trim() ? t("dialog.nameRequired")
-    : exceedsTextLimit(name, PROJECT_NAME_LIMIT, editing?.name) ? t("daemon.field_too_long.name", { limit: PROJECT_NAME_LIMIT }) : undefined;
-  const descriptionError = !addsParent && exceedsTextLimit(description, PROJECT_DESCRIPTION_LIMIT, editing?.description ?? "")
+    : exceedsTextLimit(name, PROJECT_NAME_LIMIT, read.name) ? t("daemon.field_too_long.name", { limit: PROJECT_NAME_LIMIT }) : undefined;
+  const descriptionError = !addsParent && exceedsTextLimit(description, PROJECT_DESCRIPTION_LIMIT, read.description)
     ? t("daemon.field_too_long.description", { limit: PROJECT_DESCRIPTION_LIMIT }) : undefined;
   const { shown, attempt } = useSubmitValidation();
 
@@ -215,22 +315,39 @@ export function ProjectDialog({
       const gitWorkflowChanges = changedGitWorkflowItems(gitWorkflow, initialGitWorkflow);
       const gitWorkflowChanged = Object.keys(gitWorkflowChanges).length > 0;
       if (editing) {
-        await request({
-          type: "update_project",
-          project: editing.id,
-          name: name || undefined,
+        const chosenAgent = defaultAgent === "" || defaultAgent === "detect" ? null : defaultAgent;
+        const scalars = {
+          ...(name !== read.name && { name }),
           // "" ("Same as console") means following the console's default, which on the wire
           // is an explicit `null` (clear), never an omitted field — omitting it means "leave
           // whatever was there alone" instead.
-          default_agent: defaultAgent === "" || defaultAgent === "detect" ? null : defaultAgent,
-          launch: changedLaunch("update", sent, initialLaunch),
-          accounts: changedProjectAccounts("update", sentAccounts, initialAccounts),
-          // Always sent, the whole list: a present array replaces the tags, and the field shows them all.
-          tags,
-          // Cleared with an explicit `null`, and sent only when it changed.
-          ...(trimmedDescription !== (editing.description ?? "") && { description: trimmedDescription || null }),
+          ...(chosenAgent !== read.default_agent && { default_agent: chosenAgent }),
+          // The whole list: a present array replaces the tags.
+          ...(!sameValue(tags, read.tags) && { tags }),
+          // Cleared with an explicit `null`.
+          ...(trimmedDescription !== read.description && { description: trimmedDescription || null }),
+        };
+        const launchChanges = changedLaunch("update", sent, initialLaunch);
+        const accountChanges = changedProjectAccounts("update", sentAccounts, initialAccounts);
+        // The paths of what is sent, each written as it is on the record, are what the write is based on.
+        const paths = [
+          ...Object.keys(scalars),
+          ...agentPaths("accounts", accountChanges),
+          ...agentFieldPaths("launch", launchChanges),
+          ...Object.keys(gitWorkflowChanges).map((item) => `git_workflow.${item}`),
+        ];
+        await request({
+          type: "update_project",
+          project: editing.id,
+          ...scalars,
+          launch: launchChanges,
+          accounts: accountChanges,
           // Only the items that changed, `null` for one that goes back to following the application-wide value.
           ...(gitWorkflowChanged && { git_workflow: gitWorkflowChanges }),
+          base_versions: edit.base(paths),
+        }).catch((error: unknown) => {
+          edit.refused(error);
+          throw error;
         });
       } else {
         await request({
@@ -289,6 +406,7 @@ export function ProjectDialog({
         submitDisabled={locked}
         onSubmit={submit}
       >
+        <ChangedElsewhereAnnouncer count={edit.replaced.count} labels={edit.replaced.paths.map(fieldLabel)} onSaid={edit.said} />
         {!editing && <OptionSelect label={t("dialog.project.source")} options={SOURCE_OPTIONS.map((option) => ({ ...option, label: t(option.label) }))} value={source} onChange={changeSource} />}
         {!editing && source === "git" && (
           <div ref={urlFieldRef} className="flex flex-col gap-2" {...urlFieldHandoff}>

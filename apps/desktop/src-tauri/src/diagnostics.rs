@@ -69,18 +69,23 @@ use windows as platform;
 
 use platform::HOME_VARIABLE;
 
-/// `~/.octoboard/logs`, which has to be the same directory as `paths::logs_dir` in
+/// `~/.octoboard`, which has to be the same directory as `paths::data_dir` in
 /// `apps/daemon/src/paths.rs`, with the home directory resolved the way `paths::home_dir` does:
 /// the home variable (`HOME_VARIABLE`) when it is absolute, else the system's record of the user's
-/// home when it is unset. A relative one leaves the log unwritten (`std::env::home_dir` returns a
-/// set `HOME` as it is on Unix, so the system's record is not consulted then), so it is not written
-/// into whatever directory the application happens to run in.
-fn logs_dir() -> Option<PathBuf> {
+/// home when it is unset. A relative one leaves it unresolved (`std::env::home_dir` returns a
+/// set `HOME` as it is on Unix, so the system's record is not consulted then), so nothing is
+/// written into whatever directory the application happens to run in.
+pub fn data_dir() -> Option<PathBuf> {
     home_dir(
         std::env::var_os(HOME_VARIABLE).as_deref(),
         std::env::home_dir,
     )
-    .map(|home| home.join(".octoboard").join("logs"))
+    .map(|home| home.join(".octoboard"))
+}
+
+/// `logs` under the data directory, as `paths::logs_dir` in the daemon.
+fn logs_dir() -> Option<PathBuf> {
+    data_dir().map(|dir| dir.join("logs"))
 }
 
 fn home_dir(

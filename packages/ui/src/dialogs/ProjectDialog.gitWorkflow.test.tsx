@@ -2,7 +2,8 @@
 import { act } from "react";
 import { expect, it } from "vitest";
 
-import { projectOf } from "../fixtures/builders";
+import { PROJECT_VERSIONS, projectOf } from "../fixtures/builders";
+import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { answer, chooseSource, click, fillDirectory, input, pickerNamed, render, sentOf, settle, stored, type } from "./projectDialogTestSupport";
 
 const tabs = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]'));
@@ -142,4 +143,30 @@ it("sets and clears the project's squash override without changing other workflo
   await choose("Squash commits before delivery", "Same as global setting");
   await save("Save");
   expect(sentOf(pending, "update_project")).toMatchObject({ git_workflow: { squash_before_delivery: null } });
+});
+
+it("replaces an edited git workflow item with the current value, and sends nothing for it", async () => {
+  const pending = await renderOnGitWorkflowTab(projectOf("p-1", "c-1", "Site"));
+  await choose("Delivery", "Merge locally");
+  expect(pickerNamed("Delivery").textContent).toContain("Merge locally");
+  // A version that moves over the same value (as every one does after a daemon restart) keeps the edit.
+  act(() => pending.store.setState({ projects: new Map([["p-1", projectOf("p-1", "c-1", "Site", { versions: { ...PROJECT_VERSIONS, "git_workflow.delivery": 2 } })]]) }));
+  expect(pickerNamed("Delivery").textContent).toContain("Merge locally");
+  // A value changed elsewhere replaces it.
+  act(() =>
+    pending.store.setState({
+      projects: new Map([
+        ["p-1", projectOf("p-1", "c-1", "Site", { git_workflow: { ...FOLLOWING_GIT_WORKFLOW, delivery: "ask" }, versions: { ...PROJECT_VERSIONS, "git_workflow.delivery": 3 } })],
+      ]),
+    }),
+  );
+  expect(pickerNamed("Delivery").textContent).toContain("Ask each time");
+  await choose("Revert gate", "Off");
+  await save("Save");
+  expect(sentOf(pending, "update_project")).toEqual({
+    type: "update_project",
+    project: "p-1",
+    git_workflow: { revert_gate: false },
+    base_versions: { "git_workflow.revert_gate": 1 },
+  });
 });

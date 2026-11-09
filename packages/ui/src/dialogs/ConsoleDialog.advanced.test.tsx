@@ -40,9 +40,8 @@ it("keeps the edits of every agent while switching tabs, and saves only what cha
     {
       type: "update_console",
       console: "c-1",
-      name: "Main",
-      default_agent: "claude",
       project_session_launch: { claude: { model: "alpha" } }, launch: { codex: { effort: "high" } },
+      base_versions: { "project_session_launch.claude.model": 1, "launch.codex.effort": 1 },
     },
   ]);
 });
@@ -66,7 +65,7 @@ it("sends an explicit null when a project session value is cleared", async () =>
   await openAdvanced();
   await click(groupPicker("Project sessions", "Model").parentElement!.querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
   await clickButton("Save");
-  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", project_session_launch: { claude: { model: null } } }]);
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", project_session_launch: { claude: { model: null } }, base_versions: { "project_session_launch.claude.model": 1 } }]);
 });
 
 it("leaves a missing agent without a tab unless the console stores a value for it, and drops it once cleared", async () => {

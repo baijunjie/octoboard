@@ -46,6 +46,7 @@ What happens depends on where the session stands when the call is made:
 | Archived or *interrupted*, with no process, still being launched, or not yet past its startup screens | Refused with `session_not_running`. |
 | Being switched to another account, handed off, having its branches transferred, given another owner, or restarted for a change of its account's sharing | Refused with `session_busy`. |
 | An id that names no session | Refused with `unknown_session` (through the tool, in prose). |
+| Any, once the daemon has begun a planned stop | Refused with `daemon_shutting_down` (see "While the terminals are handed over" in `docs/product/application-lifecycle.md`). |
 
 A key is written only while **both** of these hold, checked right before each key: the session reads *working* by its
 hooks, and its terminal title shows a turn running — a running indicator the agent has sent within the last few

@@ -150,11 +150,13 @@ pub struct LaunchSpec<'a> {
     /// it (see [`AgentProvider::installed_version`]); `None` makes an adapter fall back to what
     /// every version takes.
     pub agent_version: Option<AgentVersion>,
-    /// The daemon binary, which is also the MCP server and the hook forwarder.
+    /// The binary the launch's helpers run, which is the MCP server and the hook forwarder: the
+    /// daemon's, or the holder's for a program a holder runs.
     pub self_exe: &'a str,
-    /// Where the daemon is listening, for the MCP server this launch registers.
+    /// Where the helpers connect, for the MCP server this launch registers: the daemon's port, or
+    /// the holder's for a program a holder runs.
     pub daemon_port: u16,
-    /// The key the daemon requires of every connection, for every client this launch starts or
+    /// The key that port requires of every connection, for every client this launch starts or
     /// configures: the MCP server, the hooks and the status line.
     pub daemon_key: &'a str,
     /// The token that session's MCP server authenticates to the daemon with.
@@ -282,6 +284,18 @@ pub struct LaunchPlan {
     /// directory is removed (Grok's copy of the settings a session changed onto the configuration
     /// file its account shares).
     pub after_exit: Option<Box<dyn crate::session::term::AfterExit>>,
+    /// What [`AgentProvider::rebuild_launch`] rebuilds `carried_trust` and `after_exit` from when a
+    /// daemon that starts after this one adopts the launch: those are objects of this process, and
+    /// the launch outlives it. `None` for a launch that has neither.
+    pub adoption: Option<serde_json::Value>,
+}
+
+/// What a provider rebuilds of a launch's plan for a daemon that adopts the launch
+/// ([`LaunchPlan::adoption`]); the fields are those of [`LaunchPlan`] of the same names.
+#[derive(Default)]
+pub struct RebuiltLaunch {
+    pub carried_trust: Option<std::sync::Arc<dyn crate::session::trust::TrustCarrier>>,
+    pub after_exit: Option<Box<dyn crate::session::term::AfterExit>>,
 }
 
 /// A title an agent's own record gives its conversation. Of the titles one record gives, the
@@ -355,6 +369,13 @@ pub trait AgentProvider: Send + Sync {
         &NoHooks
     }
 
+    /// Whether the provider's hooks or its own signals give its sessions their status. Where they
+    /// do, they win over the status a program reports through OSC 7501, which then moves nothing
+    /// (`crate::session::program_status`); where they do not, OSC 7501 is the status's source.
+    fn has_status_integration(&self) -> bool {
+        false
+    }
+
     /// How the provider's own records of a session are found, read and watched.
     fn records(&self) -> &'static dyn RecordStore {
         &NoRecords
@@ -390,6 +411,13 @@ pub trait AgentProvider: Send + Sync {
     }
 
     fn plan(&self, spec: &LaunchSpec<'_>) -> Result<LaunchPlan>;
+
+    /// Rebuilds the `carried_trust` and `after_exit` of a launch from the `adoption` its plan
+    /// recorded, for the daemon that adopts the launch. A provider whose plan records none has
+    /// nothing to rebuild; so has one whose record no longer reads.
+    fn rebuild_launch(&self, _adoption: &serde_json::Value) -> RebuiltLaunch {
+        RebuiltLaunch::default()
+    }
 
     /// Refuses an account directory this provider cannot launch against, ahead of anything being
     /// done in it: the same rule `plan` applies at launch, asked beforehand so a switch can refuse
@@ -871,6 +899,7 @@ pub mod tests {
         assert!(!plan.resolves_approvals_itself);
         assert!(test.status_line().is_none());
         assert!(test.accounts().is_none());
+        assert!(!test.has_status_integration());
         assert!(test
             .refuse_unlaunchable_account(Some(Path::new("/nowhere")))
             .is_ok());
@@ -880,6 +909,16 @@ pub mod tests {
             Some("a title")
         );
         assert_eq!(test.task_title("   ", &[]), None);
+    }
+
+    /// Every real agent's status comes from its hooks and signals, which win over OSC 7501.
+    #[test]
+    fn every_real_agent_has_a_status_integration() {
+        for agent in crate::protocol::AgentId::ALL {
+            if agent != crate::protocol::AgentId::TEST {
+                assert!(super::provider(agent).has_status_integration());
+            }
+        }
     }
 
     /// The two registries list the same providers in the same order.

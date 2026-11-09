@@ -131,6 +131,8 @@ export function ControlHint({
   /** Told when the tooltip opens or closes. */
   onOpenChange?: (isOpen: boolean) => void;
 }): React.ReactElement {
+  // An empty title renders the child bare, so a title that switches between empty and text remounts the child and
+  // drops its focus: keep the title constant and gate it with `isDisabled` where it comes and goes.
   if (!title) return children;
   const own = children.props;
   const extra: Partial<typeof own> = {};

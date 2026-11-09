@@ -246,6 +246,7 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
             delivery: enum_from_row_opt(row, 14)?,
             revert_gate: row.get(15)?,
         },
+        versions: Default::default(),
     })
 }
 

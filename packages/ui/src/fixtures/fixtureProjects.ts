@@ -107,6 +107,7 @@ export function createProjectReplies({ scenario, store, fail, git, restored, sta
           description: directories.length === 1 ? trimmedOrNull(body.description) : null,
           ...projectFields(blank, body),
           git_workflow: projectGitWorkflow(FOLLOWING_GIT_WORKFLOW, body.git_workflow),
+          versions: blank.versions,
         };
         projects.set(project.id, project);
         added++;

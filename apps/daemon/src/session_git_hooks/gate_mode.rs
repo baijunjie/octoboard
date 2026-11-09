@@ -21,16 +21,18 @@ use std::io::{Cursor, Read, Write};
 use std::path::Path;
 use std::time::Duration;
 
+use crate::holder::RELAY_DEADLINE;
 use crate::platform::names;
 use crate::revert_gate::{self, GateInputs, Hook};
 use crate::wire_path;
 
 use super::gate_inputs::GateRequest;
 
-/// Hard deadline for the round trip, the same as `git-ref`'s and the agent hook forwarder's: git
-/// waits on this process for every branch it moves, so a daemon that does not answer promptly
-/// must cost a moment, not the user's command.
-const TIMEOUT: Duration = Duration::from_millis(1500);
+/// Hard deadline for the round trip: git waits on this process for every branch it moves. The call
+/// goes to the session's holder, which holds it for up to [`RELAY_DEADLINE`] while no daemon is
+/// linked (one that is starting or restarting), so the deadline is that plus a little for the
+/// daemon to answer once it is. A gate that cannot be asked within it lets the update through.
+const TIMEOUT: Duration = RELAY_DEADLINE.saturating_add(Duration::from_millis(2500));
 
 /// Runs the gate for the hook, with stdin, and returns the exit status for the dispatcher.
 pub fn run(session: &str, port: u16, key: &str, hook: &Hook) -> i32 {
@@ -76,8 +78,12 @@ pub(crate) fn inputs_for(
         Ok(reply) => reply,
         Err(err) => {
             // A daemon that answered with an error is not one that is down: the update is still
-            // let through, but not without saying that the gate did not look at it.
-            if crate::loopback::error_status(&err).is_some() {
+            // let through, but not without saying that the gate did not look at it. A holder
+            // saying it has no daemon, or lost it mid-call, is a daemon that is down.
+            if crate::loopback::error_status(&err).is_some()
+                && !crate::loopback::is_no_daemon(&err)
+                && !crate::loopback::is_daemon_lost(&err)
+            {
                 let _ = writeln!(
                     std::io::stderr(),
                     "octoboard: the revert gate did not check this update: {err}"

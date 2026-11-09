@@ -866,8 +866,8 @@ impl Store {
     }
 
     /// The sessions that are interrupted, oldest first: every one the daemon shows as resumable,
-    /// whichever run interrupted it. Call it after [`Self::mark_live_sessions_interrupted`] when the
-    /// sessions a previous daemon left mid-flight are to be counted too.
+    /// whichever run interrupted it. Call it after [`Self::mark_unheld_sessions_interrupted`] when
+    /// the sessions a previous daemon left mid-flight are to be counted too.
     pub fn list_interrupted_sessions(&self) -> Result<Vec<Session>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(&format!(
@@ -882,24 +882,41 @@ impl Store {
         Ok(rows.into_iter().flatten().collect())
     }
 
-    /// Moves every session that a previous daemon left mid-flight to `interrupted`. The daemon
-    /// owns the agent processes, so none of them survived its exit — whatever the stored status
-    /// says — and a turn one was in was cut short. Archived sessions are already without a process
-    /// on purpose and are left alone. Only the stored status is left to judge a turn on: a session
-    /// request's hand was the previous daemon's memory, so one it held over an agent at its prompt
-    /// when it went down without stopping its sessions reads as a turn cut short.
+    /// Moves every session that a previous daemon left mid-flight to `interrupted`, for a start
+    /// that adopts none. See [`Self::mark_unheld_sessions_interrupted`].
+    #[cfg(test)]
     pub fn mark_live_sessions_interrupted(&self) -> Result<usize> {
+        self.mark_unheld_sessions_interrupted(&[])
+    }
+
+    /// Moves every session that a previous daemon left mid-flight to `interrupted`, except the
+    /// sessions `held`, whose agents a holder kept running and this daemon adopted: they keep the
+    /// status they were stored with. For the others the daemon's processes did not survive the
+    /// daemon's exit, whatever the stored status says, and a turn one was in was cut short.
+    /// Archived sessions are already without a process on purpose and are left alone. Only the
+    /// stored status is left to judge a turn on: a session request's hand was the previous
+    /// daemon's memory, so one it held over an agent at its prompt when it went down without
+    /// stopping its sessions reads as a turn cut short.
+    pub fn mark_unheld_sessions_interrupted(&self, held: &[String]) -> Result<usize> {
+        let mut values: Vec<rusqlite::types::Value> = vec![
+            enum_to_text(&SessionStatus::Interrupted).into(),
+            crate::time::now_millis().into(),
+            enum_to_text(&SessionStatus::Archived).into(),
+        ];
+        values.extend(held.iter().cloned().map(Into::into));
+        let except = if held.is_empty() {
+            String::new()
+        } else {
+            let places: Vec<String> = (0..held.len()).map(|n| format!("?{}", n + 4)).collect();
+            format!("AND id NOT IN ({})", places.join(", "))
+        };
         let changed = self.lock().execute(
             &format!(
                 "UPDATE sessions SET status = ?1, ended_at = ?2, {}
-                 WHERE status NOT IN (?1, ?3)",
+                 WHERE status NOT IN (?1, ?3) {except}",
                 cut_short_turn("NULL")
             ),
-            params![
-                enum_to_text(&SessionStatus::Interrupted),
-                crate::time::now_millis(),
-                enum_to_text(&SessionStatus::Archived),
-            ],
+            rusqlite::params_from_iter(values),
         )?;
         Ok(changed)
     }
@@ -994,6 +1011,8 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Option<Session>> {
         switching_account: false,
         paused: row.get(31)?,
         prompt_on_launch: false,
+        screen_inexact: false,
+        holder_link: None,
         default_effort: None,
         role: enum_from_row::<Role>(row, 19)?,
         has_conversation: row.get(10)?,

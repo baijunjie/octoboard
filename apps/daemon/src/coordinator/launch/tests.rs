@@ -634,3 +634,137 @@ async fn a_relaunch_shows_as_prompting_only_while_it_is_given_an_instruction() {
         );
     }
 }
+
+/// Starts a relaunch of the stored session `id` whose launch waits for `holder` to answer, and
+/// drops the relaunch once the launch has reached it: the request is gone while the holder has
+/// not confirmed the start. The claim the request held is dropped with it.
+async fn relaunch_dropped_while_unconfirmed(
+    state: &Arc<AppState>,
+    id: &str,
+    holder: std::sync::mpsc::Receiver<Result<(), &'static str>>,
+    start: impl FnOnce(term::LaunchRequest) -> anyhow::Result<term::Launch> + Send + 'static,
+) {
+    use crate::test_support::{within, PATIENCE};
+    let (entered, reached) = std::sync::mpsc::channel::<()>();
+    let claim = state.begin_launch(id).unwrap();
+    {
+        let relaunch =
+            relaunch_session_with(state, &claim, id, None, true, None, None, move |request| {
+                entered.send(()).ok();
+                match holder.recv() {
+                    Ok(Ok(())) => start(request),
+                    Ok(Err(why)) => Err(anyhow::anyhow!(why)),
+                    Err(_) => Err(anyhow::anyhow!("the holder was never heard from")),
+                }
+            });
+        tokio::pin!(relaunch);
+        let reached = within(PATIENCE, move || reached.try_recv().is_ok());
+        tokio::select! {
+            result = &mut relaunch => panic!("the relaunch finished before the holder answered: {result:?}"),
+            reached = reached => assert!(reached, "the launch never reached the holder"),
+        }
+    }
+    drop(claim);
+}
+
+/// A start the holder confirms after the request that asked for it was dropped is still the
+/// session's process: the session stays claimed until then, and is registered live and followed
+/// when the confirmation comes.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_late_confirmation_registers_the_session_after_its_request_was_dropped() {
+    use crate::test_support::{stand_in_launch, within, Launched, StandIn, PATIENCE};
+    use std::sync::Mutex;
+    let (state, _dir) = console_with_project_and_accounts("coordinator-launch-late-confirm");
+    state
+        .store
+        .insert_session(&project_session(
+            "late",
+            AgentId::CLAUDE,
+            SessionStatus::Interrupted,
+        ))
+        .unwrap();
+    let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+    let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+    let (answer, holder) = std::sync::mpsc::channel();
+    relaunch_dropped_while_unconfirmed(
+        &state,
+        "late",
+        holder,
+        stand_in_launch(&started, &launches, || {}),
+    )
+    .await;
+
+    let refused = state
+        .begin_launch("late")
+        .err()
+        .expect("the session is claimed");
+    assert_eq!(code_of(&refused), error_code::SESSION_ALREADY_STARTING);
+    assert!(state.live_session("late").is_none());
+
+    answer.send(Ok(())).unwrap();
+    let registered = {
+        let state = state.clone();
+        within(PATIENCE, move || state.live_session("late").is_some()).await
+    };
+    assert!(
+        registered,
+        "the late confirmation never registered the session"
+    );
+    assert_eq!(
+        started.lock().unwrap().len(),
+        1,
+        "the program was started again"
+    );
+
+    // Followed: its end is seen, and the claim is let go with the registration's work done.
+    started.lock().unwrap().clear();
+    let released = {
+        let state = state.clone();
+        within(PATIENCE, move || {
+            state.live_session("late").is_none() && state.begin_launch("late").is_ok()
+        })
+        .await
+    };
+    assert!(released, "the session was never released after its end");
+}
+
+/// A start that fails after the request that asked for it was dropped lets the session go: the
+/// claim is released, and the session is left interrupted, not starting.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_late_failure_releases_the_session_after_its_request_was_dropped() {
+    use crate::test_support::{within, PATIENCE};
+    let (state, _dir) = console_with_project_and_accounts("coordinator-launch-late-failure");
+    state
+        .store
+        .insert_session(&project_session(
+            "late",
+            AgentId::CLAUDE,
+            SessionStatus::Interrupted,
+        ))
+        .unwrap();
+    let (answer, holder) = std::sync::mpsc::channel();
+    relaunch_dropped_while_unconfirmed(&state, "late", holder, |_| unreachable!()).await;
+    assert!(
+        state.begin_launch("late").is_err(),
+        "the session was let go too soon"
+    );
+
+    answer.send(Err("the holder could not start it")).unwrap();
+    let released = {
+        let state = state.clone();
+        within(PATIENCE, move || state.begin_launch("late").is_ok()).await
+    };
+    assert!(released, "the late failure never released the session");
+    assert!(state.live_session("late").is_none());
+    let within_status = {
+        let state = state.clone();
+        within(PATIENCE, move || {
+            state.session_record("late").unwrap().status == SessionStatus::Interrupted
+        })
+        .await
+    };
+    assert!(
+        within_status,
+        "the session was left as it was optimistically shown"
+    );
+}

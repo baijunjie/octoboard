@@ -320,9 +320,11 @@ That is the case for:
   push it makes itself, so a branch `git push ../other` creates in another repository gets no responsible session —
   and that repository runs its own hooks as usual;
 - **a copy** (`git branch -c`);
-- **a report that cannot reach the daemon**: one made while the daemon is not running or once it has been restarted on
-  another port than the session was started with, or from an agent whose sandbox blocks loopback network connections
-  or writing outside its workspace (as Codex's can);
+- **a report that never reaches the daemon**: one the session's process holder dropped while no daemon was connected,
+  past the reports it keeps (see "Session helpers and the holder" in `docs/product/process-holders.md`); where the
+  terminals run in the daemon itself, one made while the daemon is not running or once it has been restarted on another
+  port than the session was started with; and one from an agent whose sandbox blocks loopback network connections or
+  writing outside its workspace (as Codex's can);
 - **a repository that keeps no reflog for the branch** — with `core.logAllRefUpdates` off, as a bare repository has it
   by default — where a report cannot be told from one about a later branch of the same name, and is not taken;
 - a branch made by a session started while attribution was not available to it (see "What attribution needs" above).

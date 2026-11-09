@@ -3,7 +3,7 @@ import type { Preferences } from "../../fixtures/preferences";
 import type { Scenario } from "../scenario";
 import type { Ui } from "../../fixtures/interact";
 import { SAMPLE, shellTerminalOf, snapshotState } from "../../fixtures/builders";
-import { terminalClosed, terminalOpened } from "./liveChanges";
+import { terminalClosed, terminalHolderLink, terminalOpened } from "./liveChanges";
 
 const GROUP = "Terminal panel";
 
@@ -34,6 +34,29 @@ const severalShells = [
   shellTerminalOf("sh-1", web, "zsh", 0),
   shellTerminalOf("sh-2", web, "pnpm dev", 1, { busy: true }),
   shellTerminalOf("sh-3", web, "git log", 2),
+];
+
+// Terminals a restarted daemon took over: it rebuilt their screens and flags each (`screen_inexact`) until its process ends.
+// The shown one is the newest, and the strip is long enough to scroll beside it.
+const recoveredShells = [
+  shellTerminalOf("sh-1", web, "zsh", 0),
+  shellTerminalOf("sh-2", web, "pnpm dev", 1, { busy: true }),
+  shellTerminalOf("sh-3", web, "git log", 2),
+  shellTerminalOf("sh-4", web, "cargo watch", 3),
+  shellTerminalOf("sh-5", web, "docker compose logs", 4),
+  shellTerminalOf("sh-6", web, "ssh staging", 5, { screen_inexact: true }),
+];
+
+// Shells whose process still runs but the daemon cannot reach (`holder_link: "pending"`); the shown one is the newest, the
+// others are reached as usual.
+const outOfReachShells = [...severalShells.slice(0, 2), shellTerminalOf("sh-3", web, "git log", 2, { holder_link: "pending" })];
+const outOfReachRecoveredShells = [
+  ...severalShells.slice(0, 2),
+  shellTerminalOf("sh-3", web, "git log", 2, { holder_link: "pending", screen_inexact: true }),
+];
+const holderLinkChanges = (terminal: string) => [
+  terminalHolderLink("reach-process", "The daemon reaches the process again", terminal, "reachable"),
+  terminalHolderLink("lose-process", "The daemon loses the process again", terminal, "pending"),
 ];
 
 const MANY_TITLES = [
@@ -95,6 +118,17 @@ export const terminalPanelScenarios: Scenario[] = [
     description:
       "Twelve shells, more than the strip holds: the rounded rectangular tabs scroll on the second row. A scroll button reserves space only at the edge where it appears, clear of every close mark. New terminal and the terminal actions menu stay fixed at the end, outside the scrolling strip. The Terminal title and panel controls stay on the first row, visible at desktop, 420px and 360px widths. Every tab keeps its close mark visible. The newest tab has a blue outline and tinted fill and is scrolled into view, so only the button toward the earlier tabs shows. Compare light and dark themes with the theme control. Press it or scroll the strip sideways to reach them.",
     state: stateOf(manyShells),
+    preferences: TERMINAL_ONLY,
+    steps: [openWebsite, showTerminal],
+  },
+  {
+    id: "shell-panel-recovered",
+    group: GROUP,
+    category: "normal",
+    title: "Shell whose display was recovered",
+    description:
+      "The shown ssh staging terminal was taken over by a restarted daemon, which rebuilt its screen and flags it: a note mark sits on the tab row after the tab strip, before New terminal and the actions menu, named after the terminal it is about. The six tabs scroll in the strip, so its scroll button shows while the mark stays fixed beside it. Hover the mark, focus it with the keyboard or tap it to read what it says. Press another tab: those terminals are not flagged, so the mark goes. Narrow the window or choose RTL to see the row at its tightest and mirrored.",
+    state: stateOf(recoveredShells),
     preferences: TERMINAL_ONLY,
     steps: [openWebsite, showTerminal],
   },
@@ -290,5 +324,29 @@ export const terminalPanelScenarios: Scenario[] = [
     shellTerminal: "refuse",
     terminalRetriesImmediate: true,
     steps: [openWebsite, (ui) => ui.wait(2000)],
+  },
+  {
+    id: "shell-panel-holder-pending",
+    group: GROUP,
+    category: "exceptional",
+    title: "Shell tab whose process cannot be reached",
+    description:
+      "The shown git log shell is still running but the daemon cannot reach it: the tab's view is covered by the spinner, \"Reconnecting to the terminal…\", and a line saying input is unavailable until the connection returns and that reconnection is automatic, with no button. The tab itself is unchanged, and so is the agent terminal beside it. Press zsh or pnpm dev: those shells are reached as usual and show their terminals; press git log again for the cover. \"The daemon reaches the process again\" clears the cover and the shell connects; \"The daemon loses the process again\" covers it once more over the output drawn by then. The pane is widened to 560px so all three tabs show whole.",
+    state: stateOf(outOfReachShells),
+    preferences: WIDE_TERMINAL,
+    steps: [openWebsite, showTerminal],
+    liveChanges: holderLinkChanges("sh-3"),
+  },
+  {
+    id: "shell-panel-holder-pending-recovered",
+    group: GROUP,
+    category: "exceptional",
+    title: "Shell tab out of reach whose display was also recovered",
+    description:
+      "The shown git log shell carries both flags: its view has the one Reconnecting cover, and the recovered-display note mark still sits on the tab row after the tab strip, before New terminal and the actions menu, as in the recovered-shell scenario. The two stay side by side: the note says the screen was rebuilt, the cover that the process cannot be reached now. \"The daemon reaches the process again\" clears the cover while the note stays.",
+    state: stateOf(outOfReachRecoveredShells),
+    preferences: WIDE_TERMINAL,
+    steps: [openWebsite, showTerminal],
+    liveChanges: holderLinkChanges("sh-3"),
   },
 ];

@@ -145,14 +145,17 @@ The arguments and files through which each agent is given these are in "How each
 
 The injected hooks are built to be invisible. They never steer the agent, print nothing (with the one exception below),
 never fail the turn, and carry a short timeout (3 seconds; a command hook gets 15 on Windows, where an agent's first
-hook of a launch starts cold and slowly, except Codex's `Interrupt`, which keeps 3) so a daemon that is unreachable costs a turn a fraction of a second rather than stalling it. A
-Claude Code that can post hooks itself (2.1.63 or later) is given the daemon's address instead of a command, so its
+hook of a launch starts cold and slowly, except Codex's `Interrupt`, which keeps 3) so a daemon that is unreachable costs a turn a fraction of a second rather than stalling it.
+The hooks, like the session's other helpers, call the process holder that runs the session rather than the daemon,
+with a key of the launch's own, and the holder answers a report at once even while no daemon is connected (see
+"Session helpers and the holder" in `docs/product/process-holders.md`). A
+Claude Code that can post hooks itself (2.1.63 or later) is given that address instead of a command, so its
 hooks start no process; an older one, or one whose version Octoboard cannot tell from where it is installed, gets the
 command. So does one whose settings restrict the addresses hooks may post to (`allowedHttpHookUrls`, in the user's, the
 project's or the managed settings, read where "The default model" in `docs/product/model-and-reasoning-effort.md` says)
-to a list that leaves out the daemon's loopback address, since Claude Code would skip such hooks silently; a
+to a list that leaves out that loopback address, since Claude Code would skip such hooks silently; a
 restriction delivered by other means than those is not seen. The one exception to printing nothing is the address form
-with a daemon that cannot be reached or does not answer in time: Claude Code shows its own non-blocking notice about
+with an address that cannot be reached or does not answer in time: Claude Code shows its own non-blocking notice about
 the failed hook, where the command form stays silent.
 
 **The launch description can remain in the conversation after the role changes.** Two of the three agents record that
@@ -413,7 +416,9 @@ Besides the terminal type, the variables set over the snapshot are:
   (when exactly, an account whose last change of sharing is incomplete included, is in "Claude Code's auto memory" in
   `docs/product/sharing-the-default-configuration.md`).
 - for a project session, a `core.hooksPath` entry through `GIT_CONFIG_COUNT`, together with `OCTOBOARD_SESSION_ID`,
-  `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_KEY`, which point every git in the agent's process tree at Octoboard's hook dispatchers; those
+  `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_KEY` — the port of the process holder that runs the session and the key
+  it issued for the launch (see "Session helpers and the holder" in `docs/product/process-holders.md`), or the daemon's
+  own where the terminals run in the daemon itself — which point every git in the agent's process tree at Octoboard's hook dispatchers; those
   still run the user's own git hooks, report the branches that git creates (see "The session's git hooks" and
   "What attribution needs" in `docs/product/branch-responsible-session.md`), and run the revert gate (see
   `docs/product/revert-gate.md`). A console session gets none of them.

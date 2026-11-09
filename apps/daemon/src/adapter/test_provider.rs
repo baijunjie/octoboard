@@ -22,6 +22,7 @@ impl AgentProvider for TestProvider {
             notice: None,
             carried_trust: None,
             after_exit: None,
+            adoption: None,
         })
     }
 }

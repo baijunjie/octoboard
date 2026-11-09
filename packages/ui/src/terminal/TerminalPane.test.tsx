@@ -3,13 +3,14 @@ import React, { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
-import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { startResizeDrag } from "../components/panel/resizeDrag";
 import type { PlatformAdapter } from "../platform";
 import type { Event, ClientRequestBody } from "../protocol";
 import { setAccountSwitchesQueued, type Daemon, type State } from "../store";
+import { blurOnRemoval } from "../test/blurOnRemoval";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { sessionOf } from "../fixtures/builders";
@@ -30,6 +31,7 @@ const { FakeController } = vi.hoisted(() => {
     currentStatus: TermStatus = "closed";
     constructor(private callbacks: {
       onStatusChange: (status: TermStatus) => void;
+      onPaintedChange?: (painted: boolean) => void;
       openLink?: (url: string) => Promise<void>;
       pathLinks?: { open: (target: { path: string; line?: number; view?: { worktree?: string; path: string } }) => Promise<void> };
     }) {
@@ -55,8 +57,19 @@ const { FakeController } = vi.hoisted(() => {
       this.focuses += 1;
     }
     attaches = 0;
-    attach(sessionId: string): void {
+    /** Whether the last attach was the user's, which takes focus. */
+    lastUserInitiated: boolean | undefined;
+    held = false;
+    holdInput(held: boolean): void {
+      this.held = held;
+    }
+    paint(): void {
+      act(() => this.callbacks.onPaintedChange?.(true));
+    }
+    attach(sessionId: string, _url?: string, userInitiated?: boolean): void {
       this.attaches += 1;
+      this.lastUserInitiated = userInitiated;
+      this.callbacks.onPaintedChange?.(false);
       this.currentSessionId = sessionId;
       this.currentStatus = "connecting";
       this.callbacks.onStatusChange("connecting");
@@ -633,7 +646,7 @@ it("mounts the switching and resuming statuses empty, then writes them", () => {
   expect(switching.textContent).toBe("Switching account");
   const noProcessPane = mountArchived();
   noProcessPane.show({ resuming: true });
-  expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toEqual(["", "", ""]);
+  expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toEqual(["", "", "", ""]);
   act(() => void vi.advanceTimersByTime(FIRST_WRITE_MS));
   expect(statusRegions(noProcessPane.container).map((region) => region.textContent)).toContain("Resuming session…");
 });
@@ -712,4 +725,369 @@ it("keeps a sentence already spoken in the region while a modal opens and closes
   expect(text()).toEqual(["Not running"]);
   act(() => void vi.advanceTimersByTime(3000));
   expect(text()).toEqual(["Not running"]);
+});
+
+const RECOVERED = "Recovered terminal display";
+
+it("speaks the recovered display only when the flag turns on while the session is open, not as it opens or for another session", () => {
+  const spokenRecovered = (container: HTMLElement) => statusRegions(container).map((region) => region.textContent).filter((text) => text === RECOVERED);
+  const { container, root } = mount();
+  speak();
+  render(root, { ...session, screen_inexact: false });
+  speak();
+  expect(spokenRecovered(container)).toEqual([]);
+  render(root, { ...session, screen_inexact: true });
+  speak();
+  expect(spokenRecovered(container)).toEqual([RECOVERED]);
+  // Not again after a redraw with the flag still on.
+  render(root, { ...session, screen_inexact: true, title: "Renamed" });
+  expect(spokenRecovered(container)).toEqual([RECOVERED]);
+  render(root, { ...session, screen_inexact: false });
+  expect(spokenRecovered(container)).toEqual([]);
+});
+
+it("does not speak the recovered display for a session found with the flag on, or one selected with it on", () => {
+  const spokenRecovered = (container: HTMLElement) => statusRegions(container).map((region) => region.textContent).filter((text) => text === RECOVERED);
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  render(root, { ...session, screen_inexact: true });
+  speak();
+  expect(spokenRecovered(container)).toEqual([]);
+  render(root, sessionOf("s-2", "c-1", undefined, "Other", "working", { screen_inexact: false }));
+  render(root, sessionOf("s-3", "c-1", undefined, "Third", "working", { screen_inexact: true }));
+  speak();
+  expect(spokenRecovered(container)).toEqual([]);
+});
+
+describe("a session whose process the daemon cannot reach", () => {
+  const pending = { ...session, holder_link: "pending" as const };
+  const TITLE = "Reconnecting to the session…";
+  const BODY = "The session process is still running. Input is unavailable until the connection returns. Reconnection is automatic.";
+  const SENTENCE = "Reconnecting to the session. The session process is still running. Input is unavailable until the connection returns. Reconnection is automatic.";
+  const region = (container: HTMLElement) => container.querySelector<HTMLElement>("[role=region][aria-label]");
+  const terminal = (container: HTMLElement) => container.querySelector("[data-region=terminal] > .isolate")!;
+  const buttons = (container: HTMLElement) => [...container.querySelectorAll("button:not([hidden])")].map((button) => button.textContent).filter(Boolean);
+  const spoken = (container: HTMLElement) => statusRegions(container).map((r) => r.textContent).filter((text) => text === SENTENCE);
+
+  /** Puts focus on an element standing for xterm's input, inside the terminal's mount element. */
+  function focusTerminalInput(container: HTMLElement): HTMLTextAreaElement {
+    const input = container.querySelector("[data-region=terminal] [dir=ltr]")!.appendChild(document.createElement("textarea"));
+    input.focus();
+    return input;
+  }
+
+  it("covers a terminal opened pending with the title and description alone, attaching nothing and holding its input", () => {
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    render(root, pending);
+    const controller = FakeController.last;
+    expect(controller.attaches).toBe(0);
+    expect(controller.held).toBe(true);
+    expect(container.querySelectorAll("[role=region][aria-label]")).toHaveLength(1);
+    const cover = region(container)!;
+    expect(cover.textContent).toBe(`${TITLE}${BODY}`);
+    // Named by the session, not by the title it holds, which VoiceOver would read twice.
+    expect(cover.getAttribute("aria-label")).toBe("Work");
+    expect(cover.hasAttribute("aria-labelledby")).toBe(false);
+    expect(cover.getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id)!.textContent)).toEqual([TITLE, BODY]);
+    expect(cover.querySelector("h2")!.textContent).toBe(TITLE);
+    expect(terminal(container).hasAttribute("inert")).toBe(true);
+    expect(container.querySelector("[data-slot=spinner]")).not.toBeNull();
+    expect(buttons(container)).toEqual([]);
+    expect(container.textContent).not.toContain("Not running");
+    act(() => void vi.advanceTimersByTime(60_000));
+    expect(controller.attaches).toBe(0);
+  });
+
+  it("covers an open terminal at once, over its old screen, and spends no retry while the socket drops", () => {
+    const { container, root } = mount();
+    FakeController.last.settle("open");
+    FakeController.last.paint();
+    expect(region(container)).toBeNull();
+    render(root, pending);
+    expect(region(container)).not.toBeNull();
+    expect(FakeController.last.held).toBe(true);
+    const attaches = FakeController.last.attaches;
+    // Past every automatic attempt there is: no attach, no Reconnect, no failure cover.
+    FakeController.last.settle("closed");
+    act(() => void vi.advanceTimersByTime(120_000));
+    FakeController.last.settle("closed");
+    expect(FakeController.last.attaches).toBe(attaches);
+    expect(buttons(container)).toEqual([]);
+    expect(region(container)!.textContent).toBe(`${TITLE}${BODY}`);
+    expect(statusRegions(container).map((r) => r.textContent)).not.toContain("Terminal disconnected");
+  });
+
+  it("replaces a Reconnect that was offered, and hands the focus it held to the cover", () => {
+    const { container, root } = mount();
+    for (let i = 0; i < 5; i++) failAttempt();
+    FakeController.last.settle("closed");
+    const button = container.querySelector<HTMLButtonElement>("button:not([hidden])")!;
+    act(() => button.focus());
+    render(root, pending);
+    expect(buttons(container)).toEqual([]);
+    expect(document.activeElement).toBe(region(container));
+  });
+
+  it("moves focus held in the terminal to the cover, and back only while it is still there on recovery", () => {
+    const { container, root } = mount();
+    const input = focusTerminalInput(container);
+    render(root, pending);
+    expect(document.activeElement).toBe(region(container));
+    // The move is not the user's, so the region draws its ring however the last input came.
+    expect(region(container)!.hasAttribute("data-focus-visible")).toBe(true);
+    const focuses = FakeController.last.focuses;
+    render(root, session);
+    expect(FakeController.last.focuses).toBe(focuses + 1);
+    expect(input.isConnected).toBe(true);
+    // The person was at the cover, so the recovery attach is theirs: it activates the terminal.
+    expect(FakeController.last.lastUserInitiated).toBe(true);
+  });
+
+  it("never pulls focus on recovery once it has moved on, and attaches in the background", () => {
+    const outside = document.body.appendChild(document.createElement("button"));
+    const { container, root } = mount();
+    focusTerminalInput(container);
+    render(root, pending);
+    act(() => outside.focus());
+    const focuses = FakeController.last.focuses;
+    render(root, session);
+    expect(document.activeElement).toBe(outside);
+    expect(FakeController.last.focuses).toBe(focuses);
+    expect(FakeController.last.lastUserInitiated).toBe(false);
+  });
+
+  it("does not count focus a vanished Reconnect left, so a later recovery moves nothing", () => {
+    const outside = document.body.appendChild(document.createElement("button"));
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    const show = (current: typeof session) =>
+      act(() => root.render(host(<TerminalPane session={current} onResume={async () => true} onAddAgent={() => {}} restoreFocus={() => outside.focus()} />)));
+    show(session);
+    for (let i = 0; i < 5; i++) failAttempt();
+    FakeController.last.settle("closed");
+    act(() => container.querySelector<HTMLButtonElement>("button:not([hidden])")!.focus());
+    // The connection heals, the button goes, and the handoff puts focus outside the pane.
+    FakeController.last.settle("open");
+    FakeController.last.paint();
+    expect(document.activeElement).toBe(outside);
+    show(pending);
+    act(() => void vi.advanceTimersByTime(1500));
+    expect(spoken(container)).toEqual([SENTENCE]);
+    const focuses = FakeController.last.focuses;
+    show(session);
+    expect(document.activeElement).toBe(outside);
+    expect(FakeController.last.focuses).toBe(focuses);
+    expect(FakeController.last.lastUserInitiated).toBe(false);
+  });
+
+  it("keeps the recovery the person's when the cover's removal blurs it the way Chromium does", () => {
+    const { container, root } = mount();
+    FakeController.last.settle("open");
+    FakeController.last.paint();
+    focusTerminalInput(container);
+    render(root, pending);
+    expect(document.activeElement).toBe(region(container));
+    blurOnRemoval();
+    render(root, session);
+    expect(FakeController.last.lastUserInitiated).toBe(true);
+  });
+
+  it("sends focus to restoreFocus, not the terminal, on recovery after a tap", () => {
+    const restoreFocus = vi.fn();
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    const show = (current: typeof session) =>
+      act(() => root.render(host(<TerminalPane session={current} onResume={async () => true} onAddAgent={() => {}} restoreFocus={restoreFocus} />)));
+    show(session);
+    focusTerminalInput(container);
+    show(pending);
+    expect(document.activeElement).toBe(region(container));
+    document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch" }));
+    const focuses = FakeController.last.focuses;
+    show(session);
+    expect(FakeController.last.focuses).toBe(focuses);
+    expect(restoreFocus).toHaveBeenCalled();
+    // Still the person's recovery, which activates the terminal.
+    expect(FakeController.last.lastUserInitiated).toBe(true);
+    document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse" }));
+  });
+
+  it("leaves focus outside the pane alone as it begins to be covered", () => {
+    const outside = document.body.appendChild(document.createElement("button"));
+    const { root } = mount();
+    act(() => outside.focus());
+    render(root, pending);
+    expect(document.activeElement).toBe(outside);
+  });
+
+  it("lands focus asked for the terminal, and F6, on the cover while pending", () => {
+    const handle = createRef<TerminalPaneHandle>();
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    act(() => root.render(host(<TerminalPane ref={handle} session={pending} onResume={async () => true} onAddAgent={() => {}} />)));
+    act(() => handle.current?.focus());
+    expect(document.activeElement).toBe(region(container));
+    expect(FakeController.last.focuses).toBe(0);
+  });
+
+  it("recovers by attaching once with a fresh budget, even after the attempts were spent, keeping the loading cover until paint", () => {
+    const { container, root } = mount();
+    for (let i = 0; i < 5; i++) failAttempt();
+    FakeController.last.settle("closed");
+    expect(status(container)).toBe("Terminal disconnected");
+    render(root, pending);
+    act(() => void vi.advanceTimersByTime(300_000));
+    const attaches = FakeController.last.attaches;
+    render(root, session);
+    expect(FakeController.last.held).toBe(false);
+    expect(FakeController.last.attaches).toBe(attaches + 1);
+    expect(region(container)).toBeNull();
+    speak();
+    expect(status(container)).toBe("Loading terminal…");
+    FakeController.last.settle("open");
+    expect(status(container)).toBe("Loading terminal…");
+    // A broadcast meanwhile attaches nothing more.
+    render(root, { ...session, title: "Renamed" });
+    expect(FakeController.last.attaches).toBe(attaches + 1);
+    FakeController.last.paint();
+    expect(status(container)).toBe("");
+    // The attempts are fresh: a drop now is retried again.
+    FakeController.last.settle("closed");
+    act(() => void vi.advanceTimersByTime(8000));
+    expect(FakeController.last.attaches).toBe(attaches + 2);
+  });
+
+  it("shows the ended state, and attaches nothing, when the record becomes interrupted instead", () => {
+    const { container, root } = mount();
+    FakeController.last.settle("open");
+    render(root, pending);
+    const attaches = FakeController.last.attaches;
+    render(root, { ...session, status: "interrupted", holder_link: "pending" });
+    expect(region(container)).toBeNull();
+    expect(container.textContent).toContain("Not running");
+    expect(buttons(container)).toContain("Resume");
+    expect(FakeController.last.attaches).toBe(attaches);
+    expect(FakeController.last.held).toBe(false);
+  });
+
+  it("leaves an ordinary socket failure without the flag as it was", () => {
+    const { container } = mount();
+    failAttempt();
+    expect(status(container)).toBe("Reconnecting the terminal…");
+    expect(region(container)).toBeNull();
+    for (let i = 0; i < 4; i++) failAttempt();
+    FakeController.last.settle("closed");
+    expect(buttons(container)).toContain("Reconnect");
+  });
+
+  it("speaks the sentence once on entering pending, not again for retries, renames or upserts", () => {
+    const { container, root } = mount();
+    speak();
+    render(root, pending);
+    expect(spoken(container)).toEqual([SENTENCE]);
+    render(root, { ...pending, title: "Renamed" });
+    FakeController.last.settle("closed");
+    act(() => void vi.advanceTimersByTime(60_000));
+    render(root, { ...pending, title: "Renamed again", status: "idle" });
+    expect(spoken(container)).toEqual([SENTENCE]);
+    expect(statusRegions(container).map((r) => r.textContent)).not.toContain(TITLE);
+  });
+
+  it("does not speak the sentence while the cover holds focus, which reads the same copy", () => {
+    const { container, root } = mount();
+    focusTerminalInput(container);
+    render(root, pending);
+    expect(document.activeElement).toBe(region(container));
+    speak();
+    act(() => void vi.advanceTimersByTime(1500));
+    expect(spoken(container)).toEqual([]);
+    // Opened pending with focus landed in the cover before the delay ends: not said either.
+    const other = document.body.appendChild(document.createElement("div"));
+    const otherRoot = createRoot(other);
+    roots.push(otherRoot);
+    const handle = createRef<TerminalPaneHandle>();
+    act(() => otherRoot.render(host(<TerminalPane ref={handle} session={pending} onResume={async () => true} onAddAgent={() => {}} />)));
+    act(() => handle.current?.focus());
+    expect(document.activeElement).toBe(region(other));
+    act(() => void vi.advanceTimersByTime(1500));
+    expect(spoken(other)).toEqual([]);
+  });
+
+  it("speaks it after the focus delay for a terminal opened pending, and for another one selected pending", () => {
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    render(root, pending);
+    speak();
+    expect(spoken(container)).toEqual([]);
+    act(() => void vi.advanceTimersByTime(1500));
+    expect(spoken(container)).toEqual([SENTENCE]);
+    render(root, sessionOf("s-2", "c-1", undefined, "Other", "working"));
+    expect(spoken(container)).toEqual([]);
+    render(root, sessionOf("s-3", "c-1", undefined, "Third", "working", { holder_link: "pending" }));
+    expect(spoken(container)).toEqual([]);
+    act(() => void vi.advanceTimersByTime(1500));
+    expect(spoken(container)).toEqual([SENTENCE]);
+  });
+
+  it("holds the recovered display's announcement until the cover has gone, and does not repeat one already said", () => {
+    const recovered = (container: HTMLElement) => statusRegions(container).map((r) => r.textContent).filter((text) => text === RECOVERED);
+    const { container, root } = mount();
+    speak();
+    render(root, { ...pending, screen_inexact: false });
+    act(() => void vi.advanceTimersByTime(1500));
+    render(root, { ...pending, screen_inexact: true });
+    speak();
+    expect(spoken(container)).toEqual([SENTENCE]);
+    expect(recovered(container)).toEqual([]);
+    render(root, { ...session, screen_inexact: true });
+    speak();
+    expect(spoken(container)).toEqual([]);
+    // The loading cover that follows holds it too, and its own sentence is not overwritten.
+    expect(status(container)).toBe("Loading terminal…");
+    expect(recovered(container)).toEqual([]);
+    FakeController.last.settle("open");
+    FakeController.last.paint();
+    speak();
+    expect(recovered(container)).toEqual([RECOVERED]);
+    // Already said, then pending again and clear: said no more.
+    act(() => void vi.advanceTimersByTime(10_000));
+    render(root, { ...session, screen_inexact: true, holder_link: "pending" });
+    render(root, { ...session, screen_inexact: true });
+    speak();
+    expect(recovered(container)).toEqual([]);
+  });
+
+  it("follows a switch of the selected session during pending and recovery", () => {
+    const { container, root } = mount();
+    focusTerminalInput(container);
+    render(root, pending);
+    const other = sessionOf("s-2", "c-1", undefined, "Other", "working");
+    render(root, other);
+    expect(region(container)).toBeNull();
+    expect(FakeController.last.held).toBe(false);
+    expect(terminal(container).hasAttribute("inert")).toBe(false);
+    // The pick is the user's: the pane's own attach takes focus, not the recovery's background one.
+    expect(FakeController.last.lastUserInitiated).toBe(true);
+    render(root, { ...other, holder_link: "pending" });
+    expect(region(container)).not.toBeNull();
+    render(root, { ...pending, id: "s-3" });
+    expect(region(container)).not.toBeNull();
+    expect(FakeController.last.held).toBe(true);
+  });
+
+  it("covers an account switch's session with the pending cover, and uncovers it to the switch's", () => {
+    const { container, root } = mount();
+    render(root, { ...pending, switching_account: true });
+    expect(region(container)).not.toBeNull();
+    render(root, { ...session, switching_account: true });
+    speak();
+    expect(status(container)).toBe("Switching account");
+  });
 });

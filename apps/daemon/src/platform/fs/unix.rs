@@ -230,6 +230,15 @@ pub fn is_executable(path: &Path) -> bool {
         .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
 }
 
+/// Whether `a` and `b` lead to the same file, symlinks followed: the same device and inode, as two
+/// spellings of a path can name one file.
+pub fn same_file(a: &Path, b: &Path) -> bool {
+    match (std::fs::metadata(a), std::fs::metadata(b)) {
+        (Ok(a), Ok(b)) => (a.dev(), a.ino()) == (b.dev(), b.ino()),
+        _ => false,
+    }
+}
+
 /// The directories the host keeps scratch files in, as written: `/tmp`, macOS's `/private/tmp`
 /// that it leads to, and the process's temporary directory (`$TMPDIR`). Some may not exist.
 pub fn temp_roots() -> Vec<PathBuf> {

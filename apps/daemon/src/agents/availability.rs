@@ -256,6 +256,7 @@ mod tests {
                 share_default_config: false,
                 share_default_config_incomplete: false,
                 disabled: false,
+                versions: Default::default(),
             })
             .collect();
         for account in &seeded {
@@ -297,6 +298,7 @@ mod tests {
                 share_default_config: false,
                 share_default_config_incomplete: false,
                 disabled: false,
+                versions: Default::default(),
             })
             .unwrap();
     }

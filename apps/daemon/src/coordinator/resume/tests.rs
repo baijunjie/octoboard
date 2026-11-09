@@ -179,6 +179,7 @@ fn a_conversation_to_resume_is_located_in_the_account_written_to_last() {
         share_default_config: false,
         share_default_config_incomplete: false,
         disabled: false,
+        versions: Default::default(),
     };
     let (work, other) = (dir.join("work"), dir.join("other"));
     let accounts = [

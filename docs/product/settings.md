@@ -152,12 +152,15 @@ A row's switch whose value the daemon holds saves when it is turned, on its own:
 start**, **Prevent sleep** and **Close idle terminals when closing the panel**; in Git, **Automatically pull
 repositories**, **Squash commits before delivery**, **Rebase before delivery** and **Revert gate**; in Agent accounts,
 **Automatically select an account**, **Automatically switch accounts at the usage limit** and **Start usage windows
-automatically**; the five of Agent behavior; and in Cleanup, **Automatically delete archived sessions whose conversation is gone**. The switch always
-shows the value the daemon has stored, which every window shares: it moves when that value changes, not on the press
-itself. A press made while the save started by the previous press is still unanswered is ignored. Nothing marks that
-wait — the switch does not look unavailable — and it keeps showing the stored value meanwhile. A failed save is shown in
-an error alert saying the setting could not be saved, the switch keeping its position (see "The error alert" in
-`docs/product/error-alerts.md`).
+automatically**; the five of Agent behavior; and in Cleanup, **Automatically delete archived sessions whose conversation
+is gone**. The switch always shows the value the daemon has stored, which every window shares: it moves when that value
+changes, not on the press itself. Once a press has sent a save, further presses are ignored until the stored value shows
+that save, or the save fails. Nothing marks that wait — the switch does not look unavailable — and it keeps showing the
+stored value meanwhile. A failed save is shown in an error alert saying the setting could not be saved, the switch
+keeping its position (see "The error alert" in `docs/product/error-alerts.md`). App behavior's **When to prevent
+sleep** and the Git section's **Where sessions develop** and **Delivery** choices save the same way. Each save is
+checked against the setting's version, so a change another window made just before it is refused rather than
+overwritten, the error alert saying so and the control showing that change (see `docs/product/concurrent-edits.md`).
 
 Other switches in Settings save by rules of their own: an account's Disable switch (see "Turning an account off" in
 `docs/product/agent-accounts.md`), each agent's Claude compatibility and Codex compatibility switches, each unavailable
@@ -231,9 +234,7 @@ it.
 
 A switch, **off to begin with**: whether Octoboard resumes the interrupted sessions each time it starts, those the
 previous run left and any interrupted before it last stopped. While the switch is off the row's description says what
-turning it on will do, and while it is on it says what is happening now. In the macOS application the description of
-the on state adds that a logout, restart or shutdown then quits Octoboard without asking (see "Quitting" in
-`docs/product/application-lifecycle.md`); other clients do not say it. The daemon stores it as
+turning it on will do, and while it is on it says what is happening now, the same in every client. The daemon stores it as
 `resume_sessions_on_start` and keeps it, so every window shows the same. A console session may read and change it, and a
 configuration export that includes the App behavior section carries it (see "Application settings: `get_settings` and
 `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings an export carries" in
@@ -331,7 +332,15 @@ the picker opens. `Escape` while the field holds keyboard focus closes Settings 
 only exit that loses it: the close button, a press on the dimmed area around the dialog, and moving focus out of the
 field all save the typed path first. Once a send is answered the field shows the stored directory again, written as
 above. A value that is neither absolute nor starts with `~/` is refused with an error alert and the field returns to the
-stored one, and a blank value goes back to `~/Projects`. Browse opens the picker on the path the field holds — the
+stored one, and a blank value goes back to `~/Projects`. One send is out at a time: a value saved while one is
+unanswered waits, the latest replacing an earlier one, and is sent when the reply comes, unless by then the stored
+directory is another window's, which it would overwrite — the waiting value is then dropped, the field shows the stored
+directory and an error alert, titled that the setting could not be saved, says that a change was made elsewhere and
+nothing was saved. A send is checked against the setting's version, so a change another window made just before it is
+refused the same way, the field then showing that change. The window's own sends in quick succession never conflict
+with one another. A change made elsewhere while nothing is being sent replaces what the field shows, and replacing what
+the user had typed is announced as in "A form while its record changes elsewhere" in
+`docs/product/concurrent-edits.md`. Browse opens the picker on the path the field holds — the
 stored directory until something is typed — by the rules every directory field's Browse follows, which also say where it
 opens on a relative path or on a directory that does not exist yet (see "Browsing directories" in
 `docs/product/projects.md`). Where the directory applies is in "Associating a project" in the same document. A

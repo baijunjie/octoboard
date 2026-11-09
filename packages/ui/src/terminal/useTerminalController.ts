@@ -33,6 +33,7 @@ export function useTerminalController({
   shown = true,
   onStatusChange,
   onPaintedChange,
+  inputHeld = false,
   project,
   viewFile,
   options,
@@ -50,6 +51,9 @@ export function useTerminalController({
   onStatusChange: (status: TermStatus) => void;
   /** Read once, like `onStatusChange`. */
   onPaintedChange?: (painted: boolean) => void;
+  /** Whether the controller's input is held from the start, for a view that mounts with its process out of
+   * reach; read once, like `onStatusChange`. Later changes are `useTerminalReconnect`'s. */
+  inputHeld?: boolean;
   /** The project the paths in the output are asked about, which the controller built once does not otherwise follow. */
   project: string | null | undefined;
   /** Shows a project file a path in the output named. Without it such a path opens in the default application. */
@@ -101,6 +105,7 @@ export function useTerminalController({
       { ...options, host },
     );
     controllerRef.current = controller;
+    if (inputHeld) controller.holdInput(true);
     if (containerRef.current) controller.mount(containerRef.current);
     const resizeObserver = new ResizeObserver(() => {
       // xterm clears its renderer on resize and repaints a frame later. Hold the grid through

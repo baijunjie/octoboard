@@ -6,7 +6,7 @@ import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnounce
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import type { ReplyOf } from "../requests";
-import type { Agent, DirectoryChoiceKind, ImportedAccounts } from "../protocol";
+import type { Agent, DirectoryChoiceKind, ImportedAccounts, ImportFailure } from "../protocol";
 import type { Overrides } from "../shortcuts/store";
 import { AgentCardSections, AgentSettingsCard, useAgentSettingLines } from "./AgentSettingsCard";
 import type { ClientSettingValue } from "./clientSettings";
@@ -28,6 +28,11 @@ const VIA_LABEL: Record<DirectoryChoiceKind, PlainMessageKey> = {
   clone: "configuration.import.result.via.clone",
   directory: "configuration.import.result.via.directory",
 };
+
+/** Whether `failure` is a settings write refused because a setting changed while the import ran, which its own words
+ * tell apart from the generic conflict's: the consoles, projects and accounts were created, so "nothing was saved"
+ * would be untrue here. */
+const isConflict = (failure: ImportFailure): boolean => failure.code === "write_conflict";
 
 /** One region's totals on a line: each item reads on its own, the dot between them is only for the eye, and the line
  * wraps when it runs out of room. */
@@ -204,9 +209,11 @@ export function ImportResult({
           announce
           announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
           title={t("configuration.import.result.agentSettings.failedTitle")}
-          remedy={failureNode(accounts.agent_settings_error, "remedy")}
+          remedy={isConflict(accounts.agent_settings_error) ? <Message id="configuration.import.result.agentSettings.conflict.remedy" /> : failureNode(accounts.agent_settings_error, "remedy")}
           details={failureNode(accounts.agent_settings_error, "details")}>
-          <Message id="configuration.import.result.agentSettings.failed" params={{ reason: failureNode(accounts.agent_settings_error, "summary") }} />
+          {isConflict(accounts.agent_settings_error)
+            ? <Message id="configuration.import.result.agentSettings.conflict" />
+            : <Message id="configuration.import.result.agentSettings.failed" params={{ reason: failureNode(accounts.agent_settings_error, "summary") }} />}
         </ErrorAlert>
       )}
       <AgentSettingsCard
@@ -228,9 +235,11 @@ export function ImportResult({
           announce
           announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
           title={t("configuration.import.result.settings.failedTitle")}
-          remedy={failureNode(result.settings_error, "remedy")}
+          remedy={isConflict(result.settings_error) ? <Message id="configuration.import.result.settings.conflict.remedy" /> : failureNode(result.settings_error, "remedy")}
           details={failureNode(result.settings_error, "details")}>
-          <Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error, "summary") }} />
+          {isConflict(result.settings_error)
+            ? <Message id="configuration.import.result.settings.conflict" />
+            : <Message id="configuration.import.result.settings.failed" params={{ reason: failureNode(result.settings_error, "summary") }} />}
         </ErrorAlert>
       )}
       {/* The directory is written before the rest, so it stays when the rest could not be applied. */}

@@ -66,6 +66,11 @@ fn wait_for_unreaped_exit(child: &ChildHandle) {
 ///   waits to be ended.
 /// - `launch_and_exit`: starts a `park` helper into the containment of the launch its pid file is
 ///   named after, writes the helper's pid, and exits at once, as a daemon that goes away does.
+/// - `orphan_detached`: starts a `park` helper apart from itself ([`detach`]), writes the helper's
+///   pid, and exits at once, leaving the helper to be reparented: a double fork into a session of
+///   its own.
+/// - `lead_orphan`: starts an `orphan_detached` helper, waits for it to exit, writes the pid of the
+///   process it left, and waits to be ended.
 #[test]
 fn a_helper_process() {
     let (Ok(role), Some(pid_file)) = (std::env::var(ROLE), std::env::var_os(PID_FILE)) else {
@@ -118,6 +123,24 @@ fn a_helper_process() {
             wait_for_pid(&helper_file);
             write_pid(pid_file, helper.id());
             return;
+        }
+        "orphan_detached" => {
+            let helper_file = pid_file.with_extension("helper");
+            #[allow(
+                clippy::zombie_processes,
+                reason = "the helper outlives this process, which leaves it to be reparented"
+            )]
+            let helper = start("park", &helper_file, detach);
+            wait_for_pid(&helper_file);
+            write_pid(pid_file, helper.id());
+            return;
+        }
+        "lead_orphan" => {
+            let middle_file = pid_file.with_extension("middle");
+            let mut middle = start("orphan_detached", &middle_file, |_| {});
+            assert!(wait_for_exit(&mut middle).success());
+            write_pid(pid_file, wait_for_pid(&middle_file) as u32);
+            None
         }
         other => panic!("unknown role {other}"),
     };
@@ -413,6 +436,181 @@ fn a_launch_is_found_again_after_the_daemon_that_started_it_exits() {
         assert!(Instant::now() < deadline, "{members:?} left in the launch");
         std::thread::sleep(Duration::from_millis(20));
     }
+}
+
+/// The containment of an agent launch with the group a Linux host lets the calling process make,
+/// or `None`, said on the test's output, where it does not: a plain container's read-only
+/// `/sys/fs/cgroup`, a cgroup owned by someone else.
+#[cfg(target_os = "linux")]
+fn grouped_launch(name: &str) -> Option<(String, Containment)> {
+    let launch = format!("{name}-{}", std::process::id());
+    let containment = Containment::for_launch("contract", &launch).expect("the containment");
+    if containment.members().is_none() {
+        eprintln!("skipped: no writable cgroup v2 subtree to make a launch's group in");
+        return None;
+    }
+    Some((launch, containment))
+}
+
+/// The identity of the running process `pid`.
+#[cfg(target_os = "linux")]
+fn identity_of(pid: i32) -> ProcessIdentity {
+    ProcessIdentity {
+        pid: ProcessId(pid as u32),
+        start_micros: proc_table::start_of(pid).expect("the process runs"),
+    }
+}
+
+/// Starts `role` leading a session of its own into `containment`, as an agent is started.
+#[cfg(target_os = "linux")]
+fn start_in(containment: &Containment, role: &str, pid_file: &Path) -> (Child, ChildHandle) {
+    let child = start(role, pid_file, |command| {
+        Reach::Session.lead(command);
+        containment.prepare(command);
+    });
+    let handle = ChildHandle::started(ProcessId(child.id()), Reach::Session, Some(containment))
+        .expect("the child is taken on");
+    (child, handle)
+}
+
+/// On Linux a launch's group holds its process and what that started however it detached — a
+/// double fork into a session of its own — and its end kills all of it and removes the group.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_launch_s_group_ends_what_its_process_started_however_it_detached() {
+    let Some((_, containment)) = grouped_launch("group-end") else {
+        return;
+    };
+    let dir = ScratchDir::new("proc-group-end");
+    let pid_file = dir.join("leader");
+    let (mut leader, handle) = start_in(&containment, "lead_orphan", &pid_file);
+    let orphan = wait_for_pid(&pid_file);
+    let mut guard = KillOnDrop(vec![leader.id() as i32, orphan]);
+    let info = proc_table::list()
+        .expect("the process table is listed")
+        .into_iter()
+        .find(|info| info.pid == orphan)
+        .expect("the orphan runs");
+    assert_ne!(info.ppid, leader.id() as i32, "the orphan was reparented");
+    assert_eq!(
+        info.sid,
+        Some(ContainerId(orphan as u32)),
+        "it leads its own session"
+    );
+
+    let members = containment.members().expect("the group is read");
+    assert!(members.contains(&ProcessId(leader.id())), "{members:?}");
+    assert!(members.contains(&ProcessId(orphan as u32)), "{members:?}");
+
+    assert!(containment.end(&[]), "the group is gone");
+    assert_gone_by(orphan, Instant::now() + PATIENCE);
+    wait_for_unreaped_exit(&handle);
+    assert!(!wait_for_exit(&mut leader).success());
+    assert_eq!(
+        containment.members(),
+        None,
+        "the group's directory is removed"
+    );
+    guard.0.clear();
+}
+
+/// What a launch's group spares outlives its end: a process moved out of it beforehand, and one
+/// named to its end with the child it started, which is still in the group; the rest is killed.
+#[cfg(target_os = "linux")]
+#[test]
+fn what_a_launch_s_group_spares_outlives_its_end() {
+    let Some((_, containment)) = grouped_launch("group-spare") else {
+        return;
+    };
+    let dir = ScratchDir::new("proc-group-spare");
+    let (mut released, _released_handle) = start_in(&containment, "park", &dir.join("released"));
+    let (mut spared, _spared_handle) =
+        start_in(&containment, "lead_same_group", &dir.join("spared"));
+    let (mut doomed, _doomed_handle) = start_in(&containment, "park", &dir.join("doomed"));
+    wait_for_pid(&dir.join("released"));
+    let spared_child = wait_for_pid(&dir.join("spared"));
+    wait_for_pid(&dir.join("doomed"));
+    let mut guard = KillOnDrop(vec![
+        released.id() as i32,
+        spared.id() as i32,
+        spared_child,
+        doomed.id() as i32,
+    ]);
+
+    assert!(containment.release(&[identity_of(released.id() as i32)], None));
+    let members = containment.members().expect("the group is read");
+    assert!(!members.contains(&ProcessId(released.id())), "{members:?}");
+    assert!(
+        members.contains(&ProcessId(spared_child as u32)),
+        "{members:?}"
+    );
+
+    assert!(containment.end(&[(identity_of(spared.id() as i32), None)]));
+    assert!(!wait_for_exit(&mut doomed).success());
+    assert!(is_running(released.id() as i32));
+    assert!(is_running(spared.id() as i32));
+    assert!(
+        is_running(spared_child),
+        "the spared process's child went with it"
+    );
+    assert_eq!(
+        containment.members(),
+        None,
+        "the group's directory is removed"
+    );
+
+    for child in [&mut released, &mut spared] {
+        child.kill().expect("the child is killed");
+        child.wait().expect("the child is reaped");
+    }
+    crate::test_support::kill(spared_child);
+    assert_gone_by(spared_child, Instant::now() + PATIENCE);
+    guard.0.clear();
+}
+
+/// A group an earlier run left is found again among its instance's leftovers while it is there,
+/// and dropped with nothing in it, it is removed.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_leftover_group_is_found_again_and_removed_once_empty() {
+    let Some((launch, containment)) = grouped_launch("group-leftover") else {
+        return;
+    };
+    assert!(Containment::leftovers("contract").contains(&launch));
+    let reopened = Containment::reopen("contract", &launch).expect("the launch is found again");
+    assert_eq!(reopened.members(), Some(Vec::new()));
+    drop(containment);
+    drop(reopened);
+    assert!(!Containment::leftovers("contract").contains(&launch));
+    assert_eq!(
+        Containment::reopen("contract", &launch).and_then(|c| c.members()),
+        None
+    );
+}
+
+/// A launch's group joined by a process that starts the launch's program on its maker's behalf, as
+/// a holder does, takes in what that process starts, and is left to its maker when the joined
+/// containment is dropped: its maker's end still finds it and ends it.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_joined_launch_s_group_takes_what_is_started_and_stays_its_maker_s() {
+    let Some((launch, containment)) = grouped_launch("group-join") else {
+        return;
+    };
+    let joined = Containment::join_launch("contract", &launch).expect("the containment");
+    let dir = ScratchDir::new("proc-group-join");
+    let (mut child, handle) = start_in(&joined, "park", &dir.join("child"));
+    wait_for_pid(&dir.join("child"));
+    let mut guard = KillOnDrop(vec![child.id() as i32]);
+    drop(joined);
+
+    let members = containment.members().expect("the group is still there");
+    assert!(members.contains(&ProcessId(child.id())), "{members:?}");
+    assert!(containment.end(&[]), "the group is gone");
+    wait_for_unreaped_exit(&handle);
+    assert!(!wait_for_exit(&mut child).success());
+    assert_eq!(containment.members(), None);
+    guard.0.clear();
 }
 
 /// The wire form of a process identity names its pid and its start, and nothing else parses.

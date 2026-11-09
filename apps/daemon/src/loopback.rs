@@ -62,6 +62,25 @@ pub fn exchange(
     split_body(response)
 }
 
+/// The status a holder answers a helper's question with when no daemon linked within its deadline.
+/// What a helper does then is what it does when it finds no daemon to connect to.
+pub const NO_DAEMON: u16 = 503;
+
+/// The status a holder answers with when the daemon it had put the question to was lost before it
+/// answered, so that the call may or may not have run.
+pub const DAEMON_LOST: u16 = 502;
+
+/// Whether `err` is a holder saying there is no daemon (see [`NO_DAEMON`]).
+pub fn is_no_daemon(err: &std::io::Error) -> bool {
+    error_status(err) == Some(NO_DAEMON)
+}
+
+/// Whether `err` is a holder saying it lost the daemon with the call in flight (see
+/// [`DAEMON_LOST`]).
+pub fn is_daemon_lost(err: &std::io::Error) -> bool {
+    error_status(err) == Some(DAEMON_LOST)
+}
+
 /// A response that was not a success: the daemon turned the call away (a wrong key or a foreign
 /// origin, 401 or 403), could not read it (400) or failed while handling it (5xx), and what follows
 /// is no answer to parse.

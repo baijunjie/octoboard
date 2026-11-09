@@ -30,9 +30,7 @@ export interface BooleanSetting<F extends BooleanField = BooleanField> {
   /** The place among the switches of its section, from 1. */
   order: number;
   label: PlainMessageKey;
-  /** `onMacos`, where given, is the description of the on state for a macOS desktop app, which says what
-   * only it does. */
-  description: { on: PlainMessageKey; off: PlainMessageKey; onMacos?: PlainMessageKey };
+  description: { on: PlainMessageKey; off: PlainMessageKey };
   /** The help tip that ends the label's line: its accessible name and its text. */
   help?: { label: PlainMessageKey; text: PlainMessageKey };
   /** What turning it on means in the import cards; `null` for a setting whose line says no more than "turns on". */
@@ -74,7 +72,7 @@ const COPY: { [F in BooleanField]: Copy<F> } = {
     section: "appBehavior",
     order: 1,
     label: "settings.resumeOnStart.label",
-    description: { on: "settings.resumeOnStart.description.on", off: "settings.resumeOnStart.description.off", onMacos: "settings.resumeOnStart.description.onMacos" },
+    description: { on: "settings.resumeOnStart.description.on", off: "settings.resumeOnStart.description.off" },
     consequence: "configuration.import.settings.consequence.resumeOnStart",
   },
   auto_delete_unresumable_archives: {

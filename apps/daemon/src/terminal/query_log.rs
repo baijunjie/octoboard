@@ -1,13 +1,18 @@
 //! Logging a program's device attributes and cursor position queries, with who answered each and
-//! how long it took. A host that holds its program up until such a query is answered
-//! (`TermFacts::host_waits_on_queries`) stalls it meanwhile, which delays what the program does
-//! with its input, a pasted message among it. A program asks rarely, after a paste or a submit, so
-//! each query and its answer is logged at info.
+//! how long it took: the daemon, or a client where the query passed through to the clients. A host
+//! that holds its program up until such a query is answered (`TermFacts::host_waits_on_queries`)
+//! stalls it meanwhile, which delays what the program does with its input, a pasted message among
+//! it. A program asks rarely, after a paste or a submit, so each query and its answer is logged at
+//! info.
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use crate::terminal::reply_route::{ReplyRoute, STALE_AFTER};
+use crate::terminal::queries;
+use crate::terminal::reply_route::STALE_AFTER;
+
+/// The id the daemon's own answers are logged under, which no client has: they count up from 0.
+pub(crate) const DAEMON: u64 = u64::MAX;
 
 /// A query logged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -16,6 +21,17 @@ pub(crate) enum Query {
     DeviceAttributes,
     /// The cursor position report (`CSI 6 n`), answered `CSI row ; column R`.
     CursorPosition,
+}
+
+impl Query {
+    /// The query logged of those [`queries`] recognises.
+    pub(crate) fn of(query: &queries::Query) -> Option<Self> {
+        match query {
+            queries::Query::DeviceAttributes => Some(Self::DeviceAttributes),
+            queries::Query::CursorPosition => Some(Self::CursorPosition),
+            _ => None,
+        }
+    }
 }
 
 /// The answers to those queries in `bytes`, in order, whatever else `bytes` holds: the parsed
@@ -91,7 +107,7 @@ fn log_not_answered(label: &str, pending: &Pending, now: Instant) {
 }
 
 fn by_name(by: u64) -> String {
-    if by == ReplyRoute::DAEMON {
+    if by == DAEMON {
         "daemon".to_string()
     } else {
         format!("client {by}")
@@ -109,16 +125,9 @@ impl QueryLog {
         }
     }
 
-    /// Notes a frame of output ending at `end` that asked `queries`, at `now`, while `clients`
-    /// were attached and the daemon answers where none is (`daemon_answers`).
-    pub(crate) fn note(
-        &mut self,
-        end: u64,
-        queries: &[Query],
-        clients: usize,
-        daemon_answers: bool,
-        now: Instant,
-    ) {
+    /// Notes a frame of output ending at `end` (counted as the clients count it) that asked
+    /// `queries`, at `now`, while `clients` were attached.
+    pub(crate) fn note(&mut self, end: u64, queries: &[Query], clients: usize, now: Instant) {
         self.age(now);
         for &query in queries {
             tracing::info!(
@@ -126,7 +135,6 @@ impl QueryLog {
                 offset = end,
                 ?query,
                 clients,
-                daemon_answers,
                 "terminal query seen"
             );
             self.pending.push_back(Pending {
@@ -150,10 +158,10 @@ impl QueryLog {
     /// carries nothing else to tell which query it answers: each answer in it is matched with the
     /// query of its kind asked by that frame, else with the latest one asked before it.
     ///
-    /// An admitted reply settles the output up to `offset` ([`ReplyRoute::admit`]): no answer to a
-    /// query asked before that point is written any more, so those still waiting are given up on.
-    /// One asked by the frame at `offset` itself is kept, as the same client may answer it in a
-    /// reply of its own.
+    /// An admitted reply settles the output up to `offset`
+    /// ([`crate::terminal::reply_route::ReplyRoute::admit`]): no answer to a query asked before
+    /// that point is written any more, so those still waiting are given up on. One asked by the
+    /// frame at `offset` itself is kept, as the same client may answer it in a reply of its own.
     pub(crate) fn reply(
         &mut self,
         by: u64,
@@ -206,8 +214,9 @@ impl QueryLog {
     }
 
     /// Logs the queries waiting past [`STILL_UNANSWERED_AFTER`] once, and gives up on those past
-    /// what [`ReplyRoute`] still takes an answer to. Only output or a reply runs it, so a query
-    /// that a program stalls on with no client attached is logged once output resumes.
+    /// what [`crate::terminal::reply_route::ReplyRoute`] still takes an answer to. Only output or
+    /// a reply runs it, so a query that a program stalls on with no client attached is logged once
+    /// output resumes.
     fn age(&mut self, now: Instant) {
         let label = &self.label;
         self.pending.retain_mut(|pending| {
@@ -225,7 +234,7 @@ impl QueryLog {
     }
 
     #[cfg(test)]
-    fn waiting(&self) -> Vec<(u64, Query)> {
+    pub(crate) fn waiting(&self) -> Vec<(u64, Query)> {
         self.pending
             .iter()
             .map(|pending| (pending.offset, pending.query))
@@ -259,8 +268,8 @@ mod tests {
     fn each_answer_settles_the_query_of_its_kind_its_frame_asked() {
         let mut log = QueryLog::new("t".into());
         let now = Instant::now();
-        log.note(10, &[Cpr], 1, false, now);
-        log.note(20, &[Da, Cpr], 1, false, now);
+        log.note(10, &[Cpr], 1, now);
+        log.note(20, &[Da, Cpr], 1, now);
         log.reply(1, 20, &[Cpr], false, now);
         assert_eq!(log.waiting().len(), 3, "a dropped answer settles none");
         log.reply(0, 20, &[Cpr], true, now);
@@ -280,8 +289,8 @@ mod tests {
     fn an_answer_with_no_query_from_its_frame_settles_the_latest_before_it() {
         let mut log = QueryLog::new("t".into());
         let now = Instant::now();
-        log.note(10, &[Cpr], 1, false, now);
-        log.note(20, &[Cpr], 1, false, now);
+        log.note(10, &[Cpr], 1, now);
+        log.note(20, &[Cpr], 1, now);
         log.reply(0, 25, &[Cpr], false, now);
         log.reply(0, 5, &[Cpr], true, now);
         assert_eq!(log.waiting(), [(10, Cpr), (20, Cpr)], "nothing up to 5");
@@ -294,11 +303,11 @@ mod tests {
     fn a_query_a_client_left_unanswered_is_given_up_on_once_a_later_one_is_answered() {
         let mut log = QueryLog::new("t".into());
         let now = Instant::now();
-        // Asked while a client was attached, which left without answering.
-        log.note(10, &[Cpr], 1, true, now);
-        // Asked with nobody attached, so the daemon answers it.
-        log.note(20, &[Cpr], 0, true, now);
-        log.reply(ReplyRoute::DAEMON, 20, &[Cpr], true, now);
+        // Passed through to a client, which left without answering.
+        log.note(10, &[Cpr], 1, now);
+        // Answered by the daemon.
+        log.note(20, &[Cpr], 0, now);
+        log.reply(DAEMON, 20, &[Cpr], true, now);
         assert!(log.waiting().is_empty());
         assert_eq!(log.outcomes, [(20, true), (10, false)]);
     }
@@ -307,10 +316,10 @@ mod tests {
     fn a_query_is_waited_on_until_the_reply_route_gives_up_on_it() {
         let mut log = QueryLog::new("t".into());
         let then = Instant::now();
-        log.note(10, &[Cpr], 0, false, then);
-        log.note(11, &[], 0, false, then + STILL_UNANSWERED_AFTER);
+        log.note(10, &[Cpr], 0, then);
+        log.note(11, &[], 0, then + STILL_UNANSWERED_AFTER);
         assert_eq!(log.waiting(), [(10, Cpr)], "still waited on");
-        log.note(12, &[], 0, false, then + STALE_AFTER);
+        log.note(12, &[], 0, then + STALE_AFTER);
         assert!(log.waiting().is_empty());
     }
 }

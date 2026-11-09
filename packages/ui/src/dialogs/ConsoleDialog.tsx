@@ -1,14 +1,14 @@
 import { ActionableError } from "../errors/actionableError";
 import React, { useEffect, useRef, useState } from "react";
 
-import { changedAccounts, changedLaunch, readAccounts, readLaunch } from "../agents/agentFields";
+import { changedAccounts, changedLaunch, readAccounts, readLaunch, withAgent, withLaunchField } from "../agents/agentFields";
 import { selectableAgent, servedAgents } from "../agents/agents";
 import { defaultProviderAgent, providerLabel } from "../agents/providers";
 import { imageToAvatar } from "./avatarImage";
 import { focusOpenDialog } from "../components/focus/modalFocus";
 import { AgentIcon, agentIconPickerOptions } from "../components/icons/AgentIcon";
 import { useT } from "../i18n/react";
-import type { Agent, Console } from "../protocol";
+import type { Agent, Console, Launch } from "../protocol";
 import { SettingsDialog } from "../settings/SettingsDialog";
 import { useDaemon, useDaemonStore, useProviders } from "../store";
 import { AvatarField } from "./AvatarField";
@@ -22,6 +22,9 @@ import { OptionSelect } from "../components/form/OptionSelect";
 import { TextAreaInput } from "../components/form/TextAreaInput";
 import { TextInput } from "../components/form/TextInput";
 import { raiseError } from "../components/alerts/raiseError";
+import { ChangedElsewhereAnnouncer } from "../components/announce/ChangedElsewhereAnnouncer";
+import { useCheckedEdit } from "../components/hooks/useCheckedEdit";
+import { agentFieldPaths, agentPaths } from "../errors/writeConflict";
 
 export function ConsoleDialog({
   console: editing,
@@ -37,28 +40,118 @@ export function ConsoleDialog({
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const providers = useProviders();
   const served = servedAgents(providers);
-  const [name, setName] = useState(editing?.name ?? "");
+  // What the form read of the console, which an edit is judged against: only a field the user changed is sent, so a
+  // change another client made to a field they left alone is not overwritten, nor conflicts.
+  const [read, setRead] = useState(() => ({
+    name: editing?.name ?? "",
+    default_agent: editing?.default_agent,
+    project_session_agent: editing?.project_session_agent ?? "",
+    icon: editing?.icon ?? null,
+    console_session_prompt: editing?.console_session_prompt ?? "",
+  }));
+  const [name, setName] = useState(read.name);
   // A new console opens on the first registered agent, or on the first agent that may be picked when that one is
   // known to be missing or not added, so the agent never starts on an entry the picker would refuse.
   const initialAgent = selectableAgent(agentAvailability, addedAgents, providers, defaultProviderAgent(providers));
-  const [defaultAgent, setDefaultAgent] = useState<Agent>(editing?.default_agent ?? initialAgent);
+  const [defaultAgent, setDefaultAgent] = useState<Agent>(read.default_agent ?? initialAgent);
   // `""` is "Same as console sessions": the console sets no agent of its own for its project
   // sessions and they follow the console sessions' agent, which on the wire is an explicit `null`
   // when saving.
-  const [projectAgent, setProjectAgent] = useState<Agent | "">(editing?.project_session_agent ?? "");
+  const [projectAgent, setProjectAgent] = useState<Agent | "">(read.project_session_agent);
   // What the console holds for each agent when the dialog opens, and the edits since: the account
   // (`null` is that agent's default account) and what its console session is launched with (`null`
   // being the agent's own default), kept per agent as the values are the agent's own, so a value set
   // for one says nothing about another.
-  const [initial] = useState<ConsoleAgentSettings>(() => ({
+  const [initial, setInitial] = useState<ConsoleAgentSettings>(() => ({
     accounts: readAccounts(editing?.accounts, served),
     launch: readLaunch(editing?.launch, served),
     project_session_launch: readLaunch(editing?.project_session_launch, served),
   }));
   const [settings, setSettings] = useState(initial);
-  const [icon, setIcon] = useState<string | null>(editing?.icon ?? null);
-  const [sessionPrompt, setSessionPrompt] = useState(editing?.console_session_prompt ?? "");
+  const [icon, setIcon] = useState<string | null>(read.icon);
+  const [sessionPrompt, setSessionPrompt] = useState(read.console_session_prompt);
+  const stored = useDaemonStore((s) => (editing ? s.consoles.get(editing.id) : undefined));
+  // Whether the store holds `path` as the form read it: a version that moved over the same value (every one does after a
+  // daemon restart) changes nothing of what the form shows.
+  const sameAsRead = (path: string) => {
+    if (!stored) return true;
+    const [field, agent = "", key = ""] = path.split(".");
+    if (field === "name") return stored.name === read.name;
+    if (field === "default_agent") return stored.default_agent === read.default_agent;
+    if (field === "project_session_agent") return (stored.project_session_agent ?? "") === read.project_session_agent;
+    if (field === "icon") return (stored.icon ?? null) === read.icon;
+    if (field === "console_session_prompt") return (stored.console_session_prompt ?? "") === read.console_session_prompt;
+    if (field === "accounts") return (stored.accounts?.[agent] ?? null) === (initial.accounts[agent] ?? null);
+    if (field === "launch" || field === "project_session_launch") {
+      return (stored[field]?.[agent]?.[key as keyof Launch] ?? null) === (initial[field][agent]?.[key as keyof Launch] ?? null);
+    }
+    return true;
+  };
+  // Whether the user changed `path`'s field from what the form read, which is what makes its replacement worth announcing.
+  const editedFromRead = (path: string) => {
+    const [field, agent = "", key = ""] = path.split(".");
+    if (field === "name") return name !== read.name;
+    if (field === "default_agent") return defaultAgent !== read.default_agent;
+    if (field === "project_session_agent") return projectAgent !== read.project_session_agent;
+    if (field === "icon") return icon !== read.icon;
+    if (field === "console_session_prompt") return sessionPrompt.trim() !== read.console_session_prompt;
+    if (field === "accounts") return (settings.accounts[agent] ?? null) !== (initial.accounts[agent] ?? null);
+    if (field === "launch" || field === "project_session_launch") {
+      return (settings[field][agent]?.[key as keyof Launch] ?? null) !== (initial[field][agent]?.[key as keyof Launch] ?? null);
+    }
+    return false;
+  };
+  // The label of the field a path belongs to, as the dialog shows it.
+  const fieldLabel = (path: string) => {
+    const field = path.split(".")[0];
+    if (field === "name") return t("common.name");
+    if (field === "default_agent" || field === "project_session_agent") return t("dialog.console.defaultAgent");
+    if (field === "icon") return t("dialog.console.avatar");
+    if (field === "console_session_prompt") return t("dialog.console.sessionInstructions");
+    if (field === "accounts") return t("dialog.console.accounts");
+    // A launch setting is named as its picker is: the kind of session, then the setting.
+    const [, , key = ""] = path.split(".");
+    const kind = t(field === "launch" ? "dialog.console.launchConsole" : "dialog.console.launchProject");
+    return `${kind} ${t(key === "effort" ? "dialog.agentSettings.effort" : "dialog.agentSettings.model")}`;
+  };
+  const resetToStored = (paths: readonly string[]) => {
+    if (!stored) return;
+    let nextRead = read;
+    let nextInitial = initial;
+    let nextSettings = settings;
+    for (const path of paths) {
+      const [field, agent = "", key = ""] = path.split(".");
+      if (field === "name") {
+        setName(stored.name);
+        nextRead = { ...nextRead, name: stored.name };
+      } else if (field === "default_agent") {
+        setDefaultAgent(stored.default_agent);
+        nextRead = { ...nextRead, default_agent: stored.default_agent };
+      } else if (field === "project_session_agent") {
+        setProjectAgent(stored.project_session_agent ?? "");
+        nextRead = { ...nextRead, project_session_agent: stored.project_session_agent ?? "" };
+      } else if (field === "icon") {
+        setIcon(stored.icon ?? null);
+        nextRead = { ...nextRead, icon: stored.icon ?? null };
+      } else if (field === "console_session_prompt") {
+        setSessionPrompt(stored.console_session_prompt ?? "");
+        nextRead = { ...nextRead, console_session_prompt: stored.console_session_prompt ?? "" };
+      } else if (field === "accounts") {
+        const account = stored.accounts?.[agent] ?? null;
+        nextInitial = { ...nextInitial, accounts: withAgent(nextInitial.accounts, agent, account) };
+        nextSettings = { ...nextSettings, accounts: withAgent(nextSettings.accounts, agent, account) };
+      } else if (field === "launch" || field === "project_session_launch") {
+        const value = stored[field]?.[agent]?.[key as keyof Launch] ?? null;
+        nextInitial = { ...nextInitial, [field]: withLaunchField(nextInitial[field], agent, key as keyof Launch, value) };
+        nextSettings = { ...nextSettings, [field]: withLaunchField(nextSettings[field], agent, key as keyof Launch, value) };
+      }
+    }
+    setRead(nextRead);
+    setInitial(nextInitial);
+    setSettings(nextSettings);
+  };
   const { busy, run } = useDialogAction(undefined, t(editing ? "dialog.console.saveFailedTitle" : "dialog.console.createFailedTitle"));
+  const edit = useCheckedEdit(editing?.versions ?? {}, stored?.versions, { same: sameAsRead, edited: editedFromRead, reset: resetToStored, writing: busy });
   // Settings, opened over this dialog from the accounts table. It is rendered beside the dialog
   // rather than inside it, as its forms would otherwise submit this one.
   const [managingAccounts, setManagingAccounts] = useState(false);
@@ -98,22 +191,37 @@ export function ConsoleDialog({
     const prompt = sessionPrompt.trim();
     void run(async () => {
       if (editing) {
+        const changes = {
+          ...(name !== read.name && { name }),
+          ...(defaultAgent !== read.default_agent && { default_agent: defaultAgent }),
+          // Back to Same as console sessions is an explicit `null`.
+          ...(projectAgent !== read.project_session_agent && { project_session_agent: projectAgent || null }),
+          // The avatar is cleared the same way, with an explicit `null`.
+          ...(icon !== read.icon && { icon }),
+          // Cleared the same way, with an explicit `null`.
+          ...(prompt !== read.console_session_prompt && { console_session_prompt: prompt || null }),
+        };
+        const accounts = changedAccounts("update", settings.accounts, initial.accounts);
+        const launch = changedLaunch("update", settings.launch, initial.launch);
+        const projectLaunch = changedLaunch("update", settings.project_session_launch, initial.project_session_launch);
+        // The paths of what is sent, each written as it is on the record, are what the write is based on.
+        const paths = [
+          ...Object.keys(changes),
+          ...agentPaths("accounts", accounts),
+          ...agentFieldPaths("launch", launch),
+          ...agentFieldPaths("project_session_launch", projectLaunch),
+        ];
         await request({
           type: "update_console",
           console: editing.id,
-          name,
-          default_agent: defaultAgent,
-          // Back to Same as console sessions is an explicit `null`.
-          ...(projectAgent !== (editing.project_session_agent ?? "") && { project_session_agent: projectAgent || null }),
-          accounts: changedAccounts("update", settings.accounts, initial.accounts),
-          launch: changedLaunch("update", settings.launch, initial.launch),
-          project_session_launch: changedLaunch("update", settings.project_session_launch, initial.project_session_launch),
-          // The avatar is cleared the same way, with an explicit `null`.
-          ...(icon !== editing.icon && { icon }),
-          // Cleared the same way, with an explicit `null`.
-          ...(prompt !== (editing.console_session_prompt ?? "") && {
-            console_session_prompt: prompt || null,
-          }),
+          ...changes,
+          accounts,
+          launch,
+          project_session_launch: projectLaunch,
+          base_versions: edit.base(paths),
+        }).catch((error: unknown) => {
+          edit.refused(error);
+          throw error;
         });
       } else {
         await request({
@@ -144,6 +252,7 @@ export function ConsoleDialog({
         onSubmit={submit}
         size="wide"
       >
+        <ChangedElsewhereAnnouncer count={edit.replaced.count} labels={edit.replaced.paths.map(fieldLabel)} onSaid={edit.said} />
         {/* The avatar is centred on the name's label and input by a fixed offset rather than by
           alignment, so it stays put when the name's error appears under them. The two are 66px
           together, and 62px above the tablet boundary, where HeroUI's input drops to a smaller text size. */}

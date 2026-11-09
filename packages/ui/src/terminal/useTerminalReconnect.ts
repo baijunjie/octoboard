@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 import { useDaemonStore } from "../store";
 import type { TerminalController, TermStatus } from "./TerminalController";
@@ -9,6 +9,13 @@ import { MAX_AUTO_RECONNECT_ATTEMPTS, reconnectDelay, STABLE_CONNECTION_MS } fro
  * attached to: the status the controller reports, automatic reconnects with backoff, the recovery
  * a fresh snapshot gives a terminal that gave up, and the `trouble` that covers the terminal.
  *
+ * While `suspended` (the target's process cannot be reached, and the daemon alone retries that) none
+ * of it runs: no automatic attempt is made or counted, no trouble is reported, and a fresh snapshot
+ * attaches nothing, and the controller's input is held. When it ends, the hold is lifted, the attempts
+ * are fresh and a live target is attached once, in the background, whatever the earlier attempts came
+ * to (as the user's when `recoveredWithUser`). A controller built while already suspended is held by
+ * `useTerminalController`'s `inputHeld`, which this hook cannot reach in time.
+ *
  * Wire `onStatusChange` into `useTerminalController`. Attaching is the caller's (`attach`, with
  * whether the user asked for it); `resetAttempts` and `attemptsSpent` are for a caller that has to
  * clear or check the count where it attaches or detaches.
@@ -18,6 +25,8 @@ export function useTerminalReconnect({
   initialStatus,
   targetId,
   live,
+  suspended = false,
+  recoveredWithUser,
   attach,
   terminalReconnectDelay,
 }: {
@@ -29,6 +38,12 @@ export function useTerminalReconnect({
   /** Whether the target's socket should be up at all, per its own record rather than the controller's last
    * outcome: a socket that closed on a live target is a drop, on one that has ended it is the end. */
   live: boolean;
+  suspended?: boolean;
+  /** Whether the person was at the cover as the suspension ended (the caller's `usePendingFocus` found focus
+   * on it and moved it on; that hook is called first, its layout effect setting this): the attach that ends
+   * the suspension then counts as theirs, so that it activates the terminal as picking it does. Read as the
+   * suspension ends. */
+  recoveredWithUser?: () => boolean;
   attach: (userInitiated: boolean) => void;
   terminalReconnectDelay?: (attempt: number) => number;
 }): {
@@ -80,7 +95,7 @@ export function useTerminalReconnect({
   // it does not pull focus.
   useEffect(() => {
     const controller = controllerRef.current;
-    if (!controller || targetId === undefined || !live) return;
+    if (!controller || targetId === undefined || !live || suspended) return;
     if (controller.currentSessionId !== targetId) return;
     if (controller.currentStatus !== "closed" && controller.currentStatus !== "not_running") return;
     if (attemptsRef.current < MAX_AUTO_RECONNECT_ATTEMPTS) return;
@@ -89,15 +104,15 @@ export function useTerminalReconnect({
     // Keyed on the epoch alone: the target's own changes are the caller's business.
   }, [snapshotEpoch]);
 
-  // Reconnects a live target after its socket landed on `closed` or `not_running` — the daemon
-  // drops a client that stops draining for a few seconds (an occluded window, a large output burst)
-  // and documents that the client is expected to reconnect and get the ring buffer replayed, not
-  // treat the drop as the target having ended; and a reattach that itself fails to connect
-  // (`not_running`) needs the same retry, not a dead end. Never user-initiated: a background heal
-  // must not pull focus out of whatever the user is typing into.
+  // Reconnects a live target after its socket landed on `closed` or `not_running` — a socket can
+  // drop with the target still running (the network, a daemon restart), and the client is
+  // expected to reconnect and get the screen repainted, not treat the drop as the target having
+  // ended; and a reattach that itself fails to connect (`not_running`) needs the same retry, not a
+  // dead end. Never user-initiated: a background heal must not pull focus out of whatever the
+  // user is typing into.
   useEffect(() => {
     const controller = controllerRef.current;
-    if (!controller || targetId === undefined || !live) return;
+    if (!controller || targetId === undefined || !live || suspended) return;
     if (status !== "closed" && status !== "not_running") return;
     if (controller.currentSessionId !== targetId) return;
     if (attemptsRef.current >= MAX_AUTO_RECONNECT_ATTEMPTS) return;
@@ -110,7 +125,28 @@ export function useTerminalReconnect({
     // Deliberately keyed on the target's id rather than its record: an update arriving for this
     // target would otherwise tear the pending timer down and start it over, so under a working
     // agent the reconnect could be postponed indefinitely.
-  }, [status, targetId, live, attach, terminalReconnectDelay]);
+  }, [status, targetId, live, suspended, attach, terminalReconnectDelay]);
+
+  // The process cannot be reached: hold the controller's input, before the paint that shows the cover.
+  // When it is reachable again, release the hold, attach once with a fresh budget, even after the
+  // attempts were spent, and before the next paint so that the old screen is not shown as live in
+  // between. Not user-initiated unless the person was at the cover (`recoveredWithUser`), so
+  // focus stays where it is.
+  // Another target is the caller's to attach (the user picked it), so only the same one is attached here.
+  const wasRef = useRef({ suspended, targetId });
+  useLayoutEffect(() => {
+    const was = wasRef.current;
+    wasRef.current = { suspended, targetId };
+    if (suspended) {
+      controllerRef.current?.holdInput(true);
+      return;
+    }
+    if (!was.suspended) return;
+    controllerRef.current?.holdInput(false);
+    if (targetId === undefined || targetId !== was.targetId || !live) return;
+    attemptsRef.current = 0;
+    attach(recoveredWithUser?.() ?? false);
+  }, [suspended, targetId]);
 
   // Works out what is wrong with the connection: `disconnected` once the attempts are spent. The
   // controller's own status is read rather than `status`: a switch of target attaches in an effect,
@@ -123,7 +159,7 @@ export function useTerminalReconnect({
   useEffect(() => {
     const controller = controllerRef.current;
     let next: "reconnecting" | "disconnected" | undefined;
-    if (controller && targetId !== undefined && live && controller.currentSessionId === targetId) {
+    if (controller && targetId !== undefined && live && !suspended && controller.currentSessionId === targetId) {
       const current = controller.currentStatus;
       const failed = current === "closed" || current === "not_running";
       if (current === "open" || (current === "connecting" && attemptsRef.current === 0)) next = undefined;
@@ -134,7 +170,7 @@ export function useTerminalReconnect({
       if (targetId === undefined || !next) return undefined;
       return prev?.target === targetId && prev.state === next ? prev : { target: targetId, state: next };
     });
-  }, [status, targetId, live]);
+  }, [status, targetId, live, suspended]);
   const trouble = troubleOf?.target === targetId ? troubleOf?.state : undefined;
 
   // While the daemon connection is down the connection banner owns recovery and its Retry; the

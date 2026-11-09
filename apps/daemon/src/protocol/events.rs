@@ -2,6 +2,8 @@
 //! approving or ending a session request does. See "Daemon to client" in
 //! `apps/daemon/PROTOCOL.md`.
 
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 
 use super::accounts::{AccountLogin, AccountSharing, AccountTrashOutcome};
@@ -430,6 +432,10 @@ pub enum Event {
         settings_sections: Vec<SettingsSection>,
         accounts: Option<InspectedAccounts>,
         consoles: Vec<InspectedConsole>,
+        /// The version of every settings field as it was read before the current values the
+        /// reply shows, for `import_configuration`'s `settings_versions`.
+        #[cfg_attr(test, ts(type = "Record<string, number>"))]
+        settings_versions: BTreeMap<String, u64>,
     },
     /// The reply to `import_configuration`: what came of the settings and accounts asked for, and
     /// one entry per console of the document, in its order, each naming the console created for
@@ -645,6 +651,18 @@ pub enum Event {
     },
     Ack {
         id: Option<String>,
+    },
+    /// The reply to `handover_check`: the running sessions and shell terminals, by id, that the
+    /// planned stop would not carry over. `known` is false when the request did not give a floor
+    /// and target version that read, so the lists hold everything running rather than a proven
+    /// answer. `unreached_shell_terminals` are those of a pending holder that would not be
+    /// carried over: not registered with the daemon, their busy state unknown.
+    HandoverCheck {
+        id: Option<String>,
+        known: bool,
+        sessions: Vec<String>,
+        shell_terminals: Vec<String>,
+        unreached_shell_terminals: Vec<String>,
     },
     /// A failure, with a stable `code` and the `params` that fill it. A client words the failure from
     /// them in its own language and branches on the code where it has to act rather than just show;

@@ -76,6 +76,7 @@ async fn a_session_record_takes_what_is_held_for_it_with_it() {
                 tags: Vec::new(),
                 description: None,
                 git_workflow: Default::default(),
+                versions: Default::default(),
             })
             .unwrap();
         state

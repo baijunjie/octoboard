@@ -18,6 +18,19 @@ const QUEUED_REQUEST_TIMEOUT_MS = 5000;
 /** How long a queued broadcast may wait for an animation frame before it is delivered anyway. A
  * hidden window gets no frames, and its state must not fall behind for as long as it stays hidden. */
 const BROADCAST_FLUSH_FALLBACK_MS = 250;
+/** The heartbeat (see "The heartbeat" in `apps/daemon/PROTOCOL.md`): a `ping` request goes out every
+ * `HEARTBEAT_INTERVAL_MS`, and a connection that has delivered no frame at all for `HEARTBEAT_TIMEOUT_MS` is lost. A
+ * connection can die with no close on either side — a network path dropping, a machine sleeping — and nothing else
+ * would notice it. The check runs on a finer tick than the pings so that a dead connection is found close to the
+ * timeout, not up to an interval after it. */
+const HEARTBEAT_INTERVAL_MS = 15_000;
+const HEARTBEAT_TIMEOUT_MS = 45_000;
+const HEARTBEAT_TICK_MS = 5_000;
+/** A tick that comes this late means the page's timers were held back (a hidden page, a sleeping machine), not that
+ * the daemon fell silent: the silence is measured afresh from then on. */
+const HEARTBEAT_SUSPENDED_GAP_MS = 3 * HEARTBEAT_TICK_MS;
+/** Heartbeat ids stand apart from request ids, so their acks are recognised and dropped. */
+const HEARTBEAT_ID_PREFIX = "heartbeat-";
 
 /** Whether `reply` is of a type `request` is answered with. */
 function answers(request: RequestType, reply: Event): boolean {
@@ -54,6 +67,9 @@ export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed" 
  * connection, so a reconnect needs no replay logic of its own. Once the budget is spent, `reconnect()` is the way back —
  * called from a user-facing Retry affordance rather than retried automatically forever.
  *
+ * A connection that goes silent past the heartbeat's timeout is taken as dropped, with no close event to wait for: a
+ * dead connection may never deliver one.
+ *
  * Every connection opens with the daemon's `hello`. A daemon of another protocol generation, or one that sends its
  * `snapshot` with no hello before it (older than the hello), is not read on a guess: the client closes for good and
  * goes `incompatible` (see "Versions and compatibility" in `apps/daemon/PROTOCOL.md`).
@@ -61,7 +77,8 @@ export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed" 
 export class DaemonClient {
   private readonly url: string;
   private socket?: WebSocket;
-  /** Bumped on every `connect()`; a socket's listeners no-op once their generation is stale. */
+  /** Bumped on every `connect()`, and when a heartbeat timeout disowns its socket; a socket's listeners no-op once
+   * their generation is stale. */
   private generation = 0;
   private listeners = new Set<Listener>();
   private batchListeners = new Set<BatchListener>();
@@ -87,6 +104,12 @@ export class DaemonClient {
   /** The last request id handed out. Ids only have to be unique among this client's requests, and a counter needs no
    * secure context, which `crypto.randomUUID` does and the desktop webview's page is not reliably counted as. */
   private lastRequestId = 0;
+  /** The current connection's heartbeat tick, from its hello until it is lost or replaced. */
+  private heartbeatTimer?: ReturnType<typeof setInterval>;
+  /** When the current connection last delivered a frame, or when its silence started being measured. */
+  private lastHeard = 0;
+  /** The last heartbeat id handed out, numbered apart from request ids. */
+  private heartbeatSeq = 0;
 
   constructor(url: string) {
     this.url = url;
@@ -113,6 +136,7 @@ export class DaemonClient {
       // What waited there for the hello was failed with the rest, so it must not go out on the new socket either.
       for (const queued of this.sendQueue.splice(0)) clearTimeout(queued.timer);
     }
+    this.stopHeartbeat();
     this.socket?.close();
     const socket = new WebSocket(this.url);
     this.socket = socket;
@@ -120,7 +144,9 @@ export class DaemonClient {
     this.greeted = false;
     socket.addEventListener("message", (ev) => {
       if (!current() || this.closedPermanently) return;
+      this.lastHeard = Date.now();
       const event = JSON.parse(ev.data as string) as Event;
+      if (event.type === "ack" && event.id?.startsWith(HEARTBEAT_ID_PREFIX)) return;
       if (event.type === "hello") {
         // Into the store first, so the screen that says the versions differ has the daemon's.
         this.receive(event);
@@ -135,6 +161,7 @@ export class DaemonClient {
           clearTimeout(queued.timer);
           socket.send(queued.payload);
         }
+        this.startHeartbeat(socket);
         this.setConnectionState("open");
         return;
       }
@@ -151,25 +178,66 @@ export class DaemonClient {
     });
     socket.addEventListener("close", () => {
       if (!current()) return;
-      // What arrived before the drop is delivered ahead of the state change it precedes.
-      this.flushBroadcasts();
-      // Whatever this socket had outstanding cannot be answered by a reconnect's new socket — the
-      // daemon has no memory of a prior connection's in-flight requests — so these are rejected
-      // unconditionally rather than held pending a retry.
-      this.failPending(t("connection.error.connectionClosed"));
-      // Rejecting and retrying are contradictory: a payload still queued here would otherwise be
-      // flushed on the next connection and run an action the caller was already told had failed.
-      for (const queued of this.sendQueue.splice(0)) clearTimeout(queued.timer);
-      if (this.closedPermanently) return;
-      if (this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-        const delay = RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempts;
-        this.reconnectAttempts += 1;
-        this.setConnectionState("reconnecting");
-        this.reconnectTimer = setTimeout(() => this.connect(), delay);
-      } else {
-        this.setConnectionState("closed");
-      }
+      this.lose();
     });
+  }
+
+  /** The current connection is gone, whether its socket closed or its heartbeat timed out: what it had outstanding
+   * fails, and a reconnect is scheduled while the budget lasts. */
+  private lose(): void {
+    this.stopHeartbeat();
+    // What arrived before the drop is delivered ahead of the state change it precedes.
+    this.flushBroadcasts();
+    // Whatever this socket had outstanding cannot be answered by a reconnect's new socket — the
+    // daemon has no memory of a prior connection's in-flight requests — so these are rejected
+    // unconditionally rather than held pending a retry.
+    this.failPending(t("connection.error.connectionClosed"));
+    // Rejecting and retrying are contradictory: a payload still queued here would otherwise be
+    // flushed on the next connection and run an action the caller was already told had failed.
+    for (const queued of this.sendQueue.splice(0)) clearTimeout(queued.timer);
+    if (this.closedPermanently) return;
+    if (this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+      const delay = RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempts;
+      this.reconnectAttempts += 1;
+      this.setConnectionState("reconnecting");
+      this.reconnectTimer = setTimeout(() => this.connect(), delay);
+    } else {
+      this.setConnectionState("closed");
+    }
+  }
+
+  private startHeartbeat(socket: WebSocket): void {
+    this.stopHeartbeat();
+    let lastTick = Date.now();
+    let lastPing = lastTick;
+    this.lastHeard = lastTick;
+    this.heartbeatTimer = setInterval(() => {
+      const now = Date.now();
+      // A clock set back is taken like held-back timers, so that no deadline is pushed into the future.
+      if (now - lastTick > HEARTBEAT_SUSPENDED_GAP_MS || now < lastTick) {
+        this.lastHeard = now;
+        lastPing = Math.min(lastPing, now);
+      }
+      lastTick = now;
+      if (now - this.lastHeard >= HEARTBEAT_TIMEOUT_MS) {
+        // The socket's own close may never come, or come long after; its listeners are disowned by moving to the next
+        // generation, and the loss is taken here instead.
+        this.generation += 1;
+        socket.close();
+        this.lose();
+        return;
+      }
+      if (now - lastPing >= HEARTBEAT_INTERVAL_MS) {
+        lastPing = now;
+        const ping: ClientRequest = { type: "ping", id: `${HEARTBEAT_ID_PREFIX}${++this.heartbeatSeq}` };
+        socket.send(JSON.stringify(ping));
+      }
+    }, HEARTBEAT_TICK_MS);
+  }
+
+  private stopHeartbeat(): void {
+    clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = undefined;
   }
 
   /** Gives up on a daemon of another protocol generation: what it sends next cannot be read, and a reconnect would meet
@@ -287,7 +355,8 @@ export class DaemonClient {
         socket.send(json);
         return;
       }
-      if (socket?.readyState === WebSocket.CLOSED && !this.reconnectTimer) {
+      // A socket a heartbeat timeout gave up on may stay `CLOSING` for long, its close never answered.
+      if (socket !== undefined && socket.readyState >= WebSocket.CLOSING && !this.reconnectTimer) {
         // The socket is dead and no retry is scheduled (the reconnect budget is spent) — queuing
         // would hang the caller forever, which a quit's `shutdown` request must never do.
         reject(new CodedError(t("connection.error.connectionIsClosed"), "connection_closed", {}));
@@ -312,6 +381,7 @@ export class DaemonClient {
 
   close(): void {
     this.closedPermanently = true;
+    this.stopHeartbeat();
     this.flushBroadcasts();
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = undefined;

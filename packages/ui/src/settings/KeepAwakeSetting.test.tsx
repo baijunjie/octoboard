@@ -78,6 +78,14 @@ it("sends the choice of when to prevent sleep to the daemon", async () => {
   expect(request).toHaveBeenCalledWith({ type: "update_settings", keep_awake_when: "always" });
 });
 
+it("bases the choice of when to prevent sleep on the version the store holds of it", async () => {
+  const container = mount(withHost(true, { ...DEFAULT_SETTINGS, keep_awake: true, versions: { keep_awake_when: 4, keep_awake: 2 } }));
+  const choice = container.querySelector<HTMLElement>('button[aria-label="When to prevent sleep"], [aria-label="When to prevent sleep"] button');
+  await act(async () => choice!.click());
+  await act(async () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find((option) => option.textContent?.includes("Always"))!.click());
+  expect(request).toHaveBeenCalledWith({ type: "update_settings", keep_awake_when: "always", base_versions: { keep_awake_when: 4 } });
+});
+
 it("hands focus to the switch when an import turns it off while focus is on the choice of when", async () => {
   const daemon = withHost(true, { ...DEFAULT_SETTINGS, keep_awake: true });
   const container = mount(daemon);

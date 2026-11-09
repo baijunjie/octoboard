@@ -2,6 +2,9 @@
 // and addresses of its assets, and the manifest itself, in the static format of Tauri's updater. Kept apart from
 // the script so `release-manifest.test.mjs` can check it.
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 // The release that holds the manifests, under one fixed tag whatever version they announce. The application
 // reads them from there (`UpdateChannel` and the platform halves in `src-tauri/src/updater/`).
 export const MANIFEST_RELEASE_TAG = "updater";
@@ -223,13 +226,24 @@ export function planReleaseAssets({ platforms, assets, existing, productName, ve
   return { create: false, add, resume, conflict: null };
 }
 
+// The oldest version a daemon adopts process holders from is a constant of the daemon (`FLOOR`).
+export const HOLDER_FLOOR_FILE = "apps/daemon/src/holder/compat.rs";
+
+// The `FLOOR` the daemon names in the tree at `root`, or undefined when the file has no such constant.
+export function readHolderFloor(root) {
+  const file = readFileSync(path.join(root, HOLDER_FLOOR_FILE), "utf8");
+  return /pub const FLOOR: &str = "([^"]+)";/.exec(file)?.[1];
+}
+
 // The manifest the updater reads for one platform: the version, its notes and date and, for each platform key the
 // build serves, the update's address and the signature, which is the content of its `.sig` file. `update` is the
 // archive serving both Macs (`macos`) or the installer (`windows`). A manifest carries only its own platform's
 // entries: the other platform's has a manifest of its own, which an entry kept from an older release would
-// contradict.
-export function buildManifest({ version, notes, pubDate, platform, update }) {
+// contradict. `holderFloor` is the build's holder floor (`readHolderFloor`), which the running application reads from
+// the manifest to tell the sessions an update restart would interrupt: the holders older than it.
+export function buildManifest({ version, notes, pubDate, platform, update, holderFloor }) {
   assertVersion(version);
+  assertVersion(holderFloor);
   const keys = MANIFEST_PLATFORMS[platform];
   if (!keys) throw new Error(`"${platform}" is not a release platform.`);
   if (!update?.url || !update?.signature) throw new Error(`The manifest needs the ${platform} update's address and signature.`);
@@ -238,6 +252,7 @@ export function buildManifest({ version, notes, pubDate, platform, update }) {
     version,
     notes,
     pub_date: pubDate,
+    holder_floor: holderFloor,
     platforms: Object.fromEntries(keys.map((key) => [key, entry])),
   };
 }

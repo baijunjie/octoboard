@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 
 use crate::adapter::files::{read_regular_text, SMALL_FILE_LIMIT};
 use crate::hostfs::replace::{replace_beside, Permissions};
@@ -22,7 +23,12 @@ use crate::providers::grok::GROK_CONFIG_FILE;
 /// default is copied only when it differs from the model this launch passed, which is what a model
 /// chosen in the session looks like; choosing the launch's own model again cannot be told from the
 /// launch write, and is left in the session copy.
-#[derive(Debug)]
+///
+/// Kept in the terminal's holder meta for adoption (`super::adoption`), so it crosses builds: a
+/// field added later needs `#[serde(default)]`, and it is kept readable by every build in the
+/// compatible range: `crate::holder::compat::FLOOR` only moves by the previous-stable release
+/// rule.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SharedConfigWriteback {
     session_config: PathBuf,
     account_config: PathBuf,
@@ -34,7 +40,7 @@ pub struct SharedConfigWriteback {
 /// The keys [`SharedConfigWriteback`] compares. `None` means the key is absent. An empty plugin
 /// list is present and is copied: clearing the list is how a plugin is switched off. What
 /// [`Self::changes`] returns is a slice too, where `None` means the key is unchanged.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct ConfigSlice {
     theme: Option<String>,
     enabled: Option<Vec<String>>,

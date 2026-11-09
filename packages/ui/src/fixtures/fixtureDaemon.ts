@@ -15,6 +15,7 @@ import { createAccountGuards, createAccountReplies } from "./fixtureAccounts";
 import { createConsoleReplies } from "./fixtureConsoles";
 import { createFixtureContext, mergeHandlers, neverReplied } from "./fixtureContext";
 import { createFileReplies, FILE_REQUESTS } from "./fixtureFiles";
+import { createLifecycleReplies } from "./fixtureLifecycle";
 import { createProcessLedger, createProcessReplies } from "./fixtureProcesses";
 import { createProjectReplies } from "./fixtureProjects";
 import { createSessionReplies } from "./fixtureSessions";
@@ -101,6 +102,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     createProjectReplies(context, ledger),
     createFileReplies(context),
     createProcessReplies(context, ledger),
+    createLifecycleReplies(context),
   );
 
   return {

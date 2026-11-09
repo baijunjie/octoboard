@@ -90,8 +90,13 @@ fn scan_due(last_scan: Option<i64>, now: i64, every_millis: i64) -> bool {
 /// before judging. A group (an archived session with the sessions bound to it, at both levels)
 /// goes only whole: one member that is resumable, unknown, pinned, locked or not archived keeps
 /// all of it, as a delete of its owner would take the member along. Failures are logged and never
-/// stop the scan.
+/// stop the scan. None runs once a planned stop has raised its handover barrier, and one under way
+/// then deletes no further group (see `crate::state::ChangeAdmission`).
 async fn scan(state: &Arc<AppState>, locator: LocatorSource, trash: TrashRecord) {
+    // Held to the end, the branches and records removed after the deletion included.
+    let Ok(_admission) = state.admit_change() else {
+        return;
+    };
     match state.store.auto_delete_unresumable_archives() {
         Ok(true) => {}
         Ok(false) => return,
@@ -114,7 +119,12 @@ async fn scan(state: &Arc<AppState>, locator: LocatorSource, trash: TrashRecord)
     if deleted.is_empty() {
         return;
     }
-    branch_cleanup::remove::remove_logging_left(state.clone(), deleted.clone()).await;
+    branch_cleanup::remove::remove_logging_left(
+        state.clone(),
+        deleted.clone(),
+        state.track_change(),
+    )
+    .await;
     coordinator::lifecycle::trash_agent_records_with(state, deleted, locator(), move |path| {
         trash(path)
     })
@@ -147,6 +157,11 @@ fn delete_unresumable_groups(state: &Arc<AppState>, locator: &Locator) -> Vec<Se
                 .is_some_and(|owner| archived_ids.contains(owner))
     });
     for root in roots {
+        // Judging a group reads its records, which is no use once a planned stop has raised its
+        // handover barrier: nothing more would be deleted.
+        if state.handover_barrier_raised() {
+            break;
+        }
         match delete_group_if_unresumable(
             state,
             locator,
@@ -180,7 +195,8 @@ fn deletable(session: &Session) -> bool {
 
 /// What [`delete_judged`] found.
 enum Judged {
-    /// The setting is off or cannot be read, so nothing was deleted and nothing more should be.
+    /// The setting is off or cannot be read, or a planned stop has raised its handover barrier,
+    /// so nothing was deleted and nothing more should be.
     SwitchedOff,
     /// The sessions deleted: none when the group no longer matched the judging.
     Deleted(Vec<Session>),
@@ -236,9 +252,13 @@ fn same_standing(a: &Session, b: &Session) -> bool {
 /// pinned, bound or unbound since the judging was never judged, and keeps the whole group, as does
 /// a member that is launching or has a process. The claim keeps a lock from changing meanwhile.
 /// The setting is read again under the claim, as a scan can run long after it read the setting:
-/// turned off meanwhile, or unreadable, it deletes nothing and says so ([`Judged::SwitchedOff`]).
+/// turned off meanwhile, or unreadable, it deletes nothing and says so ([`Judged::SwitchedOff`]),
+/// as it does once a planned stop has raised its handover barrier.
 fn delete_judged(state: &Arc<AppState>, judged: &[&Session]) -> Result<Judged> {
     let _removal = state.claim_session_removal();
+    if state.handover_barrier_raised() {
+        return Ok(Judged::SwitchedOff);
+    }
     match state.store.auto_delete_unresumable_archives() {
         Ok(true) => {}
         Ok(false) => return Ok(Judged::SwitchedOff),

@@ -427,6 +427,7 @@ async fn a_codex_switch_carries_the_chain_and_repoints_the_targets_stale_row() {
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled: false,
+            versions: Default::default(),
         })
         .unwrap();
     let id = "019a0000-0000-7000-8000-000000000001";

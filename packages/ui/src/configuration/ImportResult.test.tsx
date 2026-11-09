@@ -359,3 +359,22 @@ it("shows tabs only for the regions that were imported", () => {
   expect(tabs()).toEqual([]);
   expect(container.querySelector("section")).toBeNull();
 });
+
+const conflict = { code: "write_conflict", message: "changed elsewhere", params: { fields: "auto_pull_repositories", versions: '{"auto_pull_repositories":9}' } };
+
+it("words a settings write refused as a conflict by its cause and remedy, not as nothing saved, since the rest was created", () => {
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: null, settings_error: conflict, accounts: null }} />);
+  expect(container.textContent).toContain("Settings changed while the configuration was being imported.");
+  expect(container.textContent).toContain("Check them in Settings and change any that should match the file.");
+  expect(container.textContent).not.toContain("set them again");
+  expect(container.textContent).not.toContain("nothing was saved");
+});
+
+it("words the agent account settings refused as a conflict the same way", () => {
+  const container = mountHost(
+    <ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: null, settings_error: null, accounts: { ...NO_ACCOUNTS, agent_settings_error: conflict } }} />,
+  );
+  expect(container.textContent).toContain("Settings changed while the configuration was being imported.");
+  expect(container.textContent).toContain("Check them in Settings and change any that should match the file.");
+  expect(container.textContent).not.toContain("nothing was saved");
+});

@@ -11,6 +11,7 @@ import { ChromeButton } from "./ChromeButton";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { HandoffOnUnmount } from "../components/focus/HandoffOnUnmount";
 import { StatusIcon } from "../components/status/StatusIcon";
+import { RECOVERED_DISPLAY_MARK_ID, RecoveredDisplayMark } from "../terminal/RecoveredDisplayMark";
 
 /** The bar's frame: full window width, above everything, painting nothing of its own (the window's
  * background shows, `--window-background` in `style.css`), and the window's drag handle where the
@@ -67,7 +68,7 @@ export function BareTitleBar(): React.ReactElement {
 /** Console › Project › session title, with the session's status icon; a console session has no
  * project, so its trail is just the console and its own title. The trail fades at its end edge when
  * too long, the icon always stays. */
-function Breadcrumb({ session }: { session: Session }): React.ReactElement {
+function Breadcrumb({ session, focusTerminal }: { session: Session; focusTerminal: () => void }): React.ReactElement {
   const t = useT();
   const status = useSessionShownStatus(session);
   const consoleName = useDaemonStore((s) => s.consoles.get(session.console_id)?.name);
@@ -75,6 +76,14 @@ function Breadcrumb({ session }: { session: Session }): React.ReactElement {
   const trail = session.kind === "console" ? [consoleName, sessionDisplayTitle(t, session)] : [consoleName, projectName, sessionDisplayTitle(t, session)];
   return (
     <Trail names={trail.map((part) => part ?? "…")}>
+      {/* After the title, before the status: a note about the terminal's display, not a status. */}
+      {session.screen_inexact && (
+        <>
+          {/* The flag clears when the process ends; focus on the mark or its popover goes to the terminal. */}
+          <HandoffOnUnmount from={`[data-status-mark-id="${RECOVERED_DISPLAY_MARK_ID}"]`} to={focusTerminal} />
+          <RecoveredDisplayMark />
+        </>
+      )}
       {/* Alone on the title bar, so a tap on it opens the popover. */}
       <StatusIcon status={status} withTooltip touchPopover />
     </Trail>
@@ -229,7 +238,7 @@ export function TitleBar({
         </div>
       </div>
       <div className="flex min-w-0 flex-1 items-center px-3">
-        {viewTrail ? <Trail names={viewTrail} /> : selectedSession && <Breadcrumb session={selectedSession} />}
+        {viewTrail ? <Trail names={viewTrail} /> : selectedSession && <Breadcrumb session={selectedSession} focusTerminal={focusTerminal} />}
       </div>
       {/* While the aside is docked, as wide as it and never narrower than its toggles, so the
           breadcrumb stops over the main area instead of running on above the aside. */}

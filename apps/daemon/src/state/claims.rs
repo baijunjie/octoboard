@@ -7,7 +7,7 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use super::sharing_lock::locked_over;
-use super::AppState;
+use super::{AppState, ChangeAdmission};
 use crate::protocol::{error_code, CodedError, Session};
 
 /// A session's claim for one interrupt, taken by [`AppState::claim_interrupt`].
@@ -77,25 +77,48 @@ impl Drop for SessionRemovalClaim {
 
 /// The exclusive claim on one session — to start a process for it, or (from
 /// [`AppState::begin_switch`]) to act on it while its process runs — released on drop, and only
-/// then: it outlives `register_live`, so the holder decides how much of what follows it covers.
+/// then: it outlives `register_live`, so the claim's owner decides how much of what follows it
+/// covers.
+/// A [`Self::share`]d handle keeps it too: it is released once every handle is gone.
 pub struct LaunchClaim {
-    pub(super) state: Arc<AppState>,
-    pub(super) id: String,
-    pub(super) watches_launch: bool,
+    held: Arc<ClaimHeld>,
+    watches_launch: bool,
+}
+
+/// What a claim's handles hold between them, and what releases the claim when the last is gone.
+struct ClaimHeld {
+    state: Arc<AppState>,
+    id: String,
+}
+
+impl Drop for ClaimHeld {
+    fn drop(&mut self) {
+        self.state.release_launch(&self.id);
+    }
 }
 
 impl LaunchClaim {
+    pub(super) fn new(state: Arc<AppState>, id: String) -> Self {
+        Self {
+            held: Arc::new(ClaimHeld { state, id }),
+            watches_launch: false,
+        }
+    }
+
     /// Whether the holder watches the process it launches under the claim come up and reports the
     /// outcome itself, so the exit watcher does not tell the owner that it ended on its own
     /// (`LiveSession::watch_under_claim`).
     pub fn watches_launch(&self) -> bool {
         self.watches_launch
     }
-}
 
-impl Drop for LaunchClaim {
-    fn drop(&mut self) {
-        self.state.release_launch(&self.id);
+    /// Another handle to the same claim, for work that has to keep the session claimed after the
+    /// holder of this one is done or gone: a start that no holder has confirmed yet.
+    pub(crate) fn share(&self) -> Self {
+        Self {
+            held: self.held.clone(),
+            watches_launch: self.watches_launch,
+        }
     }
 }
 
@@ -163,11 +186,7 @@ impl AppState {
         }
         drop(live);
         self.publish_account_sharing();
-        Ok(LaunchClaim {
-            state: self.clone(),
-            id: id.to_string(),
-            watches_launch: false,
-        })
+        Ok(LaunchClaim::new(self.clone(), id.to_string()))
     }
 
     /// Claims the session exclusively, as [`Self::begin_launch`] does but without needing its
@@ -179,6 +198,10 @@ impl AppState {
     /// holder has it.
     pub fn begin_switch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
         self.refuse_while_shutting_down()?;
+        self.claim_switch(id)
+    }
+
+    fn claim_switch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
         let mut live = self.live.write().expect("live sessions lock poisoned");
         if !live.launching.insert(id.to_string()) {
             return Err(CodedError::raised(
@@ -190,11 +213,7 @@ impl AppState {
         live.switching.insert(id.to_string());
         drop(live);
         self.publish_account_sharing();
-        Ok(LaunchClaim {
-            state: self.clone(),
-            id: id.to_string(),
-            watches_launch: false,
-        })
+        Ok(LaunchClaim::new(self.clone(), id.to_string()))
     }
 
     /// [`Self::begin_switch`] for an account switch: the session is also shown as switching its
@@ -207,7 +226,35 @@ impl AppState {
         id: &str,
         watches_launch: bool,
     ) -> Result<LaunchClaim> {
-        let mut claim = self.begin_switch(id)?;
+        self.refuse_while_shutting_down()?;
+        self.claim_account_switch(id, watches_launch)
+    }
+
+    /// [`Self::begin_account_switch`] for a step of an operation that is admitted past the
+    /// handover barrier (`admission`), which a planned stop is waiting for: the barrier being
+    /// raised does not refuse it, so that the operation can finish what it began, such as
+    /// bringing back a session its failed switch left down. Refused, as any new claim is, once
+    /// the planned stop has stopped waiting for the operation.
+    pub fn begin_account_switch_admitted(
+        self: &Arc<Self>,
+        id: &str,
+        watches_launch: bool,
+        admission: &ChangeAdmission,
+    ) -> Result<LaunchClaim> {
+        // Only the barrier is let past: an ordinary stop refuses it, as it refuses every claim.
+        if self.is_shutting_down() {
+            return Err(super::shutting_down_refusal());
+        }
+        admission.still_covered()?;
+        self.claim_account_switch(id, watches_launch)
+    }
+
+    fn claim_account_switch(
+        self: &Arc<Self>,
+        id: &str,
+        watches_launch: bool,
+    ) -> Result<LaunchClaim> {
+        let mut claim = self.claim_switch(id)?;
         claim.watches_launch = watches_launch;
         self.live
             .write()
@@ -263,7 +310,7 @@ impl AppState {
         live.prompted_launches.contains(id)
     }
 
-    fn release_launch(&self, id: &str) {
+    pub(super) fn release_launch(&self, id: &str) {
         let mut live = self.live.write().expect("live sessions lock poisoned");
         live.launching.remove(id);
         live.switching.remove(id);

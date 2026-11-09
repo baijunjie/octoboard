@@ -387,8 +387,14 @@ async fn a_removal_that_cannot_run_git_keeps_why_it_held_a_worktree_back() {
         git: || anyhow::bail!("git is not on the PATH"),
         ..host_tools()
     });
-    let left =
-        project::carry_out_once_stopped(state.clone(), Vec::new(), removal, Vec::new()).await;
+    let left = project::carry_out_once_stopped(
+        state.clone(),
+        Vec::new(),
+        removal,
+        Vec::new(),
+        &state.track_change(),
+    )
+    .await;
     let path = wire_path::encode(&crate::platform::names::name_bytes(held.as_os_str()));
     let (kept, others): (Vec<_>, Vec<_>) = left
         .iter()
@@ -424,9 +430,14 @@ async fn a_removal_leaves_a_worktree_that_came_to_hold_a_project_folder_after_it
     let inner = outside.join("inner");
     std::fs::create_dir(&inner).unwrap();
     other_project_at(&fixture.state, &inner);
-    let left =
-        project::carry_out_once_stopped(fixture.state.clone(), Vec::new(), removal, Vec::new())
-            .await;
+    let left = project::carry_out_once_stopped(
+        fixture.state.clone(),
+        Vec::new(),
+        removal,
+        Vec::new(),
+        &fixture.state.track_change(),
+    )
+    .await;
     assert!(inner.exists());
     assert!(fixture.has_branch("outside"));
     assert!(
@@ -456,9 +467,14 @@ async fn a_removal_holds_back_a_worktree_it_can_no_longer_tell_about() {
 
     let stuck = Arc::new(());
     stall(&fixture.state, &outside, &stuck);
-    let left =
-        project::carry_out_once_stopped(fixture.state.clone(), Vec::new(), removal, Vec::new())
-            .await;
+    let left = project::carry_out_once_stopped(
+        fixture.state.clone(),
+        Vec::new(),
+        removal,
+        Vec::new(),
+        &fixture.state.track_change(),
+    )
+    .await;
     drop(stuck);
     assert!(outside.exists());
     assert!(fixture.has_branch("outside"));

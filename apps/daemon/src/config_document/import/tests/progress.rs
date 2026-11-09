@@ -64,6 +64,7 @@ async fn import_named(
             agents: None,
         },
         import_id.map(str::to_string),
+        None,
     )
     .await
     .unwrap()
@@ -151,6 +152,7 @@ async fn the_clone_directory_comes_first_and_the_agent_account_settings_follow_t
             agents: None,
         },
         Some("order".to_string()),
+        None,
     )
     .await
     .unwrap();
@@ -191,6 +193,7 @@ async fn the_clone_directory_is_not_announced_when_the_machines_own_is_kept() {
             agents: None,
         },
         Some("kept".to_string()),
+        None,
     )
     .await
     .unwrap();
@@ -290,6 +293,7 @@ async fn a_refused_request_that_names_an_id_reports_nothing() {
             agents: None,
         },
         Some("five".to_string()),
+        None,
     )
     .await;
 
@@ -352,6 +356,7 @@ async fn only_the_accounts_of_the_agents_listed_are_announced() {
             agents: Some(vec![AgentId::CODEX]),
         },
         Some("agents".to_string()),
+        None,
     )
     .await
     .unwrap();

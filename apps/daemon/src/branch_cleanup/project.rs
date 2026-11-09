@@ -52,7 +52,7 @@ use crate::platform::names;
 use crate::protocol::{
     Project, SessionBranchItem, SessionBranchKind, SessionBranchState, SessionBranchTarget,
 };
-use crate::state::AppState;
+use crate::state::{AppState, ChangeAdmission};
 use crate::wire_path;
 
 /// What a plan reads of where each item stands: everything, for a confirmation to show, or only
@@ -349,13 +349,24 @@ pub(super) fn plan_with(
 /// a locked worktree only where `forced` names it as it stands, and an unmerged branch only where
 /// `forced` names it at the commit it points at. Returns what is left; the project's removal stands
 /// either way.
+///
+/// A planned stop waits for it through `covered`, counted by the caller while the removal of the
+/// project was still admitted past the handover barrier. Once the wait for the processes is over,
+/// nothing is carried out if the planned stop has stopped waiting, as a terminal handed over may
+/// work in what would go: what was to go is returned as left.
 pub async fn carry_out_once_stopped(
     state: Arc<AppState>,
     ids: Vec<String>,
     removal: Removal,
     forced: Vec<SessionBranchTarget>,
+    covered: &ChangeAdmission,
 ) -> Vec<SessionBranchItem> {
     wait_until_stopped(&state, &ids).await;
+    if covered.still_covered().is_err() {
+        return removal
+            .clone_items()
+            .all_failed("the daemon is stopping to hand its terminals over to the next daemon");
+    }
     let unfinished = removal.clone_items();
     let done = tokio::task::spawn_blocking(move || {
         let tools = state.host_tools.get();

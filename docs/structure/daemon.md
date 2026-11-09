@@ -15,12 +15,39 @@ serde. The crate is a member of the root Cargo workspace beside the desktop shel
 
 ## Entry points
 
-`src/main.rs` hands a named CLI mode to `cli::run`; otherwise it takes the instance lock, opens the store, binds
-`127.0.0.1` on an OS-assigned port, generates the per-launch key, prints the handshake line (port and key) and runs the
-server until a request to end arrives: the `shutdown` control request, `POST /shutdown` (`src/server/callbacks.rs`), a termination signal or the application's pid going away. The CLI modes other processes start are `hook`, `git-ref`, `gate-hook`, `status-line` and `mcp`:
-their dispatch is `src/cli/mod.rs`, and their code is `src/cli/hook.rs` (`hook`), a provider's `StatusLine`
+`src/main.rs` hands a named CLI mode to `cli::run`; otherwise it takes the instance lock, binds `127.0.0.1` (on the
+top-level `--port` when given, else on an OS-assigned port, which is what the desktop shell starts), opens the store,
+generates the per-launch key (or reads the one its predecessor hands it on stdin, `--key-stdin`), loads the screens
+a planned stop saved (`state::restart_screens`, kept until each is consumed) and the messages it left queued
+(`messaging::restart_outbox`, deleted as read), adopts what the holders kept running (`coordinator::adopt`),
+keeps claimed what a holder it cannot link to yet runs (`coordinator::unlinked`), marks the other sessions interrupted,
+clears the run directory but for the adopted and claimed sessions' scratch directories, writes the owner record beside
+the lock (`instance_lock::Owner`, the pid identity, the port and whether it follows an application), prints the
+handshake line (port and key) and runs the server until a stop is asked for (`state::StopKind`). An ordinary stop ends
+every session: the `shutdown` control request, `POST /shutdown` (`src/server/callbacks.rs`), a termination signal or
+the application's pid going away after the application wrote a `quit` line to the daemon's stdin
+(`state::application_note`); the pid going away with no such line is a planned stop. An ordinary stop asked for
+while a planned stop runs escalates it: the handover stops where it stands and everything is ended, the holders already
+handed over or parted from included, and a planned stop asked for after the application's quit line is ordinary. Every start,
+with or without `--parent-pid`, reconciles the application's quit record (`holder::quit_targets`, the
+`application-quit` file, `paths::application_quit_record`, written by every quit that may have left holders) under the
+instance lock before it adopts anything, and follows an ordinary stop for the holders it names: it ends what they run
+instead of adopting it (`Holders::end_quit_targets`), the endings running off the start and awaited for up to
+`ENDINGS_WAIT`, 4 s, so that the startup line the application waits for still comes in time (`wait_for_quit_endings`
+in `main.rs`, `Holders::wait_endings`); the record's lifecycle is in [`src/holder/`](../../apps/daemon/src/holder/README.md). A planned
+stop hands every terminal over to its holder with its screen saved and ends nothing
+(`coordinator::planned_stop`, behind the barrier of `state::handover_barrier`): the `planned_stop` control request and `POST /planned-stop`; a planned
+restart, `POST /restart` or the host's restart request (`SIGUSR1`, which `restart` sends), also brings the successor up
+on the same port: started by `main` (`cli::start_successor`, from the installation entry point `cli::launch_path` in
+`src/cli/installation.rs`, its final symlink left unresolved), with the same key, which is kept only in that case, or,
+under a systemd service (the environment shows the daemon to be the unit's main process, or `--service-managed` says
+so), by the unit on the daemon's exit status 75, when the successor makes a new key. A user runs the modes `start --port`, `stop`, `restart` and `status` to keep a daemon in
+the background (`src/cli/background.rs`; `start` runs the daemon as a background process of its own, `stop`, `restart`
+and `status` find it through `instance_lock`). The CLI modes other processes start are `hook`, `git-ref`,
+`gate-hook`, `status-line`, `mcp` and `holder`: their dispatch, with the user's modes, is `src/cli/mod.rs`, and their
+code is `src/cli/hook.rs` (`hook`), a provider's `StatusLine`
 (`status-line`; `src/cli/mod.rs` only finds the provider's and hands over, Claude Code's is
-`src/adapter/claude/status_line.rs`), `src/session_git_hooks/` (`git-ref`, `gate-hook`) and `src/mcp/stdio.rs` (`mcp`). The routes are in `src/server/`. Each mode takes the running
+`src/adapter/claude/status_line.rs`), `src/session_git_hooks/` (`git-ref`, `gate-hook`) and `src/mcp/stdio.rs` (`mcp`); `holder` is `src/cli/holder.rs`, which runs `holder::server::run`. The routes are in `src/server/`. Each mode takes the running
 daemon's port and the launch key (`--port`, `--key`):
 
 - `hook` — posts an agent's hook payload from stdin to `POST /hook/:session`.
@@ -31,6 +58,9 @@ daemon's port and the launch key (`--port`, `--key`):
   posts the context window to `POST /context-window/:session` and runs the user's own status line with the same input.
 - `mcp` — the MCP server each adapter registers for a session: speaks MCP on stdin/stdout and forwards tool calls to
   `POST /mcp/:token`.
+- `holder` — a process the daemon starts (`--holder-id`, `--registry-dir`), which runs the daemon's terminals; see
+  [`src/holder/`](../../apps/daemon/src/holder/README.md). Unlike the others it is called by the daemon, not the other way round, and it
+  is started detached (`platform::proc::start_detached`), so that it outlives the daemon.
 
 ## Directory map
 
@@ -40,27 +70,34 @@ runtime, and, in `blocking_pass/stalled.rs`, `StalledPasses`, the blocking work 
 thread is still running), `git_workflow.rs` (the one place the application-wide git workflow values and a project's
 overrides are combined: `effective`; the settings types are in `protocol/`), `host_tools.rs` (`HostTools`, the seam
 tests substitute stand-ins behind, `git` among them: the one place a project's git gets the user's `git`, handed out by
-pace with `Tools::git_for`, which `isolated_git` and `isolated_git_per_request` give browse reads), `instance_lock.rs` (one daemon per data directory), `interface_language.rs` (the
+pace with `Tools::git_for`, which `isolated_git` and `isolated_git_per_request` give browse reads), `instance_lock.rs` (one daemon per data directory, whether one runs, and the owner record beside the lock), `interface_language.rs` (the
 languages the interface is offered in, mirroring the UI's `i18n/languages.ts`), `log_file.rs` (the rotated
-`daemon.log`), `loopback.rs` (the std-only HTTP client to the daemon's own loopback address that the CLI modes, the git
-hook modes and the MCP stdio bridge call the running daemon with), `paths.rs` (where Octoboard keeps its files under the
-data directory), `text.rs` (`trimmed_or_none`, free text as stored, and `without_paste_wrapper`, a prompt with the wrapper an agent puts around a paste taken off), `time.rs` (the clock, `now_millis` and `now_secs`,
+`daemon.log`, and a holder's own `holder-<id>.log`), `loopback.rs` (the std-only HTTP client to a loopback address, the daemon's or a holder's, that the CLI modes, the git
+hook modes and the MCP stdio bridge call with; it names the statuses a holder answers a waiting helper with when it has
+no daemon or lost it), `request_guard.rs` (the Origin/Host rules, the key compare and the key generator that the daemon's guard and
+the holders' helper routes and secret share), `paths.rs` (where Octoboard keeps its files under the
+data directory), `text.rs` (`trimmed_or_none`, free text as stored, and `without_paste_wrapper`, a prompt with the wrapper an agent puts around a paste taken off), `time.rs` (the clock, `now_millis`, `now_micros` and `now_secs`,
 and the RFC 3339, compact and readable timestamps) and `wire_path.rs` (`RelPath`, the canonical wire form of a path or
 branch name, made and validated through `platform::names`, with no OS token of its own; whether this host can name it is
 asked only where it meets the disk, by `RelPath::host_path`, which gives `None` for a path it cannot). `build.rs` embeds `octoboardd.exe.manifest` (the long-path-aware declaration) in the Windows MSVC binary through the linker arguments `/MANIFEST:EMBED` and `/MANIFESTINPUT:<file>`, which `link.exe` and `lld-link` both take, so the manifest is expected in `octoboardd.exe` whichever of them links it. Test-only files (`tests.rs`, `*_tests.rs`, `test_support/` and `store/test_support.rs`, and the
 `layering_tests/` directory) sit beside the code they test, and `apps/daemon/testdata/` holds the captured agent screens
-and records tests replay.
+and records tests replay. `apps/daemon/dist/` holds hand-written distribution files, not build output (`dist/systemd/octoboardd.service`, an example systemd user unit for running the daemon in the background on Linux).
 
 ### Wire and server
 
-- `src/server/` — the router of `PROTOCOL.md`: `control.rs` the control socket, `terminal.rs` the terminal socket,
-  `callbacks.rs` the hook, git-ref, revert-gate, context-window and MCP routes, `access.rs` the Host/Origin/key guard.
+- `src/server/` — the router of `PROTOCOL.md`: `control.rs` the control socket, `terminal.rs` the terminal socket (a
+  per-connection `Registration` settles the attach's precedence at its deadline in a task of its own and lets the client
+  go however the connection ends; for a held terminal, a call that may resize it runs on a blocking thread),
+  `callbacks.rs` the hook, git-ref, revert-gate, context-window and MCP routes, `access.rs` the Host/Origin/key guard
+  (the rules are `request_guard.rs`'s; the key is the daemon's), `relay.rs` the handler of the helper requests a holder
+  relays (it runs the same `callbacks::handle` the HTTP routes run, once `AppState::end_adoption` says the adopted
+  sessions exist: reports that arrive before are held in order, questions wait up to 20 s).
 - `src/protocol/` — Rust types of the wire protocol, one file per concern, re-exported as `crate::protocol`; `codes.rs`
   is the `Code` registry (a core code can be made only there; a provider's code only through `Code::of_provider` from
   its declaration), `errors.rs` the one mapping from a failure to an `error` reply (with `CodedError::require_offered`,
   which refuses an operation a provider does not offer as `provider_unsupported`), `version.rs` the protocol generation and the daemon's version the `hello` frame states, `host.rs` `HostInfo`, the snapshot's `host` (os, path style, file links, whether the host can be held awake, and how the host names its Trash and settings app, built from `platform::HostFacts`), `bindings.rs` the test
   that renders the types (and the generation) into `packages/ui/src/protocol.generated.ts`.
-- `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode.
+- `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode and `background.rs` the user's `start`, `stop`, `restart` and `status`, and the start of a planned restart's successor, and `installation.rs` the path the daemon launches a successor, or `start` its daemon, from.
 
 ### Coordinator role
 
@@ -71,19 +108,36 @@ and records tests replay.
   session's own archive when its work is finished: `lifecycle/finished.rs`), `handoff`, `account_switch`,
   `model_change`, `account_sharing`, `accounts`, `settings`, `pages`, `processes` (listing, stopping and keeping the
   process trees a client sees), `messages`, `auto_switch` (moving a session off an account whose usage limit stopped a
-  turn; lower layers reach it through `AppState`'s hooks), `validate` for the checks of request text fields), plus
+  turn; lower layers reach it through `AppState`'s hooks), `validate` for the checks of request text fields; the
+  requests that edit settings, a console, a project or an account carry `base_versions` and run through
+  `settings::update_settings_checked`, `consoles::update_console_checked`, `projects::update_project_checked` and
+  `accounts::update_account_requested`, which check under `AppState::checked_write`), plus
   `console_workdir.rs` (a console's working directory: its instruction file written into it, and its removal),
-  `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`), `archive_cleanup.rs` (a daemon
+  `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`), `adopt.rs` (at start,
+  matches the terminals the holders kept running with the store: a session's is adopted into a
+  rebuilt `LiveSession` and watched like a launch of the daemon's own, a shell terminal's is put back,
+  any other is ended; its module doc has the rules), `unlinked.rs` (what a holder that cannot be linked to runs:
+  claimed at start from the store's record of where each launch runs, taken over once the holder is linked to,
+  interrupted once it is gone; the screen a planned stop saved for a session whose holder is gone at the next start
+  becomes its preview, `unlinked::keep_screens_as_previews`), `planned_stop.rs` (the
+  daemon's planned stop: every terminal handed over to its holder, each handed-over screen saved for the next daemon,
+  the holders parted from and left running, nothing ended or recorded; an ordinary stop asked for meanwhile cuts it
+  short), `handover_check.rs` (the
+  `handover_check` request: given the next daemon's holder floor and version, which running sessions and shell terminals,
+  and which shell terminals of holders not yet reached, a planned stop followed by that daemon would not carry over,
+  judged by `holder::compat::Range`), `archive_cleanup.rs`
+  (a daemon
   task) and `resume_on_start.rs` (a daemon task: at start, resumes the interrupted sessions when the
   `resume_sessions_on_start` setting is on, through the same path as resuming an interrupted session; the store lists
-  them, `Store::list_interrupted_sessions`).
+  them, `Store::list_interrupted_sessions`, and the adopted ones are not among them, as they never stopped).
 - `src/session_request/` — a session asking the user to approve something (`request_session`, `request_resume_session`,
   account switch, handoff): `mod.rs` the wait, `registry.rs` the requests the daemon holds, `request.rs` what a request
   is, `change.rs` the account switch and handoff variant, `carry_out.rs` what an approval does, `outcome.rs` the wording
   of the outcome.
 - `src/messaging/` — every message Octoboard writes into sessions: `delivery.rs` (gates, queueing, what became of each
-  message), `outbox.rs` (the per-session ordered queue, which also keeps the tickets a refusal failed), `write_queue.rs` (`AppState`'s queuing, flushing and holds
-  over it, and the notice of a refused message), `reporting.rs`, `capacity_retry.rs` (the retries of a Codex turn that stopped at its model's capacity; its
+  message), `outbox.rs` (the per-session ordered queue, sealed at a planned stop's handover, which also keeps the tickets a refusal failed), `write_queue.rs`
+  (`AppState`'s queuing, flushing and holds over it, and the notice of a refused message), `restart_outbox.rs` (the messages still queued at the handover,
+  saved for the next daemon and requeued by it), `reporting.rs`, `capacity_retry.rs` (the retries of a Codex turn that stopped at its model's capacity; its
   waits live in `AppState::capacity_retries`), `sharing.rs`, `naming.rs` (how a message names a session, a place, a
   quoted body),
   `owner_notices.rs` (every notice to an owner), `texts.rs` (fixed texts in Octoboard's own name).
@@ -109,13 +163,24 @@ and records tests replay.
   database up to it and the checks on a file before it is opened; `schema/v{N}.sql` keeps each released past version's
   schema for the migration tests once there is one), `rows.rs`, one file per table family (`settings.rs` the application
   settings, `provider_settings.rs` the user's explicit choices of each provider's settings and the value in effect of
-  every one), and `failure.rs`, the store's own `Result` and `StoreError`, which codes the SQLite failures to read or
+  every one, `held_terminals.rs` which holder runs each session's launch and each shell terminal, and the names users
+  gave shell terminals), and `failure.rs`, the store's own `Result` and `StoreError`, which codes the SQLite failures to read or
   write Octoboard's database the user can fix (read-only data folder, full disk, a file that cannot be opened or read)
   as `store_write_failed`.
 - `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,
   titles, turns, sharing status, git status, requests, availability, hooks to the automatic account switch, whether the
-  host is held awake, forgetting a record), plus `bindings.rs` (the read-only walks over which session is bound to which) and `refusals.rs` (the
-  locked and archived refusals every operation on a session shares).
+  host is held awake (`keep_awake.rs`), forgetting
+  a record, the adoption gate a holder's relayed requests wait on, the sessions claimed for a holder that cannot be
+  linked to (`unlinked.rs`), the stop asked for, its escalation and the refusals of a planned restart (`stop.rs`), the
+  barrier a planned stop raises against changes to terminals (`handover_barrier.rs`: `AppState::admit_change` and the
+  admission it returns), what the application says over stdin before it
+  quits, which tells a quit from a crash (`application_note.rs`), the screens a planned
+  stop saved, written and loaded with the versioned file and consumed per holder once the adoption is committed or a gone
+  holder's preview is written (`restart_screens.rs`), and
+  `field_versions.rs`, the version of each field
+  of the settings, consoles, projects and accounts a form edits, with the lock of checked writes;
+  `field_versions/paths.rs` lists the versioned paths), plus `bindings.rs` (the read-only walks over which session is
+  bound to which) and `refusals.rs` (the locked and archived refusals every operation on a session shares).
 - `src/agents/` — what the daemon knows about each agent CLI apart from launching it: availability (`availability.rs`;
   `redetermine` judges one agent again after an update changed what its binary resolves to), `cli/` (the installed
   CLI's version, how it was installed, the latest version published, and its update, described in "Agent CLI versions"
@@ -184,14 +249,45 @@ and records tests replay.
 
 ### Running sessions
 
-- `src/terminal/` — PTY processes and what clients see of them (`pty.rs` `PtyCore`, the lifecycle over a terminal
-  `platform::term` started: the reader thread, input (`lock_input` takes the lock on the platform `Pty`, which every
-  write into the terminal is made under), freezing, exit observation, scratch directory and
-  crash-cleanup entry, `fan.rs` the output fan-out of replay ring, parsed screen and attached clients, `ringbuf.rs`,
-  snapshots (which, once asked, report the title changes the output makes after it has drawn something), titles
-  (`title.rs` reads them off the output's own OSC 0/2 sequences, or off the snapshot's title changes where
-  `TermFacts::host_renders`) and the spinner glyphs they start with, reply routing, `input_class.rs` input that is only the
-  terminal's own protocol traffic, `plain_text.rs` output without its escape sequences, `shell/` project shell
+- `src/holder/` ([README](../../apps/daemon/src/holder/README.md)) — process holders: the `octoboardd holder` process that
+  owns the PTYs of the programs the daemon starts so they outlive it, and the daemon's side that links to them, adopts
+  what they kept running and answers the helper requests they relay; `protocol.rs`, `registry.rs`, `compat.rs`, `build.rs`,
+  `quit_targets.rs` (the application's quit record), `server/` and `client/`.
+- `src/terminal/` — PTY processes and what clients see of them (`backend.rs` where a terminal and its program live,
+  `Backend::Local` (`platform::term`'s) or `Backend::Held` (a holder's), and `start`, which production spawn sites go
+  through; `pty.rs` `PtyCore`, the lifecycle over a terminal either backend started: the reader thread, input (`lock_input` takes the lock on the platform `Pty`, which every
+  write into the terminal is made under), freezing, exit observation, scratch directory and crash-cleanup entry,
+  `fan.rs` the output fan-out of parsed screen, replay ring and attached clients, which also keeps each client's
+  requested size and applies the most recently active client's (a client attaching to a live terminal
+  starts from a first paint of the parsed screen, taken under the fan lock; the daemon answers the program's queries
+  there, so the queries it answers are left out of what clients receive and stream offsets count the bytes delivered),
+  and each client's flow control: a backlog of what is waiting for it, the count of bytes sent and not yet acknowledged
+  (`CREDIT_WINDOW`), and a wake-up for its connection, which takes output through `take_output` and reports what the
+  client has consumed through `acknowledge`; `push` never waits on a client, and a backlog past `BACKLOG_CAP` is replaced
+  by a fresh paint without history (`Outgoing::Paint`),
+  `queries.rs` `QueryScanner`, which cuts the program's output into plain output and the whole sequences of the
+  queries the daemon may answer (and, where the terminal keeps them, the OSC 7501 support query and status reports),
+  `program_status.rs` the status a program reports about itself (Program Status Protocol: a report's body parsed under
+  its limits, `ProgramStatus` the records kept by id, whose root record is the program's own status, and the text that
+  answers the support query; `keep_program_status` and `take_program_status` on `pty.rs` and `fan.rs` turn it on and
+  take what was reported), `display.rs` `DisplayFacts`, the colours and cell size a client reports (with the
+  defaults until it does), `activity.rs` which attached client was active most recently (it sent input or an explicit `activate` frame; an
+  attach takes precedence only until a deadline `attach` returns, `ATTACH_CLAIM` after it), whose size the terminal takes and whose display facts the answers use, `ringbuf.rs` the ring, which recent output and
+  `output_since` (the trust-dialog press in `src/session/trust/` reads it) read, `snapshot/` `TerminalSnapshot`, the parsed
+  terminal (it answers queries, `answers.rs` `take_in`, which also keeps the status reports out of what clients receive
+  and answers the support query, the display facts set by `set_display` and the colour-scheme mode 2031 included, and
+  `take_in_allowing`, which answers or delivers only the queries a replay's rule admits; it
+  flattens into a preview, serialises as the first paint, in `paint.rs`, which is also what an exited shell's attach and
+  a client's repaint after falling behind send, and, once asked, reports the title changes
+  the output makes after it has drawn something; `cells.rs` writes cells back as escape sequences for the preview and
+  the first paint, `unexposed.rs` tracks the scroll region, cursor style and title `alacritty_terminal` keeps
+  private, `save.rs` saves the terminal as the bytes that rebuild it, or says it cannot reproduce the state, which makes the saved screen inexact, and `unended.rs` keeps the escape sequence or
+  UTF-8 character the output has begun and not ended), `saved_screen.rs` what a planned restart hands the next daemon of
+  a terminal (`SavedScreen`, the saved screen, and `ReplayRule`, under which the tail kept since the handover is
+  replayed: `save_screen`, `restore_screen` and `begin_replay` on `pty.rs`), titles (`title.rs` reads them off the output's own OSC 0/2 sequences, or off the snapshot's title changes
+  where `TermFacts::host_renders`) and the spinner glyphs they start with, `reply_route.rs` which client's answer to a
+  query passed through to clients reaches the program, `query_log.rs` the log of how long the queries an agent's host waits on took to be answered, `input_class.rs` input that is
+  only the terminal's own protocol traffic, `plain_text.rs` output without its escape sequences, `shell/` project shell
   terminals).
 - `src/session/` — one running agent process (`LiveSession`; `LiveSession::host_renders` says whether its titles
   come off the parsed screen's title changes and a provider's placeholder reads as an empty input box), input and
@@ -214,7 +310,9 @@ and records tests replay.
   at its composer rather than its title, and Claude Code's readiness, otherwise its bracketed paste after the first
   hook, also comes with its input box drawn after `SessionStart`, `on_session_start`), `interrupt/`, `title_activity.rs` (what
   a terminal title says about a turn), `title_interrupt.rs` (a cancel that left no other trace, read off the title),
-  `wait.rs` (polling a condition, `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`).
+  `wait.rs` (polling a condition, `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`),
+  `program_status.rs` (the session's status, turns and pause taken from the root status record the program reports
+  through OSC 7501, only for an agent whose provider has no status integration).
   `screen.rs` is the `ScreenReader` trait, how one provider's terminal screens, input box and title read, which
   `AgentProvider::screen` gives (`NoScreen` is the default that recognises nothing; `user_action_title` is the title
   text a provider shows when only the user can act; `input_placeholder` the hint an empty input box shows; `Interrupt` how a provider's turn is interrupted, including the
@@ -227,9 +325,10 @@ and records tests replay.
 - `src/processes/` — the rest: `subprocess.rs` (running a spawned process within bounds; what a stop reaches, the signals
   and the pipe readers are `platform::proc`'s).
 - `src/platform/` — the only place OS-specific code lives, with no use of anything else in the crate, so any module may
-  use it. `sleep/` holding the host awake (`Hold`, `available`; macOS IOKit assertions, a Windows power request,
-  Linux's logind inhibitor lock and the session bus's screen saver inhibition over `zbus`), whose answer is
-  `HostFacts::keep_awake`; `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and
+  use it. `build_files.rs` the files a copy of a build holds beside the executable on this host (on Windows `conpty.dll`
+  and the `OpenConsole.exe` of `x64/` and `arm64/`, none elsewhere); `sleep/` holding the host awake (`Hold`,
+  `available`; macOS IOKit assertions, a Windows power request, Linux's logind inhibitor lock and the session bus's
+  screen saver inhibition over `zbus`), whose answer is `HostFacts::keep_awake`; `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and
   children, a descriptor's path, sockets, working directory), one reader per OS, shared by the ledger's `table.rs`,
   `platform::proc` and `terminal/shell/busy.rs`; `open/` the launcher commands `host_open` starts (file manager, default
   application, system terminal), chosen by an OS name so every OS's choice is tested anywhere
@@ -251,8 +350,8 @@ and records tests replay.
   script shim); `proc/` what the host does to the
   processes the daemon starts (leading a session or a process group, the child handle that tells how an unreaped child stands, asks
   it to end politely or kills it, sweeps what it left behind and reaps it, the containment that tells one launch's processes from any
-  other's and lists their members where the host can (on Windows a named job per launch, which each child holds a duplicated handle on so the next daemon finds it by name again), a polite request to end or a kill sent to a process or a group, the process
-  identity and its wire form, the bounded pipe reader, the host's request to end the daemon (`shutdown_requested`) and the watch on the application that started it (`watch_parent`), and `crash/`, the table that kills every process the daemon runs on a PTY
+  other's and lists their members where the host can (on Windows a named job per launch, which each child holds a duplicated handle on so the next daemon finds it by name again; on Linux, for an agent launch (`Containment::for_launch`), a cgroup v2 group `cgroup.rs` makes below the cgroup of the process that starts the launch where that cgroup lets it, which the launch's end kills and removes after moving out what it is told to spare, and without which the launch is told by its tag alone; a holder starting a launch's program joins the daemon's group, `Containment::join_launch`), a polite request to end or a kill sent to a process or a group, the process
+  identity and its wire form, the bounded pipe reader, the host's request to end the daemon (`shutdown_requested`), its planned-restart request (`restart_requested`, which `request_restart` sends: `SIGUSR1` on Unix, none on Windows), whether a systemd service runs the daemon as its main process (`restarted_by_service_manager`), the watch on the application that started it (`watch_parent`), `run_in_background` (with `runs_in_background`, whether the host can), what `start` asks of the host to keep the daemon running after its login (a session of its own on Unix; refused on Windows), starting a process that outlives the daemon (`start_detached`: a session of its own on Unix; on Windows no console or inherited handle and outside the daemon's jobs, by breakaway or else as a child of the desktop application's process, or with a warning in the job when there is none to name or a child of it cannot be created), and `crash/`, the table that kills every process the daemon runs on a PTY
   when it goes down on an internal failure; contract tests in `proc/contract_tests.rs`); `term/` the terminal backend
   (starting a process on a PTY from a plain command description, with its child handle; the `Pty` that is read, written,
   resized and hung up, and tells whose job its foreground is and its slave path; the daemon's own `Input` values, encoded
@@ -312,7 +411,8 @@ and records tests replay.
   refusing an account that cannot be launched, the installed version, reading the titles it shows, its hook
   interpreter, its record store, its screen reader, its accounts (`accounts()`, `AccountOps`), its model catalogue
   (`catalogue()`, `ModelCatalogue`), how its CLI is installed and updated (`cli_packaging()`, `CliPackaging`, defined in
-  `mod.rs`, read by `agents/cli/`), its status line (`status_line()`, `StatusLine`, defined in `mod.rs`) and what it
+  `mod.rs`, read by `agents/cli/`), whether its hooks and signals give its sessions their status
+  (`has_status_integration()`; where not, `session/program_status.rs` takes it from the program's own reports), its status line (`status_line()`, `StatusLine`, defined in `mod.rs`) and what it
   offers a provider made compatible with it (`compatibility_source()`, `CompatibilitySource`, defined in `mod.rs`: the
   MCP servers, skill directories and prompt files it has and the instructions to read the rest of its configuration;
   `LaunchSpec::compatibility_sources` holds one source per compatibility switch that is on, looked up with
@@ -394,7 +494,10 @@ module, a file under `#![cfg(test)]`, and any item, variant, match arm, field or
 holds only in tests (`cfg(test)`, `cfg(all(test, …))`, `cfg(any(test, all(test, …)))`) are left out. The scan is
 lexical: comments and literals are blanked; a name a `use` brings in is followed through the file, but a child module's
 `use super::*` inheriting a parent's import is not; a glob import counts as the import of its module; what a macro
-expands to is not seen; methods and fields reached through a value are not paths and are not seen, so an entry for a
+expands to is not seen; a module's file is found only as `<name>.rs` or `<name>/mod.rs` and `#[path = …]` is not followed,
+so a `#[path]` module's file is reported as unreached and fails the test on every OS (a per-host alternative module is
+declared `mod x_stub;` and renamed with `use x_stub as x;` under `cfg`, as `src/platform/proc/mod.rs` does for
+`cgroup_stub`); methods and fields reached through a value are not paths and are not seen, so an entry for a
 type admits everything the type exposes; and a test-only field of a tuple struct or variant whose type holds a comma
 inside angle brackets (`HashMap<K, V>`) is cut short at that comma, so the rest of its type is read as production code,
 which can only add an edge, never hide one.
@@ -407,10 +510,10 @@ same scan.
 
 | Layer | Modules |
 |---|---|
-| foundation | `blocking_pass`, `interface_language`, `loopback`, `platform`, `text`, `time`, `wire_path` |
+| foundation | `blocking_pass`, `interface_language`, `loopback`, `platform`, `request_guard`, `text`, `time`, `wire_path` |
 | providers | `providers` |
 | wire | `protocol` |
-| host | `env_shell`, `git`, `host_open`, `hostfs`, `instance_lock`, `log_file`, `paths`, `processes` |
+| host | `env_shell`, `git`, `holder`, `host_open`, `hostfs`, `instance_lock`, `log_file`, `paths`, `processes` |
 | storage | `git_workflow`, `store` |
 | state | `state` |
 | workspace | `branch_cleanup`, `branch_origin`, `browse`, `host_tools`, `path_links`, `project_git`, `removal_safety`, `revert_gate`, `terminal` |
@@ -496,6 +599,14 @@ new site is never excused: it goes under `platform`.
   state database), whose failures must not be reported as Octoboard's data folder.
 - State derived at run time from sessions, claims and processes belongs on `AppState` (`src/state/`), not in a stored
   record.
+- A record that a form edits (the settings, a console, a project, an account in the settings) reaches clients only
+  through `AppState::publish_settings`, `publish_console` and `publish_project` (`broadcast_settings` is the first),
+  which read it under the publication lock and stamp its field versions; a `settings_updated`, `console_upserted` or
+  `project_upserted` event sent through `AppState::broadcast` fails a debug assertion. A new field of such a record that
+  a form edits is added to the paths in `src/state/field_versions/paths.rs` (for the settings, `SETTINGS_FIELDS`, which
+  `SettingsChanges::paths` pairs with its flags, a test checking the pairing).
+  A new write of those records that takes `base_versions` goes through `AppState::checked_write` and holds its guard
+  until the change is published.
 - What is specific to one provider lives in the provider: its descriptor (`src/providers/<id>.rs`) for its facts and
   declared capabilities, and its behavior (`src/adapter/<id>/`), including its accounts (quota, sign-in, reset
   credits, shared configuration, thread registry), model catalogue, status line and trust carrying. Code that works
@@ -512,6 +623,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Need | Entry point |
 |---|---|
 | Run `git` in a user's repository or against their remote | `src/git/run.rs`: a family's `Runner` (`UserGit` with the call site's `Policy` and `Limits`; `read`, `write`, and `write_remote` for a command that may reach a remote) and `GitError`, the one error type. A command that reaches a remote is built with `remote_command` so the user's own ssh applies (`src/git/env.rs`). Get the user's `git` from `HostTools::get().git_for(Pace)` (`src/host_tools.rs`): a lookup a person triggers is `Pace::Person`, which looks once more with a fresh login-shell snapshot where `git` is not found; anything repeating (a sweep, a poll, an MCP tool, background cleanup) is `Pace::Scheduled`, which never takes a login shell per call. A project's own repository goes through `project_git::project_git(state, pace)`. Browse reads use `IsolatedGit` (`src/git/isolated.rs`) from `isolated_git` (scheduled) or, for a browse request carrying `asked_by_person`, `isolated_git_per_request`. The revert gate's own `src/revert_gate/git.rs`, which runs inside the user's hook, is the one exception |
+| Change or end a terminal, or remove what one works in, from an operation a planned stop must not interleave with | take `AppState::admit_change` at the operation's shared entry point, before it changes a record or touches the disk, and keep the admission until done (`src/state/handover_barrier.rs`); once the barrier is raised it refuses with `daemon_shutting_down` |
 | Replace a file whole | `hostfs::replace::replace_file` (`src/hostfs/replace.rs`) |
 | Read from the disk within a bound | `hostfs::read_bounded` (with cancel), `read_regular` / `open_regular` for files the project does not own (`src/hostfs/mod.rs`); a project's files go through `browse::live` |
 | Read an agent's record | `src/records/line_file.rs`, the bounded line reader (also what record watches use) |
@@ -520,7 +632,9 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Run a spawned process within bounds | `src/processes/subprocess.rs` (`run_bounded`, `run_exchange`, `Bounds`; `run_to_file` for a command that is to outlive the daemon, its output going to a file rather than a pipe) |
 | Lead a session, signal a process or a group, sweep a session; wait for the host's request to end the daemon, watch the application's process; tell a launch's processes apart (`Containment`) and stop or kill a child (`ChildHandle`) | `platform::proc` |
 | Listen on a private channel for a child process, and connect to it | `platform::ipc` (`PrivateListen`, `Address`, `Connection`); the caller owns what travels over it (Codex's is `src/adapter/codex/transport/`) |
-| Start a process on a terminal; write the daemon's own paste or key into one | `platform::term` (`spawn`, `Pty::write_input` with `Input`); the lifecycle around it is `terminal::pty::PtyCore` |
+| Start a terminal and its program for the daemon (it lives in a holder, or in this process where none is installed) | `terminal::backend::start` with `Helpers::issue` for the launch's helper credentials (`src/terminal/backend.rs`); the lifecycle around it is `terminal::pty::PtyCore`. `platform::term::spawn` is what the local backend and the holder itself call |
+| Write the daemon's own paste or key into a terminal | `platform::term` (`Pty::write_input` with `Input`), which a held terminal answers over the link (`holder::client::HeldTerminal`) |
+| Check a request's Origin and Host, compare a key, make a key | `src/request_guard.rs` (`headers_allowed`, `key_matches`, `same_secret`, `generate_key`); the daemon's guard is `src/server/access.rs`, and a holder's helper routes use it too |
 | Run an agent's CLI as an account for a short query | `src/adapter/account_cli.rs`: `query` (admits the run, held to `Bounds::agent_query`), `AdmittedCommand::run`, and `run_query` only where the account's directory is already held (a sign-in); `last_stderr_line` words a failure |
 | An account's directory | `adapter::account_dir` (the pinned directory, else the agent's default; `src/adapter/account_cli.rs`) |
 | A provider's fact (names, install page, binary, instruction file, tool-name prefix, detection markers, declared capabilities) | its descriptor: `AgentId::descriptor` and `providers::descriptors` (`src/providers/mod.rs`) |
@@ -559,7 +673,9 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Check a directory exists and can be looked at | `hostfs::require_directory` (absence only from NotFound; any other failure is `directory_unreadable`) |
 | Call the running daemon from another process (CLI modes, git hook modes, the MCP stdio bridge) | `src/loopback.rs` (`post`, `connect`, `exchange`; a non-2xx answer is an error whose status `error_status` gives) |
 | Store free text trimmed, blank as unset | `text::trimmed_or_none` |
-| Read the clock; format a timestamp | `src/time.rs` (`now_millis`, `now_secs`, the RFC 3339, compact and readable stamps) |
+| Read the clock; format a timestamp | `src/time.rs` (`now_millis`, `now_micros`, `now_secs`, the RFC 3339, compact and readable stamps) |
+| Send the settings, a console or a project to clients | `AppState::publish_settings` (or `broadcast_settings`), `publish_console`, `publish_project` (`src/state/field_versions.rs`): the only route, as they stamp the field versions; `AppState::broadcast` of those events fails a debug assertion |
+| Refuse a write based on a field another client changed since | `AppState::checked_write` with a `RecordKey` (`src/state/field_versions.rs`), taken by `update_settings_checked`, `update_console_checked`, `update_project_checked` and `update_account_requested` and held until the change is published; it raises `write_conflict` |
 | Poll a condition, or wait for a session's output to go quiet | `src/session/wait.rs` (`wait_for`, `wait_quiet`) |
 | Resolve the user's shell environment and binaries | `src/env_shell/` (`resolve_binary`; `capture_failed` words the refusal of a request that needed the environment and could not take it) |
 | How a provider's CLI is installed and updated; the installed and latest version of a CLI, and its update | `AgentProvider::cli_packaging` (`CliPackaging`, `src/adapter/mod.rs`), read only by `src/agents/cli/` |

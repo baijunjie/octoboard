@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { sessionOf } from "../fixtures/builders";
 import type { Session, SessionStatus } from "../protocol";
-import { delegatingSessionIds, holdsAccountSwitch, sessionIsWorking, sessionShownStatusKind, sessionStatusKind, showsSwitching } from "./sessionStatus";
+import type { ShownStatusKind } from "./sessionStatus";
+import { delegatingSessionIds, holdsAccountSwitch, isSummaryStatus, sessionIsWorking, sessionShownStatusKind, sessionStatusKind, showsSwitching, SUMMARY_STATUSES } from "./sessionStatus";
 
 const NONE: ReadonlySet<string> = new Set();
 const kindOf = (status: SessionStatus, extra: Partial<Session> = {}, delegating: ReadonlySet<string> = NONE) =>
@@ -39,6 +40,43 @@ describe("sessionShownStatusKind", () => {
   it("shows switching over delegated and done too", () => {
     const switching = sessionOf("s", "c", "p", "T", "idle", { switching_account: true });
     expect(sessionShownStatusKind(switching, new Set(["s"]), NONE)).toBe("switching");
+  });
+
+  const pending = (status: SessionStatus, extra: Partial<Session> = {}) => sessionOf("s", "c", "p", "T", status, { holder_link: "pending", has_conversation: false, ...extra });
+
+  it.each<[string, SessionStatus, Partial<Session>, ShownStatusKind]>([
+    ["starting", "starting", {}, "starting"],
+    ["working", "working", {}, "working"],
+    ["waiting for the user", "waiting_user", {}, "waiting_user"],
+    ["dormant", "dormant", {}, "dormant"],
+    ["idle", "idle", {}, "idle"],
+    ["done", "idle", { has_conversation: true }, "done"],
+    ["paused", "idle", { paused: true }, "paused"],
+    ["working in the background", "idle", { background_tasks: [{ id: "t" }] }, "background"],
+    ["switching its account", "idle", { switching_account: true }, "switching"],
+  ])("shows a live session whose process cannot be reached as reconnecting, whether it is %s", (_name, status, extra, restored) => {
+    const session = pending(status, extra);
+    expect(sessionShownStatusKind(session, NONE, NONE)).toBe("reconnecting");
+    expect(sessionShownStatusKind(session, NONE, new Set(["s"]))).toBe("reconnecting");
+    const { holder_link: _link, ...cleared } = session;
+    expect(sessionShownStatusKind(cleared, NONE, NONE)).toBe(restored);
+  });
+
+  it("shows reconnecting over delegated, and leaves the status kind alone", () => {
+    const session = pending("idle");
+    expect(sessionShownStatusKind(session, new Set(["s"]), NONE)).toBe("reconnecting");
+    expect(sessionStatusKind(session, new Set(["s"]))).toBe("delegated");
+  });
+
+  it("ignores a stale flag on an archived or interrupted record", () => {
+    expect(sessionShownStatusKind(pending("interrupted"), NONE, NONE)).toBe("interrupted");
+    expect(sessionShownStatusKind(pending("archived"), NONE, NONE)).toBe("archived");
+    expect(sessionShownStatusKind(pending("interrupted", { switching_account: true }), NONE, NONE)).toBe("switching");
+  });
+
+  it("keeps reconnecting out of the summary statuses", () => {
+    expect(isSummaryStatus("reconnecting")).toBe(false);
+    expect(SUMMARY_STATUSES).not.toContain("reconnecting");
   });
 });
 

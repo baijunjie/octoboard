@@ -3,10 +3,12 @@
 //!
 //! A process P belongs to launch L when, in this order:
 //!
-//! 1. P is the daemon, one of its ancestors or one of its direct children (an agent among them),
-//!    or sits in an agent's own terminal session or one led by the daemon's direct child: it
-//!    belongs to no launch here, whatever was decided of it before. These sessions hold
-//!    internals whose lifetimes the daemon manages separately.
+//! 1. P is the daemon, one of its ancestors, a holder process, or a direct child of the daemon or
+//!    of a holder (an agent among them), or sits in an agent's own terminal session or one led by
+//!    such a child: it belongs to no launch here, whatever was decided of it before. These
+//!    sessions hold internals whose lifetimes the daemon manages separately. The holders are the
+//!    ones the table was given ([`Table::with_holders`]): the programs the daemon starts are
+//!    their children.
 //! 2. P was attributed before and is still running (same pid, same start): L stays.
 //! 3. P's chain of parents, as this read shows it, reaches L's agent or a process of L's.
 //! 4. P sits in the terminal session of a kept process, or in one recorded as kept: it is kept
@@ -241,13 +243,17 @@ impl Book {
     }
 
     /// Makes everything attributed to `launch_id`, and the terminal sessions recorded for it, the
-    /// user's, listed under the project `project`, and stops following the launch.
-    pub fn keep_launch(&mut self, launch_id: &str, project: &str) {
+    /// user's, listed under the project `project`, and stops following the launch. Returns the
+    /// processes it kept, which the caller moves out of the containments
+    /// ([`super::ProcessLedger::release_kept`]). The launch's containments that the host can read
+    /// and release members from are handed to [`ENDED`] as [`Self::hand_to_ended`] does, rather
+    /// than dropped with processes in them.
+    pub fn keep_launch(&mut self, launch_id: &str, project: &str) -> Vec<Identity> {
         if launch_id == ENDED {
-            return;
+            return Default::default();
         }
         let Some(launch) = self.launches.remove(launch_id) else {
-            return;
+            return Default::default();
         };
         self.aliases.retain(|_, to| to != launch_id);
         let members: Vec<Identity> = self
@@ -256,10 +262,10 @@ impl Book {
             .filter(|(_, attributed)| attributed.launch == launch_id)
             .map(|(id, _)| *id)
             .collect();
-        for id in members {
-            self.attributed.remove(&id);
-            self.kept.insert(id);
-            self.kept_projects.insert(id, project.to_string());
+        for id in &members {
+            self.attributed.remove(id);
+            self.kept.insert(*id);
+            self.kept_projects.insert(*id, project.to_string());
         }
         for (sid, leader_start) in launch.sessions {
             self.kept_sessions.entry(sid).or_insert(leader_start);
@@ -267,7 +273,24 @@ impl Book {
                 .entry(sid)
                 .or_insert_with(|| project.to_string());
         }
+        self.hand_containments_to_ended(
+            launch
+                .containments
+                .into_iter()
+                .filter(|containment| containment.releases_members()),
+        );
         self.dirty = true;
+        members
+    }
+
+    /// Hands the containments that the host can still read to [`ENDED`], which holds them until
+    /// nothing is left in them.
+    fn hand_containments_to_ended(&mut self, containments: impl Iterator<Item = Arc<Containment>>) {
+        if let Some(ended) = self.launches.get_mut(ENDED) {
+            ended
+                .containments
+                .extend(containments.filter(|containment| containment.members().is_some()));
+        }
     }
 
     /// The launch of `session_id` that processes are carried over to: one whose agent has
@@ -411,12 +434,8 @@ impl Book {
             for (sid, leader_start) in sessions {
                 ended.sessions.entry(sid).or_insert(leader_start);
             }
-            ended.containments.extend(
-                containments
-                    .into_iter()
-                    .filter(|containment| containment.members().is_some()),
-            );
         }
+        self.hand_containments_to_ended(containments.into_iter());
         self.dirty |= moved;
     }
 }
@@ -1120,6 +1139,39 @@ mod tests {
             assert_eq!(launch_of(&book, pid), Some(LAUNCH), "task {pid}");
         }
         assert!(!book.launches[LAUNCH].sessions.contains_key(&sid(300)));
+    }
+
+    /// A holder process and its direct children are the daemon's own, whatever else they are: the
+    /// agent a holder started and the shell it runs are never a launch's, nor is what sits in the
+    /// session the shell leads, while a task that left it for a session of its own is followed.
+    #[test]
+    fn a_holder_and_what_it_runs_are_never_attributed_but_a_detached_task_is_followed() {
+        let mut book = book();
+        let holder = proc(50, 900, 1, 50);
+        let shell = proc(300, 1001, 50, 300);
+        let table = Table::from_procs([
+            holder.clone(),
+            // The agent the holder started: a direct child of the holder.
+            proc(100, 1000, 50, 100),
+            shell,
+            proc(301, 1002, 300, 300),
+            proc(302, 1003, 300, 302),
+        ])
+        .with_holders([holder.id]);
+        let mut tagged = |_: &Proc| Some(LAUNCH.to_string());
+        attribute(&mut book, &table, OWN, &mut tagged);
+        for pid in [50, 100, 300, 301] {
+            assert_eq!(launch_of(&book, pid), None, "managed process {pid}");
+        }
+        assert_eq!(launch_of(&book, 302), Some(LAUNCH));
+
+        // A holder the table does not hold running protects nothing: its pid may be anyone's.
+        let stale = Identity {
+            pid: ProcessId(50),
+            start_micros: 1,
+        };
+        let table = Table::from_procs([proc(300, 1001, 50, 300)]).with_holders([stale]);
+        assert!(!table.protected(OWN).covers(&proc(301, 1002, 50, 7)));
     }
 
     #[test]

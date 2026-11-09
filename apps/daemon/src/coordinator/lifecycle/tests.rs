@@ -49,6 +49,7 @@ fn deleting_sessions_is_limited_to_archived_ones_in_scope() {
             tags: Vec::new(),
             description: None,
             git_workflow: Default::default(),
+            versions: Default::default(),
         })
         .unwrap();
     let add = |id: &str, console: &str, kind: SessionKind, project: Option<&str>, status| {
@@ -977,7 +978,13 @@ async fn a_finished_sessions_own_archive_follows_its_rule() {
         state.store.insert_session(&session).unwrap();
     }
 
-    let Finish::Refused(why) = archive_finished(&state, "hub", Finished::Team).unwrap() else {
+    let Finish::Refused(why) = archive_finished(
+        &state,
+        &state.admit_change().unwrap(),
+        "hub",
+        Finished::Team,
+    )
+    .unwrap() else {
         panic!("a session two levels down is not archived");
     };
     let hub = state.session_record("hub").unwrap();
@@ -995,14 +1002,25 @@ async fn a_finished_sessions_own_archive_follows_its_rule() {
         "{text}"
     );
     // The same group is finished for the rule that looks at the sessions bound directly.
-    let Finish::Archived(archived) = archive_finished(&state, "hub", Finished::Direct).unwrap()
-    else {
+    let Finish::Archived(archived) = archive_finished(
+        &state,
+        &state.admit_change().unwrap(),
+        "hub",
+        Finished::Direct,
+    )
+    .unwrap() else {
         panic!("every session bound to it is archived");
     };
     assert_eq!(archived.len(), 2, "the unarchived one below and the owner");
     assert_eq!(status_of(&state, "hub"), Some(Archived));
     assert!(matches!(
-        archive_finished(&state, "hub", Finished::Direct).unwrap(),
+        archive_finished(
+            &state,
+            &state.admit_change().unwrap(),
+            "hub",
+            Finished::Direct
+        )
+        .unwrap(),
         Finish::AlreadyArchived
     ));
 
@@ -1015,7 +1033,13 @@ async fn a_finished_sessions_own_archive_follows_its_rule() {
     ] {
         state.store.insert_session(&session).unwrap();
     }
-    let Finish::Refused(why) = archive_finished(&state, "hub-2", Finished::Team).unwrap() else {
+    let Finish::Refused(why) = archive_finished(
+        &state,
+        &state.admit_change().unwrap(),
+        "hub-2",
+        Finished::Team,
+    )
+    .unwrap() else {
         panic!("a session under it is locked");
     };
     assert_eq!(
@@ -1029,10 +1053,61 @@ async fn a_finished_sessions_own_archive_follows_its_rule() {
         .store
         .insert_session(&bound_session("bound", Idle, "hub"))
         .unwrap();
-    let Finish::Refused(why) = archive_finished(&state, "bound", Finished::Team).unwrap() else {
+    let Finish::Refused(why) = archive_finished(
+        &state,
+        &state.admit_change().unwrap(),
+        "bound",
+        Finished::Team,
+    )
+    .unwrap() else {
         panic!("a session that reports to an owner does not archive itself");
     };
     assert!(why
         .refusal(&state.session_record("bound").unwrap())
         .starts_with("this session reports to an owner, so it does not archive itself"));
+}
+
+/// Once a planned stop has raised its handover barrier, no session is archived or deleted, by the
+/// user's request or a session's own tool alike, and the refusal changes nothing.
+#[tokio::test]
+async fn nothing_is_archived_or_deleted_once_the_handover_barrier_is_raised() {
+    let (state, _dir) = console_with_project_and_accounts("coordinator-archive-barrier");
+    for (id, status) in [
+        ("worker", SessionStatus::Idle),
+        ("archived", SessionStatus::Archived),
+    ] {
+        state
+            .store
+            .insert_session(&project_session(id, AgentId::TEST, status))
+            .unwrap();
+    }
+    state.settle_for_planned_stop().await;
+
+    for refused in [
+        archive_session(&state, "worker").err(),
+        archive_requested(
+            &state,
+            "worker".to_string(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        )
+        .await
+        .err(),
+        delete_requested(
+            &state,
+            "archived".to_string(),
+            false,
+            false,
+            Vec::new(),
+            Vec::new(),
+        )
+        .await
+        .err(),
+    ] {
+        let err = refused.expect("refused");
+        assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN);
+    }
+    assert_eq!(status_of(&state, "worker"), Some(SessionStatus::Idle));
+    assert_eq!(status_of(&state, "archived"), Some(SessionStatus::Archived));
 }

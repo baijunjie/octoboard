@@ -1,7 +1,7 @@
 //! Associating, changing and removing projects, what a removal takes along, and the refresh of
 //! their git statuses.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,12 +21,12 @@ use crate::protocol::{
 };
 use crate::removal_safety::project;
 use crate::state::refusals::ensure_unlocked;
-use crate::state::AppState;
+use crate::state::{AppState, ChangeAdmission, RecordKey};
 use crate::store::LOCAL_HOST_ID;
 use crate::text::trimmed_or_none;
 
 use super::bindings::binding_depth;
-use super::lifecycle::{archive_session, report_not_removed, session_ids_where};
+use super::lifecycle::{archive_admitted, report_not_removed, session_ids_where};
 use super::validate::{
     absolute_path, check_text_length, field_required, normalise_tags, required_text,
     PROJECT_DESCRIPTION_LIMIT, PROJECT_NAME_LIMIT,
@@ -286,15 +286,17 @@ pub async fn add_project(
             tags: tags.clone(),
             description: description.clone(),
             git_workflow: settings.git_workflow,
+            versions: Default::default(),
         };
         if !insert_unless_associated(state, &project)? {
             continue;
         }
         associated.insert_resolved(&resolved);
         project_git::watch::add(state, &project);
-        state.broadcast(Event::ProjectUpserted {
-            project: project.clone(),
-        });
+        // The project is stored; a failed publication is picked up by the next one.
+        if let Err(err) = state.publish_project(&project.id) {
+            tracing::warn!(project = %project.id, %err, "publishing the added project failed");
+        }
         added.push(project);
     }
     if added.is_empty() {
@@ -327,14 +329,29 @@ pub struct ProjectChanges {
     pub git_workflow: GitWorkflowOverrideChanges,
 }
 
-/// Applies `changes` to the project `id`, broadcasts it and returns it as stored. Every reference
-/// and setting is checked first, with nothing written yet; an absent one is not checked at all,
-/// as for a console. The agent's models are asked for before the record is read for the write, so an
-/// edit made in the meantime is not lost.
+/// [`update_project_checked`] for a write that is not based on any version.
 pub async fn update_project(
     state: &Arc<AppState>,
     id: &str,
     changes: ProjectChanges,
+) -> Result<Project> {
+    update_project_checked(state, id, changes, &BTreeMap::new()).await
+}
+
+/// Applies `changes` to the project `id`, broadcasts it and returns it as stored. Every reference
+/// and setting is checked first, with nothing written yet; an absent one is not checked at all,
+/// as for a console. The agent's models are asked for before the record is read for the write, so an
+/// edit made in the meantime is not lost.
+///
+/// With `base`, the versions the write was based on (see [`AppState::checked_write`]), it is
+/// refused with `write_conflict` when another write moved one of those fields on. That check is
+/// made after the last wait, under the lock of the checked writes, and the record is read again
+/// under it, so the check and the write it decides are one step.
+pub async fn update_project_checked(
+    state: &Arc<AppState>,
+    id: &str,
+    changes: ProjectChanges,
+    base: &BTreeMap<String, u64>,
 ) -> Result<Project> {
     if changes.tags.is_some() && !(changes.add_tags.is_empty() && changes.remove_tags.is_empty()) {
         let other = if changes.add_tags.is_empty() {
@@ -365,6 +382,7 @@ pub async fn update_project(
         );
     }
     let mut verified = Vec::new();
+    let mut checked = None;
     loop {
         let mut project = state.store.require_project(id)?;
         let console = state.store.require_console(&project.console_id)?;
@@ -407,10 +425,20 @@ pub async fn update_project(
             }
         }
         if !pending.is_empty() {
+            // Nothing is held across the waits.
+            checked = None;
             for check in pending {
                 check.run(state).await?;
                 verified.push(check);
             }
+            continue;
+        }
+        // No wait is left: the versions are checked under the lock, and the record read again
+        // under it, so a write that landed while waiting for it is neither missed nor overwritten.
+        if checked.is_none() && !base.is_empty() {
+            checked = state
+                .checked_write(&RecordKey::Project(id.to_string()), base)
+                .await?;
             continue;
         }
         if let Some(pinned) = changes.pinned {
@@ -435,9 +463,7 @@ pub async fn update_project(
         // does not touch (the remote URL, the trust consent), which another path may have just
         // changed.
         let stored = state.store.require_project(id)?;
-        state.broadcast(Event::ProjectUpserted {
-            project: stored.clone(),
-        });
+        state.publish_project(id)?;
         return Ok(stored);
     }
 }
@@ -446,7 +472,9 @@ pub async fn update_project(
 /// is locked, or is running or still starting (with `stop_sessions`, only one still starting).
 /// With `trash_directory` its folder goes to the Trash first, and what goes along with the folder
 /// is removed once the project's sessions are down, the locked worktrees in `force_remove`
-/// included and an unmerged branch only as `force_remove` names it.
+/// included and an unmerged branch only as `force_remove` names it. Refused with
+/// `daemon_shutting_down`, with nothing changed, once a planned stop has raised its handover
+/// barrier; one the barrier stops waiting for part-way leaves the folder where it is.
 pub(super) async fn delete_project(
     state: &Arc<AppState>,
     id: String,
@@ -455,6 +483,7 @@ pub(super) async fn delete_project(
     force_remove: Vec<SessionBranchTarget>,
     inspection: Option<String>,
 ) -> Result<()> {
+    let admission = state.admit_change()?;
     let _removal = state.claim_session_removal();
     let deleted = state.store.require_project(&id)?;
     let in_project = |session: &Session| session.project_id.as_deref() == Some(&id);
@@ -509,17 +538,24 @@ pub(super) async fn delete_project(
     } else {
         (None, None)
     };
+    // Each step from here on that ends a terminal, or removes what one works in, is taken only
+    // while a planned stop still waits for this removal: once it no longer does, the terminals
+    // may be handed over, and this daemon can no longer end them.
+    admission.still_covered()?;
     if stop_sessions {
-        stop_project_sessions(state, in_project)?;
+        stop_project_sessions(state, &admission, in_project)?;
     }
     // Ended before the folder is moved, if it is, so no shell is left running in it (a
     // tool still writing there by absolute path could recreate the moved folder); one
     // started during the move is ended with the record below.
+    admission.still_covered()?;
     crate::terminal::shell::close_project(state, &id).await;
     // The project's processes, which no session owns, go with it, as the confirmation
     // said (`inspect_project_removal`'s `processes`), the folder moved or not: stopped
     // here, before the move, and not after it, since removing the project stops them
-    // whether or not its folder goes to the Trash.
+    // whether or not its folder goes to the Trash. Asked again after the shells' close, which
+    // waits on them.
+    admission.still_covered()?;
     super::processes::stop_project_processes(state, std::slice::from_ref(&deleted)).await;
     // The directory goes first, once nothing runs in it, so a failure leaves the project
     // in place for a retry. Without `trash_directory` only the association goes away: the
@@ -530,6 +566,9 @@ pub(super) async fn delete_project(
         tokio::task::spawn_blocking(move || crate::git::repo_files::repository_of(&path)).await?
     };
     if let Some(directory) = to_trash {
+        // A planned stop that no longer waits for this removal may have handed over a shell that
+        // still runs in the folder, which this daemon can no longer end.
+        admission.still_covered()?;
         // Off the runtime's worker: a move across volumes copies.
         let trash = state.host_tools.get().trash;
         tokio::task::spawn_blocking(move || trash(&directory))
@@ -540,7 +579,10 @@ pub(super) async fn delete_project(
         // the project is removed regardless: such a session is ended here as well as it
         // can be, and one still being launched, which cannot be ended, is left to fail
         // once its record goes.
-        if let Err(err) = stop_project_sessions(state, in_project) {
+        let ended = admission
+            .still_covered()
+            .and_then(|()| stop_project_sessions(state, &admission, in_project));
+        if let Err(err) = ended {
             tracing::warn!(project = %id, %err, "ending sessions started during the move to the Trash failed");
         }
     }
@@ -549,7 +591,11 @@ pub(super) async fn delete_project(
     state.store.delete_project(&id)?;
     state.forget_deleted_projects(&[id.as_str()]);
     state.forget_cascaded_sessions(&session_ids);
-    crate::terminal::shell::close_project(state, &id).await;
+    if admission.still_covered().is_ok() {
+        crate::terminal::shell::close_project(state, &id).await;
+    } else {
+        tracing::warn!(project = %id, "a shell terminal started in the removed project is left to the next daemon: a planned stop is handing the terminals over");
+    }
     crate::branch_origin::project_deleted_in(state, repository);
     state.broadcast(Event::ProjectDeleted {
         project: id.clone(),
@@ -562,12 +608,15 @@ pub(super) async fn delete_project(
     }
     if let Some(along) = along {
         let state = Arc::clone(state);
+        // Counted from here, while the request still holds its admission.
+        let covered = state.track_change();
         tokio::spawn(async move {
             let missed = branch_cleanup::project::carry_out_once_stopped(
                 state.clone(),
                 session_ids,
                 along,
                 force_remove,
+                &covered,
             )
             .await;
             report_not_removed(&state, &missed);
@@ -795,6 +844,7 @@ pub(super) fn detect_project_agent(state: &Arc<AppState>, directory: &Path) -> O
 /// archive request does.
 fn stop_project_sessions(
     state: &Arc<AppState>,
+    admission: &ChangeAdmission,
     in_project: impl Fn(&Session) -> bool,
 ) -> Result<()> {
     // A process still exiting when its rows are gone is tolerated by `watch_exit` and the hook paths.
@@ -818,7 +868,7 @@ fn stop_project_sessions(
         .collect::<Result<HashMap<String, usize>>>()?;
     in_this_project.sort_by_key(|session| std::cmp::Reverse(levels[&session.id]));
     for session in in_this_project {
-        archive_session(state, &session.id)?;
+        archive_admitted(state, admission, &session.id)?;
     }
     Ok(())
 }

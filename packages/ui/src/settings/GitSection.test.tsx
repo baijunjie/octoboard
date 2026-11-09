@@ -156,3 +156,22 @@ it.each([
   expect(container.textContent).toContain(shown);
   expect(container.textContent?.includes("Once this is on, a project's branch is pulled")).toBe(!on);
 });
+
+it("bases a workflow change on the version of its own item in the store", async () => {
+  const container = mount();
+  act(() => daemon.store.setState({ settings: { ...daemon.store.getState().settings, versions: { "git_workflow.revert_gate": 6, "git_workflow.delivery": 2 } } }));
+  await act(async () => toggle(container, "Revert gate").click());
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", git_workflow: { revert_gate: !DEFAULT_GIT_WORKFLOW.revert_gate }, base_versions: { "git_workflow.revert_gate": 6 } });
+});
+
+it("sends no second write of an item before the store shows the first", async () => {
+  request.mockImplementation(() => new Promise<never>(() => {}));
+  const container = mount();
+  act(() => daemon.store.setState({ settings: { ...daemon.store.getState().settings, versions: { "git_workflow.revert_gate": 1, "git_workflow.rebase_before_delivery": 1 } } }));
+  await act(async () => toggle(container, "Revert gate").click());
+  await act(async () => toggle(container, "Revert gate").click());
+  expect(request).toHaveBeenCalledTimes(1);
+  // Another item has its own version, so it is not held back.
+  await act(async () => toggle(container, "Rebase before delivery").click());
+  expect(request).toHaveBeenCalledTimes(2);
+});

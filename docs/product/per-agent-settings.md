@@ -28,11 +28,17 @@ is. The tags offered are the distinct tags the added agents carry (every agent's
 undecided; see "Added agents" in `docs/product/agent-accounts.md`), tags differing only in case counting as one, so a
 tag used on one agent is offered for the others; a typed tag matching an offered one takes its spelling.
 
-Each change is saved as it is made, as the agent's whole list; the field stays usable meanwhile. While a save is
-unanswered the field shows the list last asked for, so changes made in quick succession build on one another. Once the
-saves are answered it shows the stored tags, and a list another window set meanwhile is shown then and built on by the
-next change. A failed save is shown in an error alert titled "Could not save the tags", and once no
-later change is still being saved the field goes back to the stored tags.
+Each change is saved as it is made, as the agent's whole list; the field stays usable meanwhile. One save is out at a
+time: a change made while one is unanswered waits, and the save sent after it carries every change since. While saves
+are outstanding the field shows the list last asked for, so changes made in quick succession build on one another and
+never conflict with one another. Once the saves are answered it shows the stored tags, and a list another window set
+meanwhile is shown then and built on by the next change. Each save is checked against the tags' version (see
+`docs/product/concurrent-edits.md`): a save refused because another window changed the agent's tags just before it,
+and a waiting change that would overwrite a list another window set meanwhile, are dropped, the field shows the stored
+tags, and an error alert titled "Could not save the tags" says that a change was made elsewhere and nothing was saved.
+Any other failed save is shown in the same alert with its own reason; a change that waited is still sent, unless a list
+another window set is stored by then, when it is dropped too; and once no later change is still being saved the field
+goes back to the stored tags.
 
 The tags are kept by the daemon with the other application settings, so every window shows the same ones, and a change
 reaches them at once; they survive a restart. **Removing an agent keeps its tags**, which come back when it is added

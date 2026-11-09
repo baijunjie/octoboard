@@ -36,6 +36,7 @@ pub(super) fn console(default_agent: AgentId, workdir: &Path) -> Console {
         icon: None,
         console_session_prompt: None,
         created_at: 0,
+        versions: Default::default(),
     }
 }
 
@@ -70,6 +71,7 @@ pub(super) fn project_of(console_id: &str, id: &str) -> Project {
         tags: Vec::new(),
         description: None,
         git_workflow: Default::default(),
+        versions: Default::default(),
     }
 }
 
@@ -395,4 +397,46 @@ pub(super) fn resolve_bound_to(
     requested: Option<String>,
 ) -> Result<Option<String>> {
     Ok(resolve_owner(state, console_id, project_id, kind, requested)?.map(|owner| owner.id))
+}
+
+/// Starts the terminal `id` in a holder of `dir`, running `script` in bash at `size`, and leaves
+/// it there as a daemon that is gone would: its terminal is leaked, since dropping one releases it
+/// in the holder, and its link is parted from. Returns the program's pid.
+#[cfg(unix)]
+pub(super) fn left_running_script(
+    dir: &ScratchDir,
+    id: &str,
+    meta: serde_json::Value,
+    script: &str,
+    size: crate::platform::term::Size,
+) -> i32 {
+    let previous = crate::holder::client::in_process(dir.join("holders")).expect("holders");
+    let mut command = crate::platform::term::Command::new(crate::test_support::bash());
+    command.args(["-c", script]);
+    let held = previous
+        .spawn(crate::holder::protocol::SpawnSpec {
+            id: id.to_string(),
+            command,
+            size,
+            containment: None,
+            kill_session_leftovers: false,
+            meta,
+        })
+        .expect("the program starts in the holder");
+    let pid = held.pid().0 as i32;
+    std::mem::forget(held);
+    drop(previous);
+    pid
+}
+
+/// The terminals a daemon over `holders` finds in them.
+pub(super) fn found_in(
+    holders: &crate::holder::client::Holders,
+) -> Vec<crate::holder::client::FoundTerminal> {
+    holders
+        .adopt_existing(crate::holder::client::unresolved())
+        .found
+        .into_iter()
+        .flat_map(|holder| holder.terminals)
+        .collect()
 }

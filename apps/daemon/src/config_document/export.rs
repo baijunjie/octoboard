@@ -446,6 +446,7 @@ mod tests {
             icon: None,
             console_session_prompt: None,
             created_at: 0,
+            versions: Default::default(),
         }
     }
 
@@ -466,6 +467,7 @@ mod tests {
             tags: Vec::new(),
             description: None,
             git_workflow: Default::default(),
+            versions: Default::default(),
         }
     }
 
@@ -478,6 +480,7 @@ mod tests {
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled: false,
+            versions: Default::default(),
         }
     }
 

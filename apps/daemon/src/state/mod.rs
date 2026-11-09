@@ -9,7 +9,13 @@
 //!   keep two launches of one session, an archive or deletion and a lock change, or two of the
 //!   operations that must have a session to themselves from racing, the locks of an account's
 //!   change of sharing, and the stop of every session at shutdown with the output saved as each
-//!   process ends.
+//!   process ends, or their settling before a planned stop; [`unlinked`]: the sessions a start
+//!   left claimed for the holders it could not link to.
+//! - [`stop`]: how the daemon's run is asked to end, an ordinary or a planned stop;
+//!   [`handover_barrier`]: what a planned stop refuses and waits for before it hands the terminals
+//!   over; [`application_note`]: what the application says over stdin before it quits, which
+//!   tells a quit from a crash; [`restart_screens`]: the screens a planned stop saved for the
+//!   next daemon, which its adoption takes.
 //! - [`mcp_tokens`], [`turns`], [`left_for_limit`]: the per-session MCP tokens, the turn
 //!   bookkeeping a synthesised report rests on, and the accounts a session left for a usage limit.
 //! - [`auto_switch`]: the hooks through which lower layers reach the automatic account switch.
@@ -19,6 +25,8 @@
 //!   watch.
 //! - [`git_status`]: each project's live git status, with the claim that keeps two checks of one
 //!   project from racing and the timestamp that keeps them from piling up across several clients.
+//! - [`field_versions`]: the version of each field of the records a form edits, and the lock of the
+//!   writes that carry the versions they were based on.
 //! - [`keep_awake`]: whether the host is held awake.
 //! - [`agent_availability`]: each agent's availability; [`forget`]: what is dropped where a record
 //!   is removed.
@@ -35,12 +43,15 @@
 //! The types other modules name are re-exported here, so they are reached as `crate::state::X`.
 
 mod agent_availability;
+pub(crate) mod application_note;
 mod auto_switch;
 mod background;
 pub(crate) mod bindings;
 mod claims;
+mod field_versions;
 mod forget;
 mod git_status;
+mod handover_barrier;
 mod keep_awake;
 mod late_turn_end;
 mod left_for_limit;
@@ -51,15 +62,18 @@ mod record_watch;
 mod recoveries;
 pub(crate) mod refusals;
 mod requests;
+pub(crate) mod restart_screens;
 pub(crate) mod session_as_left;
 mod sessions;
 mod sharing_lock;
 mod sharing_status;
 mod status;
+mod stop;
 #[cfg(test)]
 pub(crate) mod test_support;
 mod titles;
 mod turns;
+mod unlinked;
 
 pub use crate::messaging::write_queue::{OutboxHold, WriteHold};
 pub(crate) use auto_switch::AutoSwitchHooks;
@@ -67,11 +81,17 @@ pub(crate) use auto_switch::AutoSwitchHooks;
 pub(crate) use background::EMPTY_TASKS_DELAY;
 pub(crate) use claims::session_archived;
 pub use claims::{ClaimKind, LaunchClaim};
+pub(crate) use field_versions::SETTINGS_FIELDS;
+pub use field_versions::{FieldVersions, RecordKey, Stamp};
 pub use git_status::{GitCheckClaim, OwedCheck};
+pub use handover_barrier::ChangeAdmission;
 pub use live::Running;
+pub use restart_screens::ExactScreen;
 pub use sessions::Deletion;
 pub use sharing_lock::AccountSharingLock;
+pub use stop::StopKind;
 pub use turns::{LastReport, TurnClose};
+pub use unlinked::UnlinkedFinished;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -95,6 +115,7 @@ use self::left_for_limit::AccountLeft;
 use self::live::LiveSessions;
 use self::sharing_status::SharingStatus;
 use self::turns::TurnState;
+use self::unlinked::Unlinked;
 
 /// How long a message written to an idle session is given to be reported sent before it is taken
 /// to be sitting unsent in the input box. A prompt's `UserPromptSubmit` normally arrives well
@@ -282,6 +303,13 @@ pub struct AppState {
     /// [`EMPTY_TASKS_DELAY`]: background::EMPTY_TASKS_DELAY
     next_tasks_ticket: std::sync::atomic::AtomicU64,
     events: broadcast::Sender<Event>,
+    /// The version of each field of the records a form edits, stamped on them as they are
+    /// published; see [`field_versions`].
+    pub field_versions: FieldVersions,
+    /// Held by every checked write (`update_settings`, `update_console`, `update_project` and
+    /// `update_account` that carry `base_versions`, and an import's settings) from its check to its
+    /// publication, so two cannot both pass the check; see [`AppState::checked_write`].
+    checked_writes: tokio::sync::Mutex<()>,
     /// Held by `create_account` and `update_account` from their uniqueness checks to their write,
     /// so two requests cannot both pass the checks and then both write. A plain mutex and never
     /// held across an `.await`; see [`AppState::lock_account_writes`].
@@ -292,11 +320,36 @@ pub struct AppState {
     /// Lock changes and removal claims share this gate, so a lock cannot be accepted halfway
     /// through a cascade or while a project directory is being moved to the Trash.
     session_removals: Mutex<usize>,
-    shutdown: tokio::sync::Notify,
-    /// Set once [`Self::stop_all_sessions`] has begun: no claim is granted and no process stays
-    /// registered from then on, so a launch that was under way cannot start an agent after the
-    /// stop.
+    /// The stop asked for, if any; see [`stop`].
+    stop: tokio::sync::watch::Sender<Option<StopKind>>,
+    /// Whether the daemon follows an application; see [`Self::set_follows_application`].
+    follows_application: AtomicBool,
+    /// Whether a service manager restarts the daemon after a planned restart; see
+    /// [`Self::set_service_managed`].
+    service_managed: AtomicBool,
+    /// What a planned stop refuses and waits for before it hands the terminals over; see
+    /// [`handover_barrier`].
+    handover_barrier: handover_barrier::HandoverBarrier,
+    /// What the application said over stdin; see [`application_note`].
+    application_note: application_note::ApplicationNote,
+    /// Whether the sessions and shell terminals the holders kept are adopted (see
+    /// [`Self::begin_adoption`]); true for a daemon that adopts nothing.
+    adoption_done: tokio::sync::watch::Sender<bool>,
+    /// What runs as the adoption ends, before it reads as done; see [`Self::after_adoption`].
+    adoption_hooks: Mutex<Vec<Box<dyn FnOnce() + Send>>>,
+    /// The sessions the start left claimed for the holders it could not link to; see
+    /// [`unlinked`].
+    unlinked: Unlinked,
+    /// Set once [`Self::stop_all_sessions`] or [`Self::settle_for_planned_stop`] has begun: no
+    /// claim is granted and no process stays registered from then on, so a launch that was under
+    /// way cannot start an agent after the stop.
     shutting_down: AtomicBool,
+    /// Set once a planned stop has begun to hand the terminals over: from then on nothing of this
+    /// daemon records a session's or a shell terminal's exit, which is the next daemon's to find.
+    handing_over: AtomicBool,
+    /// The screens the previous daemon's planned stop saved, until each is taken by the adoption
+    /// of its terminal; see [`restart_screens`].
+    restart_screens: restart_screens::RestartScreens,
     /// Whether the daemon holds its host awake (`crate::keep_awake`). Held in memory only: the
     /// hold goes with the process.
     keep_awake_held: AtomicBool,
@@ -399,11 +452,22 @@ impl AppState {
             directory_looks: Default::default(),
             path_link_roots: Default::default(),
             events,
+            field_versions: FieldVersions::default(),
+            checked_writes: tokio::sync::Mutex::new(()),
             account_writes: Mutex::new(()),
             session_publication: Mutex::new(()),
             session_removals: Mutex::new(0),
-            shutdown: tokio::sync::Notify::new(),
+            stop: tokio::sync::watch::channel(None).0,
+            follows_application: AtomicBool::new(false),
+            service_managed: AtomicBool::new(false),
+            handover_barrier: handover_barrier::new_barrier(),
+            application_note: Default::default(),
+            adoption_done: tokio::sync::watch::channel(true).0,
+            adoption_hooks: Mutex::new(Vec::new()),
+            unlinked: Unlinked::default(),
             shutting_down: AtomicBool::new(false),
+            handing_over: AtomicBool::new(false),
+            restart_screens: Default::default(),
             keep_awake_held: AtomicBool::new(false),
             interrupts: Mutex::new(HashSet::new()),
             project_associations: Mutex::new(HashMap::new()),
@@ -424,18 +488,72 @@ impl AppState {
         self.consoles_dir.join(console_id)
     }
 
-    /// Asks the daemon to shut down. The application sends this once the user has confirmed the
-    /// exit; `main` waits on it.
-    pub fn request_shutdown(&self) {
-        self.shutdown.notify_waiters();
+    /// Marks the adoption of what the holders kept as not done yet, so what a helper asks of the
+    /// daemon through a holder waits for the sessions it names to exist ([`Self::await_adoption`]).
+    /// Called before the holders are linked.
+    pub fn begin_adoption(&self) {
+        self.adoption_done.send_replace(false);
     }
 
-    pub async fn await_shutdown(&self) {
-        self.shutdown.notified().await;
+    /// Whether the adoption is done.
+    pub fn adoption_done(&self) -> bool {
+        *self.adoption_done.borrow()
+    }
+
+    /// Marks the adoption as done, once what [`Self::after_adoption`] was given has run.
+    pub fn end_adoption(&self) {
+        loop {
+            let hooks = {
+                let mut hooks = self
+                    .adoption_hooks
+                    .lock()
+                    .expect("adoption hooks lock poisoned");
+                if hooks.is_empty() {
+                    // Under the lock, so a hook given meanwhile is either run above or runs now.
+                    self.adoption_done.send_replace(true);
+                    return;
+                }
+                std::mem::take(&mut *hooks)
+            };
+            for hook in hooks {
+                hook();
+            }
+        }
+    }
+
+    /// Has `hook` run as the adoption ends, before anything waiting on it is let go, or now when
+    /// it is done already: the relay's reports held back meanwhile are handled so, and so are
+    /// queued before an adopted session's exit settles them (`coordinator::exit_watch`).
+    pub fn after_adoption(&self, hook: impl FnOnce() + Send + 'static) {
+        {
+            let mut hooks = self
+                .adoption_hooks
+                .lock()
+                .expect("adoption hooks lock poisoned");
+            if !self.adoption_done() {
+                hooks.push(Box::new(hook));
+                return;
+            }
+        }
+        hook();
+    }
+
+    /// Waits until the adoption is done, for at most `limit`; whether it is.
+    pub async fn await_adoption(&self, limit: std::time::Duration) -> bool {
+        let mut done = self.adoption_done.subscribe();
+        let waited = tokio::time::timeout(limit, done.wait_for(|done| *done)).await;
+        matches!(waited, Ok(Ok(_)))
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.events.subscribe()
+    }
+
+    /// How many listeners the broadcasts have: one per connected control client, besides any a
+    /// test holds itself.
+    #[cfg(test)]
+    pub fn subscriber_count(&self) -> usize {
+        self.events.receiver_count()
     }
 
     /// The critical section of an account write that depends on what the other accounts hold (a
@@ -448,11 +566,20 @@ impl AppState {
     }
 
     pub fn broadcast(&self, event: Event) {
+        debug_assert!(
+            !matches!(
+                event,
+                Event::SettingsUpdated { .. }
+                    | Event::ConsoleUpserted { .. }
+                    | Event::ProjectUpserted { .. }
+            ),
+            "form-edited records are published through publish_settings, publish_console and publish_project"
+        );
         let _publication = self
             .session_publication
             .lock()
             .expect("session publication lock poisoned");
-        self.broadcast_locked(event);
+        self.publish_locked(event);
     }
 
     fn broadcast_locked(&self, event: Event) {
@@ -465,23 +592,35 @@ impl AppState {
         self.shutting_down.load(Ordering::Acquire)
     }
 
+    /// Whether a planned stop has begun to hand the terminals over, after which nothing of this
+    /// daemon records an exit.
+    pub fn is_handing_over(&self) -> bool {
+        self.handing_over.load(Ordering::Acquire)
+    }
+
+    /// Refuses what would start something once the daemon has begun to stop: an ordinary stop
+    /// ending the sessions, or a planned stop that has raised its handover barrier (see
+    /// [`handover_barrier`]), which the claims of a launch and a switch are refused by too.
     pub(crate) fn refuse_while_shutting_down(&self) -> Result<()> {
-        if self.shutting_down.load(Ordering::Acquire) {
-            return Err(CodedError::raised(
-                error_code::DAEMON_SHUTTING_DOWN,
-                "the daemon is shutting down, so nothing is started",
-                &[],
-            ));
+        if self.shutting_down.load(Ordering::Acquire) || self.handover_barrier_raised() {
+            return Err(shutting_down_refusal());
         }
         Ok(())
     }
 }
 
+/// The refusal of what would start something once the daemon has begun to stop.
+pub(crate) fn shutting_down_refusal() -> anyhow::Error {
+    CodedError::raised(
+        error_code::DAEMON_SHUTTING_DOWN,
+        "the daemon is shutting down, so nothing is started",
+        &[],
+    )
+}
+
 /// Broadcasts the current settings record — the pattern every settings-shaped mutation (the
-/// trusted directories, `auto_pull_repositories` and the accounts) follows.
+/// trusted directories, `auto_pull_repositories` and the accounts) follows. The record is read
+/// as it is published (see [`AppState::publish_settings`]).
 pub(crate) fn broadcast_settings(state: &AppState) -> Result<()> {
-    state.broadcast(Event::SettingsUpdated {
-        settings: state.store.get_settings()?,
-    });
-    Ok(())
+    state.publish_settings()
 }

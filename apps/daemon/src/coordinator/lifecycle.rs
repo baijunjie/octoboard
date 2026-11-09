@@ -15,7 +15,7 @@ use crate::protocol::{
 use crate::records;
 use crate::state::bindings::{bound_sessions, team};
 use crate::state::refusals::ensure_unlocked;
-use crate::state::{AppState, Deletion};
+use crate::state::{AppState, ChangeAdmission, Deletion};
 
 use super::launch::stop_process;
 use super::validate::required_text;
@@ -45,7 +45,21 @@ pub(crate) use finished::{
 /// Returns the sessions it archived, as they were before, for the removal of the branches bound
 /// to them (`branch_cleanup`), which is the caller's: a project's deletion stops its
 /// sessions this way and removes none.
+///
+/// Refused with `daemon_shutting_down`, with nothing changed, once a planned stop has raised its
+/// handover barrier (`AppState::admit_change`): the terminals are the next daemon's.
 pub fn archive_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> {
+    let admission = state.admit_change()?;
+    archive_admitted(state, &admission, id)
+}
+
+/// [`archive_session`] for an operation admitted past the handover barrier already, which holds
+/// `_admission` until it is done: a step of it, which no barrier raised meanwhile cuts off.
+pub(crate) fn archive_admitted(
+    state: &Arc<AppState>,
+    _admission: &ChangeAdmission,
+    id: &str,
+) -> Result<Vec<Session>> {
     archive_session_group(state, id, false)
 }
 
@@ -61,6 +75,7 @@ pub(super) async fn archive_requested(
     keep: Vec<SessionBranchTarget>,
     keep_process_ids: Vec<String>,
 ) -> Result<()> {
+    let _admission = state.admit_change()?;
     // Before the archive ends the processes, which the exit path then stops; kept after
     // the record is known so an unknown session keeps nothing.
     if !keep_process_ids.is_empty() {
@@ -162,10 +177,17 @@ fn remove_branches_once_stopped(
         return;
     }
     let state = Arc::clone(state);
+    // Counted from here, while the request still holds its admission, so that a planned stop
+    // waits for the removal and the removal does not start once it has stopped waiting.
+    let covered = state.track_change();
     tokio::spawn(async move {
-        let left =
-            branch_cleanup::remove::remove_once_stopped(state.clone(), sessions, forced.clone())
-                .await;
+        let left = branch_cleanup::remove::remove_once_stopped(
+            state.clone(),
+            sessions,
+            forced.clone(),
+            &covered,
+        )
+        .await;
         report_not_removed(
             &state,
             &branch_cleanup::report::to_report(left, &forced, &keep),
@@ -531,6 +553,7 @@ pub(super) async fn delete_requested(
     force_remove: Vec<SessionBranchTarget>,
     keep: Vec<SessionBranchTarget>,
 ) -> Result<()> {
+    let _admission = state.admit_change()?;
     let deleted = if only_if_unused {
         delete_unused_session(state, &session)?
     } else {
@@ -557,6 +580,7 @@ pub(super) async fn delete_archived_requested(
     force_remove: Vec<SessionBranchTarget>,
     keep: Vec<SessionBranchTarget>,
 ) -> Result<()> {
+    let _admission = state.admit_change()?;
     let deleted = delete_archived_sessions(
         state,
         &console,

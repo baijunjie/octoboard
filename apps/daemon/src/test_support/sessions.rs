@@ -33,6 +33,8 @@ pub(crate) fn bare_session(id: &str, kind: SessionKind) -> Session {
         switching_account: false,
         paused: false,
         prompt_on_launch: false,
+        screen_inexact: false,
+        holder_link: None,
         default_effort: None,
         role: Role::Coordinator,
         context: None,

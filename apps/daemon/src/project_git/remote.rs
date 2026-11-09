@@ -22,7 +22,7 @@ use crate::git::layout::is_git_repo;
 use crate::git::remote_branch::split_remote_branch;
 use crate::git::run::{GitError, Limits, Runner};
 use crate::host_tools::Pace;
-use crate::protocol::{Event, Project};
+use crate::protocol::Project;
 use crate::state::AppState;
 
 /// Upper bound on one `git` read here. All of them read the repository's own files, so this is a
@@ -353,8 +353,8 @@ pub fn record_remote_url(state: &AppState, project_id: &str, url: Option<String>
     }
     // Read back rather than sent as `stored` with the new URL: the user may have edited the
     // project in between, and an upsert carries the whole record.
-    if let Ok(Some(project)) = state.store.get_project(project_id) {
-        state.broadcast(Event::ProjectUpserted { project });
+    if let Err(err) = state.publish_project(project_id) {
+        tracing::debug!(%err, "publishing the project's remote URL failed");
     }
 }
 
@@ -396,7 +396,7 @@ fn reconcile_project(
 mod tests {
     use super::*;
     use crate::git::run::UserGit;
-    use crate::protocol::{AgentId, Console, ProjectSource};
+    use crate::protocol::{AgentId, Console, Event, ProjectSource};
     use crate::store::LOCAL_HOST_ID;
     use crate::test_support::{
         app_state, fixture_git, git, isolated_git_env, redirecting_overrides, repo_pair, repo_with,
@@ -816,6 +816,7 @@ mod tests {
                 icon: None,
                 console_session_prompt: None,
                 created_at: 0,
+                versions: Default::default(),
             })
             .expect("console");
         state
@@ -836,6 +837,7 @@ mod tests {
                 tags: Vec::new(),
                 description: None,
                 git_workflow: Default::default(),
+                versions: Default::default(),
             })
             .expect("project");
         (state, dir)

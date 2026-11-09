@@ -1,18 +1,24 @@
 import type { AvailableUpdate } from "../../platform";
 import type { Step } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { SAMPLE, shellTerminalOf, snapshotState } from "../../fixtures/builders";
+import { SAMPLE, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Updates";
 
 const { console: console_, web, sessions } = SAMPLE;
 
-// What the update scenarios sit over. Sessions that are idle hold a restart up no more than they hold a quit up, so
-// the first state is held up by nothing, and the restart state by a working session and a busy shell.
+// What the update scenarios sit over. The first state has only idle sessions, which no restart is held up by unless
+// the daemon lists them as interrupted; the restart states have a working session, a waiting one and a busy shell.
 const idle = sessions.filter(({ status }) => status === "idle");
 const busyShell = shellTerminalOf("sh-dev", web, "pnpm dev", 1, { busy: true });
 const quiet = snapshotState({ consoles: [console_], projects: [web], sessions: idle });
 const bothRunning = snapshotState({ consoles: [console_], projects: [web], sessions, shellTerminals: [busyShell] });
+// A restart that cannot carry seven working sessions over, for the list that names four and gathers the rest.
+const manySessions = ["Fix the summary layout", "Add idempotency keys", "Migrate the build to Vite", "Speed up the search index", "Rework the result ranking", "Document the export format", "Tidy the settings dialog"]
+  .map((title, i) => sessionOf(`s-many-${i}`, console_.id, web.id, title, "working"));
+// Two sessions, one working and one idle, for the restart whose answer could not be had: it names every running session.
+const workingAndIdle = snapshotState({ consoles: [console_], projects: [web], sessions: sessions.filter(({ id }) => id === "s-web-1" || id === "s-web-2") });
+const manyRunning = snapshotState({ consoles: [console_], projects: [web], sessions: manySessions });
 const reconnecting = snapshotState({ consoles: [console_], projects: [web], sessions: idle, connectionState: "reconnecting" });
 
 const NOTES = [
@@ -144,9 +150,87 @@ export const updateScenarios: Scenario[] = [
     id: "updates-restart-sessions-and-terminals",
     group: GROUP,
     category: "normal",
-    title: "Restart held up by a session and a terminal",
-    description: "One confirmation says both are running: the sessions are interrupted and can each be resumed, and what the terminals run is ended. A restart held up by sessions alone, or by terminals alone, words only its own half.",
+    title: "Restart held up by sessions and a terminal",
+    description: "The confirmation says the restart interrupts the sessions below and ends programs running in terminals, names two sessions (one working, one idle) and ends with \"Everything else keeps running.\". The waiting session is not listed, since it is carried over.",
     state: bothRunning,
+    handover: { sessions: ["s-web-1", "s-web-2"], shellTerminals: [busyShell.id] },
+    updater: { check: newer, checked: true },
+    steps: [downloadAndInstall, restartNow],
+  },
+  {
+    id: "updates-restart-idle-session",
+    group: GROUP,
+    category: "normal",
+    title: "Restart interrupting an idle session",
+    description: "The confirmation opens although nothing is working: it says the restart interrupts the sessions below, names the one idle session and ends with \"Everything else keeps running.\". The working and waiting sessions are carried over and the busy terminal runs on, so none is named.",
+    state: bothRunning,
+    handover: { sessions: ["s-web-2"] },
+    updater: { check: newer, checked: true },
+    steps: [downloadAndInstall, restartNow],
+  },
+  {
+    id: "updates-restart-terminals-only",
+    group: GROUP,
+    category: "normal",
+    title: "Restart held up by a terminal alone",
+    description: "No session list: the message says some terminals are still running something and that restarting ends it, followed by \"Everything else keeps running.\". The working and waiting sessions are carried over, so none is named.",
+    state: bothRunning,
+    handover: { shellTerminals: [busyShell.id] },
+    updater: { check: newer, checked: true },
+    steps: [downloadAndInstall, restartNow],
+  },
+  {
+    id: "updates-restart-many-sessions",
+    group: GROUP,
+    category: "normal",
+    title: "Restart interrupting seven sessions",
+    description: "The list names four sessions and gathers the other three in its last row, \"and 3 more\", set level with the titles above it (past the status glyph and the agent icon); \"Everything else keeps running.\" follows below the list.",
+    state: manyRunning,
+    handover: { sessions: manySessions.map(({ id }) => id) },
+    updater: { check: newer, checked: true },
+    steps: [downloadAndInstall, restartNow],
+  },
+  {
+    id: "updates-restart-uncertain",
+    group: GROUP,
+    category: "exceptional",
+    title: "Restart, what the update keeps running could not be checked",
+    description: "The answer is not known, so the message says it could not check which sessions keep running through the update and that the sessions below may be interrupted. Both running sessions are named, working and idle alike, then \"Terminals that cannot be reached right now may end too.\" for the terminals the daemon reported as unreachable; no \"Everything else keeps running.\" line follows.",
+    state: workingAndIdle,
+    handover: { known: false, sessions: ["s-web-1", "s-web-2"], unreachedShellTerminals: ["sh-unreached"] },
+    updater: { check: newer, checked: true },
+    steps: [downloadAndInstall, restartNow],
+  },
+  {
+    id: "updates-restart-unreached-terminals",
+    group: GROUP,
+    category: "exceptional",
+    title: "Restart, terminals that cannot be reached",
+    description: "The only reason to ask is terminals of a holder the daemon cannot reach right now: the message alone says they cannot be reached and that restarting may end what they run. No session is named and there is no \"Everything else keeps running.\" line, since nothing says what else is safe.",
+    state: bothRunning,
+    handover: { unreachedShellTerminals: ["sh-unreached"] },
+    updater: { check: newer, checked: true },
+    steps: [downloadAndInstall, restartNow],
+  },
+  {
+    id: "updates-restart-unnamed-and-unreached",
+    group: GROUP,
+    category: "exceptional",
+    title: "Restart, sessions the window cannot name and unreachable terminals",
+    description: "Under the message about the interrupted sessions, one named session and a row \"and 2 more\" for two sessions the window holds no title for, then the line \"Terminals that cannot be reached right now may end too.\". \"Everything else keeps running.\" is left out, as the unreached terminals leave that unsaid.",
+    state: bothRunning,
+    handover: { sessions: ["s-web-1"], unnamedSessions: ["s-unheard-1", "s-unheard-2"], unreachedShellTerminals: ["sh-unreached"] },
+    updater: { check: newer, checked: true },
+    steps: [downloadAndInstall, restartNow],
+  },
+  {
+    id: "updates-restart-unnamed-sessions-only",
+    group: GROUP,
+    category: "exceptional",
+    title: "Restart, sessions the window cannot name at all",
+    description: "No session list: the message itself states the count, \"Restarting interrupts 3 sessions. You can resume each one after the restart.\", followed by \"Everything else keeps running.\".",
+    state: bothRunning,
+    handover: { unnamedSessions: ["s-unheard-1", "s-unheard-2", "s-unheard-3"] },
     updater: { check: newer, checked: true },
     steps: [downloadAndInstall, restartNow],
   },

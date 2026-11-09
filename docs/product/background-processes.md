@@ -28,16 +28,28 @@ The user's way to spare a process the launch started is to keep it: **Keep** on 
 "Stop and Keep" in `docs/product/processes-panel.md`), or unchecking it in an archive confirmation to keep it running
 (see "Processes in an archive confirmation" below). Nothing else exempts a process, and on a Windows daemon host a
 process on the agent's own console cannot be kept at all (see "Processes on the agent's own console" below). What
-Octoboard keeps without being
-asked, after a restart that fails or when its saved records cannot be read, and the processes outside these rules
-altogether (the daemon's own, the user's shell terminals, the agent's own terminal session), are in "Automatic stopping
-and its boundaries" below.
+Octoboard keeps without being asked, after a restart that fails or when its saved records cannot be read, and the
+processes outside these rules altogether (the daemon's own and its process holders', the user's shell terminals, the
+agent's own terminal session), are in "Automatic stopping and its boundaries" below.
 
 Attribution cannot follow everything. Octoboard cannot attribute a program whose environment macOS withholds (a system
 binary such as `/bin/sleep` or `/usr/bin/tail`) that a command left running in the background when the shell that
 started it exits within one process-table scan, about **2 seconds**: such a process is neither listed nor stopped with
 the launch. A limit that concerns kept processes is described with keeping, in "Automatic stopping and its boundaries"
 below.
+
+**On a Linux daemon host whose cgroup lets the daemon make groups below it**, each agent launch is also held in a
+cgroup v2 group of its own. That is the case where the daemon's cgroup subtree is writable to it — under the example
+systemd unit's `Delegate=yes` (see "Running as a systemd user service" in `docs/product/application-lifecycle.md`), or
+in a container's writable hierarchy — and normally not for a daemon started from a login session (by
+`octoboardd start`, say), whose cgroup systemd does not let the user write. The agent's process is moved into the group
+just after it starts, with what it has started by then, and everything a process in the group starts is born in it,
+wherever it goes after that: a process in the launch's group is the launch's however it detached and whatever its
+environment says. Where no group can be made (no cgroup v2 hierarchy, a read-only one, a cgroup owned by someone else),
+the launch has none, which the daemon's log says once, and the rules above apply alone. A process the agent forked and
+that left it in the instant before the move is outside the group and is the launch's only by those rules. Shell
+terminals get no group; nor does anything the daemon starts other than an agent launch. How the group ends with the
+launch is in "Automatic stopping and its boundaries" below.
 
 **On a Windows daemon host** no process's environment is read, so the launch's tag attributes nothing there, and a
 process has no terminal session. A process is the launch's when its chain of parents reaches the agent or another
@@ -92,6 +104,21 @@ it after **5 minutes**, or when another launch ends, and a stop naming its tree 
 proof that every process has already disappeared, and an automatic stop does not tell the user what it left running (see
 the known limit below).
 
+**Where the launch has a cgroup group** (on Linux, see "Which processes belong to a launch" above), ending it does more
+once those rounds of signals are through: whatever is still in its group, and in the groups of the launches whose
+processes were carried over to it, is killed — what no scan attributed and what sits in the agent's own terminal
+session included — and the groups are removed. The processes spared are moved out of the group first: every process the
+user kept, with the children it started that are still in the group, goes to the cgroup the group is in, and a process
+moved to another session (see "Moving processes between sessions" below) goes to that session's launch's group. A
+process is moved out of the group already when it is kept or moved, so what it starts from then on is born outside it;
+processes carried over stay in their group, which passes to the receiving launch with them. The kill is skipped, and
+the group left to the ordinary cleanup until it is empty and removed, when a process to be spared cannot be moved out
+of it, or when the process table could not be read during the rounds of signals; a group whose processes have not all
+gone **1 second** after the kill is left in place. Groups an earlier run of the same data directory's daemon left,
+which a daemon in the same cgroup finds again at start, are treated as that run's leftovers: what is in them is stopped
+as the cleanup after a daemon restart (below) stops what a previous run left, kept processes excepted, and an empty one
+is removed.
+
 **On a Windows daemon host** there are no signals. A process that runs on a terminal the daemon started (a pseudo
 console, as an agent's own process does) is asked to end through that terminal. Where its agent declares quit keys,
 those are pressed first: Codex's are Ctrl-C, then, if it has not quit within **650 milliseconds**, Ctrl-C again, after
@@ -105,13 +132,22 @@ having gone, not stopped. A process still running after it was terminated, or on
 retried as above.
 
 After a daemon restart, Octoboard uses its saved process records and launch identities to stop what its previous run
-left behind, while preserving kept processes. A terminal session it saved, which reaches the processes in it that it
+left behind, while preserving kept processes. It stops nothing until it has read those records back. A launch whose
+agent a process holder kept running and the start adopted (see "What a daemon start takes over" in
+`docs/product/process-holders.md`) is not left behind: the processes and terminal sessions the records attribute to it
+stay that launch's, listed under its session and stopped when its process ends, under the rules above. So does a
+launch whose agent a process holder the start cannot connect to may still run, until that holder is connected to or
+known to be gone (see "A holder that cannot be connected to" in `docs/product/process-holders.md`). While such a
+holder may run a session whose launch nothing records, the records are still read back and this run's own processes
+are handled as ever, but what the previous run left, and what descends from it, is kept until no such holder is
+left, and stopped then. A terminal session it saved, which reaches the processes in it that it
 never saw, is taken back only while a process it saved is still running in it: a session's ID is a process ID, and
 once every process of the session has exited it can pass to unrelated processes. Records written before the system
 last started name nothing. If those records cannot be read, it does not assume that a process was not kept: it leaves
 the processes identified only by their launch tag running and records them as kept. On a Windows daemon host a sign-out
-or a shutdown ends the daemon without any of the cleanup above (see "Crashes and forced termination" in
-`docs/product/application-lifecycle.md`); what it leaves is handled by this cleanup at the next start, though the system
+or a shutdown can end the daemon before or without any of the cleanup above: a daemon started on its own is told
+nothing, and the desktop application's stop has only the seconds the system allows (see "Crashes and forced
+termination" in `docs/product/application-lifecycle.md`); what it leaves is handled by this cleanup at the next start, though the system
 has normally ended the user's processes by then, kept ones included.
 
 **On a Windows daemon host, a Store PowerShell leaves the launch's job.** A `pwsh` installed from the Microsoft Store
@@ -120,8 +156,9 @@ object. Such a tree is the launch's only through its chain of parents. Once a pr
 **2 seconds**, and one more just before the agent is ended — has seen that chain reach the agent, the tree is the
 launch's like any other, and stays so when the chain later breaks: it is listed under the session, stopped when the
 agent's process ends (archiving included), and stopped by the next daemon start's cleanup when the saved records name
-it. The daemon's own kill on an internal failure, which reaches only the job's members, does not end it, so it runs on
-until that next start. A tree whose chain to the agent is broken before any scan has seen it — the process of the
+it. The kill on an internal failure of the process the agent's terminal runs in (see "Crashes and forced termination"
+in `docs/product/application-lifecycle.md`), which reaches only the job's members, does not end it, so it runs on until
+that next start. A tree whose chain to the agent is broken before any scan has seen it — the process of the
 launch that started it exits first — is not the launch's: it is neither listed under the session nor stopped with
 it, and can be left running after the session ends. Which PowerShell runs a tool call is the agent's choice; Octoboard accepts this limit.
 
@@ -143,11 +180,15 @@ system refused to end — is recorded only as a warning in the daemon's log, and
 after **5 minutes**, or when another launch ends. Only Stop in the Processes panel reports the processes it left running
 (see "Process information and actions" below).
 
-The daemon, its ancestors and its direct children are protected. Processes in terminal sessions led by those direct
-children, including a Codex session's private app server and what runs in its session (see "Codex's private app
-server" in `docs/product/per-agent-launch-specifics.md`), are excluded from the background-process lists and Stop and
-Keep controls. Their lifecycle remains managed with the agent session. Tool commands that start a terminal session of
-their own remain subject to the attribution rules above.
+The daemon, its ancestors and its direct children are protected, and so are the running process holders (see
+`docs/product/process-holders.md`) and their direct children, the agents and the shell terminals' shells a holder
+starts. The holders are found from their registry files in `~/.octoboard/holders/`, and one counts only while the
+process its file names, by process ID and start time, is still running. A protected process is the daemon's own: it is
+never a launch's background process, nor kept, nor left behind in a project. Processes in terminal sessions led by
+those direct children, including a Codex session's private app server and what runs in its session (see "Codex's
+private app server" in `docs/product/per-agent-launch-specifics.md`), are excluded from the background-process lists
+and Stop and Keep controls. Their lifecycle remains managed with the agent session. Tool commands that start a
+terminal session of their own remain subject to the attribution rules above.
 
 The user's shell terminals and the processes in their terminal sessions are excluded from the background-process lists
 and cleanup described here; closing those terminals still follows "Closing a shell terminal" in

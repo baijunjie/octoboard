@@ -1,6 +1,6 @@
 //! The coordinator's SQLite storage: hosts, accounts, consoles, projects, sessions, report-panel
-//! pages, trusted directories, the information held for interrupted sessions, branch origins and
-//! the application settings.
+//! pages, trusted directories, the information held for interrupted sessions, branch origins, the
+//! application settings, and where the holders run the daemon's terminals.
 //!
 //! `Store` is one `Mutex<Connection>`; each table family has a file of its own holding its methods
 //! as a further `impl Store` block, and [`schema`] holds the schema and what opening an existing
@@ -35,6 +35,7 @@ mod agents;
 mod branch_origins;
 mod consoles;
 mod failure;
+mod held_terminals;
 mod hosts;
 mod kept_messages;
 mod pages;
@@ -60,6 +61,7 @@ pub use accounts::SharingStart;
 pub use agents::ReorderOutcome;
 pub use branch_origins::{BranchMove, BranchOrigin};
 pub use failure::{Result, StoreError};
+pub use held_terminals::{HeldKind, HeldTerminalRecord};
 pub use sessions::{cuts_turn_short, RecordUpdate};
 
 /// The single local host record every project and session points at. There is no other host yet,

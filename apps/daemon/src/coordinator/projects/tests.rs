@@ -45,6 +45,7 @@ async fn deleting_a_project_with_stop_sessions_refuses_a_launch_in_flight() {
             tags: Vec::new(),
             description: None,
             git_workflow: Default::default(),
+            versions: Default::default(),
         })
         .unwrap();
     state
@@ -769,6 +770,7 @@ fn update_project_request(project: &str, edit: impl FnOnce(&mut RequestBody)) ->
         tags: None,
         description: None,
         git_workflow: None,
+        base_versions: None,
     };
     edit(&mut request);
     request
@@ -855,6 +857,7 @@ async fn a_project_account_reference_is_checked_set_and_cleared_by_an_update() {
                 share_default_config: false,
                 share_default_config_incomplete: false,
                 disabled: false,
+                versions: Default::default(),
             })
             .unwrap();
     }
@@ -986,6 +989,7 @@ async fn adding_a_project_stores_its_settings_and_refuses_a_mismatched_account()
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled: false,
+            versions: Default::default(),
         })
         .unwrap();
     let repo = dir.join("repo");
@@ -1466,6 +1470,35 @@ async fn project_detection_and_creation_reject_a_file_ancestor() {
     }
     assert_eq!(std::fs::read_to_string(dir.join("file")).unwrap(), "keep");
     assert!(state.store.list_projects().unwrap().is_empty());
+}
+
+/// Once a planned stop has raised its handover barrier, neither a project nor a console is
+/// removed: the request is refused before anything is changed, the folder and the records alike.
+#[tokio::test]
+async fn no_project_or_console_is_removed_once_the_handover_barrier_is_raised() {
+    let (state, _dir) = console_with_project_and_accounts("coordinator-delete-project-barrier");
+    state.settle_for_planned_stop().await;
+    let requests = [
+        RequestBody::DeleteProject {
+            project: "project-1".to_string(),
+            stop_sessions: true,
+            trash_directory: true,
+            force_remove: Vec::new(),
+            inspection: None,
+        },
+        RequestBody::DeleteConsole {
+            console: "console-1".to_string(),
+        },
+    ];
+    for request in requests {
+        let err = handle(&state, None, request).await.unwrap_err();
+        assert_eq!(
+            crate::test_support::code_of(&err),
+            error_code::DAEMON_SHUTTING_DOWN
+        );
+    }
+    assert!(state.store.require_project("project-1").is_ok());
+    assert!(state.store.require_console("console-1").is_ok());
 }
 
 #[tokio::test]

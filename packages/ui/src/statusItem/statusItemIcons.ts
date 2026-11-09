@@ -88,9 +88,10 @@ export function statusGlyph(status: ShownStatusKind, appearance: Appearance): st
       return success && stroked(BUBBLE, success, BUBBLE_SHIFT);
     case "done":
       return success && stroked(CHECK, success);
-    // Still, as a menu cannot turn it: switching account shows the same arc as starting.
+    // Still, as a menu cannot turn it: switching account and reconnecting show the same arc as starting.
     case "starting":
     case "switching":
+    case "reconnecting":
       return muted && stroked(ARC, muted);
     case "interrupted":
       return muted && stroked(PAUSE, muted);

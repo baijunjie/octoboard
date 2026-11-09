@@ -107,7 +107,7 @@ export function UpdateNotice({ focusTerminal }: { focusTerminal: () => void }): 
             )}
             {kind === "installed" && (
               <>
-                <Button size="xs" variant="outline" className={BUTTON_CLASS} focusOnPress={false} onPress={store.restart}>
+                <Button size="xs" variant="outline" className={BUTTON_CLASS} focusOnPress={false} pending={state.restarting} onPress={() => void store.restart()}>
                   {t("updates.notice.restart")}
                 </Button>
                 <Button size="xs" variant="outline" className={BUTTON_CLASS} focusOnPress={false} onPress={store.hideRestartNotice}>

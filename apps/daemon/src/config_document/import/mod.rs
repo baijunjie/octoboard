@@ -34,11 +34,11 @@ use crate::protocol::{
     CONFIGURATION_VERSION,
 };
 use crate::providers::SettingValue;
-use crate::state::AppState;
+use crate::state::{AppState, RecordKey};
 
 use accounts::{
-    announce_accounts, apply_accounts, index_account_resolutions, inspect_accounts, only_agents,
-    prepare_accounts,
+    agent_settings_changes, announce_accounts, apply_accounts, index_account_resolutions,
+    inspect_accounts, only_agents, prepare_accounts,
 };
 use progress::Progress;
 use projects::{
@@ -55,6 +55,8 @@ pub struct Inspection {
     /// Absent when the document carries no accounts.
     pub accounts: Option<InspectedAccounts>,
     pub consoles: Vec<InspectedConsole>,
+    /// The version of every settings field, read before the current values `settings` shows.
+    pub settings_versions: BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -100,7 +102,7 @@ pub async fn apply(
     resolutions: Vec<ProjectResolution>,
     options: ApplyOptions,
 ) -> Result<Imported> {
-    apply_reporting(state, document, resolutions, options, None).await
+    apply_reporting(state, document, resolutions, options, None, None).await
 }
 
 /// The document `value` holds, upgraded to the current version, or the refusal that applies: it is
@@ -284,6 +286,48 @@ fn known_keep_awake_when(name: Option<&str>) -> Option<KeepAwakeWhen> {
     name.and_then(KeepAwakeWhen::from_wire_name)
 }
 
+/// The write of the default clone directory `dir`, before anything is created.
+fn clone_dir_changes(dir: &str) -> SettingsChanges {
+    SettingsChanges {
+        default_clone_dir: Some(dir.to_string()),
+        ..Default::default()
+    }
+}
+
+/// The write of the document's application settings, once everything else is done: the keys it
+/// carries, the language only where this build offers it and the choice of when to hold only where
+/// this build knows it.
+fn application_settings_changes(settings: &DocumentSettings) -> SettingsChanges {
+    SettingsChanges {
+        auto_close_idle_shell_terminals: settings.auto_close_idle_shell_terminals,
+        auto_pull_repositories: settings.auto_pull_repositories,
+        auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives,
+        auto_approve_session_requests: settings.auto_approve_session_requests,
+        auto_approve_resume_requests: settings.auto_approve_resume_requests,
+        auto_approve_account_switches: settings.auto_approve_account_switches,
+        auto_approve_handoffs: settings.auto_approve_handoffs,
+        ask_questions_as_choices: settings.ask_questions_as_choices,
+        interface_language: offered_language(settings.interface_language.as_deref()),
+        resume_sessions_on_start: settings.resume_sessions_on_start,
+        keep_awake: settings.keep_awake,
+        keep_awake_when: known_keep_awake_when(settings.keep_awake_when.as_deref()),
+        // Written before the projects.
+        default_clone_dir: None,
+        git_workflow: settings.git_workflow.map(Into::into).unwrap_or_default(),
+        ..Default::default()
+    }
+}
+
+/// The versions `changes` is based on: those of the fields it writes among the `read` ones, none
+/// where the import is not checked.
+fn based_on(
+    changes: &SettingsChanges,
+    read: Option<&BTreeMap<String, u64>>,
+) -> BTreeMap<String, u64> {
+    read.map(|read| changes.versions_read(read))
+        .unwrap_or_default()
+}
+
 /// Reads the document and answers, per project, which directory choices its state allows and the
 /// account references that fall back. Changes nothing.
 ///
@@ -293,6 +337,9 @@ fn known_keep_awake_when(name: Option<&str>) -> Option<KeepAwakeWhen> {
 /// answer does not wait for it. A project whose check did not come back is offered nothing.
 pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Result<Inspection> {
     let document = parse(document)?;
+    // Before any current value is read: a change in between then leaves the versions behind the
+    // values, which only makes the import conflict, never overwrite.
+    let settings_versions = state.settings_versions()?;
     let host_accounts = state.store.list_accounts()?;
     let rebinder = Rebinder {
         accounts: host_accounts,
@@ -466,6 +513,7 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
         settings_sections,
         accounts,
         consoles,
+        settings_versions,
     })
 }
 
@@ -570,6 +618,11 @@ fn naming_console(mut err: anyhow::Error, name: &str) -> anyhow::Error {
 /// accounts section are applied with the accounts (see [`apply_accounts`]), a document of an
 /// earlier version having been upgraded so that they are there.
 ///
+/// With `settings_versions`, the settings versions the preview read, every settings field the
+/// import writes is checked against them: the import is refused with `write_conflict` before
+/// anything is created when one has changed since, and each settings write is checked again as it
+/// is applied, where a conflict is reported as that write's failure like any other.
+///
 /// Projects are placed one at a time, so a clone, which may run for minutes, holds one blocking
 /// thread for its whole length and no document, however large, holds more.
 ///
@@ -587,6 +640,7 @@ pub async fn apply_reporting(
     resolutions: Vec<ProjectResolution>,
     options: ApplyOptions,
     import_id: Option<String>,
+    settings_versions: Option<BTreeMap<String, u64>>,
 ) -> Result<Imported> {
     let ApplyOptions {
         settings: settings_sections,
@@ -644,6 +698,35 @@ pub async fn apply_reporting(
     };
     let account_step = account_choices.zip(document.accounts.as_ref());
 
+    // The directory this import writes: the document's, when it is usable here and the user takes
+    // it.
+    let clone_dir_choice = document
+        .settings
+        .as_ref()
+        .and_then(|settings| usable_clone_dir(settings.default_clone_dir.as_deref()))
+        .filter(|_| apply_clone_dir);
+    if let Some(read) = &settings_versions {
+        let mut changes = Vec::new();
+        if let Some(dir) = &clone_dir_choice {
+            changes.push(clone_dir_changes(dir));
+        }
+        if let Some(settings) = &document.settings {
+            changes.push(application_settings_changes(settings));
+        }
+        // Those of the agents the import applies, the accounts having been reduced to them above.
+        let agent_settings = account_step
+            .as_ref()
+            .and_then(|(_, accounts)| accounts.agent_settings.as_ref());
+        if let Some(settings) = agent_settings {
+            changes.push(agent_settings_changes(settings));
+        }
+        let written: BTreeMap<String, u64> = changes
+            .iter()
+            .flat_map(|changes| changes.versions_read(read))
+            .collect();
+        state.check_versions(&RecordKey::Settings, &written)?;
+    }
+
     // What `create_console` would refuse of any console is refused before the first account is
     // created; the account references are not bound yet, and nothing in the check depends on them.
     let unbound = Rebinder::default();
@@ -661,13 +744,6 @@ pub async fn apply_reporting(
         )),
         None => None,
     };
-    // The directory this import writes: the document's, when it is usable here and the user takes
-    // it.
-    let clone_dir_choice = document
-        .settings
-        .as_ref()
-        .and_then(|settings| usable_clone_dir(settings.default_clone_dir.as_deref()))
-        .filter(|_| apply_clone_dir);
     if clone_dir_choice.is_some() {
         progress.waiting(ImportItem::CloneDir);
     }
@@ -697,11 +773,9 @@ pub async fn apply_reporting(
     let (mut clone_dir_applied, mut clone_dir_error) = (None, None);
     if let Some(dir) = clone_dir_choice {
         progress.report(ImportItem::CloneDir, ImportItemState::Creating);
-        let changes = SettingsChanges {
-            default_clone_dir: Some(dir.clone()),
-            ..Default::default()
-        };
-        match coordinator::settings::update_settings(state, changes) {
+        let changes = clone_dir_changes(&dir);
+        let base = based_on(&changes, settings_versions.as_ref());
+        match coordinator::settings::update_settings_checked(state, changes, &base).await {
             Ok(()) => {
                 clone_dir_applied = Some(dir);
                 progress.report(ImportItem::CloneDir, ImportItemState::Done);
@@ -715,15 +789,20 @@ pub async fn apply_reporting(
     }
     let clone_dir = state.store.default_clone_dir()?;
 
-    let imported_accounts = accounts_ready.map(|(document_accounts, account_choices, prepared)| {
-        apply_accounts(
-            state,
-            document_accounts,
-            prepared,
-            account_choices,
-            &progress,
-        )
-    });
+    let imported_accounts = match accounts_ready {
+        Some((document_accounts, account_choices, prepared)) => Some(
+            apply_accounts(
+                state,
+                document_accounts,
+                prepared,
+                account_choices,
+                &progress,
+                settings_versions.as_ref(),
+            )
+            .await,
+        ),
+        None => None,
+    };
     // After the accounts, so a reference binds to one the import created.
     let rebinder = Rebinder {
         accounts: state.store.list_accounts()?,
@@ -826,26 +905,10 @@ pub async fn apply_reporting(
     if let Some(settings) = document.settings.filter(|_| settings_error.is_none()) {
         progress.report(ImportItem::Settings, ImportItemState::Creating);
         let interface_language = offered_language(settings.interface_language.as_deref());
-        let keep_awake_when = known_keep_awake_when(settings.keep_awake_when.as_deref());
-        let changes = SettingsChanges {
-            auto_close_idle_shell_terminals: settings.auto_close_idle_shell_terminals,
-            auto_pull_repositories: settings.auto_pull_repositories,
-            auto_delete_unresumable_archives: settings.auto_delete_unresumable_archives,
-            auto_approve_session_requests: settings.auto_approve_session_requests,
-            auto_approve_resume_requests: settings.auto_approve_resume_requests,
-            auto_approve_account_switches: settings.auto_approve_account_switches,
-            auto_approve_handoffs: settings.auto_approve_handoffs,
-            ask_questions_as_choices: settings.ask_questions_as_choices,
-            interface_language: interface_language.clone(),
-            resume_sessions_on_start: settings.resume_sessions_on_start,
-            keep_awake: settings.keep_awake,
-            keep_awake_when,
-            // Written above, before the projects.
-            default_clone_dir: None,
-            git_workflow: settings.git_workflow.map(Into::into).unwrap_or_default(),
-            ..Default::default()
-        };
-        match coordinator::settings::update_settings(state, changes) {
+        let changes = application_settings_changes(&settings);
+        let keep_awake_when = changes.keep_awake_when;
+        let base = based_on(&changes, settings_versions.as_ref());
+        match coordinator::settings::update_settings_checked(state, changes, &base).await {
             // The echo says what was applied, so the directory only where it was written above, the
             // language only where this build offers it and the choice of when to hold only where
             // this build knows it.

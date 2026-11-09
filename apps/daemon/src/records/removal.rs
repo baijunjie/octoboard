@@ -181,6 +181,7 @@ mod tests {
             share_default_config: true,
             share_default_config_incomplete: false,
             disabled: false,
+            versions: Default::default(),
         };
         let on_sharing = removable(&mut locator, std::slice::from_ref(&sharing), Some(&account));
         assert!(on_sharing.contains(&transcript(&default)), "{on_sharing:?}");

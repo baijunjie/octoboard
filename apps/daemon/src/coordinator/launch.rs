@@ -12,6 +12,7 @@ use anyhow::{Context, Result};
 use crate::agents::launch_settings::{self, normalize_session_launch_setting, LaunchCheck};
 use crate::messaging::delivery;
 use crate::messaging::owner_notices;
+use crate::processes::ledger::PendingLaunch;
 use crate::protocol::{
     error_code, AgentId, CodedError, Console, GitWorkflowSettings, Launch, ProcessTree, Project,
     Session, SessionKind, SessionStatus, TerminalAppearance,
@@ -408,7 +409,8 @@ fn launch_git_workflow_settings(
 }
 
 /// Launches the agent for an already-stored session, through `launch` (`term::launch` outside the
-/// tests, which cannot start an agent), and starts watching it.
+/// tests, which cannot start an agent), and starts watching it. The launch outlives this call if
+/// it is dropped before the holder has answered: see [`run_launch`].
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn start_process(
     state: &Arc<AppState>,
@@ -421,6 +423,11 @@ pub(super) async fn start_process(
     shell_env: Option<HashMap<String, String>>,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
+    // Counted while a planned stop waits, so that it waits for the process to be registered: the
+    // claim the caller holds was refused once the stop raised its handover barrier. Refused once
+    // the stop has stopped waiting, as a launch claimed before the barrier and started after the
+    // wait would start a terminal the stop never lists.
+    let _tracked = state.track_change_unless_passed()?;
     // Refresh the instruction file on every console launch, resume and account switch. A missing
     // directory is left to the launch, whose refusal names it, rather than failing here on the write.
     if session.kind == SessionKind::Console && cwd.is_dir() {
@@ -452,7 +459,7 @@ pub(super) async fn start_process(
     for notice in sharing.notices {
         state.broadcast(notice.about(&session.id));
     }
-    // Reserved until the process is registered below, and given up if it never is.
+    // Reserved until the process is registered (see `run_launch`), and given up if it never is.
     let pending_launch = state
         .process_ledger
         .begin_launch(&session.id)
@@ -484,18 +491,81 @@ pub(super) async fn start_process(
         process_tag: pending_launch.tag().clone(),
     };
 
+    // The rest runs as a task of its own, not as part of the request this was asked in. A holder
+    // that has not confirmed the start may have the program running, and may answer long after
+    // that request has been dropped: until it does, the task keeps the launch's claim and its
+    // place in the ledger, so the session stays claimed and unavailable, and registers what
+    // started whether or not anyone is still waiting for it.
+    let (report, outcome) = tokio::sync::oneshot::channel();
+    tokio::spawn(run_launch(
+        state.clone(),
+        claim.share(),
+        pending_launch,
+        request,
+        launch,
+        report,
+    ));
+    outcome
+        .await
+        .unwrap_or_else(|_| Err(anyhow::anyhow!("the launch ended without an outcome")))
+}
+
+/// Starts the program of `request` through `launch`, registers it as the session's live process
+/// and starts watching it, then hands the outcome to `report`. Holds `claim` and the
+/// ledger's reservation until it is done, whoever is left to hear the outcome.
+async fn run_launch(
+    state: Arc<AppState>,
+    claim: crate::state::LaunchClaim,
+    _pending_launch: PendingLaunch,
+    request: term::LaunchRequest,
+    launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
+    report: tokio::sync::oneshot::Sender<Result<()>>,
+) {
+    let session_id = request.session_id.clone();
     // Launching snapshots the user's shell environment and forks a process, so it goes off the
     // runtime rather than holding up the socket it was asked on.
-    let launch = tokio::task::spawn_blocking(move || launch(request)).await??;
+    let launched = match tokio::task::spawn_blocking(move || launch(request)).await {
+        Ok(launched) => launched,
+        Err(err) => Err(err.into()),
+    };
+    match launched {
+        Ok(launched) => {
+            let registered = register_launched(&state, &claim, &session_id, launched);
+            report.send(registered).ok();
+        }
+        Err(err) => {
+            let Err(Err(err)) = report.send(Err(err)) else {
+                return;
+            };
+            // The request that asked for the launch is gone, and with it what it would have done
+            // about the failure: nothing is left to move the session out of `starting`.
+            tracing::warn!(session = %session_id, %err, "a launch nobody waited for failed");
+            state.revoke_mcp_tokens(&session_id);
+            state.discard_outbox(&session_id);
+            if let Err(err) = state.interrupt_session_record(&session_id) {
+                tracing::warn!(session = %session_id, %err, "marking a session whose launch failed interrupted failed");
+            }
+        }
+    }
+}
+
+/// Makes `launched` the live process of session `session_id`, under `claim`, and starts watching
+/// it.
+fn register_launched(
+    state: &Arc<AppState>,
+    claim: &crate::state::LaunchClaim,
+    session_id: &str,
+    launched: term::Launch,
+) -> Result<()> {
     // Octoboard's own account switch, or the restoring of a session after one, watches the
     // process come up and reports the outcome itself.
     if claim.watches_launch() {
-        launch.session.watch_under_claim();
+        launched.session.watch_under_claim();
     }
 
-    // The live map now says the session is running; `claim` stays with the caller, which drops it
-    // when it is done with the launch.
-    state.register_live(launch.session.clone());
+    // The live map now says the session is running; the claim stays with `run_launch`, which
+    // drops it once it is done with the launch.
+    state.register_live(launched.session.clone());
     // The output of an earlier run is stale from here on: were this process to end without saving
     // (a daemon killed outright), it must not stand in for what this one printed. It goes after
     // `register_live`, so a client attaching meanwhile finds either the process or the saved
@@ -503,19 +573,19 @@ pub(super) async fn start_process(
     // `watch_exit`, so the exit save of this process is never the one removed; `stop_all_sessions`
     // saves too, but only after `terminate` has returned, which waits on the process, long past
     // this point.
-    state.forget_saved_output(&session.id);
-    super::exit_watch::watch_exit(state, launch.session.clone());
-    trust::supervise(state, &launch.session);
-    dialogs::watch(state, &launch.session);
-    if let Some(agent_session_id) = launch.agent_session_id {
-        if let Err(err) = state.set_agent_session_id(&session.id, &agent_session_id) {
+    state.forget_saved_output(session_id);
+    super::exit_watch::watch_exit(state, launched.session.clone());
+    trust::supervise(state, &launched.session);
+    dialogs::watch(state, &launched.session);
+    if let Some(agent_session_id) = launched.agent_session_id {
+        if let Err(err) = state.set_agent_session_id(session_id, &agent_session_id) {
             // Registered already, and the caller will not watch it come up.
-            state.release_launch_watch(&session.id);
+            state.release_launch_watch(session_id);
             return Err(err);
         }
     }
-    if let Some(notice) = launch.notice {
-        state.broadcast(notice.about(&session.id));
+    if let Some(notice) = launched.notice {
+        state.broadcast(notice.about(session_id));
     }
     Ok(())
 }
@@ -530,12 +600,18 @@ pub(super) async fn start_process(
 ///
 /// The process ledger reads the table first, so that what the agent started a moment ago is
 /// attributed to its launch while its chain through the agent still shows.
+///
+/// Counted by the handover barrier until the process has ended, from this call on rather than
+/// from when the blocking thread starts, so that a planned stop waits for an end an archive or a
+/// deletion began and returned before; never refused, since what began it was admitted.
 pub(crate) fn stop_process(
     state: &Arc<AppState>,
     live: Arc<LiveSession>,
 ) -> tokio::task::JoinHandle<bool> {
     let ledger = Arc::clone(&state.process_ledger);
+    let tracked = state.track_change();
     tokio::task::spawn_blocking(move || {
+        let _tracked = tracked;
         ledger.scan_before_ending();
         live.end()
     })
@@ -544,13 +620,16 @@ pub(crate) fn stop_process(
 /// [`stop_process`], answering with the trees of the session's launches that were running before
 /// it was stopped as well, so a restart can tell what it ended. The listing reads the table, and
 /// the read before the end is made again right after it, to keep what the agent started meanwhile
-/// attributed while its chain through the agent still shows.
+/// attributed while its chain through the agent still shows. Counted by the handover barrier as
+/// [`stop_process`] is.
 pub(crate) fn stop_process_listing_trees(
     state: &Arc<AppState>,
     live: Arc<LiveSession>,
 ) -> tokio::task::JoinHandle<(bool, Vec<ProcessTree>)> {
     let ledger = Arc::clone(&state.process_ledger);
+    let tracked = state.track_change();
     tokio::task::spawn_blocking(move || {
+        let _tracked = tracked;
         let running = ledger.trees_of_sessions(std::slice::from_ref(&live.id), Duration::ZERO);
         ledger.scan_before_ending();
         (live.end(), running)

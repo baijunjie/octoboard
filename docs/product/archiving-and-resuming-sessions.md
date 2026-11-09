@@ -146,14 +146,18 @@ there, where it is listed, and that selecting an archived one does not relaunch 
 
 ### Resuming the interrupted sessions at start
 
-Every daemon start leaves the sessions of the previous run interrupted (see "Starting up" in
-`docs/product/application-lifecycle.md`). While **Resume sessions on start** is on (see that section in
-`docs/product/settings.md`), the start then resumes, on its own, every session that is interrupted by then: the ones
-the previous run had a process for when it ended, however it ended (a quit, a restart, a termination signal, a crash
-or the system ending the user's session), and the ones already interrupted before, whether a session whose agent the
-user quit in its terminal, one an earlier run left or one whose resume failed. An archived session is not among them.
-The setting is read once, at the start; turning it on later resumes nothing until the next start. The daemon does this
-whichever client, if any, is connected.
+Every daemon start leaves the sessions of the previous run interrupted, apart from those whose process a process
+holder kept running and the start adopted (see "Starting up" in `docs/product/application-lifecycle.md`). While
+**Resume sessions on start** is on (see that section in `docs/product/settings.md`), the start then resumes, on its
+own, every session that is interrupted by then: the ones the previous run had a process for when it ended and that no
+holder kept running, however it ended (a quit, a termination signal, the system ending the user's session, or a crash
+or restart whose holder did not survive or was not taken over), and the ones already
+interrupted before, whether a session whose agent the user quit in its terminal, one an earlier run left or one whose
+resume failed. An archived session is not among them, and neither is an adopted one, which never stopped, nor one a
+process holder the start cannot connect to may still run, which stays claimed (see "A holder that cannot be connected
+to" in `docs/product/process-holders.md`); while such a holder may run a session the daemon has no record of placing,
+the resumes wait until every such holder is connected to or gone. The setting is read once, at the start; turning it
+on later resumes nothing until the next start. The daemon does this whichever client, if any, is connected.
 
 - **Each is relaunched as an interrupted session is resumed** (see above), with no opening prompt: a session whose
   conversation is proven gone, for instance, is not relaunched and stays interrupted.

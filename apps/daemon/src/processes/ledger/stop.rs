@@ -60,7 +60,7 @@ pub(super) fn stop(
         asked.retain(Identity::is_running);
     }
     // Kept during the grace: the user's now, whatever it was asked to do before. A target that
-    // has gone meanwhile is not signalled, as `send` reads its start time first.
+    // has gone meanwhile is not signalled, as `signal_identified` reads its start time first.
     let mut left: Vec<Identity> = Vec::new();
     let mut refused: Vec<(Identity, UnstoppedReason)> = Vec::new();
     for id in targets.iter().copied().filter(|id| !kept(id)) {
@@ -98,10 +98,9 @@ pub(super) fn signal(id: &Identity, signal: Signal) -> bool {
     send(id, signal).is_some_and(|sent| sent.delivered())
 }
 
-/// What came of sending `signal` to `id` (see [`signal`]); `None` when it was not sent, the
-/// process being gone already or one never signalled.
+/// What came of sending `signal` to `id` (see [`signal`]); `None` when it was never to be sent.
 fn send(id: &Identity, signal: Signal) -> Option<Sent> {
-    if id.pid.0 <= 1 || id.pid.0 == std::process::id() || !id.is_running() {
+    if id.pid.0 <= 1 || id.pid.0 == std::process::id() {
         return None;
     }
     #[cfg(test)]

@@ -130,7 +130,7 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
           return () => { requestQuit = undefined; daemonExited = undefined; };
         },
         heartbeat: async () => {},
-        setSystemQuitWithoutAsking: async () => {},
+        beginQuit: async () => {},
         confirmQuit: async () => {
           if (scenario?.exitFailure !== undefined) throw new Error(scenario.exitFailure);
         },

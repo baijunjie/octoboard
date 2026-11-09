@@ -26,11 +26,14 @@
 //! - [`messages`], [`pages`]: the user's own message into a session; the report panel's page list
 //!   and form submission, withdrawing a new worker's pages and the sweep of stray ones at start-up.
 //! - [`validate`]: the checks of the text fields requests carry.
-//! - [`archive_cleanup`], [`resume_on_start`], [`exit_watch`]: not request handlers.
-//!   `archive_cleanup` is the daemon task that deletes archived sessions whose conversation can no
-//!   longer be resumed; `resume_on_start` resumes the interrupted sessions when the daemon starts, if
-//!   the user asked for that; `exit_watch` is the exit watcher every launch starts, and the
-//!   sequence that drops a live session.
+//! - [`archive_cleanup`], [`resume_on_start`], [`exit_watch`], [`adopt`], [`unlinked`],
+//!   [`planned_stop`]: not request handlers. `archive_cleanup` is the daemon task that deletes
+//!   archived sessions whose conversation can no longer be resumed; `resume_on_start` resumes the
+//!   interrupted sessions when the daemon starts, if the user asked for that; `exit_watch` is the
+//!   exit watcher every launch starts, and the sequence that drops a live session; `adopt` takes
+//!   over at start what the holders kept running, and `unlinked` keeps claimed what a holder that
+//!   cannot be linked to runs until it is linked to or gone; `planned_stop` hands every terminal
+//!   over to its holder, with its screen saved, when the daemon makes a planned stop.
 //!
 //! Writing into a running session is `crate::messaging::delivery`'s, the notices an owner is sent
 //! are `crate::messaging::owner_notices`', and the console session's reports, synthesis and
@@ -43,19 +46,24 @@ mod account_choice_tests;
 pub mod account_sharing;
 pub mod account_switch;
 pub mod accounts;
+pub mod adopt;
 pub mod archive_cleanup;
 pub mod auto_switch;
 pub mod bindings;
+#[cfg(test)]
+mod checked_write_tests;
 pub mod console_workdir;
 pub mod consoles;
 pub mod exit_watch;
 pub mod handoff;
+pub mod handover_check;
 pub mod launch;
 pub mod lifecycle;
 mod messages;
 pub mod model_change;
 pub mod open;
 pub mod pages;
+pub mod planned_stop;
 pub mod processes;
 pub mod projects;
 pub mod restart;
@@ -64,6 +72,7 @@ pub mod resume_on_start;
 pub mod settings;
 #[cfg(test)]
 mod test_support;
+pub mod unlinked;
 pub mod validate;
 
 use std::path::Path;
@@ -99,8 +108,8 @@ use accounts::{
 };
 use bindings::release_requested;
 use consoles::{
-    check_new_console, check_new_console_launch, delete_console, store_new_console, update_console,
-    ConsoleChanges, NewConsole,
+    check_new_console, check_new_console_launch, delete_console, store_new_console,
+    update_console_checked, ConsoleChanges, NewConsole,
 };
 use lifecycle::{
     archive_requested, delete_archived_requested, delete_requested, inspect_session_branches,
@@ -113,10 +122,10 @@ use open::{open_session_detached, OpenRequest};
 use pages::{list_pages, submit_page};
 use projects::{
     add_project, delete_project, detect_project_agent, inspect_project_removal, refresh_git_status,
-    update_project, AddProjectRequest, NewProjectSettings, ProjectChanges,
+    update_project_checked, AddProjectRequest, NewProjectSettings, ProjectChanges,
 };
 use resume::{locate_conversation, resume_session};
-use settings::{set_provider_setting, update_settings, SettingsChanges};
+use settings::{set_provider_setting, update_settings_checked, SettingsChanges};
 use validate::{absolute_path, required_text};
 
 /// Handles one request. The returned event, when there is one, is the answer to that request and
@@ -211,8 +220,9 @@ async fn handle_inner(
             project_session_launch,
             icon,
             console_session_prompt,
+            base_versions,
         } => {
-            update_console(
+            update_console_checked(
                 state,
                 &id,
                 ConsoleChanges {
@@ -228,6 +238,7 @@ async fn handle_inner(
                     icon,
                     console_session_prompt,
                 },
+                &base_versions.unwrap_or_default(),
             )
             .await?;
             Ok(None)
@@ -289,8 +300,9 @@ async fn handle_inner(
             tags,
             description,
             git_workflow,
+            base_versions,
         } => {
-            update_project(
+            update_project_checked(
                 state,
                 &id,
                 ProjectChanges {
@@ -309,6 +321,7 @@ async fn handle_inner(
                     git_workflow: git_workflow.unwrap_or_default(),
                     ..ProjectChanges::default()
                 },
+                &base_versions.unwrap_or_default(),
             )
             .await?;
             Ok(None)
@@ -548,6 +561,7 @@ async fn handle_inner(
                 settings_sections: inspection.settings_sections,
                 accounts: inspection.accounts,
                 consoles: inspection.consoles,
+                settings_versions: inspection.settings_versions,
             }))
         }
 
@@ -561,6 +575,7 @@ async fn handle_inner(
             apply_consoles,
             apply_clone_dir,
             import_id,
+            settings_versions,
         } => {
             let imported = import::apply_reporting(
                 state,
@@ -574,6 +589,7 @@ async fn handle_inner(
                     clone_dir: apply_clone_dir,
                 },
                 import_id,
+                settings_versions,
             )
             .await?;
             Ok(Some(Event::ConfigurationImported {
@@ -881,6 +897,8 @@ async fn handle_inner(
             remember,
             trust_parent_dir,
         } => {
+            // Its answer is keys typed into the session's terminal.
+            let _admission = state.admit_change()?;
             trust::confirm(state, &session, remember, trust_parent_dir).await?;
             Ok(None)
         }
@@ -931,8 +949,9 @@ async fn handle_inner(
             default_clone_dir,
             git_workflow,
             agent_tags,
+            base_versions,
         } => {
-            update_settings(
+            update_settings_checked(
                 state,
                 SettingsChanges {
                     auto_pull_repositories,
@@ -956,7 +975,9 @@ async fn handle_inner(
                     provider_settings: Default::default(),
                     agent_tags: agent_tags.unwrap_or_default(),
                 },
-            )?;
+                &base_versions.unwrap_or_default(),
+            )
+            .await?;
             Ok(None)
         }
 
@@ -985,6 +1006,9 @@ async fn handle_inner(
             worktree,
             path,
         } => {
+            // Refused once a planned stop raises its handover barrier, and waited for by it: a
+            // terminal started while the others are handed over would be no one's.
+            let _admission = state.admit_change()?;
             let shell_terminal =
                 crate::terminal::shell::create(state, project, worktree, path).await?;
             Ok(Some(Event::ShellTerminalCreated {
@@ -1009,6 +1033,9 @@ async fn handle_inner(
             shell_terminal,
             only_if_idle,
         } => {
+            // A close would remove the record and name, which the next daemon, now the
+            // terminal's, could not honor.
+            let _admission = state.admit_change()?;
             if only_if_idle {
                 crate::terminal::shell::close_if_idle(state, &shell_terminal).await;
             } else {
@@ -1133,8 +1160,16 @@ async fn handle_inner(
             account,
             name,
             config_dir,
+            base_versions,
         } => {
-            update_account_requested(state, account, name, config_dir).await?;
+            update_account_requested(
+                state,
+                account,
+                name,
+                config_dir,
+                &base_versions.unwrap_or_default(),
+            )
+            .await?;
             Ok(None)
         }
 
@@ -1199,9 +1234,34 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::Ping => Ok(None),
+
         RequestBody::Shutdown => {
             state.request_shutdown();
             Ok(None)
+        }
+
+        RequestBody::PlannedStop => {
+            state.request_planned_stop();
+            Ok(None)
+        }
+
+        RequestBody::HandoverCheck {
+            holder_floor,
+            target_version,
+        } => {
+            let state = Arc::clone(state);
+            let check = tokio::task::spawn_blocking(move || {
+                handover_check::check(&state, holder_floor.as_deref(), target_version.as_deref())
+            })
+            .await?;
+            Ok(Some(Event::HandoverCheck {
+                id: request_id,
+                known: check.known,
+                sessions: check.sessions,
+                shell_terminals: check.shell_terminals,
+                unreached_shell_terminals: check.unreached_shell_terminals,
+            }))
         }
     }
 }

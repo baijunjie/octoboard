@@ -269,6 +269,10 @@ impl AgentProvider for ClaudeProvider {
         &hooks::ClaudeHooks
     }
 
+    fn has_status_integration(&self) -> bool {
+        true
+    }
+
     fn accounts(&self) -> Option<&'static dyn crate::accounts::AccountOps> {
         Some(&accounts::ClaudeAccounts)
     }

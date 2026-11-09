@@ -99,7 +99,7 @@ it("opens no popover on a tap where the caller turns it off, as in a pressable r
   expect(openPopover()).toBeNull();
 });
 
-const EVERY_STATUS: ShownStatusKind[] = ["waiting_user", "dormant", "paused", "done", "switching", "idle", "delegated", "background", "working", "starting", "interrupted", "archived"];
+const EVERY_STATUS: ShownStatusKind[] = ["waiting_user", "dormant", "paused", "done", "switching", "reconnecting", "idle", "delegated", "background", "working", "starting", "interrupted", "archived"];
 
 it.each([
   [false, "size-4"],
@@ -116,5 +116,5 @@ it("moves the bubble and the hand a little on their grid, and no other glyph, th
   const viewBox = (status: ShownStatusKind) => mountForTooltip(<StatusIcon status={status} decorative />).querySelector("svg")!.getAttribute("viewBox");
   expect(viewBox("idle")).toBe(shiftedViewBox(BUBBLE_SHIFT));
   expect(viewBox("waiting_user")).toBe(shiftedViewBox(HAND_SHIFT));
-  for (const status of ["starting", "switching", "dormant", "paused", "done", "interrupted"] as const) expect(viewBox(status)).toBe("0 0 24 24");
+  for (const status of ["starting", "switching", "reconnecting", "dormant", "paused", "done", "interrupted"] as const) expect(viewBox(status)).toBe("0 0 24 24");
 });

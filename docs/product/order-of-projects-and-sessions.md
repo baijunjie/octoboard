@@ -86,6 +86,9 @@ old process has stopped, so until then such a session sorts by whether it has a 
 launch has finished, a session that was handed a prompt can read as at its prompt before its agent's first report moves
 it on to *working*, and sorts as such.
 
+**Reconnecting has no place of its own either.** A session shown as reconnecting (see "Which status a session shows" in
+`docs/product/session-statuses.md`) sorts with the status it stores.
+
 ## Choosing the sort
 
 The sort is chosen in the **Sorting** group at the end of Settings' General section (see "Sorting" in

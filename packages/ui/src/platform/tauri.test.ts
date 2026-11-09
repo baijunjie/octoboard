@@ -118,6 +118,12 @@ it("turns a directory command failure into an Error for the shared error route",
   await expect(tauriPlatform().directoryPicker!.pick({ title: "Choose directory", initialPath: "~" })).rejects.toThrow("Could not open picker");
 });
 
+it("tells the shell a quit has begun with its own command", async () => {
+  invoke.mockResolvedValue(undefined);
+  await tauriPlatform().exit!.beginQuit();
+  expect(invoke.mock.calls).toEqual([["begin_quit"]]);
+});
+
 it("asks the shell to relaunch only when told to", async () => {
   invoke.mockResolvedValue(undefined);
   await tauriPlatform().exit!.confirmQuit();
@@ -128,12 +134,12 @@ it("asks the shell to relaunch only when told to", async () => {
   ]);
 });
 
-it("hands the shell the channel to check and answers the version and notes it found", async () => {
-  invoke.mockResolvedValue({ version: "0.2.0", notes: "Fixes." });
-  await expect(tauriPlatform().updater!.check("stable")).resolves.toEqual({ version: "0.2.0", notes: "Fixes." });
+it("hands the shell the channel to check and answers the version, notes and holder floor it found", async () => {
+  invoke.mockResolvedValue({ version: "0.2.0", notes: "Fixes.", holder_floor: "0.2.0" });
+  await expect(tauriPlatform().updater!.check("stable")).resolves.toEqual({ version: "0.2.0", notes: "Fixes.", holderFloor: "0.2.0" });
   expect(invoke).toHaveBeenCalledWith("check_for_update", { channel: "stable" });
   invoke.mockResolvedValue({ version: "0.3.0", notes: null });
-  await expect(tauriPlatform().updater!.check("beta")).resolves.toEqual({ version: "0.3.0", notes: undefined });
+  await expect(tauriPlatform().updater!.check("beta")).resolves.toEqual({ version: "0.3.0", notes: undefined, holderFloor: null });
 });
 
 it("answers nothing for a check that found no newer version", async () => {

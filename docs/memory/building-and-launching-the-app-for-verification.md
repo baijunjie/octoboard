@@ -188,7 +188,8 @@ by a tool's timeout can leave its processes running and holding the build direct
 `CARGO_TARGET_DIR` of your own under a temporary directory rather than killing them or waiting.
 
 A `pnpm tauri dev` app running from the worktree you edit rebuilds and restarts itself on every change under
-`apps/desktop/src-tauri/`, and the restart interrupts every session in it: the daemon exits with the app and ends the
-agents (see "Crashes and forced termination" in `docs/product/application-lifecycle.md`), which may include the very
+`apps/desktop/src-tauri/`, and the restart stops its daemon: an app killed without its quit note leaves the sessions to
+the next launch, which takes them over (see "Crashes and forced termination" in
+`docs/product/application-lifecycle.md`), but one that quits interrupts every session in it, which may include the very
 agents doing the editing. So when the user has that app running, tell them before editing Rust there and land the Rust
 edits together rather than one at a time.

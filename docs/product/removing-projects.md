@@ -71,6 +71,13 @@ running will still be stopped, announced as it appears, and no count (see "Failu
   removal can be retried; sessions already ended for it stay archived, and shell terminals already ended stay gone.
 - A session or shell terminal started in the project while the folder is being moved is ended as well, and goes with
   the project.
+- **Once a planned stop has begun, a removal is refused** with `daemon_shutting_down`, with nothing changed (see "While
+  the terminals are handed over" in `docs/product/application-lifecycle.md`). A removal already under way is waited
+  for, up to 5 seconds; one still running when that wait runs out takes no further step that would end a session, a
+  shell terminal or a process, or move the folder: it fails with `daemon_shutting_down`, the folder left where it is,
+  and what it had already ended stays ended. One that had already moved the folder by then removes the project all the
+  same, and a session or shell terminal started in the project during the move is left running for the next daemon,
+  which ends it, its record or project being gone (see "What a daemon start takes over" in `docs/product/process-holders.md`).
 - Once the project is removed and its sessions' processes have ended, linked worktrees outside the folder that would
   be left without it, and where the repository outlives the folder the branches of the project's sessions, go too
   (which ones depends on whether the repository goes with the folder, and an unmerged branch goes only while it still

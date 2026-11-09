@@ -346,6 +346,43 @@ fn the_hook_side_takes_only_an_answer_as_a_reason_to_run_the_gate() {
     );
 }
 
+/// A stand-in for a holder that answers the one request it gets with `status`, and says nothing
+/// else. Returns its port.
+fn answering_with(status: u16) -> u16 {
+    use std::io::{Read, Write};
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        let (mut helper, _) = listener.accept().unwrap();
+        let mut request = [0u8; 1024];
+        let _ = helper.read(&mut request);
+        write!(
+            helper,
+            "HTTP/1.1 {status} X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )
+        .unwrap();
+        let _ = helper.shutdown(std::net::Shutdown::Write);
+        let mut rest = Vec::new();
+        let _ = helper.read_to_end(&mut rest);
+    });
+    port
+}
+
+#[test]
+fn a_holder_with_no_daemon_or_one_that_was_lost_is_no_answer_to_run_the_gate_with() {
+    let (fixture, _) = project_with_remote();
+    let repo = fixture.repo.to_path_buf();
+    for status in [crate::loopback::NO_DAEMON, crate::loopback::DAEMON_LOST] {
+        let port = answering_with(status);
+        assert_eq!(
+            crate::session_git_hooks::gate_mode::inputs_for(port, TEST_KEY, "a", &repo, None),
+            None,
+            "{status}"
+        );
+    }
+}
+
 #[test]
 fn a_refused_call_reaches_the_hook_side_as_a_refusal_not_as_an_answer() {
     let (fixture, _) = project_with_remote();

@@ -33,18 +33,18 @@ it("opens a console stored without a project session agent on Same as and sends 
   expect(picker("Project sessions").textContent).toContain("Same as console sessions");
   type("Name", "Renamed");
   await clickButton("Save");
-  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Renamed", default_agent: "codex" }]);
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Renamed", base_versions: { name: 1 } }]);
 });
 
 it("sends the project session agent only when it changed, and an explicit null when it goes back to Same as", async () => {
   const request = render(consoleOf("c-1", "Main", { project_session_agent: "grok" }));
   expect(picker("Project sessions").textContent).toContain("Grok Build");
   await clickButton("Save");
-  expect(sent(request)[0]).toEqual({ type: "update_console", console: "c-1", name: "Main", default_agent: "claude" });
+  expect(sent(request)[0]).toEqual({ type: "update_console", console: "c-1" });
   await click(picker("Project sessions"));
   await choose("Same as console sessions, Claude Code");
   await clickButton("Save");
-  expect(sent(request)[1]).toEqual({ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", project_session_agent: null });
+  expect(sent(request)[1]).toEqual({ type: "update_console", console: "c-1", project_session_agent: null, base_versions: { project_session_agent: 1 } });
 });
 
 it("lets the console session agent change without moving the project session agent", async () => {
@@ -52,7 +52,7 @@ it("lets the console session agent change without moving the project session age
   await click(picker("Console sessions"));
   await choose("Codex");
   await clickButton("Save");
-  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "codex" }]);
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", default_agent: "codex", base_versions: { default_agent: 1 } }]);
 });
 
 it("follows the console session agent in the Advanced section, not the project session agent", async () => {
@@ -86,7 +86,7 @@ it("sends an account chosen for an agent that is not the console session agent",
   await click(picker("Codex account"));
   await choose("Codex work");
   await clickButton("Save");
-  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", accounts: { codex: "a-codex" } }]);
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", accounts: { codex: "a-codex" }, base_versions: { "accounts.codex": 1 } }]);
 });
 
 it("opens Settings at the agent accounts from the section's Manage accounts button", async () => {

@@ -897,7 +897,7 @@ pub async fn confirm(
             &[],
         ));
     };
-    let mut project = state.store.require_project(project_id)?;
+    let project = state.store.require_project(project_id)?;
 
     let directory = if trust_parent_dir {
         Some(parent_to_trust(state, &project.path).await?)
@@ -914,9 +914,11 @@ pub async fn confirm(
         add_trusted_directory(state, &directory).await?;
     } else if remember && !project.trust_consent {
         state.store.set_project_trust_consent(&project.id, true)?;
-        project.trust_consent = true;
         let project_id = project.id.clone();
-        state.broadcast(Event::ProjectUpserted { project });
+        // The consent is stored; a failed publication is picked up by the next one.
+        if let Err(err) = state.publish_project(&project_id) {
+            tracing::warn!(project = %project_id, %err, "publishing the project's trust consent failed");
+        }
         // The dialog promised that later confirmations for this project are pressed without
         // asking, and so are the ones already waiting, whichever agent shows them.
         for (live, _, waiting) in waiting_project_sessions(state) {

@@ -237,6 +237,10 @@ impl AgentProvider for CodexProvider {
         &hooks::CodexHooks
     }
 
+    fn has_status_integration(&self) -> bool {
+        true
+    }
+
     fn accounts(&self) -> Option<&'static dyn crate::accounts::AccountOps> {
         Some(&accounts::CodexAccounts)
     }

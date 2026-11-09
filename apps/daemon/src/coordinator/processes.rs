@@ -267,7 +267,9 @@ fn leftover_dirs(state: &AppState) -> Result<Vec<PathBuf>> {
 
 /// Stops the trees `ids` name that are still a tree of a running launch, a leftover of a project
 /// or a tree the user kept; returns the ids it stopped, and the processes it left running.
+/// Refused with `daemon_shutting_down` once a planned stop has raised its handover barrier.
 pub async fn stop(state: &Arc<AppState>, ids: Vec<String>) -> Result<TreesStopped> {
+    let _admission = state.admit_change()?;
     let dirs = leftover_dirs(state)?;
     let state = Arc::clone(state);
     Ok(tokio::task::spawn_blocking(move || state.process_ledger.stop_trees(&ids, &dirs)).await?)

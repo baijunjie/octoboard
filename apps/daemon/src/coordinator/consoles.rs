@@ -1,6 +1,6 @@
 //! Creating, changing and deleting consoles.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -12,7 +12,7 @@ use crate::protocol::{
     Project,
 };
 use crate::state::refusals::ensure_unlocked;
-use crate::state::AppState;
+use crate::state::{AppState, RecordKey};
 use crate::text::trimmed_or_none;
 use crate::time::now_millis;
 
@@ -98,6 +98,7 @@ pub(super) fn store_new_console(
         icon,
         console_session_prompt: trimmed_or_none(new.console_session_prompt.as_deref()),
         created_at: now_millis(),
+        versions: Default::default(),
     };
     // Written before the record is stored: nothing else can touch a console no one has been told
     // of yet, and a failed write then leaves no console behind. Either failing takes the new
@@ -110,9 +111,10 @@ pub(super) fn store_new_console(
         }
         return Err(err);
     }
-    state.broadcast(Event::ConsoleUpserted {
-        console: console.clone(),
-    });
+    // The console is stored, so a failed publication must not report the create as failed.
+    if let Err(err) = state.publish_console(&console.id) {
+        tracing::warn!(console = %console.id, %err, "publishing the new console failed");
+    }
     Ok(console)
 }
 
@@ -134,6 +136,15 @@ pub struct ConsoleChanges {
     pub console_session_prompt: Present<String>,
 }
 
+/// [`update_console_checked`] for a write that is not based on any version.
+pub async fn update_console(
+    state: &Arc<AppState>,
+    id: &str,
+    changes: ConsoleChanges,
+) -> Result<Console> {
+    update_console_checked(state, id, changes, &BTreeMap::new()).await
+}
+
 /// Applies `changes` to the console `id`, broadcasts it and returns it as stored. Every field is
 /// checked first, with nothing written yet. An absent reference is not checked at all: saving a
 /// console with a field untouched succeeds whatever has happened to the account it names since, and
@@ -142,10 +153,16 @@ pub struct ConsoleChanges {
 /// Asking the agent for its models can take a while, so it is done before the record is read for
 /// the write: the change is applied to the console as it is once the answers are in, and the
 /// checks are made again only if an edit meanwhile moved the account one of them was made under.
-pub async fn update_console(
+///
+/// With `base`, the versions the write was based on (see [`AppState::checked_write`]), it is
+/// refused with `write_conflict` when another write moved one of those fields on. That check is
+/// made after the last wait, under the lock of the checked writes, and the record is read again
+/// under it, so the check and the write it decides are one step.
+pub async fn update_console_checked(
     state: &Arc<AppState>,
     id: &str,
     changes: ConsoleChanges,
+    base: &BTreeMap<String, u64>,
 ) -> Result<Console> {
     let name = changes
         .name
@@ -169,6 +186,7 @@ pub async fn update_console(
         );
     }
     let mut verified = Vec::new();
+    let mut checked = None;
     loop {
         let mut console = state.store.require_console(id)?;
         if let Some(name) = &name {
@@ -205,10 +223,20 @@ pub async fn update_console(
             }
         }
         if !pending.is_empty() {
+            // Nothing is held across the waits.
+            checked = None;
             for check in pending {
                 check.run(state).await?;
                 verified.push(check);
             }
+            continue;
+        }
+        // No wait is left: the versions are checked under the lock, and the record read again
+        // under it, so a write that landed while waiting for it is neither missed nor overwritten.
+        if checked.is_none() && !base.is_empty() {
+            checked = state
+                .checked_write(&RecordKey::Console(id.to_string()), base)
+                .await?;
             continue;
         }
         if let Some(icon) = &icon {
@@ -220,9 +248,7 @@ pub async fn update_console(
         state.store.update_console(&console)?;
         // Read back rather than sent as `console`: the record is what clients are told it is.
         let stored = state.store.require_console(id)?;
-        state.broadcast(Event::ConsoleUpserted {
-            console: stored.clone(),
-        });
+        state.publish_console(id)?;
         // After the record is stored, so the file never holds text that was not saved. Every
         // agent's new console sessions read the change, and a resumed one does where its agent
         // reads its instruction file again on a resume (Grok does not). A failure here is logged,
@@ -236,8 +262,10 @@ pub async fn update_console(
 }
 
 /// Deletes the console `id` with its projects and sessions, refused while one of its sessions is
-/// locked, running or still starting.
+/// locked, running or still starting, and with `daemon_shutting_down` once a planned stop has
+/// raised its handover barrier.
 pub(super) async fn delete_console(state: &Arc<AppState>, id: String) -> Result<()> {
+    let admission = state.admit_change()?;
     let _removal = state.claim_session_removal();
     ensure_unlocked(
         state
@@ -274,9 +302,15 @@ pub(super) async fn delete_console(state: &Arc<AppState>, id: String) -> Result<
     for project in &projects {
         crate::branch_origin::project_deleted(state, &project.path);
     }
-    crate::terminal::shell::close_projects(state, &project_ids).await;
-    // Their processes, which no session owns, go with the projects.
-    super::processes::stop_project_processes(state, &projects).await;
+    // Ended only while a planned stop still waits for this removal: once it no longer does, the
+    // terminals may be handed over, and this daemon can no longer end them.
+    if admission.still_covered().is_ok() {
+        crate::terminal::shell::close_projects(state, &project_ids).await;
+        // Their processes, which no session owns, go with the projects.
+        super::processes::stop_project_processes(state, &projects).await;
+    } else {
+        tracing::warn!(console = %id, "the shell terminals and processes of the removed console's projects are left to the next daemon: a planned stop is handing the terminals over");
+    }
     // The working directory is Octoboard's own, under `~/.octoboard/consoles/`; no project
     // directory is ever touched by this.
     if let Err(err) = remove_console_workdir(&console.workdir) {

@@ -33,22 +33,26 @@ pub(in crate::mcp) async fn archive_session(
     }
     let keep = optional_bool(arguments, "keep")?.unwrap_or(false);
     let target = resolve_owned_session(state, caller, wanted)?;
+    // Counted from before the archive is admitted, so that a planned stop that waits for the
+    // archive waits for the removal of its branches after it too, and the removal does not start
+    // once the stop has stopped waiting.
+    let covered = state.track_change();
     let archived = lifecycle::archive_session(state, &target.id)?;
     let mut answer = json!({ "session": target.id, "status": SessionStatus::Archived });
     if keep {
         // Nothing is removed, so nothing is waited for: the records stay bound to the archived
         // sessions, which `list_session_branches` lists and `transfer_branches` can move.
+        drop(covered);
         answer["branches_kept"] = json!(true);
         let kept = branch_names_of(state, archived.clone()).await?;
         answer["note"] = json!(keep_note(caller.agent, &target, &archived, &kept));
         return Ok(answer);
     }
     // A task of its own, so the removal finishes even if the call it answers is dropped.
-    let left = tokio::spawn(branch_cleanup::remove::remove_once_stopped(
-        state.clone(),
-        archived,
-        Vec::new(),
-    ))
+    let removing = state.clone();
+    let left = tokio::spawn(async move {
+        branch_cleanup::remove::remove_once_stopped(removing, archived, Vec::new(), &covered).await
+    })
     .await
     .unwrap_or_else(|err| {
         tracing::warn!(%err, "removing the branches of an archived session did not finish");
@@ -133,16 +137,21 @@ fn keep_note(
 /// they can go without forcing anything. What will stay is judged before the archive, since the
 /// answer has to be on its way before the process is ended.
 pub(in crate::mcp) async fn archive_self(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
+    // Held from before the branches are judged until their removal is counted, so that a planned
+    // stop raised meanwhile refuses the whole call rather than the archive after the judging.
+    let admission = state.admit_change()?;
     let caller = lifecycle::archivable_self(state, caller)?;
     let left = branch_cleanup::survey::left_by(state, vec![caller.clone()]).await;
     // The checks are made again, so a lock set while the branches were judged cannot slip past
     // them.
-    let archived = match lifecycle::archive_finished(state, &caller.id, Finished::Team)? {
+    let archived = match lifecycle::archive_finished(state, &admission, &caller.id, Finished::Team)?
+    {
         Finish::Archived(archived) => archived,
         Finish::AlreadyArchived => Vec::new(),
         Finish::Refused(why) => bail!(why.refusal(&caller)),
     };
-    branch_cleanup::remove::remove_in_background(state, archived);
+    branch_cleanup::remove::remove_in_background(state, archived, state.track_change());
+    drop(admission);
     let mut answer = json!({
         "session": caller.id,
         "status": SessionStatus::Archived,

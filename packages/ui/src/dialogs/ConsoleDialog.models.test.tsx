@@ -66,11 +66,12 @@ it("locks the pickers and says so while the list is out, with the stored value i
   expect(pickerNamed("Reasoning effort").textContent).toContain("high");
 });
 
-/** The status regions assistive technology is given, read once their first write delay has passed, so what
- * they say is part of what is checked. */
+/** The status regions assistive technology is given that say something, read once their first write delay has
+ * passed, so what they say is part of what is checked; the form's other regions (the announcement of fields changed
+ * elsewhere) stay mounted and empty. */
 async function exposedStatusesAfterFirstWrite(): Promise<Element[]> {
   await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
-  return Array.from(document.body.querySelectorAll('[role="status"]')).filter((node) => !node.closest("[hidden], [inert], [aria-hidden='true']"));
+  return Array.from(document.body.querySelectorAll('[role="status"]')).filter((node) => !node.closest("[hidden], [inert], [aria-hidden='true']") && node.textContent !== "");
 }
 
 it.each([
@@ -126,7 +127,7 @@ it.each([
   await click(clearButton("Reasoning effort"));
   await clickButton("Save");
   expect(sent(request)).toEqual([
-    { type: "update_console", console: "c-1", name: "Main", default_agent: "claude", launch: { claude: { effort: null } } },
+    { type: "update_console", console: "c-1", launch: { claude: { effort: null } }, base_versions: { "launch.claude.effort": 1 } },
   ]);
 });
 
@@ -173,7 +174,7 @@ it("keeps a stored effort clearable once a model that takes none is chosen", asy
   await click(clearButton("Reasoning effort"));
   await clickButton("Save");
   expect(sent(request)).toEqual([
-    { type: "update_console", console: "c-1", name: "Main", default_agent: "claude", launch: { claude: { model: "plain", effort: null } } },
+    { type: "update_console", console: "c-1", launch: { claude: { model: "plain", effort: null } }, base_versions: { "launch.claude.model": 1, "launch.claude.effort": 1 } },
   ]);
 });
 

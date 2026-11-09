@@ -4,6 +4,7 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use super::table::Identity;
 use super::ProcessLedger;
 
 /// An open hold for the next launch of a session (see [`ProcessLedger::hold_for_launch`]).
@@ -69,13 +70,16 @@ impl Drop for HeldForLaunch {
             .keep_in
             .as_ref()
             .filter(|_| !self.ledger.closing.load(Ordering::Acquire));
+        let mut kept: Vec<Identity> = Vec::new();
         for launch in &held {
             match keep_in {
-                Some(project) => book.keep_launch(launch, project),
+                Some(project) => kept.extend(book.keep_launch(launch, project)),
                 None => book.hand_to_ended(launch),
             }
         }
         drop(book);
+        // What is kept leaves the groups of the launches it was held under, which nothing ends.
+        self.ledger.release_kept(&kept);
         if !held.is_empty() {
             if keep_in.is_some() {
                 tracing::info!(

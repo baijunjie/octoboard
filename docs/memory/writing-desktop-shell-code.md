@@ -26,7 +26,7 @@ state when the navigation started.
 
 So keep the state in the shell and expose it through a command that the page invokes once its `listen` is registered,
 reporting once whichever of the two arrives first: the shape of `daemon-exited` with `daemon_exit_detail`
-(`apps/desktop/src-tauri/src/sidecar.rs`) and its caller in `packages/ui/src/platform/tauri.ts`. The loss shows only
+(`apps/desktop/src-tauri/src/sidecar/mod.rs`) and its caller in `packages/ui/src/platform/tauri.ts`. The loss shows only
 when the state changes while a page is loading, which spaced-out manual checks do not hit.
 
 ## After raising Tauri, tray-icon or muda, check each native hook into their internals in the running app

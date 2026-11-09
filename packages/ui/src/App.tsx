@@ -1,5 +1,4 @@
 import { AttendedStatusAnnouncer } from "./components/announce/AttendedStatusAnnouncer";
-import type { PlainMessageKey } from "./i18n/catalog";
 import React, { useEffect, useRef, useState } from "react";
 
 import { ArchiveLayer } from "./archive/ArchiveLayer";
@@ -19,7 +18,6 @@ import { Toasts } from "./shell/Toasts";
 import { useFirstConsoleHandoff } from "./shell/useFirstConsoleHandoff";
 import { useStableHandler } from "./components/hooks/useLatest";
 import { focusAfterLoss, setFocusAfterModalLoss } from "./components/focus/modalFocus";
-import { ConfirmDialog } from "./components/dialog/ConfirmDialog";
 import type { DialogRequest } from "./dialogs/dialogRequest";
 import { PendingQuestionDialog, usePendingQuestion } from "./dialogs/PendingQuestionDialog";
 import { RequestedDialog } from "./dialogs/RequestedDialog";
@@ -29,6 +27,7 @@ import { useT } from "./i18n/react";
 import { liveOwner, ownerKey, type AsideOwner } from "./layout/asideOwner";
 import { columnSpan, isDockEasing } from "./layout/paneDockMotion";
 import { useRegionCycle } from "./layout/useRegionCycle";
+import { ExitConfirmDialog } from "./lifecycle/ExitConfirmDialog";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
 import { useInterfaceLanguage } from "./lifecycle/useInterfaceLanguage";
@@ -270,22 +269,28 @@ export function App(): React.ReactElement {
   // protocol generation does. That daemon is not talked to, and its screen has no room for the quit's
   // confirmation, so a quit while it is shown asks about nothing.
   const reachable = () => store.getState().connectionState !== "incompatible";
-  const { exitConfirmOpen, exitHolders, exitRestarts, closeExitConfirm, confirmExit, requestRestart, requestQuit } = useAppExit({
+  const exit = useAppExit({
     getSessions: () => (reachable() ? allSessions() : []),
     getShellTerminals: () => (reachable() ? Array.from(store.getState().shellTerminals.values()) : []),
     requestShutdown: () => request({ type: "shutdown" }),
+    requestPlannedStop: () => request({ type: "planned_stop" }),
+    checkHandover: async (holder_floor, target_version) => {
+      const { known, sessions, shell_terminals, unreached_shell_terminals } = await request({ type: "handover_check", holder_floor, target_version });
+      return { known, sessions, shellTerminals: shell_terminals, unreachedShellTerminals: unreached_shell_terminals };
+    },
   });
 
   // An installed update takes effect on a restart, which only ever happens through the exit flow above, so the
-  // user is asked about the sessions it ends and can cancel. The update notice and Settings ask for it here.
-  const answerRestart = useStableHandler(() => void requestRestart());
+  // user is asked, and can cancel, whenever it would or may interrupt a session or end a busy terminal. The update notice
+  // and Settings ask for it here, and hold their button pending until the confirmation opens or the relaunch starts.
+  const answerRestart = useStableHandler((holderFloor: string | null, targetVersion: string | null) => exit.requestRestart(holderFloor, targetVersion));
   useEffect(() => updateStore?.onRestartRequested(answerRestart), [updateStore, answerRestart]);
 
   // The question before a launch on an account whose sharing change did not finish; this window's
   // own launches (a resume, a quick create) go through it and render it at this level.
   const { confirmLaunch, confirmation: launchConfirmation } = useConfirmIncompleteLaunch();
 
-  const otherModalOpen = dialogRequest !== undefined || questionPending || exitConfirmOpen || launchConfirmation !== undefined;
+  const otherModalOpen = dialogRequest !== undefined || questionPending || exit.exitConfirmOpen || launchConfirmation !== undefined;
   // Settings opened from a control of the open drawer (the rail's, on a phone) hands focus back to it
   // as it closes, as any dialog opened there does (`focusDrawerTrigger`).
   const settingsFromDrawer = useRef(false);
@@ -471,7 +476,7 @@ export function App(): React.ReactElement {
   useEffect(() => setFocusAfterModalLoss(focusAfterModal), [focusAfterModal]);
 
   // A daemon of another protocol generation: nothing it sent is shown, whatever an earlier connection had loaded.
-  if (connectionState === "incompatible") return <IncompatibleDaemonScreen onQuit={() => void requestQuit()} />;
+  if (connectionState === "incompatible") return <IncompatibleDaemonScreen onQuit={() => void exit.requestQuit()} />;
 
   // Nothing to show until the first snapshot. The toasts belong here all the same, and so does the
   // banner with the Retry the client offers once it has given up — otherwise this screen would say
@@ -752,25 +757,7 @@ export function App(): React.ReactElement {
         />
       )}
       <PendingQuestionDialog />
-      {exitConfirmOpen && (
-        <ConfirmDialog
-          title={t(exitRestarts ? "app.restart.title" : "app.quit.title")}
-          message={t(exitMessageKey(exitRestarts, exitHolders))}
-          confirmLabel={t(exitRestarts ? "common.restart" : "common.quit")}
-          destructive
-          onCancel={closeExitConfirm}
-          onConfirm={confirmExit}
-          // A quit or restart that fails is reported by `useAppExit` under its own title; `confirmExit` never rejects.
-          errorTitle={t(exitRestarts ? "exit.restartFailed.title" : "exit.failed.title")}
-        />
-      )}
+      <ExitConfirmDialog exit={exit} />
     </div>
   );
-}
-
-/** The confirmation's text for what a restart or a quit would end: sessions, terminals, both or neither. */
-function exitMessageKey(restarts: boolean, holders: { sessions: boolean; terminals: boolean }): PlainMessageKey {
-  const prefix = restarts ? "app.restart.message" : "app.quit.message";
-  if (!holders.terminals) return prefix;
-  return holders.sessions ? `${prefix}.both` : `${prefix}.terminals`;
 }

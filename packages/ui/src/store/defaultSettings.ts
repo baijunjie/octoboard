@@ -27,4 +27,6 @@ export const DEFAULT_SETTINGS: Settings = {
   default_account_names: {},
   disabled_default_accounts: [],
   git_workflow: DEFAULT_GIT_WORKFLOW,
+  // Nothing to base a write on until a snapshot brings the daemon's.
+  versions: {},
 };

@@ -201,6 +201,10 @@ pub(crate) async fn set_session_model_with(
     }
     // A prompt may have come up while the snapshot was taken.
     refuse_if_owner_must_wait(state, asker, &current)?;
+    // Admitted past the handover barrier before anything commits the session to the restart, and
+    // held through it: a planned stop raised first refuses the change, leaving a waiting quota
+    // recovery and the shown status alone, and one raised later waits for it.
+    let admission = state.admit_change()?;
     // Committed to the restart from here: a quota recovery waiting to resume the session would
     // only be cut off by it.
     state.cancel_recoveries(id);
@@ -208,8 +212,9 @@ pub(crate) async fn set_session_model_with(
     // Borrowed by the restart below, so that it stays held until the restart is over.
     let claim_held = &claim;
     // From the process being down, a failure that follows is the restart's, whatever it was.
-    let restarted = restart::run(
+    let restarted = restart::run_admitted(
         state,
+        admission,
         id,
         |err| {
             if err

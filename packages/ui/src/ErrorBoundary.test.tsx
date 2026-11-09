@@ -173,7 +173,7 @@ it("has no Quit button where the platform can quit, yet answers a quit gesture a
       return () => {};
     },
     heartbeat: async () => {},
-    setSystemQuitWithoutAsking: async () => {},
+    beginQuit: async () => {},
     confirmQuit,
   };
   const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, Crashing, { kind: "tauri", host: BROWSER_HOST, exit });

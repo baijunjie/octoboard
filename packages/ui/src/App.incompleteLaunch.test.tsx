@@ -29,7 +29,7 @@ vi.mock("./terminal/TerminalController", () => ({
 }));
 
 const ASKING = '[role="alertdialog"]';
-const account = (incomplete: boolean): Account => ({ id: "a-half", agent: "claude", name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: incomplete, disabled: false });
+const account = (incomplete: boolean): Account => ({ id: "a-half", agent: "claude", name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: incomplete, disabled: false, versions: {} });
 
 function mountWith(incomplete: boolean) {
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: matchesWidthQuery(media, 1440), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));

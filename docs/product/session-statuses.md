@@ -12,6 +12,7 @@
 | Child sessions working | `idle`, while a session under it is starting, working, waiting for the user, dormant or has work left running in the background | a hollow green ring with a filled green dot in its centre, pinging outward | The process is sitting at its prompt with nothing of its own left running, while work it delegated is in progress in the sessions under it. See "Done, awaiting instructions and child sessions working" below. |
 | Working in background | `idle`, with a non-empty `background_tasks` | a hollow green ring, pinging outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code sessions only; see "Working in background" below. |
 | Switching account | any status except `archived`, with `switching_account` true, or queued in this window's account switch | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). Shown in place of the session's own status, which it does not change; lists ranked by status sort it by the status it will have once the switch is over (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). |
+| Reconnecting | `starting`, `working`, `waiting_user`, `dormant` or `idle`, with `holder_link` `pending` | the *starting* arc | The session's process still runs but Octoboard cannot reach it for now, and retries by itself (see "A holder that cannot be connected to" in `docs/product/process-holders.md`). Worked out by the client alone and shown in place of the session's own status and of *switching account*; the stored status, which may be out of date until the process is reached again, is unchanged, and lists ranked by status sort the session by it. |
 | Interrupted | `interrupted` | a grey pause sign, with no circle | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" in `docs/product/archiving-and-resuming-sessions.md`) and can be reopened. |
 
@@ -29,15 +30,23 @@ facts the client reads.
 
 A session shows the first of these that applies:
 
-1. *Switching account*, while an account switch holds it, over every status but *archived*.
-2. Its wire status, when that is not `idle` — *dormant* included, which the daemon works out (see "Dormant" below).
-3. *Paused*, while `paused` is true.
-4. *Working in background*, while it has work left running in the background (Claude Code only; for the other agents
+1. *Reconnecting*, while Octoboard cannot reach the process of a session that is neither *interrupted* nor *archived*
+   (`holder_link: "pending"`), over every status, *switching account* included. An interrupted or archived session never
+   shows it, whatever its record says.
+2. *Switching account*, while an account switch holds it, over every status but *archived*.
+3. Its wire status, when that is not `idle` — *dormant* included, which the daemon works out (see "Dormant" below).
+4. *Paused*, while `paused` is true.
+5. *Working in background*, while it has work left running in the background (Claude Code only; for the other agents
    this step never applies).
-5. *Child sessions working*, while a session under it is starting, working, waiting for the user, dormant or has work
+6. *Child sessions working*, while a session under it is starting, working, waiting for the user, dormant or has work
    left running in the background.
-6. *Done*, when it has a conversation.
-7. *Awaiting instructions*.
+7. *Done*, when it has a conversation.
+8. *Awaiting instructions*.
+
+*Reconnecting* changes only what is drawn and said, the summaries that go by the shown status included (see "The top
+status" below), and whether the session counts as waiting for the user (see "The raised hand" below): the session's
+status on the wire, its place in lists ranked by status and everything else decided by its status stay as its stored
+status gives them.
 
 ## Status glyphs
 
@@ -53,8 +62,8 @@ held in a view until the person leaves it. Green is the session at its prompt, w
 pause of *paused*, the check mark of *done*, the speech bubble of *awaiting instructions*, the ring with a centre dot of
 *child sessions working* and the hollow ring of *working in background*. Blue is the session itself busy: the solid dot
 of *working*. The muted grey is a session that cannot be talked to now: the bare pause of *interrupted*, and the turning
-arc that *starting* and *switching account* share. *Archived* is an archive box. The ring of *child sessions working* is
-larger than the other dots, and its ping reaches less far, ending within the glyph's own slot.
+arc that *starting*, *switching account* and *reconnecting* share. *Archived* is an archive box. The ring of *child
+sessions working* is larger than the other dots, and its ping reaches less far, ending within the glyph's own slot.
 
 **Every glyph sits in a box of one size, whatever the status**: 16 px on rows, cards, the breadcrumb and a
 confirmation's list, 14 px in a status marker (see "The top status" below), so glyphs in a column share one centre line.
@@ -157,6 +166,12 @@ and only these seven.
   back to where its agent was last seen to be (see "Waiting for the answer" in `docs/product/session-requests.md`).
 
 A session's end is not taken from a hook either: the process is observed directly.
+
+All of the above is for an agent with a status integration of its own — hooks or signals of the agent that give its
+status — which Claude Code, Codex and Grok Build all have. A session whose agent has none takes its status from what the
+program in its terminal reports about itself through OSC 7501 instead, still held at *waiting for the user* by a session
+request as above; in a session whose agent has one, such reports move nothing. See "Where the protocol is supported and
+where reports give the status" in `docs/product/program-status-reports.md`.
 
 Where an agent reports nothing, the status simply stays at its last reported value. The known cases, which are
 limitations of what the agents expose rather than of this one:
@@ -296,7 +311,9 @@ mode's card and every accessible name say only that it is paused.
 
   Hook events the agent had already delivered are applied before the end of its process is recorded — waited on for
   up to 2 seconds when a process exits, and for up to half a second across all sessions when the application quits —
-  so a turn that ended normally just before the end reads as having ended normally.
+  so a turn that ended normally just before the end reads as having ended normally. Where a session takes its status
+  from the program's own reports, the reports already read are waited on the same way (see "Reports at the end of the
+  process" in `docs/product/program-status-reports.md`).
 
 **What clears it:**
 
@@ -377,12 +394,13 @@ shows again the moment the view is gone.
 
 ## The top status
 
-A collapsed project's row and a console session's focus-mode switch-strip chip mark several sessions with their
-**top status**: the shown status, as "Which status a session shows" above gives it, of the session that comes first
-in the status order (see "The status order" in `docs/product/order-of-projects-and-sessions.md`), the most recently
-started breaking a tie. Archived sessions are left out. A session starting or switching account is ranked with the
-status it will have once that is over, but marked as starting or switching account. The choice does not depend on
-pins, nor on the sort chosen in Settings (see "Choosing the sort" in
+A collapsed project's row and a console session's focus-mode switch-strip chip mark several sessions with their **top
+status**: the shown status, as "Which status a session shows" above gives it, of the session that comes first in the
+status order (see "The status order" in `docs/product/order-of-projects-and-sessions.md`), the most recently started
+breaking a tie. Archived sessions are left out. A session starting or switching account is ranked with the status it
+will have once that is over, but marked as starting or switching account. A session shown reconnecting is ranked with
+its stored status, so it never moves a group's top status up by itself, but is marked as reconnecting when it is the one
+chosen. The choice does not depend on pins, nor on the sort chosen in Settings (see "Choosing the sort" in
 `docs/product/order-of-projects-and-sessions.md`).
 
 Every status but *archived* has its own glyph there, as "Status glyphs" above describes, so the mark always says exactly
@@ -391,11 +409,11 @@ chip is its own name followed by that status ("Name, Working"; for a pinned proj
 each is drawn is in "Project rows" in `docs/product/sidebar-project-rows.md` and "The switch strip" in
 `docs/product/focus-mode.md`.
 
-**A console's avatar badge on the rail selects only among sessions whose shown status is waiting for the user, paused, done or
-awaiting instructions**, in that priority order, with the most recently started breaking a tie. Other shown statuses
-are excluded before choosing the top status, including starting and switching account. With no eligible session, it
-has no badge. The avatar's tooltip and accessible name count all its console's unarchived sessions by shown status,
-as described with the badges in "The console switcher" in `docs/product/console-switcher.md`.
+**A console's avatar badge on the rail selects only among sessions whose shown status is waiting for the user, paused,
+done or awaiting instructions**, in that priority order, with the most recently started breaking a tie. Other shown
+statuses are excluded before choosing the top status, including starting, switching account and reconnecting. With no
+eligible session, it has no badge. The avatar's tooltip and accessible name count all its console's unarchived sessions
+by shown status, as described with the badges in "The console switcher" in `docs/product/console-switcher.md`.
 
 The menu bar icon's session list uses the same four eligible statuses and their priority (see "The icon's menu" in
 `docs/product/menu-bar-icon.md`). This filtering does not change session rows, collapsed-project markers or focus-mode
@@ -431,6 +449,13 @@ switch-strip chips.
 
 A *dormant* session raises none of this: it notifies nobody and is in neither count; only the menu bar icon's dot lights
 for it (see "Dormant" above).
+
+A session shown *reconnecting* is not shown waiting either, even when its stored status is *waiting for the user*: its
+row shows the turning arc, it is in neither the Dock badge nor the rail's count, pressing the rail's count never selects
+it, and the menu bar icon neither lists it nor lights its dot for it. Once its process is reached again it counts by its
+status as before. The system notification follows the stored status alone: it fires as that status enters *waiting for
+the user*, whatever is shown, and a session whose process is reached again does not notify again for a wait it already
+notified.
 
 **Where the hand is the agent's own, the user answers in the session's terminal**, and the status leaves *waiting for
 the user* on the agent's next event, when its Codex action title clears or when the screen that held it is no longer

@@ -271,6 +271,7 @@ fn read_account(row: &Row<'_>) -> rusqlite::Result<Option<Account>> {
         share_default_config: row.get(4)?,
         share_default_config_incomplete: row.get(5)?,
         disabled: row.get(6)?,
+        versions: Default::default(),
     }))
 }
 
@@ -529,6 +530,7 @@ mod tests {
                 share_default_config: false,
                 share_default_config_incomplete: false,
                 disabled: false,
+                versions: Default::default(),
             })
             .unwrap();
         assert!(store.set_account_disabled("work", true).unwrap());

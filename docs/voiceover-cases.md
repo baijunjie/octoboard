@@ -1765,12 +1765,15 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `report/ReportPanel.tsx` | list failure mark's words | none | none | Region mounted through every state of the panel. Not heard. |
 | `sidebar/useGitRetryAnnouncement.tsx`, through `AttendedStatusAnnouncer` | "Git check failed" after a Try again on the branch badge's Git-missing mark that still finds no Git | SA-P for the sidebar `ProjectNode` placement (E13); other placements have no complete match | Heard | Mounted empty outside the row button; two request-answer writes after the attended wait, alternating trailing no-break space, row focus restored and automatic clear heard. Focus-mode header/group placements and window-attention transitions were not heard. |
 | `dialogs/BranchCleanupOptions.tsx`, `DelayedAnnouncer` | the sentence of the project-removal dialog's "Other worktrees unknown" mark after inspection fails, and after a still-failing missing-Git retry | SA-O for the recorded tick/retry/untick paths (E13) | Heard | Region mounted empty with the Trash option; each failure delayed 1500 ms, pending retry empties it for a same-words repeat. Missing Git tick/retry and malformed config tick were heard; untick cleared it. Unattended windows and other focus relations were not heard. |
+| `dialogs/ConsoleDialog.tsx`, `dialogs/ProjectDialog.tsx`, `settings/accounts/AccountDialog.tsx`, through `ChangedElsewhereAnnouncer` | the fields the user had edited that were replaced because they changed elsewhere | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | `ChangeAnnouncer` is remounted per change and written `AFTER_FOCUS_MOVE_DELAY_MS` of attended time after it arrives, inside the open dialog with focus kept in the form, and cleared `READ_TIME_MS` after the write. A write while another modal covers the dialog (Settings over the console dialog, an error alert for another failure) is the KNW-2 shape, where the announcement is lost. Not heard. |
+| `settings/CloneDirSetting.tsx`, through `ChangedElsewhereAnnouncer` | the clone directory field replaced over what was typed because it changed elsewhere | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | The same region as the dialogs', in the Settings dialog beside the field. A write while another modal covers Settings (an error alert for another failure) is the KNW-2 shape, where the announcement is lost. Not heard. |
+| `configuration/ImportConfigurationDialog.tsx`, through `ChangeAnnouncer` | the file was read again because settings changed | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | Written after the same delay, which also outlasts the focus handed on when a failed read's Alert goes away. Not heard. |
 
-Totals: of 34 callers, 15 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
+Totals: of 39 callers (the three dialogs of one row count as three), 15 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
 `AccountLoginAnnouncer`, `PermissionsSection`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
 `ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`, `useGitRetryAnnouncement`, `DelayedAnnouncer`), 5 are candidates (`ImportReview`, `ChangeList`,
-`FilesPanel`, `TerminalPane`, `ShellTerminalView`) and 14 have no complete match (`ShellTerminalPanel`, `SpotNotice`,
-`BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the ten unmatched callers listed after it). Of
+`FilesPanel`, `TerminalPane`, `ShellTerminalView`) and 19 have no complete match (`ShellTerminalPanel`, `SpotNotice`,
+`BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the fifteen unmatched callers listed after it, the three dialogs counted as three). Of
 the heard callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer` matches the E10
 table and owned-account details paths recorded in SA-D; the other thirteen match for some writes only, with SA-N's
 native-capture limits stated in that case. Of the candidates, `ImportReview` matches for every write it makes;
@@ -1840,6 +1843,10 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   "Start on <account>?" question is open and written after it closes, a write after a modal closes that no passing case
   covers directly. The close-terminal confirmation of `ShellTerminalPanel` is not counted in the pane's modal flag
   (rare: the session would have to end during that confirmation).
+- The cover of a terminal whose process cannot be reached (`TerminalCover`'s `pending`), not yet listened to: a
+  focusable region named by the session's name (a shell terminal's by its name, the same as the tab panel around it)
+  and described by its title and line, in place of being named by its title (KNW-9). Open: that focusing it speaks the
+  title once, and how the shell cover's name repeating the tab panel's reads.
 - A write made while the region is under an open modal outside a marker: heard failing in the login success form
   (KNW-2); no passing case.
 - A window visible but not frontmost, and a minimized window with the application also not frontmost (KNW-4's condition,

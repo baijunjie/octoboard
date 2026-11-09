@@ -30,5 +30,6 @@ export {
   useSessionProjectId,
   useWaitingCount,
   useWaitingIds,
+  useShownWaitingCount,
 } from "./useSessions";
 export { useSessionLaunch } from "./useSessionLaunch";

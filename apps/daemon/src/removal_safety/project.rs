@@ -355,6 +355,7 @@ mod tests {
             tags: Vec::new(),
             description: None,
             git_workflow: Default::default(),
+            versions: Default::default(),
         }
     }
 

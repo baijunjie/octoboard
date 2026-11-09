@@ -148,6 +148,10 @@ pub enum WhenBlocked {
 /// until the resume, so a message for it is queued, whatever the process's state, and `when_blocked`
 /// does not apply.
 ///
+/// Once a planned stop has raised its handover barrier, a message is queued and not written, and
+/// carried over to the next daemon with the rest of the queue (`super::restart_outbox`); once the
+/// queues have been saved, it is refused with `daemon_shutting_down`, for the sender to send again.
+///
 /// **Blocks** on the PTY write and, for an idle Claude Code session, on the few seconds' wait for
 /// its agent to send it (twice, for a message a dialog discarded and that is written again);
 /// callers on the runtime are responsible for keeping it off a worker.
@@ -158,6 +162,18 @@ pub fn write_message(
     when_blocked: WhenBlocked,
 ) -> Result<Delivery> {
     write_message_inner(state, id, text, when_blocked, None)
+}
+
+/// The refusal of a message once a planned stop has saved the queues for the next daemon
+/// (`super::restart_outbox`): nothing would write it, nor carry it over, so it is not accepted, and
+/// the sender may send it again once the next daemon is up.
+fn outbox_saved() -> anyhow::Error {
+    CodedError::raised(
+        error_code::DAEMON_SHUTTING_DOWN,
+        "the daemon is stopping and has saved the queued messages for the next daemon, so this \
+         message is not accepted; send it again once the daemon is back",
+        &[],
+    )
 }
 
 /// The refusal of a message with nothing left in it once its control and invisible characters
@@ -190,7 +206,11 @@ fn write_message_inner(
             .queue_if_restarting_with(id, || first.enqueue(text))
             .transpose()?
             .is_some(),
-        None => state.queue_if_restarting(id, text).is_some(),
+        None => match state.queue_if_restarting(id, text) {
+            Some(Some(_)) => true,
+            Some(None) => return Err(outbox_saved()),
+            None => false,
+        },
     };
     if restarting {
         return Ok(Delivery::Queued);
@@ -235,7 +255,9 @@ fn write_message_inner(
             state.note_activity(id);
             ticket
         }
-        None => state.queue_message(id, text),
+        None => state
+            .queue_message_unless_sealed(id, text)
+            .ok_or_else(outbox_saved)?,
     };
     let drain = state.flush_outbox(id, agent_status);
     // Told first, as the flush may have stopped before it told the session; then taken by ticket,

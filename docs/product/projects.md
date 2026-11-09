@@ -338,6 +338,9 @@ The default agent can be cleared, which puts the project
 back to following the console's default for project sessions; the account can be put on any of its three states,
 inheriting the console's reference among them, and the model and the effort back to unset.
 
+Saving the project dialog sends only the fields the user changed, and a field changed elsewhere while it is open shows
+the current value (see "A form while its record changes elsewhere" in `docs/product/concurrent-edits.md`).
+
 The console session can make the same changes to its console's projects (see "Changing a project: `update_project`" in
 `docs/product/agent-settings-tools.md`), its own git workflow settings included. How the project dialog offers those
 is in "Reading and changing them" in `docs/product/git-workflow-settings.md`.

@@ -43,6 +43,7 @@ const project = (id: string, name: string, pinned = false): Project => ({
   accounts: { claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } },
   launch: { claude: { model: null, effort: null }, codex: { model: null, effort: null }, grok: { model: null, effort: null } },
   git_workflow: FOLLOWING_GIT_WORKFLOW,
+  versions: {},
 });
 
 describe("liveSessions", () => {
@@ -112,6 +113,7 @@ describe("topStatus", () => {
       working: session("working", "working", 1),
       starting: session("starting", "starting", 1),
       switching: { ...session("switching", "idle", 1), switching_account: true },
+      reconnecting: { ...session("reconnecting", "idle", 1), holder_link: "pending" },
       interrupted: session("interrupted", "interrupted", 1),
     };
     const delegating = delegatingSessionIds([...Object.values(sessions), session("child", "working", 2, false, "delegated")]);
@@ -141,6 +143,17 @@ describe("topStatus", () => {
   it("takes the newest of equally ranked sessions", () => {
     expect(topStatus([session("old", "working", 1), { ...session("new", "starting", 2), prompt_on_launch: true }], NONE, NONE)).toBe("starting");
     expect(topStatus([session("new", "working", 2), { ...session("old", "starting", 1), prompt_on_launch: true }], NONE, NONE)).toBe("working");
+  });
+});
+
+describe("a session whose process cannot be reached", () => {
+  it("ranks by its stored status, so a project is not promoted for it, and is drawn as reconnecting where it is the top", () => {
+    const working = { ...session("working", "working", 1), holder_link: "pending" as const };
+    const idle = session("idle", "idle", 2);
+    expect(topStatus([working, idle], NONE, NONE)).toBe("idle");
+    expect(topStatus([working, session("w", "working", 0)], NONE, NONE)).toBe("reconnecting");
+    expect(topStatus([working], NONE, NONE)).toBe("reconnecting");
+    expect(projectRank([working], NONE, NONE)).toBe(STATUS_RANK.working);
   });
 });
 

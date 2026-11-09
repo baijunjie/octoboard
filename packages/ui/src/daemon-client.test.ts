@@ -9,6 +9,7 @@ import { setLanguage } from "./i18n/language";
 
 class FakeSocket extends EventTarget {
   static OPEN = 1;
+  static CLOSING = 2;
   static CLOSED = 3;
   static last: FakeSocket;
   static all: FakeSocket[] = [];
@@ -296,4 +297,86 @@ it("gives every request its own id, across reconnects", () => {
   const ids = [...FakeSocket.all.flatMap((socket) => socket.sent)].map((sent) => (JSON.parse(sent) as { id: string }).id);
   expect(ids).toHaveLength(2);
   expect(new Set(ids).size).toBe(2);
+});
+
+/** The heartbeat pings this socket has sent, by id. */
+const pings = (socket: FakeSocket) =>
+  socket.sent
+    .map((payload) => JSON.parse(payload) as { type: string; id: string })
+    .filter((request) => request.type === "ping")
+    .map((request) => request.id);
+
+it("pings an open connection and keeps it while the daemon answers, without passing the answers on", () => {
+  const client = new DaemonClient("ws://test");
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  const socket = FakeSocket.last;
+  greet(socket);
+  const heard: Event[] = [];
+  client.onEvent((event) => heard.push(event));
+  for (let beat = 0; beat < 8; beat += 1) {
+    vi.advanceTimersByTime(15_000);
+    const id = pings(socket).at(-1)!;
+    socket.receive({ type: "ack", id });
+  }
+  vi.advanceTimersByTime(250);
+  expect(pings(socket)).toHaveLength(8);
+  expect(new Set(pings(socket)).size).toBe(8);
+  expect(heard.filter((event) => event.type === "ack")).toEqual([]);
+  expect(FakeSocket.all).toHaveLength(1);
+  expect(states.at(-1)).toBe("open");
+});
+
+it("takes a connection that falls silent for the heartbeat timeout as lost, with no close from its socket", async () => {
+  const client = new DaemonClient("ws://test");
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  const socket = FakeSocket.last;
+  const closed = vi.spyOn(socket, "close");
+  greet(socket);
+  const reply = client.request({ type: "shutdown" }).catch((cause: unknown) => cause);
+  vi.advanceTimersByTime(40_000);
+  expect(states.at(-1)).toBe("open");
+  vi.advanceTimersByTime(5_000);
+  expect(states.at(-1)).toBe("reconnecting");
+  expect(closed).toHaveBeenCalled();
+  expect(await reply).toMatchObject({ code: "connection_closed" });
+  // The dead socket's close, should it come before the reconnect, is not taken as a second loss.
+  drop(socket);
+  expect(states.filter((state) => state === "reconnecting")).toHaveLength(1);
+  // The lost-connection path reconnects once, and the new connection reads the state again.
+  vi.advanceTimersByTime(5_000);
+  expect(FakeSocket.all).toHaveLength(2);
+  greet(FakeSocket.last);
+  expect(states.at(-1)).toBe("open");
+});
+
+it("measures the silence afresh after the page's timers were held back", () => {
+  const client = new DaemonClient("ws://test");
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  greet(FakeSocket.last);
+  // A machine asleep for a minute: the clock moves on while no timer runs.
+  vi.setSystemTime(Date.now() + 60_000);
+  vi.advanceTimersByTime(5_000);
+  expect(states.at(-1)).toBe("open");
+  vi.advanceTimersByTime(45_000);
+  expect(states.at(-1)).toBe("reconnecting");
+});
+
+it("fails a request at once when the reconnects after a heartbeat loss are spent and the dead socket never closed", async () => {
+  const client = new DaemonClient("ws://test");
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const socket = FakeSocket.last;
+    socket.close = () => (socket.readyState = FakeSocket.CLOSING);
+    // Greeted but never sent its snapshot, so the connection never earns its reconnect budget back.
+    socket.receive(hello());
+    vi.advanceTimersByTime(45_000);
+    vi.advanceTimersByTime(2_000);
+  }
+  expect(states.at(-1)).toBe("closed");
+  const error = await client.request({ type: "shutdown" }).catch((cause: unknown) => cause);
+  expect(error).toMatchObject({ code: "connection_closed" });
 });

@@ -76,6 +76,7 @@ pub(super) fn account(id: &str, agent: AgentId, name: &str) -> Account {
         share_default_config: false,
         share_default_config_incomplete: false,
         disabled: false,
+        versions: Default::default(),
     }
 }
 

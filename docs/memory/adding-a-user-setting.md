@@ -27,8 +27,8 @@ outside files, ask. In the same change, by where the setting sits:
 - An application setting the daemon holds (General, App behavior, Git, Agent behavior, Cleanup): a field of `DocumentSettings` in
   `apps/daemon/src/protocol/configuration.rs`, filled under its Settings section in `build` in
   `apps/daemon/src/config_document/export.rs`; its document and current values in `InspectedSettings`, filled by the
-  inspection in `apps/daemon/src/config_document/import/mod.rs`, and the `coordinator::settings::update_settings` call there that
-  applies the document's settings.
+  inspection in `apps/daemon/src/config_document/import/mod.rs`, and `application_settings_changes` there, which
+  builds the checked write that applies the document's settings.
 - A setting of the Agent accounts section: in the accounts region, `DocumentAgentSettings` and
   `InspectedAgentSettings`, inspected and applied in `apps/daemon/src/config_document/import/accounts.rs` — never in
   `DocumentSettings`.
@@ -61,6 +61,21 @@ switch with rows that depend on it is a component that renders `DaemonSwitchSett
 (`packages/ui/src/settings/KeepAwakeSetting.tsx`). A setting that is not a switch gets its own line in the card the review and the result share:
 `packages/ui/src/configuration/SettingsGroups.tsx` for an application setting, `AgentSettingsCard.tsx` beside it for an
 Agent accounts setting; an optional one is shown only when the document carries it.
+
+## A new setting a form edits gets a versioned path, and nothing fails without one
+
+Applies to a new application setting the daemon holds and to a new field of a console, a project or an account that a
+dialog edits; not to a provider setting (its path comes from its descriptor) or a setting only the client holds. In the
+same change, add its path to the versioned paths in `apps/daemon/src/state/field_versions/paths.rs` — for an application
+setting, its name in `SETTINGS_FIELDS` and its flag in `SettingsChanges::paths`
+(`apps/daemon/src/coordinator/settings.rs`) at the same position, with its case in the test that pairs them
+(`apps/daemon/src/coordinator/settings/tests.rs`) — and have its control send `base_versions` for that path
+(`docs/structure/daemon.md` and `docs/structure/ui.md`, section "Where new code goes" of each, name the entry points).
+Leaving all of it out compiles and passes every test: the setting is then written unchecked, so two clients changing it
+overwrite each other without a conflict, and a control that names the path anyway checks nothing, since a path the store
+holds no version of is not checked. Add the path to `SETTINGS_VERSIONS` (or the console's, project's or account's list
+beside it) in `packages/ui/src/fixtures/builders.ts` too, so the records the tests and the gallery build carry a version
+of it and its control's check is exercised.
 
 ## A daemon setting that acts on its machine is offered by the daemon's host facts, never by the client's platform
 

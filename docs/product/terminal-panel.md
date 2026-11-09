@@ -156,14 +156,15 @@ fzf) get it there too: from inside a shell terminal it does not send a floating 
 then sent away with its Close panel button or by moving the pointer away. In the agent terminal in the centre,
 `Escape` behaves as described in "A hidden pane floats in on hover" in `docs/product/pane-docking.md`.
 
-- **Copy, paste and select all**: the same editing menu as a session's terminal, opened the same ways (see "Copy,
-  paste and selection" in `docs/product/session-terminal.md`). Paste is unavailable while the terminal is not
-  connected, a terminal whose shell has exited included. Selecting under mouse reporting, and text a program copies
-  with OSC 52, follow the same section; a program in a tab not shown can copy too, and each tab's menu offers what its
-  own program copied. An Option-click moves the shell's cursor as described in "Typing and the mouse" in the same doc.
+- **Copy, paste and select all**: the same editing menu as a session's terminal, opened the same ways (see "Copy, paste
+  and selection" in `docs/product/session-terminal.md`). Paste is unavailable while the terminal is not connected, a
+  terminal whose shell has exited or whose shell's process cannot be reached included. Selecting under mouse reporting,
+  and text a program copies with OSC 52, follow the same section; a program in a tab not shown can copy too, and each
+  tab's menu offers what its own program copied. An Option-click moves the shell's cursor as described in "Typing and
+  the mouse" in the same doc.
 - **Answers to a program's queries**: a program in the shell gets one answer to each query it puts to its terminal,
-  however many clients show the terminal, and none to old queries in the output replayed on attaching, by the rules of
-  "Answers to a program's queries" in `docs/product/session-terminal.md`.
+  however many clients show the terminal, most of them answered by Octoboard whether or not a client is attached, by
+  the rules of `docs/product/terminal-queries.md`.
 - **Links**: web addresses and file paths in the output are links by the rules of `docs/product/terminal-links.md`, with
   the terminal's project in the place of the session's. **A file opened in the file viewer from a shell terminal hands
   keyboard focus back to that terminal** when the viewer closes, while its tab is still there and shown; otherwise focus
@@ -189,27 +190,57 @@ part of what is said; it is reached as any other control. The tab stays until it
 
 ## Reconnecting
 
-A running shell's terminal whose connection drops reconnects by itself, as a session's terminal does (see
-"Reconnecting" in `docs/product/session-terminal.md`): with a backoff, up to five times, under a cover with a spinner
-saying it is reconnecting; then a cover saying it is disconnected, with a **Reconnect** button offered only while the
-connection to the daemon is open. Pressing Reconnect starts the attempts over and puts keyboard focus in the terminal.
-A terminal whose attempts are spent is tried again by Reconnect, or by itself when the application re-reads the
-daemon's whole state on a new connection to the daemon. Each tab reconnects on its own, shown or hidden; only the shown
-tab's state is told to assistive technology, as it begins, and, for a tab already reconnecting or disconnected, about
-1.5 seconds after the tab is shown. A reconnect in the background never moves keyboard focus. Typing a dropped
-connection had not yet written into the shell is reported as for a session's terminal, naming the shell terminal (see
-"Reconnecting" in `docs/product/session-terminal.md`).
+A running shell's terminal whose connection drops reconnects by itself, as a session's terminal does (see "Reconnecting"
+in `docs/product/session-terminal.md`): with a backoff, up to five times, under a cover with a spinner saying it is
+reconnecting; then a cover saying it is disconnected, with a **Reconnect** button offered only while the connection to
+the daemon is open. Pressing Reconnect starts the attempts over and puts keyboard focus in the terminal; a tap on it
+leaves focus where the button's going away puts it after a tap (below). A terminal whose attempts are spent is tried
+again by Reconnect, or by itself when the application re-reads the daemon's whole state on a new connection to the
+daemon. Each tab reconnects on its own, shown or hidden; only the shown tab's state is told to assistive technology, as
+it begins, and, for a tab already reconnecting or disconnected, about 1.5 seconds after the tab is shown. A reconnect in
+the background never moves keyboard focus. Typing a dropped connection had not yet written into the shell is reported as
+for a session's terminal, naming the shell terminal (see "Reconnecting" in `docs/product/session-terminal.md`).
 
 Keyboard focus and Reconnect:
 
 - whatever puts focus in the panel's terminal — `F6`, a maximize — puts it on Reconnect while the button is offered,
   since the terminal keeps `Tab`;
 - Reconnect appearing while keyboard focus is in that terminal takes focus; focus anywhere else is left where it is;
-- Reconnect going away while it holds focus — the connection back, the shell exited — hands focus to the terminal.
+- Reconnect going away while it holds focus — the connection back, the shell exited — hands focus to the terminal, or,
+  when the last interaction was a tap, to the panel's first control that takes no text, otherwise the top bar's, so that
+  no on-screen keyboard comes up; going away because the shell's process cannot be reached, it hands focus to that cover
+  (see "While the shell's process cannot be reached" below).
+
+## While the shell's process cannot be reached
+
+A running shell terminal whose process Octoboard cannot reach for now — its record carries `holder_link: "pending"`, as
+"A holder that cannot be connected to" in `docs/product/process-holders.md` describes — keeps the state *running*, and
+its tab stays as it was. Its terminal follows the same rules as a session's terminal in that case (see "While the
+session's process cannot be reached" in `docs/product/session-terminal.md`): a cover at once, over its last screen, with
+a spinner, a heading saying it is reconnecting to the terminal and a line saying that the shell's process is still
+running, that input is unavailable until the connection returns and that reconnection is automatic; no button; nothing
+sent to the shell and nothing kept to be sent later; no automatic reconnect attempt made or counted; and, once the
+process can be reached, one attach by itself with the five attempts fresh, even where they had been spent. Each tab goes
+by its own terminal's record. A shell that exits meanwhile shows its exited notice instead (see "When the shell exits"
+above); a tab first shown while its shell's process could not be reached is then attached once, for the shell's last
+screen.
+
+Keyboard focus follows the session terminal's rules too: the cover is a region named by the terminal's name, as its tab
+is, and described by its heading and line; focus in the shell terminal, or on a Reconnect that goes away, moves to the
+cover; `F6` and a maximize land on it; when the cover goes, focus moves on only if it is still on the cover, back to the
+terminal or, when the last interaction was a tap, to the panel's first control that takes no text, otherwise the top
+bar's, with no focus ring; and a recovery in the background never moves focus. Assistive technology is told the cover's
+heading and line once, only for the shown tab: as the cover comes while the tab is shown, or about 1.5 seconds after a
+tab already covered is shown, and not when keyboard focus is on the cover at that moment. A tab hidden throughout is
+never told. A recovered-display announcement for the shown tab waits until the cover is gone.
+
+A shell terminal of a holder that a daemon start finds unreachable is not listed, and has no tab, until its process
+can be reached (see "A holder that cannot be connected to" in `docs/product/process-holders.md`).
 
 ## Keyboard focus
 
 The Terminal panel is a stop of its own in the `F6` cycle (see "Panels and keyboard focus" in
 `docs/product/right-pane-panels.md`), the first among the panels while it is maximized. `F6` lands in the shown tab's
-terminal, so typing reaches the shell, or on its cover's Reconnect while that is offered; with no tab, on New terminal
-on the tab row. From there `Tab` goes to the shell, so `F6` and `Shift+F6` are the way out of a shell terminal.
+terminal, so typing reaches the shell, on its cover's Reconnect while that is offered, or on its cover while the shell's
+process cannot be reached; with no tab, on New terminal on the tab row. From there `Tab` goes to the shell, so `F6` and
+`Shift+F6` are the way out of a shell terminal.

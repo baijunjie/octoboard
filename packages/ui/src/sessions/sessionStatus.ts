@@ -59,10 +59,12 @@ export function sessionStatusKind(session: Pick<Session, "id" | "status" | "paus
   return session.has_conversation ? "done" : "idle";
 }
 
-/** What a status glyph and label show: a `StatusKind`, or *switching account*, which a session
- * shows over its own status while an account switch holds it (`holdsAccountSwitch`). Only
- * what is drawn follows it; ordering and the other decisions about a session go by `StatusKind`. */
-export type ShownStatusKind = StatusKind | "switching";
+/** What a status glyph and label show: a `StatusKind`, or one of two kinds a session shows over its own status:
+ * *switching account*, while an account switch holds it (`holdsAccountSwitch`), and *reconnecting*, while the daemon
+ * cannot reach its process (`holdsPendingLink`) and the status it stores may be stale. Only what is drawn follows
+ * them, and, for *reconnecting* alone, what counts a session as waiting for the user (`waitsForUser`); ordering and
+ * the other decisions about a session go by `StatusKind`. */
+export type ShownStatusKind = StatusKind | "switching" | "reconnecting";
 
 /** Whether an account switch holds `session`: the daemon says one does (`Session.switching_account`), or an
  * account-switch batch of this window has not finished with it, queued or running (`queuedSwitches`, the store's
@@ -78,15 +80,26 @@ export function showsSwitching(session: Pick<Session, "id" | "status" | "switchi
   return holdsAccountSwitch(session, queuedSwitches) && session.status !== "archived";
 }
 
+/** Whether the daemon cannot reach the process of `session` (`Session.holder_link` is `pending`) while it is live. It
+ * is the daemon's own retry to resolve: the session keeps its stored status, which may be stale until the link is
+ * back. An archived or interrupted record has no process to reach, so a stale flag on one means nothing. */
+export function holdsPendingLink(session: Pick<Session, "status" | "holder_link">): boolean {
+  return session.holder_link === "pending" && isLive(session.status);
+}
+
+/** What `session` shows as its status: *reconnecting* over everything (`holdsPendingLink`), else *switching account*
+ * (`showsSwitching`), else its `StatusKind`. */
 export function sessionShownStatusKind(
-  session: Pick<Session, "id" | "status" | "paused" | "background_tasks" | "has_conversation" | "switching_account">,
+  session: Pick<Session, "id" | "status" | "paused" | "background_tasks" | "has_conversation" | "switching_account" | "holder_link">,
   delegating: ReadonlySet<string>,
   queuedSwitches: ReadonlySet<string>,
 ): ShownStatusKind {
+  if (holdsPendingLink(session)) return "reconnecting";
   return showsSwitching(session, queuedSwitches) ? "switching" : sessionStatusKind(session, delegating);
 }
 
-/** The statuses surfaced by the menu bar list and console avatars. Other statuses stay on session rows. */
+/** The statuses surfaced by the menu bar list and console avatars. Other statuses stay on session rows, so a
+ * reconnecting session is none of Done, Idle or Waiting for you there. */
 export const SUMMARY_STATUSES = ["waiting_user", "paused", "done", "idle"] as const satisfies readonly ShownStatusKind[];
 
 export function isSummaryStatus(status: ShownStatusKind): boolean {

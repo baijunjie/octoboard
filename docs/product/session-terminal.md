@@ -4,7 +4,8 @@ The terminal in the window's content panel, where the selected session's agent i
 themselves are described in `docs/product/sessions.md`, opening them in `docs/product/opening-sessions.md`, their
 statuses in `docs/product/session-statuses.md`, and archiving, interruption and resuming in
 `docs/product/archiving-and-resuming-sessions.md`. What an archived session shows in the terminal's place is in
-`docs/product/session-history.md`.
+`docs/product/session-history.md`, and how the program's queries to its terminal are answered in
+`docs/product/terminal-queries.md`.
 
 ## With no session selected
 
@@ -72,9 +73,10 @@ separated from Paste and Select all by a divider.
   Where the platform has no clipboard, or it refuses, the text is copied through the browser's selection copy instead.
 - **Paste** reads text from the clipboard and sends it as terminal input, respecting the running program's bracketed
   paste mode, as Cmd+V / Ctrl+V does. A clipboard holding no text (only an image, say) is pasted as an empty paste
-  rather than refused, which is how an agent's input knows to fetch the image from the clipboard itself. It is disabled without clipboard reading support, saying under its name that the clipboard is
-  unavailable, and while the selected session cannot accept input, with no reason given (the terminal itself shows why,
-  by its reconnecting spinner or its disconnected notice).
+  rather than refused, which is how an agent's input knows to fetch the image from the clipboard itself. It is disabled
+  without clipboard reading support, saying under its name that the clipboard is unavailable, and while the selected
+  session cannot accept input, with no reason given (the terminal itself shows why, by its reconnecting spinner, its
+  disconnected notice or the cover of a process that cannot be reached).
 - **Select all** selects the terminal's contents, including its available scrollback, for copying.
 
 The clipboard is read only when Paste is chosen, so merely opening the menu does not request clipboard access. If
@@ -107,9 +109,9 @@ sequence, as Claude Code does with the text selected in its fullscreen view. Whi
 text goes to the one system clipboard. Only writes are honoured:
 
 - a request to read the clipboard is never answered, and a request to clear it is ignored;
-- a request in output written before the session was attached is ignored: the replay that opens each attach (or, when
-  there was nothing to replay, the first live output after it), the saved output of a session without a process, and output still
-  waiting to be drawn when the screen is reset, as on a switch to another session;
+- a request in output written before the session was attached is ignored: whatever opens each attach (the first paint
+  of a running program, or the paint of an exited shell terminal's last screen), the saved output of a session without
+  a process, and output still waiting to be drawn when the screen is reset, as on a switch to another session;
 - where the platform has no clipboard nothing is put on it; the text is still offered to Copy in the editing menu, which
   falls back to the browser's selection copy.
 
@@ -122,23 +124,52 @@ copy can fail without notice; Copy in the editing menu, a gesture of the user's,
 Copy while the terminal has no selection of its own; a selection in the terminal comes first. It is offered until the
 user turns back to the program or the screen moves on: a key typed to the program (`Control-C` included), a paste, a
 press in the terminal other than a right-click or, on macOS, a `Control`-click (a click, a drag, an Option-click), a
-reset of the screen (another session selected, a reconnect) or the terminal closing. Moving the pointer and the
+reset of the screen (another session selected, a reconnect, a fresh paint sent to a client that fell behind the output)
+or the terminal closing. Moving the pointer and the
 right-click that opens the menu leave it on offer, as does the wheel while the program has mouse reporting on; on an
 alternate screen without mouse reporting the wheel sends the program arrow keys, which drop it like any other key. The
 program's next copy replaces it.
 
 ## Output, scrollback and size
 
-- Attaching to a running session replays the **most recent 2 MiB** of that session's raw output, then follows live
-  output. The terminal itself keeps 10,000 lines of scrollback. An interrupted session shows the saved preview described
-  in "Interrupted and archived sessions" below; an archived one shows its history instead.
-- **Once a session has written more than those 2 MiB, the replay first restores the terminal modes the agent has on at
-  that moment**, since agents announce them only once, at startup: the alternate screen, mouse reporting, focus
-  reporting, bracketed paste, application cursor and keypad keys, a hidden cursor and disabled line wrap. A full-screen
-  agent therefore stays full-screen and keeps answering the mouse, the wheel included, after a reattach.
-  Keyboard-protocol enhancements an agent asked for (the kitty keyboard flags) are not restored.
-- A reattach always redraws from the replay rather than appending to what is on screen, so scrollback older than the
-  replay window is lost on every reconnect.
+- **Attaching to a running session starts from a first paint of its terminal**, then follows live output, with no
+  byte lost or repeated between the two. The daemon keeps a continuously parsed copy of every running terminal, and
+  the first paint is that copy written out as escape sequences: it resets and clears the terminal, writes up to
+  **10,000 rows** of the normal screen's scrollback, then the screen's rows with their colours, styles and links —
+  on the alternate screen when the agent is on it — and then restores the scroll region, the saved and current cursor
+  with the attributes each draws with, the terminal modes (mouse reporting, focus reporting, bracketed paste,
+  application cursor and keypad keys, insert, newline and origin modes, a hidden cursor, disabled line wrap), the
+  cursor style the agent chose and the window title. Attaching covers selecting a session, reconnecting and reloading
+  the window. The terminal itself keeps 10,000 lines of scrollback. An interrupted session shows the saved preview
+  described in "Interrupted and archived sessions" below; an archived one shows its history instead.
+- **A newly attached or reconnecting terminal therefore shows the agent's exact current screen however much output it
+  has written**, and a full-screen agent stays full-screen and keeps answering the mouse, the wheel included. Its
+  scrollback is the daemon's parsed scrollback, up to 10,000 rows. Lines the output wrapped stay joined, so they reflow
+  when the terminal is resized.
+- Not painted, and so missing on a terminal attached after the agent set them: the normal screen behind the alternate
+  screen (a terminal that attached while the agent was on its alternate screen gets no scrollback, and shows a blank
+  normal screen once the agent leaves the alternate one), character sets, tab stops, colour palette changes, and
+  keyboard-protocol enhancements an agent asked for (the kitty keyboard flags).
+- The first paint is drawn at the size the agent's terminal has at that moment. The size the attaching client reports
+  is applied after its paint, and an agent told a different size redraws for it over the painted screen. Attaching
+  makes the client the most recently active one, which is what decides the size while several clients show the
+  terminal (see "The terminal's size" in `docs/product/terminals-on-several-clients.md`).
+- A reattach always redraws from a new first paint rather than appending to what is on screen, so scrollback older
+  than the daemon's 10,000 rows is lost on every reconnect.
+- **A client that falls behind the output stays connected, and holds up nothing else.** The daemon sends each client
+  output only up to about **512 KiB** ahead of what that client's terminal has taken in; the rest waits in the daemon
+  for that client alone, so neither the program nor any other client showing the terminal is slowed by it. Once more than
+  **4 MiB** waits for one client, what waits is discarded and the client is sent a fresh paint of the current screen in
+  its place, drawn as the first paint is but without scrollback; live output follows it with no byte lost or repeated.
+  The fresh paint resets the terminal, so that client's scrollback is gone from then on, and with it, as on any reset of
+  the screen, what a program copied that the editing menu offered (see "The menu offers what a program copied" in "Copy,
+  paste and selection" above), a link's tooltip and what was known of the file paths on the replaced screen (see
+  `docs/product/terminal-links.md`). A client that stops reading altogether (a suspended window, a stalled network) is
+  not disconnected either: once it reads again it is sent that paint rather than the output it missed. A client of the
+  daemon that does not report what its terminal has taken in is sent output as fast as its connection takes it, and is
+  moved to a fresh paint by the 4 MiB limit alone.
+- **When a terminal finishes** — the session's process ends, or a shell terminal's shell exits or the terminal is
+  closed — each attached client is still sent the output waiting for it before its connection ends.
 - The character grid has a 14px base gutter on each physical side, in either reading direction. The right gutter is
   the terminal's internal scrollbar area, reserved even while the scrollbar is hidden or the agent uses a full-screen
   interface; it has no additional outer padding. Docked panels add no extra gap beside the terminal, and resize handles
@@ -149,10 +180,13 @@ program's next copy replaces it.
   `docs/product/sidebar-drawer.md`).
   The screen follows at once (except while a resize handle is dragged or a docked column eases, below), but the agent
   is told the new size only once it has held still for about 120 ms, and only when it differs from the size the agent
-  already has, so a drag sends the agent one size change rather than one for every step of the drag. The window has
-  a minimum size, sized so that the sidebar, the terminal and the right pane all stay usable side by side — see
-  "The window's minimum size" in
-  `docs/product/window-layout.md`.
+  already has, so a drag sends the agent one size change rather than one for every step of the drag. A size change
+  made in the window the user is in makes this client the most recently active one, so it applies at once even while
+  another client shows the same terminal; one made in a window the user is not in waits while another client showing
+  the same terminal is more recently active, until this one is again (see "The terminal's size" in
+  `docs/product/terminals-on-several-clients.md`). The
+  window has a minimum size, sized so that the sidebar, the terminal and the right pane all stay usable side by
+  side — see "The window's minimum size" in `docs/product/window-layout.md`.
 - While any pane-width, panel-height or column-width handle is being dragged, the terminal keeps its grid size and
   continues showing the agent's output. After the drag ends, a shown terminal whose area changed is fitted once to
   its current area; a terminal whose area did not change needs no fit. Resizing a floating sidebar therefore leaves
@@ -169,36 +203,15 @@ program's next copy replaces it.
   against its cell's background whatever colours the agent prints — see "What follows the choice" in
   `docs/product/appearance.md`.
 
-## Answers to a program's queries
-
-A program can ask its terminal about itself through its output — the cursor's position, the background colour, the
-features the terminal supports — and reads the answer back as input. Prompt libraries ask this way before drawing a
-prompt (`gh`'s does, for one), and a program handed an answer it is no longer waiting for reads it as typed text. Every
-client showing the terminal at the same moment (another window, a browser, a phone) runs a terminal of its own that
-answers, yet **the program gets one answer per query**:
-
-- **The first client to answer a query is the one whose answer the program gets**; the copies the other clients send
-  are dropped. So is an answer to output older than output whose query has already been answered.
-- **A query is answered within 5 seconds of its output or not at all.** A later answer is dropped, since a program
-  waits no longer than that and would take a late answer as typed input. A client that falls that far behind, such as
-  a browser tab the browser throttles in the background, has its answers dropped even when it is the only one attached.
-- **Attaching does not answer old queries**: in the output replayed on attaching (selecting a session, reconnecting,
-  reopening the Terminal panel), queries already answered, or more than 5 seconds old, are not answered. A query
-  no client answered, from a program that gave up waiting in under 5 seconds, can still be answered by a client
-  attaching within those 5 seconds.
-- **Read-only screens answer nothing**: an interrupted session's saved preview, a session frozen for archiving, and a
-  shell terminal whose shell has exited.
-- **A report that the terminal gained or lost keyboard focus is not an answer**: each client's report reaches the
-  program as that client's own input.
-
 ## Reconnecting
 
-- A client that stops draining output for more than a few seconds is dropped by the daemon rather than letting output
-  buffer without bound. The application then reconnects by itself, with a backoff, up to five times. **While those
-  attempts are under way the terminal is covered by a spinner and a line saying it is reconnecting**, over whatever
-  output was on screen. **Once the attempts are spent the cover becomes a disconnected panel**, in the shape every empty
-  state takes (see "The full panel" in `docs/product/empty-states.md`): an unplugged-cord glyph, a heading saying the
-  terminal is disconnected, and a **Reconnect** button. The top bar shows nothing about the terminal's connection in
+- A terminal's connection can drop while the session is still running — the network failing, the daemon restarting;
+  falling behind the output does not drop it (see "Output, scrollback and size" above). The application then
+  reconnects by itself, with a backoff, up to five times. **While those attempts are under way the terminal is covered
+  by a spinner and a line saying it is reconnecting**, over whatever output was on screen. **Once the attempts are
+  spent the cover becomes a disconnected panel**, in the shape every empty state takes (see "The full panel" in
+  `docs/product/empty-states.md`): an unplugged-cord glyph, a heading saying the terminal is disconnected, and a
+  **Reconnect** button. The top bar shows nothing about the terminal's connection in
   either state. Assistive technology is told each of these states as it begins, by the terminal's area alone; the
   disconnected panel's message and button can also be reached when browsing, while the spinner covers cannot. A
   reconnect in the background never steals keyboard focus.
@@ -216,8 +229,9 @@ answers, yet **the program gets one answer per query**:
 - **A terminal whose automatic attempts are spent is tried again only** by pressing Reconnect, by selecting another
   session and then this one again, or, by itself and without moving keyboard focus, when the application re-reads the
   daemon's whole state, as it does on each new connection to the daemon (see "Losing the daemon connection" in
-  `docs/product/application-lifecycle.md`). Each of these starts the five attempts over. An update to the session's
-  status does not try it again.
+  `docs/product/application-lifecycle.md`), or when its process can be reached again after a time it could not (see
+  "While the session's process cannot be reached" below). Each of these starts the five attempts over. An update to the
+  session's status does not try it again.
 - **Typing a connection had not yet passed on is reported, not retried.** When a terminal's connection ends, for any
   reason, before everything typed into it over that connection has been written into the program — or a write into the
   program failed part way — every client is sent the error `terminal_input_lost`, with no request id. It carries
@@ -226,7 +240,56 @@ answers, yet **the program gets one answer per query**:
   so the program's input line may hold only part of it. The window shows an error alert titled "Terminal input not
   accepted", naming the session (or the shell terminal) whose terminal disconnected before it had taken everything
   typed into it, and telling the user to check the terminal's input line before continuing; `detail` is under Error
-  details. The alert is a known failure with no remedy beyond its own text, not an unexpected one.
+  details. The alert is a known failure with no remedy beyond its own text, not an unexpected one. Typing refused whole
+  because a planned stop has handed the terminal over is told with `daemon_shutting_down` instead (see "While the
+  terminals are handed over" in `docs/product/application-lifecycle.md`).
+
+## While the session's process cannot be reached
+
+While Octoboard cannot reach the process of a session that is neither interrupted nor archived — the session's record
+carries `holder_link: "pending"`, as "A holder that cannot be connected to" in `docs/product/process-holders.md`
+describes — the process keeps running, but nothing reaches it and none of its output arrives. The session shows the
+status *Reconnecting* (see "Which status a session shows" in `docs/product/session-statuses.md`), and its terminal:
+
+- **is covered at once**, whatever its connection reports and whatever it last drew: over the terminal's background, a
+  spinner, a heading saying it is reconnecting to the session, and a line saying that the session's process is still
+  running, that input is unavailable until the connection returns and that reconnection is automatic. The output already
+  on screen stays under the cover and is not shown as live. The cover offers no button, no countdown and no error:
+  Octoboard retries by itself, for as long as the process runs. It comes before every other cover of the terminal — the
+  loading state, the reconnecting and disconnected covers, and the switching cover of "While a session is switching" in
+  `docs/product/switching-session-accounts.md`, which comes back once the process is reached again with the switch still
+  under way — and a terminal opened in this state shows only it.
+- **sends the program nothing.** Typing, pastes, mouse reports, the terminal's answers to the program's queries, size
+  changes and turning to the terminal (see "The most recently active client" in
+  `docs/product/terminals-on-several-clients.md`) are not sent, and none of it is kept to be sent later: what had been
+  typed but not yet sent as the cover came is discarded, and a clipboard read that completes after the cover came is
+  discarded as well. The covered terminal can be neither focused nor reached by assistive technology, and the editing
+  menu's Paste is unavailable. Typing a connection had already taken is reported as "Typing a connection had not yet
+  passed on is reported, not retried" in "Reconnecting" above says.
+- **is not reconnected meanwhile.** No automatic reconnect attempt is made or counted, the disconnected panel and its
+  Reconnect do not appear, and the application re-reading the daemon's whole state attaches nothing.
+- **attaches again by itself once the process can be reached**, once, with the five automatic attempts fresh, even where
+  they had been spent before. The loading state covers it until the new first paint is on screen (see "Loading" below).
+  A session that has become interrupted meanwhile shows its interrupted state instead (see "Interrupted and archived
+  sessions" below).
+
+**Keyboard focus.** The cover is a region named by the session's name, not by its heading, which VoiceOver would
+otherwise read twice, and described by its heading and its line. Keyboard focus in the terminal as the cover comes, or
+on a Reconnect button that goes away with it, moves to the cover, showing its focus ring; whatever hands keyboard focus
+to the terminal — `F6` reaching the terminal's region, for one (see "Moving focus between regions with F6" in
+`docs/product/moving-focus-between-regions.md`) — puts it on the cover; focus anywhere else in the window is left where
+it is. When the cover goes, focus moves on only if it is still on the cover: back to the terminal, showing its focus
+ring, or, when the last interaction was a tap, to the first control that takes no text, so that no on-screen keyboard
+comes up — the first such control of a maximized or floating panel covering the terminal, otherwise the top bar's — with
+no focus ring. Either way the reattach counts as turning to the terminal (see "The most recently active client" in
+`docs/product/terminals-on-several-clients.md`). A recovery never moves focus that is elsewhere.
+
+**Assistive technology** is told the cover's heading and line as one message, once: as the cover comes while the session
+is shown, or, for a session shown while its process already cannot be reached, after the usual delay of a focus move. It
+is not told at all when keyboard focus is on the cover at that moment, since the cover's name and description already
+say the same. Reconnect attempts, renames and other updates of the session do not repeat it. When the recovered-display
+note (see "The screen of a terminal taken over" in `docs/product/process-holders.md`) comes while the cover is up, its
+announcement waits until the cover, and the loading state that follows it, are gone.
 
 ## Loading
 
@@ -241,9 +304,10 @@ output, the bare terminal is shown. While the terminal is not connected — a fi
 started with Reconnect, a resume still starting the process — the loading state stays, however long that takes. While
 the terminal is reconnecting or disconnected, the cover described in "Reconnecting" above is shown in its place. While
 the session is shown as switching its account, the cover described in "While a session is switching" in
-`docs/product/switching-session-accounts.md` is shown in place of all of these. Assistive technology is told the line of
-the loading state and of the switching cover as each begins, by the terminal's area alone, as it is told the covers in
-"Reconnecting" above.
+`docs/product/switching-session-accounts.md` is shown in place of all of these, and while the session's process cannot
+be reached, the cover described in "While the session's process cannot be reached" above is shown in place of every
+other. Assistive technology is told the line of the loading state and of the switching cover as each begins, by the
+terminal's area alone, as it is told the covers in "Reconnecting" above.
 
 ## Interrupted and archived sessions
 
@@ -278,16 +342,18 @@ the loading state and of the switching cover as each begins, by the terminal's a
   kept, but its history is what is shown.
 - The preview contains the active terminal screen, retaining text colours and styles. With the normal screen active, it
   includes up to **10,000 rows of scrollback**. An agent's alternate full-screen interface has no scrollback: its
-  preview contains only that visible screen, without the hidden normal screen's history. The preview is independent of
-  the live replay's 2 MiB limit and wraps to the reader's terminal width. It is **not a full conversation record**:
+  preview contains only that visible screen, without the hidden normal screen's history. The preview does not depend
+  on how much output the agent wrote, and wraps to the reader's terminal width. It is **not a full conversation record**:
   content an agent already overwrote inside its full-screen interface is not reconstructed. The agent's own stored
   conversation is separate.
 - Each process end replaces the previous preview; starting a new process discards it. While a resume is under way, the
   loading state covers it, so it is what shows when a resume fails before starting a process. A successful resume
-  redraws from the new process's replay rather than appending to the preview. Older saved output is displayed as
+  redraws from the new process's first paint rather than appending to the preview. Older saved output is displayed as
   recorded, including any clearing it contains; it is not converted into a recovered screen. A session whose process
-  ended before Octoboard kept output, or with the daemon killed outright, shows a blank terminal, even if an earlier
-  process left some. Deleting the session's record deletes its saved preview too (see "Files Octoboard owns" in
+  ended before Octoboard kept output, or that was lost with a daemon killed outright and not taken over from a process
+  holder (see "What a daemon start takes over" in `docs/product/process-holders.md`), shows a blank terminal, even if
+  an earlier process left some; one whose screen a planned stop saved before its holder was lost shows that screen
+  instead (see "The screen of a terminal handed over" in `docs/product/process-holders.md`). Deleting the session's record deletes its saved preview too (see "Files Octoboard owns" in
   `docs/product/application-lifecycle.md`).
 
 ## Links in the output

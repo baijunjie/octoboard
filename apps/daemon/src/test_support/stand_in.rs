@@ -570,7 +570,7 @@ fn stand_in_of(
             || uuid::Uuid::new_v4().to_string(),
             |tag| tag.launch_id().to_string(),
         ),
-        spawned,
+        spawned: spawned.into(),
         checks_composer: false,
         transport: None,
         scratch_dir: None,

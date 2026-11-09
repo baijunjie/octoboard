@@ -7,6 +7,7 @@
 //! This module uses nothing else in the crate: it sits in the foundation layer, so any module may
 //! use it.
 
+pub(crate) mod build_files;
 pub(crate) mod fs;
 pub(crate) mod ipc;
 pub(crate) mod names;
@@ -21,7 +22,7 @@ pub(crate) mod shell;
 pub(crate) mod sleep;
 pub(crate) mod term;
 #[cfg(test)]
-mod test_helper;
+pub(crate) mod test_helper;
 
 /// The operating system the daemon runs on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

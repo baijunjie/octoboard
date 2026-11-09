@@ -4,7 +4,7 @@ import type { Session } from "../protocol";
 import { useDaemonStore } from "./react";
 import { topStatus } from "../sessions/order";
 import { holdsAccountSwitch, isSummaryStatus, sessionShownStatusKind, type ShownStatusKind } from "../sessions/sessionStatus";
-import { countWaitingInTree } from "../sessions/waiting";
+import { countWaiting, countWaitingInTree } from "../sessions/waiting";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 
 /** Every session of a console, console sessions included. The array is the same one until a
@@ -121,4 +121,10 @@ export function useWaitingIds(): string[] {
       return ids;
     }),
   );
+}
+
+/** How many sessions count as waiting for the user (`countWaiting`), wherever they sit: the app icon's badge, which
+ * leaves out a session whose process cannot be reached until the link is back, as the in-app badge does. */
+export function useShownWaitingCount(): number {
+  return useDaemonStore((s) => countWaiting(s.sessions.values()));
 }

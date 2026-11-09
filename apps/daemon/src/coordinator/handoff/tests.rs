@@ -214,6 +214,7 @@ async fn a_handoff_to_codex_keeps_mcp_tokens_in_a_non_default_accounts_home_only
                 share_default_config: false,
                 share_default_config_incomplete: false,
                 disabled: false,
+                versions: Default::default(),
             })
             .unwrap();
         fixture.run(session("original", true, "idle", None, false));
@@ -800,6 +801,7 @@ async fn a_handoff_that_is_refused_changes_nothing() {
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled: false,
+            versions: Default::default(),
         })
         .unwrap();
     let before = fixture.snapshot();

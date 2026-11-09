@@ -83,25 +83,57 @@ pub(super) fn keyed(request_line: &str) -> String {
     format!("{request_line}?key={TEST_KEY}")
 }
 
-/// Sends one request with exactly the headers given (plus a body length) and returns the
-/// response's status code, read from the status line alone so an upgraded connection does not
-/// have to close first.
-pub(super) fn status_of(port: u16, request_line: &str, headers: &[&str]) -> u16 {
+/// Writes one request with exactly the headers given (plus a body length), with a header telling
+/// the server to close the connection after its response when `close`, and returns the connection
+/// to read the response from.
+fn send_request(port: u16, request_line: &str, headers: &[&str], close: bool) -> TcpStream {
     let mut request = format!("{request_line} HTTP/1.1\r\n");
+    if close {
+        request.push_str("Connection: close\r\n");
+    }
     for header in headers {
         request.push_str(header);
         request.push_str("\r\n");
     }
     request.push_str("Content-Length: 2\r\n\r\n{}");
     let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+    stream
+        .set_read_timeout(Some(PATIENCE))
+        .expect("a read timeout");
     stream.write_all(request.as_bytes()).expect("write");
+    stream
+}
+
+/// The status code of the status line `line`.
+fn status_in(line: &str) -> u16 {
+    line.split_whitespace()
+        .nth(1)
+        .and_then(|status| status.parse().ok())
+        .expect("a status line")
+}
+
+/// Sends one request with exactly the headers given (plus a body length) and returns the
+/// response's status code, read from the status line alone so an upgraded connection does not
+/// have to close first.
+pub(super) fn status_of(port: u16, request_line: &str, headers: &[&str]) -> u16 {
+    let stream = send_request(port, request_line, headers, false);
     let mut status_line = String::new();
     BufReader::new(stream)
         .read_line(&mut status_line)
         .expect("read");
-    status_line
-        .split_whitespace()
-        .nth(1)
-        .and_then(|status| status.parse().ok())
-        .expect("a status line")
+    status_in(&status_line)
+}
+
+/// Sends one request as [`status_of`] does and returns the response's status code and body, read
+/// to the end of a response that closes its connection or states its length.
+pub(super) fn response_of(port: u16, request_line: &str, headers: &[&str]) -> (u16, String) {
+    use std::io::Read;
+
+    let mut stream = send_request(port, request_line, headers, true);
+    let mut response = String::new();
+    stream.read_to_string(&mut response).expect("read");
+    let (head, body) = response
+        .split_once("\r\n\r\n")
+        .expect("a response with a head");
+    (status_in(head), body.to_string())
 }

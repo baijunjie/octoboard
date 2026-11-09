@@ -668,6 +668,314 @@ fn reconcile_stops_what_the_previous_run_left_and_nothing_else() {
     }
 }
 
+/// A holder the data directory's registry lists, and what it runs, are protected in what the
+/// ledger reads, though the daemon did not start them: its direct child is covered only once the
+/// holder's file is there, and the registry read is the ledger's own data directory's.
+#[cfg(unix)]
+#[test]
+fn the_holders_of_the_data_directorys_registry_protect_what_they_run() {
+    let dir = ScratchDir::new("ledger-holders");
+    let ledger = ProcessLedger::new(&dir);
+    quiet(&ledger);
+    let here = std::env::current_dir().unwrap();
+    // Detached, so that the daemon (this process) is not the parent of either.
+    let holder = detached_in(&here, "/bin/sh", &["-c", "/bin/sleep 300 & wait"], &[]);
+    let mut guard = KillOnDrop(vec![holder]);
+    let holder_id = ProcessId(holder as u32);
+    let deadline = Instant::now() + PATIENCE;
+    let child = loop {
+        let table = ledger.read_table().expect("the table reads");
+        if let Some(proc) = table.procs().find(|proc| proc.ppid == holder_id) {
+            break proc.clone();
+        }
+        assert!(Instant::now() < deadline, "the holder started nothing");
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    guard.0.push(child.id.pid.0 as i32);
+
+    let table = ledger.read_table().expect("the table reads");
+    assert!(!table.protected(ledger.own).covers(&child));
+
+    crate::holder::registry::write(
+        &crate::paths::holders_dir_in(&dir),
+        &crate::holder::registry::RegistryEntry {
+            holder_id: "h1".to_string(),
+            pid: holder as u32,
+            started: identity(holder).key(),
+            port: 1,
+            secret: "s".to_string(),
+            version: "1".to_string(),
+            build_id: "b".to_string(),
+            exe: "/bin/sh".to_string(),
+        },
+    )
+    .expect("the registry file is written");
+    let table = ledger.read_table().expect("the table reads");
+    let protected = table.protected(ledger.own);
+    assert!(protected.covers(table.get(holder_id).expect("the holder runs")));
+    assert!(protected.covers(&child));
+}
+
+/// A launch a starting daemon adopted is followed before the reconcile, so what the previous run
+/// recorded for it stays its own, while what it recorded for a launch nobody follows is stopped.
+#[test]
+fn reconcile_leaves_the_processes_of_an_adopted_launch_alone() {
+    let dir = ScratchDir::new("ledger-adopted");
+    let ledger = ProcessLedger::new(&dir);
+    quiet(&ledger);
+    let here = std::env::current_dir().unwrap();
+    let sleep = || detached_sleep_in(&here, 60);
+    let (agent, child, left) = (sleep(), sleep(), sleep());
+    let _guard = KillOnDrop(vec![agent, child, left]);
+    let launch = uuid::Uuid::new_v4().to_string();
+    ledger.launch_started(&launch, "s1", ProcessId(agent as u32));
+    let persisted = |pid: i32, launch: &str| {
+        let id = identity(pid);
+        persist::PersistedProcess {
+            pid,
+            start: id.start_micros,
+            launch: launch.to_string(),
+            sid: 0,
+        }
+    };
+    persist::save(
+        &dir.join(persist::LEDGER_FILE),
+        &persist::Persisted {
+            attributed: vec![
+                persisted(child, &launch),
+                persisted(left, &uuid::Uuid::new_v4().to_string()),
+            ],
+            ..this_boot()
+        },
+    )
+    .unwrap();
+
+    ledger.reconcile();
+    assert_stops_running(left);
+    assert!(is_running(child), "an adopted launch's process was stopped");
+    assert!(is_running(agent));
+    assert_eq!(launch_of(&ledger, child), Some(launch));
+}
+
+/// While a holder the daemon cannot link to may run a launch no record places, the reconcile
+/// reads the previous run's file back and keeps what that run left, and so does every scan,
+/// until the hold is released; a launch the holder is recorded to run is followed meanwhile.
+#[test]
+fn what_the_previous_run_left_waits_while_its_stop_is_held() {
+    let dir = ScratchDir::new("ledger-held-previous");
+    let ledger = ProcessLedger::new(&dir);
+    quiet(&ledger);
+    let here = std::env::current_dir().unwrap();
+    let sleep = || detached_sleep_in(&here, 60);
+    let (child, left) = (sleep(), sleep());
+    let _guard = KillOnDrop(vec![child, left]);
+    let launch = uuid::Uuid::new_v4().to_string();
+    ledger.launch_unlinked(&launch, "s1");
+    let persisted = |pid: i32, launch: &str| {
+        let id = identity(pid);
+        persist::PersistedProcess {
+            pid,
+            start: id.start_micros,
+            launch: launch.to_string(),
+            sid: 0,
+        }
+    };
+    persist::save(
+        &dir.join(persist::LEDGER_FILE),
+        &persist::Persisted {
+            attributed: vec![
+                persisted(child, &launch),
+                persisted(left, &uuid::Uuid::new_v4().to_string()),
+            ],
+            ..this_boot()
+        },
+    )
+    .unwrap();
+
+    ledger.hold_previous_run();
+    ledger.reconcile();
+    ledger.tick();
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(is_running(left), "what the previous run left was stopped");
+    assert!(is_running(child));
+    assert_eq!(launch_of(&ledger, child), Some(launch.clone()));
+
+    ledger.release_previous_run();
+    ledger.tick();
+    assert_stops_running(left);
+    assert!(is_running(child), "a followed launch's process was stopped");
+}
+
+/// In the order a late takeover has it: the stop is held, the reconcile reads the previous run's
+/// file back, a holder linked to late has an agent adopted whose launch no record placed at the
+/// start, and the hold is released. What the previous run recorded for that launch outside the
+/// agent's terminal session (a development server, say) is the launch's again and survives the
+/// scan after the release, while what an ended launch left is stopped.
+#[test]
+fn a_launch_adopted_late_takes_back_what_the_previous_run_recorded_for_it() {
+    let dir = ScratchDir::new("ledger-taken-back");
+    let ledger = ProcessLedger::new(&dir);
+    quiet(&ledger);
+    let here = std::env::current_dir().unwrap();
+    let sleep = || detached_sleep_in(&here, 60);
+    let (agent, server, left) = (sleep(), sleep(), sleep());
+    let _guard = KillOnDrop(vec![agent, server, left]);
+    let launch = uuid::Uuid::new_v4().to_string();
+    let persisted = |pid: i32, launch: &str| {
+        let id = identity(pid);
+        persist::PersistedProcess {
+            pid,
+            start: id.start_micros,
+            launch: launch.to_string(),
+            sid: 0,
+        }
+    };
+    persist::save(
+        &dir.join(persist::LEDGER_FILE),
+        &persist::Persisted {
+            attributed: vec![
+                persisted(server, &launch),
+                persisted(left, &uuid::Uuid::new_v4().to_string()),
+            ],
+            ..this_boot()
+        },
+    )
+    .unwrap();
+
+    ledger.hold_previous_run();
+    ledger.reconcile();
+    ledger.containment_adopted(&launch);
+    ledger.launch_started(&launch, "s1", ProcessId(agent as u32));
+    assert_eq!(launch_of(&ledger, server), Some(launch.clone()));
+
+    ledger.release_previous_run();
+    ledger.tick();
+    assert_stops_running(left);
+    assert!(
+        is_running(server),
+        "the adopted launch's process was stopped"
+    );
+    assert!(is_running(agent));
+    assert_eq!(launch_of(&ledger, server), Some(launch));
+}
+
+/// A daemon adopting launches follows them before the reconcile; until the reconcile has read
+/// the previous run's file back, a tick stops nothing and nothing overwrites that file.
+#[test]
+fn nothing_is_stopped_or_written_before_the_reconcile_has_read_the_previous_file() {
+    let dir = ScratchDir::new("ledger-before-reconcile");
+    let ledger = ProcessLedger::new(&dir);
+    quiet(&ledger);
+    ledger.await_reconcile();
+    let here = std::env::current_dir().unwrap();
+    let sleep = || detached_sleep_in(&here, 60);
+    let (agent, child, left) = (sleep(), sleep(), sleep());
+    let _guard = KillOnDrop(vec![agent, child, left]);
+    let launch = uuid::Uuid::new_v4().to_string();
+    let persisted = |pid: i32, launch: &str| {
+        let id = identity(pid);
+        persist::PersistedProcess {
+            pid,
+            start: id.start_micros,
+            launch: launch.to_string(),
+            sid: 0,
+        }
+    };
+    let file = dir.join(persist::LEDGER_FILE);
+    persist::save(
+        &file,
+        &persist::Persisted {
+            attributed: vec![
+                persisted(child, &launch),
+                persisted(left, &uuid::Uuid::new_v4().to_string()),
+            ],
+            ..this_boot()
+        },
+    )
+    .unwrap();
+    let written = std::fs::read(&file).unwrap();
+
+    // The order of a daemon's start: the adoption, then the reconcile.
+    ledger.containment_adopted(&launch);
+    ledger.launch_started(&launch, "s1", ProcessId(agent as u32));
+    ledger.tick();
+    ledger.persist(true);
+    assert!(
+        is_running(left),
+        "a tick stopped a process before the reconcile"
+    );
+    assert_eq!(
+        std::fs::read(&file).unwrap(),
+        written,
+        "the previous run's file was written over before the reconcile"
+    );
+
+    ledger.reconcile();
+    assert_stops_running(left);
+    assert!(is_running(child), "an adopted launch's process was stopped");
+    assert_eq!(launch_of(&ledger, child), Some(launch));
+}
+
+/// The end of an adopted launch that comes before the reconcile has read the previous file waits
+/// for it: stopping its processes then would decide from a book that has not read the file, and
+/// the stop's own write would replace the file.
+#[test]
+fn the_end_of_a_launch_waits_for_the_reconcile_to_have_read_the_previous_file() {
+    let dir = ScratchDir::new("ledger-end-before-reconcile");
+    let ledger = ProcessLedger::new(&dir);
+    quiet(&ledger);
+    ledger.await_reconcile();
+    let here = std::env::current_dir().unwrap();
+    let sleep = || detached_sleep_in(&here, 60);
+    let (agent, child, left) = (sleep(), sleep(), sleep());
+    let _guard = KillOnDrop(vec![agent, child, left]);
+    let launch = uuid::Uuid::new_v4().to_string();
+    let persisted = |pid: i32, launch: &str| {
+        let id = identity(pid);
+        persist::PersistedProcess {
+            pid,
+            start: id.start_micros,
+            launch: launch.to_string(),
+            sid: 0,
+        }
+    };
+    let file = dir.join(persist::LEDGER_FILE);
+    persist::save(
+        &file,
+        &persist::Persisted {
+            attributed: vec![
+                persisted(child, &launch),
+                persisted(left, &uuid::Uuid::new_v4().to_string()),
+            ],
+            ..this_boot()
+        },
+    )
+    .unwrap();
+    let written = std::fs::read(&file).unwrap();
+
+    ledger.containment_adopted(&launch);
+    ledger.launch_started(&launch, "s1", ProcessId(agent as u32));
+    ledger.end_launch(&launch);
+    // A second end of the launch returns at once, as it would if the reconcile never came: the
+    // deferred end is the one that runs after it.
+    ledger.end_launch(&launch);
+    assert!(
+        is_running(child) && is_running(left),
+        "an end stopped a process before the reconcile"
+    );
+    assert_eq!(
+        std::fs::read(&file).unwrap(),
+        written,
+        "the previous run's file was written over before the reconcile"
+    );
+
+    // The reconcile reads the file, and then the launch's end is carried out: the process the
+    // file attributes to it goes with it, and what belonged to no launch followed is stopped too.
+    ledger.reconcile();
+    assert_stops_running(child);
+    assert_stops_running(left);
+}
+
 /// Makes this test's system one whose boot id is `id`.
 fn in_boot(id: Option<&str>) {
     BOOT_ID_OVERRIDE.set(Some(id.map(str::to_string)));
@@ -1429,7 +1737,7 @@ fn a_scan_before_a_launch_starts_leaves_its_agents_internals_alone() {
         "in the agent's session, though the agent is not known yet"
     );
 
-    ledger.launch_started(pending.tag().launch_id(), "s1", live.handle());
+    ledger.launch_started(pending.tag().launch_id(), "s1", live.process_id());
     ledger.scan(false);
     assert_eq!(launch_of(ledger, helper), None);
 }
@@ -2496,6 +2804,83 @@ fn a_kept_tree_stays_listed_under_its_project_until_the_user_stops_it() {
     );
     assert_stops_running(child);
     assert!(unowned(&restarted, "p1").is_empty());
+}
+
+/// On Linux, where the test process may make cgroup v2 groups, a launch's processes are in its
+/// group: ending the launch leaves nothing of it running, however a process detached and whatever
+/// its environment says, removes the group, and spares the tree the user kept, which left the
+/// group when it was kept.
+#[cfg(target_os = "linux")]
+#[test]
+fn ending_a_launch_removes_its_group_and_spares_what_was_kept() {
+    let (state, dir) = app_state("ledger-group");
+    let escapee_file = dir.join("escapee");
+    let kept_file = dir.join("kept");
+    let escapee_script = format!(
+        "my $c = fork(); if ($c == 0) {{ POSIX::setsid(); delete $ENV{{\"{TAG_VARIABLE}\"}}; exec \"/bin/sleep\", \"300\" }} {} exit 0;",
+        perl_write(&escapee_file, "$c")
+    );
+    let ledger = &state.process_ledger;
+    let pending = ledger.begin_launch("s1").expect("the launch is reserved");
+    let containment = pending.tag().containment().clone();
+    // The commands start only once the stand-in has been moved into the group, as an agent's
+    // first command comes long after its start: what leaves its parent before the move is outside.
+    let go = dir.join("go");
+    let script: String = std::iter::once(format!(
+        "until [ -e '{}' ]; do sleep 0.02; done\n",
+        go.display()
+    ))
+    .chain(
+        [
+            Background::perl(&escapee_script),
+            Background::sleeper(&kept_file),
+        ]
+        .iter()
+        .map(Background::line),
+    )
+    .chain(std::iter::once("exec sleep 300".to_string()))
+    .collect();
+    let live = tagged_live_session("s1", AgentId::CLAUDE, &script, pending.tag());
+    state.register_live(live.clone());
+    std::fs::write(&go, "").expect("the go file is written");
+    let escapee = wait_for_pid(&escapee_file);
+    let kept = wait_for_pid(&kept_file);
+    let mut guard = KillOnDrop(vec![escapee, kept]);
+    let Some(members) = containment.members() else {
+        eprintln!("skipped: no writable cgroup v2 subtree to make a launch's group in");
+        return;
+    };
+    assert!(
+        members.contains(&ProcessId(escapee as u32)),
+        "{escapee} not in {members:?}"
+    );
+    assert!(
+        members.contains(&ProcessId(kept as u32)),
+        "{kept} not in {members:?}"
+    );
+
+    ledger.scan(false);
+    let key = identity(kept).key();
+    let sessions = std::collections::HashMap::from([("s1".to_string(), "p1".to_string())]);
+    assert_eq!(
+        ledger.keep_trees(std::slice::from_ref(&key), &[], &sessions),
+        Ok(vec![key])
+    );
+    let members = containment.members().expect("the group is read");
+    assert!(!members.contains(&ProcessId(kept as u32)), "{members:?}");
+
+    live.terminate();
+    ledger.end_launch(&live.launch_id);
+    assert_stops_running(escapee);
+    assert!(
+        is_running(kept),
+        "the kept process outlived the end of its launch"
+    );
+    assert_eq!(containment.members(), None, "the launch's group is removed");
+
+    crate::test_support::kill(kept);
+    assert_stops_running(kept);
+    guard.0.clear();
 }
 
 /// A tree left behind in a removed directory of a project and kept is listed under that project

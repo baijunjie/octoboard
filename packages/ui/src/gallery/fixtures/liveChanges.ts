@@ -1,4 +1,4 @@
-import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type Page, type ShellTerminal } from "../../protocol";
+import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type Page, type Session, type ShellTerminal } from "../../protocol";
 import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import { accountQuotaOf } from "../../accounts/accountQuotaOf";
 import type { Step } from "../../fixtures/interact";
@@ -81,6 +81,36 @@ export function terminalOpened(id: string, label: string, terminal: ShellTermina
 /** The shell terminal `terminal` closed by another window. */
 export function terminalClosed(id: string, label: string, terminal: string): LiveChange {
   return { id, label, steps: [(ui) => ui.daemonEvents({ type: "shell_terminal_deleted", shell_terminal: terminal })] };
+}
+
+/** The daemon losing its way to the process of `session` (`holder_link: "pending"`) or finding it again (the field
+ * gone): the record as it was, with only that field changed. Does nothing (no event) when the record is already so,
+ * or is not there. */
+export function sessionHolderLink(id: string, label: string, session: string, link: "pending" | "reachable"): LiveChange {
+  const step: Step = (ui) =>
+    ui.daemonEvents((state): DaemonEvent | null => {
+      const held = state.sessions.get(session);
+      if (!held || (held.holder_link === "pending") === (link === "pending")) return null;
+      const changed: Session = { ...held };
+      if (link === "pending") changed.holder_link = "pending";
+      else delete changed.holder_link;
+      return { type: "session_upserted", session: changed };
+    });
+  return { id, label, steps: [step] };
+}
+
+/** As `sessionHolderLink`, for a shell terminal. */
+export function terminalHolderLink(id: string, label: string, terminal: string, link: "pending" | "reachable"): LiveChange {
+  const step: Step = (ui) =>
+    ui.daemonEvents((state): DaemonEvent | null => {
+      const held = state.shellTerminals.get(terminal);
+      if (!held || (held.holder_link === "pending") === (link === "pending")) return null;
+      const changed: ShellTerminal = { ...held };
+      if (link === "pending") changed.holder_link = "pending";
+      else delete changed.holder_link;
+      return { type: "shell_terminal_upserted", shell_terminal: changed };
+    });
+  return { id, label, steps: [step] };
 }
 
 // A session's report pages are not in the snapshot, so these act on the pages the store holds for it. The protocol

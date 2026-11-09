@@ -74,16 +74,17 @@ export function withCloneDirOffers(consoles: InspectedConsole[], documentDir: bo
   }));
 }
 
-/** The review's rows after the offers changed to `after` (see `withCloneDirOffers`): a row the user never touched
- * follows the new preselected choice, or is left out where there is none. A row the user chose for keeps the choice,
- * unless it is on a clone-dependent choice that the new offers lack, which goes to the new preselected choice too. */
+/** The review's rows after the offers changed to `after` (the clone-dependent ones moving with the clone directory
+ * choice, see `withCloneDirOffers`, or all of them on a fresh inspection of the same document): a row the user never
+ * touched follows the new preselected choice, or is left out where there is none. A row the user chose for keeps the
+ * choice, unless the new offers lack it, which goes to the new preselected choice too. */
 export function reviewForOffers(review: ReviewState, after: InspectedConsole[]): ReviewState {
   return review.map((rows, c) =>
     rows.map((row, p) => {
       const now = after[c].projects[p];
       const fallback = now.default ?? "skip";
       if (!row.chosen) return row.choice === fallback ? row : { ...row, choice: fallback };
-      if ((row.choice === "default_clone_dir" || row.choice === "clone") && now.offers[row.choice] === null) return { ...row, choice: fallback };
+      if (row.choice !== "directory" && row.choice !== "skip" && now.offers[row.choice] === null) return { ...row, choice: fallback };
       return row;
     }),
   );
@@ -230,6 +231,24 @@ export function initialAccountReview(accounts: InspectedAccounts | null | undefi
       agent.accounts.map((account) => ({ choice: account.status === "new" || account.status === "existing" ? "create" : "leave_out", directory: "" })),
     ),
     leftOut: [],
+  };
+}
+
+/** The accounts review after a fresh inspection of the same document: a row whose choice the account's status still
+ * allows is kept, any other goes back to where a review opens on, and the agents left out stay left out. */
+export function accountReviewForInspection(review: AccountReviewState, accounts: InspectedAccounts | null | undefined): AccountReviewState {
+  const opened = initialAccountReview(accounts);
+  return {
+    rows: opened.rows.map((rows, a) =>
+      rows.map((row, i) => {
+        const kept = review.rows[a]?.[i];
+        const account = accounts!.agents[a].accounts[i];
+        if (!kept) return row;
+        const allowed = account.status === "existing" ? kept.choice === "create" : accountChoicesFor(account).includes(kept.choice);
+        return allowed ? kept : row;
+      }),
+    ),
+    leftOut: review.leftOut,
   };
 }
 

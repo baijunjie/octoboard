@@ -1,10 +1,12 @@
 //! The revert gate: blocks updates that quietly undo changes already merged into a guarded branch.
 //! The product behavior (which branches are guarded, what is refused, what is allowed, how it
 //! fails) is specified in `docs/product/revert-gate.md`; what follows is how this implementation
-//! goes about it. The session hook dispatchers start `octoboardd gate-hook`, which asks the daemon
-//! for the [`GateInputs`] and calls [`check`] in-process. Its first step, before any `git` runs,
-//! is to see whether a ref update moves an existing branch at all (for a push, whether it has a
-//! guarded or target branch to check against), and it allows at once when none does.
+//! goes about it. The session hook dispatchers start `octoboardd gate-hook`, which asks for the
+//! [`GateInputs`] and calls [`check`] in-process. It asks the holder of its terminal, which relays
+//! the question to the daemon; with no holder, the daemon answers it directly. Its first step,
+//! before any `git` runs, is to see whether a ref update moves an existing branch at all (for a
+//! push, whether it has a guarded or target branch to check against), and it allows at once when
+//! none does.
 //!
 //! - `local` decides a `reference-transaction` update: which fork points a move is held against
 //!   and whether the move is allowed. `push` decides a push and `report` words a rejection. The

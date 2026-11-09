@@ -113,7 +113,7 @@ export function UpdatesSetting(): React.ReactElement | null {
   );
   const action =
     state.phase === "installed" ? (
-      <Button ref={actionButton} size="sm" variant="primary" onPress={store.restart}>{t("settings.updates.restart")}</Button>
+      <Button ref={actionButton} size="sm" variant="primary" pending={state.restarting} onPress={() => void store.restart()}>{t("settings.updates.restart")}</Button>
     ) : state.update ? (
       // Pending rather than disabled while a check runs: a disabled button would drop the focus it holds.
       <Button ref={actionButton} size="sm" variant="primary" pending={state.phase !== "idle"} onPress={() => void store.install()}>

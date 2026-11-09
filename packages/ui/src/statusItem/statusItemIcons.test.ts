@@ -73,14 +73,15 @@ const COLOURS: Record<string, string> = {
   "var(--app-muted)": "#777777",
 };
 
-const GLYPH_STATUSES: ShownStatusKind[] = ["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working", "starting", "switching", "interrupted"];
+const GLYPH_STATUSES: ShownStatusKind[] = ["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working", "starting", "switching", "reconnecting", "interrupted"];
 
-it("draws every status a glyph of its own in the colour the sidebar draws it in, starting and switching account sharing the arc", () => {
+it("draws every status a glyph of its own in the colour the sidebar draws it in, starting, switching account and reconnecting sharing the arc", () => {
   vi.mocked(resolveCssColour).mockImplementation((expression) => COLOURS[expression]);
   const glyphs = GLYPH_STATUSES.map((status) => statusGlyph(status, "light"));
   expect(glyphs.every((glyph) => glyph !== undefined)).toBe(true);
-  expect(new Set(glyphs).size).toBe(GLYPH_STATUSES.length - 1);
+  expect(new Set(glyphs).size).toBe(GLYPH_STATUSES.length - 2);
   expect(statusGlyph("starting", "light")).toBe(statusGlyph("switching", "light"));
+  expect(statusGlyph("starting", "light")).toBe(statusGlyph("reconnecting", "light"));
   expect(statusGlyph("starting", "light")).toContain("#777777");
   expect(statusGlyph("interrupted", "light")).toContain("#777777");
   expect(statusGlyph("interrupted", "light")).toContain("<rect");
@@ -96,7 +97,7 @@ it("moves the bubble and the hand by the shifts the sidebar's glyphs take, and n
   vi.mocked(resolveCssColour).mockImplementation((expression) => COLOURS[expression]);
   expect(statusGlyph("idle", "light")).toContain(`<g transform="${shiftedTransform(BUBBLE_SHIFT)}"`);
   expect(statusGlyph("waiting_user", "light")).toContain(`<g transform="${shiftedTransform(HAND_SHIFT)}"`);
-  for (const status of ["starting", "switching", "dormant", "paused", "done", "interrupted"] as const) expect(statusGlyph(status, "light")).not.toContain("transform");
+  for (const status of ["starting", "switching", "reconnecting", "dormant", "paused", "done", "interrupted"] as const) expect(statusGlyph(status, "light")).not.toContain("transform");
 });
 
 

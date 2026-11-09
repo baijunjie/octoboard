@@ -43,8 +43,8 @@ pub fn spawn_detached(mut command: Command) -> Result<(), String> {
 const AGENT_TERM_GRACE: Duration = Duration::from_secs(6);
 
 /// The most a stop waits for its CLI after `SIGTERM` once the run is cancelled, which is how a
-/// daemon shutdown reaches the runs it can cancel. A restart of the daemon by the application
-/// gives it a bounded time to exit (see the "Restarting" section of
+/// daemon shutdown reaches the runs it can cancel. The application gives a stopping daemon a
+/// bounded time to exit (see "Quitting" and "When the system ends the session" in
 /// `docs/product/application-lifecycle.md`) and then kills it, which would leave a CLI that
 /// ignores `SIGTERM` behind; this keeps the runs' waits within that. Longer than the two seconds
 /// Claude Code's own cleanup is allowed to take.

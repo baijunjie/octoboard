@@ -130,6 +130,13 @@ pub(crate) fn start_of(pid: i32) -> Option<u64> {
     start_micros(stat.start_ticks)
 }
 
+/// The pid of the parent of the process `pid`, or `None` when there is no such process or it is a
+/// zombie.
+pub(crate) fn parent_of(pid: i32) -> Option<i32> {
+    let stat = stat(pid)?;
+    (!stat.zombie).then_some(stat.ppid)
+}
+
 /// Whether a process that is not a zombie has the pid `pid`, whichever user it runs as: every
 /// user can read any process's `stat`.
 pub(crate) fn runs_as_anyone(pid: i32) -> bool {

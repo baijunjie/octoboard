@@ -110,6 +110,14 @@ it("reads the clipboard only for Paste and sends it to the captured session", as
   expect(controller.paste).toHaveBeenCalledWith("clipboard text", "s-1");
 });
 
+it("reads no clipboard for a Paste chosen after the controller stopped taking input", async () => {
+  await open();
+  controller.inputSessionId = undefined;
+  await choose("Paste");
+  expect(clipboard!.readText).not.toHaveBeenCalled();
+  expect(controller.paste).not.toHaveBeenCalled();
+});
+
 it("dismisses on session switch and never redirects a pending clipboard read", async () => {
   let finish!: (text: string) => void;
   clipboard!.readText = vi.fn(() => new Promise<string>((resolve) => { finish = resolve; }));

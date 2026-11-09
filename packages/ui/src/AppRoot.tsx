@@ -6,7 +6,6 @@ import { LanguageProvider } from "./i18n/react";
 import { useKeepAwakeSync } from "./lifecycle/useKeepAwakeSync";
 import { useNativeMenuLabels } from "./lifecycle/useNativeMenuLabels";
 import { useNativeWindowTheme } from "./lifecycle/useNativeWindowTheme";
-import { useSystemQuitSync } from "./lifecycle/useSystemQuitSync";
 import { ThemeProvider } from "./preferences/theme";
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
@@ -39,18 +38,12 @@ function KeepAwakeSync(): null {
   return null;
 }
 
-// Under the daemon's provider, which it reads the setting from, but outside `ErrorBoundary` too.
-function SystemQuitSync(): null {
-  useSystemQuitSync();
-  return null;
-}
-
 export interface AppRootProps {
   platform: PlatformAdapter;
   /** `undefined` for a screen that has no daemon to connect to. */
   daemon: Daemon | undefined;
-  /** Whether the window pushes its menu labels, theme, whether the daemon holds the computer awake and system-quit
-   * choice to a native shell. The window's entry does; a page that stands in for one in a browser (the gallery, the
+  /** Whether the window pushes its menu labels, theme and whether the daemon holds the computer awake to a native
+   * shell. The window's entry does; a page that stands in for one in a browser (the gallery, the
    * website preview) has no shell to push to. */
   nativeSync: boolean;
   /** Passed to `UpdatesProvider`: `null` leaves out the automatic checks, for a surface that must hold a state of its
@@ -93,7 +86,6 @@ export function AppRoot({ platform, daemon, nativeSync, firstCheckDelayMs, insid
           <DaemonProvider value={daemon}>
             <DaemonHostAnnouncement />
             {nativeSync && <KeepAwakeSync />}
-            {nativeSync && <SystemQuitSync />}
             <ErrorBoundary>
               <ThemeProvider>
                 {nativeSync && <NativeWindowThemeSync />}

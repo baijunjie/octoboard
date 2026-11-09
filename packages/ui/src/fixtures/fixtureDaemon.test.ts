@@ -762,9 +762,9 @@ describe("the fixture daemon's settings and trusted folders", () => {
     await expect(daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "relative" })).rejects.toThrow();
     expect(daemon.store.getState().settings.auto_pull_repositories).toBe(false);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "~/work/../repos" });
-    expect(daemon.store.getState().settings).toEqual({ ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: [], default_clone_dir: "/Users/dev/repos", accounts, provider_settings: providerSettings() });
+    expect(daemon.store.getState().settings).toEqual({ ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: [], default_clone_dir: "/Users/dev/repos", accounts, provider_settings: providerSettings(), versions: expect.any(Object) });
     await daemon.request({ type: "update_settings", auto_pull_repositories: false, default_clone_dir: " " });
-    expect(daemon.store.getState().settings).toEqual({ ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts, provider_settings: providerSettings() });
+    expect(daemon.store.getState().settings).toEqual({ ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts, provider_settings: providerSettings(), versions: expect.any(Object) });
     await daemon.request({ type: "update_settings", auto_delete_unresumable_archives: false });
     expect(daemon.store.getState().settings.auto_delete_unresumable_archives).toBe(false);
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(false);
@@ -2834,5 +2834,44 @@ describe("the fixture daemon's providers", () => {
     expect(daemon.store.getState().settings.provider_settings[UNPRESENTED_PROVIDER.id]).toEqual({ review_mode: "fast" });
     expect((await exported())?.[UNPRESENTED_PROVIDER.id]).toEqual({ review_mode: "fast" });
     await expect(daemon.request({ type: "set_provider_setting", agent: UNPRESENTED_PROVIDER.id, setting: "review_mode", value: "sloppy" })).rejects.toMatchObject({ code: "unreadable_request" });
+  });
+});
+
+describe("the fixture daemon's handover check", () => {
+  const project = projectOf("p", "c", "Website");
+  const working = sessionOf("working", "c", "p", "Working", "working");
+  const gone = sessionOf("gone", "c", "p", "Gone", "interrupted");
+  const running = shellTerminalOf("running", project, "pnpm dev", 0, { busy: true });
+  const exited = shellTerminalOf("exited", project, "zsh", 1, { state: "exited" });
+  const state = snapshotState({ consoles: [consoleOf("c", "Main")], projects: [project], sessions: [working, gone], shellTerminals: [running, exited] });
+  const ask = (handover?: Fixture["handover"]) => createFixtureDaemon({ state, handover }).request({ type: "handover_check", holder_floor: "0.2.0", target_version: "0.3.0" });
+
+  it("lists what the scenario says would be interrupted, and nothing by default", async () => {
+    await expect(ask({ sessions: [working.id], shellTerminals: [running.id] })).resolves.toEqual({ type: "handover_check", id: null, known: true, sessions: ["working"], shell_terminals: ["running"], unreached_shell_terminals: [] });
+    await expect(ask()).resolves.toEqual({ type: "handover_check", id: null, known: true, sessions: [], shell_terminals: [], unreached_shell_terminals: [] });
+  });
+
+  it("answers that is not known, and with the unreached shell terminals, as the scenario says", async () => {
+    await expect(ask({ known: false, sessions: [working.id], unreachedShellTerminals: ["pending-shell"] })).resolves.toEqual({
+      type: "handover_check",
+      id: null,
+      known: false,
+      sessions: ["working"],
+      shell_terminals: [],
+      unreached_shell_terminals: ["pending-shell"],
+    });
+  });
+
+  it("lists the sessions the window does not know after the ones it does, and refuses one it holds", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(ask({ sessions: [working.id], unnamedSessions: ["unheard-of"] })).resolves.toMatchObject({ sessions: ["working", "unheard-of"] });
+    await expect(ask({ unnamedSessions: [working.id] })).rejects.toThrow("the scenario holds it");
+  });
+
+  it("refuses to list a session or shell terminal that does not run, as the daemon never would", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await expect(ask({ sessions: [gone.id] })).rejects.toThrow("not a running session");
+    await expect(ask({ sessions: ["missing"] })).rejects.toThrow("not a running session");
+    await expect(ask({ shellTerminals: [exited.id] })).rejects.toThrow("not a running shell terminal");
   });
 });

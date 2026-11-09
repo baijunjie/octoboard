@@ -25,6 +25,29 @@ installed application's. To point the UI's dev server at it, see [`packages/ui/R
 A workspace-wide `cargo build` or `cargo test` also builds the Tauri crate, which needs the daemon sidecar built once
 first: `pnpm --filter @octoboard/desktop build:daemon`.
 
+## Running in the background (Linux)
+
+On a headless server the daemon runs on its own, as the owner's user, and listens on `127.0.0.1` only:
+
+```sh
+octoboardd start --port 7531        # Start it in the background and return.
+octoboardd status                   # Print its pid and address; exits 3 when none runs.
+octoboardd stop                     # Stop it, which leaves every session interrupted.
+octoboardd --port 7531              # Run it in the foreground on that port, as a service does.
+```
+
+`start` refuses while a daemon already runs against the same `~/.octoboard`. Reach the daemon from your own machine
+through an SSH port forward, which puts it at `127.0.0.1:7531` there for a client with the key `start` printed:
+
+```sh
+ssh -L 7531:127.0.0.1:7531 server
+```
+
+To start it at boot instead, install the example systemd user unit
+[`dist/systemd/octoboardd.service`](dist/systemd/octoboardd.service); its comments say how, and why the user needs
+lingering enabled. Use the unit as well on a host where logind kills a user's processes at logout
+(`KillUserProcesses=yes`), which would end a daemon started by `start` with the login.
+
 ## Read next
 
 - [What the daemon does and the files it owns](../../docs/product/application-lifecycle.md)

@@ -33,7 +33,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
   const paste = () => {
     const controller = controllerRef.current;
     const destination = inputSession;
-    if (!clipboard?.readText || !controller || destination !== sessionId) return;
+    if (!clipboard?.readText || !controller || destination !== sessionId || controller.inputSessionId !== destination) return;
     void clipboard.readText().then(
       (text) => {
         // A permission prompt may outlive the session that asked for it.

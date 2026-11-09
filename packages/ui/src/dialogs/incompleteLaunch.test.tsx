@@ -21,7 +21,7 @@ vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "
 /** The confirmation about an account whose last sharing change did not finish. */
 const ASKING = '[role="alertdialog"]';
 
-const half = (agent: Agent): Account => ({ id: `${agent}-half`, agent, name: "Half", config_dir: `/a/${agent}`, share_default_config: true, share_default_config_incomplete: true, disabled: false });
+const half = (agent: Agent): Account => ({ id: `${agent}-half`, agent, name: "Half", config_dir: `/a/${agent}`, share_default_config: true, share_default_config_incomplete: true, disabled: false, versions: {} });
 const complete = (agent: Agent): Account => ({ ...half(agent), share_default_config_incomplete: false });
 
 /** A console whose new sessions of every agent open on that agent's `account`. */

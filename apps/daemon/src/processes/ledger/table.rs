@@ -37,6 +37,8 @@ pub struct Table {
     /// The terminal sessions of these processes whose leader is running as another user, and so
     /// is not in the table without being gone.
     foreign_leaders: HashSet<ContainerId>,
+    /// The running holder processes (see [`Self::with_holders`]).
+    holders: HashSet<ProcessId>,
 }
 
 impl Table {
@@ -68,7 +70,21 @@ impl Table {
         Self {
             procs: procs.into_iter().map(|proc| (proc.id.pid, proc)).collect(),
             foreign_leaders: HashSet::new(),
+            holders: HashSet::new(),
         }
+    }
+
+    /// The table, with the holder processes `holders` names that run in it. A holder runs the
+    /// programs the daemon starts, so what the daemon's direct children are to the ledger, its
+    /// children are too ([`Self::protected`]).
+    pub fn with_holders(mut self, holders: impl IntoIterator<Item = Identity>) -> Self {
+        let running: Vec<ProcessId> = holders
+            .into_iter()
+            .filter(|id| self.has(id))
+            .map(|id| id.pid)
+            .collect();
+        self.holders.extend(running);
+        self
     }
 
     /// The table, with the sessions `sids` led by processes of another user.
@@ -84,23 +100,28 @@ impl Table {
         self.foreign_leaders.contains(&sid)
     }
 
-    /// The pids that are never any launch's: `own` — the daemon — and its ancestors, its
-    /// direct children (the agents themselves, and what else the daemon runs), the terminal
-    /// sessions those children lead, and pid 1.
+    /// The pids that are never any launch's: `own` — the daemon — and its ancestors, the holder
+    /// processes, the direct children of the daemon and of the holders (the agents themselves,
+    /// and what else they run, a shell terminal's shell among it), the terminal sessions those
+    /// children lead, and pid 1.
     pub fn protected(&self, own: ProcessId) -> Protected {
         let mut ancestors: HashSet<ProcessId> = HashSet::from([ProcessId(1), own]);
         if let Some(me) = self.get(own) {
             ancestors.extend(self.ancestors(me).map(|ancestor| ancestor.id.pid));
         }
+        ancestors.extend(&self.holders);
+        let mut managers = self.holders.clone();
+        managers.insert(own);
         let sessions = self
             .procs()
             .filter(|proc| {
-                proc.ppid == own && proc.sid.is_some_and(|sid| sid.leader() == proc.id.pid)
+                managers.contains(&proc.ppid)
+                    && proc.sid.is_some_and(|sid| sid.leader() == proc.id.pid)
             })
             .filter_map(|proc| proc.sid)
             .collect();
         Protected {
-            own,
+            managers,
             ancestors,
             sessions,
         }
@@ -148,16 +169,18 @@ impl Table {
 /// What [`Table::protected`] answers.
 #[derive(Debug, Clone)]
 pub struct Protected {
-    own: ProcessId,
+    /// The daemon and the holders, whose direct children are protected.
+    managers: HashSet<ProcessId>,
     ancestors: HashSet<ProcessId>,
     sessions: HashSet<ContainerId>,
 }
 
 impl Protected {
-    /// Whether `proc` is managed by the daemon itself, including internals in a terminal
-    /// session led by its direct child. Commands that start their own session are not covered.
+    /// Whether `proc` is managed by the daemon or a holder itself, including internals in a
+    /// terminal session led by a direct child of either. Commands that start their own session
+    /// are not covered.
     pub fn covers(&self, proc: &Proc) -> bool {
-        proc.ppid == self.own
+        self.managers.contains(&proc.ppid)
             || self.ancestors.contains(&proc.id.pid)
             || proc.sid.is_some_and(|sid| self.covers_session(sid))
     }

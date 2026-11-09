@@ -24,7 +24,9 @@ tint — and set in solid head all round:
   18 pt icon. It appears with or without a readable quota.
   It is part of the icon's look and is not presented to assistive technology on
   its own. Sessions across every console count, independently of which statuses the menu lists. A dormant
-  session can light the dot even when the menu has no sessions to show.
+  session can light the dot even when the menu has no sessions to show. What counts is the shown status (see "Which
+  status a session shows" in `docs/product/session-statuses.md`), so a session shown as switching account or
+  reconnecting does not light it.
 
 When the selected session has a readable account quota, bars below the octopus show the remaining percentage, with
 a gap above them. They use the octopus's monochrome tint and span the icon's width, covering its lower tentacles while
@@ -86,7 +88,8 @@ From top to bottom:
    the status with the number of sessions in it, whatever sort is chosen. A group with no
    sessions is left out. The shown status is the one given by "Which status a session shows" in
    `docs/product/session-statuses.md`: all other shown statuses are excluded, including starting and switching
-   account even when the session would become done or awaiting instructions afterwards.
+   account even when the session would become done or awaiting instructions afterwards, and reconnecting whatever the
+   session's stored status.
    - **Headings.** A heading is system text at the menu font's size, regular weight, in the secondary text
      colour, with its status glyph to the left of the text. Its glyph and text sit where the session lines below place
      their agent marks and titles — the same left edges and the same line height, the glyph centred on the text — as

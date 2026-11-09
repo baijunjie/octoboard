@@ -81,6 +81,9 @@ pub(crate) async fn handoff_session_with(
     // Claimed before the record is read, so the status checked is the one the handoff goes on
     // with. Held to the end, so that nothing resumes, switches or deletes the original meanwhile.
     let _claim = state.begin_switch(&request.session)?;
+    // Held to the end too, so that a planned stop waits for the whole move rather than cut it off
+    // between opening the receiving session and archiving the original.
+    let admission = state.admit_change()?;
     // Held from the claim on, before anything is read: a refusal just drops it.
     let hold = state.hold_outbox(&request.session);
     let original = state.session_record(&request.session)?;
@@ -127,7 +130,7 @@ pub(crate) async fn handoff_session_with(
     });
     // No branch cleanup follows the archive: the branches the original was responsible for have
     // moved to the receiving session, and any that could not move are not the archive's to remove.
-    if let Err(err) = super::lifecycle::archive_session(state, &original.id) {
+    if let Err(err) = super::lifecycle::archive_admitted(state, &admission, &original.id) {
         // The original stays as it is, and what it started stays its own.
         if let Some(launch) = &carried {
             state.process_ledger.withdraw_carry_over(launch);

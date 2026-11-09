@@ -37,9 +37,10 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
   behaves" in
   `docs/product/labels-and-tooltips.md`). A plain-text address has no
   tooltip, its text being its target. The tooltip goes when the pointer leaves the link, when the terminal's view
-  scrolls, and when the terminal is cleared to draw a session afresh — selecting another session, a reattach, or an
-  interrupted session's preview replacing the screen. It also closes on any key press or pointer press, including the
-  click that opens the link. The target reaches no assistive technology, as none of the terminal's output does.
+  scrolls, and when the terminal is cleared to draw a session afresh — selecting another session, a reattach, a fresh
+  paint sent to a client that fell behind the output, or an interrupted session's preview replacing the screen. It
+  also closes on any key press or pointer press, including the click that opens the link. The target reaches no
+  assistive technology, as none of the terminal's output does.
 - **An address the program itself breaks onto the next line is joined**: when the program ends a row partway through an
   address and carries on with it on the next row — as Claude Code does with a long line of text, usually after an indent
   — the pieces are one link, which covers the rows it spans and opens the whole address; the next row's indent is no
@@ -94,7 +95,7 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
 
   An address that runs onto the next row only because the terminal is too narrow for it is recognised whole. A line the
   terminal wrapped is taken as a whole by the rules above, whether the row after it continues the address depending on
-  the line's last row — so output replayed or resized into a narrower terminal still joins.
+  the line's last row — so output painted on attaching, or resized into a narrower terminal, still joins.
 
 ## File paths
 
@@ -232,4 +233,4 @@ pointer has to move first.
   older, the next time the screen changes or the pointer passes over it — so a path named before the agent writes the
   file becomes a link shortly after the file exists, and one removed stops being a link. A check that fails leaves a
   path as it was, and plain text when nothing was known of it. Every answer is dropped when the terminal is cleared to
-  draw a session afresh.
+  draw a session afresh, a fresh paint sent to a client that fell behind the output included.

@@ -35,7 +35,9 @@ in the environment wins.
   notarized macOS build, or `release-windows.mjs`, the x64 NSIS installer with its signing modes (below).
 - `release-desktop.mjs` (`pnpm release:version`) — prepares a version commit in an isolated worktree, checks it and
   pushes it with its annotated tag to start release CI (see "Releasing by tag"); `--platforms` makes a version for one
-  platform. Its version-file preparation, argument parsing and release orchestration are tested by
+  platform. It refuses a version while the daemon's holder floor (`FLOOR` in `apps/daemon/src/holder/compat.rs`) is not
+  the greatest stable `desktop-v*` tag below it (`0.0.0` while none is tagged). Its version-file preparation, argument
+  parsing and release orchestration are tested by
   `release-desktop.test.mjs`.
 - `tag-message.mjs` — prints the notes or the platforms of a tag message read from standard input, for
   `.github/release-notes.sh`.
@@ -46,8 +48,9 @@ in the environment wins.
   (below).
 - `release-manifest.mjs` — what publishing decides without GitHub (the platform selection and the tag message's
   `Platforms:` line, which manifests a version goes to for each platform, asset names and addresses, what an existing
-  release needs, version ordering, the manifest itself and its platform entries); tested by `release-manifest.test.mjs` through
-  `pnpm test`.
+  release needs, version ordering, the manifest itself with the build's `holder_floor` and its platform entries), and
+  the one read of the tree it makes, the daemon's `FLOOR` at the release commit (`readHolderFloor`); tested by
+  `release-manifest.test.mjs` through `pnpm test`.
 - `windows-release.mjs` — the Windows release's pieces: the signing mode and stages, the `--config` that makes
   `tauri build` call the sign command, the `signtool` checks, the look inside the installer and the check of the
   files `publish-release` takes. `sign-file.mjs` is what `tauri build` calls per file in `command` mode. Tested by

@@ -22,6 +22,7 @@ fn update_console_request(console: &str, edit: impl FnOnce(&mut RequestBody)) ->
         project_session_launch: Default::default(),
         icon: None,
         console_session_prompt: None,
+        base_versions: None,
     };
     edit(&mut request);
     request
@@ -554,6 +555,7 @@ async fn an_update_refuses_a_blank_name_and_a_model_the_agent_does_not_offer() {
         tags: Vec::new(),
         description: None,
         git_workflow: Default::default(),
+        versions: Default::default(),
     };
     state.store.insert_project(&project).unwrap();
     let refused = |err: anyhow::Error| {

@@ -2,6 +2,8 @@
 //! their availability, report pages, git statuses and shell terminals. See "Records" in
 //! `apps/daemon/PROTOCOL.md`.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use super::agents::{AgentId, Launch, PerAgent};
@@ -175,6 +177,10 @@ pub struct Console {
     /// tags; `None` adds nothing. Never reachable through the MCP tools.
     pub console_session_prompt: Option<String>,
     pub created_at: i64,
+    /// The version of each field a form edits, by path (`crate::state::FieldVersions`): always
+    /// every path of the record. A write names the version it was based on in `base_versions`.
+    #[cfg_attr(test, ts(type = "Record<string, number>"))]
+    pub versions: BTreeMap<String, u64>,
 }
 
 impl Console {
@@ -238,6 +244,11 @@ pub struct Account {
     /// `set_account_disabled`, until the user turns it back on.
     #[serde(default)]
     pub disabled: bool,
+    /// The version of each field a form edits, by path (`crate::state::FieldVersions`): always
+    /// every path of the record once a client is sent it, as part of `Settings::accounts`.
+    #[serde(default)]
+    #[cfg_attr(test, ts(type = "Record<string, number>"))]
+    pub versions: BTreeMap<String, u64>,
 }
 
 /// Whether an agent's binary resolves on the user's login shell `PATH`, the only test an agent is
@@ -364,6 +375,11 @@ pub struct Project {
     /// value in `Settings::git_workflow`.
     #[serde(default)]
     pub git_workflow: GitWorkflowOverride,
+    /// The version of each field a form edits, by path (`crate::state::FieldVersions`): always
+    /// every path of the record. A write names the version it was based on in `base_versions`.
+    #[serde(default)]
+    #[cfg_attr(test, ts(type = "Record<string, number>"))]
+    pub versions: BTreeMap<String, u64>,
 }
 
 /// How much the main conversation's latest request carried, as the agent's own session record
@@ -496,6 +512,22 @@ pub struct Session {
     /// absent otherwise.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub prompt_on_launch: bool,
+    /// Whether the screen a client is first painted was rebuilt, after a restart of the daemon
+    /// that left the session's process running, from the last of the raw output a holder kept of
+    /// it, rather than followed from the start: it may differ from what the agent has on its own
+    /// screen until the agent redraws it. It lasts as long as the process does. Never stored: it
+    /// is filled in on the record a client receives (`AppState::wire_session`), and absent
+    /// otherwise.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub screen_inexact: bool,
+    /// Whether the holder that runs the session's process can be reached: `pending` while it runs
+    /// but cannot be linked to, and absent while it can, or no holder runs the process. While
+    /// pending, the process goes on and the session stays claimed: it is neither interrupted nor
+    /// resumed, and what is asked of its process fails. Never stored: it is filled in on the
+    /// record a client receives (`AppState::wire_session`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub holder_link: Option<HolderLink>,
     /// Whether this session has a conversation on the agent's side: a turn taken, or one resumed
     /// at open. Until it has, the agent has stored no conversation to resume: `claude --resume`
     /// on such an id fails outright with "No conversation found", and a session the user opened
@@ -640,8 +672,8 @@ pub enum ShellTerminalState {
 }
 
 /// A plain shell the daemon runs in a project's directory, beside its agent sessions. Live state
-/// held in memory only, never stored in SQLite: the shell is a process of this daemon's and ends
-/// with it, so the record does too.
+/// held in memory, not stored in SQLite but for the name the user gave it: the record lasts as
+/// long as the shell, which its holder keeps running across a restart of the daemon.
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ShellTerminal {
@@ -666,6 +698,28 @@ pub struct ShellTerminal {
     /// When it was created, in milliseconds since the epoch; a project's terminals are listed in
     /// this order.
     pub created_at: i64,
+    /// The screen a client is first painted was rebuilt, after a restart of the daemon that left
+    /// the shell running, from the last of the raw output a holder kept of it, rather than
+    /// followed from the start: it may differ from what the shell has on its own screen until it
+    /// redraws it. Absent otherwise; it lasts as long as the terminal does.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    #[cfg_attr(test, ts(optional = nullable))]
+    pub screen_inexact: bool,
+    /// Whether the holder that runs the shell can be reached: `pending` while it runs but cannot
+    /// be linked to, the shell going on unreachable, and absent while it can.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub holder_link: Option<HolderLink>,
+}
+
+/// How a holder that runs a session's process or a shell terminal's shell stands, when it cannot
+/// be reached.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HolderLink {
+    /// Its process runs but the daemon cannot link to it for now, and keeps trying.
+    Pending,
 }
 
 #[cfg(test)]
@@ -674,6 +728,74 @@ mod tests {
         AgentAvailability, AgentId, Availability, ConsoleSessionColour, Event, Request,
         RequestBody, Settings, ShellTerminal, ShellTerminalState,
     };
+
+    /// An inexact screen is sent as `true` on a session and on a shell terminal, and left out
+    /// otherwise.
+    #[test]
+    fn an_inexact_screen_is_sent_only_while_it_holds() {
+        let mut terminal = ShellTerminal {
+            id: "t1".to_string(),
+            project_id: "p1".to_string(),
+            worktree: None,
+            cwd: "/work/p".to_string(),
+            title: "zsh".to_string(),
+            renamed: false,
+            state: ShellTerminalState::Running,
+            busy: false,
+            created_at: 7,
+            screen_inexact: false,
+            holder_link: None,
+        };
+        let mut session =
+            crate::test_support::bare_session("s1", crate::protocol::SessionKind::Project);
+        let sent = |value: serde_json::Value| value.get("screen_inexact").cloned();
+        assert_eq!(sent(serde_json::to_value(&terminal).unwrap()), None);
+        assert_eq!(sent(serde_json::to_value(&session).unwrap()), None);
+        terminal.screen_inexact = true;
+        session.screen_inexact = true;
+        assert_eq!(
+            sent(serde_json::to_value(&terminal).unwrap()),
+            Some(serde_json::json!(true))
+        );
+        assert_eq!(
+            sent(serde_json::to_value(&session).unwrap()),
+            Some(serde_json::json!(true))
+        );
+    }
+
+    /// A holder that cannot be reached is sent as `pending` on a session and on a shell terminal,
+    /// and left out otherwise.
+    #[test]
+    fn a_holder_that_cannot_be_reached_is_sent_only_while_it_cannot() {
+        let mut terminal = ShellTerminal {
+            id: "t1".to_string(),
+            project_id: "p1".to_string(),
+            worktree: None,
+            cwd: "/work/p".to_string(),
+            title: "zsh".to_string(),
+            renamed: false,
+            state: ShellTerminalState::Running,
+            busy: false,
+            created_at: 7,
+            screen_inexact: false,
+            holder_link: None,
+        };
+        let mut session =
+            crate::test_support::bare_session("s1", crate::protocol::SessionKind::Project);
+        let sent = |value: serde_json::Value| value.get("holder_link").cloned();
+        assert_eq!(sent(serde_json::to_value(&terminal).unwrap()), None);
+        assert_eq!(sent(serde_json::to_value(&session).unwrap()), None);
+        terminal.holder_link = Some(crate::protocol::HolderLink::Pending);
+        session.holder_link = Some(crate::protocol::HolderLink::Pending);
+        assert_eq!(
+            sent(serde_json::to_value(&terminal).unwrap()),
+            Some(serde_json::json!("pending"))
+        );
+        assert_eq!(
+            sent(serde_json::to_value(&session).unwrap()),
+            Some(serde_json::json!("pending"))
+        );
+    }
 
     /// A shell terminal travels in the snapshot and in events of its own in the shape
     /// `PROTOCOL.md` and the generated `packages/ui/src/protocol.generated.ts` give it, and a
@@ -690,6 +812,8 @@ mod tests {
             state: ShellTerminalState::Exited,
             busy: false,
             created_at: 7,
+            screen_inexact: false,
+            holder_link: None,
         };
         let record = serde_json::json!({
             "id": "t1", "project_id": "p1", "worktree": "w1", "cwd": "/work/p", "title": "zsh",

@@ -30,6 +30,7 @@ fn setup(name: &str, body: &str) -> Setup {
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled: false,
+            versions: Default::default(),
         })
         .unwrap();
     Setup { state, dir, env }

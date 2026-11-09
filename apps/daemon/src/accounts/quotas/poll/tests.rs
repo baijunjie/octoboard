@@ -41,6 +41,7 @@ async fn an_account_the_user_turned_off_is_read_by_no_trigger() {
                 share_default_config: false,
                 share_default_config_incomplete: false,
                 disabled,
+                versions: Default::default(),
             })
             .unwrap();
     }
@@ -90,6 +91,7 @@ async fn a_turned_off_account_loses_its_reading_and_is_read_at_once_when_turned_
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled: false,
+            versions: Default::default(),
         })
         .unwrap();
     let quotas = &state.account_quotas;
@@ -151,6 +153,7 @@ async fn a_turned_off_account_with_a_running_session_is_still_read_until_the_ses
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled: true,
+            versions: Default::default(),
         })
         .unwrap();
     let mut session = crate::test_support::sessions::project_session(
@@ -234,6 +237,7 @@ async fn a_missing_config_directory_is_a_state_found_before_the_cli_is_run() {
         share_default_config: false,
         share_default_config_incomplete: false,
         disabled: false,
+        versions: Default::default(),
     };
     state.store.insert_account(&account).unwrap();
     let scope = Scope {
@@ -418,6 +422,7 @@ async fn a_refresh_reads_what_its_scope_selects_once_and_announces_each_reading(
         share_default_config: false,
         share_default_config_incomplete: false,
         disabled: false,
+        versions: Default::default(),
     };
     state.store.insert_account(&account).unwrap();
     let mut events = state.subscribe();

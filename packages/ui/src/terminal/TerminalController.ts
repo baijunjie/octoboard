@@ -3,6 +3,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { type IBufferRange, Terminal } from "@xterm/xterm";
 
+import { onWindowFocusReturn, windowHasFocus } from "../components/hooks/windowFocus";
 import type { PathStyle } from "../format/hostPath";
 import type { TermControl, TermEvent } from "../protocol";
 import { interactionIsTouch } from "../input/touchInput";
@@ -39,6 +40,14 @@ import { XTERM_THEMES } from "./xtermThemes";
 /** How long the terminal's size must hold still before `syncSize` reports it to the daemon. */
 const RESIZE_SETTLE_MS = 120;
 
+/** The rows of scrollback the terminal keeps, and asks the daemon's first paint to fill. */
+const SCROLLBACK_ROWS = 10_000;
+
+/** How much parsed output is acknowledged at once. The daemon sends nothing more once a client
+ * holds its credit window unacknowledged, which is several times this, so batching costs no
+ * throughput and saves a frame per small write. */
+const ACK_BYTES = 64 * 1024;
+
 export type TermStatus = "connecting" | "open" | "closed" | "not_running";
 
 export interface TerminalControllerOptions {
@@ -72,7 +81,7 @@ export interface TerminalControllerHandlers {
   /** Puts on the clipboard the text a program in the terminal asks to copy (OSC 52), as Claude Code
    * does with the text selected in its own fullscreen view; absent where there is no clipboard, where
    * the text is only offered to the editing menu (`programCopiedText`). Never called for output
-   * written before the screen's session was attached: a live session's replay, a process-less session's
+   * written before the screen's session was attached: a live session's first paint, a process-less session's
    * saved output, or what was still queued when the screen was reset. */
   copyToClipboard?: (text: string) => void;
   /** What the daemon makes of the file paths in the output, for the session on screen: absent where
@@ -153,8 +162,9 @@ export class TerminalController {
    * to output queries are dropped unless it marked the data as the user's (`userInput`), and what
    * the output asks to copy is ignored. */
   private savedWritesInFlight = 0;
-  /** A live session's replay (the first frame after an attach) written and not yet parsed. What it
-   * asks to copy was asked before the attach, and may be long gone from the user's mind. */
+  /** The first frame after an attach (a live session's first paint, or an exited shell's paint)
+   * written and not yet parsed. What it asks to copy was asked before the attach, and may be long
+   * gone from the user's mind. */
   private replayWritesInFlight = 0;
   /** The text a program last asked to copy (OSC 52), while it still stands for what the user picked
    * in that program: the editing menu's Copy offers it when the terminal itself has no selection,
@@ -181,7 +191,13 @@ export class TerminalController {
   private readonly marksUserInput: boolean;
   private disposed = false;
   private pendingInput: Uint8Array[] = [];
-  /** This connection's replay mark, until the replay it describes has arrived. */
+  /** Whether the terminal's process cannot be reached, so nothing is sent to it: no input, answer,
+   * resize or activation, and nothing is held for later (see `holdInput`). */
+  private inputHeld = false;
+  /** Output of this connection xterm has parsed and the daemon has not been told of yet (see
+   * `acknowledge`). */
+  private parsedUnacknowledged = 0;
+  /** This connection's replay mark, until the first paint it describes has arrived. */
   private replayMark?: TermEvent;
   /** The point in the output the last frame of this connection ended at, counted as the daemon
    * counts it; unknown before the replay mark. */
@@ -193,6 +209,11 @@ export class TerminalController {
   /** The pending trailing send of `syncSize`, and the size the daemon was last told. */
   private resizeTimer?: ReturnType<typeof setTimeout>;
   private sentSize?: { cols: number; rows: number };
+  /** The display frame this connection last sent (see `sendDisplay`). */
+  private sentDisplay?: string;
+  /** Whether this connection tells the daemon the person turned to it once it opens (see
+   * `activate`): a session the user picked does, a reconnect in the background does not. */
+  private activateOnOpen = false;
 
   private readonly options: Required<TerminalControllerOptions>;
   /** Whether the terminal has been fitted to its container at least once. */
@@ -203,7 +224,7 @@ export class TerminalController {
     this.options = { gpu, fittedSizesOnly, host };
     const onLinkClick = terminalLinkHandler(handlers.openLink, () => this.term.hasSelection(), host);
     this.term = new Terminal({
-      scrollback: 10000,
+      scrollback: SCROLLBACK_ROWS,
       fontFamily: TERMINAL_FONT_FAMILY,
       theme: XTERM_THEMES[initialColorTheme],
       // The colours on screen are the agent's own, picked for whichever background its own theme
@@ -293,10 +314,10 @@ export class TerminalController {
     this.term.onData((data) => {
       let fromUser = this.userInput;
       this.userInput = false;
-      // Every view attached to the terminal answers the same queries, and a program that got each
-      // answer twice would read the second as input, so answers go as reply frames, of which the
-      // daemon writes one view's (see `apps/daemon/PROTOCOL.md`, "`GET /ws/term/:session` —
-      // terminal stream").
+      // The daemon answers the queries it can itself and leaves them out of the output. Every view
+      // attached to the terminal answers the rest, and a program that got each answer twice would
+      // read the second as input, so answers go as reply frames, of which the daemon writes one
+      // view's (see `apps/daemon/PROTOCOL.md`, "`GET /ws/term/:session` — terminal stream").
       if (!fromUser && this.marksUserInput && !FOCUS_REPORT.test(data)) {
         this.sendReply(data);
         return;
@@ -358,6 +379,7 @@ export class TerminalController {
         // fullscreen program reads as keys of its own (Claude Code walks its prompt history). Set
         // before xterm's own listener on its element reads it.
         this.term.options.altClickMovesCursor = this.term.modes.mouseTrackingMode === "none";
+        this.activate();
         // A secondary press opens the editing menu, which is how what the program copied gets used.
         if (!isSecondaryPress(event, this.options.host)) {
           this.programCopy = undefined;
@@ -392,6 +414,11 @@ export class TerminalController {
       { signal },
     );
     if (screen) this.askLinksUnderPointer = watchPointerForLinks(this.term, screen, signal);
+    // Coming back to the window: the person turns to the terminal it shows.
+    const stopFocusReturn = onWindowFocusReturn(() => {
+      if (this.inForeground()) this.activate();
+    });
+    signal.addEventListener("abort", stopFocusReturn);
     // Observed: fitting or clearing the terminal in the same task as `open()` throws from inside
     // xterm's own scheduled work, where no caller's `try` can catch it — and an uncaught throw
     // there takes the whole window down with it. Deferring by a frame avoids it. This is anchored
@@ -478,9 +505,28 @@ export class TerminalController {
     if (this.touchable && !this.disposed) this.term.selectAll();
   }
 
-  /** The session that can accept input now: the one the socket is connected or connecting to. */
+  /**
+   * Holds or releases the terminal's output to its process, for as long as the process cannot be
+   * reached. Held, nothing the user does or xterm answers reaches the socket (keys, input methods,
+   * pastes, mouse reports, answers to queries, resizes, activation), `inputSessionId` names no
+   * destination, and nothing is queued: input accepted while the socket was still connecting is
+   * dropped, never sent once the terminal is reached again. Releasing sends nothing either; the
+   * caller attaches anew (`attach`), which repaints the screen.
+   */
+  holdInput(held: boolean): void {
+    if (this.inputHeld === held) return;
+    this.inputHeld = held;
+    if (!held) return;
+    this.pendingInput = [];
+    // A size that settled after this would reach the process the moment the hold lifted.
+    clearTimeout(this.resizeTimer);
+    this.activateOnOpen = false;
+  }
+
+  /** The session that can accept input now: the one the socket is connected or connecting to, none
+   * while the input is held. */
   get inputSessionId(): string | undefined {
-    if (this.disposed || !this.touchable) return undefined;
+    if (this.disposed || !this.touchable || this.inputHeld) return undefined;
     if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) return this.sessionId;
     return undefined;
   }
@@ -522,6 +568,7 @@ export class TerminalController {
   setColorTheme(mode: "light" | "dark"): void {
     this.term.options.theme = XTERM_THEMES[mode];
     this.linkColors.reset();
+    this.sendDisplay();
   }
 
   /**
@@ -551,16 +598,21 @@ export class TerminalController {
     this.pendingInput = [];
     this.replayMark = undefined;
     this.outputEnd = undefined;
-    // Reset unconditionally rather than appending the replay to what is already on screen: the
-    // ring buffer always replays its full retained window from the start, not just what changed
-    // since the drop, so appending would duplicate whatever overlaps. Losing scrollback older than
-    // the ring buffer's retention window on every reconnect is the accepted cost of not risking
-    // corrupted-looking duplicated output.
+    this.sentDisplay = undefined;
+    // Attaching anew on a change of the session's state counts as the user's too, so only a window the
+    // user is in claims the terminal by it.
+    this.activateOnOpen = userInitiated && this.windowAttended();
+    this.parsedUnacknowledged = 0;
+    // Reset unconditionally: the daemon's first paint redraws the whole screen and the scrollback
+    // it is asked for from its own parsed copy, not just what changed since the drop. Anything
+    // older than the daemon's scrollback is lost on every reconnect.
     this.resetScreen();
     this.screenSessionId = sessionId;
     this.setStatus("connecting");
 
-    const socket = new WebSocket(wsUrl);
+    const attachUrl = new URL(wsUrl);
+    attachUrl.searchParams.set("history", String(SCROLLBACK_ROWS));
+    const socket = new WebSocket(attachUrl.toString());
     socket.binaryType = "arraybuffer";
     this.socket = socket;
 
@@ -570,8 +622,13 @@ export class TerminalController {
     socket.addEventListener("open", () => {
       if (generation !== this.generation) return;
       everOpened = true;
+      if (this.activateOnOpen) this.sendActivate();
       if (this.fitted || !this.options.fittedSizesOnly) this.sendResize(this.term.cols, this.term.rows);
       for (const data of this.pendingInput.splice(0)) socket.send(data);
+      this.sendDisplay();
+      // Opts into the daemon's credit window at once, rather than with the first batch
+      // acknowledged, which a client attaching during a flood would otherwise be sent ahead of.
+      socket.send(JSON.stringify({ type: "ack", bytes: 0 } satisfies TermControl));
       this.setStatus("open");
       if (userInitiated && !interactionIsTouch()) this.term.focus();
     });
@@ -582,19 +639,24 @@ export class TerminalController {
         return;
       }
       if (!(ev.data instanceof ArrayBuffer)) return;
-      // The daemon replays the ring buffer as one frame, ahead of any live output, and sends none when
-      // the ring is empty, so a first frame of live output is held to the same rule.
+      // The daemon sends its first paint as one frame, ahead of any live output. The first frame is
+      // held to that rule whatever it is.
       const replay = firstFrame;
       firstFrame = false;
       if (replay) this.replayWritesInFlight++;
+      const length = ev.data.byteLength;
+      // A fresh paint in place of output this connection fell behind on starts with a reset of the
+      // screen (RIS), so what the links and the program's copy said of the screen before goes.
+      if (!replay && this.replayMark?.length === length) this.forgetScreenOnceParsed();
       if (this.painted && !replay) {
-        this.writeOutput(new Uint8Array(ev.data));
+        this.writeOutput(new Uint8Array(ev.data), () => this.acknowledge(generation, socket, length));
         return;
       }
       const paint = !this.painted;
       // The write callback fires once xterm has parsed the data; the frame after it is when the
       // renderer has drawn it.
       this.writeOutput(new Uint8Array(ev.data), () => {
+        this.acknowledge(generation, socket, length);
         if (replay) this.replayWritesInFlight--;
         if (!paint) return;
         requestAnimationFrame(() => {
@@ -724,10 +786,16 @@ export class TerminalController {
   syncSize(): void {
     clearTimeout(this.resizeTimer);
     this.resizeTimer = setTimeout(() => {
+      // A cell's size changes with the page's zoom, which also fits the terminal anew.
+      this.sendDisplay();
       if (!this.fitted && this.options.fittedSizesOnly) return;
       const { cols, rows } = this.term;
       if (this.sentSize?.cols === cols && this.sentSize.rows === rows) return;
+      // A terminal resized in a window in the background only says what size it would like; the
+      // person changing the layout of the window they work in takes the terminal's size with it.
+      // The size goes first, so the activation applies it rather than the one asked for before.
       this.sendResize(cols, rows);
+      if (this.inForeground()) this.activate();
     }, RESIZE_SETTLE_MS);
   }
 
@@ -754,10 +822,51 @@ export class TerminalController {
       this.savedWritesInFlight--;
       if (this.disposed) return;
       this.term.reset();
-      this.linkColors.reset();
-      this.pathLinks?.clear();
-      this.handlers.onLinkHover?.(undefined);
+      this.forgetScreenLinks();
     });
+  }
+
+  /** Forgets what the links and the pointer's hover said of the screen, which a reset replaces. */
+  private forgetScreenLinks(): void {
+    this.linkColors.reset();
+    this.pathLinks?.clear();
+    this.handlers.onLinkHover?.(undefined);
+  }
+
+  /** Forgets what the links, the hover and the program's copy said of the screen once what was
+   * written before has been parsed, where a paint written next resets the screen. */
+  private forgetScreenOnceParsed(): void {
+    this.term.write("", () => {
+      if (this.disposed) return;
+      this.programCopy = undefined;
+      this.forgetScreenLinks();
+    });
+  }
+
+  /** Whether the person is working in this terminal's window. */
+  private windowAttended(): boolean {
+    return document.visibilityState === "visible" && windowHasFocus();
+  }
+
+  /** Whether the person is working in this terminal's window and the terminal is shown in it. */
+  private inForeground(): boolean {
+    return this.windowAttended() && this.touchable && (this.container?.offsetWidth ?? 0) > 0;
+  }
+
+  /** Tells the daemon the person turned to this terminal (picked its session, pressed on it, came
+   * back to its window, or resized the window they work in), so the terminal takes this client's
+   * size and the program's queries its display however long ago anything was typed here (see
+   * `apps/daemon/PROTOCOL.md`, "`GET /ws/term/:session` — terminal stream"). Sent once the
+   * connection opens when it is still connecting; dropped without a connection. */
+  private activate(): void {
+    if (this.inputHeld) return;
+    if (this.socket?.readyState === WebSocket.OPEN) this.sendActivate();
+    else if (this.socket?.readyState === WebSocket.CONNECTING) this.activateOnOpen = true;
+  }
+
+  private sendActivate(): void {
+    if (this.inputHeld) return;
+    this.socket?.send(JSON.stringify({ type: "activate" } satisfies TermControl));
   }
 
   /** Skipped while the terminal is untouchable (see `mount`) and while the pane has no size: a
@@ -788,6 +897,7 @@ export class TerminalController {
   }
 
   private sendInput(data: Uint8Array, fromUser = true): void {
+    if (this.inputHeld) return;
     if (this.savedWritesInFlight > 0 && !fromUser) return;
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(data);
@@ -799,20 +909,55 @@ export class TerminalController {
     }
   }
 
+  /** Tells the daemon that xterm has parsed `bytes` more of this connection's output, once that
+   * comes to `ACK_BYTES`: the daemon sends a terminal stream no more than a window of output ahead
+   * of what its client has acknowledged, so a client that cannot keep up is not buried in output,
+   * and once it falls too far behind it is sent a fresh paint in place of the backlog (see
+   * `apps/daemon/PROTOCOL.md`, "`GET /ws/term/:session` — terminal stream"). */
+  private acknowledge(generation: number, socket: WebSocket, bytes: number): void {
+    if (generation !== this.generation || socket !== this.socket || socket.readyState !== WebSocket.OPEN) return;
+    this.parsedUnacknowledged += bytes;
+    if (this.parsedUnacknowledged < ACK_BYTES) return;
+    socket.send(JSON.stringify({ type: "ack", bytes: this.parsedUnacknowledged } satisfies TermControl));
+    this.parsedUnacknowledged = 0;
+  }
+
   /** Sends xterm's answer to a query in the output, naming the point in the output it answers.
    * Dropped for saved output, for output of an earlier connection and for output whose queries were
    * answered already: their programs are not waiting for it any more and would read it as input. */
   private sendReply(data: string): void {
     const parsed = this.parsing[0];
-    if (this.savedWritesInFlight > 0 || parsed?.offset === undefined || parsed.generation !== this.generation) return;
+    if (this.inputHeld || this.savedWritesInFlight > 0 || parsed?.offset === undefined || parsed.generation !== this.generation) return;
     if (this.socket?.readyState !== WebSocket.OPEN) return;
     this.socket.send(JSON.stringify({ type: "reply", data, offset: parsed.offset } satisfies TermControl));
+  }
+
+  /** Tells the daemon what this terminal shows, its colours and a cell's size in whole pixels once
+   * the screen is laid out, when that differs from what this connection last told it: the daemon
+   * answers the program's colour and size queries with the display of the client that was active
+   * last (see `apps/daemon/PROTOCOL.md`, "`GET /ws/term/:session` — terminal stream"). */
+  private sendDisplay(): void {
+    if (this.socket?.readyState !== WebSocket.OPEN) return;
+    const theme = this.term.options.theme ?? {};
+    const grid = this.grid();
+    const cell = grid && { width: Math.round(grid.screen.width / grid.cols), height: Math.round(grid.screen.height / grid.rows) };
+    const frame: TermControl = {
+      type: "display",
+      foreground: theme.foreground ?? "",
+      background: theme.background ?? "",
+      cursor: theme.cursor ?? "",
+      ...(cell && cell.width > 0 && cell.height > 0 ? { cell_width: cell.width, cell_height: cell.height } : {}),
+    };
+    const text = JSON.stringify(frame);
+    if (text === this.sentDisplay) return;
+    this.sentDisplay = text;
+    this.socket.send(text);
   }
 
   private sendResize(cols: number, rows: number): void {
     // Defensive: `fit` yields a positive size for a laid-out container, and a zero one must never
     // be handed to the agent.
-    if (cols <= 0 || rows <= 0) return;
+    if (cols <= 0 || rows <= 0 || this.inputHeld) return;
     if (this.socket?.readyState === WebSocket.OPEN) {
       this.sentSize = { cols, rows };
       this.socket.send(JSON.stringify({ type: "resize", cols, rows }));

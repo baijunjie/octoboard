@@ -32,13 +32,25 @@ pub(super) const APPLICATION_ID: i64 = 0x4F43_5442;
 pub(super) const MIGRATIONS: &[&str] = &[
     // 1 to 2: the id of the owner a release left with the notice told at the next launch.
     "ALTER TABLE sessions ADD COLUMN owner_notice_former_owner TEXT;",
-    // 2 to 3: the sidebar's ordering moved into the client's own preferences, and the settings that
+    // 2 to 3: the sidebar's ordering moved into the client's own preferences, the settings that
     // resume the interrupted sessions when the daemon starts and hold the computer awake (Prevent
-    // sleep, and when) are added.
+    // sleep, and when) are added, and so are the tables of what the holders run (see `SCHEMA`).
     "ALTER TABLE settings DROP COLUMN sidebar_order_by_status;
      ALTER TABLE settings ADD COLUMN resume_sessions_on_start INTEGER NOT NULL DEFAULT 0;
      ALTER TABLE settings ADD COLUMN keep_awake INTEGER NOT NULL DEFAULT 0;
-     ALTER TABLE settings ADD COLUMN keep_awake_when TEXT NOT NULL DEFAULT 'working';",
+     ALTER TABLE settings ADD COLUMN keep_awake_when TEXT NOT NULL DEFAULT 'working';
+     CREATE TABLE held_terminals (
+         kind        TEXT NOT NULL CHECK (kind IN ('session', 'shell_terminal')),
+         owner_id    TEXT NOT NULL,
+         holder_id   TEXT NOT NULL,
+         terminal_id TEXT NOT NULL,
+         launch_id   TEXT NOT NULL,
+         PRIMARY KEY (kind, owner_id)
+     );
+     CREATE TABLE shell_terminal_titles (
+         id    TEXT PRIMARY KEY,
+         title TEXT NOT NULL
+     );",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -337,6 +349,25 @@ CREATE TABLE provider_settings (
     setting  TEXT NOT NULL,
     value    TEXT NOT NULL,
     PRIMARY KEY (provider, setting)
+);
+-- Which holder runs the latest launch of each session (`kind` 'session', `owner_id` the session)
+-- and each shell terminal ('shell_terminal', the terminal, which is its own launch), with the
+-- terminal's id there: a start that cannot link to a holder reads it to know exactly which
+-- sessions that holder runs. A later launch replaces a session's row; the rows of a holder are
+-- forgotten once it is gone. See `Store::record_held_terminal`.
+CREATE TABLE held_terminals (
+    kind        TEXT NOT NULL CHECK (kind IN ('session', 'shell_terminal')),
+    owner_id    TEXT NOT NULL,
+    holder_id   TEXT NOT NULL,
+    terminal_id TEXT NOT NULL,
+    launch_id   TEXT NOT NULL,
+    PRIMARY KEY (kind, owner_id)
+);
+-- The name the user gave a shell terminal, by its id, which a daemon that puts the terminal back
+-- from its holder shows again. Forgotten with the terminal. See `Store::shell_terminal_title`.
+CREATE TABLE shell_terminal_titles (
+    id    TEXT PRIMARY KEY,
+    title TEXT NOT NULL
 );
 "#;
 

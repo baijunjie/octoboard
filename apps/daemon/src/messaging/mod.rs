@@ -4,7 +4,8 @@
 //! notices to an owner (one of them about a child left idle after its last report), how a message
 //! names a session, and information one session shares with another.
 //! [`write_queue`] is `AppState`'s side of the outbox: queuing, flushing and holding the queues,
-//! and the reasons nothing is written into a session for now.
+//! and the reasons nothing is written into a session for now; [`restart_outbox`] carries what is
+//! still queued over a planned stop to the next daemon.
 
 pub(crate) mod capacity_retry;
 pub(crate) mod delivery;
@@ -13,6 +14,7 @@ pub(crate) mod naming;
 pub(crate) mod outbox;
 pub(crate) mod owner_notices;
 pub(crate) mod reporting;
+pub(crate) mod restart_outbox;
 pub(crate) mod sharing;
 pub(crate) mod texts;
 pub(crate) mod write_queue;

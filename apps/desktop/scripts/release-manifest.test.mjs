@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -6,6 +9,7 @@ import {
   assertVersion,
   buildManifest,
   compareVersions,
+  HOLDER_FLOOR_FILE,
   isPrerelease,
   manifestFiles,
   manifestNames,
@@ -14,6 +18,7 @@ import {
   planManifestWrites,
   planReleaseAssets,
   platformsTrailer,
+  readHolderFloor,
   readTagMessage,
   releaseAssets,
   releaseLayout,
@@ -46,7 +51,7 @@ test("each platform has a beta and a stable manifest", () => {
 test("the original manifest names stay the Mac's, holding the darwin entries, and Windows has names of its own", () => {
   // Released macOS applications read `stable.json` and `beta.json` (`src-tauri/src/updater/macos.rs`), for good.
   const update = { url: "https://example.test/mac.app.tar.gz", signature: "bWFj" };
-  const manifest = buildManifest({ version: "1.0.0", notes: "", pubDate: "2026-11-01T00:00:00.000Z", platform: "macos", update });
+  const manifest = buildManifest({ version: "1.0.0", notes: "", pubDate: "2026-11-01T00:00:00.000Z", platform: "macos", update, holderFloor: "0.1.0" });
   assert.deepEqual(manifestFiles("macos"), ["beta.json", "stable.json"]);
   assert.deepEqual(Object.keys(manifest.platforms), ["darwin-aarch64", "darwin-x86_64"]);
   for (const name of manifestFiles("windows")) assert.ok(!["beta.json", "stable.json"].includes(name), name);
@@ -94,33 +99,56 @@ test("the Windows installer is published under the name the bundler gives it", (
 
 test("a Mac manifest names the archive for both Macs and nothing else", () => {
   const update = { url: "https://github.com/baijunjie/octoboard/releases/download/desktop-v0.2.0/a.app.tar.gz", signature: "c2lnbmF0dXJl\n" };
-  const manifest = buildManifest({ version: "0.2.0", notes: "Fixes.", pubDate: "2026-11-01T00:00:00.000Z", platform: "macos", update });
+  const manifest = buildManifest({ version: "0.2.0", notes: "Fixes.", pubDate: "2026-11-01T00:00:00.000Z", platform: "macos", update, holderFloor: "0.1.0" });
   const entry = { signature: "c2lnbmF0dXJl", url: update.url };
   assert.deepEqual(manifest, {
     version: "0.2.0",
     notes: "Fixes.",
     pub_date: "2026-11-01T00:00:00.000Z",
+    holder_floor: "0.1.0",
     platforms: { "darwin-aarch64": entry, "darwin-x86_64": entry },
   });
 });
 
 test("a Windows manifest names the installer for windows-x86_64 and nothing else", () => {
   const update = { url: "https://github.com/baijunjie/octoboard/releases/download/desktop-v0.2.0/a-setup.exe", signature: "d2luZG93cw==\n" };
-  const manifest = buildManifest({ version: "0.2.0", notes: "Fixes.", pubDate: "2026-11-01T00:00:00.000Z", platform: "windows", update });
+  const manifest = buildManifest({ version: "0.2.0", notes: "Fixes.", pubDate: "2026-11-01T00:00:00.000Z", platform: "windows", update, holderFloor: "0.0.0" });
   assert.deepEqual(manifest, {
     version: "0.2.0",
     notes: "Fixes.",
     pub_date: "2026-11-01T00:00:00.000Z",
+    holder_floor: "0.0.0",
     platforms: { "windows-x86_64": { signature: "d2luZG93cw==", url: update.url } },
   });
 });
 
 test("a manifest without its update's address or signature, or for another platform, is refused", () => {
-  const base = { version: "0.2.0", notes: "", pubDate: "2026-11-01T00:00:00.000Z" };
+  const base = { version: "0.2.0", notes: "", pubDate: "2026-11-01T00:00:00.000Z", holderFloor: "0.1.0" };
   const update = { url: "https://example.test/a", signature: "c2ln" };
   assert.throws(() => buildManifest({ ...base, platform: "windows" }), /windows update/);
   assert.throws(() => buildManifest({ ...base, platform: "macos", update: { url: update.url, signature: "" } }), /macos update/);
   assert.throws(() => buildManifest({ ...base, platform: "linux", update }), /not a release platform/);
+});
+
+test("a manifest carries the build's holder floor, which must be a version", () => {
+  const base = { version: "0.2.0", notes: "", pubDate: "2026-11-01T00:00:00.000Z", platform: "macos", update: { url: "https://example.test/a", signature: "c2ln" } };
+  assert.equal(buildManifest({ ...base, holderFloor: "0.1.0" }).holder_floor, "0.1.0");
+  assert.throws(() => buildManifest(base), /not a semantic version/);
+  assert.throws(() => buildManifest({ ...base, holderFloor: "latest" }), /not a semantic version/);
+});
+
+test("the holder floor is read from the daemon's constant, and a tree without one has none", () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "octoboard-floor-"));
+  try {
+    mkdirSync(path.join(root, "apps/daemon/src/holder"), { recursive: true });
+    const file = path.join(root, HOLDER_FLOOR_FILE);
+    writeFileSync(file, 'pub const FLOOR: &str = "0.1.0";\n');
+    assert.equal(readHolderFloor(root), "0.1.0");
+    writeFileSync(file, "// no constant\n");
+    assert.equal(readHolderFloor(root), undefined);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("each platform's release assets are its files and the update file's signature", () => {

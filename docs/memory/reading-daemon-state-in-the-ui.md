@@ -113,18 +113,26 @@ So write what follows an `await request(...)` to be correct under either order:
 - A control that shows a value the daemon holds, such as a switch bound to a setting, shows the store's value. Do not
   show a local value that is set on press and cleared when the request settles. When the reply arrives before the
   broadcast, the control briefly shows the old value again, and then the new one. To stop a second press while the
-  first is unanswered, ignore that press; use a ref, not a value that is shown. A switch in Settings gets both from
-  `SettingSwitch` or `SwitchSettingRow`, the entry points the "Shared entry points" section of `docs/structure/ui.md`
-  names, when its `onChange` returns the save; it holds no ref of its own.
+  first is unanswered, ignore that press; use a ref, not a value that is shown. A switch in Settings gets the ignoring
+  from the entry points the "Shared entry points" section of `docs/structure/ui.md` names for it (for an application
+  setting, the version guard of `useSettingsWrite`), and holds no ref of its own.
 - That does not hold for a control whose every edit sends the whole value it shows, such as a list of tags saved on
-  each change: the user's next edit is built on what is shown, so showing the store's value while a save is
-  unanswered drops what that save added, and such edits cannot be ignored. Keep a local value, the list last sent,
-  shown while any save is outstanding (count them). Once none is, keep showing it until the store holds that list, or
-  holds a list none of this run's saves explains — neither the stored list the first save started from nor any list
-  sent — which is a concurrent writer's or a different normalisation, and is shown and built on from then on. Clearing
-  the local value when the request settles shows the old list again; clearing it only when the store equals it hides
-  a concurrent writer's change for good. When the last outstanding save fails, report it and show the store's value
-  again. `packages/ui/src/settings/accounts/AgentTagsSetting.tsx` has that shape; a new control of the kind copies it.
+  each change or a text field saved as a whole: the user's next edit is built on what is shown, so showing the store's
+  value while a save is unanswered drops what that save added, and such edits cannot be ignored. Keep a local value,
+  the one last asked for, shown while a save is outstanding, and after that until the store holds it or holds a value
+  none of this run's saves explains — neither the stored value the first save went over nor any value sent — which is
+  another client's or a different normalisation, and is shown and built on from then on. With checked writes
+  (`base_versions`) two mistakes pass every test and reviewers keep finding them: a save sent while an earlier one is
+  out is based on a version that one is about to advance, and is refused as a conflict with this window's own write;
+  and an edit sent over a stored value the run cannot explain silently overwrites a change the user never saw. So send
+  one save at a time, and let an edit made meanwhile wait and go at the reply, on the version the store holds then,
+  only while the stored value is explained; otherwise drop it, show the stored value and report a conflict. A conflict
+  refused while the store is still behind this window's own earlier save (its reply came before its broadcast) is not
+  another client's: wait (`whenState`) until the store holds the versions the refusal names, then send again if the
+  stored value is explained. When a save fails, report it; an edit that waited still goes, as it carries the whole
+  value, and with none waiting the stored value shows again. The run goes on after the control unmounts, reading the store through `store.getState()`.
+  `packages/ui/src/settings/accounts/AgentTagsSetting.tsx` and `packages/ui/src/settings/CloneDirSetting.tsx` have
+  that shape; a new control of the kind copies it.
 
 ## Tell which of two events came first with a counter, never a clock
 

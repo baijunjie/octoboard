@@ -256,7 +256,7 @@ it.each([
   { name: "a record's account", asked: { ...request, action: "resume_record" as const, account: "a-half", conversation: "x" } },
 ])("marks the account whose last sharing change did not finish, in the sentence: $name", ({ asked }) => {
   const held = sessionOf("s-held", "c-1", "p-1", "Old work", "archived", { account_id: "a-half" });
-  const half = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true, disabled: false };
+  const half = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true, disabled: false, versions: {} };
   mountPendingQuestionDialog({
     ...snapshotState({ sessions: [held] }),
     ...names,
@@ -280,7 +280,7 @@ it.each([
 
 it("does not warn while the account's sharing change is running", () => {
   const held = sessionOf("s-held", "c-1", "p-1", "Old work", "archived", { account_id: "a-half" });
-  const half = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true, disabled: false };
+  const half = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true, disabled: false, versions: {} };
   mountPendingQuestionDialog({
     ...snapshotState({ sessions: [held], accountSharing: [{ account: "a-half", progress: { share: true, phase: "changing", done: 1, total: 3 } }] }),
     ...names,
@@ -290,7 +290,7 @@ it("does not warn while the account's sharing change is running", () => {
   expect(incompleteMark()).toBeNull();
 });
 
-const halfCodex = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true, disabled: false };
+const halfCodex = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true, disabled: false, versions: {} };
 const settingsWith = (accounts: unknown[]) => ({ ...snapshotState({}).settings!, accounts: accounts as never });
 const statusTexts = () => [...document.body.querySelectorAll('[role="status"]')].map((node) => node.textContent).filter(Boolean);
 
@@ -463,7 +463,7 @@ it("a switch to an account that is not logged in cannot be confirmed", () => {
   expect(findButton("Switch account")?.disabled).toBe(true);
 });
 
-const half = { id: "a-two", agent: "claude" as const, name: "Two", config_dir: "/a/two", share_default_config: true, share_default_config_incomplete: true, disabled: false };
+const half = { id: "a-two", agent: "claude" as const, name: "Two", config_dir: "/a/two", share_default_config: true, share_default_config_incomplete: true, disabled: false, versions: {} };
 const mountWith = (asked: SessionRequest, session = owned, accounts: typeof claudeAccounts | (typeof claudeAccounts[number] | typeof half)[] = claudeAccounts, extra: Parameters<typeof mountPendingQuestionDialog>[0] = {}, reply = ack) => mountPendingQuestionDialog({
   ...snapshotState({ sessions: [session] }),
   ...names,

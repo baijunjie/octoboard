@@ -16,6 +16,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use serde::{Deserialize, Serialize};
+
 use super::proc::{ChildHandle, ProcessId, SetEnv};
 
 mod vt;
@@ -36,7 +38,7 @@ mod windows;
 pub(crate) use windows::*;
 
 /// The size of a terminal, in character cells.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Size {
     pub rows: u16,
     pub cols: u16,
@@ -44,38 +46,49 @@ pub struct Size {
 
 /// How the terminal backend that starts this host's pseudoconsoles behaves where business code has
 /// to know. Where the OS ships more than one host for them, these are the facts of the one in use.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A fact a holder of another build does not state reads as off, as the facts cross the holder
+/// link (see `holder::protocol`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TermFacts {
     /// What the program prints reaches the reader as a host's repaint of the screen rather than as
     /// the program's own bytes, so only the parsed screen says what is drawn, not the order of the
     /// output, and the host may set titles and drop attributes and modes of its own accord. The
     /// trust screen, the titles, the input box and the agent's readiness are then read off the
     /// parsed screen, its title changes and the agent's hooks.
+    #[serde(default)]
     pub host_renders: bool,
     /// The host answers the program's terminal queries (device attributes, status and cursor
-    /// reports) itself, before any client could.
-    // TODO(multi-client-terminal 04): the reply routing consults this once the daemon answers
-    // every query.
-    #[allow(dead_code, reason = "no consumer until the daemon answers every query")]
+    /// reports) itself, before the daemon or any client could, so the daemon leaves those to the
+    /// clients: a second answer would be read as input.
+    #[serde(default)]
     pub host_answers_queries: bool,
     /// The host forwards the program's terminal queries to the output and holds the console until
     /// they are answered, about half a second for each, so a query nobody answers stalls the
-    /// program and what it was about to read. The daemon then answers the device attributes and
-    /// the cursor position itself while no client is attached to do it.
+    /// program and what it was about to read. The daemon answers the queries it can itself as
+    /// soon as it reads them, whether a client is attached or not, which is what keeps the stall
+    /// short; nothing in the daemon decides by this.
+    #[allow(
+        dead_code,
+        reason = "only the Windows tests read it; the daemon answers promptly on every host"
+    )]
+    #[serde(default)]
     pub host_waits_on_queries: bool,
     /// The host takes a bracketed paste's markers itself and hands a program that reads its input
     /// as key presses (a console's input records) the pasted text as typed keys, and an Enter
     /// written right behind it as one more key in the same burst. A program that tells a paste by
     /// how fast its keys arrive then reads that Enter as a line break inside the paste.
+    #[serde(default)]
     pub paste_as_keys: bool,
     /// [`Pty::foreground_job`] can tell whose job the terminal's foreground is.
     #[allow(
         dead_code,
         reason = "the busy check acts on `Foreground::Unsupported` itself; the contract tests read this"
     )]
+    #[serde(default)]
     pub foreground_job: bool,
     /// How long the output has to stay silent for the program to count as having finished
     /// drawing.
+    #[serde(default)]
     pub settle_window: Duration,
 }
 
@@ -92,8 +105,10 @@ pub(crate) fn host_preamble() -> &'static [u8] {
 }
 
 /// A program to start on a terminal, with its arguments, environment and working directory. Plain
-/// data: it says what to start, and [`spawn`] starts it.
-#[derive(Debug, Clone)]
+/// data: it says what to start, and [`spawn`] starts it. It travels to another process as
+/// [`CommandWire`], so that a process other than the one that built it can start it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(into = "CommandWire", from = "CommandWire")]
 pub struct Command {
     program: OsString,
     args: Vec<OsString>,
@@ -102,13 +117,6 @@ pub struct Command {
     inherits_env: bool,
     env: Vec<(OsString, OsString)>,
     cwd: Option<PathBuf>,
-    #[cfg_attr(
-        unix,
-        allow(
-            dead_code,
-            reason = "a Unix host's polite request is a signal the program takes"
-        )
-    )]
     quit_keys: Option<QuitKeys>,
 }
 
@@ -187,6 +195,76 @@ impl SetEnv for Command {
     }
 }
 
+/// What a [`Command`] is as it crosses to another process: the same fields, owned and made of
+/// what the wire carries without loss (an `OsString` keeps a name that is not text).
+#[derive(Serialize, Deserialize)]
+struct CommandWire {
+    program: OsString,
+    args: Vec<OsString>,
+    inherits_env: bool,
+    env: Vec<(OsString, OsString)>,
+    cwd: Option<OsString>,
+    quit_keys: Option<QuitKeysWire>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct QuitKeysWire {
+    key: Vec<Input>,
+    presses: u32,
+    apart: Duration,
+    wait: Duration,
+}
+
+impl From<Command> for CommandWire {
+    fn from(command: Command) -> Self {
+        Self {
+            program: command.program,
+            args: command.args,
+            inherits_env: command.inherits_env,
+            env: command.env,
+            cwd: command.cwd.map(PathBuf::into_os_string),
+            quit_keys: command.quit_keys.map(|keys| QuitKeysWire {
+                key: keys.key.to_vec(),
+                presses: keys.presses,
+                apart: keys.apart,
+                wait: keys.wait,
+            }),
+        }
+    }
+}
+
+impl From<CommandWire> for Command {
+    fn from(wire: CommandWire) -> Self {
+        Self {
+            program: wire.program,
+            args: wire.args,
+            inherits_env: wire.inherits_env,
+            env: wire.env,
+            cwd: wire.cwd.map(PathBuf::from),
+            quit_keys: wire.quit_keys.map(|keys| QuitKeys {
+                key: interned_keys(keys.key),
+                presses: keys.presses,
+                apart: keys.apart,
+                wait: keys.wait,
+            }),
+        }
+    }
+}
+
+/// `key` as the `'static` slice [`QuitKeys`] holds. The keys a program quits on are a handful of
+/// constants, so each distinct set is leaked once and handed out again rather than once per
+/// command that names it.
+fn interned_keys(key: Vec<Input>) -> &'static [Input] {
+    static KNOWN: std::sync::Mutex<Vec<&'static [Input]>> = std::sync::Mutex::new(Vec::new());
+    let mut known = KNOWN.lock().unwrap_or_else(|err| err.into_inner());
+    if let Some(found) = known.iter().find(|known| **known == key.as_slice()) {
+        return found;
+    }
+    let leaked: &'static [Input] = Box::leak(key.into_boxed_slice());
+    known.push(leaked);
+    leaked
+}
+
 /// A process just started on a terminal of its own, by [`spawn`].
 pub struct Spawned {
     /// The process, which the caller now holds unreaped.
@@ -197,7 +275,7 @@ pub struct Spawned {
 
 /// What the daemon itself writes into a terminal, by meaning; [`Pty::write_input`] encodes it as
 /// the host's terminal takes it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Input {
     /// Text pasted in one piece, which a program that asked for bracketed paste reads as a paste
     /// rather than as typing. The caller strips what must not reach the program, the paste's own
@@ -262,4 +340,59 @@ pub enum Foreground {
     Other,
     /// The host cannot say.
     Unsupported,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn through_json(command: &Command) -> Command {
+        serde_json::from_str(&serde_json::to_string(command).expect("encodes")).expect("decodes")
+    }
+
+    #[test]
+    fn a_command_keeps_everything_it_says_across_the_wire() {
+        let mut command = Command::new("/some/program");
+        command
+            .args(["one", "two words"])
+            .env_clear()
+            .env("A", "1")
+            .env("B", "")
+            .cwd("/some/dir");
+        command.quit_keys(QuitKeys {
+            key: &[Input::Ctrl('c'), Input::Enter],
+            presses: 3,
+            apart: Duration::from_millis(250),
+            wait: Duration::from_secs(2),
+        });
+        let back = through_json(&command);
+        assert_eq!(back.program, command.program);
+        assert_eq!(back.args, command.args);
+        assert_eq!(back.inherits_env, command.inherits_env);
+        assert_eq!(back.env, command.env);
+        assert_eq!(back.cwd, command.cwd);
+        assert_eq!(back.quit_keys, command.quit_keys);
+    }
+
+    #[test]
+    fn a_command_that_inherits_its_environment_and_has_no_directory_or_keys_stays_so() {
+        let command = Command::new("p");
+        let back = through_json(&command);
+        assert!(back.inherits_env);
+        assert_eq!((back.cwd, back.quit_keys), (None, None));
+    }
+
+    #[test]
+    fn the_same_quit_keys_are_one_slice_however_often_they_arrive() {
+        let mut command = Command::new("p");
+        command.quit_keys(QuitKeys {
+            key: &[Input::Escape],
+            presses: 1,
+            apart: Duration::ZERO,
+            wait: Duration::from_secs(1),
+        });
+        let first = through_json(&command).quit_keys.expect("keys").key;
+        let second = through_json(&command).quit_keys.expect("keys").key;
+        assert!(std::ptr::eq(first, second));
+    }
 }

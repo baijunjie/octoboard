@@ -33,6 +33,8 @@ export function documentSettings(carried: Partial<DocumentSettings> = {}): Docum
 }
 
 export interface Mounted {
+  /** The daemon's state store, for a test that changes the state under the dialog. */
+  store: Daemon["store"];
   /** The bodies of the requests sent to the daemon, in order. */
   sent: () => ClientRequestBody[];
   /** The messages given to `showNotice`. */
@@ -66,6 +68,7 @@ export function mountDialog(
   });
   mountHost(<ThemeProvider>{dialog(closed)}<ErrorAlerts daemon={daemon} /></ThemeProvider>, { daemon, platform: { kind: "browser", host: BROWSER_HOST, configurationFile, ...capabilities } });
   return {
+    store: daemon.store,
     sent: () => request.mock.calls.map(([body]) => body),
     notices: () => vi.mocked(daemon.showNotice).mock.calls.map(([message]) => message),
     closed: () => closed.mock.calls.length,

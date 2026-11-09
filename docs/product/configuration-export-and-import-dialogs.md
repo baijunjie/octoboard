@@ -353,6 +353,21 @@ setting that account to Leave out, or unchecking its agent, brings its mark back
 the file carries no accounts, every reference that matches no account on the machine has its mark, those to the
 accounts the file would have created included.
 
+### When settings change during the review
+
+While the review is shown with a Settings section or Agent accounts checked, a change to any application setting — from
+another window, a console session or a single action — has the file read again by itself, so that the review shows, and
+the import acts on, the settings as they are now. The choices made in the review are kept where they still apply: a
+project's choice stays unless the new reading no longer offers it, when it goes to the preselected one, and an account's
+choice stays while its new status allows it, as do the agents and Settings sections checked. **Import** shows as pending
+while the file is read again, and assistive technology is told that the file was read again because settings changed.
+
+When reading it again fails, an Alert at the top of the review, titled "Could not read the file again", gives the
+reason with **Try again**, or, for a failure no retry can change, says to choose the file again with a **Choose file**
+button that does so. Meanwhile **Import** is unavailable: its tooltip and description are the Alert's title, and a press
+of it moves keyboard focus to the Alert's button, with the focus ring shown. The Alert goes once the file is read again,
+or once nothing checked writes settings any more.
+
 ## Applying the import
 
 The review's **Import** button sends the document unchanged, in one request, with the regions checked, the sections of
@@ -364,7 +379,10 @@ projects first, its row is marked and its field takes focus. Otherwise the **pro
 as the request runs, which with clones can be long. When the daemon answers, the **result** replaces it, and the dialog
 is renamed to say that the import finished (see `docs/product/configuration-import-progress-and-result.md`). When the request fails instead — the daemon refuses it, or the connection
 to it is lost — the dialog goes back to the review with every choice as it was, and the failure is told in an error
-alert over it (see "When the file fails" above).
+alert over it (see "When the file fails" above). The request carries the settings versions the review was read with,
+and is refused before anything is created when a setting it would write was changed after that — a change that reached
+the daemon before the review could be read again. The dialog then goes back to choosing the file, and the error alert
+says that settings changed after the file was read and to choose the file again to read it with the current settings.
 
 While the request runs the dialog cannot be left (see "A dialog cannot be left while its request runs" in
 `docs/product/dialogs.md`): **Cancel** stays in the footer, disabled like every other control of the dialog, beside the

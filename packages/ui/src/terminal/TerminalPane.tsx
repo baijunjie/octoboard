@@ -11,7 +11,8 @@ import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useLatest } from "../components/hooks/useLatest";
 import { Message, useT } from "../i18n/react";
 import { type Session } from "../protocol";
-import { hasNoProcess, isLive } from "../sessions/sessionStatus";
+import { sessionDisplayTitle } from "../sessions/sessionLabel";
+import { hasNoProcess, holdsPendingLink, isLive } from "../sessions/sessionStatus";
 import { useAccountSwitchHeld, useDaemon } from "../store";
 import type { ViewedFile } from "../viewer/viewedFile";
 import type { TerminalController } from "./TerminalController";
@@ -20,6 +21,9 @@ import { TerminalEditMenu } from "./TerminalEditMenu";
 import { TerminalSurface } from "./TerminalSurface";
 import { TerminalCover } from "./TerminalCover";
 import { TerminalNoticeBar, TerminalNoticeSlot } from "./TerminalNoticeBar";
+import { useAnnouncedOnRise } from "./useAnnouncedOnRise";
+import { useAnnouncedWhilePending } from "./useAnnouncedWhilePending";
+import { usePendingFocus } from "./usePendingFocus";
 import { useTerminalController } from "./useTerminalController";
 import { useTerminalReconnect } from "./useTerminalReconnect";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
@@ -64,10 +68,10 @@ interface TerminalPaneProps {
 }
 
 export interface TerminalPaneHandle {
-  /** Puts keyboard focus on the terminal, or on the button the pane offers in its place — the
-   * cover's Reconnect, or the empty state's creation action — since the terminal's Tab belongs to the
-   * agent and this is how the keyboard reaches either. With nothing to focus it goes to the top
-   * bar, except from `<body>`, which is left alone (`focusTerminal`). */
+  /** Puts keyboard focus on the terminal, or on what the pane offers in its place — the cover's
+   * Reconnect, the pending cover's region, or the empty state's creation action — since the terminal's
+   * Tab belongs to the agent and this is how the keyboard reaches any of them. With nothing to focus
+   * it goes to the top bar, except from `<body>`, which is left alone (`focusTerminal`). */
   focus: () => void;
 }
 
@@ -114,8 +118,13 @@ export function TerminalPane({
   const archivedRef = useLatest(isArchived);
   const historyRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
+  // A live session whose process the daemon cannot reach (`holder_link`) has its terminal covered
+  // and inert, and focus asked for it goes to the cover's region, which says why.
+  const livePending = session !== undefined && holdsPendingLink(session);
+  const pendingRef = useLatest(livePending);
   const focusTerminal = useCallback(() => {
-    if (archivedRef.current) {
+    if (pendingRef.current) coverRef.current?.focus();
+    else if (archivedRef.current) {
       const history = historyRef.current;
       (
         history?.querySelector<HTMLElement>("[role=region][tabindex]") ??
@@ -125,7 +134,7 @@ export function TerminalPane({
       )?.focus();
     } else if (hasSessionRef.current) controllerRef.current?.focus();
     else if (document.activeElement !== document.body) focusTopBar();
-  }, [hasSessionRef, archivedRef]);
+  }, [hasSessionRef, archivedRef, pendingRef]);
   // The session going away turns the terminal inert, and focus inside it would then fall to
   // `<body>` with no event; hand it to the top bar first.
   const noSession = session === undefined;
@@ -212,11 +221,21 @@ export function TerminalPane({
     [attachedId, terminalUrl],
   );
 
+  // Before `useTerminalReconnect`, which reads what it found as the suspension ends.
+  const { coverHasFocus, focusReturned } = usePendingFocus({
+    pending: livePending,
+    rootRef,
+    coverRef,
+    focusTerminal,
+    focusAfterTap: restoreFocus ?? focusTopBar,
+  });
   const { status, onStatusChange, resetAttempts, attemptsSpent, trouble, canReconnect, reconnectNow } = useTerminalReconnect({
     controllerRef,
     initialStatus: "closed",
     targetId: session?.id,
     live: !noProcess && sessionIsLive,
+    suspended: livePending,
+    recoveredWithUser: focusReturned,
     attach: attachCurrent,
     terminalReconnectDelay,
   });
@@ -227,10 +246,10 @@ export function TerminalPane({
     resizing,
     onStatusChange,
     onPaintedChange: setPainted,
+    inputHeld: livePending,
     project: session?.project_id,
     viewFile: onViewFile,
   });
-
   useEffect(() => {
     const controller = controllerRef.current;
     if (!controller) return;
@@ -263,6 +282,13 @@ export function TerminalPane({
       });
       return;
     }
+    if (livePending) {
+      // The daemon cannot reach the process, so nothing is attached and no attempt is spent: the
+      // hook attaches once when it can. A screen of another session is cleared; this session's own
+      // output stays under the cover.
+      if (controller.currentSessionId !== session.id) controller.detach({ keepScreenFor: session.id });
+      return;
+    }
     // Only skip when a connection to this exact session is already in flight or open — any other
     // status for this same session id means selecting it (again) should attach for real, not no-op.
     const alreadyAttached =
@@ -285,8 +311,10 @@ export function TerminalPane({
     if (ended && archivedRef.current && document.activeElement === document.body) focusTerminal();
   }, [resuming, archivedRef, focusTerminal]);
 
-  // What covers the terminal. A switch of the session's account comes first, as its process going
-  // down and coming back up is no trouble with the connection. A connection in trouble comes next,
+  // What covers the terminal, in this order. A process the daemon cannot reach comes first of all, over
+  // the socket's own state and the old output: nothing on screen is live, and no button is offered, as
+  // the daemon alone retries. A switch of the session's account comes next, as its process going down
+  // and coming back up is no trouble with the connection. A connection in trouble comes after it,
   // over any old output as well: a terminal that is not connected has nothing live to show, and the
   // disconnected state carries the Reconnect. Otherwise, from selecting a session until its first
   // output is on screen — through a resume starting the process, the socket connecting, and a
@@ -336,13 +364,29 @@ export function TerminalPane({
     return () => clearTimeout(timer);
   }, [barSentence, modalOpen]);
   const barSaid = modalOpen || bar.held ? (bar.spoken === barSentence ? barSentence : undefined) : barSentence;
-  const cover: { text: string; spinner: boolean } | undefined = switching
-    ? { text: t("terminal.switchingAccount"), spinner: true }
-    : trouble
-      ? { text: t(trouble === "disconnected" ? "terminal.disconnected" : "terminal.reconnecting"), spinner: trouble === "reconnecting" }
-      : loading
-        ? { text: t(resuming ? "terminal.resuming" : isStarting ? "terminal.starting" : "terminal.loading"), spinner: true }
-        : undefined;
+  const pendingCover = livePending && session ? { label: sessionDisplayTitle(t, session), title: t("terminal.holderPending.title"), body: t("terminal.holderPending.body") } : undefined;
+  const pendingSaid = useAnnouncedWhilePending(session?.id, livePending, t("terminal.holderPending.sentence"), coverHasFocus);
+  const cover: { text: string; spinner: boolean } | undefined = pendingCover
+    ? { text: pendingCover.title, spinner: true }
+    : switching
+      ? { text: t("terminal.switchingAccount"), spinner: true }
+      : trouble
+        ? { text: t(trouble === "disconnected" ? "terminal.disconnected" : "terminal.reconnecting"), spinner: trouble === "reconnecting" }
+        : loading
+          ? { text: t(resuming ? "terminal.resuming" : isStarting ? "terminal.starting" : "terminal.loading"), spinner: true }
+          : undefined;
+
+  // The mark of a rebuilt display is drawn in the title bar beside the session's title; the pane
+  // speaks it when the flag turns on under an open session, not for one that is shown with it.
+  // A rise under a pending cover waits for it to go, and for the cover that follows it (the loading
+  // one, until the first paint) to go too, so that it overwrites neither of their sentences.
+  const [afterPending, setAfterPending] = useState(false);
+  const covered = cover !== undefined;
+  useLayoutEffect(() => {
+    if (livePending) setAfterPending(true);
+    else if (!covered) setAfterPending(false);
+  }, [livePending, covered]);
+  const recoveredSaid = useAnnouncedOnRise(session?.id, session?.screen_inexact === true, t("terminal.recovered.title"), livePending || afterPending);
 
   return (
     // `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener
@@ -356,7 +400,7 @@ export function TerminalPane({
       containerRef={containerRef}
       setLinkRef={setLinkRef}
       padding="session-terminal-inset py-2"
-      inert={!session || isArchived || switching}
+      inert={!session || isArchived || switching || livePending}
       editMenu={session && !isArchived && <TerminalEditMenu key={session.id} sessionId={session.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
     >
       {session && isArchived && (
@@ -385,13 +429,14 @@ export function TerminalPane({
           disconnected={trouble === "disconnected"}
           canReconnect={canReconnect}
           onReconnect={reconnectNow}
+          pending={pendingCover}
         />
       )}
       {/* The cover's text is spoken from a status region that is mounted empty and written after
           its first delay (`StatusAnnouncer`). The loading and reconnecting covers are hidden from
-          assistive technology; the disconnected one is not, so that its button stays reachable, and
-          browsing meets its message a second time. */}
-      <StatusAnnouncer text={cover?.text} />
+          assistive technology; the disconnected one and the pending one are not, so that the button
+          and the focusable region stay reachable, and browsing meets their message a second time. */}
+      <StatusAnnouncer text={livePending ? pendingSaid : cover?.text} />
       {!session && (
         // `held`: a creation button goes away when its list gains content, from this window
         // or another, and a focused element that is removed leaves focus on `<body>`. It is the
@@ -428,6 +473,7 @@ export function TerminalPane({
           pane never opens on a session without a process); the visible sentence is hidden from assistive
           technology so nothing is said twice, and the button stays reachable. */}
       <StatusAnnouncer text={barSaid} />
+      <StatusAnnouncer text={recoveredSaid} clearAfterRead />
       <TerminalNoticeSlot>
         {noProcessBar && (
           <TerminalNoticeBar

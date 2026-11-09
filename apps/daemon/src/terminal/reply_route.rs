@@ -1,25 +1,21 @@
-//! Which answers to the queries a terminal's program writes reach the program.
+//! Which clients' answers to the queries passed through to them reach the program.
 //!
 //! A program asks its terminal things through the output — the cursor position (`CSI 6n`), the
 //! background colour (`OSC 11 ?`), the device attributes — and reads the answer back as input.
-//! Every client attached to the terminal runs an emulator of its own that sees the same output and
-//! answers it, so with two clients attached the program would get every answer twice: it reads the
-//! first and leaves the second in its input, where the next prompt trips over it or the shell echoes
-//! it. A client attaching again answers the queries in the output it is replayed as well, long after
-//! the program stopped waiting.
+//! The daemon answers those its parsed terminal can answer itself and leaves them out of what the
+//! clients receive (`terminal::queries`). The rest passes through, and every client attached to
+//! the terminal runs an emulator of its own that sees the same output and answers it, so with two
+//! clients attached the program would get every answer twice: it reads the first and leaves the
+//! second in its input, where the next prompt trips over it or the shell echoes it.
 //!
 //! So each answer names the point in the output it answers: the end of the output frame whose
-//! parsing produced it, as a count of the bytes the program has written. The first client to answer
-//! the output up to a point is the one whose answers to it are written; answers to output up to an
-//! earlier point come too late and are dropped, however long a client took to send them. Output
+//! parsing produced it, as a count of the bytes the clients have been handed. The first client to
+//! answer the output up to a point is the one whose answers to it are written; answers to output up
+//! to an earlier point come too late and are dropped, however long a client took to send them. Output
 //! older than [`STALE_AFTER`] is settled too, answered or not: a program waits that long for an
 //! answer at most, and one that has given up would read a late answer as input. A client attaching
-//! is told how much of its replay is settled (see [`ReplayMark`]), so it answers only the rest.
-//!
-//! The daemon can be the one to answer ([`ReplyRoute::DAEMON`]), for a program whose host holds it
-//! up until its queries are answered, while no client is attached to do it. Its answer is the first
-//! to the output it names like any other, so a client attaching later is told that output is
-//! settled, and one that answers it anyway is dropped.
+//! starts from a first paint of the screen, which asks nothing, and answers only the output after
+//! it.
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -32,16 +28,6 @@ pub(crate) const STALE_AFTER: Duration = Duration::from_secs(5);
 #[cfg(test)]
 pub(crate) const STALE_AFTER: Duration = Duration::from_secs(60);
 
-/// Where a replay stands in the output, told to a client attaching before its replay.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ReplayMark {
-    /// The count of bytes the program had written when the replay was taken: the point in the
-    /// output the replay ends at.
-    pub offset: u64,
-    /// How many of the replay's leading bytes hold only settled output, which is not answered.
-    pub answered: usize,
-}
-
 /// The answers written so far, and the output recent enough to answer.
 #[derive(Debug, Default)]
 pub struct ReplyRoute {
@@ -51,12 +37,12 @@ pub struct ReplyRoute {
     recent: VecDeque<(u64, Instant)>,
     /// The end of the last frame of output older than [`STALE_AFTER`].
     stale_through: u64,
+    /// The end of the last frame of output that passed a query through to the clients while one
+    /// was attached to answer it ([`Self::owe`]).
+    owed_through: u64,
 }
 
 impl ReplyRoute {
-    /// The id the daemon answers under, which no client has: they count up from 0.
-    pub const DAEMON: u64 = u64::MAX;
-
     /// Records a frame of output, which ends at `end`, as having come at `now`.
     pub fn note_output(&mut self, end: u64, now: Instant) {
         self.recent.push_back((end, now));
@@ -73,11 +59,21 @@ impl ReplyRoute {
         }
     }
 
-    /// How far into the output no query is waiting for an answer any more, at `now`.
-    fn settled_through(&mut self, now: Instant) -> u64 {
+    /// Notes that the frame of output ending at `end` passed a query through to the clients, with
+    /// one attached to answer it.
+    pub fn owe(&mut self, end: u64) {
+        self.owed_through = self.owed_through.max(end);
+    }
+
+    /// Whether, at `now`, a query passed through to the clients ([`Self::owe`]) may still be
+    /// answered: no answer has been written for output up to it, and it is not yet older than
+    /// [`STALE_AFTER`], past which no answer to it is written any more.
+    pub fn owed(&mut self, now: Instant) -> bool {
         self.forget_stale(now);
-        let answered = self.last_answer.map_or(0, |(offset, _)| offset);
-        answered.max(self.stale_through)
+        self.owed_through > self.stale_through
+            && self
+                .last_answer
+                .is_none_or(|(answered, _)| answered < self.owed_through)
     }
 
     /// Whether this client's answer to the output up to `offset`, given at `now` when the program
@@ -97,51 +93,13 @@ impl ReplyRoute {
         }
         admitted
     }
-
-    /// The mark, at `now`, for a replay of the output in `[end - replayed, end)`, after `preamble`
-    /// bytes that restore the terminal's modes and ask nothing.
-    pub fn replay_mark(
-        &mut self,
-        end: u64,
-        replayed: usize,
-        preamble: usize,
-        now: Instant,
-    ) -> ReplayMark {
-        let start = end - replayed as u64;
-        let settled = self
-            .settled_through(now)
-            .saturating_sub(start)
-            .min(replayed as u64);
-        ReplayMark {
-            offset: end,
-            answered: preamble + settled as usize,
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
 
-    use super::{ReplayMark, ReplyRoute, STALE_AFTER};
-
-    #[test]
-    fn the_daemons_answer_settles_the_output_it_answers_and_no_client_can_repeat_it() {
-        let mut route = ReplyRoute::default();
-        let now = Instant::now();
-        route.note_output(10, now);
-        assert!(route.admit(ReplyRoute::DAEMON, 10, 10, now));
-        assert!(!route.admit(0, 10, 10, now));
-        assert_eq!(
-            route.replay_mark(10, 10, 0, now),
-            ReplayMark {
-                offset: 10,
-                answered: 10
-            }
-        );
-        route.note_output(20, now);
-        assert!(route.admit(0, 20, 20, now), "later output is still open");
-    }
+    use super::{ReplyRoute, STALE_AFTER};
 
     #[test]
     fn the_first_answer_to_a_point_is_written_and_another_clients_copy_is_dropped() {
@@ -193,42 +151,22 @@ mod tests {
     }
 
     #[test]
-    fn a_replay_is_marked_settled_up_to_the_last_answer_or_the_stale_output_within_it() {
+    fn a_query_passed_to_the_clients_is_owed_until_answered_or_stale() {
         let mut route = ReplyRoute::default();
-        let now = Instant::now();
-        for end in [20, 70, 100] {
-            route.note_output(end, now);
-        }
-        assert_eq!(
-            route.replay_mark(100, 60, 4, now),
-            ReplayMark {
-                offset: 100,
-                answered: 4
-            }
-        );
-        let client = 0;
-        route.admit(client, 20, 100, now);
-        assert_eq!(
-            route.replay_mark(100, 60, 4, now),
-            ReplayMark {
-                offset: 100,
-                answered: 4
-            }
-        );
-        route.admit(client, 70, 100, now);
-        assert_eq!(
-            route.replay_mark(100, 60, 4, now),
-            ReplayMark {
-                offset: 100,
-                answered: 34
-            }
-        );
-        assert_eq!(
-            route.replay_mark(100, 60, 4, now + STALE_AFTER),
-            ReplayMark {
-                offset: 100,
-                answered: 64
-            }
-        );
+        let then = Instant::now();
+        assert!(!route.owed(then));
+        route.note_output(10, then);
+        route.owe(10);
+        assert!(route.owed(then));
+        // An answer to earlier output settles nothing; one to it, or to later output, does.
+        route.note_output(20, then);
+        assert!(route.admit(0, 5, 100, then));
+        assert!(route.owed(then));
+        assert!(route.admit(0, 10, 100, then));
+        assert!(!route.owed(then));
+        // Nobody answers the next one: it is owed only until the program has stopped waiting.
+        route.owe(20);
+        assert!(route.owed(then));
+        assert!(!route.owed(then + STALE_AFTER));
     }
 }

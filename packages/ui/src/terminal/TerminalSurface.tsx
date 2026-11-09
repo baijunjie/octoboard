@@ -38,7 +38,7 @@ export function TerminalSurface({
   setLinkRef: React.RefObject<((link: HoveredTerminalLink | undefined) => void) | undefined>;
   /** The padding classes of the wrapper around the mount element. */
   padding: string;
-  /** The terminal is out of reach (no session to show, or switching). */
+  /** The terminal is out of reach (no session to show, switching, or its process cannot be reached). */
   inert?: boolean;
   /** A `data-*` attribute that marks the mount element, for what looks for a terminal by it. */
   mountMarker?: `data-${string}`;

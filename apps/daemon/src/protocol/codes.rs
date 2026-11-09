@@ -93,6 +93,12 @@ pub mod error_code {
     /// this or another client or in the terminal, gone with its session, or never shown. Nothing is
     /// wrong, so a client shows nothing.
     pub const TRUST_NOT_WAITING: Code = Code("trust_not_waiting");
+    /// A write of a record edited through a form (`update_settings`, `update_console`,
+    /// `update_project`, `update_account`, or an import's settings) was based on a version of a
+    /// field that another write has moved on from, so none of it was applied. `params` names the
+    /// `fields` whose versions differ (their paths, comma-separated) and their current `versions`
+    /// (a JSON object of path to version), for the client to show the current values and ask again.
+    pub const WRITE_CONFLICT: Code = Code("write_conflict");
 
     // -- for the user to read ----------------------------------------------------------------
 
@@ -477,7 +483,13 @@ pub mod error_code {
     /// keeps the model and effort it had and is left interrupted. `params` names the `session`.
     pub const MODEL_CHANGE_DID_NOT_COME_UP: Code = Code("model_change_did_not_come_up");
     /// The daemon has begun to shut down, so no session is launched, resumed, switched or handed
-    /// off, and no claim on one is granted.
+    /// off, and no claim on one is granted; in a planned stop, also nothing that would change or
+    /// end a terminal or remove what one works in (an archive, a deletion, a removal of a project
+    /// or a console, a restart, an explicit stop of processes, a shell terminal created or closed,
+    /// an interrupt, a trust answer), once the queued messages are saved for the next daemon no
+    /// message, and once a terminal is handed over nothing typed into it, which is dropped (told
+    /// once per terminal connection, with no params). The request may be made again once the
+    /// daemon is back.
     pub const DAEMON_SHUTTING_DOWN: Code = Code("daemon_shutting_down");
     /// A requested account name collides with an existing one of the same agent, trimmed and
     /// compared ignoring letter case — the default account's name takes part. `params` names

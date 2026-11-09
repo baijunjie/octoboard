@@ -151,7 +151,7 @@ it("does not select the session when the window moved to another console while i
 });
 
 const ASKING = '[role="alertdialog"]';
-const half: Account = { id: "a-half", agent: "claude", name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true, disabled: false };
+const half: Account = { id: "a-half", agent: "claude", name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true, disabled: false, versions: {} };
 const target = (): NewSessionRequest => ({ kind: "new-console-session", console: consoleOf(parent.id, "Main", { accounts: { claude: half.id } }) });
 const close = () => act(async () => (document.body.querySelector(`${ASKING} button[aria-label="Close"]`) as HTMLElement).click());
 

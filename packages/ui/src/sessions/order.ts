@@ -6,8 +6,9 @@ import { runsInBackground, sessionShownStatusKind, sessionStatusKind, showsSwitc
  * abnormally, a finished turn, a prompt waiting for a first instruction), then work going on elsewhere
  * (delegated or left in the background), then the sessions busy working, which are best left alone, and last
  * the ones with no process. Archived sessions are listed separately. A session starting up or switching account has no
- * rank of its own: it sorts where it will land (`outcomeKind`), so `starting` has no entry. */
-export const STATUS_RANK: Record<Exclude<ShownStatusKind, "starting" | "switching">, number> = {
+ * rank of its own: it sorts where it will land (`outcomeKind`), so `starting` has no entry. A session whose process cannot
+ * be reached (`reconnecting`) is only drawn differently: it ranks by its stored status. */
+export const STATUS_RANK: Record<Exclude<ShownStatusKind, "starting" | "switching" | "reconnecting">, number> = {
   waiting_user: 0,
   dormant: 1,
   paused: 2,

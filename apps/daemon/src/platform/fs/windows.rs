@@ -448,6 +448,14 @@ pub fn keep_private_below(dir: &Path) -> io::Result<()> {
     restrict_to_owner(dir)
 }
 
+/// Whether `a` and `b` lead to the same file: their resolved paths are equal.
+pub fn same_file(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
 /// Whether `path` leads to a regular file the system would run: one whose extension is among those
 /// `PATHEXT` lists (Windows runs a file by its extension, not by a permission).
 pub fn is_executable(path: &Path) -> bool {

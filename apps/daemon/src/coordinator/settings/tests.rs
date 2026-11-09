@@ -598,3 +598,181 @@ async fn update_settings_changes_the_git_workflow_settings_and_broadcasts_only_a
     )
     .is_err());
 }
+
+/// Every settings field a change can write is named by the path the versions are kept under, so a
+/// write is checked against the versions of the fields it writes and no others.
+#[test]
+fn each_settings_change_names_the_path_it_writes() {
+    use crate::protocol::{GitDelivery, GitDevelopment};
+
+    let fields = [
+        (
+            "auto_close_idle_shell_terminals",
+            SettingsChanges {
+                auto_close_idle_shell_terminals: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "auto_pull_repositories",
+            SettingsChanges {
+                auto_pull_repositories: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "auto_delete_unresumable_archives",
+            SettingsChanges {
+                auto_delete_unresumable_archives: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "auto_approve_session_requests",
+            SettingsChanges {
+                auto_approve_session_requests: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "auto_approve_resume_requests",
+            SettingsChanges {
+                auto_approve_resume_requests: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "auto_approve_account_switches",
+            SettingsChanges {
+                auto_approve_account_switches: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "auto_approve_handoffs",
+            SettingsChanges {
+                auto_approve_handoffs: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "ask_questions_as_choices",
+            SettingsChanges {
+                ask_questions_as_choices: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "interface_language",
+            SettingsChanges {
+                interface_language: Some(String::new()),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "keep_awake",
+            SettingsChanges {
+                keep_awake: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "keep_awake_when",
+            SettingsChanges {
+                keep_awake_when: Some(KeepAwakeWhen::Always),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "auto_select_account",
+            SettingsChanges {
+                auto_select_account: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "auto_switch_on_usage_limit",
+            SettingsChanges {
+                auto_switch_on_usage_limit: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "auto_start_quota_windows",
+            SettingsChanges {
+                auto_start_quota_windows: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "default_clone_dir",
+            SettingsChanges {
+                default_clone_dir: Some(String::new()),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "resume_sessions_on_start",
+            SettingsChanges {
+                resume_sessions_on_start: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+    ];
+    let named: Vec<&str> = fields.iter().map(|(name, _)| *name).collect();
+    assert_eq!(named, SETTINGS_FIELDS, "every field has a case, in order");
+    for (name, changes) in fields {
+        assert_eq!(changes.paths(), vec![name.to_string()], "{name}");
+    }
+
+    let items = [
+        (
+            "development",
+            GitWorkflowSettingsChanges {
+                development: Some(GitDevelopment::Branch),
+                ..GitWorkflowSettingsChanges::default()
+            },
+        ),
+        (
+            "squash_before_delivery",
+            GitWorkflowSettingsChanges {
+                squash_before_delivery: Some(true),
+                ..GitWorkflowSettingsChanges::default()
+            },
+        ),
+        (
+            "rebase_before_delivery",
+            GitWorkflowSettingsChanges {
+                rebase_before_delivery: Some(true),
+                ..GitWorkflowSettingsChanges::default()
+            },
+        ),
+        (
+            "delivery",
+            GitWorkflowSettingsChanges {
+                delivery: Some(GitDelivery::Merge),
+                ..GitWorkflowSettingsChanges::default()
+            },
+        ),
+        (
+            "revert_gate",
+            GitWorkflowSettingsChanges {
+                revert_gate: Some(true),
+                ..GitWorkflowSettingsChanges::default()
+            },
+        ),
+    ];
+    let named: Vec<&str> = items.iter().map(|(name, _)| *name).collect();
+    assert_eq!(named, GIT_WORKFLOW_ITEMS, "every item has a case, in order");
+    for (name, git_workflow) in items {
+        let changes = SettingsChanges {
+            git_workflow,
+            ..SettingsChanges::default()
+        };
+        assert_eq!(
+            changes.paths(),
+            vec![format!("git_workflow.{name}")],
+            "{name}"
+        );
+    }
+}

@@ -18,7 +18,7 @@ use crate::protocol::{
 use crate::records::switch_continue;
 use crate::session::term;
 use crate::state::refusals::refuse_if_archived;
-use crate::state::{session_archived, AppState};
+use crate::state::{session_archived, AppState, ChangeAdmission};
 
 use super::accounts::refuse_unless_account_usable;
 use super::bindings::refuse_unless_still_askers;
@@ -580,10 +580,14 @@ pub(crate) async fn wait_for_usage_limit(
 /// fails when the process cannot be started or does not stay up. `target` is the account the
 /// failed switch was to move it to (`None` the default account): a session found on neither that
 /// nor `before`'s account was moved by somebody else meanwhile, and is left as they left it.
+/// `admission` is the failed switch's admission past the handover barrier ([`SwitchFailed`]): with
+/// it the restore is not refused by a barrier raised since, as it finishes what the switch began,
+/// and without it, or once the planned stop has stopped waiting, it is refused like any launch.
 pub(crate) async fn restore_after_failed_switch(
     state: &Arc<AppState>,
     before: &Session,
     target: Option<&str>,
+    admission: Option<&ChangeAdmission>,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
     let id = before.id.as_str();
@@ -592,7 +596,11 @@ pub(crate) async fn restore_after_failed_switch(
     // rather than given up on: the session is down and nobody else will bring it back.
     let deadline = Instant::now() + RESTORE_CLAIM_WAIT;
     let claim = loop {
-        match state.begin_account_switch(id, true) {
+        let claimed = match admission {
+            Some(admission) => state.begin_account_switch_admitted(id, true, admission),
+            None => state.begin_account_switch(id, true),
+        };
+        match claimed {
             Ok(claim) => break claim,
             Err(err) if is_already_starting(&err) && Instant::now() < deadline => {
                 tokio::time::sleep(Duration::from_millis(100)).await;

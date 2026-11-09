@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
-import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
+import { FOLLOWING_GIT_WORKFLOW, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type Console, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
 import { type MessageParams } from "../errors/codedError";
@@ -30,6 +30,32 @@ const NO_LAUNCH: Launch = { model: null, effort: null };
 function layered<T extends object>(base: PerAgent<T>, over: Partial<PerAgent<Partial<T>>> = {}): PerAgent<T> {
   return Object.fromEntries(FIXTURE_AGENTS.map((agent) => [agent, { ...base[agent], ...over[agent] }])) as PerAgent<T>;
 }
+
+/** Every path at version 1: what a record built here holds for a checked write to be based on. */
+const versionsOf = (paths: string[]): Record<string, number> => Object.fromEntries(paths.map((path) => [path, 1]));
+const forEachAgent = (paths: (agent: Agent) => string[]): string[] => FIXTURE_AGENTS.flatMap(paths);
+
+/** The `versions` of a console, a project, an account and the settings a builder here gives: one for every path the
+ * daemon versions. */
+export const CONSOLE_VERSIONS = versionsOf([
+  "name", "default_agent", "project_session_agent", "icon", "console_session_prompt",
+  ...forEachAgent((agent) => [`accounts.${agent}`, `launch.${agent}.model`, `launch.${agent}.effort`, `project_session_launch.${agent}.model`, `project_session_launch.${agent}.effort`]),
+]);
+export const PROJECT_VERSIONS = versionsOf([
+  "name", "default_agent", "pinned", "tags", "description",
+  ...forEachAgent((agent) => [`accounts.${agent}`, `launch.${agent}.model`, `launch.${agent}.effort`]),
+  ...GIT_WORKFLOW_ITEM_KEYS.map((item) => `git_workflow.${item}`),
+]);
+export const ACCOUNT_VERSIONS = versionsOf(["name", "config_dir", "disabled", "share_default_config"]);
+export const SETTINGS_VERSIONS = versionsOf([
+  "auto_close_idle_shell_terminals", "auto_pull_repositories", "auto_delete_unresumable_archives", "auto_approve_session_requests",
+  "auto_approve_resume_requests", "auto_approve_account_switches", "auto_approve_handoffs", "ask_questions_as_choices",
+  "interface_language", "keep_awake", "keep_awake_when", "auto_select_account", "auto_switch_on_usage_limit",
+  "auto_start_quota_windows", "default_clone_dir", "resume_sessions_on_start",
+  ...GIT_WORKFLOW_ITEM_KEYS.map((item) => `git_workflow.${item}`),
+  ...forEachAgent((agent) => [`agent_tags.${agent}`]),
+  ...FIXTURE_PROVIDERS.flatMap(({ id, settings }) => settings.map((setting) => `provider_settings.${id}.${setting.id}`)),
+]);
 
 /** What a test or scenario may set on a console: the per-agent settings may name only the agents (and launch fields) they set. */
 export type ConsoleExtra = Partial<Omit<Console, "accounts" | "launch" | "project_session_launch">> & {
@@ -70,7 +96,7 @@ export function projectWith(base: Project, extra: ProjectExtra): Project {
 /** An account of `agent` in `config_dir` that is not shared with the default configuration and not turned off; `extra`
  * sets what a scenario shows otherwise. */
 export function accountOf(id: string, agent: Agent, name: string, config_dir: string, extra: Partial<Account> = {}): Account {
-  return { id, agent, name, config_dir, share_default_config: false, share_default_config_incomplete: false, disabled: false, ...extra };
+  return { id, agent, name, config_dir, share_default_config: false, share_default_config_incomplete: false, disabled: false, versions: ACCOUNT_VERSIONS, ...extra };
 }
 
 /** One agent's CLI as the daemon last checked it: installed through the CLI's own installer at 2.1.319, which is also the
@@ -102,6 +128,7 @@ export function consoleOf(id: string, name: string, extra: ConsoleExtra = {}): C
     icon: null,
     console_session_prompt: null,
     created_at: minutesAgo(60 * 24 * 30),
+    versions: CONSOLE_VERSIONS,
   }, extra);
 }
 
@@ -122,6 +149,7 @@ export function projectOf(id: string, consoleId: string, name: string, extra: Pr
     accounts: { claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } },
     launch: { claude: NO_LAUNCH, codex: NO_LAUNCH, grok: NO_LAUNCH },
     git_workflow: FOLLOWING_GIT_WORKFLOW,
+    versions: PROJECT_VERSIONS,
   }, extra);
 }
 
@@ -311,7 +339,8 @@ export function snapshotState(parts: {
     gitStatuses: new Map((parts.gitStatuses ?? []).map((g) => [g.project, g])),
     providers: FIXTURE_PROVIDERS,
     agentAvailability: availabilityOf(FIXTURE_PROVIDERS),
-    settings: parts.settings ?? { ...DEFAULT_SETTINGS, default_clone_dir: "/Users/dev/Projects" },
+    // The daemon's settings always carry the version of every field, so a scenario's own settings are completed with them.
+    settings: { ...(parts.settings ?? { ...DEFAULT_SETTINGS, default_clone_dir: "/Users/dev/Projects" }), versions: { ...SETTINGS_VERSIONS, ...parts.settings?.versions } },
     accountQuotas: parts.accountQuotas ?? [],
     accountSharing: accountSharingOf(parts.accountSharing ?? []),
     homeDir: parts.homeDir ?? "/Users/dev",

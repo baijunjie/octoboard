@@ -93,6 +93,7 @@
 //! already begun.
 
 pub(crate) mod accounts;
+mod adoption;
 mod compatibility_consumer;
 mod conversation;
 mod home;
@@ -169,6 +170,10 @@ impl AgentProvider for GrokProvider {
         &hooks::GrokHooks
     }
 
+    fn has_status_integration(&self) -> bool {
+        true
+    }
+
     fn accounts(&self) -> Option<&'static dyn crate::accounts::AccountOps> {
         Some(&accounts::GrokAccounts)
     }
@@ -179,6 +184,10 @@ impl AgentProvider for GrokProvider {
 
     fn records(&self) -> &'static dyn crate::records::RecordStore {
         &records::GrokRecords
+    }
+
+    fn rebuild_launch(&self, record: &serde_json::Value) -> super::RebuiltLaunch {
+        adoption::rebuild(record)
     }
 
     fn refuse_unlaunchable_account(&self, pinned: Option<&Path>) -> Result<()> {
@@ -386,12 +395,15 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<Launch
             (var.to_string(), on.to_string())
         }));
     }
+    let writeback = shared_config_writeback(&source_home, &grok_home, spec.model);
+    let adoption = adoption::record(&carried_trust, writeback.as_ref());
     Ok(LaunchPlan {
         args,
         env,
         carried_trust: Some(std::sync::Arc::new(carried_trust)),
-        after_exit: shared_config_writeback(&source_home, &grok_home, spec.model)
+        after_exit: writeback
             .map(|writeback| Box::new(writeback) as Box<dyn crate::session::term::AfterExit>),
+        adoption,
         ..LaunchPlan::default()
     })
 }

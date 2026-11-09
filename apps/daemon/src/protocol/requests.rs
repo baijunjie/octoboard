@@ -2,6 +2,8 @@
 //! ones, with the request-only values they carry. See "Client to daemon" in
 //! `apps/daemon/PROTOCOL.md`.
 
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 
 use super::agents::{AgentId, Change, Launch, LaunchChange, PerAgent};
@@ -117,6 +119,14 @@ pub enum RequestBody {
         #[serde(default, deserialize_with = "present_option")]
         #[cfg_attr(test, ts(optional))]
         console_session_prompt: Option<Option<String>>,
+        /// The version of each field this request changes that the client read it at (the
+        /// record's `versions`), by path. Absent or empty means the write is not checked. A path
+        /// that is not a versioned field of the record is refused with `unreadable_request`; any
+        /// path whose version is no longer current refuses the whole request with
+        /// `write_conflict`, applying nothing.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional, type = "Record<string, number>"))]
+        base_versions: Option<BTreeMap<String, u64>>,
     },
     DeleteConsole {
         console: String,
@@ -205,6 +215,14 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         git_workflow: Option<GitWorkflowOverrideChanges>,
+        /// The version of each field this request changes that the client read it at (the
+        /// record's `versions`), by path. Absent or empty means the write is not checked. A path
+        /// that is not a versioned field of the record is refused with `unreadable_request`; any
+        /// path whose version is no longer current refuses the whole request with
+        /// `write_conflict`, applying nothing.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional, type = "Record<string, number>"))]
+        base_versions: Option<BTreeMap<String, u64>>,
     },
     DeleteProject {
         project: String,
@@ -380,6 +398,14 @@ pub enum RequestBody {
         #[serde(default = "default_true")]
         #[cfg_attr(test, ts(optional = nullable))]
         apply_clone_dir: bool,
+        /// The settings versions the client's `configuration_inspected` reply carried
+        /// (`settings_versions`). Given, an import that writes settings is refused with
+        /// `write_conflict`, before anything is created, when any settings field it would write
+        /// has changed since; the settings write itself is checked again as it is applied, and a
+        /// conflict then is reported as that write's failure. Absent means unchecked.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional, type = "Record<string, number>"))]
+        settings_versions: Option<BTreeMap<String, u64>>,
     },
     OpenSession {
         console_id: String,
@@ -762,6 +788,14 @@ pub enum RequestBody {
         #[cfg_attr(test, ts(optional))]
         #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string>>>"))]
         agent_tags: Option<std::collections::BTreeMap<String, Vec<String>>>,
+        /// The version of each field this request changes that the client read it at (the
+        /// record's `versions`), by path. Absent or empty means the write is not checked. A path
+        /// that is not a versioned field of the record is refused with `unreadable_request`; any
+        /// path whose version is no longer current refuses the whole request with
+        /// `write_conflict`, applying nothing.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional, type = "Record<string, number>"))]
+        base_versions: Option<BTreeMap<String, u64>>,
     },
     /// Both fields are required: an account always has a name and a directory. Broadcasts
     /// `settings_updated`.
@@ -778,6 +812,14 @@ pub enum RequestBody {
         name: Option<String>,
         #[cfg_attr(test, ts(optional))]
         config_dir: Option<String>,
+        /// The version of each field this request changes that the client read it at (the
+        /// record's `versions`), by path. Absent or empty means the write is not checked. A path
+        /// that is not a versioned field of the record is refused with `unreadable_request`; any
+        /// path whose version is no longer current refuses the whole request with
+        /// `write_conflict`, applying nothing.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional, type = "Record<string, number>"))]
+        base_versions: Option<BTreeMap<String, u64>>,
     },
     /// Clears the reference of every console that refers to this account, which puts each one back
     /// on its agent's default account, then removes the account. A session holding it is left
@@ -1162,7 +1204,24 @@ pub enum RequestBody {
     RestoreProjectChanges {
         project: String,
     },
+    /// The client's heartbeat: answered with `ack` and changes nothing, so that a client hears from
+    /// the daemon within its heartbeat timeout even when nothing else happens.
+    Ping,
     Shutdown,
+    /// Stops the daemon with every terminal handed over to its holder, the sessions left running
+    /// for the next daemon to adopt with their screens exact; starts no successor. Answered with
+    /// `ack`; never refused.
+    PlannedStop,
+    /// Asks which running sessions and shell terminals a planned stop followed by a daemon that
+    /// adopts holders from `holder_floor` up to `target_version` (the next daemon's own, both
+    /// inclusive) would not carry over, so that they would end up interrupted or closed.
+    /// `holder_floor` is the oldest holder version the next daemon adopts; either is `null` when
+    /// the caller does not know it, which counts every one and answers `known: false`. Answered
+    /// with `handover_check`; never refused.
+    HandoverCheck {
+        holder_floor: Option<String>,
+        target_version: Option<String>,
+    },
 }
 
 /// What a `list_processes` asks about: one session, or one project.

@@ -99,6 +99,9 @@ pub struct AvailableUpdate {
     version: String,
     /// The release notes, when the manifest has any.
     notes: Option<String>,
+    /// The oldest version whose process holders the new build adopts (the manifest's `holder_floor`), when
+    /// the manifest names one: a session whose holder is older would be interrupted by the restart.
+    holder_floor: Option<String>,
 }
 
 /// How far a download has got.
@@ -309,6 +312,7 @@ pub async fn check_for_update(
             let found = AvailableUpdate {
                 version: update.version.clone(),
                 notes: update.body.clone().filter(|notes| !notes.trim().is_empty()),
+                holder_floor: holder_floor(&update.raw_json),
             };
             inner.found = Some(update);
             Ok(Some(found))
@@ -319,6 +323,12 @@ pub async fn check_for_update(
         }
         Err(err) => Err(err),
     }
+}
+
+/// The holder floor the update's manifest names: `holder_floor` as a string, none when it is absent or not
+/// one.
+fn holder_floor(manifest: &serde_json::Value) -> Option<String> {
+    manifest.get("holder_floor")?.as_str().map(str::to_owned)
 }
 
 async fn look_for_update(
@@ -436,6 +446,33 @@ mod tests {
                 .unwrap();
             assert_eq!(url.scheme(), "https");
         }
+    }
+
+    #[test]
+    fn the_holder_floor_is_read_from_the_manifest_when_it_names_one() {
+        let manifest = serde_json::json!({ "version": "0.2.0", "holder_floor": "0.1.0" });
+        assert_eq!(holder_floor(&manifest), Some("0.1.0".to_string()));
+        assert_eq!(
+            holder_floor(&serde_json::json!({ "version": "0.2.0" })),
+            None
+        );
+        assert_eq!(
+            holder_floor(&serde_json::json!({ "holder_floor": 1 })),
+            None
+        );
+    }
+
+    #[test]
+    fn a_found_update_reaches_the_page_with_its_holder_floor() {
+        let found = AvailableUpdate {
+            version: "0.2.0".into(),
+            notes: None,
+            holder_floor: Some("0.1.0".into()),
+        };
+        assert_eq!(
+            serde_json::to_string(&found).unwrap(),
+            r#"{"version":"0.2.0","notes":null,"holder_floor":"0.1.0"}"#
+        );
     }
 
     #[test]

@@ -219,7 +219,11 @@ changing them" in `docs/product/git-workflow-settings.md`.
 ## When it cannot decide
 
 The gate fails open. Git goes through, saying nothing, whenever the daemon cannot be reached, does not answer within
-about a second and a half, or gives an answer the gate cannot read. When the daemon answers the gate's call with an
+about **32.5 seconds**, or gives an answer the gate cannot read. The call goes to the process holder that runs the
+session, which holds it up to 30 seconds while no daemon is connected, so a daemon restart in that time delays git
+rather than letting the update through unchecked; a holder that has no daemon by then, or that loses the daemon while
+it is answering, counts as a daemon that cannot be reached (see "Session helpers and the holder" in
+`docs/product/process-holders.md`). When the daemon answers the gate's call with an
 error status, git still goes through, with one line on its error output saying that the revert gate did not check this
 update because the daemon refused the call (a 4xx status) or failed it (any other error status), with the HTTP status.
 And it goes through when the gate's own check fails, with a line saying the check failed and the update was allowed. A failing hook fails every reference update git makes, so the

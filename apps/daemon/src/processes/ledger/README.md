@@ -15,6 +15,14 @@ process-end cleanup and shutdown through `apps/daemon/src/coordinator/exit_watch
 `apps/daemon/src/state/process_exit.rs`, startup reconciliation through `apps/daemon/src/main.rs`, and the owner's moves
 of trees through `apps/daemon/src/mcp/tools/transfer/processes.rs`.
 
+The holder processes (`apps/daemon/src/holder/`, [README](../../holder/README.md)) are the daemon's own to the ledger: the scanner lists them from the
+registry files in the `holders` directory of the data directory the ledger is built with (`paths::holders_dir_in`;
+`registry::list`, the running ones, matched by their start time) and gives them to the table (`Table::with_holders`).
+`Table::protected` then covers a holder process and its direct children (the agents and shell terminals it starts) and
+the terminal sessions those children lead, exactly as it covers the daemon's own direct children, so rule 1 of
+`attribute.rs` never attributes them, `trees_of_project` never lists them as left behind or kept, and a shell terminal's
+processes under a removed directory are not shown as left behind.
+
 Where things are: `mod.rs` the types, the launch lifecycle, reconciliation and `ForgetLaunch`, `attribute.rs` the rules
 that attribute processes to launches, `scan.rs` the scan of the table, the scanner thread and the stop of what ended
 launches left and what has worked in a removed directory, `looks.rs` the deadline-bounded looks at working directories
@@ -32,8 +40,37 @@ signals that follow what started meanwhile, and `table.rs` the table as the ledg
   and the `platform::proc::Containment` used when launching an agent. Where the containment lists its members, the
   ledger attributes them to the launch; otherwise it finds them by the tag in their environment.
 - `ProcessLedger::launch_started` — associate a reserved launch with its running agent process (a `platform::proc::ChildHandle`).
+- `ProcessLedger::containment_adopted` — for an agent a starting daemon adopts from a holder: take into its launch the
+  containment the host still keeps for it (where the host lists a containment's members), before `launch_started`
+  follows the launch and before the reconcile. The reconcile then reads back what the previous run's file recorded for
+  such a launch as the launch's own: its attributed processes (`Persisted::attributed`) and its terminal sessions
+  (`Persisted::launch_sessions`, which `Persisted::from_book` writes for every launch but an ended one) go back to the
+  launch the book follows instead of to an ended launch, and `reopen_containments` skips the launches the book follows,
+  so a launch's job members are never taken for an ended launch's.
+- `ProcessLedger::launch_unlinked` — for an agent a holder the starting daemon cannot link to yet runs: follow its
+  launch, with the containment the host still keeps for it, before the reconcile, so that what the previous run's file
+  attributed to it stays the launch's and nothing of it is stopped as an ended launch's. Once the holder is linked to
+  and the agent adopted, `launch_started` follows it on; once the holder is known to be gone, `end_launch` ends it.
+- `ProcessLedger::hold_previous_run`, `ProcessLedger::release_previous_run` — while such a holder may run a session no
+  record places, whose launch would read as ended: the reconcile still reads the previous run's file back and the
+  ledger follows, scans, ends and writes down this run's launches as ever, but what the reconcile finds left by the
+  previous run, and what descends from it, is kept rather than stopped, by the reconcile and by every scan, until
+  `release_previous_run` once no such holder is left; the next scan stops it then. A launch followed meanwhile
+  (`launch_started` or `containment_adopted` for an agent adopted from a holder linked to late) takes back what the
+  previous run's file recorded for it, processes and terminal sessions, which the read-back had given an ended launch;
+  at the release, what a launch followed then was recorded for goes to it too, and so does what descends from what was
+  taken back.
+- `ProcessLedger::await_reconcile` — called by the daemon before adoption: until the reconcile has read the previous
+  run's file back, the scanner stops nothing and nothing is written, so a launch followed during adoption (which starts
+  the scanner thread) can neither stop what the file says was kept nor overwrite the file. A launch that ends in that
+  time (`end_launch`, such as an adopted agent found exited) is marked ending and its carry-over or stop is queued; the
+  reconcile runs the queue once it has read the file.
 - `ProcessLedger::scan_before_ending`, `ProcessLedger::end_launch` — observe and clean up the processes of a launch
-  being ended.
+  being ended. On Linux, where the launch has a cgroup v2 group, the end then kills what is still in its group and
+  in the groups of the launches carried over to it, and removes them; kept processes and those moved to another
+  launch are moved out first (into that launch's group, or into the cgroup the ended launch's group is in), as
+  `keep_trees` and `move_trees` already move them when they are kept or moved. The reconcile takes in the groups an
+  earlier run left (`Containment::leftovers`) as it does the launches its file names, and an empty one is removed.
 - `carry.rs`: `ProcessLedger::mark_carry_over`, `ProcessLedger::withdraw_carry_over`, `ProcessLedger::hold_for_launch`,
   `HeldForLaunch` — carry a launch's processes over to another session's launch when it ends, instead of stopping them
   (a handoff, an account switch, a change of a session's model, a change of an account's sharing), holding them while
@@ -70,6 +107,16 @@ signals that follow what started meanwhile, and `table.rs` the table as the ledg
 
 ## Known limits
 
+- On Linux a launch's process is moved into the launch's cgroup v2 group just after it starts, with what it has
+  started by then, since the PTY backend runs nothing in the child before its program: a process it forked and that
+  left it before the move is outside the group, and found by the other rules alone. Without a writable cgroup v2
+  subtree (no `Delegate=yes`, a read-only hierarchy), launches have no group, which is logged once, and are followed
+  as on macOS. A launch a holder starts has the group the daemon made below its own cgroup, which the holder joins
+  (`Containment::join_launch`) and finds only below its own cgroup: one started by the daemon is in the daemon's, but a
+  holder a later daemon adopted from another cgroup (an application started again in a scope of its own) does not
+  find the new daemon's groups, and its launches are followed by their tag alone; likewise
+  `containment_adopted` finds an adopted launch's group only when the daemon runs in the cgroup the earlier one did. A group is never ended while a process to be spared cannot be moved out of it; it is then left to the
+  ledger's own stops, and removed once empty.
 - The looks at a working directory or a project directory run as a pass bounded by a deadline (`looks.rs`), and one that
   outruns it is skipped while it is stuck. Only a directory whose kernel-reported text may lie under a project root is
   looked at; on macOS the report of the working directory is itself read in such a bounded pass, since it may stat the

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../../components/alerts/errorAlerts";
+import { CodedError } from "../../errors/codedError";
 import { isolate } from "../../i18n/isolate";
 import { request, settings } from "./agentAccountsSectionTestState";
 import { mountAgentSettings } from "./agentAccountsSectionTestSupport";
@@ -125,12 +126,14 @@ it("shows no intermediate list while saves are pending, when a tag is added and 
   type(input, "tests");
   enter(input);
   act(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true })));
-  expect(request).toHaveBeenLastCalledWith({ type: "update_settings", agent_tags: { codex: ["review"] } });
+  // One save is on the wire at a time: the removal waits for the first save's reply.
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", agent_tags: { codex: ["review", "tests"] } });
   expect(liveTags(container)).toEqual(["review"]);
   // The first save's broadcast arrives before the second's.
   setSettings({ agent_tags: { codex: ["review", "tests"] } });
   expect(liveTags(container)).toEqual(["review"]);
   await act(async () => replies.forEach((reply) => reply()));
+  expect(request).toHaveBeenLastCalledWith({ type: "update_settings", agent_tags: { codex: ["review"] } });
   expect(liveTags(container)).toEqual(["review"]);
   setSettings({ agent_tags: { codex: ["review"] } });
   expect(liveTags(container)).toEqual(["review"]);
@@ -151,4 +154,117 @@ it("shows a concurrent writer's value that arrives before its own reply, and bui
   type(input, "more");
   await act(async () => enter(input));
   expect(request).toHaveBeenLastCalledWith({ type: "update_settings", agent_tags: { codex: ["elsewhere", "more"] } });
+});
+
+// What a daemon does with a save based on a version: the first one at the current version applies, and advances it.
+function checkingDaemon(version: { current: number }) {
+  const replies: (() => void)[] = [];
+  request.mockImplementation((body) => {
+    if (body.type !== "update_settings") return Promise.resolve({});
+    const based = (body as { base_versions?: Record<string, number> }).base_versions?.["agent_tags.codex"];
+    if (based !== undefined && based !== version.current) {
+      return Promise.reject(new CodedError("changed elsewhere", "write_conflict", { fields: "agent_tags.codex", versions: JSON.stringify({ "agent_tags.codex": version.current }) }));
+    }
+    version.current += 1;
+    return new Promise<object>((resolve) => replies.push(() => resolve({})));
+  });
+  return replies;
+}
+
+it("never conflicts with its own earlier save: an edit made meanwhile waits and goes on the version the store has then", async () => {
+  settings.agent_tags = { codex: ["review"] };
+  settings.versions = { "agent_tags.codex": 1 };
+  const version = { current: 1 };
+  const replies = checkingDaemon(version);
+  const { container, setSettings } = await mountAgentSettings("Codex");
+  const input = tagsInput(container);
+  type(input, "tests");
+  enter(input);
+  type(input, "more");
+  enter(input);
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", agent_tags: { codex: ["review", "tests"] }, base_versions: { "agent_tags.codex": 1 } });
+  // The broadcast of the first save, then its reply.
+  setSettings({ agent_tags: { codex: ["review", "tests"] }, versions: { "agent_tags.codex": 2 } });
+  await act(async () => replies.forEach((reply) => reply()));
+  expect(request).toHaveBeenLastCalledWith({ type: "update_settings", agent_tags: { codex: ["review", "tests", "more"] }, base_versions: { "agent_tags.codex": 2 } });
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+});
+
+it("sends again, silently, a save the daemon refused because the store was behind its own earlier save", async () => {
+  settings.agent_tags = { codex: ["review"] };
+  settings.versions = { "agent_tags.codex": 1 };
+  const version = { current: 1 };
+  const replies = checkingDaemon(version);
+  const { container, setSettings } = await mountAgentSettings("Codex");
+  const input = tagsInput(container);
+  type(input, "tests");
+  enter(input);
+  // The reply comes before the broadcast, so the next edit is based on the old version and is refused.
+  await act(async () => replies.forEach((reply) => reply()));
+  await act(async () => {});
+  type(input, "more");
+  await act(async () => enter(input));
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(pickedTags(container)).toEqual(["review", "tests", "more"]);
+  setSettings({ agent_tags: { codex: ["review", "tests"] }, versions: { "agent_tags.codex": 2 } });
+  await act(async () => {});
+  expect(request).toHaveBeenLastCalledWith({ type: "update_settings", agent_tags: { codex: ["review", "tests", "more"] }, base_versions: { "agent_tags.codex": 2 } });
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+});
+
+it("reports another client's change as a conflict and shows its tags", async () => {
+  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+  settings.agent_tags = { codex: ["review"] };
+  settings.versions = { "agent_tags.codex": 1 };
+  const version = { current: 3 };
+  checkingDaemon(version);
+  const { container, setSettings } = await mountAgentSettings("Codex");
+  const input = tagsInput(container);
+  type(input, "tests");
+  await act(async () => enter(input));
+  // Another client changed the tags, which the store has not heard of yet.
+  expect(pickedTags(container)).toEqual(["review", "tests"]);
+  setSettings({ agent_tags: { codex: ["elsewhere"] }, versions: { "agent_tags.codex": 3 } });
+  await act(async () => {});
+  expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not save the tags"]);
+  expect(liveTags(container)).toEqual(["elsewhere"]);
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
+it("sends one save for two edits made in the same event, the second waiting for the first", async () => {
+  settings.agent_tags = { codex: ["review"] };
+  const replies: (() => void)[] = [];
+  request.mockImplementation(() => new Promise<object>((resolve) => replies.push(() => resolve({}))));
+  const { container } = await mountAgentSettings("Codex");
+  const input = tagsInput(container);
+  // No render comes between the two edits, so neither can have seen the other's save start.
+  act(() => {
+    type(input, "tests");
+    enter(input);
+    type(input, "more");
+    enter(input);
+  });
+  expect(request).toHaveBeenCalledTimes(1);
+  await act(async () => replies.splice(0).forEach((reply) => reply()));
+  expect(request).toHaveBeenCalledTimes(2);
+  await act(async () => replies.splice(0).forEach((reply) => reply()));
+});
+
+it("drops an edit that waited when another client's list reached the store meanwhile, and shows that list", async () => {
+  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+  settings.agent_tags = { codex: ["review"] };
+  const replies: (() => void)[] = [];
+  request.mockImplementation(() => new Promise<object>((resolve) => replies.push(() => resolve({}))));
+  const { container, setSettings } = await mountAgentSettings("Codex");
+  const input = tagsInput(container);
+  type(input, "tests");
+  enter(input);
+  type(input, "more");
+  enter(input);
+  setSettings({ agent_tags: { codex: ["elsewhere"] } });
+  await act(async () => replies.splice(0).forEach((reply) => reply()));
+  // Sending the waiting edit would overwrite the other client's list.
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not save the tags"]);
+  expect(liveTags(container)).toEqual(["elsewhere"]);
 });

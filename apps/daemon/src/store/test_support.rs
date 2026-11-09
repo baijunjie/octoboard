@@ -27,6 +27,7 @@ pub(super) fn console(claude: Option<&str>, codex: Option<&str>, grok: Option<&s
         created_at: 0,
         project_session_agent: None,
         project_session_launch: Default::default(),
+        versions: Default::default(),
     }
 }
 
@@ -39,6 +40,7 @@ pub(super) fn account(id: &str, agent: AgentId, config_dir: &str) -> Account {
         share_default_config: false,
         share_default_config_incomplete: false,
         disabled: false,
+        versions: Default::default(),
     }
 }
 
@@ -67,6 +69,7 @@ pub(super) fn project(consent: bool) -> Project {
         tags: Vec::new(),
         description: None,
         git_workflow: Default::default(),
+        versions: Default::default(),
     }
 }
 

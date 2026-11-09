@@ -138,9 +138,15 @@ impl Drop for OutboxHold {
         let successor = self.successor.lock().expect("hold lock poisoned").take();
         let target = match &successor {
             Some(successor) => {
+                let mut lost = 0;
                 for (text, _) in self.state.outbox.take(&self.id) {
-                    self.state.outbox.push(successor, &text);
+                    if self.state.outbox.push(successor, &text).is_none() {
+                        lost += 1;
+                    }
                 }
+                // Too late for the successor: a planned stop has saved the queues already.
+                self.state
+                    .tell_held_dropped(successor, lost, self.for_sharing, true);
                 successor
             }
             None => &self.id,
@@ -300,6 +306,10 @@ impl PromptSignal for HookPrompts<'_> {
     fn note_written_mid_turn(&self) {
         self.state.note_written_mid_turn(&self.live.id);
     }
+
+    fn writes_stopped(&self) -> bool {
+        self.state.handover_barrier_raised()
+    }
 }
 
 impl AppState {
@@ -317,11 +327,23 @@ impl AppState {
     /// Accepts a message for a session, to be written as soon as it can take one. Queued rather
     /// than written even when the session looks ready, so order is structural rather than something
     /// each caller has to get right.
-    pub fn queue_message(&self, id: &str, text: &str) -> Ticket {
+    ///
+    /// `None`, with nothing queued, once a planned stop has saved the queues for the next daemon
+    /// ([`super::outbox::Outbox::push`]).
+    pub fn queue_message(&self, id: &str, text: &str) -> Option<Ticket> {
         self.cancel_recoveries_silently(id);
-        let ticket = self.outbox.push(id, text);
+        let ticket = self.outbox.push(id, text)?;
         self.note_activity(id);
-        ticket
+        Some(ticket)
+    }
+
+    /// [`Self::queue_message`], unless a planned stop has saved the queues for the next daemon:
+    /// then `None`, and nothing is queued (see [`super::outbox::Outbox::push_unless_sealed`]).
+    pub fn queue_message_unless_sealed(&self, id: &str, text: &str) -> Option<Ticket> {
+        self.cancel_recoveries_silently(id);
+        let ticket = self.outbox.push_unless_sealed(id, text)?;
+        self.note_activity(id);
+        Some(ticket)
     }
 
     /// Reserves a new session's first automatic message before the session can receive reports.
@@ -384,7 +406,14 @@ impl AppState {
     /// **Blocks** on the PTY write and on the wait for an idle Claude Code session to send what was
     /// written — twice over for a message a dialog discarded, which is written again in the same
     /// call — so callers on an async path go through [`Self::spawn_flush_outbox`].
+    ///
+    /// Writes nothing once a planned stop has raised its handover barrier: the queue stays, for the
+    /// stop to save for the next daemon. A drain under way then is waited for, and stops before its
+    /// next message.
     pub fn flush_outbox(&self, id: &str, status: SessionStatus) -> Drain {
+        let Ok(_admission) = self.admit_change() else {
+            return Drain::Pending;
+        };
         self.flush_outbox_once(id, status, true)
     }
 
@@ -662,6 +691,13 @@ impl AppState {
     /// when anything was queued.
     pub(crate) fn drop_held_queue(&self, id: &str, for_sharing: bool) {
         let dropped = self.outbox.forget(id);
+        self.tell_held_dropped(id, dropped, for_sharing, false);
+    }
+
+    /// Tells every client that `dropped` messages held back for `id` were dropped, as
+    /// [`Self::drop_held_queue`] does, when there were any; with `stopping`, because a planned
+    /// stop had saved the queues for the next daemon before they could be forwarded to `id`.
+    fn tell_held_dropped(&self, id: &str, dropped: usize, for_sharing: bool, stopping: bool) {
         if dropped == 0 {
             return;
         }
@@ -677,6 +713,11 @@ impl AppState {
                 "during a handoff",
                 "the session has no process to receive them",
             )
+        };
+        let why = if stopping {
+            "the daemon is stopping and had already saved its queued messages for the next daemon"
+        } else {
+            why
         };
         self.broadcast(
             Notice::new(

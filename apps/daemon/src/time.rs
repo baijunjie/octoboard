@@ -11,6 +11,14 @@ pub fn now_millis() -> i64 {
         .unwrap_or(0)
 }
 
+/// Microseconds since the epoch now; 0 when the clock reads before it.
+pub fn now_micros() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_micros() as u64)
+        .unwrap_or(0)
+}
+
 /// Seconds since the epoch now; 0 when the clock reads before it.
 pub fn now_secs() -> i64 {
     std::time::SystemTime::now()

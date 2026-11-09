@@ -64,6 +64,7 @@ impl Store {
             default_account_names: read_default_account_names(&conn)?,
             disabled_default_accounts: read_disabled_default_accounts(&conn)?,
             git_workflow: read_git_workflow_settings(&conn)?,
+            versions: Default::default(),
         })
     }
 

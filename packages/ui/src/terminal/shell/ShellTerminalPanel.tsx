@@ -29,6 +29,7 @@ import type { Project, ShellTerminal } from "../../protocol";
 import { useDaemon } from "../../store";
 import { useHostPaths } from "../../components/hooks/useHostPaths";
 import { ringForAutomaticFocus } from "../../input/touchInput";
+import { RECOVERED_DISPLAY_MARK_ID, RecoveredDisplayMark } from "../RecoveredDisplayMark";
 import { shellTerminalTitle } from "./shellTerminalTitle";
 import { setActiveShellTerminal, startShellTerminal, takeShellTerminalFocus, useActiveShellTerminal, useProjectShellTerminals, useShellTerminalStarting } from "./shellTerminals";
 import { closeShellTerminal, revealInScroller, TabCloseMark, TabContextMenu } from "./shellTerminalTabs";
@@ -275,6 +276,14 @@ export function ShellTerminalPanel({
                   ))}
                 </TabList>
               </TabListContainer>
+            )}
+            {/* Not inside the tab, whose close mark is its one control: after the strip, named for the terminal. */}
+            {activeTerminal?.screen_inexact && (
+              <span className="ms-1 flex shrink-0 items-center">
+                {/* First among what goes away with the mark, so focus on it or its popover is still found. */}
+                <HandoffOnUnmount from={`[data-status-mark-id="${RECOVERED_DISPLAY_MARK_ID}"]`} to={focusShownTab} />
+                <RecoveredDisplayMark terminalTitle={activeTerminal.title} />
+              </span>
             )}
             <RowIconGroup className="ms-auto px-1.5">
               {newTerminalButton}

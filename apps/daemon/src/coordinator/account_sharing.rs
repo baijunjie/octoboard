@@ -107,6 +107,10 @@ async fn change(
     share: bool,
     refused: &Refused,
 ) -> Result<()> {
+    // Held to the end, the sessions' relaunch included, so that a planned stop waits for the whole
+    // change rather than leave sessions it ended down; refused before anything is changed once
+    // the stop has raised its handover barrier.
+    let _admission = state.admit_change()?;
     let start = state.store.account_sharing_start(&account.id)?;
     let conversations = match (&start, share) {
         (Some(_), false) => own_conversations(state, account)?,

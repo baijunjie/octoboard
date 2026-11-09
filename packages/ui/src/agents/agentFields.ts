@@ -25,6 +25,17 @@ export function readLaunch(source: PerAgent<Launch> | undefined, served: readonl
   return everyAgent(served, (agent) => ({ model: source?.[agent]?.model ?? null, effort: source?.[agent]?.effort ?? null }));
 }
 
+/** `values` with `agent`'s entry set to `value`: how a dialog puts one agent's account back to what the record holds. */
+export function withAgent<T>(values: PerAgent<T>, agent: Agent, value: T): PerAgent<T> {
+  return { ...values, [agent]: value };
+}
+
+/** `values` with `agent`'s launch `key` set to `value`, the agent's other field as it was: how a dialog puts one launch
+ * setting back to what the record holds. */
+export function withLaunchField(values: PerAgent<Launch>, agent: Agent, key: keyof Launch, value: string | null): PerAgent<Launch> {
+  return withAgent(values, agent, { ...values[agent]!, [key]: value });
+}
+
 /** The agents' entries of `current` that differ from `initial`, what the dialog opened with, as
  * `change` makes them; `undefined` when none does. Every agent is compared, so an edit to an agent
  * no longer in view is kept, and an entry is sent only when it was touched, which leaves a stored

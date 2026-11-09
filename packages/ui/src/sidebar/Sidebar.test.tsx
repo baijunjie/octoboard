@@ -260,6 +260,17 @@ it("lists a project session's own sessions under it, and the binding badge only 
   act(() => root.unmount());
 });
 
+it("names a row whose process cannot be reached Reconnecting, ranked by the status it stores", () => {
+  const pending = sessionOf("web-pending", main.id, web.id, "Watch the build", "working", { holder_link: "pending" });
+  const { container, root } = mountSidebar({ sessions: [unbound, pending] });
+  const rows = Array.from(container.querySelectorAll<HTMLElement>("[data-sessions] div[role=button]"));
+  expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
+    `${isolate("Watch the build")} session, ${isolate(`${isolate("Claude Code")} (${isolate("Default")})`)}, Reconnecting, Default model`,
+    `${isolate("Tidy the changelog")} session, ${isolate(`${isolate("Claude Code")} (${isolate("Default")})`)}, Interrupted, Default model`,
+  ]);
+  act(() => root.unmount());
+});
+
 /** The floating sidebar card in a 1440x800 window with a 48px rail and an 8px gap: x 56..336 and
  * y 48..792, with the real toggle and the real rail beside it. `Sidebar` is what arms the pointer
  * watch, and the toggle's and the avatars' attributes are what it matches on. */

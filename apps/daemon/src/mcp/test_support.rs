@@ -37,6 +37,7 @@ pub(super) fn account(
         share_default_config: false,
         share_default_config_incomplete: false,
         disabled: false,
+        versions: Default::default(),
     }
 }
 
@@ -64,6 +65,7 @@ pub(super) fn console() -> Console {
         icon: None,
         console_session_prompt: None,
         created_at: 0,
+        versions: Default::default(),
     }
 }
 
@@ -140,6 +142,7 @@ pub(super) fn shared_console_state(name: &str) -> (Arc<AppState>, ScratchDir) {
                 tags: Vec::new(),
                 description: None,
                 git_workflow: Default::default(),
+                versions: Default::default(),
             })
             .unwrap();
     }
@@ -240,6 +243,7 @@ pub(super) fn peer_state(name: &str) -> (Arc<AppState>, ScratchDir) {
             tags: Vec::new(),
             description: None,
             git_workflow: Default::default(),
+            versions: Default::default(),
         })
         .unwrap();
     for session in [

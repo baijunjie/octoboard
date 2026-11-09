@@ -254,7 +254,10 @@ window does (see "The guidance on the user's language" in `docs/product/launchin
 
 ## Refusals
 
-A refused call comes back as a tool error carrying the reason in prose and changes no stored settings. A failed local
+A refused call comes back as a tool error carrying the reason in prose and changes no stored settings. No call is
+refused because a setting changed after the session read it: the tools' changes are not checked against what was read,
+and are made over whatever is there. Such a change still replaces the field in a form a window has open, and a form
+based on the old value is refused when it saves (see `docs/product/concurrent-edits.md`). A failed local
 project creation may leave parent directories behind (see "Associating a project" in `docs/product/projects.md`).
 Besides the refusals above, an argument of the wrong type — a boolean, a list or a text given as something else —
 is refused with a reason rather than read as left out. So is a `git_workflow` object, for a project or

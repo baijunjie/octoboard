@@ -268,6 +268,17 @@ async fn forward_until(
 /// have acted on before it broke off.
 fn failure_message(session: &str, err: &std::io::Error) -> String {
     use std::io::ErrorKind;
+    if crate::loopback::is_no_daemon(err) {
+        return format!(
+            "Octoboard could not be reached for session {session}: no daemon is running."
+        );
+    }
+    if crate::loopback::is_daemon_lost(err) {
+        return format!(
+            "Octoboard was lost while it handled the call for session {session}; the call may \
+             have run."
+        );
+    }
     if let Some(status) = crate::loopback::error_status(err) {
         return format!(
             "Octoboard {} the call for session {session} (HTTP {status}).",
@@ -430,6 +441,27 @@ mod tests {
         let message = failure_message("s-1", &err);
         assert!(message.contains("refused the call"), "{message}");
         assert!(message.contains("401"), "{message}");
+    }
+
+    /// A holder with no daemon, or one that lost the daemon with the call in flight, is told apart
+    /// from a daemon that failed: the first says nothing ran, the second that the call may have.
+    #[tokio::test]
+    async fn a_holder_without_a_daemon_or_that_lost_it_is_reported_as_that() {
+        let message = failure_message(
+            "s-1",
+            &forward_failure(b"HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n")
+                .await,
+        );
+        assert!(message.contains("no daemon is running"), "{message}");
+        assert!(!message.contains("failed the call"), "{message}");
+
+        let message = failure_message(
+            "s-1",
+            &forward_failure(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n").await,
+        );
+        assert!(message.contains("was lost while it handled"), "{message}");
+        assert!(message.contains("may have run"), "{message}");
+        assert!(!message.contains("failed the call"), "{message}");
     }
 
     /// A daemon that fails while handling the call did not refuse it: the model is told the call

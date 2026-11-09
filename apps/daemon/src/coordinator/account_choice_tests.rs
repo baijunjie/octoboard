@@ -94,6 +94,7 @@ fn opening_a_session_is_refused_on_an_account_whose_quota_is_used_up() {
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled: false,
+            versions: Default::default(),
         })
         .unwrap();
     let reset = now_millis() + 60_000;
@@ -435,6 +436,7 @@ fn automatic_open_choice_uses_another_agent_only_after_all_preferred_accounts() 
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled: false,
+            versions: Default::default(),
         })
         .unwrap();
     let resolved = resolve_open(&state, &open_request()).unwrap();
@@ -470,6 +472,7 @@ fn automatic_open_choice_uses_saved_account_order_for_unranked_accounts() {
                 share_default_config: false,
                 share_default_config_incomplete: false,
                 disabled: false,
+                versions: Default::default(),
             })
             .unwrap();
     }
@@ -562,6 +565,7 @@ fn automatic_open_choice_keeps_a_weekly_preference_within_its_agent() {
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled: false,
+            versions: Default::default(),
         })
         .unwrap();
     state.account_quotas.hold_in_dir_for_test(
@@ -669,6 +673,7 @@ fn insert_claude_account(state: &Arc<AppState>, id: &str, disabled: bool) {
             share_default_config: false,
             share_default_config_incomplete: false,
             disabled,
+            versions: Default::default(),
         })
         .unwrap();
 }
@@ -869,6 +874,7 @@ fn a_sessions_account_is_its_own_pick_else_its_projects_else_its_consoles() {
                 share_default_config: false,
                 share_default_config_incomplete: false,
                 disabled: false,
+                versions: Default::default(),
             })
             .unwrap();
     }

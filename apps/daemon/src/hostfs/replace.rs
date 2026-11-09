@@ -1,6 +1,6 @@
 //! Replacing a file whole, so that a reader sees the old content or the new and never part of
-//! either, and a crash mid-write leaves the old file in place. What permissions the file gets
-//! is the platform layer's ([`Permissions`]).
+//! either, and a crash mid-write leaves the old file in place; and removing such a file. What
+//! permissions the file gets is the platform layer's ([`Permissions`]).
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -41,6 +41,15 @@ pub fn replace_beside(target: &Path, bytes: &[u8], permissions: Permissions) -> 
     let staged = staged_beside(target)
         .ok_or_else(|| io::Error::other(format!("`{}` has no file name", target.display())))?;
     replace_file(target, &staged, bytes, permissions)
+}
+
+/// Removes the file at `target`, as a file replaced whole is removed once nothing is left to keep
+/// in it. Nothing there is no error. Blocking.
+pub fn remove_replaced(target: &Path) -> io::Result<()> {
+    match std::fs::remove_file(target) {
+        Err(err) if err.kind() != io::ErrorKind::NotFound => Err(err),
+        _ => Ok(()),
+    }
 }
 
 fn staged_beside(target: &Path) -> Option<PathBuf> {

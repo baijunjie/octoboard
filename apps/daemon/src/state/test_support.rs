@@ -11,17 +11,17 @@ pub(crate) fn session_record(id: &str, status: SessionStatus) -> Session {
     }
 }
 
-/// Stores a session record, with the console it belongs to.
+/// Stores a session record, with the console it belongs to unless an earlier record stored it.
 pub(crate) fn insert_record(
     state: &AppState,
     dir: &std::path::Path,
     id: &str,
     status: SessionStatus,
 ) {
-    state
-        .store
-        .insert_console(&crate::test_support::console(dir))
-        .unwrap();
+    let console = crate::test_support::console(dir);
+    if state.store.get_console(&console.id).unwrap().is_none() {
+        state.store.insert_console(&console).unwrap();
+    }
     state
         .store
         .insert_session(&session_record(id, status))

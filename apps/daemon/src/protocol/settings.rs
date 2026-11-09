@@ -149,6 +149,10 @@ pub struct Settings {
     /// The application-wide git workflow settings; a project may override each item (see
     /// `Project::git_workflow`).
     pub git_workflow: GitWorkflowSettings,
+    /// The version of each field a form edits, by path (`crate::state::FieldVersions`): always
+    /// every path of the record. A write names the version it was based on in `base_versions`.
+    #[cfg_attr(test, ts(type = "Record<string, number>"))]
+    pub versions: BTreeMap<String, u64>,
 }
 
 impl Default for Settings {
@@ -179,6 +183,7 @@ impl Default for Settings {
             default_account_names: Default::default(),
             disabled_default_accounts: Default::default(),
             git_workflow: Default::default(),
+            versions: BTreeMap::new(),
         }
     }
 }

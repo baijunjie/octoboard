@@ -102,7 +102,10 @@ export const REPLY_TYPES = {
   list_project_commits: "project_commits",
   read_project_commit_change: "project_commit_change",
   read_project_commit_change_bodies: "project_commit_change_bodies",
+  ping: "ack",
   shutdown: "ack",
+  planned_stop: "ack",
+  handover_check: "handover_check",
 } as const satisfies Record<ClientRequestBody["type"], Event["type"] | readonly Event["type"][]>;
 
 type ReplyTypes = typeof REPLY_TYPES;

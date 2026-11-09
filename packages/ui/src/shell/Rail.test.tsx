@@ -19,19 +19,20 @@ const main = consoleOf("c-1", "Main");
 
 /** A session status beyond the wire's: the ones derived from an idle session (`delegated` adds a
  * working session bound to it), and `switching` account over any status. */
-type Case = SessionStatus | "background" | "paused" | "done" | "delegated" | "switching";
+type Case = SessionStatus | "background" | "paused" | "done" | "delegated" | "switching" | "reconnecting";
 
 const EXTRAS: Partial<Record<Case, Partial<Session>>> = {
   background: { background_tasks: [{ id: "watcher" }] },
   paused: { paused: true },
   done: { has_conversation: true },
   switching: { switching_account: true },
+  reconnecting: { holder_link: "pending" },
 };
 
 /** Mounts a rail with one console, holding a session in each of `statuses`, whose avatar's pointer
  * hover floats the hidden sidebar in when `hoverOpensSidebar`. Returns the console's avatar button. */
 function avatarOf(statuses: Case[], hoverOpensSidebar = false, otherSessions: Session[] = []): HTMLButtonElement {
-  const wire = (status: Case): SessionStatus => (status === "background" || status === "paused" || status === "done" || status === "delegated" || status === "switching" ? "idle" : status);
+  const wire = (status: Case): SessionStatus => (status === "background" || status === "paused" || status === "done" || status === "delegated" || status === "switching" || status === "reconnecting" ? "idle" : status);
   const sessions = statuses.flatMap((status, index) => {
     const own = sessionOf(`s-${index}`, main.id, undefined, `Hub ${index}`, wire(status), { has_conversation: false, ...EXTRAS[status] });
     return status === "delegated" ? [own, sessionOf(`s-${index}-child`, main.id, undefined, `Child ${index}`, "working", { bound_to: own.id })] : [own];
@@ -78,6 +79,7 @@ const COUNTS: Array<[Case[], string[]]> = [
   [["background"], ["Working in background 1"]],
   [["delegated"], ["Child sessions working 1", "Working 1"]],
   [["switching"], ["Switching account 1"]],
+  [["reconnecting", "done"], ["Done 1", "Reconnecting 1"]],
   [["interrupted"], ["Interrupted 1"]],
 ];
 
@@ -109,7 +111,7 @@ it.each([{ statuses: [] }, { statuses: ["archived"] }] as { statuses: Case[] }[]
   settle();
 });
 
-it.each(["working", "starting", "dormant", "background", "delegated", "switching", "interrupted"] as Case[])("counts %s even without an avatar badge", (status) => {
+it.each(["working", "starting", "dormant", "background", "delegated", "switching", "reconnecting", "interrupted"] as Case[])("counts %s even without an avatar badge", (status) => {
   const avatar = avatarOf([status]);
   expect(avatar.closest('[data-slot="badge-anchor"]')!.children).toHaveLength(1);
 });

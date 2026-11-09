@@ -130,6 +130,19 @@ So such a handler never calls an `env_shell` snapshot directly: it takes its she
 off the real CLI by construction instead of by each test's care. The action itself is tested one level down, handed the
 environment `test_support::fake_agent` returns, whose `PATH` finds only the fake.
 
+## No daemon test may reach the user's live data directory: code under it takes its directory
+
+Applies to daemon code a test can reach that reads, writes or removes anything under Octoboard's data directory (the
+holders' registry, the build copies, anything newly kept there). `cargo test` runs with the developer's own `HOME`, so
+`paths::data_dir()` and the paths built on it (`paths::holders_dir()`, `paths::builds_dir()`) are their live
+`~/.octoboard`: code a test reaches that calls them reads the user's running holders or removes their files. So such
+code takes the directory from its caller (`ProcessLedger::new(data_dir)`,
+`paths::holders_dir_in(dir)`, the holders' registry and build directories in `holder::client::ClientConfig`), and only
+the daemon's own start in `apps/daemon/src/main.rs` passes the global path; a test passes its temporary directory, and
+a test that needs a holder uses `holder::client::test_holders` with its own registry directory. Do not add a
+`#[cfg(test)]` setter that redirects a global path instead: every test that forgets it, or runs before it is set,
+reaches the live directory.
+
 ## Test a daemon budget by lowering it, never by asserting its value
 
 Applies to daemon tests of a limit in `apps/daemon/src/browse/budget.rs` whose real figure no small fixture reaches. A
@@ -139,3 +152,12 @@ is deleted, so it tests nothing. Have the production code read the limit through
 the override around the call in the test, clear it after, and assert what happens past the limit. The override is per
 thread, so it reaches only code running on the test's own thread: the browse fixtures' `serve` calls in directly,
 while anything moved onto another thread (`spawn_blocking`, a request through the coordinator) reads the real figure.
+
+## A test that needs a permission to refuse something returns early when it is not refused
+
+Applies to daemon tests that make a file or directory unwritable or unreadable (`set_permissions` to `0o555`, `0o000`)
+and expect the operation under test to fail. The suite's Linux container runs happen as root, the default user of the
+`rust` images, and root ignores permission modes, so such a test fails there, while on macOS nothing shows it. Before
+asserting the refusal, return when it cannot happen: check `libc::geteuid() == 0` (`apps/daemon/src/path_links/tests.rs`)
+or try the write and return if it succeeds (`apps/daemon/src/accounts/relocate/tests.rs`). A test that fails only when
+run as root is missing this early return; it is not a regression in the change being verified.

@@ -139,6 +139,7 @@ fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
         created_at: row.get(6)?,
         project_session_agent: project_session_agent.and_then(|id| AgentId::from_wire_name(&id)),
         project_session_launch: PerAgent::default(),
+        versions: Default::default(),
     })
 }
 

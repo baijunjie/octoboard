@@ -23,12 +23,14 @@ use bytes::Bytes;
 /// that matters most, and the queue's head, the one being applied, is never touched.
 const MAX_QUEUED: usize = 256;
 
-/// How long [`HookQueues::settled`] waits for a session's queue to drain before giving up.
+/// How long [`HookQueues::settled`] waits for a session's queue to drain before giving up; a
+/// session's program status reports settle within the same bound
+/// (`LiveSession::settle_program_status`).
 const SETTLE_BOUND: Duration = Duration::from_secs(2);
 
 /// [`SETTLE_BOUND`], widened to `PATIENCE` under test so a test holding an event back is not
 /// raced by it, and lowered by `SETTLE_OVERRIDE` for the test proving it runs out.
-fn settle_bound() -> Duration {
+pub(crate) fn settle_bound() -> Duration {
     #[cfg(test)]
     {
         SETTLE_OVERRIDE

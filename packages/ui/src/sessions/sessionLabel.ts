@@ -104,6 +104,7 @@ const STATUS_KEY = {
   paused: "session.status.paused",
   done: "session.status.done",
   switching: "session.status.switching",
+  reconnecting: "session.status.reconnecting",
   starting: "session.status.starting",
   working: "session.status.working",
   waiting_user: "session.status.waitingUser",

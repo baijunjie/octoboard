@@ -120,7 +120,13 @@ impl Fixture {
         sessions: &[Session],
         forced: &[SessionBranchTarget],
     ) -> Vec<SessionBranchItem> {
-        remove_once_stopped(self.state.clone(), sessions.to_vec(), forced.to_vec()).await
+        remove_once_stopped(
+            self.state.clone(),
+            sessions.to_vec(),
+            forced.to_vec(),
+            &self.state.track_change(),
+        )
+        .await
     }
 }
 

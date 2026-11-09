@@ -22,6 +22,8 @@ import { Message, useT } from "../../i18n/react";
 import type { Account, Agent } from "../../protocol";
 import { useDaemon, useDaemonStore, useProviders } from "../../store";
 import { useHostPaths } from "../../components/hooks/useHostPaths";
+import { ChangedElsewhereAnnouncer } from "../../components/announce/ChangedElsewhereAnnouncer";
+import { useCheckedEdit } from "../../components/hooks/useCheckedEdit";
 import { ProviderName } from "../../components/text/ProviderName";
 import { nameCollision, nextConfigDir, type NameCollision } from "./agentAccounts";
 
@@ -57,13 +59,30 @@ export function AccountDialog({
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const providers = useProviders();
   const [agent, setAgent] = useState<Agent>(editing?.agent ?? initialAgent);
-  const [name, setName] = useState(editing?.name ?? (renameDefault ? defaultNames?.[initialAgent] ?? "" : ""));
-  const [typedConfigDir, setConfigDir] = useState<string | undefined>(editing?.config_dir);
+  // What the form read of the account, which an edit is judged against: only a field the user changed is sent, so a
+  // change another client made to the other one is not overwritten, nor conflicts.
+  const [read, setRead] = useState({ name: editing?.name, config_dir: editing?.config_dir });
+  const [name, setName] = useState(read.name ?? (renameDefault ? defaultNames?.[initialAgent] ?? "" : ""));
+  const [typedConfigDir, setConfigDir] = useState<string | undefined>(read.config_dir);
+  const stored = editing && accounts.find((account) => account.id === editing.id);
+  // Whether the store holds `path` as the form read it: a version that moved over the same value (every one does after a
+  // daemon restart) changes nothing of what the form shows.
+  const sameAsRead = (path: string) => !stored || (path === "name" ? stored.name === read.name : path === "config_dir" ? stored.config_dir === read.config_dir : true);
+  // Whether the user changed `path`'s field from what the form read, which is what makes its replacement worth announcing.
+  const editedFromRead = (path: string) => path === "name" ? name !== read.name : path === "config_dir" && typedConfigDir !== undefined && typedConfigDir !== read.config_dir;
+  const fieldLabel = (path: string) => t(path === "name" ? "common.name" : "settings.accounts.configDir");
+  const resetToStored = (paths: readonly string[]) => {
+    if (!stored) return;
+    if (paths.includes("name")) setName(stored.name);
+    if (paths.includes("config_dir")) setConfigDir(stored.config_dir);
+    setRead({ name: paths.includes("name") ? stored.name : read.name, config_dir: paths.includes("config_dir") ? stored.config_dir : read.config_dir });
+  };
   const [directoryListing, setDirectoryListing] = useState<{ home: string; paths: string[] }>();
   const [directoryFailure, setDirectoryFailure] = useState<{ message: ErrorPresentation; attempt: number }>();
   const [listingAttempt, setListingAttempt] = useState(0);
   const [listingPending, setListingPending] = useState(true);
   const { busy, run } = useDialogAction(undefined, t(editing || renameDefault ? "settings.accounts.dialog.saveFailedTitle" : "settings.accounts.dialog.addFailedTitle"), renameDefault ? appDataRecovery : undefined);
+  const edit = useCheckedEdit(editing?.versions ?? {}, stored?.versions, { same: sameAsRead, edited: editedFromRead, reset: resetToStored, writing: busy });
   const { shown, attempt } = useSubmitValidation();
   const directoryField = useRef<HTMLDivElement>(null);
   const directoryFailureId = useId();
@@ -113,7 +132,14 @@ export function AccountDialog({
       if (renameDefault) {
         await request({ type: "set_default_account_name", agent, name });
       } else if (editing) {
-        await request({ type: "update_account", account: editing.id, name, config_dir: configDir });
+        const changes = {
+          ...(name !== read.name && { name }),
+          ...(configDir !== read.config_dir && { config_dir: configDir }),
+        };
+        await request({ type: "update_account", account: editing.id, ...changes, base_versions: edit.base(Object.keys(changes)) }).catch((error: unknown) => {
+          edit.refused(error);
+          throw error;
+        });
       } else {
         await request({ type: "create_account", agent, name, config_dir: configDir });
       }
@@ -130,8 +156,9 @@ export function AccountDialog({
         busy={busy}
         onSubmit={submit}
       >
+        <ChangedElsewhereAnnouncer count={edit.replaced.count} labels={edit.replaced.paths.map(fieldLabel)} onSaid={edit.said} />
         {renameDefault && <p className="text-sm"><Message id="settings.accounts.dialog.renameDefaultSubject" params={{ agent: <ProviderName agent={agent} /> }} /></p>}
-        {editing && <p className="text-sm"><Message id="settings.accounts.dialog.editSubject" params={{ agent: <ProviderName agent={editing.agent} />, name: <InlineReference dir="auto" wrap>{editing.name}</InlineReference> }} /></p>}
+        {editing && <p className="text-sm"><Message id="settings.accounts.dialog.editSubject" params={{ agent: <ProviderName agent={editing.agent} />, name: <InlineReference dir="auto" wrap>{(stored ?? editing).name}</InlineReference> }} /></p>}
         {!editing && !renameDefault && (
           <OptionSelect
             label={t("settings.accounts.agent")}

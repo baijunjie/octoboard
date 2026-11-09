@@ -21,6 +21,10 @@
   remembered by hand. It has no `package.json` today and is therefore skipped by the `apps/*` glob in
   `pnpm-workspace.yaml`, which was deliberate while nothing in it depended on a workspace package; this milestone is
   the first thing that makes it depend on one.
+- The owner has no way yet to get the per-launch key of a daemon the example systemd unit runs: the handshake line
+  that carries it goes nowhere there (`StandardOutput=null`, so journald does not keep a key every journal reader
+  could use), and `status` prints the address alone. `start` relays the line to the owner's terminal. Serving the UI
+  has to give the browser on the owner's machine the key, or replace it, in a way that works for both.
 
 ## Notes for the developer
 

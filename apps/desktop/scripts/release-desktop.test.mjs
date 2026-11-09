@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { gitChecked, runResult } from "../../../scripts/lib/git.mjs";
-import { parseOptions, releaseDesktop, versionFiles } from "./release-desktop.mjs";
+import { holderFloorProblem, parseOptions, releaseDesktop, versionFiles } from "./release-desktop.mjs";
 import { readTagMessage } from "./release-manifest.mjs";
 
 import { assertRepositoryEnvironmentCleared } from "../../../scripts/verify/environment.mjs";
@@ -25,6 +25,8 @@ function fixture(t) {
   writeFileSync(path.join(root, "apps/desktop/package.json"), '{\n  "name": "desktop",\n  "version": "0.1.0-beta.1"\n}\n');
   writeFileSync(path.join(root, "Cargo.toml"), '[workspace]\nresolver = "2"\n[workspace.package]\nversion = "0.1.0-beta.1"\n');
   writeFileSync(path.join(root, "Cargo.lock"), '# Lockfile\nversion = 4\n\n[[package]]\nname = "octoboard"\nversion = "0.1.0-beta.1"\n\n[[package]]\nname = "octoboardd"\nversion = "0.1.0-beta.1"\n\n[[package]]\nname = "external"\nversion = "0.1.0-beta.1"\n');
+  mkdirSync(path.join(root, "apps/daemon/src/holder"), { recursive: true });
+  writeFileSync(path.join(root, "apps/daemon/src/holder/compat.rs"), 'pub const FLOOR: &str = "0.0.0";\n');
   git("add", ".");
   git("commit", "-qm", "base");
   git("init", "--bare", "-q", "-b", "main", remote);
@@ -123,6 +125,26 @@ test("a version for one platform ends its tag message with the platforms line, w
   const message = git("tag", "-l", "--format=%(contents)", "desktop-v0.1.0-beta.2");
   assert.equal(message, `${options.notes.trim()}\n\nPlatforms: macos`);
   assert.deepEqual(readTagMessage(message), { notes: options.notes.trim(), platforms: ["macos"] });
+});
+
+test("the holder floor must be the greatest stable release below the new version, or the initial value when none is tagged", (t) => {
+  const { root } = fixture(t);
+  assert.equal(holderFloorProblem(root, "0.1.0-beta.2", []), null);
+  assert.equal(holderFloorProblem(root, "0.1.0-beta.2", ["0.1.0", "0.2.0"]), null);
+  assert.match(holderFloorProblem(root, "0.2.0-beta.1", ["0.1.0"]), /FLOOR to 0\.1\.0/);
+  assert.match(holderFloorProblem(root, "0.3.0", ["0.1.0", "0.2.0"]), /greatest stable release below 0\.3\.0 is 0\.2\.0/);
+  writeFileSync(path.join(root, "apps/daemon/src/holder/compat.rs"), 'pub const FLOOR: &str = "0.1.0";\n');
+  assert.equal(holderFloorProblem(root, "0.2.0-beta.1", ["0.1.0", "0.2.0"]), null);
+  assert.match(holderFloorProblem(root, "0.1.0-beta.2", []), /initial value/);
+});
+
+test("a release whose holder floor is stale is refused before any file, ref or command", (t) => {
+  const { git, calls, options } = fixture(t);
+  git("tag", "desktop-v0.0.5");
+  const before = git("show-ref");
+  assert.throws(() => releaseDesktop(options), /holder floor[\s\S]*0\.0\.5/);
+  assert.deepEqual(calls, []);
+  assert.equal(git("show-ref"), before);
 });
 
 test("a machine that cannot run the Windows cross-check is refused before any file, ref or command, dry run included", (t) => {

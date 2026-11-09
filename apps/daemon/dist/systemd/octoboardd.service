@@ -1,0 +1,51 @@
+# Example systemd user unit for running octoboardd in the background on a Linux server.
+#
+# The binary path and the port below are examples; change them to where octoboardd is installed
+# and to the port you want the daemon to keep.
+#
+# Install:
+#   mkdir -p ~/.config/systemd/user
+#   cp octoboardd.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now octoboardd
+#
+# A user service runs only while its user has a login session, and nobody logs in on a server, so
+# enable lingering once for the user the daemon runs as, or the service stops at logout and does
+# not start at boot:
+#   loginctl enable-linger <user>
+#
+# The daemon runs as that user, so its sessions use that user's ~/.octoboard, agent accounts and
+# keys. It listens on 127.0.0.1 only; reach it with an SSH port forward
+# (ssh -L 7531:127.0.0.1:7531 server).
+
+[Unit]
+Description=Octoboard daemon
+
+[Service]
+Type=simple
+# --service-managed makes a planned restart exit with 75 (see RestartForceExitStatus below)
+# instead of starting the next daemon itself; pass it only with that restart.
+ExecStart=%h/.local/bin/octoboardd --port 7531 --service-managed
+Restart=on-failure
+# A planned restart (`octoboardd restart`, or POST /restart) hands every session over to the
+# holders and exits with 75, so that the next daemon runs in this unit: restart on that status
+# even though it is not a failure. Until the holders run as user units of their own, systemd stops
+# them with the daemon's cgroup, so the sessions do not survive a restart under this unit yet.
+RestartForceExitStatus=75
+# The handshake line the daemon prints carries its per-launch key, and journald would keep it
+# readable to anyone who can read the journal.
+# TODO: with stdout discarded, a daemon run by this unit has no way yet to hand its key to its
+# owner; this waits for key delivery for service-run daemons.
+StandardOutput=null
+# Stderr carries only the log, never the key, so it goes to the journal.
+StandardError=journal
+# SIGTERM goes to the daemon alone, so that it ends its sessions cleanly; systemd kills whatever
+# remains in the unit afterwards.
+KillMode=mixed
+# Stopping every session takes time.
+TimeoutStopSec=90
+# A writable cgroup v2 subtree for the daemon, which it makes the per-launch groups of agent
+# processes in.
+Delegate=yes
+
+[Install]
+WantedBy=default.target

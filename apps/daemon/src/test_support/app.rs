@@ -161,6 +161,7 @@ pub(crate) fn console(dir: &Path) -> crate::protocol::Console {
         icon: None,
         console_session_prompt: None,
         created_at: 0,
+        versions: Default::default(),
     }
 }
 
@@ -236,6 +237,7 @@ pub(crate) fn console_with_project_and_accounts(prefix: &str) -> (Arc<AppState>,
             tags: Vec::new(),
             description: None,
             git_workflow: Default::default(),
+            versions: Default::default(),
         })
         .unwrap();
     for (id, agent) in [
@@ -253,6 +255,7 @@ pub(crate) fn console_with_project_and_accounts(prefix: &str) -> (Arc<AppState>,
                 share_default_config: false,
                 share_default_config_incomplete: false,
                 disabled: false,
+                versions: Default::default(),
             })
             .unwrap();
     }

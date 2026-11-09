@@ -1,11 +1,6 @@
-//! Fixed-capacity byte ring buffer holding the tail of a session's terminal output, replayed to
-//! each client that attaches.
-//!
-//! What the replay guarantees is narrower than "every byte ever written": it is exact only across
-//! one attach's snapshot-to-live transition, which `LiveSession::attach` provides by taking the
-//! snapshot and registering the subscriber under one lock. A detach long enough to overrun this
-//! buffer loses output permanently, and because there is no per-client cursor a short detach
-//! legitimately re-displays bytes the client already saw — the same semantics as `tmux attach`.
+//! Fixed-capacity byte ring buffer holding the tail of a terminal's raw output: what an exited
+//! shell's attach replays, and what reading a process's recent output, or its output since a mark,
+//! returns. Output older than its capacity is gone from it.
 
 use std::collections::VecDeque;
 
@@ -39,6 +34,7 @@ impl RingBuffer {
     /// A contiguous copy of everything buffered, oldest byte first. Copies the deque's two
     /// internal slices directly rather than byte by byte, since this runs under the lock that
     /// gates the PTY reader thread.
+    #[cfg(test)]
     pub fn snapshot(&self) -> Vec<u8> {
         self.tail(self.buf.len())
     }

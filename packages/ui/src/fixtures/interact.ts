@@ -35,6 +35,7 @@ const SHOWN_STATUSES = Object.keys({
   working: 0,
   starting: 0,
   switching: 0,
+  reconnecting: 0,
   interrupted: 0,
   archived: 0,
 } satisfies Record<ShownStatusKind, 0>) as ShownStatusKind[];

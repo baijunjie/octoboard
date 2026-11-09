@@ -9,7 +9,7 @@
 
 - [ ] The daemon and its agent adapters build and run on Linux.
 - [ ] start / stop / status commands; start takes the port, detaches and prints the address.
-- [ ] The port file is written per user, under the daemon's data directory, not in the shared temporary directory.
+- [x] The port file is written per user, under the daemon's data directory, not in the shared temporary directory.
 - [ ] A running daemon is found through the single-instance mechanism.
 - [ ] An example service definition for running it at boot as the owner's user; a user service runs only while that
       user has a login session unless lingering is enabled for the user, and nobody logs in on the server.
@@ -39,3 +39,40 @@
   container with a writable cgroup v2 subtree (`--privileged`, or a private cgroup namespace mounted read-write), or
   one with systemd as PID 1 and a user manager for the `Delegate=yes` path.
 - **Reference docs**: `apps/daemon/README.md`, `docs/product/application-lifecycle.md`.
+
+## Mid-task handoff
+
+- **How far**: everything in this milestone is implemented on branch `linux/background-run`: `--port` on the
+  daemon, `start --port` / `stop` / `status` (`apps/daemon/src/cli/background.rs`), the owner record `daemon.owner`
+  beside `daemon.lock` that the commands find a running daemon by, the example unit
+  `apps/daemon/dist/systemd/octoboardd.service`, and per-launch cgroup v2 groups (`platform/proc/cgroup.rs`, used by
+  the Unix `Containment` and the process ledger). The boxes above stay unticked because the final code has not been
+  compiled: by the user's decision every compile and test, the Linux container runs included, runs together once all
+  milestones are finished.
+- **Already observed on Linux** (Docker, aarch64, before three rounds of review fixes changed the code): start
+  detached and surviving the closed login, status, refusal while running, stop leaving no record behind, restart on
+  the same port, a taken port failing clearly; with a writable cgroup subtree, a launch's double-forked orphan listed
+  and killed with its group; the full daemon suite passing in both a privileged and a plain container apart from four
+  `accounts::shared_config` tests that fail only because the container runs as root.
+- **Still to run** (each with `CARGO_BUILD_JOBS=2`, one at a time):
+  - macOS: `cargo clippy -p octoboardd --all-targets -- -D warnings`; `cargo test -p octoboardd` (layering tests,
+    `instance_lock`, `cli::`, `platform::proc`, `processes::ledger` at least).
+  - Windows: `pnpm check:windows` (the Windows `Containment::releases_members`, `run_in_background` and
+    `shutdown_requested` changes are uncompiled).
+  - Linux, plain `docker run --init` container: `cargo clippy -p octoboardd --all-targets -- -D warnings` and
+    `cargo test -p octoboardd` (the cgroup tests skip; the ledger's fallback is exercised).
+  - Linux, `--privileged --cgroupns=private` container with cgroup2 mounted read-write: `cargo test -p octoboardd`
+    (the contract tests `a_launch_s_group_ends_…`, `what_a_launch_s_group_spares_…`,
+    `a_leftover_group_is_found_again_and_removed_once_empty` and the ledger test
+    `ending_a_launch_removes_its_group_and_spares_what_was_kept`).
+  - Linux end to end with the built binary and a scratch `HOME`: start / status / stop / restart on the same port, an
+    agent session run through it (a Codex session stops at its sign-in screen with no login), and after `stop` every
+    session interrupted.
+  - Optional: a container with systemd as PID 1 and a user manager, running the example unit with `Delegate=yes`.
+- **Trade-offs made**: shell terminals get no group (their background jobs outlive them by design); the group kill
+  comes after the ledger's polite rounds and is skipped when a table read failed; a process the agent forked before
+  it was moved into its group can escape the group (portable-pty has no pre-exec hook) and is left to the ledger's
+  other rules; groups are made under a `Subtree` base, by default the starting process's own cgroup, with no check
+  that it is delegated; `start` relays the handshake line, key included, to the owner's terminal; Windows has no
+  `start` / `stop`. What remains of macOS-specific behavior: nothing found that breaks on Linux in locating
+  directories; real agent CLIs' launches on Linux are what the end-to-end run above checks.

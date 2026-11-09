@@ -10,9 +10,9 @@ use crate::messaging::naming::session_labels;
 use crate::protocol::{AgentId, Session, SessionStatus};
 use crate::session_tools::catalogue::qualified_tool_name;
 use crate::state::bindings::{bound_sessions, team};
-use crate::state::AppState;
+use crate::state::{AppState, ChangeAdmission};
 
-use super::archive_session;
+use super::archive_admitted;
 
 /// What a session's own archive requires of the sessions under it, as well as that none is locked.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -39,7 +39,8 @@ pub(crate) enum Unfinished {
 
 /// What became of [`archive_finished`].
 pub(crate) enum Finish {
-    /// Archived, with the sessions it archived as they were before (see [`archive_session`]).
+    /// Archived, with the sessions it archived as they were before (see
+    /// [`super::archive_session`]).
     Archived(Vec<Session>),
     /// Archived by someone else already; nothing was changed.
     AlreadyArchived,
@@ -85,11 +86,20 @@ pub(crate) fn archivable_self(state: &Arc<AppState>, caller: &Session) -> Result
     }
 }
 
-/// Archives the session `id` and what is bound to it as [`archive_session`] does, unless it is
-/// unfinished under `rule`. The checks are made under the claim that keeps a lock from changing
+/// Archives the session `id` and what is bound to it as [`super::archive_session`] does, unless it
+/// is unfinished under `rule`. The checks are made under the claim that keeps a lock from changing
 /// meanwhile, taken only now: held across a wait on the owner or on a survey of the session's
 /// branches, it would refuse every change of a lock in the daemon for as long as that took.
-pub(crate) fn archive_finished(state: &Arc<AppState>, id: &str, rule: Finished) -> Result<Finish> {
+///
+/// The caller holds `admission` past the handover barrier from before it begins what leads here,
+/// a report delivered or the branches judged, so that a planned stop raised meanwhile neither
+/// refuses the archive after the rest was done nor misses what follows it.
+pub(crate) fn archive_finished(
+    state: &Arc<AppState>,
+    admission: &ChangeAdmission,
+    id: &str,
+    rule: Finished,
+) -> Result<Finish> {
     let _removal = state.claim_session_removal();
     let session = state.session_record(id)?;
     if session.status == SessionStatus::Archived {
@@ -98,7 +108,7 @@ pub(crate) fn archive_finished(state: &Arc<AppState>, id: &str, rule: Finished) 
     if let Some(why) = unfinished(state, &session, rule)? {
         return Ok(Finish::Refused(why));
     }
-    Ok(Finish::Archived(archive_session(state, id)?))
+    Ok(Finish::Archived(archive_admitted(state, admission, id)?))
 }
 
 impl Unfinished {

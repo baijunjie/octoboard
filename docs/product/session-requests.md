@@ -218,8 +218,9 @@ A request made while an approval of a request it would take the place of — fro
 carried out is refused, saying the earlier request has just been approved and is being carried out, and that its
 outcome will arrive in the session's terminal as a message.
 
-Nothing about a request is persisted. Every agent process ends with the daemon, so a daemon restart leaves no call
-waiting.
+Nothing about a request is persisted. A daemon that ends fails every call still waiting on it, even for a session
+whose process runs on in its process holder (see "Session helpers and the holder" in
+`docs/product/process-holders.md`), so a daemon restart leaves no call waiting.
 
 ## On approval
 

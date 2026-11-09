@@ -54,7 +54,7 @@ it("sends only what changed when editing", async () => {
   await choose("low");
   await clickButton("Save");
   expect(sent(request)).toEqual([
-    { type: "update_console", console: "c-1", name: "Main", default_agent: "claude", launch: { claude: { effort: "low" } } },
+    { type: "update_console", console: "c-1", launch: { claude: { effort: "low" } }, base_versions: { "launch.claude.effort": 1 } },
   ]);
 });
 
@@ -65,7 +65,7 @@ it("sends an explicit null when a picker is returned to unset", async () => {
   expect(pickerNamed("Model").textContent).toContain(PLACEHOLDER);
   await clickButton("Save");
   expect(sent(request)).toEqual([
-    { type: "update_console", console: "c-1", name: "Main", default_agent: "claude", launch: { claude: { model: null } } },
+    { type: "update_console", console: "c-1", launch: { claude: { model: null } }, base_versions: { "launch.claude.model": 1 } },
   ]);
 });
 
@@ -74,7 +74,7 @@ it("never sends the fields of an agent that was not touched", async () => {
   const request = render(stored);
   type("Name", "Renamed");
   await clickButton("Save");
-  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Renamed", default_agent: "claude" }]);
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Renamed", base_versions: { name: 1 } }]);
 });
 
 it("keeps an edit to an agent that is no longer the selected one", async () => {
@@ -85,7 +85,7 @@ it("keeps an edit to an agent that is no longer the selected one", async () => {
   await choose("Codex");
   await clickButton("Save");
   expect(sent(request)).toEqual([
-    { type: "update_console", console: "c-1", name: "Main", default_agent: "codex", accounts: { claude: "a-personal" } },
+    { type: "update_console", console: "c-1", default_agent: "codex", accounts: { claude: "a-personal" }, base_versions: { default_agent: 1, "accounts.claude": 1 } },
   ]);
 });
 
@@ -93,7 +93,7 @@ it("leaves an account reference that was since removed alone unless its picker i
   const request = render(consoleOf("c-1", "Main", { accounts: { codex: "a-gone" } }), [work, personal]);
   type("Name", "Renamed");
   await clickButton("Save");
-  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Renamed", default_agent: "claude" }]);
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Renamed", base_versions: { name: 1 } }]);
 });
 
 const AVATAR = "data:image/png;base64,AAAA";
@@ -121,7 +121,7 @@ it("shows the avatar with a delete button, and sends an explicit null once it is
   expect(document.body.querySelector("img")).toBeNull();
   expect(button("Choose image")).toBeDefined();
   await clickButton("Save");
-  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", icon: null }]);
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", icon: null, base_versions: { icon: 1 } }]);
 });
 
 it("creates with the avatar that was picked", async () => {
@@ -167,14 +167,13 @@ it("sends the console session instructions only when they changed, and an explic
   await openAdvanced();
   expect(document.body.querySelector("textarea")?.value).toBe("Be brief.");
   await clickButton("Save");
-  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude" }]);
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1" }]);
   typeInstructions("  ");
   await clickButton("Save");
   expect(sent(request)[1]).toEqual({
     type: "update_console",
     console: "c-1",
-    name: "Main",
-    default_agent: "claude",
     console_session_prompt: null,
+    base_versions: { console_session_prompt: 1 },
   });
 });

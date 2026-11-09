@@ -34,7 +34,7 @@ use crate::messaging::naming::{named_session, one_line, place, quote, session_la
 use crate::messaging::texts::REPORT_OPENING;
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
 use crate::session_tools::catalogue;
-use crate::state::{AppState, TurnClose};
+use crate::state::{AppState, ChangeAdmission, TurnClose};
 
 /// A report from a bound project session, as its owner reads it.
 pub struct Report<'a> {
@@ -109,12 +109,15 @@ impl ReportStatus {
 /// `opened` is the number of the session's own turn that had opened last when the report was made
 /// ([`AppState::turn_opened`]): a report accepted is noted as the session's last only while no
 /// turn of its own has opened since.
+///
+/// With the sessions it archived comes the count the handover barrier keeps of the removal of
+/// their branches, taken while the archive was still admitted, for the caller to start it with.
 fn deliver_and_archive(
     state: &Arc<AppState>,
     session_id: &str,
     report: Report<'_>,
     opened: u64,
-) -> Result<(String, Vec<Session>, Delivery)> {
+) -> Result<(String, Vec<Session>, Delivery, ChangeAdmission)> {
     let session = state.session_record(session_id)?;
     let Some(bound_to) = &session.bound_to else {
         bail!("this session is unbound, so there is nobody to report to");
@@ -161,6 +164,15 @@ fn deliver_and_archive(
             Some(_) => {}
         }
     }
+    // A finished report archives the session once delivered. Admitted past the handover barrier
+    // before anything is delivered, so that a planned stop raised first refuses the whole report,
+    // leaving nothing queued for the agent's next attempt to deliver twice, and one raised later
+    // waits for the archive.
+    let admission = if finished {
+        Some(state.admit_change()?)
+    } else {
+        None
+    };
 
     // The binding names the owner directly, so this is a plain lookup by id rather than a search
     // for "the" console session of the console — a console may hold any number of them, each with
@@ -234,12 +246,21 @@ fn deliver_and_archive(
     let held_back = finished && delivery == Delivery::Unsent;
     let mut finished = finished && !held_back;
     let mut changed_meanwhile = false;
-    let (left, archived) = if finished {
+    // The delivery waited past the planned stop's wait: the terminal may be handed over, so the
+    // session is left as it is rather than archived behind the handover's back.
+    let stopping = finished
+        && admission
+            .as_ref()
+            .is_some_and(|admission| admission.still_covered().is_err());
+    if stopping {
+        finished = false;
+    }
+    let (left, archived) = if let Some(admission) = admission.as_ref().filter(|_| finished) {
         let left = branch_cleanup::survey::will_be_left(
             state,
             std::slice::from_ref(&state.session_record(session_id)?),
         );
-        match lifecycle::archive_finished(state, session_id, Finished::Direct)? {
+        match lifecycle::archive_finished(state, admission, session_id, Finished::Direct)? {
             Finish::Archived(archived) => (left, archived),
             // Archived by someone else while the report was delivered.
             Finish::AlreadyArchived => (Vec::new(), Vec::new()),
@@ -259,6 +280,13 @@ fn deliver_and_archive(
         idle_children::report_accepted(state, session_id, report.synthesised, opened);
     }
     let mut note = report_note(delivery, finished, held_back, &owner_kind, &owner.id);
+    if stopping {
+        note.push_str(
+            " This session was not archived: the daemon is stopping to hand its terminals over. \
+             The report was delivered, so do not send it again; your owner can archive this \
+             session.",
+        );
+    }
     if changed_meanwhile {
         note.push_str(
             " This session was not archived: while the report was delivered, it or a session under \
@@ -271,7 +299,10 @@ fn deliver_and_archive(
             branch_cleanup::report::lines(&left).join("; ")
         ));
     }
-    Ok((note, archived, delivery))
+    // Counted before the archive's admission goes, so that no planned stop slips in between.
+    let removal = state.track_change();
+    drop(admission);
+    Ok((note, archived, delivery, removal))
 }
 
 /// What a reporter is told became of its report, delivered as `delivery` to its owner `owner_id`,
@@ -533,10 +564,10 @@ pub(crate) fn report_failed_turn(state: &Arc<AppState>, session_id: &str, messag
 ///
 /// The session is credited with having reported before delivery, even if its owner cannot take the
 /// message yet, so its stop does not also produce a synthesised report. The credit is given after
-/// the session's queued hooks, whose turn start would otherwise reset it, and is taken back
-/// when delivery definitely failed, so the owner gets a synthesised report instead of neither.
-/// An uncertain native submission keeps its credit: synthesising another report could duplicate
-/// one the native queue already accepted.
+/// the session's queued hooks and program status reports, whose turn start would otherwise reset
+/// it, and is taken back when delivery definitely failed, so the owner gets a synthesised report
+/// instead of neither. An uncertain native submission keeps its credit: synthesising another report
+/// could duplicate one the native queue already accepted.
 pub async fn deliver_own_report(
     state: &Arc<AppState>,
     session_id: &str,
@@ -547,6 +578,9 @@ pub async fn deliver_own_report(
     lead: Option<String>,
 ) -> Result<(String, Delivery)> {
     state.hook_queues.settled(session_id).await;
+    if let Some(live) = state.live_session(session_id) {
+        live.settle_program_status().await;
+    }
     state.mark_reported(session_id);
     let opened = state.turn_opened(session_id);
     let delivered = {
@@ -573,7 +607,7 @@ pub async fn deliver_own_report(
         .map_err(anyhow::Error::from)
         .and_then(|delivered| delivered)
     };
-    let (note, archived, delivery) = delivered.map_err(|error| {
+    let (note, archived, delivery, removal) = delivered.map_err(|error| {
         if !crate::messaging::delivery::acceptance_uncertain(&error) {
             state.clear_reported(session_id);
             return error;
@@ -592,7 +626,7 @@ pub async fn deliver_own_report(
             &pairs,
         )
     })?;
-    branch_cleanup::remove::remove_in_background(state, archived);
+    branch_cleanup::remove::remove_in_background(state, archived, removal);
     Ok((note, delivery))
 }
 
@@ -1029,6 +1063,42 @@ mod tests {
         assert_eq!(status("worker"), SessionStatus::Archived);
         assert_eq!(status("hub"), SessionStatus::Idle);
         assert_eq!(status("sibling"), SessionStatus::Idle);
+    }
+
+    /// A `done` report made once a planned stop has raised its handover barrier is refused whole:
+    /// nothing is queued for the owner, so the report the agent makes again is not delivered
+    /// twice, and the reporter stays as it is.
+    #[tokio::test]
+    async fn a_done_report_is_refused_whole_once_the_handover_barrier_is_raised() {
+        let (state, _dir) = crate::test_support::app_state("reporting-done-barrier");
+        state.store.insert_console(&console()).unwrap();
+        let hub = Session {
+            id: "hub".to_string(),
+            kind: SessionKind::Console,
+            bound_to: None,
+            ..project_session("hub")
+        };
+        state.store.insert_session(&hub).unwrap();
+        let live = crate::test_support::idle_stand_in("hub");
+        state.register_live(live.clone());
+        let worker = Session {
+            id: "worker".to_string(),
+            bound_to: Some("hub".to_string()),
+            role: Role::Worker,
+            ..project_session("worker")
+        };
+        state.store.insert_session(&worker).unwrap();
+        state.settle_for_planned_stop().await;
+
+        let err = deliver_report(&state, "worker", done_report()).expect_err("refused");
+
+        assert_eq!(
+            crate::test_support::code_of(&err),
+            crate::protocol::error_code::DAEMON_SHUTTING_DOWN
+        );
+        assert_eq!(state.queued_count("hub"), 0);
+        let status = state.store.get_session("worker").unwrap().unwrap().status;
+        assert_eq!(status, SessionStatus::Idle);
     }
 
     /// A `done` report its owner's agent leaves unsent archives nothing: the reporter is told the

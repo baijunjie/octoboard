@@ -105,7 +105,7 @@ impl ProcessLedger {
         Some(table)
     }
 
-    fn read_table(&self) -> Option<Table> {
+    pub(super) fn read_table(&self) -> Option<Table> {
         #[cfg(test)]
         if self
             .failing_reads
@@ -116,7 +116,16 @@ impl ProcessLedger {
         {
             return None;
         }
-        Table::read()
+        Table::read().map(|table| table.with_holders(self.holders()))
+    }
+
+    /// The holder processes the registry lists, as their files name them. A file whose process
+    /// cannot be read is left out: the table drops one that does not run.
+    fn holders(&self) -> Vec<Identity> {
+        crate::holder::registry::list(&self.holders_dir)
+            .into_iter()
+            .filter_map(|entry| Identity::parse(&entry.started))
+            .collect()
     }
 
     /// One turn of the scanner thread, for a test outside the ledger, whose ledger has none.
@@ -129,6 +138,11 @@ impl ProcessLedger {
     /// what ended launches left and what has worked in a removed directory for long enough, and
     /// writes the ledger file when it changed.
     pub(super) fn tick(&self) {
+        // The previous run's file is not read back yet: what would be stopped here is decided by
+        // the book that read it.
+        if self.awaiting_reconcile.load(Ordering::Acquire) {
+            return;
+        }
         let idle = {
             let book = self.book();
             book.launches.len() <= 1 && book.attributed.is_empty()
@@ -141,6 +155,7 @@ impl ProcessLedger {
                     .collect();
                 let mut doomed: HashSet<Identity> =
                     self.book().members_of(ENDED, &table).into_iter().collect();
+                self.spare_previous_run(&mut doomed, &table);
                 doomed.extend(&removed);
                 {
                     let mut stubborn = self

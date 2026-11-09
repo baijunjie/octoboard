@@ -138,11 +138,11 @@ const PROBE_LIMITS: Limits = Limits::deadline(PROBE_TIMEOUT);
 /// is gone makes git run no hook at all; a month leaves only what nothing plausibly still uses.
 const STALE_AFTER: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
-/// What making the dispatchers ready came to, by the `git` and the daemon executable they were made
-/// for, so that only the first launch with each pays for the probes: the directory, or when the
-/// attempt failed.
+/// What making the dispatchers ready came to, by the directory they are made under, the `git` and
+/// the daemon executable they were made for, so that only the first launch with each pays for the
+/// probes: the directory, or when the attempt failed.
 type Ready = Result<PathBuf, Instant>;
-static READY: Mutex<Option<HashMap<(String, String), Ready>>> = Mutex::new(None);
+static READY: Mutex<Option<HashMap<(PathBuf, String, String), Ready>>> = Mutex::new(None);
 
 /// The variables a project session's agent is started with so that its git reports the branches
 /// it creates: the next `GIT_CONFIG_COUNT` slot set to `core.hooksPath` = the dispatchers, and
@@ -154,11 +154,30 @@ pub fn session_env(
     port: u16,
     daemon_key: &str,
 ) -> Vec<(String, String)> {
-    let root = paths::data_dir().join("githooks");
-    let Some(user) = user_entries(shell_env, &root) else {
+    session_env_under(
+        &paths::data_dir().join("githooks"),
+        shell_env,
+        self_exe,
+        session_id,
+        port,
+        daemon_key,
+    )
+}
+
+/// [`session_env`] with the dispatchers under `root`, which a test points into a directory of its
+/// own.
+pub(crate) fn session_env_under(
+    root: &Path,
+    shell_env: &HashMap<String, String>,
+    self_exe: &str,
+    session_id: &str,
+    port: u16,
+    daemon_key: &str,
+) -> Vec<(String, String)> {
+    let Some(user) = user_entries(shell_env, root) else {
         return Vec::new();
     };
-    let dir = match ready_dir(&root, shell_env, self_exe) {
+    let dir = match ready_dir(root, shell_env, self_exe) {
         Ok(dir) => dir,
         Err(err) => {
             tracing::debug!(%err, "branch origins: no hook dispatchers for this session");
@@ -235,7 +254,7 @@ fn ready_dir(root: &Path, shell_env: &HashMap<String, String>, self_exe: &str) -
         bail!("the daemon executable `{self_exe}` cannot be found for the report");
     }
     let git = env_shell::resolve_program("git", shell_env)?;
-    let key = (git.clone(), self_exe.to_string());
+    let key = (root.to_path_buf(), git.clone(), self_exe.to_string());
     let cached = READY
         .lock()
         .expect("hook dispatcher cache poisoned")

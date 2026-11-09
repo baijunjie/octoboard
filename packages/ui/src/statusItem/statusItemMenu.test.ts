@@ -87,6 +87,14 @@ describe("buildStatusItemMenu", () => {
     expect(waiting?.items.map((item) => item.session)).toEqual(["m", "x"]);
   });
 
+  it("keeps a reconnecting session out of the list and the attention dot even when its stored status is eligible", () => {
+    for (const status of ["waiting_user", "idle", "dormant"] as const) {
+      const pending = sessionOf("s", "c", "p", "s", status, { holder_link: "pending" });
+      expect(menuOf([pending]).sections).toEqual([{ heading: "No sessions to show", items: [] }]);
+      expect(menuOf([pending]).attention).toBe(false);
+    }
+  });
+
   it("keeps a switching session out of the list even when its underlying status is eligible", () => {
     for (const status of ["waiting_user", "idle"] as const) {
       const switching = sessionOf("s", "c", "p", "s", status, { switching_account: true });

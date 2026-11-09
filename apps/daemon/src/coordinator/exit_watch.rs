@@ -15,6 +15,11 @@ use crate::time::now_millis;
 /// since a killed process fires nothing at all.
 const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
+/// How long the exit of a session adopted from a holder waits for the adoption to end, which is
+/// when the reports its holder relayed meanwhile are queued: as long as such a report waits for it
+/// (`server::relay`).
+const ADOPTION_WAIT: Duration = Duration::from_secs(20);
+
 /// Drops a session from the live map, if it is still *this* session, and what goes with it: its
 /// queue, a session request it has waiting (its call has nobody left to return to), its
 /// bookkeeping. Called wherever a live session is dropped.
@@ -45,12 +50,19 @@ pub(crate) fn end_process_for_test(state: &Arc<AppState>, id: &str) {
 /// reports the outcome itself; a switch someone asked for does not watch, so it is told. A
 /// claim held on the session says nothing else of it: a process that exits by itself under one
 /// is told, and so is one a claim that stops nothing (a transfer of branches, a binding
-/// change) left running.
+/// change) left running. Once a planned stop begins to hand the terminals over, it stops
+/// watching and records nothing: the process is the next daemon's.
 pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
     let state = state.clone();
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(EXIT_POLL_INTERVAL).await;
+            // Once a planned stop hands the terminals over, the session is the next daemon's: an
+            // exit seen from here on is its to find, and nothing of the process is reaped here, nor
+            // its scratch directory removed, which the adopted session's hooks still call.
+            if state.is_handing_over() {
+                return;
+            }
             if live.poll_exit() {
                 break;
             }
@@ -70,14 +82,26 @@ pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
         };
         // A hook the agent waited on before it exited (Claude Code's HTTP hook, Grok Build's
         // command hook) is queued already, since the route answers once it has queued the
-        // event, but may not have been applied yet. Whether the exit cut a turn short is read
-        // off the status those events leave, so a `Stop` still being applied would otherwise
-        // find the turn recorded as cut short and the flag no longer its to clear. Bounded
-        // (`HookQueues::settled`). An asynchronous command hook (Codex's, Claude Code's command
-        // form) can still post after the exit; an end of the turn cut short that arrives so is
-        // taken by `AppState::apply_late_turn_event`.
-        let settling = state.hook_queues.settled(&live.id);
+        // event, but may not have been applied yet. Through a holder that is likely, not
+        // guaranteed: the holder answers the helper itself, and the event is queued when the
+        // link has read it (in order), which may still be under way. Whether the exit cut a turn
+        // short is read off the status those events leave, so a `Stop` still being applied would
+        // otherwise find the turn recorded as cut short and the flag no longer its to clear.
+        // Bounded (`HookQueues::settled`). An asynchronous command hook (Codex's, Claude Code's
+        // command form) can still post after the exit; an end of the turn cut short that arrives
+        // so is taken by `AppState::apply_late_turn_event`. The reports a holder relayed while
+        // the daemon was adopting its sessions are queued only as the adoption ends, so the exit
+        // of an adopted session waits for that first.
+        let settling = async {
+            state.await_adoption(ADOPTION_WAIT).await;
+            state.hook_queues.settled(&live.id).await;
+        };
         let _ = tokio::join!(saving, ending, settling);
+        // The program's status reports, as far as the reader took them in by the time the output
+        // was saved, decide how its turn ended in the same way, and are applied before the exit is
+        // recorded (bounded, as above). Its running and held-up records go with the process.
+        live.settle_program_status().await;
+        live.end_program_status();
         live.note_input_recovery_ended();
         // Recorded while the process is still the session's: no launch can be claimed while
         // it is registered (`begin_launch`), so the row cannot belong to a relaunch yet — one

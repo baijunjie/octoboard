@@ -4,13 +4,13 @@
 //! them. The account helpers it calls are the coordinator's, so an imported account passes the
 //! checks a hand-added one does.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::Result;
 
 use super::progress::Progress;
-use super::{exported_in_effect, known_agent_tags, Rebinder};
+use super::{based_on, exported_in_effect, known_agent_tags, Rebinder};
 use crate::accounts::dirs::normalize_account_dir;
 use crate::agents::availability;
 use crate::config_document::export;
@@ -469,12 +469,13 @@ pub(super) fn announce_accounts(
 /// section come last, through the path a settings update takes; a failure of those is reported on
 /// the result and leaves the accounts as they are. Each account, and those settings, is reported
 /// to `progress` as it is handled (see [`announce_accounts`]).
-pub(super) fn apply_accounts(
+pub(super) async fn apply_accounts(
     state: &Arc<AppState>,
     document: &DocumentAccounts,
     prepared: PreparedAccounts,
     mut chosen: HashMap<(AgentId, usize), AccountChoice>,
     progress: &Progress,
+    settings_versions: Option<&BTreeMap<String, u64>>,
 ) -> ImportedAccounts {
     let PreparedAccounts {
         before,
@@ -576,19 +577,9 @@ pub(super) fn apply_accounts(
     let (mut agent_settings_applied, mut agent_settings_error) = (None, None);
     if let Some(settings) = &document.agent_settings {
         progress.report(ImportItem::AgentSettings, ImportItemState::Creating);
-        let changes = SettingsChanges {
-            auto_select_account: Some(settings.auto_select_account),
-            auto_switch_on_usage_limit: Some(settings.auto_switch_on_usage_limit),
-            auto_start_quota_windows: Some(settings.auto_start_quota_windows),
-            // A setting this build does not carry is skipped, so a document from a build that
-            // knows more providers still applies the rest of its settings.
-            provider_settings: crate::config_document::exported_provider_settings(
-                &settings.provider_settings,
-            ),
-            agent_tags: known_agent_tags(&settings.agent_tags).collect(),
-            ..Default::default()
-        };
-        match coordinator::settings::update_settings(state, changes) {
+        let changes = agent_settings_changes(settings);
+        let base = based_on(&changes, settings_versions);
+        match coordinator::settings::update_settings_checked(state, changes, &base).await {
             Ok(()) => {
                 agent_settings_applied = Some(settings.clone());
                 progress.report(ImportItem::AgentSettings, ImportItemState::Done);
@@ -605,6 +596,22 @@ pub(super) fn apply_accounts(
         agents: imported,
         agent_settings_applied,
         agent_settings_error,
+    }
+}
+
+/// The write of the Agent accounts settings the document carries.
+pub(super) fn agent_settings_changes(settings: &DocumentAgentSettings) -> SettingsChanges {
+    SettingsChanges {
+        auto_select_account: Some(settings.auto_select_account),
+        auto_switch_on_usage_limit: Some(settings.auto_switch_on_usage_limit),
+        auto_start_quota_windows: Some(settings.auto_start_quota_windows),
+        // A setting this build does not carry is skipped, so a document from a build that knows
+        // more providers still applies the rest of its settings.
+        provider_settings: crate::config_document::exported_provider_settings(
+            &settings.provider_settings,
+        ),
+        agent_tags: known_agent_tags(&settings.agent_tags).collect(),
+        ..Default::default()
     }
 }
 
@@ -1174,6 +1181,7 @@ mod tests {
                 agents: None,
             },
             Some("accounts".to_string()),
+            None,
         )
         .await
         .unwrap();
@@ -1227,6 +1235,7 @@ mod tests {
                 agents: None,
             },
             Some("existing".to_string()),
+            None,
         )
         .await
         .unwrap();

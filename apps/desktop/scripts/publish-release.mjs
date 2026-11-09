@@ -35,6 +35,7 @@ import { gitChecked } from "../../../scripts/lib/git.mjs";
 import { appDir, appVersion, findBundle, repoRoot, universalBundleDir as bundleDir } from "./bundle.mjs";
 import {
   buildManifest,
+  HOLDER_FLOOR_FILE,
   isPrerelease,
   manifestFiles,
   manifestNames,
@@ -43,6 +44,7 @@ import {
   parsePlatforms,
   planManifestWrites,
   planReleaseAssets,
+  readHolderFloor,
   releaseAssetUrl,
   releaseAssets,
   releaseLayout,
@@ -144,6 +146,9 @@ if (selected("windows")) {
 }
 
 const pubDate = new Date().toISOString();
+// Read from the tree, which is the release commit: a publish refuses uncommitted changes below.
+const holderFloor = readHolderFloor(repoRoot);
+if (holderFloor === undefined) throw new Error(`${HOLDER_FLOOR_FILE} has no FLOOR constant to publish.`);
 for (const platform of platforms) {
   const { update } = publishing[platform];
   publishing[platform].manifest = buildManifest({
@@ -151,6 +156,7 @@ for (const platform of platforms) {
     notes,
     pubDate,
     platform,
+    holderFloor,
     update: { url: releaseAssetUrl(appConfig.repositoryUrl, version, update.name), signature: update.signature },
   });
   publishing[platform].manifests = manifestFiles(platform);
