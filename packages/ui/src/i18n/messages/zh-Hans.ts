@@ -1453,7 +1453,7 @@ export const zhHans: Translation<"other"> = {
   "dialog.project.agentDetectHint": "在此选择的智能体将应用到所有仓库。",
   "dialog.project.agentDetectHelp": "关于检测智能体",
   "dialog.project.agentDetectMechanism":
-    "{detect} 会在每个仓库中查找 {markers} 等智能体文件和目录；无法判定的仓库将继承控制台的默认值。",
+    "{detect} 会在每个仓库中查找 {markers} 等智能体文件和文件夹；无法判定的仓库沿用控制台的默认智能体。",
   "dialog.project.directoryRequired": "必须提供目录。",
   "dialog.project.pathChecking": "正在检查目录…",
   "dialog.project.createEmptyHint": "将在此目录中创建一个空项目。",
