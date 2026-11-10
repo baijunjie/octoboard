@@ -282,10 +282,10 @@ export interface Ui {
   hoverIndicator: (host: Matcher) => Promise<void>;
   /** Moves the pointer onto the status glyph of the sidebar session row named `row`
    * (`session(title)`) and leaves it there, as `hoverIndicator` does. The row's glyph is decorative,
-   * so it has no `role="img"` for `hoverIndicator` to find; it is taken as the row's first element
-   * child when that is a tooltip trigger, which is how `SessionRow` lays it out. A row whose glyph
-   * carries no tooltip (focus mode's card) fails rather than match the agent mark's trigger further
-   * along. */
+   * so it has no `role="img"` for `hoverIndicator` to find; it is taken as the row's first visible
+   * element child (past the hidden press-target button every `TreeRow` leads with) when that is a
+   * tooltip trigger, which is how `SessionRow` lays it out. A row whose glyph carries no tooltip
+   * (focus mode's card) fails rather than match the agent mark's trigger further along. */
   hoverRowStatus: (row: Matcher) => Promise<void>;
   /** Moves the pointer onto the status glyph of the session titled `title` in the open confirmation
    * dialog's callout list, and leaves it there, as `hoverIndicator` does. Unlike a sidebar row's,
@@ -949,7 +949,8 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
       await hover(() => {
         const found = find(row);
         if (!found) return undefined;
-        const glyph = found.firstElementChild;
+        // The row leads with its hidden press-target button, which is no glyph.
+        const glyph = Array.from(found.children).find((child) => !child.matches("button[hidden]"));
         // Found, so waiting would not change it: the row's glyph is one without a tooltip.
         if (!glyph?.matches("[role=presentation]")) {
           throw new Error(`The session row matching ${String(row)} has no tooltip on its status glyph to hover`);

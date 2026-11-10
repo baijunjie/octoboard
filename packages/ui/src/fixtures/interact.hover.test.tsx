@@ -55,6 +55,9 @@ beforeEach(() => {
   });
 });
 
+/** The hidden press-target button every `TreeRow` leads its row with. */
+const pressTarget = <button type="button" hidden tabIndex={-1} aria-hidden="true" />;
+
 /** The placements the hover steps reach, built from the real glyph: the top bar, a session row with
  * a status glyph and an agent mark that has a tooltip of its own, a row with a status glyph only, a
  * row like focus mode's card, whose glyph carries no tooltip and whose agent mark does, and the
@@ -72,10 +75,12 @@ function mountWindow(): void {
         <StatusIcon status="archived" withTooltip />
       </header>
       <div role="button" aria-label="Fix the layout, Claude Code, Working">
+        {pressTarget}
         <StatusIcon status="working" decorative withTooltip />
         <AgentIcon agent="claude" tooltip={agentTooltip("Work")} />
       </div>
       <div role="button" aria-label="Write the migration, Claude Code, Waiting for you">
+        {pressTarget}
         <StatusIcon status="waiting_user" decorative withTooltip />
       </div>
       <div role="button" aria-label="Website, Awaiting instructions">
@@ -114,6 +119,7 @@ function mountWindow(): void {
       </TitledControl>
       <HelpTip label="About Billing">Billing is charged monthly.</HelpTip>
       <div role="button" aria-label="Card, Claude Code, Idle">
+        {pressTarget}
         <div>
           <StatusIcon status="idle" decorative />
         </div>
@@ -137,8 +143,9 @@ function runOut(): void {
   expect(vi.getTimerCount()).toBe(0);
 }
 
-/** The glyph a row's step hovers: the row's first child, found from the row's name. */
-const glyphOf = (title: string): Element => document.querySelector(`[aria-label^="${title}"]`)!.firstElementChild!;
+/** The glyph a row's step hovers: the row's first visible child, found from the row's name. */
+const glyphOf = (title: string): Element =>
+  Array.from(document.querySelector(`[aria-label^="${title}"]`)!.children).find((child) => !child.matches("button[hidden]"))!;
 
 const row = (title: string) => (name: string) => name.startsWith(title);
 
