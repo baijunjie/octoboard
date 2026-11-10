@@ -29,7 +29,7 @@ write each out separately.
 
 | Scope | Framework | Test root | Path mapping | Shared helpers | Run all | Run given files | Select tests by change |
 |---|---|---|---|---|---|---|---|
-| `packages/ui` | Vitest | None | `src/<path>/<name>.ts(x)` → `src/<path>/<name>.test.ts(x)`; `scripts/<name>.mjs` → `scripts/<name>.test.mjs` | `src/test/` (setup, `testDaemon`, `mountHost`, hosts), `*TestSupport.ts(x)` / `testSupport.tsx` / `*TestState.tsx` files beside the module that uses them, `scripts/test-fixtures/` for the `scripts/*.test.mjs` tests; tests may read `src/fixtures/` (data shared with the gallery), which is changed only through the `agent-gallery` skill | `pnpm --filter @octoboard/ui test` | `pnpm --filter @octoboard/ui exec vitest run <file>` | `pnpm --filter @octoboard/ui exec vitest related --run <changed files>` |
+| `packages/ui` | Vitest | None | `src/<path>/<name>.ts(x)` → `src/<path>/<name>.test.ts(x)`; `scripts/<name>.mjs` → `scripts/<name>.test.mjs` | `src/test/` (setup, `testDaemon`, `mountHost`, hosts, the clock helpers `clock.ts`, `lazyImport.ts`, `alertQueue.ts`), `*TestSupport.ts(x)` / `testSupport.tsx` / `*TestState.tsx` files beside the module that uses them, `scripts/test-fixtures/` for the `scripts/*.test.mjs` tests; tests may read `src/fixtures/` (data shared with the gallery), which is changed only through the `agent-gallery` skill | `pnpm --filter @octoboard/ui test` | `pnpm --filter @octoboard/ui exec vitest run <file>` | `pnpm --filter @octoboard/ui exec vitest related --run <changed files>` |
 | `apps/daemon`, `apps/desktop/src-tauri` | cargo test | None | `src/<path>/<name>.rs` (or `<name>/mod.rs`) → `#[cfg(test)] mod tests` in the same file, or `src/<path>/<name>/tests.rs` (a `tests/` directory when large) declared in the module file with `#[cfg(test)] mod tests;`; some modules split their tests by topic into `<topic>_tests.rs` beside them | `apps/daemon/src/test_support/` (`#[cfg(test)]` module of the daemon crate) | `pnpm test:rust` | `node scripts/cargo.mjs test -p <crate> <test path filter>` (`<crate>` is `octoboardd` or `octoboard`) | None |
 | `apps/desktop` scripts | node:test | None | `scripts/<name>.mjs` → `scripts/<name>.test.mjs` | None | `pnpm --filter @octoboard/desktop test` | `node --test <file>` | None |
 | `apps/web` | node:test (run with `--experimental-strip-types`) | `apps/web/test/` | `<path>/<name>.ts` → `test/<name>.test.ts` | None | `pnpm --filter @octoboard/web test` | `node --experimental-strip-types --test <file>` | None |
@@ -40,33 +40,37 @@ write each out separately.
   tests: None).
 - Languages whose tests are placed by language convention: Rust (the `#[cfg(test)] mod tests` module in the source
   file, and the `tests.rs` / `tests/` submodule files beside a module, as `apps/daemon` already does).
-- Tests that depend on time (every scope; mandatory for every test written or changed, and the rest are brought in
-  line by a dedicated cleanup): a test's outcome must not depend on how fast the machine runs it. A test that passes
-  alone and fails under the full suite's load is a broken test, never an intermittent one to rerun. The quick check's
-  solo rerun in `CLAUDE.md` only lets a merge go ahead; it does not clear the test, which is still fixed or reported.
+- Tests that depend on time (every scope; mandatory for every test): a test's outcome must not depend on how fast the
+  machine runs it. A test that passes alone and fails under the full suite's load is a broken test, never an
+  intermittent one to rerun. The quick check's solo rerun in `CLAUDE.md` only lets a merge go ahead; it does not clear
+  the test, which is still fixed or reported.
   - **No inline real-time waits.** No sleep, `setTimeout`, `thread::sleep` or fixed-length polling loop written in a
     test to let something happen. Where the code under test waits (a delay, debounce, cooldown, retry), drive a fake
-    clock: Vitest `vi.useFakeTimers()` started before the code arms its timers (before mounting); Rust
+    clock started before the code arms its timers (before mounting): in `packages/ui`, `fakeTimers()`
+    (`packages/ui/src/test/clock.ts`), or `fakeTimersKeepingFrames()` under `framesAsTimers()`; Rust
     `#[tokio::test(start_paused = true)]`, `tokio::time::pause()` (crates with tokio's `test-util`) or an injected
     clock. Durations come from the production constant (import it), never a literal; a library delay that cannot be
     imported is a named constant in the support code, citing its source, as `MOUNT_REFOCUS_MS` does.
   - **Real time only through the named helpers.** Where real time cannot be avoided — a library singleton the test
-    cannot reset or fake, a library step that only completes on the real event loop, or a timer that a test which has
-    to stay on the real clock cannot avoid meeting — the wait lives in one named helper beside the other test support
-    code, documented with its reason, and tests call it. The sanctioned set:
+    cannot reset or fake, a library step that only completes on the real event loop, a timer that a test which has
+    to stay on the real clock cannot avoid meeting, or an ordering yield past queued promise work — the wait lives in
+    one named helper beside the other test support code, documented with its reason, and tests call it. The sanctioned
+    set:
     - `trackMountRefocus` and `settleFrames` (`packages/ui/src/components/dialog/dialogTestSupport.ts`);
-    - the react-aria tooltip waits, which belong in `packages/ui/src/components/hint/tooltipTestSupport.ts`: the
-      touch-hover suppression (in `press`) and the cooldown, added there as a named helper (until the cleanup,
-      `ActionMenu.test.tsx` and the memory doc still show it inline: a new test that needs it adds the helper
-      first and does not copy the inline form);
-    - the lazy-import settle described in `docs/memory/writing-automated-tests.md`, to be pulled out into a named
-      helper in `packages/ui/src/test/`, the doc's inline form being the one allowed until then;
-    - the status region's first-write wait (`firstWriteDelayPassed`, to be moved from
-      `packages/ui/src/App.projectActions.test.tsx` into support code; a new test that needs it moves it first
-      rather than copying it), for a test that must mount on the real clock; otherwise fake the clock before
-      mounting.
+    - the react-aria tooltip waits in `packages/ui/src/components/hint/tooltipTestSupport.ts`: the touch-hover
+      suppression (in `press`) and `tooltipsCooledDown`;
+    - the lazy-import settle, `settleLazyImport` (`packages/ui/src/test/lazyImport.ts`);
+    - the status region's first-write wait, `firstWriteDelayPassed`
+      (`packages/ui/src/components/announce/statusAnnouncerTestSupport.ts`), for a test that must mount on the real
+      clock; otherwise fake the clock before mounting and advance `FIRST_WRITE_DELAY_MS`;
+    - `afterQueuedWork` and `flushPromises` (`packages/ui/src/test/clock.ts`), one real 0 ms macrotask that lets
+      queued microtasks run, for code that finishes on promise chains alone; where a positive assertion follows,
+      wait on it instead;
+    - in the daemon, `next_millisecond` (`apps/daemon/src/test_support/clock.rs`), for production stamps in
+      wall-clock milliseconds.
 
-    A new exception is added only as such a helper, with its reason. Daemon tests that drive a real child process
+    A new exception is added only as such a helper, with its reason, waiting through `waitOnRealClock`
+    (`packages/ui/src/test/clock.ts`), which tests never call directly. Daemon tests that drive a real child process
     follow the real-process rules in `docs/memory/writing-daemon-tests.md` (the patience window, the short-timeout
     override getters), not a fake clock.
   - **Let React commit between timers.** In a `packages/ui` component test, advance the fake clock inside `act`, and
@@ -85,7 +89,8 @@ write each out separately.
     armed after the dialog mounts); the tooltip warm-up and the status region's first write are in
     `docs/memory/writing-automated-tests.md`.
   - **Leave nothing running.** A test that faked timers runs out its pending timers and asserts `vi.getTimerCount()`
-    is 0 before restoring real ones; teardown is bound to the test with `onTestFinished`.
+    is 0 before restoring real ones; teardown is bound to the test with `onTestFinished`. In `packages/ui`,
+    `fakeTimers()` does all of this.
   - **Prove it under load.** On top of the single run that "Run scope" and `test-writer` prescribe, a new or changed
     test that touches time is also run under load (for example the file run several times in parallel, or with
     `--sequence.shuffle`), and a fixed-delay check (an injected delay before the assertion) shows it still passes;
