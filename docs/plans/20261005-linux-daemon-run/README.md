@@ -35,6 +35,7 @@ the one arrangement that works with the daemon as it is, and it is how the miles
 ## Milestones
 
 - [01 Linux build and background run](01-linux-build-and-background-run.md)
+- [01a Linux holders and restart verification](01a-holders-and-restart-verification.md) — needs 01; systemd cases also need delegated holder user services and service-key delivery
 - [02 Serving the UI](02-serving-the-ui.md) — needs the UI to run outside the Tauri shell
 
 ## Open

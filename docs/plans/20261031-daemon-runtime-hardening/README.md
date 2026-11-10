@@ -112,19 +112,16 @@ clients through the first paint.
   on the remote machine, reconnects with backoff, treats a silent line as lost, and folds the remote machine's events
   into the local event stream. No milestone here builds it.
 
+Linux verification, including holder services, cgroups, service restarts and companions, lives in `docs/plans/20261005-linux-daemon-run/` (milestones 01 and 01a). This plan's remaining verification covers macOS and Windows.
+
 ## Milestones
 
 - 01 Windows holder feasibility (closed)
-- [02 Process holders](02-process-holders.md) — its Linux systemd parts need the daemon running on Linux as a
-  systemd user service, which does not exist yet
-- [03 Planned restart handover](03-planned-restart-handover.md) — needs 02; its `restart` command sits beside the
-  command-line `start`, `stop` and `status` of Linux daemon run milestone 01, none of which runs a daemon in the
-  background on Windows; its systemd case needs the daemon running on Linux as a systemd user service, which does
-  not exist yet
-- [04 Desktop updates keep sessions running](04-desktop-update-handover.md) — needs 03
+- [02 Process holders](02-process-holders.md)
+- 03 Planned restart handover (closed)
+- [04 Desktop updates keep sessions running](04-desktop-update-handover.md)
 - 05 Program status reports (closed)
 - 06 Conflict-checked writes (closed)
 - 07 Control-channel heartbeat (closed)
-- [08 Codex app server in the holder](08-codex-server-in-holder.md) — needs 02 and 03, and Codex's private app
-  server, which is in place
+- [08 Codex app server in the holder](08-codex-server-in-holder.md) — needs 02 and Codex's private app server, which is in place
 - [09 Final confirmation](09-final-confirmation.md)

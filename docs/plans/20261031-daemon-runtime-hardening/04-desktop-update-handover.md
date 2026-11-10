@@ -1,10 +1,12 @@
 # 04 Desktop updates keep sessions running
 
+> Platform scope: macOS and Windows.
+>
 > Goal: restarting the desktop application to apply an update hands every session over to the new version's daemon
 > instead of interrupting it, on macOS and Windows; an application crash leaves them running too.
 > Completion criteria: install an update and restart into it while sessions are working, with a shell terminal open.
 > - Every session and shell terminal keeps running in the new version, with its exact screen. Nothing becomes
->   interrupted. The exact screen has milestone 03's stated exception: a screen whose width changed while a program
+>   interrupted. The exact screen has one stated exception: a screen whose width changed while a program
 >   showed the alternate screen comes back marked inexact.
 > - The adopted sessions' hooks, MCP tools and git gate work with the new daemon.
 > - New sessions run under a holder of the new build. The old holder exits once its last terminal ends.
@@ -17,7 +19,7 @@
 
 ## Technical design
 
-- The update restart sends milestone 03's planned-stop request rather than the ordinary shutdown:
+- The update restart sends the planned-stop request rather than the ordinary shutdown:
   - [x] On macOS the application bundle has already been replaced, so the old daemon makes its planned stop and the
         new application's daemon adopts the holders.
   - [ ] On Windows the installer runs only after that planned stop.
@@ -88,8 +90,8 @@ Made without the user, with reasons.
   had a daemon that may hold holders (its daemon exited on its own before its startup line), so a desktop whose daemon
   lost the instance lock to another one does not end that daemon's sessions at its next start.
 - A macOS logout stops the daemon by blocking the delegate's answer (within 5 s) rather than `TerminateLater`. A system
-  end is an ordinary stop also during an update restart: it escalates the planned stop (03's hook, main the single
-  cleanup owner) instead of waiting for it, and wins over the installer and the relaunch; a planned stop asked for
+  end is an ordinary stop also during an update restart: it escalates the planned stop (the stop-escalation hook,
+  main the single cleanup owner) instead of waiting for it, and wins over the installer and the relaunch; a planned stop asked for
   after the quit line is made ordinary, so a late planned-stop request cannot undo the session end.
 - The new build's holder floor and version reach the old application through the update manifest; compatibility is the
   inclusive range from the floor to the target version, and a missing or unreadable end means unknown, which warns
@@ -109,7 +111,7 @@ Made without the user, with reasons.
 - Desktop shell (`sidecar/{mod.rs,stop.rs,quit_note.rs}`, `exit.rs`, `lifecycle/macos.rs`): `stop_daemon` takes the
   stop's kind. The update restart (and on Windows the installer it starts) sends `POST /planned-stop`, repeats it once
   if it could not be sent, never signals, and kills only after a 30 s grace; a killed daemon leaves its sessions to
-  crash recovery. The daemon's planned stop is nominally about 31.5 s at worst after 03's barriers (barrier 5, hook
+  crash recovery. The daemon's planned stop is nominally about 31.5 s at worst after its barriers (barrier 5, hook
   settle 0.5, a link reopened and settled 15, the handover's answer 5, the readers 3, parting from every holder at once
   3), a sum of deadlines rather than a measured maximum; it begins at the UI's request, so the kill comes 32 to about
   37 s after it (more where recoveries are waited for first): a thin margin, past which the sessions are left to crash

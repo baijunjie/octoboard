@@ -1,5 +1,7 @@
 # 02 Process holders
 
+> Platform scope: macOS and Windows.
+>
 > Goal: agent processes and shell terminals survive the daemon going down, and keep working with the daemon that
 > starts next.
 > Completion criteria:
@@ -16,8 +18,6 @@
 > - A holder that runs but refuses connections or keeps dropping the link is not ended: its sessions stay running and
 >   claimed, shown as pending, and are taken over once it accepts a link again.
 > - A custom shell name is kept with the terminal identity.
-> - After a Linux host shutdown and the next start, every session is interrupted, and its preview is its last screen
->   from before the shutdown.
 
 ## Technical design
 
@@ -59,17 +59,12 @@
       terminals go to a holder of the current build.
 - Holders are detached from the daemon, and a holder outlives the daemon's process group:
   - [x] On macOS, in a session of their own.
-  - [ ] On Linux, as a systemd user service that kills only its main process when stopped. The unit delegates its
-        cgroup subtree, and the holder makes a group per launch inside it, falling back to the process ledger where no
-        writable subtree is available. The daemon's unit is ordered to stop before the holders' units, so at a host
-        shutdown the daemon makes its ordinary stop, freezing each preview, while the shells are still running. A
-        daemon not run by a systemd user manager detaches its holders as on macOS, with the process ledger alone.
   - [ ] On Windows, outside the daemon's hidden console and its jobs, as "Process holders on Windows" in
         `docs/architecture.md` describes.
 - The daemon's crash hook no longer reaches programs a holder runs; a holder's own crash still ends them:
   - [x] macOS: daemon `SIGABRT` preserved the agent and shell for adoption; holder `SIGABRT` ended both.
         Evidence: `/tmp/octoboard-remaining-20261110-7fd0/REPORT.md` (crash-hook records).
-  - [ ] Linux and Windows: verify the same crash-hook boundary.
+  - [ ] Windows: verify the same crash-hook boundary.
 - [x] On macOS, a program in a held terminal raises a privacy prompt naming the packaged application, with the
       holder outside the bundle; Desktop access was denied after capture.
       Evidence: `/tmp/octoboard-remaining-20261110-7fd0/privacy-prompt.png`.
@@ -90,7 +85,7 @@
       unchanged.
 - [x] Route the helpers through the holder.
 - [x] Then let holders outlive the daemon, and add adoption and crash recovery, on macOS.
-- [ ] The same on Linux and Windows, with the crash hook (see the open technical-design items).
+- [ ] The same on Windows, with the crash hook (see the open technical-design items).
 - [x] Then add the build check and draining.
 
 ## Handoff
@@ -164,9 +159,6 @@ Made without the user, with reasons, as revised after an independent review.
     process group): a holder process would own them, with their `Pty` and `Containment` APIs as its protocol.
 - **Development notes**:
   - Builds on the daemon's first paint on attach: a screen rebuilt after a crash reaches clients through it.
-  - The Linux detach and the stop order, with the Linux shutdown criterion, need the daemon running on Linux as a
-    systemd user service, which does not exist yet. The rest can be done and verified on macOS, on Linux without
-    systemd once the Linux build exists, and on Windows.
   - The per-build copy must keep the binary's code signature on macOS and Windows, and carry the files found next to
     the binary, such as Windows' `conpty.dll` and `OpenConsole.exe` in both of its architecture subdirectories (the
     copy's `conpty.dll` starts the copy's `OpenConsole.exe`).
@@ -241,9 +233,3 @@ handler; these results do not claim separate handler or interactive-desktop veri
    on the bundled console host draws before any input (Handoff); a real update over running sessions installs with no
    Abort/Retry/Ignore prompt (Handoff). The SSH follow-up above verified the remaining gate, compatibility, draining,
    unknown-terminal, no-holder and connection-refusal criteria; repeated link drops were not separately run on Windows.
-2. Linux without systemd, blocked on Docker, which is off: with the Linux build in a container, the Unix detach, and a
-   held launch joining the cgroup group the daemon made for it below the holder's own cgroup (a writable cgroup v2
-   subtree, as Linux daemon run milestone 01's notes describe).
-3. Linux with systemd, blocked on the daemon running on Linux as a systemd user service, which does not exist yet:
-   the holder as a systemd user service with `Delegate=yes` and a group per launch, the daemon's unit stopping before
-   the holders' units, and the Linux host shutdown criterion.

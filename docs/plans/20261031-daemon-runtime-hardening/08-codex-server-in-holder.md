@@ -1,5 +1,7 @@
 # 08 Codex app server in the holder
 
+> Platform scope: macOS and Windows.
+>
 > Goal: a Codex session's private app server lives in the holder that runs its terminal, as the terminal's companion,
 > so a daemon crash, a planned restart and a desktop update leave the server running with the terminal, and the daemon
 > that adopts the terminal links to the server again and keeps delivering the session's automatic messages through
@@ -142,7 +144,7 @@
     turn, so nothing is started twice;
   - the held-message notice: told again by the successor after its own 30 s; a notice the predecessor broadcast is
     not withdrawn by it, as events are not persisted.
-- [x] Messages in flight at a handover: the outbox seals and saves what is queued (milestone 03); a request already
+- [x] Messages in flight at a handover: the outbox seals and saves what is queued; a request already
       sent to the server completes or fails within its own 5 s, independent of the holder link, and the uncertain
       rules stand. Nothing of this milestone writes into the terminal during a planned stop: a message the server
       declines (nothing of it reached it) falls back to the terminal only while the handover barrier is down; one
@@ -191,7 +193,7 @@
 
 ### Security of reaching the server directly
 
-- [x] The daemon connects to the companion's endpoint itself, not through the holder: on macOS and Linux a socket in
+- [x] The daemon connects to the companion's endpoint itself, not through the holder: on macOS a socket in
       a directory only the user can enter, as today, now made and removed by the holder (a holder killed outright
       leaves the directory, as a killed daemon did); on Windows the loopback port guarded by the token above.
 - The direct connection keeps working while the holder link is down, so a message is queued through a pending holder:
@@ -309,7 +311,7 @@
   `docs/product/per-agent-launch-specifics.md` ("Codex's private app server"), `docs/product/message-delivery.md`
   ("Messages through Codex's own queue"), `docs/product/background-processes.md` ("Automatic stopping and its
   boundaries"), `docs/architecture.md` ("Process holders on Windows"), `docs/structure/daemon.md`,
-  `02-process-holders.md` and `03-planned-restart-handover.md` in this directory.
+  `02-process-holders.md` in this directory.
 
 ## Mid-task handoff
 
