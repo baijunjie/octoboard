@@ -17,7 +17,7 @@ import { testDaemon } from "../test/testDaemon";
 import { Sidebar } from "./Sidebar";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { TEST_AGENTS } from "../test/testProviders";
-import { fakeTimers } from "../test/clock";
+import { FAKE_FRAME_MS, fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -216,9 +216,9 @@ it("positions a new hover card without motion, then enables its enter and leave 
   expect(nav.classList.contains("sidebar-docked:invisible")).toBe(true);
   // Fake timers run animation frames at 16ms intervals. The first paints the offscreen card;
   // the next applies the destination with its transition enabled.
-  act(() => void vi.advanceTimersByTime(16));
+  act(() => void vi.advanceTimersByTime(FAKE_FRAME_MS));
   expect(nav.classList.contains("sidebar-docked:invisible")).toBe(true);
-  act(() => void vi.advanceTimersByTime(16));
+  act(() => void vi.advanceTimersByTime(FAKE_FRAME_MS));
   expect(nav.classList.contains("sidebar-docked:transition-none")).toBe(false);
   expect(nav.classList.contains("sidebar-docked:invisible")).toBe(false);
   render({ open: false, peek });
@@ -409,7 +409,7 @@ it("updates a session's visible and accessible name as the daemon title changes"
 
 it("uses the card entry alone for a new console, then animates switches while the card is visible", () => {
   vi.stubGlobal("matchMedia", () => ({ matches: false }));
-  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => setTimeout(() => callback(0), 16));
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => setTimeout(() => callback(0), FAKE_FRAME_MS));
   vi.stubGlobal("cancelAnimationFrame", clearTimeout);
   const originalAnimate = HTMLElement.prototype.animate;
   const animate = vi.fn();
@@ -424,8 +424,8 @@ it("uses the card entry alone for a new console, then animates switches while th
   const { render } = mountSidebar({ peek, projects: [], sessions: [] });
   render({ shownConsole: other, peek: { ...peek, active: true }, projects: [], sessions: [] });
   expect(animate).not.toHaveBeenCalled();
-  act(() => void vi.advanceTimersByTime(16));
-  act(() => void vi.advanceTimersByTime(16));
+  act(() => void vi.advanceTimersByTime(FAKE_FRAME_MS));
+  act(() => void vi.advanceTimersByTime(FAKE_FRAME_MS));
   render({ shownConsole: main, peek: { ...peek, active: true }, projects: [], sessions: [] });
   expect(animate).toHaveBeenCalledOnce();
   expect(animate).toHaveBeenCalledWith(

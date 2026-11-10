@@ -5,13 +5,13 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { PANE_INSET_MS } from "../layout/paneDockMotion";
 import { Scrim } from "./Scrim";
-import { fakeTimers } from "../test/clock";
+import { FAKE_FRAME_MS, fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function mount(reduce = false) {
   fakeTimers();
-  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => setTimeout(() => callback(0), 16));
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => setTimeout(() => callback(0), FAKE_FRAME_MS));
   vi.stubGlobal("cancelAnimationFrame", clearTimeout);
   vi.stubGlobal("matchMedia", () => ({ matches: reduce }));
   const onClose = vi.fn();
