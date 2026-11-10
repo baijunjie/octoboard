@@ -1718,7 +1718,7 @@ export const id: Translation<"other"> = {
   "configuration.import.couldNotRead": "Tidak dapat membaca file.",
   "configuration.import.alertTitle": "Tidak dapat mengimpor konfigurasi",
   "configuration.import.conflict": "Pengaturan berubah setelah file dibaca. Pilih file lagi untuk membacanya dengan pengaturan saat ini.",
-  "configuration.import.refreshFailedTitle": "Tidak dapat membaca file lagi",
+  "configuration.import.refreshFailedTitle": "Tidak dapat membaca ulang file",
   "configuration.import.reviewUpdated": "File dibaca lagi karena pengaturan berubah.",
   "configuration.import.refreshFailedChooseAgain": "Pilih file lagi.",
   "configuration.file.tooLarge": "File terlalu besar untuk menjadi file konfigurasi.",

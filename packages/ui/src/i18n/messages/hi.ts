@@ -1320,7 +1320,7 @@ export const hi: Translation<"one" | "other"> = {
   "dialog.characterCount": "{ratio} अक्षर",
   "dialog.characterRatio": "{count} / {limit}",
   "dialog.nameRequired": "नाम ज़रूरी है।",
-  "dialog.changedElsewhere": { "one": "कहीं और बदला गया: {fields}। अभी का मान दिखाया गया है।", "other": "कहीं और बदले गए: {fields}। अभी के मान दिखाए गए हैं।" },
+  "dialog.changedElsewhere": { "one": "कहीं और बदला गया: {fields}। मौजूदा मान दिखाया गया है।", "other": "कहीं और बदले गए: {fields}। मौजूदा मान दिखाए गए हैं।" },
   "dialog.chooseDirectory": "डायरेक्टरी चुनें",
   "dialog.agentSettings.account": "{agent} अकाउंट",
   "dialog.agentSettings.advanced": "एडवांस्ड",

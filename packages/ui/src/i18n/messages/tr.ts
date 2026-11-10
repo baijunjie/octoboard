@@ -1900,7 +1900,7 @@ export const tr: Translation<"one" | "other"> = {
   "configuration.import.choose.submit": "Dosya seç",
   "configuration.import.couldNotRead": "Dosya okunamadı.",
   "configuration.import.alertTitle": "Yapılandırma içe aktarılamadı",
-  "configuration.import.conflict": "Dosya okunduktan sonra ayarlar değişti. Dosyayı geçerli ayarlarla okumak için yeniden seçin.",
+  "configuration.import.conflict": "Dosya okunduktan sonra ayarlar değişti. Geçerli ayarlarla okumak için dosyayı yeniden seçin.",
   "configuration.import.refreshFailedTitle": "Dosya yeniden okunamadı",
   "configuration.import.reviewUpdated": "Ayarlar değiştiği için dosya yeniden okundu.",
   "configuration.import.refreshFailedChooseAgain": "Dosyayı yeniden seçin.",

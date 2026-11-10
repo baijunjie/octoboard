@@ -1365,7 +1365,7 @@ export const th: Translation<"other"> = {
   "dialog.characterCount": "{ratio} อักขระ",
   "dialog.characterRatio": "{count} / {limit}",
   "dialog.nameRequired": "ต้องระบุชื่อ",
-  "dialog.changedElsewhere": { "other": "มีการเปลี่ยนแปลงที่อื่น: {fields} กำลังแสดงค่าปัจจุบัน" },
+  "dialog.changedElsewhere": { "other": "มีการเปลี่ยนแปลงที่อื่น: {fields} แสดงค่าปัจจุบันแล้ว" },
   "dialog.chooseDirectory": "เลือกไดเรกทอรี",
   "dialog.agentSettings.account": "บัญชี {agent}",
   "dialog.agentSettings.advanced": "ขั้นสูง",
