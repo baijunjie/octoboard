@@ -6,7 +6,11 @@
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
-import { byLabel, deliver, fakeDaemon, mountApp, pressElement, pressMenuItem, regionOfFocus, row, stubWindow } from "./appTestSupport";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
+
+import { byLabel, deliver, fakeDaemon, mountApp, pressElement, pressMenuItem, railConsole, regionOfFocus, row, stubWindow } from "./appTestSupport";
+import { withModality } from "./components/dialog/dialogTestSupport";
+import { press, tap } from "./components/hint/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import type { UpdaterCapability } from "./platform";
@@ -25,6 +29,7 @@ vi.mock("./terminal/TerminalController", () => import("./terminalControllerTestS
 const console_ = consoleOf("c-main", "Main");
 const project = projectOf("p-site", console_.id, "Website");
 const live = sessionOf("s-live", console_.id, project.id, "Fix header", "idle");
+const other = consoleOf("c-other", "Other");
 const agentInput = () => document.querySelector("[data-region=terminal] textarea[aria-label='Agent terminal']");
 
 it("hands focus on an archived session's owner link to its history when the owner's record is deleted", async () => {
@@ -114,4 +119,53 @@ it("hands focus on the connection banner's Try again to the agent terminal once 
   await act(async () => daemon.store.setState({ connectionState: "reconnecting" }));
   expect(document.querySelector("[data-region=banner] button")).toBeNull();
   expect(document.activeElement).toBe(agentInput());
+});
+
+/** The app with an archived session's history on screen and focus in it, under `modality`. */
+async function mountFocusedHistory(modality: "keyboard" | "pointer") {
+  stubWindow();
+  withModality(modality);
+  const archived = sessionOf("s-old", console_.id, project.id, "Old fix", "archived");
+  const daemon = fakeDaemon(snapshotState({ consoles: [console_, other], projects: [project], sessions: [archived, live] }), (body) =>
+    body.type === "read_session_history" ? { type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } : { type: "ack", id: null });
+  mountApp(daemon);
+  await pressElement(byLabel(`Actions for project ${isolate(project.name)}`));
+  await pressMenuItem("View archive");
+  await pressMenuItem("Old fix");
+  const region = document.querySelector<HTMLElement>("[data-region=terminal] [role=region][tabindex]");
+  expect(region).not.toBeNull();
+  act(() => region!.focus());
+  expect(document.activeElement).toBe(region);
+  return { daemon, archived };
+}
+
+it.each([
+  ["pointer", false],
+  ["keyboard", true],
+] as const)("hands focus on from an archived session's history, without forcing the ring, when %s selects a console with no session to show, ringed only after a key", async (modality, ringed) => {
+  await mountFocusedHistory(modality);
+
+  // The rail's press leaves focus where it is, and the console remembers no session, so none is selected. The press
+  // is made by the input that sets the modality, which `element.click()` does not (react-aria reads it as virtual).
+  const avatar = railConsole(other.name)!;
+  if (modality === "pointer") press(avatar, "mouse");
+  else tap(avatar, "Enter");
+  await act(async () => {});
+  expect(railConsole(other.name)?.getAttribute("aria-current")).toBe("true");
+  expect(document.querySelector("[data-region=terminal] [role=region][tabindex]")).toBeNull();
+  // The empty state's creation action, where focus meant for the terminal goes with no session on screen.
+  expect(regionOfFocus()).toBe("terminal");
+  expect(document.activeElement?.textContent).toBe("New console session");
+  expect(document.activeElement).not.toBe(document.body);
+  expect(document.querySelector("[data-focus-visible]") !== null).toBe(ringed);
+  expect(getInteractionModality()).toBe(modality);
+});
+
+it("hands focus on with the ring when the record of the archived session on screen is deleted, even after a pointer press", async () => {
+  const { daemon, archived } = await mountFocusedHistory("pointer");
+
+  await deliver(daemon, { type: "session_deleted", session: archived.id });
+  expect(document.querySelector("[data-region=terminal] [role=region][tabindex]")).toBeNull();
+  expect(document.activeElement).not.toBe(document.body);
+  expect(getInteractionModality()).toBe("keyboard");
 });

@@ -668,6 +668,7 @@ export function App(): React.ReactElement {
                     onViewFile={viewLinkedFile}
                     onSelectSession={stableSelectSession}
                     restoreFocus={focusTerminal}
+                    noSelection={selectedSessionId === undefined}
                     session={selectedSession}
                     onResume={resumeSession}
                     resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}

@@ -34,7 +34,8 @@ import type { HoveredTerminalLink } from "./links/terminalLinks";
 export const LOADING_LIMIT_MS = 10_000;
 
 interface TerminalPaneProps {
-  /** The session whose terminal should be shown, or `undefined` when nothing is selected yet. */
+  /** The session whose terminal should be shown, or `undefined` when none is selected or its record is gone
+   * (`noSelection` tells which). */
   session?: Session;
   /** Resumes a session; resolves to whether it was accepted. */
   onResume: (sessionId: string) => Promise<boolean>;
@@ -69,6 +70,9 @@ interface TerminalPaneProps {
    * link, Reconnect, a creation action), in place of the pane's own terminal, which a panel
    * covering the agent area can leave out of reach. */
   restoreFocus?: () => void;
+  /** Whether no session is selected. A missing `session` is then the user's own choice (a console
+   * with none to show); otherwise it is a selected session whose record went away. */
+  noSelection?: boolean;
   ref?: React.Ref<TerminalPaneHandle>;
 }
 
@@ -100,6 +104,7 @@ export function TerminalPane({
   onViewFile,
   onSelectSession,
   restoreFocus,
+  noSelection = false,
   ref,
 }: TerminalPaneProps): React.ReactElement {
   const t = useT();
@@ -165,19 +170,29 @@ export function TerminalPane({
     }
   }, [switching, focusTerminal]);
   const held = useFocusHandoff(restoreFocus ?? focusTerminal);
-  // Selecting another archived session replaces the history, and focus in it falls to `<body>` (a
-  // sidebar row's press leaves focus where it was). The user made that move, so focus goes where
-  // focus meant for the terminal goes, with the modality the selecting input left: no ring after a
-  // pointer press, unlike `held`, which turns the ring on for a control that went away by itself.
-  // `held` cannot tell the two apart, so this runs first, as a layout effect, and leaves it nothing
-  // to do. Only towards another archived session: a live one's terminal is where the keyboard works
-  // next, as for any other handoff. The flag goes while no history is shown or it is inert, as
-  // focus can leave it then without a blur.
+  // Selecting another session, or none, replaces the history, and focus in it falls to `<body>` (a
+  // sidebar row's or a rail avatar's press leaves focus where it was). The user made that move, so
+  // focus goes where focus meant for the terminal goes — the new history, a live session's terminal,
+  // or, with none selected, the empty state's action or the top bar — with the modality the
+  // selecting input left: no ring after a pointer press, unlike `held`, which turns the ring on for
+  // a control that went away by itself. `held` cannot tell the two apart, so this runs first, as a
+  // layout effect, and leaves it nothing to do; where nothing there takes focus, `held` still moves
+  // it to the top bar with the ring. Not when the selected session's record went away: nobody
+  // selected that, and `held` hands focus on with the ring. The flag goes while no history is shown
+  // or it is inert, as focus can leave it then without a blur.
   const historyFocusedRef = useRef(false);
   useLayoutEffect(() => {
     if (!historyFocusedRef.current || document.activeElement !== document.body) return;
     historyFocusedRef.current = false;
-    if (archivedRef.current) (restoreFocus ?? focusTerminal)();
+    if (session === undefined && !noSelection) return;
+    (restoreFocus ?? focusTerminal)();
+    // `focusTerminal` leaves `<body>` alone without a session, as the app's launch must not pull
+    // focus onto a control; this one is a handoff.
+    if (session === undefined && document.activeElement === document.body) {
+      const action = emptyRef.current?.querySelector("button");
+      if (action) action.focus();
+      else focusTopBar();
+    }
   }, [session?.id]);
   useLayoutEffect(() => {
     if (!isArchived || resuming) historyFocusedRef.current = false;

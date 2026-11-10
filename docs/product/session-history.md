@@ -144,3 +144,15 @@ below (see "At 768 px and below: one panel floats over the terminal" in `docs/pr
 otherwise into the owner's terminal, or, for an archived owner, its history as described above. When the link goes away
 while holding focus, because its owner did, focus is handed to the terminal the same way, so it lands in this session's
 history.
+
+Selecting another session while keyboard focus is in the history — from a sidebar row, Back or Forward, the rail or the
+owner link — hands focus to the terminal of what is now shown: another archived session's history as described above, a
+live session's terminal, or a panel covering the terminal; after a tap, as described in "Focus after a tap" in
+`docs/product/moving-focus-between-regions.md`. Selecting no session from the history does the same — a console with no
+session to show chosen from the rail, say, or Back to where none was selected: focus goes to the creation action the
+empty panel offers, or else to the top bar's first enabled control (see "With no session selected" in
+`docs/product/session-terminal.md`). Either way the focus ring follows the input that made the selection: it shows after
+a key, and not after a pointer press. Where nothing there can take focus, such as a live session shown as switching its
+account (see `docs/product/switching-session-accounts.md`), focus goes to the top bar's first enabled control with its
+ring showing. A selected session whose record goes away by itself is not a selection the user made: focus is handed on
+with its ring showing.

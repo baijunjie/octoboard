@@ -738,9 +738,10 @@ event — also calls `setKeyboardModality()` before it focuses the destination. 
 move, so they have to be able to see where focus went, and the previous input was often a pointer press, which leaves
 the destination without a ring. `handFocusOff` takes a `showRing` flag for the handoff whose trigger is a press, where
 the ring follows how the press came; `HandoffOnUnmount` sets it by default, its trigger being a render, and so does
-`useFocusHandoff`, whose trigger is the render that took the control away. That covers the one handoff through
+`useFocusHandoff`, whose trigger is the render that took the control away. That covers the handoffs through
 `useFocusHandoff` whose trigger is really a press — the change filter field closed from the header's toggle, which takes
-no focus itself — knowingly: focus lands on a control the user did not aim it at either way.
+no focus itself, and a session selected while focus is in the history, where the destination takes no focus (below) —
+knowingly: focus lands on a control the user did not aim it at either way.
 
 A mark or link whose focus goes to a control of its own surface (a field's trigger, a row's action, its dialog) hands
 focus on through `useHandoffAfterRemoval`, which sets the ring only when it actually moves focus. It decides in the
@@ -761,13 +762,17 @@ alone moves at once, from `HandoffOnUnmount` with `ring` false and a `to` that s
 popover waits two frames for that restore, then moves only if focus has fallen to `<body>`: a control that claimed focus
 meanwhile keeps it, and the restore cannot take focus back from the terminal after the handoff.
 
-Selecting another archived session while focus is in the history on screen is not such a move: a sidebar row's press
-keeps focus where it is, so the history it replaces drops focus to `<body>`, but the user made the switch, whether
-from a row, Back and Forward, the rail or the owner link of an archived owner. `TerminalPane` hands focus on, ahead of
-`useFocusHandoff`, the way focus meant for the agent terminal goes (the new history, a covering panel, or the top bar
-after a tap) without setting the modality, so the ring follows the input that selected: none after a pointer press,
-shown after a key. A switch from the history to a live session, or to none, still goes through `useFocusHandoff` with
-the ring on.
+Selecting another session while focus is in the history on screen is not such a move: a sidebar row's press keeps
+focus where it is, so the history it replaces drops focus to `<body>`, but the user made the switch, whether from a
+row, Back and Forward, the rail or the history's owner link. Selecting none is the user's move too: a console with no
+session to show, chosen from the rail's avatars, say, or Back to where none was selected. `TerminalPane` hands focus
+on, ahead of `useFocusHandoff`, the way focus meant for the agent terminal goes (the new history, a live session's
+terminal, a covering panel, the empty state's action or else the top bar when none is selected, or the top bar after a
+tap) without setting the modality, so the ring follows the input that selected: none after a pointer press, shown after a
+key. Where nothing there can take focus (a live session held by an account switch, say), `useFocusHandoff` still moves
+it to the top bar with the ring, as focus then lands where the user did not aim. A session that goes away by itself,
+its record gone while it is still the selected one, goes through `useFocusHandoff` with the ring on, as any control
+taken away does.
 
 After a tap (`interactionIsTouch` in `packages/ui/src/input/touchInput.ts`: the last press was a finger; a mouse, a trackpad
 or any key counts as not, so an iPad with a keyboard keeps the desktop rules) two things change. An automatic move does

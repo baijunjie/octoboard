@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS, READ_TIME_MS } from "../components/announce/StatusAnnouncer";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { windowAttention } from "../components/announce/windowTestSupport";
+import { withModality } from "../components/dialog/dialogTestSupport";
 import { startResizeDrag } from "../components/panel/resizeDrag";
 import type { PlatformAdapter } from "../platform";
 import type { Event, ClientRequestBody } from "../protocol";
@@ -301,13 +302,25 @@ it("names the terminal's input in the UI language, and follows a language change
   }
 });
 
+/** An element standing for xterm's textarea, inside the terminal's mount element. */
+function terminalInput(container: HTMLElement): HTMLTextAreaElement {
+  const input = container.querySelector("[data-region=terminal] [dir=ltr]")!.appendChild(document.createElement("textarea"));
+  input.className = "xterm-helper-textarea";
+  return input;
+}
+
+/** A top bar region with one control, where focus falls back to; returns the control. */
+function addTopBar(): HTMLButtonElement {
+  const topBar = document.body.appendChild(document.createElement("div"));
+  topBar.dataset.region = "topbar";
+  return topBar.appendChild(document.createElement("button"));
+}
+
 /** A pane mounted beside the top bar focus falls back to and a control elsewhere to put focus on:
  * the three cases below all turn on where focus goes while the terminal is empty. `show` renders
  * again with the props it is given, the mount's own where it is given none. */
 function mountEmpty(props: Partial<React.ComponentProps<typeof TerminalPane>> = {}) {
-  const topBar = document.body.appendChild(document.createElement("div"));
-  topBar.dataset.region = "topbar";
-  const topBarButton = topBar.appendChild(document.createElement("button"));
+  const topBarButton = addTopBar();
   const elsewhere = document.body.appendChild(document.createElement("button"));
   const handle = createRef<TerminalPaneHandle>();
   const container = document.body.appendChild(document.createElement("div"));
@@ -565,20 +578,104 @@ it("moves focus held inside the pane to the history when the session on screen b
   expect(container.querySelector("section")?.contains(document.activeElement)).toBe(true);
 });
 
-it.each([
-  ["pointer", false],
-  ["keyboard", true],
-] as const)("keeps focus in the history when another archived session is selected by %s, ringed only after a key", async (modality, ringed) => {
-  const previous = getInteractionModality();
-  onTestFinished(() => { act(() => Reflect.apply(setInteractionModality, undefined, [previous])); });
-  const { container, handle, show } = mountArchived();
-  await act(async () => {});
-  act(() => setInteractionModality(modality));
-  act(() => handle.current?.focus());
-  show({ session: sessionOf("s-older", "c-1", undefined, "Older work", "archived") });
-  await act(async () => {});
-  expect(container.querySelector("section")?.contains(document.activeElement)).toBe(true);
-  expect(container.querySelector("[data-focus-visible]") !== null).toBe(ringed);
+describe("selecting another session while focus is in the history", () => {
+  /** An archived pane with focus in its history, and the modality restored after the test. */
+  async function mountFocusedHistory(modality: "keyboard" | "pointer", props: Partial<React.ComponentProps<typeof TerminalPane>> = {}) {
+    withModality(modality);
+    const pane = mountArchived(props);
+    await act(async () => {});
+    act(() => pane.handle.current?.focus());
+    expect(pane.container.querySelector("section")?.contains(document.activeElement)).toBe(true);
+    return pane;
+  }
+
+  const emptyAction = (container: HTMLElement) => Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Add agent");
+
+  it.each([
+    ["archived", "pointer", false],
+    ["archived", "keyboard", true],
+    ["live", "pointer", false],
+    ["live", "keyboard", true],
+    ["none", "pointer", false],
+    ["none", "keyboard", true],
+  ] as const)("keeps focus where focus meant for the terminal goes when %s is selected by %s, ringed only after a key", async (target, modality, ringed) => {
+    // An archived target is reached through the pane's own focus, so the window's restore is only given for the others;
+    // the restore here leaves focus on `<body>` for no selection, as the window's does, which is then handed on.
+    const restoreFocus = vi.fn();
+    const props = target === "archived" ? {} : { restoreFocus, noAgents: "add" as const };
+    const { container, show } = await mountFocusedHistory(modality, props);
+    const input = terminalInput(container);
+    if (target === "live") restoreFocus.mockImplementation(() => input.focus());
+    show(target === "archived" ? { session: sessionOf("s-older", "c-1", undefined, "Older work", "archived") } : { ...props, session: target === "live" ? session : undefined, noSelection: target === "none" });
+    await act(async () => {});
+    if (target === "live") {
+      expect(restoreFocus).toHaveBeenCalledOnce();
+      expect(document.activeElement).toBe(input);
+    } else if (target === "none") {
+      expect(restoreFocus).toHaveBeenCalledOnce();
+      expect(document.activeElement).toBe(emptyAction(container));
+    } else expect(container.querySelector("section")?.contains(document.activeElement)).toBe(true);
+    expect(container.querySelector("[data-focus-visible]") !== null).toBe(ringed);
+    expect(getInteractionModality()).toBe(modality);
+  });
+
+  it("hands focus left on <body> by no selection to the top bar when the empty state offers no action", async () => {
+    const bar = addTopBar();
+    const { container, show } = await mountFocusedHistory("pointer");
+    show({ session: undefined, noSelection: true });
+    await act(async () => {});
+    expect(container.querySelector("[data-region=terminal] button")).toBeNull();
+    expect(document.activeElement).toBe(bar);
+    expect(getInteractionModality()).toBe("pointer");
+  });
+
+  it("hands focus on with the ring when the live session selected is held by an account switch, which leaves its terminal inert", async () => {
+    const bar = addTopBar();
+    const { show } = await mountFocusedHistory("pointer");
+    // The held terminal cannot take the focus asked of it (the fake controller moves none, as an inert one would).
+    show({ session: { ...session, switching_account: true } });
+    await act(async () => {});
+    expect(document.activeElement).toBe(bar);
+    expect(getInteractionModality()).toBe("keyboard");
+  });
+
+  it("focuses the live session's terminal itself when none is given to restore, with no ring after a pointer selection", async () => {
+    const { container, show } = await mountFocusedHistory("pointer");
+    const input = terminalInput(container);
+    const focus = vi.spyOn(FakeController.last, "focus").mockImplementation(() => input.focus());
+    show({ session });
+    await act(async () => {});
+    expect(focus).toHaveBeenCalledOnce();
+    expect(container.querySelector("section")).toBeNull();
+    expect(document.activeElement).toBe(input);
+    expect(container.querySelector("[data-focus-visible]")).toBeNull();
+    expect(getInteractionModality()).toBe("pointer");
+  });
+
+  it("hands focus on with the ring when a selected session's record goes away, even after a pointer press", async () => {
+    const restoreFocus = vi.fn();
+    const { show } = await mountFocusedHistory("pointer", { restoreFocus });
+    show({ session: undefined, noSelection: false, restoreFocus });
+    await act(async () => {});
+    expect(restoreFocus).toHaveBeenCalledOnce();
+    expect(getInteractionModality()).toBe("keyboard");
+  });
+
+  it("does not take focus back for the terminal when focus was not in the history", async () => {
+    const restoreFocus = vi.fn();
+    const { container, show } = mountArchived({ restoreFocus });
+    await act(async () => {});
+    const outside = document.body.appendChild(document.createElement("button"));
+    act(() => outside.focus());
+    const controller = FakeController.last;
+    const focuses = controller.focuses;
+    show({ session, restoreFocus });
+    await act(async () => {});
+    expect(restoreFocus).not.toHaveBeenCalled();
+    expect(controller.focuses).toBe(focuses);
+    expect(document.activeElement).toBe(outside);
+    expect(container.querySelector("[data-focus-visible]")).toBeNull();
+  });
 });
 
 it("reaches the history itself through the handle while it is still loading", () => {
@@ -601,13 +698,18 @@ it("keeps focus asked for the terminal off the header's owner link while the his
 it("hands focus lost with the control that held it to the window's restore, not the inert terminal", async () => {
   const owner = sessionOf("s-owner", "c-1", undefined, "Release captain", "idle");
   setState({ sessions: new Map([[owner.id, owner]]) });
-  const restoreFocus = vi.fn();
+  const target = document.body.appendChild(document.createElement("button"));
+  const restoreFocus = vi.fn(() => target.focus());
   const { container, show } = mountArchived({ session: { ...archived, bound_to: owner.id }, onSelectSession: () => {}, restoreFocus });
   await act(async () => {});
   const link = container.querySelector<HTMLElement>("header button")!;
+  withModality("pointer");
   act(() => link.focus());
   show({ session: owner, onSelectSession: () => {}, restoreFocus });
   expect(restoreFocus).toHaveBeenCalledOnce();
+  expect(document.activeElement).toBe(target);
+  expect(container.querySelector("[data-focus-visible]")).toBeNull();
+  expect(getInteractionModality()).toBe("pointer");
 });
 
 it("falls back to the Reopen button when the history has no control to focus", () => {
@@ -1674,12 +1776,6 @@ describe("the pane's sentences while the agent area is inert", () => {
 describe("the terminal's focus ring", () => {
   const surface = (container: HTMLElement) => container.querySelector<HTMLElement>("[data-region=terminal]")!;
   const ringed = (container: HTMLElement) => surface(container).hasAttribute("data-focus-visible");
-  /** An element standing for xterm's textarea, inside the terminal's mount element. */
-  function terminalInput(container: HTMLElement): HTMLTextAreaElement {
-    const input = container.querySelector("[data-region=terminal] [dir=ltr]")!.appendChild(document.createElement("textarea"));
-    input.className = "xterm-helper-textarea";
-    return input;
-  }
   const modality = (next: "keyboard" | "pointer") => act(() => setInteractionModality(next));
   const key = (target: Element, name: string) =>
     act(() => {
@@ -1688,8 +1784,7 @@ describe("the terminal's focus ring", () => {
     });
   /** A pane past its cover, with focus outside it and the modality restored after the test. */
   function mountUncovered() {
-    const previous = getInteractionModality();
-    onTestFinished(() => { act(() => Reflect.apply(setInteractionModality, undefined, [previous])); });
+    withModality(getInteractionModality());
     const outside = document.body.appendChild(document.createElement("button"));
     const { container, root } = mount();
     FakeController.last.settle("open");
