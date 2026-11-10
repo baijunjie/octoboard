@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import type { AccountMcpInventory, LocalMcpServer, McpServerAuthOutcome } from "../../protocol";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
@@ -14,6 +14,7 @@ import { isolate } from "../../i18n/isolate";
 import { readMcpInventory, request } from "./agentAccountsSectionTestState";
 import { buttonNamed, mount, openMcpOf } from "./agentAccountsSectionTestSupport";
 import { fakeTimers } from "../../test/clock";
+import { READING_CEILING_MS, SLOW_READING_MS } from "./useAccountMcpInventory";
 
 vi.mock("../../components/icons/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
 vi.mock("../../components/text/FadeOverflow", async () => ({ FadeOverflow: (await import("./agentAccountsSectionTestState")).FadeOverflowStandIn }));
@@ -71,6 +72,24 @@ async function openWithServers(servers: LocalMcpServer[]) {
   await reading.answer(inventoryOf({ agent: "codex", account: "codex-work", servers }));
   return dialog;
 }
+
+const REFRESH = "Refresh connectors and MCP servers";
+
+/** The table of a group, found by the heading that labels it. */
+function tableOf(dialog: ParentNode, heading: string): HTMLElement {
+  const title = [...dialog.querySelectorAll("h3")].find((candidate) => candidate.textContent === heading)!;
+  return dialog.querySelector<HTMLElement>(`table[aria-labelledby="${title.id}"]`)!;
+}
+const headersOf = (table: HTMLElement) => [...table.querySelectorAll('[role="columnheader"]')].map((header) => header.textContent);
+/** The text of a cell, without the separator a screen reader hears before a badge. */
+const textOf = (cell: Element) => cell.textContent!.replace(/^, /, "");
+/** The row named `name`, as a list of its cells' texts: the row header first. */
+function rowOf(table: HTMLElement, name: string) {
+  const row = [...table.querySelectorAll<HTMLElement>('tbody [role="row"]')].find((candidate) => candidate.querySelector('[role="rowheader"]')?.textContent === name)!;
+  const cells = [...row.querySelectorAll<HTMLElement>('[role="rowheader"], [role="gridcell"]')];
+  return { row, cells, texts: cells.map(textOf) };
+}
+const spinners = (dialog: ParentNode) => dialog.querySelectorAll('[data-slot="spinner"]').length;
 
 const CONNECTION_CLOSED = () => new CodedError("The daemon control connection closed.", "connection_closed", {});
 
@@ -519,4 +538,387 @@ it("leaves focus on the page alone when a reading answers with nothing removed f
   await second.fail(CONNECTION_CLOSED());
   expect(document.activeElement).toBe(before);
   expect(document.activeElement).not.toBe(buttonNamed(dialog, "Try again"));
+});
+
+it("shows one progress line and neither Refresh nor the age until the first answer is in", async () => {
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  expect(dialog.textContent).toContain("Reading connectors and MCP servers…");
+  expect(spinners(dialog)).toBe(1);
+  expect(dialog.querySelector('[role="progressbar"]')).toBeNull();
+  expect(dialog.textContent).not.toContain("Refreshing");
+  expect(dialog.textContent).not.toContain("Updated");
+  expect(buttonNamed(dialog, REFRESH)).toBeUndefined();
+  await reading.answer(inventoryOf());
+  expect(spinners(dialog)).toBe(0);
+  expect(dialog.textContent).not.toContain("Reading connectors and MCP servers…");
+  expect(buttonNamed(dialog, REFRESH)).toBeDefined();
+});
+
+it.each<[string, (reading: ReturnType<typeof nextReading>) => Promise<void>]>([
+  ["an inventory", (reading) => reading.answer(inventoryOf())],
+  ["an unavailable inventory", (reading) => reading.answer(inventoryOf({ unavailable: { reason: "timed_out", detail: null } }))],
+  ["a refused reading", (reading) => reading.fail(CONNECTION_CLOSED())],
+])("brings the Refresh button in with the first answer, %s", async (_, answer) => {
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  expect(buttonNamed(dialog, REFRESH)).toBeUndefined();
+  await answer(reading);
+  expect(buttonNamed(dialog, REFRESH)).toBeDefined();
+  expect(spinners(dialog)).toBe(0);
+});
+
+it("says Refreshing in place of the age while a later reading runs, with Refresh pending and the lists kept", async () => {
+  const first = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await first.answer(inventoryOf({ connectors: [{ id: "a", name: "Gmail", state: "connected", plugins: [] }] }));
+  expect(dialog.textContent).toContain("Updated just now");
+  expect(dialog.textContent).not.toContain("Refreshing");
+  const second = nextReading();
+  press(buttonNamed(dialog, REFRESH)!);
+  expect(dialog.textContent).toContain("Refreshing…");
+  expect(dialog.textContent).not.toContain("Updated");
+  expect(buttonNamed(dialog, REFRESH)!.getAttribute("aria-busy")).toBe("true");
+  expect(dialog.textContent).toContain("Gmail");
+  expect(dialog.textContent).not.toContain("Reading connectors and MCP servers…");
+  await second.answer(inventoryOf({ connectors: [{ id: "a", name: "Gmail", state: "connected", plugins: [] }] }));
+  expect(dialog.textContent).not.toContain("Refreshing");
+  expect(dialog.textContent).toContain("Updated just now");
+});
+
+it("shows no age over an unavailable inventory, with Refreshing while it is read again", async () => {
+  const first = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await first.answer(inventoryOf({ unavailable: { reason: "failed", detail: null } }));
+  expect(dialog.textContent).not.toContain("Updated");
+  expect(dialog.textContent).not.toContain("Refreshing");
+  const second = nextReading();
+  press(buttonNamed(dialog, REFRESH)!);
+  expect(dialog.textContent).toContain("Refreshing…");
+  await second.answer(inventoryOf());
+  expect(dialog.textContent).not.toContain("Refreshing");
+  expect(dialog.textContent).toContain("Updated just now");
+});
+
+it.each<[string, string, string]>([
+  ["Claude Code", "claude-work", "Still reading… Claude Code can take about a minute."],
+  ["Codex", "codex-work", "Still reading… Codex can take about a minute."],
+])("says a %s reading that has not answered by SLOW_READING_MS is still going, until the answer comes", async (tab, id, line) => {
+  fakeTimers();
+  const reading = nextReading();
+  const { container } = mount(tab === "Claude Code" ? undefined : tab);
+  const dialog = await openMcpOf(container, id);
+  await act(async () => vi.advanceTimersByTime(SLOW_READING_MS - 1));
+  expect(dialog.textContent).toContain("Reading connectors and MCP servers…");
+  expect(dialog.textContent).not.toContain("Still reading");
+  await act(async () => vi.advanceTimersByTime(1));
+  expect(dialog.textContent).toContain(line);
+  expect(dialog.textContent).not.toContain("Reading connectors and MCP servers…");
+  expect(spinners(dialog)).toBe(1);
+  expect(buttonNamed(dialog, REFRESH)).toBeUndefined();
+  await reading.answer(inventoryOf({ agent: tab === "Claude Code" ? "claude" : "codex", account: id }));
+  expect(dialog.textContent).not.toContain("Still reading");
+  expect(spinners(dialog)).toBe(0);
+});
+
+it("does not say a later reading is slow, since the lists are already on show", async () => {
+  fakeTimers();
+  const first = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await first.answer(inventoryOf());
+  nextReading();
+  press(buttonNamed(dialog, REFRESH)!);
+  await act(async () => vi.advanceTimersByTime(SLOW_READING_MS));
+  expect(dialog.textContent).not.toContain("Still reading");
+  expect(dialog.textContent).toContain("Refreshing…");
+});
+
+it("shows the reading as timed out when no answer comes within READING_CEILING_MS", async () => {
+  fakeTimers();
+  nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await act(async () => vi.advanceTimersByTime(READING_CEILING_MS - 1));
+  expect(dialog.textContent).not.toContain("Reading timed out");
+  expect(spinners(dialog)).toBe(1);
+  await act(async () => vi.advanceTimersByTime(1));
+  expect(dialog.textContent).toContain("Reading timed out");
+  expect(dialog.textContent).toContain("Claude Code did not answer in time.");
+  expect(dialog.textContent).toContain("Make sure the servers it connects to are reachable, then try again.");
+  expect(buttonNamed(dialog, "Try again")).toBeDefined();
+  expect(buttonNamed(dialog, REFRESH)).toBeDefined();
+  expect(spinners(dialog)).toBe(0);
+  expect(dialog.textContent).not.toContain("Reading connectors and MCP servers…");
+  expect(dialog.textContent).not.toContain("Still reading");
+  expect(dialog.textContent).not.toContain("Updated");
+});
+
+it("shows a later reading that does not answer within READING_CEILING_MS as timed out in place of the lists", async () => {
+  fakeTimers();
+  const first = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await first.answer(inventoryOf({ connectors: [{ id: "a", name: "Gmail", state: "connected", plugins: [] }] }));
+  nextReading();
+  press(buttonNamed(dialog, REFRESH)!);
+  await act(async () => vi.advanceTimersByTime(READING_CEILING_MS));
+  expect(dialog.textContent).toContain("Reading timed out");
+  expect(dialog.textContent).not.toContain("Gmail");
+  expect(dialog.textContent).not.toContain("Refreshing");
+  expect(buttonNamed(dialog, REFRESH)!.getAttribute("aria-busy")).toBeNull();
+});
+
+it("lets the daemon's late answer replace the timed-out alert", async () => {
+  fakeTimers();
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await act(async () => vi.advanceTimersByTime(READING_CEILING_MS));
+  expect(dialog.textContent).toContain("Reading timed out");
+  await reading.answer(inventoryOf({ connectors: [{ id: "a", name: "Gmail", state: "connected", plugins: [] }] }));
+  expect(dialog.textContent).not.toContain("Reading timed out");
+  expect(dialog.textContent).toContain("Gmail");
+  expect(dialog.textContent).toContain("Updated just now");
+});
+
+it("lets the daemon's late failure replace the timed-out alert", async () => {
+  fakeTimers();
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await act(async () => vi.advanceTimersByTime(READING_CEILING_MS));
+  await reading.fail(CONNECTION_CLOSED());
+  expect(dialog.textContent).not.toContain("Reading timed out");
+  expect(dialog.textContent).toContain("Could not read connectors and MCP servers");
+});
+
+it("keeps the answer of the reading that Try again started over the late answer of the one that timed out", async () => {
+  fakeTimers();
+  const late = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await act(async () => vi.advanceTimersByTime(READING_CEILING_MS));
+  const retry = nextReading();
+  press(buttonNamed(dialog, "Try again")!);
+  expect(readMcpInventory.mock.calls.at(-1)![0].refresh).toBe(true);
+  await late.answer(inventoryOf({ connectors: [{ id: "old", name: "Stale", state: "connected", plugins: [] }] }));
+  expect(dialog.textContent).not.toContain("Stale");
+  expect(dialog.textContent).toContain("Refreshing…");
+  await retry.answer(inventoryOf({ connectors: [{ id: "new", name: "Fresh", state: "connected", plugins: [] }] }));
+  expect(dialog.textContent).toContain("Fresh");
+  expect(dialog.textContent).not.toContain("Stale");
+  expect(dialog.textContent).not.toContain("Reading timed out");
+});
+
+it("keeps the answer of the reading that Try again started when the stale late answer comes after it has answered", async () => {
+  fakeTimers();
+  const late = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await act(async () => vi.advanceTimersByTime(READING_CEILING_MS));
+  const retry = nextReading();
+  press(buttonNamed(dialog, "Try again")!);
+  await retry.answer(inventoryOf({ connectors: [{ id: "new", name: "Fresh", state: "connected", plugins: [] }] }));
+  expect(dialog.textContent).toContain("Fresh");
+  expect(buttonNamed(dialog, REFRESH)!.getAttribute("aria-busy")).toBeNull();
+  await late.answer(inventoryOf({ connectors: [{ id: "old", name: "Stale", state: "connected", plugins: [] }] }));
+  expect(dialog.textContent).toContain("Fresh");
+  expect(dialog.textContent).not.toContain("Stale");
+  expect(dialog.textContent).not.toContain("Reading timed out");
+});
+
+it("does nothing when a reading's timers fall due after the dialog has closed", async () => {
+  fakeTimers();
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+  onTestFinished(() => logged.mockRestore());
+  await closeDialog(dialog);
+  await act(async () => vi.advanceTimersByTime(SLOW_READING_MS));
+  await act(async () => vi.advanceTimersByTime(READING_CEILING_MS));
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(logged).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+  expect(readMcpInventory).toHaveBeenCalledTimes(1);
+  // An answer that lands now is dropped just the same.
+  await reading.answer(inventoryOf());
+  expect(logged).not.toHaveBeenCalled();
+});
+
+it("says a first reading under StrictMode is still going after SLOW_READING_MS, once", async () => {
+  fakeTimers();
+  const reading = nextReading();
+  const { container } = mount(undefined, true);
+  const dialog = await openMcpOf(container, "claude-work");
+  expect(readMcpInventory).toHaveBeenCalledTimes(1);
+  await act(async () => vi.advanceTimersByTime(SLOW_READING_MS - 1));
+  expect(dialog.textContent).not.toContain("Still reading");
+  await act(async () => vi.advanceTimersByTime(1));
+  expect(dialog.textContent).toContain("Still reading… Claude Code can take about a minute.");
+  expect(spinners(dialog)).toBe(1);
+  await reading.answer(inventoryOf());
+  expect(dialog.textContent).not.toContain("Still reading");
+});
+
+it("shows a first reading under StrictMode as timed out after READING_CEILING_MS", async () => {
+  fakeTimers();
+  nextReading();
+  const { container } = mount(undefined, true);
+  const dialog = await openMcpOf(container, "claude-work");
+  await act(async () => vi.advanceTimersByTime(READING_CEILING_MS - 1));
+  expect(dialog.textContent).not.toContain("Reading timed out");
+  await act(async () => vi.advanceTimersByTime(1));
+  expect(dialog.textContent).toContain("Reading timed out");
+  expect(buttonNamed(dialog, "Try again")).toBeDefined();
+  expect(spinners(dialog)).toBe(0);
+});
+
+it("lays the platform connectors out as a table of Name, Status and Details, labelled by its heading", async () => {
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await reading.answer(inventoryOf({
+    connectors: [
+      { id: "claude.ai Gmail", name: "Gmail", state: "connected", plugins: [] },
+      { id: "claude.ai Slack", name: "Slack", state: "not_connected", plugins: ["chat", "ops"] },
+      { id: "claude.ai Drive", name: "Drive", state: "unknown", plugins: [] },
+    ],
+  }));
+  const table = tableOf(dialog, "Platform connectors");
+  expect(table.getAttribute("role")).toBe("grid");
+  expect(headersOf(table)).toEqual(["Name", "Status", "Details"]);
+  expect(table.querySelectorAll('tbody [role="row"]')).toHaveLength(3);
+  expect(rowOf(table, "Gmail").texts).toEqual(["Gmail", "Connected", ""]);
+  expect(rowOf(table, "Slack").texts).toEqual(["Slack", "Not connected", "From plugins chat and ops"]);
+  expect(rowOf(table, "Drive").texts).toEqual(["Drive", "State unknown", ""]);
+  // The platform link and account note stay with the group.
+  expect(dialog.querySelector("a[data-external-link]")!.textContent).toBe("Manage on claude.ai");
+  expect(dialog.textContent).toContain("To connect or disconnect connectors, log in to claude.ai with the account this one uses.");
+});
+
+it("lays the local servers out as a table of Name, Sign-in, Runtime and Details, with no Actions column when none signs in with OAuth", async () => {
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await reading.answer(inventoryOf({
+    servers: [
+      serverOf({ name: "linear", origin: "https://mcp.linear.app/mcp", sign_in: "needs_sign_in", oauth_sign_in: false }),
+      serverOf({ name: "notes", origin: null, sign_in: "not_needed", runtime: "running", tool_count: 3, oauth_sign_in: false }),
+    ],
+  }));
+  const table = tableOf(dialog, "Local MCP servers");
+  expect(headersOf(table)).toEqual(["Name", "Sign-in", "Runtime", "Details"]);
+  expect(rowOf(table, "notes").texts).toEqual(["notes", "Not needed", "Running", "3 tools"]);
+  const linear = rowOf(table, "linear").texts;
+  expect(linear.slice(0, 3)).toEqual(["linear", "Needs sign-in", "Unknown"]);
+  expect(linear[3]).toContain("https://mcp.linear.app/mcp");
+  expect(linear[3]).toContain("To sign in, run /mcp in a session of this account.");
+  expect(table.querySelector("button")).toBeNull();
+});
+
+it.each<[LocalMcpServer["sign_in"], string]>([
+  ["signed_in", "Signed in"],
+  ["needs_sign_in", "Needs sign-in"],
+  ["not_needed", "Not needed"],
+  ["unknown", "Unknown"],
+])("words a server whose sign-in is %s as %s in its Sign-in cell", async (signIn, word) => {
+  const reading = nextReading();
+  const { container } = mount("Codex");
+  const dialog = await openMcpOf(container, "codex-work");
+  await reading.answer(inventoryOf({ agent: "codex", account: "codex-work", servers: [serverOf({ sign_in: signIn, oauth_sign_in: false })] }));
+  expect(rowOf(tableOf(dialog, "Local MCP servers"), "jira").texts[1]).toBe(word);
+});
+
+it.each<[LocalMcpServer["runtime"], string]>([
+  ["running", "Running"],
+  ["failed", "Failed"],
+  ["unknown", "Unknown"],
+])("words a server whose runtime is %s as %s in its Runtime cell", async (runtime, word) => {
+  const reading = nextReading();
+  const { container } = mount("Codex");
+  const dialog = await openMcpOf(container, "codex-work");
+  await reading.answer(inventoryOf({ agent: "codex", account: "codex-work", servers: [serverOf({ runtime, runtime_message: null, oauth_sign_in: false })] }));
+  expect(rowOf(tableOf(dialog, "Local MCP servers"), "jira").texts[2]).toBe(word);
+});
+
+it("puts a bare mark right after a failed server's Failed badge, its popover holding only what the agent said", async () => {
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await reading.answer(inventoryOf({
+    servers: [
+      serverOf({ name: "files", origin: null, sign_in: "not_needed", runtime: "failed", runtime_message: "spawn ENOENT", oauth_sign_in: false }),
+      serverOf({ name: "quiet", origin: null, sign_in: "not_needed", runtime: "failed", runtime_message: null, oauth_sign_in: false }),
+    ],
+  }));
+  const table = tableOf(dialog, "Local MCP servers");
+  const runtime = rowOf(table, "files").cells[2];
+  const mark = runtime.querySelector<HTMLButtonElement>("button")!;
+  expect(mark.getAttribute("aria-label")).toBe("Failed to connect");
+  expect(mark.textContent).toBe("");
+  expect(mark.previousElementSibling!.textContent).toBe("Failed");
+  // No mark where the agent said nothing.
+  expect(rowOf(table, "quiet").cells[2].querySelector("button")).toBeNull();
+  expect(document.querySelector("[data-status-mark-popover]")).toBeNull();
+  press(mark);
+  await act(async () => {});
+  const popover = document.querySelector("[data-status-mark-popover]")!;
+  expect(popover.querySelector('[role="dialog"]')!.textContent).toBe("spawn ENOENT");
+});
+
+it("puts a server's URL, plugin and tool count in its Details cell, one to a line", async () => {
+  const reading = nextReading();
+  const { container } = mount("Codex");
+  const dialog = await openMcpOf(container, "codex-work");
+  await reading.answer(inventoryOf({
+    agent: "codex",
+    account: "codex-work",
+    servers: [serverOf({ origin: "https://jira.example.com/mcp", plugin: "atlassian", sign_in: "signed_in", runtime: "running", tool_count: 1, oauth_sign_in: false })],
+  }));
+  const details = rowOf(tableOf(dialog, "Local MCP servers"), "jira").cells[3];
+  expect([...details.firstElementChild!.children].map((line) => line.textContent)).toEqual(["https://jira.example.com/mcp", "From plugin atlassian", "1 tool"]);
+});
+
+it("adds a visible Actions column, with the buttons in it, when a server signs in with OAuth", async () => {
+  const dialog = await openWithServers([serverOf(), serverOf({ name: "wiki", sign_in: "signed_in" }), serverOf({ name: "bearer", oauth_sign_in: false })]);
+  const table = tableOf(dialog, "Local MCP servers");
+  expect(headersOf(table)).toEqual(["Name", "Sign-in", "Runtime", "Details", "Actions"]);
+  expect(rowOf(table, "jira").cells[4].querySelector("button")!.textContent).toBe("Sign in");
+  expect(rowOf(table, "wiki").cells[4].querySelector("button")!.textContent).toBe("Sign out");
+  // A server with no OAuth sign-in has the cell, empty.
+  const bearer = rowOf(table, "bearer");
+  expect(bearer.cells).toHaveLength(5);
+  expect(bearer.cells[4].querySelector("button")).toBeNull();
+});
+
+it("shows the wait for the browser in the row's Details and Cancel beside Sign in in its Actions while a sign-in waits", async () => {
+  const dialog = await openWithServers([serverOf()]);
+  nextAuth();
+  press(buttonNamed(dialog, `Sign in to ${isolate("jira")}`)!);
+  const { cells } = rowOf(tableOf(dialog, "Local MCP servers"), "jira");
+  expect(cells[3].textContent).toContain("Waiting for the sign-in in your browser…");
+  expect([...cells[4].querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Cancel", "Sign in"]);
+});
+
+it("names each row by the server's name and a table by its group heading", async () => {
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await reading.answer(inventoryOf({
+    connectors: [{ id: "a", name: "Gmail", state: "connected", plugins: [] }],
+    servers: [serverOf({ name: "linear", oauth_sign_in: false })],
+  }));
+  for (const heading of ["Platform connectors", "Local MCP servers"]) {
+    const table = tableOf(dialog, heading);
+    expect(table.getAttribute("aria-labelledby")).toBe([...dialog.querySelectorAll("h3")].find((title) => title.textContent === heading)!.id);
+  }
+  const row = dialog.querySelector('tbody [role="row"]')!;
+  expect(row.querySelector('[role="rowheader"]')!.textContent).toBe("Gmail");
+  expect(row.getAttribute("aria-labelledby")).toBe(row.querySelector('[role="rowheader"]')!.id);
 });

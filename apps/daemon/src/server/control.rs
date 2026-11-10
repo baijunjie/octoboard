@@ -164,7 +164,10 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>, heartbeat: Hear
                 let state = state.clone();
                 let outbound = outbound.clone();
                 tokio::spawn(async move {
-                    let (reply, followup) = handle_request(&state, &text).await;
+                    let (reply, followup) = answered(request_id(&text), async move {
+                        handle_request(&state, &text).await
+                    })
+                    .await;
                     let _ = outbound.send(reply).await;
                     // After the reply is queued, never before: what the follow-up does (a launch
                     // that fails at once deletes the session just opened) is broadcast on a path
@@ -356,6 +359,33 @@ async fn handle_request(state: &Arc<AppState>, text: &str) -> (Event, Option<Fol
         Ok((Some(event), followup)) => (event, followup),
         Ok((None, followup)) => (Event::Ack { id }, followup),
         Err(err) => (Event::from_error(id, &err), None),
+    }
+}
+
+/// The `id` a request text carries, if it is a JSON object with a string one.
+fn request_id(text: &str) -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct Frame<'a> {
+        #[serde(borrow)]
+        id: Option<std::borrow::Cow<'a, str>>,
+    }
+    let frame = serde_json::from_str::<Frame>(text).ok()?;
+    frame.id.map(std::borrow::Cow::into_owned)
+}
+
+/// What `handling` ends with, run as a task of its own so that a panic in it ends there: the
+/// request `id` is then answered with an internal error, never left for the client to wait on.
+async fn answered(
+    id: Option<String>,
+    handling: impl std::future::Future<Output = (Event, Option<Followup>)> + Send + 'static,
+) -> (Event, Option<Followup>) {
+    match tokio::spawn(handling).await {
+        Ok(handled) => handled,
+        Err(err) => {
+            tracing::error!(%err, request = ?id, "a request handler stopped unexpectedly");
+            let failure = anyhow::anyhow!("the daemon failed while handling the request");
+            (Event::from_error(id, &failure), None)
+        }
     }
 }
 
@@ -642,6 +672,65 @@ mod tests {
             }
         };
         assert_eq!(reply, serde_json::json!({"type": "ack", "id": "beat"}));
+    }
+
+    #[tokio::test]
+    async fn a_request_handler_that_panics_is_answered_with_an_internal_error() {
+        assert_eq!(
+            request_id(r#"{"id":"r1","type":"x"}"#).as_deref(),
+            Some("r1")
+        );
+        assert_eq!(request_id("not json"), None);
+        let (reply, followup) = answered(Some("r1".to_string()), async {
+            panic!("a handler bug");
+        })
+        .await;
+        let reply = serde_json::to_value(reply).unwrap();
+        assert_eq!(reply["type"], "error");
+        assert_eq!(reply["id"], "r1");
+        assert_eq!(reply["code"], "internal_error");
+        assert!(followup.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_request_that_is_handled_is_answered_as_handled_whatever_happened_to_others() {
+        // One request's handler panics; the one beside it, handled as usual, still has its own answer.
+        let (panicked, handled) = tokio::join!(
+            answered(Some("bad".to_string()), async {
+                panic!("a handler bug");
+            }),
+            answered(Some("good".to_string()), async {
+                (
+                    Event::Ack {
+                        id: Some("good".to_string()),
+                    },
+                    None,
+                )
+            }),
+        );
+        let panicked = serde_json::to_value(panicked.0).unwrap();
+        assert_eq!(
+            (panicked["type"].as_str(), panicked["id"].as_str()),
+            (Some("error"), Some("bad"))
+        );
+        assert_eq!(
+            serde_json::to_value(handled.0).unwrap(),
+            serde_json::json!({"type": "ack", "id": "good"})
+        );
+    }
+
+    #[tokio::test]
+    async fn a_request_with_no_id_whose_handler_panics_is_still_answered_with_an_internal_error() {
+        assert_eq!(request_id(r#"{"type":"x"}"#), None);
+        assert_eq!(request_id(r#"{"id":7,"type":"x"}"#), None);
+        let (reply, _) = answered(None, async {
+            panic!("a handler bug");
+        })
+        .await;
+        let reply = serde_json::to_value(reply).unwrap();
+        assert_eq!(reply["type"], "error");
+        assert_eq!(reply["code"], "internal_error");
+        assert!(reply["id"].is_null());
     }
 
     #[test]

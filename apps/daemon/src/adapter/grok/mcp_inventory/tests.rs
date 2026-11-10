@@ -176,6 +176,43 @@ fn the_reading_asks_list_then_doctor_under_the_accounts_own_home_only() {
     assert!(dirs.lines().all(|line| line == "unset"), "{dirs}");
 }
 
+#[cfg(unix)]
+#[test]
+fn list_and_doctor_share_one_reading_budget() {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let budget = Duration::from_secs(3);
+    let step_wait = budget.mul_f64(2.0 / 3.0).as_secs();
+    let result = crate::test_support::until_the_shell_ran(|| {
+        let dir = ScratchDir::new("mcp-inventory-grok-shared-budget");
+        let fifo = dir.join("hold");
+        crate::test_support::mkfifo(&fifo);
+        // Keep the built-in reads waiting on input, with no executable starting inside their
+        // timed windows; a real child process is what this reader's deadline bounds.
+        let _writer = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(&fifo)
+            .unwrap();
+        let env = fake_agent(
+            &dir,
+            AgentId::GROK.descriptor().binary,
+            &format!(
+                "test -n \"$BASH_VERSION\" || exec /bin/bash \"$0\" \"$@\"\n\
+                 case \"$2\" in\n\
+                 list) read -t {step_wait} ignored < '{d}/hold'; echo '[]';;\n\
+                 doctor) echo started > '{d}/second'; read -t {step_wait} ignored < '{d}/hold'; echo '{{\"servers\":[]}}';;\n\
+                 esac",
+                d = dir.display(),
+            ),
+        );
+        let result = GrokMcpInventory.read(&env, None, false, budget, &AtomicBool::new(false));
+        dir.join("second").exists().then_some(result)
+    });
+    assert_eq!(result.unwrap_err().reason, McpInventoryFailure::TimedOut);
+}
+
 #[test]
 fn a_missing_binary_a_slow_doctor_and_a_failing_list_are_told_apart() {
     let dir = ScratchDir::new("mcp-inventory-grok-failures");

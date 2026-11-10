@@ -34,7 +34,7 @@ export function AccountMcpDialog({ agent, account, onClose }: {
   if (gone) return null;
   return (
     <Dialog
-      size="lg"
+      size="wide"
       title={t("settings.accounts.mcp.title")}
       onClose={onClose}
       footer={null}

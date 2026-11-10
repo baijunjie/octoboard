@@ -700,6 +700,11 @@ pub fn run_exchange_traced(
         if cancel.load(std::sync::atomic::Ordering::Relaxed) {
             break Err(ExchangeFailure::Cancelled);
         }
+        // Checked on every pass, not only when a poll comes up empty: a child that keeps writing
+        // would otherwise never reach the deadline.
+        if Instant::now() >= deadline {
+            break Err(ExchangeFailure::TimedOut(bounds.timeout));
+        }
         let left = deadline.saturating_duration_since(Instant::now());
         match stdout_rx.recv_timeout(left.min(BOUNDED_POLL)) {
             Ok(BoundedChunk::Data(bytes)) => {
@@ -714,11 +719,7 @@ pub fn run_exchange_traced(
                     anyhow::Error::new(err).context("reading stdout from the subprocess"),
                 ))
             }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                if Instant::now() >= deadline {
-                    break Err(ExchangeFailure::TimedOut(bounds.timeout));
-                }
-            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 // The last line may come without its newline.
                 pending.push(b'\n');
@@ -986,6 +987,21 @@ mod tests {
         grace: Duration,
         trace: &mut ExchangeTrace,
     ) -> Option<(std::result::Result<String, ExchangeFailure>, i32)> {
+        exchange_judged_by(script, input, bounds, cancel, grace, trace, |line| {
+            line.starts_with("reply")
+        })
+    }
+
+    /// [`exchange_graced_by`] with `is_reply` to tell the reply line.
+    fn exchange_judged_by(
+        script: &str,
+        input: &[&str],
+        bounds: Bounds,
+        cancel: &AtomicBool,
+        grace: Duration,
+        trace: &mut ExchangeTrace,
+        is_reply: impl FnMut(&str) -> bool,
+    ) -> Option<(std::result::Result<String, ExchangeFailure>, i32)> {
         let pid_file = ScratchFile::new("env-shell-exchange", "pid");
         let mut command = Command::new(crate::test_support::bash());
         command.args([
@@ -1004,7 +1020,7 @@ mod tests {
             cancel,
             grace,
             trace,
-            |line| line.starts_with("reply"),
+            is_reply,
         );
         Some((outcome, read_pid_file(&pid_file)?))
     }
@@ -1160,6 +1176,40 @@ mod tests {
         });
         let failure = outcome.expect_err("no reply");
         assert!(matches!(failure, ExchangeFailure::TimedOut(_)), "{failure}");
+        assert_gone_by(pid, Instant::now() + PATIENCE);
+    }
+
+    #[test]
+    fn an_exchange_whose_child_keeps_writing_still_ends_at_the_deadline() {
+        // The child writes without pause and the reader is slower than it, so output is always
+        // waiting and no poll for it ends empty: only the check on each pass reaches the deadline.
+        // The limit is far above what the child writes in that time.
+        let slow = Duration::from_micros(200);
+        let started = Instant::now();
+        let (outcome, pid) = until_the_shell_ran(|| {
+            exchange_judged_by(
+                "while :; do echo noise; done",
+                &[],
+                Bounds {
+                    stdout_limit: 64 * 1024 * 1024,
+                    ..exchange_bounds(Duration::from_millis(500))
+                },
+                &AtomicBool::new(false),
+                Duration::ZERO,
+                &mut ExchangeTrace::default(),
+                |_| {
+                    // A spin, not a wait on time: the cost of judging one line.
+                    let judged = Instant::now();
+                    while judged.elapsed() < slow {
+                        std::hint::spin_loop();
+                    }
+                    false
+                },
+            )
+        });
+        let failure = outcome.expect_err("no reply");
+        assert!(matches!(failure, ExchangeFailure::TimedOut(_)), "{failure}");
+        assert!(started.elapsed() < Duration::from_secs(20));
         assert_gone_by(pid, Instant::now() + PATIENCE);
     }
 

@@ -101,5 +101,7 @@ export function openingFocus(autoFocus: boolean | undefined): { "data-opening-fo
  * and no hook offers the choice: to check again when react-aria is upgraded.
  */
 export function onFocusScopeRestore(listener: (event: Event) => void, signal: AbortSignal): void {
-  document.addEventListener("react-aria-focus-scope-restore", listener, { capture: true, once: true, signal });
+  document.addEventListener(FOCUS_SCOPE_RESTORE_EVENT, listener, { capture: true, once: true, signal });
 }
+
+export const FOCUS_SCOPE_RESTORE_EVENT = "react-aria-focus-scope-restore";

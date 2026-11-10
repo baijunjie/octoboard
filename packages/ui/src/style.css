@@ -51,6 +51,7 @@
 @import "@heroui/styles/components/switch.css" layer(components);
 @import "@heroui/styles/components/badge.css" layer(components);
 @import "@heroui/styles/components/chip.css" layer(components);
+@import "@heroui/styles/components/table.css" layer(components);
 @import "@heroui/styles/components/alert.css" layer(components);
 @import "@heroui/styles/components/empty-state.css" layer(components);
 @import "@heroui/styles/components/meter.css" layer(components);
@@ -427,12 +428,13 @@ body {
 
 /* The few transitions HeroUI leaves running under reduced motion, where it guards the rest with
    `motion-reduce:transition-none`: a select's chevron turning as its list opens, a combo box trigger's
-   hover and press fade, and a checkbox's checkmark drawing itself in. `style.test.ts` finds any other
+   hover and press fade, a checkbox's checkmark drawing itself in, and a sortable table column's arrow turning. `style.test.ts` finds any other
    in the imported sheets. */
 @media (prefers-reduced-motion: reduce) {
   .select__indicator,
   .combo-box__trigger,
-  [data-slot="checkbox-default-indicator--checkmark"] {
+  [data-slot="checkbox-default-indicator--checkmark"],
+  .table__sortable-column-indicator {
     transition: none;
   }
 }

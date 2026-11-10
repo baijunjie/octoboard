@@ -35,6 +35,7 @@ export { Select, SelectClearButton, SelectPopover, SelectTrigger } from "./Selec
 export { Spinner } from "./Spinner";
 export { Surface } from "./Surface";
 export { Switch } from "./Switch";
+export { Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from "./Table";
 export { Tab, TabList, TabListContainer, TabPanel, Tabs, useTabPanelLink } from "./Tabs";
 export { StaticTag, Tag, TagGroup, TagList, TagRemoveButton } from "./Tag";
 export { Input, SearchField, TextArea, TextField } from "./TextField";

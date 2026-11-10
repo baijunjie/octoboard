@@ -1,5 +1,5 @@
 import { Plug, RefreshCw, Server } from "lucide-react";
-import React, { useId, useLayoutEffect, useRef } from "react";
+import React, { createContext, useContext, useId, useLayoutEffect, useRef } from "react";
 
 import { AlertButton } from "../../components/alerts/AlertButton";
 import { DiagnosticBlock } from "../../components/alerts/DiagnosticBlock";
@@ -20,19 +20,23 @@ import { InlineReference } from "../../i18n/InlineReference";
 import { isolate } from "../../i18n/isolate";
 import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
-import { Button, Spinner } from "../../primitives";
+import { Button, Spinner, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from "../../primitives";
 import type { Agent, ConnectorState, LocalMcpServer, McpInventoryUnavailable, PlatformConnector } from "../../protocol";
 import { providerConnectorPlatform, providerMcpSessionSignIn } from "../../providers/registry";
 import type { McpInventoryState } from "./useAccountMcpInventory";
 
-/** The aside at the end of the account's name line: when the inventory shown was read (not while the last answer is a
- * failure), then the Refresh button, pending while a reading runs. */
-export function McpInventoryAside({ state, refreshButton }: { state: McpInventoryState; refreshButton: React.Ref<HTMLButtonElement> }): React.ReactElement {
+/** The aside at the end of the account's name line, once the first answer is in (until then the body's reading line is
+ * the only progress shown): when the inventory shown was read (not while the last answer is a failure), or "Refreshing…"
+ * while a later reading runs, then the Refresh button, pending meanwhile. */
+export function McpInventoryAside({ state, refreshButton }: { state: McpInventoryState; refreshButton: React.Ref<HTMLButtonElement> }): React.ReactElement | null {
   const t = useT();
-  const inventory = state.answer && "inventory" in state.answer ? state.answer.inventory : undefined;
+  if (!state.answer) return null;
+  const inventory = "inventory" in state.answer ? state.answer.inventory : undefined;
   return (
     <span className="ms-auto flex shrink-0 items-center gap-1 text-xs font-normal text-app-muted">
-      {inventory && !inventory.unavailable && <UpdatedAge at={inventory.read_at} copy={{ now: "settings.accounts.mcp.updatedNow", age: "settings.accounts.mcp.updated" }} />}
+      {state.reading
+        ? <span>{t("settings.accounts.mcp.refreshing")}</span>
+        : inventory && !inventory.unavailable && <UpdatedAge at={inventory.read_at} copy={{ now: "settings.accounts.mcp.updatedNow", age: "settings.accounts.mcp.updated" }} />}
       <TitledControl title={t("settings.accounts.mcp.refresh")}>
         <Button ref={refreshButton} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("settings.accounts.mcp.refresh")} focusOnPress={false} pending={state.reading} onPress={state.refresh}>
           <RefreshCw aria-hidden="true" className="size-4" />
@@ -90,7 +94,7 @@ function McpInventoryBody({ agent, state }: { agent: Agent; state: McpInventoryS
     return (
       <div className="flex items-center gap-2 text-sm text-app-muted">
         <Spinner size="sm" color="current" />
-        <span>{t("settings.accounts.mcp.reading")}</span>
+        <span>{state.slow ? <Message id="settings.accounts.mcp.readingSlow" params={{ agent: <ProviderName agent={agent} /> }} /> : t("settings.accounts.mcp.reading")}</span>
       </div>
     );
   }
@@ -100,7 +104,7 @@ function McpInventoryBody({ agent, state }: { agent: Agent; state: McpInventoryS
   const { inventory } = answer;
   if (inventory.unavailable) return <UnavailableAlert agent={agent} unavailable={inventory.unavailable} state={state} />;
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-5">
       {(providerConnectorPlatform(agent) || inventory.connectors.length > 0) && <ConnectorGroup agent={agent} connectors={inventory.connectors} />}
       <ServerGroup agent={agent} servers={inventory.servers} state={state} />
     </div>
@@ -135,7 +139,7 @@ function UnavailableAlert({ agent, unavailable, state }: { agent: Agent; unavail
 
 /** A group's heading, standing under the dialog's title. */
 function GroupHeading({ id, children }: { id: string; children: React.ReactNode }): React.ReactElement {
-  return <h3 id={id} className="text-xs font-medium text-app-muted">{children}</h3>;
+  return <h3 id={id} className="text-sm font-semibold text-foreground">{children}</h3>;
 }
 
 const CONNECTOR_STATE: Record<ConnectorState, { key: "settings.accounts.mcp.connector.connected" | "settings.accounts.mcp.connector.notConnected" | "settings.accounts.mcp.state.unknown"; color: "success" | "default" }> = {
@@ -168,19 +172,20 @@ function ConnectorGroup({ agent, connectors }: { agent: Agent; connectors: Platf
       {connectors.length === 0
         ? <EmptyPanel compact icon={Plug} message={t("settings.accounts.mcp.noConnectors")} />
         : (
-          <ul className="flex flex-col gap-1.5">
+          <EntryTable labelledBy={headingId} stateColumns={[t("settings.accounts.mcp.column.status")]}>
             {connectors.map((connector) => {
               const state = CONNECTOR_STATE[connector.state];
               return (
-                <Entry
+                <EntryRow
                   key={connector.id}
+                  id={connector.id}
                   name={connector.name}
-                  states={<DotStatusBadge color={state.color}>{t(state.key)}</DotStatusBadge>}
+                  stateCells={[<DotStatusBadge key="state" color={state.color}>{t(state.key)}</DotStatusBadge>]}
                   facts={connector.plugins.length > 0 ? [<FromPlugins key="plugins" plugins={connector.plugins} />] : []}
                 />
               );
             })}
-          </ul>
+          </EntryTable>
         )}
       {platform && <p className="text-xs text-app-muted">{t("settings.accounts.mcp.platformAccount", { platform: platform.name })}</p>}
     </section>
@@ -195,18 +200,75 @@ function ServerGroup({ agent, servers, state }: { agent: Agent; servers: LocalMc
       <GroupHeading id={headingId}>{t("settings.accounts.mcp.servers")}</GroupHeading>
       {servers.length === 0
         ? <EmptyPanel compact icon={Server} message={t("settings.accounts.mcp.noServers")} />
-        : <ul className="flex flex-col gap-1.5">{servers.map((server) => <ServerEntry key={`${server.plugin ?? ""}:${server.name}`} agent={agent} server={server} state={state} />)}</ul>}
+        : (
+          <EntryTable labelledBy={headingId} stateColumns={[t("settings.accounts.mcp.column.signIn"), t("settings.accounts.mcp.column.runtime")]} actions={servers.some((server) => server.oauth_sign_in)}>
+            {servers.map((server) => <ServerEntry key={`${server.plugin ?? ""}:${server.name}`} agent={agent} server={server} state={state} />)}
+          </EntryTable>
+        )}
     </section>
   );
 }
 
-/** One local server: its name with its sign-in and runtime states (a state the agent does not know shows nothing),
- * then what it is (its URL, the plugin bringing it, how many tools it offers). A server the agent signs in to with
- * OAuth through its own login command (`oauth_sign_in`) has Sign in or Sign out beside its states; while one runs the
+/** One local server's row: its name, its sign-in state and its runtime state in a column each ("Unknown" where the agent
+ * does not know), then
+ * what it is (its URL, the plugin bringing it, how many tools it offers). A failed server's Failed badge is followed by a
+ * mark holding what the agent said, the raw text alone, since the badge already says it failed. A server the agent signs in to with
+ * OAuth through its own login command (`oauth_sign_in`) has Sign in or Sign out in the row's actions cell; while one runs the
  * button is pending and a sign-in says it waits for the browser, with Cancel. A Claude Code server that needs sign-in
  * says how to authorize it, since Octoboard has no way of signing it in. Cancel goes when the sign-in ends; focus on
  * it goes to the row's Sign in or Sign out button. */
 function ServerEntry({ agent, server, state }: { agent: Agent; server: LocalMcpServer; state: McpInventoryState }): React.ReactElement {
+  const t = useT();
+  const run = state.runs[server.name];
+  const waiting = run?.action === "sign_in" && !run.settling;
+  const unknown = <span className="text-xs text-app-muted">{t("settings.accounts.mcp.state.unknownShort")}</span>;
+  const signIn = {
+    signed_in: <DotStatusBadge color="success">{t("settings.accounts.mcp.server.signedIn")}</DotStatusBadge>,
+    needs_sign_in: <DotStatusBadge color="warning">{t("settings.accounts.mcp.server.needsSignIn")}</DotStatusBadge>,
+    not_needed: <span className="text-xs text-app-muted">{t("settings.accounts.mcp.server.signInNotNeeded")}</span>,
+    unknown,
+  }[server.sign_in];
+  const runtime = {
+    running: <DotStatusBadge color="success">{t("settings.accounts.mcp.server.running")}</DotStatusBadge>,
+    failed: (
+      <span className="flex items-center gap-1">
+        <DotStatusBadge color="danger">{t("settings.accounts.mcp.server.failed")}</DotStatusBadge>
+        {server.runtime_message && (
+          <StatusMark tone="danger" label={t("settings.accounts.mcp.server.failedLabel")}>
+            <DiagnosticBlock>{server.runtime_message}</DiagnosticBlock>
+          </StatusMark>
+        )}
+      </span>
+    ),
+    unknown,
+  }[server.runtime];
+  const facts: React.ReactNode[] = [];
+  if (server.origin) facts.push(<span key="origin" dir="ltr" className="wrap-anywhere">{server.origin}</span>);
+  if (server.plugin) facts.push(<FromPlugins key="plugin" plugins={[server.plugin]} />);
+  if (server.tool_count !== null) facts.push(t("settings.accounts.mcp.toolCount", { count: server.tool_count }));
+  const sessionCommand = server.sign_in === "needs_sign_in" ? providerMcpSessionSignIn(agent) : undefined;
+  return (
+    <EntryRow id={`${server.plugin ?? ""}:${server.name}`} name={server.name} stateCells={[signIn, runtime]} actions={server.oauth_sign_in ? <ServerAuthActions server={server} state={state} /> : undefined} facts={facts}>
+      {waiting && (
+        <p className="flex items-center gap-2 text-xs text-app-muted">
+          <Spinner size="sm" color="current" />
+          <span aria-hidden="true">{t("settings.accounts.mcp.server.waiting")}</span>
+          <StatusAnnouncer text={t("settings.accounts.mcp.server.waiting")} element="span" />
+        </p>
+      )}
+      {sessionCommand && (
+        <p className="text-xs text-app-muted">
+          <Message id="settings.accounts.mcp.server.signInFromSession" params={{ command: <InlineReference monospace size="xs">{sessionCommand}</InlineReference> }} />
+        </p>
+      )}
+    </EntryRow>
+  );
+}
+
+/** A server's Sign in or Sign out, with Cancel while a sign-in waits for the browser. It holds its own focus hand-off:
+ * the table renders a row's cells apart from the component that builds the row, so the hand-off lives with the
+ * buttons it moves focus between. */
+function ServerAuthActions({ server, state }: { server: LocalMcpServer; state: McpInventoryState }): React.ReactElement {
   const t = useT();
   const cancelId = useId();
   const authButton = useRef<HTMLButtonElement>(null);
@@ -215,22 +277,7 @@ function ServerEntry({ agent, server, state }: { agent: Agent; server: LocalMcpS
   const waiting = run?.action === "sign_in" && !run.settling;
   const signOut = run ? run.action === "sign_out" : server.sign_in === "signed_in";
   const name = isolate(server.name);
-  const states = (
-    <>
-      {server.sign_in === "signed_in" && <DotStatusBadge color="success">{t("settings.accounts.mcp.server.signedIn")}</DotStatusBadge>}
-      {server.sign_in === "needs_sign_in" && <DotStatusBadge color="warning">{t("settings.accounts.mcp.server.needsSignIn")}</DotStatusBadge>}
-      {server.runtime === "running" && <DotStatusBadge color="success">{t("settings.accounts.mcp.server.running")}</DotStatusBadge>}
-      {server.runtime === "failed" && (
-        <StatusMark tone="danger" text={t("settings.accounts.mcp.server.failed")} label={t("settings.accounts.mcp.server.failedLabel")} detail={server.runtime_message ?? undefined} />
-      )}
-    </>
-  );
-  const facts: React.ReactNode[] = [];
-  if (server.origin) facts.push(<span key="origin" dir="ltr" className="wrap-anywhere">{server.origin}</span>);
-  if (server.plugin) facts.push(<FromPlugins key="plugin" plugins={[server.plugin]} />);
-  if (server.tool_count !== null) facts.push(t("settings.accounts.mcp.toolCount", { count: server.tool_count }));
-  const sessionCommand = server.sign_in === "needs_sign_in" ? providerMcpSessionSignIn(agent) : undefined;
-  const actions = server.oauth_sign_in && (
+  return (
     <>
       {waiting && handoffFrom(`#${CSS.escape(cancelId)}`)}
       {waiting && (
@@ -251,40 +298,61 @@ function ServerEntry({ agent, server, state }: { agent: Agent; server: LocalMcpS
       </Button>
     </>
   );
+}
+
+/** Whether `EntryTable` has the actions column, for its rows to add their cell. */
+const ActionsColumnContext = createContext(false);
+
+/**
+ * A group's entries in HeroUI's `Table`: Name (the rows' header), one column per state (`stateColumns`, each a
+ * row's state in its own words, so the states line up whatever the names' lengths), Details and, when a row has a
+ * button (`actions`), Actions. A dialog too narrow for the columns scrolls the table sideways in its scroll container
+ * rather than squeezing the cells.
+ */
+function EntryTable({ labelledBy, stateColumns, actions = false, children }: { labelledBy: string; stateColumns: string[]; actions?: boolean; children: React.ReactNode }): React.ReactElement {
+  const t = useT();
   return (
-    <Entry name={server.name} states={states} actions={actions || undefined} facts={facts}>
-      {waiting && (
-        <p className="flex items-center gap-2 text-xs text-app-muted">
-          <Spinner size="sm" color="current" />
-          <span aria-hidden="true">{t("settings.accounts.mcp.server.waiting")}</span>
-          <StatusAnnouncer text={t("settings.accounts.mcp.server.waiting")} element="span" />
-        </p>
-      )}
-      {sessionCommand && (
-        <p className="text-xs text-app-muted">
-          <Message id="settings.accounts.mcp.server.signInFromSession" params={{ command: <InlineReference monospace size="xs">{sessionCommand}</InlineReference> }} />
-        </p>
-      )}
-    </Entry>
+    <Table labelledBy={labelledBy} minWidth={actions ? "40rem" : "34rem"}>
+      <TableHeader>
+        <TableColumn rowHeader>{t("settings.accounts.mcp.column.name")}</TableColumn>
+        {stateColumns.map((column) => <TableColumn key={column}>{column}</TableColumn>)}
+        <TableColumn>{t("settings.accounts.mcp.column.details")}</TableColumn>
+        {actions ? <TableColumn>{t("settings.accounts.mcp.column.actions")}</TableColumn> : null}
+      </TableHeader>
+      <TableBody>
+        <ActionsColumnContext.Provider value={actions}>{children}</ActionsColumnContext.Provider>
+      </TableBody>
+    </Table>
   );
 }
 
-/** A list entry: the name and its state badges on one line, wrapping, with its actions at the trailing end; what it is
- * under it, muted, its facts apart. */
-function Entry({ name, states, actions, facts, children }: { name: string; states: React.ReactNode; actions?: React.ReactNode; facts: React.ReactNode[]; children?: React.ReactNode }): React.ReactElement {
+/** A table row: the name, one cell per state column (`stateCells`), what it is (its facts, one to a line, muted, then
+ * any further lines in `children`) and, in a table with the actions column, its buttons. */
+function EntryRow({ id, name, stateCells, actions, facts, children }: { id: string; name: string; stateCells: React.ReactNode[]; actions?: React.ReactNode; facts: React.ReactNode[]; children?: React.ReactNode }): React.ReactElement {
+  const actionsColumn = useContext(ActionsColumnContext);
   return (
-    <li className="flex min-w-0 flex-col gap-0.5">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <span dir="auto" className="min-w-0 text-foreground wrap-anywhere">{name}</span>
-        {states}
-        {actions && <span className="ms-auto flex items-center gap-1">{actions}</span>}
-      </div>
-      {facts.length > 0 && (
-        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-app-muted">
-          {facts.map((fact, index) => <span key={index} className="min-w-0">{fact}</span>)}
-        </div>
-      )}
-      {children}
-    </li>
+    <TableRow id={id} textValue={name}>
+      <TableCell className="align-top">
+        <span dir="auto" className="block min-w-24 leading-6 wrap-anywhere">{name}</span>
+      </TableCell>
+      {stateCells.map((cell, index) => (
+        <TableCell key={index} className="align-top whitespace-nowrap">
+          <div className="flex min-h-6 items-center">{cell}</div>
+        </TableCell>
+      ))}
+      <TableCell className="align-top">
+        {(facts.length > 0 || children) && (
+          <div className="flex min-h-6 flex-col justify-center gap-1 text-xs text-app-muted">
+            {facts.map((fact, index) => <span key={index} className="min-w-0 wrap-anywhere">{fact}</span>)}
+            {children}
+          </div>
+        )}
+      </TableCell>
+      {actionsColumn ? (
+        <TableCell className="align-top">
+          {actions && <div className="flex min-h-6 items-center gap-1 whitespace-nowrap">{actions}</div>}
+        </TableCell>
+      ) : null}
+    </TableRow>
   );
 }

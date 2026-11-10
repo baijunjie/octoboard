@@ -1775,7 +1775,11 @@ the hover-opened popover, which stays open.
 
 Where the row's other outcomes are each a glyph and a word in a status column, the failed outcome is the same shape
 (its glyph and the word Failed) and that pair, where there is detail to show, is the one trigger of the popover, named
-by the row's own label. In a section's heading (the Git
+by the row's own label. In the account's MCP server table, the failed runtime uses the same badge as the other runtime
+states, with a separate error mark beside it when the agent gives a diagnostic. That mark opens the raw diagnostic in
+a diagnostic block with its copy action. The visible failure badge already states the outcome.
+
+In a section's heading (the Git
 change list) the trigger takes no tab stop of its own; the application's own walk reaches it (Right from the heading's
 band), and when a press-opened popover (touch, keyboard, assistive technology) closes, focus goes to the heading's band,
 which takes it only when focus was on the mark or the page body, as for a press from scratch. A hover-opened one moved

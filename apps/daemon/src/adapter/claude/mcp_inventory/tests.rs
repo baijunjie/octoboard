@@ -225,3 +225,126 @@ fn a_missing_binary_a_slow_list_and_a_failing_one_are_told_apart() {
     assert_eq!(failed.reason, McpInventoryFailure::Failed);
     assert_eq!(failed.detail.as_deref(), Some("broke"));
 }
+
+#[cfg(unix)]
+#[test]
+fn status_and_list_share_one_reading_budget() {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let budget = Duration::from_secs(3);
+    let step_wait = budget.mul_f64(2.0 / 3.0).as_secs();
+    let result = crate::test_support::until_the_shell_ran(|| {
+        let dir = ScratchDir::new("mcp-inventory-claude-shared-budget");
+        let fifo = dir.join("hold");
+        crate::test_support::mkfifo(&fifo);
+        // An open writer keeps the built-in timed read from seeing EOF. No subprocess starts
+        // inside either step's wait, where a host's executable scan could consume its budget.
+        let _writer = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(libc::O_NONBLOCK)
+            .open(&fifo)
+            .unwrap();
+        let env = fake_agent(
+            &dir,
+            AgentId::CLAUDE.descriptor().binary,
+            &format!(
+                "test -n \"$BASH_VERSION\" || exec /bin/bash \"$0\" \"$@\"\n\
+                 case \"$1\" in\n\
+                 auth) read -t {step_wait} ignored < '{d}/hold'; echo '{{\"loggedIn\":true}}';;\n\
+                 mcp) echo started > '{d}/second'; read -t {step_wait} ignored < '{d}/hold'; echo 'No MCP servers configured.';;\n\
+                 esac",
+                d = dir.display(),
+            ),
+        );
+        let result = ClaudeMcpInventory.read(&env, None, false, budget, &AtomicBool::new(false));
+        // Retry when the host delayed a start until the deadline: the second step must have
+        // reached its own wait for this attempt to exercise the shared budget.
+        dir.join("second").exists().then_some(result)
+    });
+    assert_eq!(result.unwrap_err().reason, McpInventoryFailure::TimedOut);
+}
+
+#[test]
+fn the_listing_waits_at_most_the_server_timeout_unless_the_shell_asks_for_less() {
+    let shell = |value: Option<&str>| {
+        let mut env = HashMap::from([("PATH".to_string(), "/usr/bin".to_string())]);
+        if let Some(value) = value {
+            env.insert("MCP_TIMEOUT".to_string(), value.to_string());
+        }
+        env
+    };
+    let capped = LIST_SERVER_TIMEOUT_MS.to_string();
+    let cases = [
+        (None, capped.as_str()),
+        // A shorter positive wait of the shell's own is kept.
+        (Some("3000"), "3000"),
+        (Some("1"), "1"),
+        // A longer one, zero (no wait at all would list every server as failed) and one that is no number are replaced.
+        (Some("600000"), capped.as_str()),
+        (Some("0"), capped.as_str()),
+        (Some("soon"), capped.as_str()),
+        (Some(""), capped.as_str()),
+        (Some("-5"), capped.as_str()),
+    ];
+    for (held, expected) in cases {
+        let env = shell(held);
+        let adjusted = with_list_server_timeout(&env);
+        assert_eq!(
+            adjusted.get("MCP_TIMEOUT").map(String::as_str),
+            Some(expected),
+            "shell MCP_TIMEOUT {held:?}"
+        );
+        // Nothing else of the environment changes, and the shell's own is left as it was.
+        assert_eq!(adjusted.get("PATH"), env.get("PATH"));
+        assert_eq!(adjusted.len(), 2);
+        assert_eq!(env.get("MCP_TIMEOUT").map(String::as_str), held);
+    }
+}
+
+#[test]
+fn only_the_listing_runs_with_the_server_timeout_and_auth_status_keeps_the_shell_environment() {
+    let status = r#"{"loggedIn": true, "authMethod": "claude.ai"}"#;
+    // `None` is a shell with no `MCP_TIMEOUT`.
+    for (held, status_saw, list_saw) in [
+        (
+            None,
+            "unset".to_string(),
+            LIST_SERVER_TIMEOUT_MS.to_string(),
+        ),
+        (Some("3000"), "3000".to_string(), "3000".to_string()),
+        (
+            Some("600000"),
+            "600000".to_string(),
+            LIST_SERVER_TIMEOUT_MS.to_string(),
+        ),
+    ] {
+        let dir = ScratchDir::new("mcp-inventory-claude-server-timeout");
+        std::fs::write(dir.join("status"), status).unwrap();
+        let mut env = fake_agent(
+            &dir,
+            AgentId::CLAUDE.descriptor().binary,
+            &format!(
+                "echo \"$1 $2 ${{MCP_TIMEOUT-unset}}\" >> '{d}/seen'\n\
+                 case \"$1 $2\" in\n\
+                 'auth status') cat '{d}/status'; exit 1;;\n\
+                 'mcp list') echo 'No MCP servers configured.';;\n\
+                 esac",
+                d = dir.display(),
+            ),
+        );
+        if let Some(held) = held {
+            env.insert("MCP_TIMEOUT".to_string(), held.to_string());
+        }
+        assert_eq!(read(&env, None), Ok((vec![], vec![])));
+        let seen = std::fs::read_to_string(dir.join("seen")).unwrap();
+        assert_eq!(
+            seen.lines().collect::<Vec<_>>(),
+            [
+                format!("auth status {status_saw}"),
+                format!("mcp list {list_saw}")
+            ],
+            "shell MCP_TIMEOUT {held:?}"
+        );
+    }
+}

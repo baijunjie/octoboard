@@ -27,6 +27,8 @@ export interface McpServerRun {
 export interface McpInventoryState {
   answer?: { inventory: AccountMcpInventory } | { error: CodedError };
   reading: boolean;
+  /** The current reading has run past `SLOW_READING_MS` with no answer yet. */
+  slow: boolean;
   attempt: number;
   /** The wait before the answer's failure is announced: set when the first answer came so soon after the dialog opened
    * that the announcement would be lost in the dialog's own (see `AFTER_FOCUS_MOVE_DELAY_MS`). */
@@ -42,6 +44,15 @@ export interface McpInventoryState {
   /** Ends the sign-in to the server that is running. */
   cancelSignIn: (server: string) => void;
 }
+
+/** How long a reading takes to count as slow. Connecting to servers that do not answer
+ * can keep the account's CLI waiting for tens of seconds. */
+export const SLOW_READING_MS = 15_000;
+
+/** How long the dialog waits for a reading before it shows the reading as timed out. The daemon answers every reading
+ * within its own overall deadline (90 s); this ceiling is just above it, for an answer that never comes all the same
+ * (a daemon that stopped answering while the connection stayed up). */
+export const READING_CEILING_MS = 100_000;
 
 const withoutSettling = (runs: Readonly<Record<string, McpServerRun>>) =>
   Object.values(runs).some((run) => run.settling) ? Object.fromEntries(Object.entries(runs).filter(([, run]) => !run.settling)) : runs;
@@ -66,6 +77,7 @@ export function useAccountMcpInventory(agent: Agent, account: string | null, ena
   const { request } = useDaemon();
   const [answer, setAnswer] = useState<McpInventoryState["answer"]>();
   const [reading, setReading] = useState(false);
+  const [slow, setSlow] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [announceDelayMs, setAnnounceDelayMs] = useState<number>();
   const [runs, setRuns] = useState<Record<string, McpServerRun>>({});
@@ -75,18 +87,45 @@ export function useAccountMcpInventory(agent: Agent, account: string | null, ena
   const running = useRef(new Set<string>());
   const mounted = useRef(true);
   const openedAt = useRef<number>(undefined);
+  const latestAsk = useRef(0);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
+  // A reading's timers outlive an unmount rather than being cleared by it: StrictMode unmounts and mounts again while
+  // the first reading runs, and that reading is not started again (`busy`), so clearing them would lose them. What
+  // they run checks `mounted` itself, as an answer does, so a timer that fires after the dialog has gone does nothing.
+  const after = (ms: number, run: () => void) => {
+    const timer = setTimeout(run, ms);
+    return () => clearTimeout(timer);
+  };
   const read = useCallback((refresh: boolean) => {
     if (busy.current) return;
     busy.current = true;
     setReading(true);
-    const ask = (refreshing: boolean) => request({ type: "read_account_mcp_inventory", agent, account, refresh: refreshing }).then(
-      (reply) => settle({ inventory: reply.inventory }),
-      (err: unknown) => settle({ error: errorPresentation(err) }),
-    );
+    // An answer that comes after the ceiling still replaces the timed-out one, unless another reading has started
+    // since, whether or not that one has answered.
+    const ask = (refreshing: boolean) => {
+      const asked = ++latestAsk.current;
+      let overdue = false;
+      const stopSlow = after(SLOW_READING_MS, () => {
+        if (mounted.current) setSlow(true);
+      });
+      const stopCeiling = after(READING_CEILING_MS, () => {
+        overdue = true;
+        settle({ inventory: { agent, account, read_at: Date.now(), connectors: [], servers: [], unavailable: { reason: "timed_out", detail: null } } });
+      });
+      const answered = (next: NonNullable<McpInventoryState["answer"]>) => {
+        stopSlow();
+        stopCeiling();
+        if (!overdue) settle(next);
+        else if (mounted.current && asked === latestAsk.current) setAnswer(next);
+      };
+      request({ type: "read_account_mcp_inventory", agent, account, refresh: refreshing }).then(
+        (reply) => answered({ inventory: reply.inventory }),
+        (err: unknown) => answered({ error: errorPresentation(err) }),
+      );
+    };
     const settle = (next: NonNullable<McpInventoryState["answer"]>) => {
       if (!mounted.current) {
         busy.current = false;
@@ -95,6 +134,7 @@ export function useAccountMcpInventory(agent: Agent, account: string | null, ena
       const opened = openedAt.current;
       openedAt.current = undefined;
       setAnnounceDelayMs(opened !== undefined && Date.now() - opened < AFTER_FOCUS_MOVE_DELAY_MS ? AFTER_FOCUS_MOVE_DELAY_MS : undefined);
+      setSlow(false);
       setAnswer(next);
       setAttempt((value) => value + 1);
       if (rereadQueued.current) {
@@ -169,7 +209,7 @@ export function useAccountMcpInventory(agent: Agent, account: string | null, ena
     read(false);
   }, [enabled, read]);
   return {
-    answer, reading, attempt, announceDelayMs, runs, announcement,
+    answer, reading, slow, attempt, announceDelayMs, runs, announcement,
     refresh: () => read(true),
     signIn: (server) => beginAuth(server, "sign_in"),
     signOut: (server) => beginAuth(server, "sign_out"),

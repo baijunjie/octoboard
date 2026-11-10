@@ -3,12 +3,13 @@
 //! `<name>: <transport> - <marker> <status>` line per server after connecting to each of them.
 //! The default account is read with `CLAUDE_CONFIG_DIR` as the shell has it, a non-default one with
 //! its own directory, as `account_cli` runs every query. The listing has nothing to refetch, so a
-//! `refresh` changes nothing.
+//! `refresh` changes nothing. The listing runs with a shorter per-server connect timeout than
+//! Claude Code's own (`LIST_SERVER_TIMEOUT_MS`).
 
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::login::{logged_in, STATUS_OUTPUT_LIMIT, STATUS_TIMEOUT};
 use crate::accounts::mcp_inventory::{
@@ -22,6 +23,13 @@ use crate::protocol::{
 
 /// The most `claude mcp list` may print: a line per server.
 const LIST_OUTPUT_LIMIT: usize = 1024 * 1024;
+
+/// How long `claude mcp list` waits for each server to connect, in milliseconds, through Claude
+/// Code's `MCP_TIMEOUT`. Its own default is 30 s per server, and the listing prints nothing until
+/// every server has answered or timed out, so a few unreachable servers could take close to a
+/// minute, which is the reading's whole budget. A server slower than this is listed as failed to
+/// connect. A shorter `MCP_TIMEOUT` the user's shell already sets is kept.
+const LIST_SERVER_TIMEOUT_MS: u64 = 10_000;
 
 /// The name prefix of a connector the claude.ai account hosts, as `claude mcp list` shows it.
 const CONNECTOR_PREFIX: &str = "claude.ai ";
@@ -37,10 +45,12 @@ impl McpInventoryReader for ClaudeMcpInventory {
         timeout: Duration,
         cancel: &AtomicBool,
     ) -> Result<Listing, McpInventoryUnavailable> {
-        let run = |args: &[&str], timeout, limit| {
+        let deadline = Instant::now() + timeout;
+        let left = || deadline.saturating_duration_since(Instant::now());
+        let run = |env: &HashMap<String, String>, args: &[&str], timeout, limit| {
             account_cli::query(
                 AgentId::CLAUDE,
-                shell_env,
+                env,
                 config_dir,
                 args,
                 timeout,
@@ -51,8 +61,9 @@ impl McpInventoryReader for ClaudeMcpInventory {
         };
         // `auth status` exits 1 when signed out, with its answer on stdout all the same.
         let status = run(
+            shell_env,
             &["auth", "status"],
-            STATUS_TIMEOUT.min(timeout),
+            STATUS_TIMEOUT.min(left()),
             STATUS_OUTPUT_LIMIT,
         )?;
         match logged_in(&status.stdout) {
@@ -70,7 +81,12 @@ impl McpInventoryReader for ClaudeMcpInventory {
                 ));
             }
         }
-        let list = run(&["mcp", "list"], timeout, LIST_OUTPUT_LIMIT)?;
+        let list = run(
+            &with_list_server_timeout(shell_env),
+            &["mcp", "list"],
+            left(),
+            LIST_OUTPUT_LIMIT,
+        )?;
         if !list.status.success() {
             return Err(unavailable(
                 McpInventoryFailure::Failed,
@@ -79,6 +95,22 @@ impl McpInventoryReader for ClaudeMcpInventory {
         }
         Ok(parse_list(&String::from_utf8_lossy(&list.stdout)))
     }
+}
+
+/// `shell_env` with `MCP_TIMEOUT` at `LIST_SERVER_TIMEOUT_MS`, unless it already sets a shorter one.
+fn with_list_server_timeout(shell_env: &HashMap<String, String>) -> HashMap<String, String> {
+    let mut env = shell_env.clone();
+    let shorter = env
+        .get("MCP_TIMEOUT")
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .is_some_and(|ms| ms > 0 && ms <= LIST_SERVER_TIMEOUT_MS);
+    if !shorter {
+        env.insert(
+            "MCP_TIMEOUT".to_string(),
+            LIST_SERVER_TIMEOUT_MS.to_string(),
+        );
+    }
+    env
 }
 
 fn unavailable(reason: McpInventoryFailure, detail: Option<String>) -> McpInventoryUnavailable {

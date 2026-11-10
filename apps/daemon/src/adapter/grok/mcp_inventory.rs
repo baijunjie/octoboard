@@ -16,7 +16,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 
@@ -49,6 +49,8 @@ impl McpInventoryReader for GrokMcpInventory {
         timeout: Duration,
         cancel: &AtomicBool,
     ) -> Result<Listing, McpInventoryUnavailable> {
+        let deadline = Instant::now() + timeout;
+        let left = || deadline.saturating_duration_since(Instant::now());
         let run = |args: &[&str], timeout| {
             account_cli::query(
                 AgentId::GROK,
@@ -61,7 +63,7 @@ impl McpInventoryReader for GrokMcpInventory {
             )
             .map_err(query_unavailable)
         };
-        let list = run(&["mcp", "list", "--json"], LIST_TIMEOUT.min(timeout))?;
+        let list = run(&["mcp", "list", "--json"], LIST_TIMEOUT.min(left()))?;
         if !list.status.success() {
             return Err(unavailable(
                 McpInventoryFailure::Failed,
@@ -76,7 +78,7 @@ impl McpInventoryReader for GrokMcpInventory {
         })?;
         // `doctor` exits 1 when a server fails, with its report on stdout all the same; a report
         // that cannot be read leaves every state unknown.
-        let doctor = run(&["mcp", "doctor", "--json"], timeout)?;
+        let doctor = run(&["mcp", "doctor", "--json"], left())?;
         let report = serde_json::from_slice::<Report>(&doctor.stdout).ok();
         Ok((vec![], servers_of(configured, report)))
     }
