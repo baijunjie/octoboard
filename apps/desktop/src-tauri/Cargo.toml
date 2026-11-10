@@ -70,10 +70,11 @@ tauri-plugin-single-instance = "2.5"
 # `chrome/windows.rs`, which measures the system frame with `AdjustWindowRectExForDpi`, for `tray/windows.rs`,
 # which follows the tray menu's modal loop through a subclass of tray-icon's window and reads the theme its menu
 # is drawn in (the registry, high contrast and its colours) to colour the menu's single-colour pictures, and for
-# `launch_at_login/windows.rs`, which reads and writes the `Run` key's login entry. The
+# `launch_at_login/windows.rs`, which reads and writes the `Run` key's login entry, and
+# `lifecycle/windows.rs`, which puts the shell before its daemon in the system's shutdown order. The
 # version the lockfile already resolves for other dependencies.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Registry", "Win32_UI_Accessibility", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_Accessibility", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 # For the request filter `page_isolation/windows.rs` puts on the window's WebView2 and the browser accelerator
 # keys `chrome/windows.rs` turns off on it, and `windows` for the string and interface types their calls take.
 # Pinned to the exact versions `tauri` and `wry` already resolve, so promoting them to direct dependencies does
