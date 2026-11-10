@@ -12,7 +12,7 @@ import { ResizeSeparator } from "../components/panel/ResizeSeparator";
  * +1 (right) or -1 (left) for the direction in force. `offset` is how far the pane's own edge is
  * from the window's: the sidebar starts where the left rail ends, the aside is flush with
  * the window. The docked sidebar's handle sits on the physical right of its seam, clear of either
- * scroller's right-hand scrollbar. The docked aside's handle sits inside the cards' edge.
+ * scroller's right-hand scrollbar. The docked aside's handle shares the terminal gutter outside the cards' edge.
  * Floating handles sit in their gap. */
 const SIDES = {
   sidebar: {
@@ -29,14 +29,14 @@ const SIDES = {
     edge: "insetInlineEnd",
     offset: "0px",
     grow: -1,
-    centre: "calc(var(--panel-grip-gap) + 3px)",
+    centre: "calc(var(--panel-grip-gap) - 7px)",
     appearance: "grip",
-    layout: "w-1.5",
+    layout: "w-3.5",
   },
 } as const;
 
 /** The width of the hit area of each side's handle, in px, `layout`'s `w-*`. */
-const HIT_WIDTH = { sidebar: 6, aside: 6 } as const;
+const HIT_WIDTH = { sidebar: 6, aside: 14 } as const;
 
 /**
  * The drag handle on a docked pane's inner edge (the sidebar's end, the aside's start): a
@@ -81,6 +81,8 @@ export function PaneResizeHandle({
       pane={side}
       region={region ?? side}
       appearance={appearance}
+      // Align the outer grip with the column grip, 3px from the card, without moving either target.
+      gripInlineOffset={side === "aside" ? floating ? -1 : 2 : undefined}
       tooltip={appearance === "grip" ? t("pane.resize") : undefined}
       tooltipPlacement={side === "sidebar" ? "start" : "end"}
       // Docked handles follow the pane's logical inner edge; floating handles straddle its gap.

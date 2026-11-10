@@ -26,7 +26,7 @@ vi.mock("../hint/AnchoredTooltip", async (importOriginal) => {
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function mount(orientation: "vertical" | "horizontal", grow: 1 | -1 = 1, direction: "ltr" | "rtl" = "ltr", extra: { appearance?: "grip"; tooltip?: string; tooltipPlacement?: "start" | "end" } = {}) {
+function mount(orientation: "vertical" | "horizontal", grow: 1 | -1 = 1, direction: "ltr" | "rtl" = "ltr", extra: { appearance?: "grip"; gripInlineOffset?: number; tooltip?: string; tooltipPlacement?: "start" | "end" } = {}) {
   const onChange = vi.fn();
   const onCommit = vi.fn();
   const onReset = vi.fn();
@@ -147,9 +147,31 @@ it.each([
   expect(grip.className).not.toContain("bg-(--grip-hover)");
 });
 
+it.each(["ltr", "rtl"] as const)("%s: offsets only the visible grip along the reading direction, leaving the pointer target and drag delta unchanged", (direction) => {
+  const { separator, pointer, onChange, onCommit } = mount("vertical", 1, direction, { appearance: "grip", gripInlineOffset: 3 });
+  const grip = separator.firstElementChild as HTMLElement;
+  expect(grip.style.position).toBe("relative");
+  expect(grip.style.insetInlineStart).toBe("3px");
+  expect(separator.style.position).toBe("");
+  expect(separator.style.insetInlineStart).toBe("");
+  expect(separator.style.insetInlineEnd).toBe("");
+  pointer("pointerdown", { button: 0, pointerId: 1, clientX: 10 });
+  pointer("pointermove", { pointerId: 1, clientX: 50 });
+  pointer("lostpointercapture", { pointerId: 1 });
+  expect(onChange).toHaveBeenCalledExactlyOnceWith(direction === "ltr" ? 240 : 160, { commit: false });
+  expect(onCommit).toHaveBeenCalledOnce();
+});
+
+it("leaves the grip centred when no offset is requested", () => {
+  const { separator } = mount("vertical", 1, "ltr", { appearance: "grip" });
+  const grip = separator.firstElementChild as HTMLElement;
+  expect(grip.style.position).toBe("");
+  expect(grip.style.insetInlineStart).toBe("");
+});
+
 it("shows its tooltip once the mouse has rested on the handle, without naming the separator a second time", () => {
   fakeTimers();
-  const { separator } = mount("vertical", -1, "ltr", { appearance: "grip", tooltip: "Resize panel" });
+  const { separator } = mount("vertical", -1, "ltr", { appearance: "grip", gripInlineOffset: 3, tooltip: "Resize panel" });
   expect(separator.getAttribute("aria-label")).toBe("Resize");
   expect(separator.hasAttribute("aria-describedby")).toBe(false);
   enter(separator);

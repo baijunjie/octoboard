@@ -68,12 +68,13 @@ edge:
 - the **docked sidebar's** immediately to the physical right of its inner seam in either reading direction, clear of
   both scrollbars, drawn on hover and keyboard focus as a line along the whole edge;
 - the **floating sidebar's** in the 8 px gap outside its inner edge, drawn as the same grip as the right pane's;
-- the **right pane's** just inside the cards' inner edge while docked, and in the 8 px gap beside the cards while
-  floating, drawn as a **grip**: a short rounded bar in the middle of the handle's height, light grey while the pointer
-  or keyboard focus is on the handle, and strong only while it is pressed or dragged. While a mouse pointer rests on
-  it, a tooltip saying "Resize" opens beside the grip, toward the pane. It is named "Resize panel area". The floating
-  sidebar's grip has the same tooltip, facing into
-  the sidebar; it mirrors with the layout under a right-to-left language. Both vertical grips are 4×40 px.
+- the **right pane's** drawn as a **grip**, a short rounded bar in the middle of the handle's height. Its nearest
+  edge stays 3 px outside the cards' inner edge, docked and floating alike. While docked it shares the terminal's
+  existing gutter; while floating it sits in the 8 px gap beside the cards. It is light grey while the pointer or
+  keyboard focus is on the handle, and strong only while it is pressed or dragged. While a mouse pointer rests on it,
+  a tooltip saying "Resize" opens beside the grip, toward the pane. It is named "Resize panel area". The floating
+  sidebar's grip has the same tooltip, facing into the sidebar; it mirrors with the layout under a right-to-left
+  language. Both vertical grips are 4×40 px.
 
 The handles work the same way:
 
@@ -97,10 +98,10 @@ docked column is easing and at 768 px and below. The floating sidebar uses the s
 The right pane's handle is available while docked and while its whole group floats, including when it floats
 automatically. It remains reachable at the floating group's inner edge and changes the group's total width. It is
 absent for a mobile panel and a column folded away under a maximized panel (see "Maximizing a panel" in
-`docs/product/right-pane-panels.md`). Its pointer target is 6 px wide just
-inside the cards' inner edge while docked, clear of the terminal's scrollbar, and 24 px wide while floating, centred
-on the 8 px gap. Resizing a floating sidebar or right group keeps it revealed throughout the drag and does
-not resize the agent terminal.
+`docs/product/right-pane-panels.md`). Its pointer target is 14 px wide while docked, sharing the terminal's existing
+gutter directly outside the cards' inner edge without adding spacing. While floating, its pointer target is 24 px
+wide, centred on the 8 px gap outside the cards' inner edge. Resizing a floating sidebar or right group keeps it
+revealed throughout the drag and does not resize the agent terminal.
 
 **A floating right pane can widen to the sidebar's content-side edge**, keeping the cards' usual insets. Its maximum
 total width is the window's width less the **48 px rail** and the width of the docked sidebar while shown. With the
@@ -176,8 +177,8 @@ above).
   sidebar and the right pane" above), with a shadow and no dimming behind it. It overlays the terminal, so **the
   terminal is not resized** and the agent is sent no size change. - The **sidebar's card** keeps an 8 px gap from the
   rail, from the top bar and from the window's bottom (or the connection banner), never drawn over the rail. - The
-  **right pane's card** keeps the gaps it keeps docked: 8 px from the top bar, from the window's end edge and from the
-  window's bottom (or the connection banner), and 8 px on the terminal's side. - A card's own headers are 8 px shorter
+  **right pane's card** keeps 8 px from the top bar, from the window's end edge, from the window's bottom (or the
+  connection banner), and on the terminal's side. - A card's own headers are 8 px shorter
   than the docked sidebar's — the 8 px gap, the card's edge taking no space — so the line under a header stays level
   across the panel (see "The window chrome and the content panel" in `docs/product/window-layout.md`).
 - **How it goes away**: 200 ms after the pointer has left it, the card fades out while sinking back by 4% of its height

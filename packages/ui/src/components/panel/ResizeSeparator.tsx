@@ -63,6 +63,7 @@ export function ResizeSeparator({
   pane,
   region,
   appearance = "line",
+  gripInlineOffset,
   tooltip,
   tooltipPlacement = "end",
 }: {
@@ -86,6 +87,8 @@ export function ResizeSeparator({
   /** What it draws on hover, focus and drag: a `line` along the whole edge, or a `grip`, a short
    * rounded bar centred on the edge in the gap the handle sits in. */
   appearance?: "line" | "grip";
+  /** Moves the visible grip along the reading direction without moving its pointer target. */
+  gripInlineOffset?: number;
   /** What a tooltip on a grip says while a mouse pointer is on the handle, placed against the grip
    * itself rather than the handle's long box: beside it, toward the end by default, for a vertical grip, above
    * a horizontal one. It is no second name: the tooltip is not linked to
@@ -195,7 +198,7 @@ export function ResizeSeparator({
       onKeyDown={onKeyDown}
     >
       {appearance === "grip" ? (
-        <div ref={gripRef} className={`rounded-full transition-opacity motion-reduce:transition-none ${axis.grip} ${dragging ? "bg-(--grip-active) opacity-100" : "bg-(--grip-hover) opacity-0 group-hover:opacity-100 group-ui-keyboard-focus:opacity-100"}`} />
+        <div ref={gripRef} style={gripInlineOffset === undefined ? undefined : { position: "relative", insetInlineStart: gripInlineOffset }} className={`rounded-full transition-opacity motion-reduce:transition-none ${axis.grip} ${dragging ? "bg-(--grip-active) opacity-100" : "bg-(--grip-hover) opacity-0 group-hover:opacity-100 group-ui-keyboard-focus:opacity-100"}`} />
       ) : (
         <div className={`transition-colors motion-reduce:transition-none group-hover:bg-accent group-ui-keyboard-focus:bg-accent ${axis.line} ${dragging ? "bg-accent" : ""}`} />
       )}

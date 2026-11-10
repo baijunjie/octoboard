@@ -47,10 +47,10 @@
   --pane-header-height: 48px;
   --pane-header-height-floating: calc(var(--pane-header-height) - var(--peek-gap));
 
-  /* The gap on the terminal side of the right pane (`layout/AsidePane.tsx`), which holds the width
-     grip: the 4px grip, centred in it, has 2px clear on either side. The other
-     sides of the cards keep `--peek-gap`. `PaneResizeHandle` centres the width grip in this gap by
-     calculation, so a change here moves it. */
+  /* The inset on the terminal side of the right pane (`layout/AsidePane.tsx`). While floating,
+     it holds the 4px width grip, drawn 3px from the card. While docked, a negative
+     margin offsets this inset, and the grip shares the terminal's existing 14px gutter instead.
+     The other sides of the cards keep `--peek-gap`. */
   --panel-grip-gap: 8px;
 
   /* The gap between two stacked cards of the right pane (`panels/PanelStack.tsx`), which holds the

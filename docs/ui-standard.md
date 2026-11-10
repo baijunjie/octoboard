@@ -2393,10 +2393,11 @@ shortcut, hidden from assistive technology, with its tooltip anchored beside it 
 keyboard reaches the same action as Close terminal in the panel's tab-row menu and the tab's context menu.
 
 Floating pane width handles and the separators between stacked panel cards take a 24-pixel pointer target centred
-on their gap, reaching into the cards' edges where the gap is narrower. Docked pane width handles are 6px wide to
-leave adjacent scrollbars and controls reachable. The sidebar's sits immediately to the physical right of its seam,
-clear of either scroller's right-hand scrollbar. The right pane's sits inside the cards' inner edge, keeping the
-terminal's 14px scrollbar area clear.
+on their gap, reaching into the cards' edges where the gap is narrower. The docked sidebar's width handle is 6px
+wide and sits immediately to the physical right of its seam, clear of either scroller's right-hand scrollbar. The
+docked right pane's width handle is 14px wide, immediately outside the cards' inner edge. It shares the terminal's
+existing gutter without adding spacing. The right pane's 4px grip stays 3px outside the card edge in both docked
+and floating layouts, independently of the pointer target's width.
 
 Where the drawn size has to stay under 24, extend the target rather than the drawing: an absolutely positioned `::after`
 with a negative inset enlarges what the pointer hits and changes nothing visible. The pressable part of a checkbox whose

@@ -44,8 +44,8 @@ function motionOf(shown: boolean, preparing: boolean): "shown" | "away" | "prepa
  * nothing in that gap but what is behind it, the agent terminal's background, so the cards read as
  * lying on the content.
  *
- * While docked its start margin offsets the grip padding, so that gap shares the terminal's
- * outer inset instead of widening it. It is a row sibling of the terminal that takes its room from it
+ * While docked its start margin offsets the grip padding, so the width handle shares the
+ * terminal's gutter without adding spacing. It is a row sibling of the terminal that takes its room from it
  * and shrinks to the row's available room down to `minWidth` (320px by default), and docking (and
  * going, when its last panel closes) is at once. In a window too narrow for that (`overlay`, a phone)
  * it floats over the terminal's area instead, holding one panel at a time
