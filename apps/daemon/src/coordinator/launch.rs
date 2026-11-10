@@ -517,6 +517,12 @@ pub(super) async fn start_process(
     // the stop has stopped waiting, as a launch claimed before the barrier and started after the
     // wait would start a terminal the stop never lists.
     let _tracked = state.track_change_unless_passed()?;
+    // Stamped now, not when the terminal is built after the shell snapshot and the spawn, so a
+    // display a client reports in the meantime is the newer of the two.
+    let display = crate::terminal::display::DisplaySeed::new(
+        state.display_fallback.clone(),
+        terminal_appearance,
+    );
     // Refresh the instruction file on every console launch, resume and account switch. A missing
     // directory is left to the launch, whose refusal names it, rather than failing here on the write.
     if session.kind == SessionKind::Console && cwd.is_dir() {
@@ -570,6 +576,7 @@ pub(super) async fn start_process(
         model,
         effort,
         terminal_appearance,
+        display,
         preresolved_shell_env: None,
         daemon_port: state.port,
         daemon_key: state.key.clone(),

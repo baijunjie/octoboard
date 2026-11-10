@@ -7,6 +7,7 @@ use tokio::sync::broadcast;
 use super::{close, close_all, close_all_ending, create, rename, shell_environment, ShellProcess};
 use crate::protocol::{error_code, Event, Request, ShellTerminal, ShellTerminalState};
 use crate::state::AppState;
+use crate::terminal::display::{DisplayFacts, DisplaySeed};
 use crate::terminal::pty::PtyCore;
 use crate::test_support::code_of;
 use crate::test_support::{
@@ -206,6 +207,27 @@ async fn a_terminal_runs_a_shell_in_its_project_that_takes_input_and_ends_when_c
     ));
     let again = close(&state, &created.id).await.unwrap_err();
     assert_eq!(code_of(&again), error_code::UNKNOWN_SHELL_TERMINAL);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_display_a_client_reports_on_a_shell_becomes_the_daemons_fallback_for_every_terminal() {
+    let (state, _dir, _project) = with_project("shell-display-fallback");
+    let before = DisplaySeed::new(state.display_fallback.clone(), None).fallback();
+    assert!(before.dark(), "no report yet: the dark theme");
+    let created = create(&state, "p1".to_string(), None, String::new())
+        .await
+        .unwrap();
+    let shell = process(&state, &created);
+    let attached = shell.attach(0);
+    let client = attached.answering.as_ref().expect("a live client").client;
+    let light = DisplayFacts::reported("#383a42", "#fafafa", "#808080", Some((9, 20))).unwrap();
+    shell.report_display(client, light);
+
+    let after = DisplaySeed::new(state.display_fallback.clone(), None).fallback();
+    assert!(!after.dark(), "the reported colours are the daemon's last");
+    assert_eq!(after.background, light.background);
+    assert_eq!(after.cell, DisplayFacts::default().cell, "never the cell");
+    close(&state, &created.id).await.unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]

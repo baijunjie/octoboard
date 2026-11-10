@@ -1750,7 +1750,7 @@
               "description": "The agent's own id of a conversation started outside Octoboard, to continue in this\nsession. Trimmed, blank meaning absent. Only a project session takes one, never\ntogether with `bound_to`; it must be a UUID (kept lowercase and hyphenated), found in\nthe session's account directory and recorded by no session already. Each refusal has a\ncode of its own (see `apps/daemon/PROTOCOL.md`'s \"Coded messages\" section) and leaves\nno session behind."
             },
             "terminal_appearance": {
-              "description": "The appearance the asking client's terminal is showing. Absent (a session an agent\nopens, or a client that does not send it) leaves Grok following the operating system.\nNot recorded on the session.",
+              "description": "The appearance the asking client's terminal is showing. It sets Grok's theme and the\ncolours the session's terminal answers its program's queries with until a client\nreports. Absent (a session an agent opens, or a client that does not send it) leaves\nGrok following the operating system and the terminal on what the daemon last saw. Not\nrecorded on the session.",
               "$ref": "#/$defs/TerminalAppearance"
             },
             "type": {
@@ -3623,7 +3623,7 @@
         "light",
         "dark"
       ],
-      "description": "The appearance a client has resolved for its window, sent with a launch so Grok's theme matches\nthe terminal that will show it. It is not stored: a later launch sends its own."
+      "description": "The appearance a client has resolved for its window, sent with a launch so Grok's theme matches\nthe terminal that will show it and so that terminal answers its program's colour queries with\nit until a client reports. It is not stored: a later launch sends its own."
     }
   }
 }

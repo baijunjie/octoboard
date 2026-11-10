@@ -619,6 +619,7 @@ fn stand_in_of(
         resolves_approvals_itself: false,
         carried_trust,
         before_scratch_removal: None,
+        display: Default::default(),
     })))
 }
 

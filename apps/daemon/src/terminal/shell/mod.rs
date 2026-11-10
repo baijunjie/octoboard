@@ -33,6 +33,7 @@ use crate::protocol::{
 };
 use crate::state::{AppState, ExactScreen};
 use crate::terminal::backend::{self, Launching, Started};
+use crate::terminal::display::DisplaySeed;
 use crate::terminal::pty::{self, NewPty, PtyCore, PtyOwner};
 use crate::time::now_millis;
 
@@ -247,6 +248,7 @@ pub async fn create(
     let id = uuid::Uuid::new_v4().to_string();
     let created_at = now_millis();
     let tools = state.host_tools.get();
+    let display = DisplaySeed::new(state.display_fallback.clone(), None);
     let process = {
         let (id, cwd) = (id.clone(), cwd.clone());
         let (project, worktree) = (project.clone(), worktree.clone());
@@ -275,6 +277,7 @@ pub async fn create(
                 &cwd,
                 &(tools.shell)(),
                 shell_environment(snapshot, inherited),
+                display,
             )
         })
         .await??
@@ -334,6 +337,7 @@ fn launch(
     cwd: &Path,
     shell: &ShellCommand,
     env: HashMap<String, String>,
+    display: DisplaySeed,
 ) -> Result<Arc<ShellProcess>> {
     if !cwd.is_dir() {
         // The terminal backend may fall back to the home directory for a cwd that does not exist.
@@ -373,7 +377,14 @@ fn launch(
         companion: false,
     })
     .with_context(|| format!("starting the shell `{}`", shell.program.display()))?;
-    Ok(run(&id, spawned, containment, shell_name, Seed::Nothing))
+    Ok(run(
+        &id,
+        spawned,
+        containment,
+        shell_name,
+        Seed::Nothing,
+        display,
+    ))
 }
 
 /// Puts a shell terminal the holders kept running back among the terminals: `meta` is what its
@@ -427,7 +438,14 @@ pub fn restore(
         }
         None => Seed::Tail(tail),
     };
-    let process = run(&meta.id, Started::Held(held), containment, shell_name, seed);
+    let process = run(
+        &meta.id,
+        Started::Held(held),
+        containment,
+        shell_name,
+        seed,
+        DisplaySeed::new(state.display_fallback.clone(), None),
+    );
     let record = ShellTerminal {
         id: meta.id.clone(),
         project_id: meta.project_id.clone(),
@@ -471,6 +489,7 @@ fn run(
     containment: Containment,
     shell_name: String,
     seed: Seed,
+    display: DisplaySeed,
 ) -> Arc<ShellProcess> {
     let pty = PtyCore::new(NewPty {
         label: id.to_string(),
@@ -478,6 +497,7 @@ fn run(
         scratch_dir: None,
         kill_session_leftovers: false,
         before_scratch_removal: None,
+        display,
     });
     let host_renders = term::facts().host_renders;
     if host_renders {

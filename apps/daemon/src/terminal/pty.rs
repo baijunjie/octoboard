@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use crate::platform::proc::{crash, Polite, ProcessId, Sent};
 use crate::platform::term::{self, Foreground, Input, PartialWrite, Size};
 use crate::terminal::backend::{Backend, Started};
-use crate::terminal::display::DisplayFacts;
+use crate::terminal::display::{DisplayFacts, DisplaySeed};
 use crate::terminal::fan::{Attached, Delivery, Fan};
 use crate::terminal::program_status::ReportedState;
 use crate::terminal::saved_screen::{ReplayRule, SavedScreen};
@@ -159,6 +159,9 @@ pub struct NewPty {
     /// Runs after the process is reaped and before its scratch directory is removed. A stop of
     /// the process waits for it, so it must not stop the process itself.
     pub before_scratch_removal: Option<Box<dyn FnOnce() + Send>>,
+    /// What the terminal answers its program's colour queries with while no client has reported a
+    /// display, including once every reporting client has left.
+    pub display: DisplaySeed,
 }
 
 /// Marks the exit complete when dropped, so a hook that unwinds still lets observers see the exit.
@@ -197,7 +200,7 @@ impl PtyCore {
             exit_complete: AtomicBool::new(false),
             exit_cleanup: Mutex::new(()),
             crash_cleanup: Mutex::new(None),
-            fan: Fan::new(size.rows, size.cols, host_answers_queries),
+            fan: Fan::with_display(size.rows, size.cols, host_answers_queries, new.display),
             screen_inexact: AtomicBool::new(false),
             resize_lock: Mutex::new(()),
             client_changes_held: AtomicBool::new(false),
@@ -1306,6 +1309,7 @@ mod tests {
                 scratch_dir: None,
                 kill_session_leftovers: false,
                 before_scratch_removal: None,
+                display: Default::default(),
             },
             false,
         );
@@ -1348,6 +1352,7 @@ mod tests {
                 scratch_dir: None,
                 kill_session_leftovers: false,
                 before_scratch_removal: None,
+                display: Default::default(),
             },
             false,
         );
@@ -1394,6 +1399,7 @@ mod tests {
                     scratch_dir: None,
                     kill_session_leftovers: false,
                     before_scratch_removal: None,
+                    display: Default::default(),
                 },
                 false,
             );
@@ -1476,6 +1482,7 @@ mod tests {
             scratch_dir: None,
             kill_session_leftovers,
             before_scratch_removal: None,
+            display: Default::default(),
         });
         let deadline = Instant::now() + crate::test_support::PATIENCE;
         let helpers = loop {
@@ -1601,6 +1608,7 @@ mod tests {
                 let text = std::fs::read_to_string(dir_for_hook.join("config.toml")).expect("file");
                 std::fs::write(&marker_for_hook, text).expect("marker");
             })),
+            display: Default::default(),
         });
         let deadline = Instant::now() + crate::test_support::PATIENCE;
         while !core.poll_exit() {
@@ -1636,6 +1644,7 @@ mod tests {
                     .expect("hook released");
                 std::fs::write(marker_for_hook, "saved").expect("writeback");
             })),
+            display: Default::default(),
         }));
         let reaping = core.clone();
         let observer = std::thread::spawn(move || {
@@ -1729,6 +1738,7 @@ mod tests {
                 scratch_dir: None,
                 kill_session_leftovers: false,
                 before_scratch_removal: None,
+                display: Default::default(),
             },
             false,
         );

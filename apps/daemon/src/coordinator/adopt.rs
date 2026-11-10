@@ -56,6 +56,7 @@ use crate::protocol::{AgentId, SessionStatus};
 use crate::session::{self, dialogs, trust, LiveSession, NewSession};
 use crate::state::{AppState, ExactScreen};
 use crate::terminal::backend::Started;
+use crate::terminal::display::DisplaySeed;
 use crate::terminal::pty;
 use crate::terminal::server_host::{FoundServer, HeldServer, ServerEndpoint};
 use crate::terminal::shell::{self, ShellMeta};
@@ -419,6 +420,7 @@ fn adopt_session(
         // The transport is stopped once the process is reaped; a server its holder runs is left to
         // the holder, which ends it with the terminal.
         before_scratch_removal: crate::session::term::before_scratch_removal(transport, after_exit),
+        display: DisplaySeed::new(state.display_fallback.clone(), None),
     }));
     live.enable_native_stash(meta.native_stash);
     if let Some(prompt) = meta.launch_prompt {

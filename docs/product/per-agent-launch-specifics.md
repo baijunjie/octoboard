@@ -405,12 +405,12 @@ paint dark bands across a terminal in the light appearance, so every Grok Build 
 | asked for from a window in the dark appearance | `groknight` |
 | with no window behind it | `auto`, which has Grok follow the operating system's appearance |
 
-A window asks for a launch when it opens a session (with the new-session dialog or with defaults), resumes one, switches
-one to another account or hands one off, and it sends the appearance its Light, Dark or System choice has resolved to at
-that moment (see "Light, dark and follow the system" in `docs/product/appearance.md`). No window is behind a launch an
-agent asks for through Octoboard's tools (opening or reopening a session, handing one off, switching one to another
-account), a session opened, reopened or resumed by an approved session request, or an archived owner relaunched on the
-way while a session is resumed.
+A window asks for a launch when it opens a session (with the new-session dialog or with defaults), resumes one, changes
+one's model, switches one to another account or hands one off, and it sends the appearance its Light, Dark or System
+choice has resolved to at that moment (see "Light, dark and follow the system" in `docs/product/appearance.md`). No
+window is behind a launch an agent asks for through Octoboard's tools (opening or reopening a session, handing one off,
+switching one to another account, changing one's model), a session opened, reopened or resumed by an approved session
+request, or an archived owner relaunched on the way while a session is resumed.
 
 The appearance is taken at each launch and not kept with the session: a running Grok session keeps the theme it was
 launched with when the window's appearance changes later, and its next launch picks the theme afresh. `GROK_THEME` takes
@@ -418,7 +418,8 @@ precedence over the theme set in the Grok configuration file at startup, and doe
 explicit `/theme` saves the chosen theme in the session copy; when the source `config.toml` is linked, it is carried
 into the linked file on exit under the rules in "The per-session Grok home" above, even when it is the theme the
 appearance picked. The next launch applies the terminal's appearance again. Claude Code and Codex are told nothing of
-the appearance.
+the appearance at launch; in every agent's session, it also counts towards the colours the session's terminal answers a
+program's colour queries with (see "The colours and sizes a program reads" in `docs/product/terminal-queries.md`).
 
 ### A Grok Build config directory
 

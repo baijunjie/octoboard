@@ -22,7 +22,8 @@ use super::settings::KeepAwakeWhen;
 use crate::providers::SettingValue;
 
 /// The appearance a client has resolved for its window, sent with a launch so Grok's theme matches
-/// the terminal that will show it. It is not stored: a later launch sends its own.
+/// the terminal that will show it and so that terminal answers its program's colour queries with
+/// it until a client reports. It is not stored: a later launch sends its own.
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -465,9 +466,11 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         resume_agent_session_id: Option<String>,
-        /// The appearance the asking client's terminal is showing. Absent (a session an agent
-        /// opens, or a client that does not send it) leaves Grok following the operating system.
-        /// Not recorded on the session.
+        /// The appearance the asking client's terminal is showing. It sets Grok's theme and the
+        /// colours the session's terminal answers its program's queries with until a client
+        /// reports. Absent (a session an agent opens, or a client that does not send it) leaves
+        /// Grok following the operating system and the terminal on what the daemon last saw. Not
+        /// recorded on the session.
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         terminal_appearance: Option<TerminalAppearance>,

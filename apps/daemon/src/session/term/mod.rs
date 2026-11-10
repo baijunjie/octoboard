@@ -63,6 +63,9 @@ pub struct LaunchRequest {
     pub effort: Option<String>,
     /// See `LaunchSpec::terminal_appearance`.
     pub terminal_appearance: Option<TerminalAppearance>,
+    /// What the launched terminal answers its program's colour queries with until a client reports
+    /// a display, stamped as the launch begins, before its preparation (`crate::terminal::display`).
+    pub display: crate::terminal::display::DisplaySeed,
     /// A shell environment already snapshotted for this launch, used as it is instead of taking
     /// another. Only a caller that has already resolved something from one passes it — a switch
     /// to the default account, which resolved that account's directory from it to copy the
@@ -102,6 +105,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         model,
         effort,
         terminal_appearance,
+        display,
         preresolved_shell_env,
         daemon_port,
         daemon_key,
@@ -322,6 +326,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         resolves_approvals_itself: plan.resolves_approvals_itself,
         carried_trust: plan.carried_trust,
         before_scratch_removal: before_scratch_removal(transport, plan.after_exit),
+        display,
     }));
     live.enable_native_stash(native_stash);
     if let Some(prompt) = launch_prompt {

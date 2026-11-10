@@ -374,6 +374,10 @@ pub struct AppState {
     /// The processes each agent launch started outside its terminal session, stopped when the
     /// launch ends (`crate::processes::ledger`).
     pub process_ledger: Arc<crate::processes::ledger::ProcessLedger>,
+    /// The colours last reported by any client, which a terminal answers its program's colour
+    /// queries with when no client of its own has reported and its launch appearance is not newer
+    /// (`crate::terminal::display`). Held in memory only.
+    pub display_fallback: Arc<crate::terminal::display::DisplayFallback>,
 }
 
 impl AppState {
@@ -484,6 +488,7 @@ impl AppState {
             stalled_directory_passes: Default::default(),
             unresolved_removals: Default::default(),
             process_ledger,
+            display_fallback: Default::default(),
         }
     }
 

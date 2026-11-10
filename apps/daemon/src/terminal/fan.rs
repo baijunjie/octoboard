@@ -9,7 +9,7 @@ use bytes::Bytes;
 use tokio::sync::Notify;
 
 use crate::terminal::activity::Activity;
-use crate::terminal::display::DisplayFacts;
+use crate::terminal::display::{DisplayFacts, DisplaySeed};
 use crate::terminal::program_status::ReportedState;
 use crate::terminal::queries::Query;
 use crate::terminal::query_log::{self, QueryLog};
@@ -112,6 +112,8 @@ struct State {
     /// The display each attached client last reported. The most recently active one's is what
     /// the program's colour and size queries are answered with.
     displays: HashMap<u64, DisplayFacts>,
+    /// What the queries are answered with while no attached client has reported a display.
+    display_seed: DisplaySeed,
     /// Where the device attributes and cursor position queries are logged; see
     /// [`Fan::log_queries`].
     queries: Option<QueryLog>,
@@ -160,8 +162,20 @@ impl Fan {
     /// queries; the device attributes, status and cursor reports pass through to the clients
     /// where `host_answers_queries` (`TermFacts::host_answers_queries`).
     pub fn new(rows: u16, cols: u16, host_answers_queries: bool) -> Self {
+        Self::with_display(rows, cols, host_answers_queries, DisplaySeed::default())
+    }
+
+    /// As [`Self::new`], answering with the display `display_seed` gives while no client has
+    /// reported one.
+    pub fn with_display(
+        rows: u16,
+        cols: u16,
+        host_answers_queries: bool,
+        display_seed: DisplaySeed,
+    ) -> Self {
         let mut terminal = TerminalSnapshot::new(rows, cols);
         terminal.answer_queries(host_answers_queries);
+        terminal.set_display(display_seed.fallback());
         Self(Mutex::new(State {
             ring: RingBuffer::new(RING_CAPACITY),
             terminal,
@@ -175,6 +189,7 @@ impl Fan {
             sizes: HashMap::new(),
             size: (rows, cols),
             displays: HashMap::new(),
+            display_seed,
             queries: None,
             program_status: Vec::new(),
             replay: None,
@@ -386,6 +401,7 @@ impl Fan {
         if fan.closed || !fan.subscribers.iter().any(|sub| sub.id == client) {
             return Vec::new();
         }
+        fan.display_seed.record(display);
         fan.displays.insert(client, display);
         fan.apply_display(Instant::now())
     }
@@ -728,7 +744,7 @@ impl State {
     }
 
     /// Has the parsed terminal answer with the display of the most recently active client at
-    /// `now` that has reported one, or the default display while none has. Returns what to tell
+    /// `now` that has reported one, or the terminal's seed while none has. Returns what to tell
     /// the program; see [`TerminalSnapshot::set_display`].
     fn apply_display(&mut self, now: Instant) -> Vec<u8> {
         let displays = &self.displays;
@@ -736,7 +752,7 @@ impl State {
             .activity
             .most_recent_of(|client| displays.contains_key(&client), now)
             .and_then(|client| displays.get(&client).copied())
-            .unwrap_or_default();
+            .unwrap_or_else(|| self.display_seed.fallback());
         self.terminal.set_display(display)
     }
 
@@ -805,12 +821,14 @@ mod tests {
     use std::time::Instant;
 
     use super::{Attached, Delivery, Fan, Outgoing, BACKLOG_CAP, CREDIT_WINDOW, RING_CAPACITY};
+    use crate::protocol::TerminalAppearance;
     use crate::terminal::activity::ATTACH_CLAIM;
-    use crate::terminal::display::DisplayFacts;
+    use crate::terminal::display::{DisplayFacts, DisplayFallback, DisplaySeed};
     use crate::terminal::saved_screen::ReplayRule;
     use crate::terminal::snapshot::assert_same_state;
     use crate::terminal::snapshot::TerminalSnapshot;
     use crate::terminal::title::TitleChange;
+    use crate::test_support::next_millisecond;
 
     fn push(fan: &Fan, data: &[u8]) -> Vec<u8> {
         fan.push(data, |_, _| {})
@@ -880,16 +898,56 @@ mod tests {
         DisplayFacts::reported("#383a42", "#fafafa", "#101010", Some((9, 20))).expect("a display")
     }
 
+    /// The answers to the program's colour queries and `CSI ? 996 n`, as the fan gives them.
+    struct Answers {
+        foreground: Vec<u8>,
+        background: Vec<u8>,
+        cursor: Vec<u8>,
+        scheme: Vec<u8>,
+    }
+
+    fn answers(fan: &Fan) -> Answers {
+        Answers {
+            foreground: push(fan, b"\x1b]10;?\x07"),
+            background: push(fan, b"\x1b]11;?\x07"),
+            cursor: push(fan, b"\x1b]12;?\x07"),
+            scheme: push(fan, b"\x1b[?996n"),
+        }
+    }
+
+    const LIGHT_BACKGROUND: &[u8] = b"\x1b]11;rgb:fafa/fafa/fafa\x07";
+    const DARK_BACKGROUND: &[u8] = b"\x1b]11;rgb:1e1e/1f1f/2222\x07";
+    const CURSOR: &[u8] = b"\x1b]12;rgb:8080/8080/8080\x07";
+    /// The answer to the query for the size of a cell: the default cell, 8 by 17.
+    const DEFAULT_CELL: &[u8] = b"\x1b[6;17;8t";
+
+    fn background(fan: &Fan) -> Vec<u8> {
+        push(fan, b"\x1b]11;?\x07")
+    }
+
+    /// A terminal launched for `appearance` (none: with no appearance), sharing `shared`.
+    fn launched(shared: &Arc<DisplayFallback>, appearance: Option<TerminalAppearance>) -> Fan {
+        Fan::with_display(24, 80, false, DisplaySeed::new(shared.clone(), appearance))
+    }
+
+    /// Attaches a client to `fan`, which reports `display`.
+    fn client_reporting(fan: &Fan, display: DisplayFacts) -> u64 {
+        let client = client_of(&fan.attach(0));
+        let _ = fan.report_display(client, display);
+        client
+    }
+
+    fn dark() -> DisplayFacts {
+        DisplayFacts::reported("#e4e4e6", "#1e1f22", "#808080", Some((11, 23))).expect("a display")
+    }
+
     #[test]
     fn the_daemon_answers_with_nobody_attached() {
         let fan = Fan::new(24, 80, false);
         assert_eq!(push(&fan, b"\x1b[c"), b"\x1b[?6c");
         assert_eq!(push(&fan, b"ab\x1b[6n"), b"\x1b[1;3R");
         assert_eq!(push(&fan, b"\x1b[5n"), b"\x1b[0n");
-        assert_eq!(
-            push(&fan, b"\x1b]11;?\x07"),
-            b"\x1b]11;rgb:1e1e/1f1f/2222\x07"
-        );
+        assert_eq!(push(&fan, b"\x1b]11;?\x07"), DARK_BACKGROUND);
         assert_eq!(
             fan.lock().delivered,
             2,
@@ -948,28 +1006,14 @@ mod tests {
     #[test]
     fn the_most_recently_active_client_with_a_display_decides_the_colours() {
         let fan = Fan::new(24, 80, false);
-        let background = |fan: &Fan| push(fan, b"\x1b]11;?\x07");
         let (first_attached, second_attached) = (fan.attach(0), fan.attach(0));
-        let first = first_attached
-            .answering
-            .as_ref()
-            .expect("a live client")
-            .client;
-        let second = second_attached
-            .answering
-            .as_ref()
-            .expect("a live client")
-            .client;
-        assert_eq!(
-            background(&fan),
-            b"\x1b]11;rgb:1e1e/1f1f/2222\x07",
-            "the default"
-        );
+        let (first, second) = (client_of(&first_attached), client_of(&second_attached));
+        assert_eq!(background(&fan), DARK_BACKGROUND, "the default");
 
         assert!(fan.report_display(first, light()).is_empty());
         assert_eq!(
             background(&fan),
-            b"\x1b]11;rgb:fafa/fafa/fafa\x07",
+            LIGHT_BACKGROUND,
             "the second client is more recent but has reported nothing"
         );
         let dark = DisplayFacts::reported("#ffffff", "#000000", "#ffffff", None).unwrap();
@@ -977,31 +1021,233 @@ mod tests {
         assert_eq!(background(&fan), b"\x1b]11;rgb:0000/0000/0000\x07");
 
         assert!(fan.activate(first, keep_size).is_empty());
-        assert_eq!(background(&fan), b"\x1b]11;rgb:fafa/fafa/fafa\x07");
+        assert_eq!(background(&fan), LIGHT_BACKGROUND);
         assert!(fan.leave(first, keep_size).is_empty());
         assert_eq!(background(&fan), b"\x1b]11;rgb:0000/0000/0000\x07");
         assert!(fan.leave(second, keep_size).is_empty());
-        assert_eq!(background(&fan), b"\x1b]11;rgb:1e1e/1f1f/2222\x07");
+        assert_eq!(
+            background(&fan),
+            b"\x1b]11;rgb:0000/0000/0000\x07",
+            "the display last reported by any client"
+        );
         assert!(
-            fan.report_display(second, dark).is_empty() && background(&fan).ends_with(b"2222\x07"),
+            fan.report_display(second, light()).is_empty()
+                && background(&fan).ends_with(b"0000\x07"),
             "a client that left reports nothing"
         );
+    }
+
+    #[test]
+    fn a_terminal_launched_for_an_appearance_answers_from_that_theme_at_the_first_query() {
+        let light = launched(&Arc::default(), Some(TerminalAppearance::Light));
+        let answered = answers(&light);
+        assert_eq!(answered.foreground, b"\x1b]10;rgb:3838/3a3a/4242\x07");
+        assert_eq!(answered.background, LIGHT_BACKGROUND);
+        assert_eq!(answered.cursor, CURSOR);
+        assert_eq!(answered.scheme, b"\x1b[?997;2n");
+
+        let dark = launched(&Arc::default(), Some(TerminalAppearance::Dark));
+        let answered = answers(&dark);
+        assert_eq!(answered.foreground, b"\x1b]10;rgb:e4e4/e4e4/e6e6\x07");
+        assert_eq!(answered.background, DARK_BACKGROUND);
+        assert_eq!(answered.cursor, CURSOR);
+        assert_eq!(answered.scheme, b"\x1b[?997;1n");
+    }
+
+    #[test]
+    fn a_client_that_attached_without_reporting_leaves_the_launch_appearance_in_force() {
+        let fan = launched(&Arc::default(), Some(TerminalAppearance::Light));
+        let attached = fan.attach(0);
+        assert_eq!(background(&fan), LIGHT_BACKGROUND);
+        assert!(fan.activate(client_of(&attached), keep_size).is_empty());
+        assert_eq!(background(&fan), LIGHT_BACKGROUND);
+        assert_eq!(push(&fan, b"\x1b[?996n"), b"\x1b[?997;2n");
+    }
+
+    #[test]
+    fn a_terminal_with_no_appearance_and_no_report_anywhere_answers_dark() {
+        let fan = launched(&Arc::default(), None);
+        let answered = answers(&fan);
+        assert_eq!(answered.background, DARK_BACKGROUND);
+        assert_eq!(answered.scheme, b"\x1b[?997;1n");
+    }
+
+    #[tokio::test]
+    async fn a_terminal_created_after_a_report_on_another_terminal_answers_that_report() {
+        let shared = Arc::new(DisplayFallback::default());
+        let reporting = launched(&shared, None);
+        client_reporting(&reporting, light());
+        next_millisecond().await;
+
+        let created = launched(&shared, None);
+        let answered = answers(&created);
+        assert_eq!(answered.background, LIGHT_BACKGROUND);
+        assert_eq!(answered.foreground, b"\x1b]10;rgb:3838/3a3a/4242\x07");
+        assert_eq!(
+            answered.cursor, b"\x1b]12;rgb:1010/1010/1010\x07",
+            "the reported cursor colour"
+        );
+        assert_eq!(answered.scheme, b"\x1b[?997;2n");
+        let elsewhere = launched(&Arc::default(), None);
+        assert_eq!(
+            background(&elsewhere),
+            DARK_BACKGROUND,
+            "a report on another daemon's terminals does not reach it"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_terminal_launched_for_an_appearance_after_a_report_answers_its_own_appearance() {
+        let shared = Arc::new(DisplayFallback::default());
+        client_reporting(&launched(&shared, None), dark());
+        next_millisecond().await;
+
+        let light = launched(&shared, Some(TerminalAppearance::Light));
+        assert_eq!(background(&light), LIGHT_BACKGROUND);
+        assert_eq!(push(&light, b"\x1b[?996n"), b"\x1b[?997;2n");
+    }
+
+    #[tokio::test]
+    async fn a_later_report_on_another_terminal_overrides_the_launch_appearance_when_the_display_is_next_worked_out(
+    ) {
+        let shared = Arc::new(DisplayFallback::default());
+        let fan = launched(&shared, Some(TerminalAppearance::Light));
+        assert!(push(&fan, b"\x1b[?2031h").is_empty());
+        let attached = fan.attach(0);
+        assert_eq!(background(&fan), LIGHT_BACKGROUND);
+
+        next_millisecond().await;
+        client_reporting(&launched(&shared, None), dark());
+        assert_eq!(
+            fan.activate(client_of(&attached), keep_size),
+            b"\x1b[?997;1n",
+            "the program is told the scheme is dark now"
+        );
+        assert_eq!(background(&fan), DARK_BACKGROUND);
+        assert_eq!(push(&fan, b"\x1b[?996n"), b"\x1b[?997;1n");
+    }
+
+    #[tokio::test]
+    async fn a_client_that_reported_on_the_terminal_wins_over_the_fallback() {
+        let shared = Arc::new(DisplayFallback::default());
+        let fan = launched(&shared, Some(TerminalAppearance::Dark));
+        let client = client_reporting(&fan, light());
+        assert_eq!(background(&fan), LIGHT_BACKGROUND);
+
+        next_millisecond().await;
+        client_reporting(&launched(&shared, None), dark());
+        assert!(fan.activate(client, keep_size).is_empty());
+        assert_eq!(
+            background(&fan),
+            LIGHT_BACKGROUND,
+            "a later report elsewhere does not override its own client's"
+        );
+        assert!(fan.settle_activity(Instant::now(), keep_size).is_empty());
+        assert_eq!(background(&fan), LIGHT_BACKGROUND);
+    }
+
+    #[tokio::test]
+    async fn a_client_that_reported_wins_over_a_launch_appearance_newer_than_its_report() {
+        let shared = Arc::new(DisplayFallback::default());
+        let fan = launched(&shared, None);
+        client_reporting(&fan, dark());
+        next_millisecond().await;
+        let _newer_launch = launched(&shared, Some(TerminalAppearance::Light));
+        assert_eq!(background(&fan), DARK_BACKGROUND);
+    }
+
+    #[test]
+    fn a_quiet_client_attaching_later_does_not_take_the_decision_from_a_reporting_one() {
+        let fan = launched(&Arc::default(), Some(TerminalAppearance::Dark));
+        client_reporting(&fan, light());
+        let quiet = client_of(&fan.attach(0));
+        assert!(fan.activate(quiet, keep_size).is_empty());
+        assert_eq!(
+            background(&fan),
+            LIGHT_BACKGROUND,
+            "the quiet client has no display to decide with"
+        );
+    }
+
+    #[test]
+    fn when_the_last_client_leaves_the_terminal_goes_back_to_the_fallback_not_to_dark() {
+        let fan = Fan::new(24, 80, false);
+        assert!(push(&fan, b"\x1b[?2031h").is_empty());
+        let client = client_reporting(&fan, light());
+        assert_eq!(background(&fan), LIGHT_BACKGROUND);
+        assert!(
+            fan.leave(client, keep_size).is_empty(),
+            "the daemon's last report is still light, so nothing changed"
+        );
+        assert_eq!(background(&fan), LIGHT_BACKGROUND);
+        assert_eq!(push(&fan, b"\x1b[?996n"), b"\x1b[?997;2n");
+    }
+
+    #[tokio::test]
+    async fn on_the_last_client_leaving_a_report_made_since_on_another_terminal_decides() {
+        let shared = Arc::new(DisplayFallback::default());
+        let fan = launched(&shared, Some(TerminalAppearance::Dark));
+        assert!(push(&fan, b"\x1b[?2031h").is_empty());
+        let client = client_reporting(&fan, dark());
+        next_millisecond().await;
+        client_reporting(&launched(&shared, None), light());
+        assert_eq!(
+            background(&fan),
+            DARK_BACKGROUND,
+            "its client still decides"
+        );
+
+        assert_eq!(fan.leave(client, keep_size), b"\x1b[?997;2n");
+        assert_eq!(background(&fan), LIGHT_BACKGROUND);
+    }
+
+    #[tokio::test]
+    async fn on_a_client_that_never_reported_leaving_the_launch_appearance_newer_than_every_report_stays(
+    ) {
+        let shared = Arc::new(DisplayFallback::default());
+        client_reporting(&launched(&shared, None), dark());
+        next_millisecond().await;
+        let fan = launched(&shared, Some(TerminalAppearance::Light));
+        let client = client_of(&fan.attach(0));
+        assert_eq!(background(&fan), LIGHT_BACKGROUND);
+        assert!(fan.leave(client, keep_size).is_empty());
+        assert_eq!(background(&fan), LIGHT_BACKGROUND);
+    }
+
+    #[tokio::test]
+    async fn only_colours_are_shared_a_clients_cell_stays_its_own() {
+        let shared = Arc::new(DisplayFallback::default());
+        let fan = launched(&shared, None);
+        let client = client_reporting(&fan, light());
+        assert_eq!(
+            push(&fan, b"\x1b[16t"),
+            b"\x1b[6;20;9t",
+            "the client's own cell while it decides"
+        );
+        next_millisecond().await;
+
+        let other = launched(&shared, None);
+        assert_eq!(background(&other), LIGHT_BACKGROUND);
+        assert_eq!(
+            push(&other, b"\x1b[16t"),
+            DEFAULT_CELL,
+            "the daemon-wide fallback carries no cell"
+        );
+        let _ = fan.leave(client, keep_size);
+        assert_eq!(
+            push(&fan, b"\x1b[16t"),
+            DEFAULT_CELL,
+            "the terminal back on the fallback uses the default cell"
+        );
+        let seeded = launched(&Arc::default(), Some(TerminalAppearance::Light));
+        assert_eq!(push(&seeded, b"\x1b[16t"), DEFAULT_CELL);
     }
 
     #[test]
     fn a_program_subscribed_to_colour_scheme_updates_is_told_when_another_client_takes_over() {
         let fan = Fan::new(24, 80, false);
         let (first_attached, second_attached) = (fan.attach(0), fan.attach(0));
-        let first = first_attached
-            .answering
-            .as_ref()
-            .expect("a live client")
-            .client;
-        let second = second_attached
-            .answering
-            .as_ref()
-            .expect("a live client")
-            .client;
+        let (first, second) = (client_of(&first_attached), client_of(&second_attached));
         assert!(push(&fan, b"\x1b[?2031h").is_empty());
         assert!(
             fan.report_display(first, DisplayFacts::default())
@@ -1073,7 +1319,6 @@ mod tests {
             resized.borrow_mut().push((rows, cols));
             Ok(())
         };
-        let background = |fan: &Fan| push(fan, b"\x1b]11;?\x07");
         let first_attached = fan.attach(0);
         let first = client_of(&first_attached);
         fan.request_size(first, 40, 120, resize).unwrap();
@@ -1097,11 +1342,7 @@ mod tests {
             [(40, 120), (20, 50), (40, 120)],
             "the size goes back to the client that typed"
         );
-        assert_eq!(
-            background(&fan),
-            b"\x1b]11;rgb:fafa/fafa/fafa\x07",
-            "and so do the colours"
-        );
+        assert_eq!(background(&fan), LIGHT_BACKGROUND, "and so do the colours");
     }
 
     #[test]

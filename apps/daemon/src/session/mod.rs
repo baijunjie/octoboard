@@ -203,6 +203,8 @@ pub struct NewSession {
     pub carried_trust: Option<Arc<dyn TrustCarrier>>,
     /// Runs after the process is reaped and before its scratch directory is removed.
     pub before_scratch_removal: Option<Box<dyn FnOnce() + Send>>,
+    /// See `NewPty::display`.
+    pub display: crate::terminal::display::DisplaySeed,
 }
 
 impl LiveSession {
@@ -213,6 +215,7 @@ impl LiveSession {
             scratch_dir: session.scratch_dir,
             kill_session_leftovers: true,
             before_scratch_removal: session.before_scratch_removal,
+            display: session.display,
         });
         // Every session's terminal supports the protocol: it keeps the reports and answers their
         // support query. Only an agent with no status of its own takes its status from them.

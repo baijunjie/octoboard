@@ -26,8 +26,10 @@ Everything the window shows follows the chosen appearance, including:
   output from an agent whose own colour scheme assumes the other appearance (pale greys and blues meant for a dark
   background, for instance) stays readable rather than all but vanishing.
   A program running in a terminal that asks for the terminal's colours, or whether it is dark or light, is answered
-  with the appearance of the most recently active client showing that terminal, and one that asked to be told is told
-  when that changes (see "The colours and sizes a program reads" in `docs/product/terminal-queries.md`).
+  with the appearance of the most recently active client showing that terminal; while no client showing it has told
+  its colours, with the appearance the session was launched for or the colours a client last told on any terminal,
+  whichever is more recent. One that asked to be told is told when that changes (see "The colours and sizes a program
+  reads" in `docs/product/terminal-queries.md`).
 - **A Grok Build session's own theme**, which is picked from the appearance in force when the session is launched and
   does not follow later appearance changes while it runs (see "Grok Build's theme" in
   `docs/product/per-agent-launch-specifics.md`).
@@ -80,16 +82,18 @@ How a launch avoids showing the window before the appearance has been applied is
 
 The choice is remembered **per client**, in that client's own browser storage. The daemon does not store it, and it is
 not among the files under `~/.octoboard` (see "Files Octoboard owns" in `docs/product/application-lifecycle.md`). A
-client tells the daemon only what the choice has resolved to, in two ways, and the daemon stores neither: light or
-dark, sent with a request that launches a session so that a Grok Build session's theme matches the terminal, and used
-for that launch alone (see "Grok Build's theme" in `docs/product/per-agent-launch-specifics.md`); and the terminal's
-colours, sent by each attached terminal and held only while it stays attached, to answer the programs that ask for
-them (see "The colours and sizes a program reads" in `docs/product/terminal-queries.md`).
+client tells the daemon only what the choice has resolved to, in two ways, and the daemon writes neither to disk:
+light or dark, sent with a request that launches a session, used for that launch alone, so that a Grok Build session's
+theme matches the terminal (see "Grok Build's theme" in `docs/product/per-agent-launch-specifics.md`) and so that it
+counts towards the colours the session's terminal answers queries with; and the terminal's colours, sent by each
+attached terminal to answer the programs that ask for them, of which the daemon keeps in memory those most recently
+sent by any client, for terminals none of whose own clients has sent any (see "The colours and sizes a program reads"
+in `docs/product/terminal-queries.md`).
 
-So the choice does not travel between clients. A desktop window and a browser tab, or two machines reaching the same
-daemon, each keep their own; a client whose storage has been cleared is back to System. A configuration export that
-includes the General section carries the exporting client's choice, and an import asked to apply that section sets it on
-the client that runs the import alone (see "The settings a client holds" in
+So the choice itself does not travel between clients. A desktop window and a browser tab, or two machines reaching the
+same daemon, each keep their own; a client whose storage has been cleared is back to System. A configuration export
+that includes the General section carries the exporting client's choice, and an import asked to apply that section sets
+it on the client that runs the import alone (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`).
 
 ## A report page stays on a light surface in both appearances

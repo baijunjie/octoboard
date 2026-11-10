@@ -3371,9 +3371,11 @@ export type Request = {
    */
   resume_agent_session_id?: string,
   /**
-   * The appearance the asking client's terminal is showing. Absent (a session an agent
-   * opens, or a client that does not send it) leaves Grok following the operating system.
-   * Not recorded on the session.
+   * The appearance the asking client's terminal is showing. It sets Grok's theme and the
+   * colours the session's terminal answers its program's queries with until a client
+   * reports. Absent (a session an agent opens, or a client that does not send it) leaves
+   * Grok following the operating system and the terminal on what the daemon last saw. Not
+   * recorded on the session.
    */
   terminal_appearance?: TerminalAppearance,
 }
@@ -4224,9 +4226,11 @@ export type RequestBody = {
    */
   resume_agent_session_id?: string,
   /**
-   * The appearance the asking client's terminal is showing. Absent (a session an agent
-   * opens, or a client that does not send it) leaves Grok following the operating system.
-   * Not recorded on the session.
+   * The appearance the asking client's terminal is showing. It sets Grok's theme and the
+   * colours the session's terminal answers its program's queries with until a client
+   * reports. Absent (a session an agent opens, or a client that does not send it) leaves
+   * Grok following the operating system and the terminal on what the daemon last saw. Not
+   * recorded on the session.
    */
   terminal_appearance?: TerminalAppearance,
 }
@@ -5513,7 +5517,8 @@ export type TermEvent = {
 
 /**
  * The appearance a client has resolved for its window, sent with a launch so Grok's theme matches
- * the terminal that will show it. It is not stored: a later launch sends its own.
+ * the terminal that will show it and so that terminal answers its program's colour queries with
+ * it until a client reports. It is not stored: a later launch sends its own.
  */
 export type TerminalAppearance = "light" | "dark";
 

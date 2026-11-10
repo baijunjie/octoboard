@@ -268,41 +268,44 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   server runs (`ServerHost` and `RunningServer`: open its endpoint, start it, wait for it, end it, with the provider
   saying what to run and how readiness shows; `LocalHost` has the daemon run it as a child it owns, for a terminal that
   runs in the daemon, `HeldHost` has the holder that runs the terminal start it as the terminal's companion so that it
-  outlives the daemon; `FoundServer`, the server a holder lists with an adopted terminal; none for a holder that runs
-  no companions, which leaves the launch its ordinary terminal); `pty.rs` `PtyCore`, the lifecycle over a terminal either backend started: the reader thread, input (`lock_input` takes the lock on the platform `Pty`, which every
-  write into the terminal is made under), freezing, exit observation, scratch directory and crash-cleanup entry,
-  `fan.rs` the output fan-out of parsed screen, replay ring and attached clients, which also keeps each client's
-  requested size and applies the most recently active client's (a client attaching to a live terminal
-  starts from a first paint of the parsed screen, taken under the fan lock; the daemon answers the program's queries
-  there, so the queries it answers are left out of what clients receive and stream offsets count the bytes delivered),
-  and each client's flow control: a backlog of what is waiting for it, the count of bytes sent and not yet acknowledged
-  (`CREDIT_WINDOW`), and a wake-up for its connection, which takes output through `take_output` and reports what the
-  client has consumed through `acknowledge`; `push` never waits on a client, and a backlog past `BACKLOG_CAP` is replaced
-  by a fresh paint without history (`Outgoing::Paint`),
-  `queries.rs` `QueryScanner`, which cuts the program's output into plain output and the whole sequences of the
-  queries the daemon may answer (and, where the terminal keeps them, the OSC 7501 support query and status reports),
-  `program_status.rs` the status a program reports about itself (Program Status Protocol: a report's body parsed under
-  its limits, `ProgramStatus` the records kept by id, whose root record is the program's own status, and the text that
-  answers the support query; `keep_program_status` and `take_program_status` on `pty.rs` and `fan.rs` turn it on and
-  take what was reported), `display.rs` `DisplayFacts`, the colours and cell size a client reports (with the
-  defaults until it does), `activity.rs` which attached client was active most recently (it sent input or an explicit `activate` frame; an
-  attach takes precedence only until a deadline `attach` returns, `ATTACH_CLAIM` after it), whose size the terminal takes and whose display facts the answers use, `ringbuf.rs` the ring, which recent output and
-  `output_since` (the trust-dialog press in `src/session/trust/` reads it) read, `snapshot/` `TerminalSnapshot`, the parsed
-  terminal (it answers queries, `answers.rs` `take_in`, which also keeps the status reports out of what clients receive
-  and answers the support query, the display facts set by `set_display` and the colour-scheme mode 2031 included, and
-  `take_in_allowing`, which answers or delivers only the queries a replay's rule admits; it
-  flattens into a preview, serialises as the first paint, in `paint.rs`, which is also what an exited shell's attach and
-  a client's repaint after falling behind send, and, once asked, reports the title changes
-  the output makes after it has drawn something; `cells.rs` writes cells back as escape sequences for the preview and
-  the first paint, `unexposed.rs` tracks the scroll region, cursor style and title `alacritty_terminal` keeps
-  private, `save.rs` saves the terminal as the bytes that rebuild it, or says it cannot reproduce the state, which makes the saved screen inexact, and `unended.rs` keeps the escape sequence or
-  UTF-8 character the output has begun and not ended), `saved_screen.rs` what a planned restart hands the next daemon of
-  a terminal (`SavedScreen`, the saved screen, and `ReplayRule`, under which the tail kept since the handover is
-  replayed: `save_screen`, `restore_screen` and `begin_replay` on `pty.rs`), titles (`title.rs` reads them off the output's own OSC 0/2 sequences, or off the snapshot's title changes
-  where `TermFacts::host_renders`) and the spinner glyphs they start with, `reply_route.rs` which client's answer to a
-  query passed through to clients reaches the program, `query_log.rs` the log of how long the queries an agent's host waits on took to be answered, `input_class.rs` input that is
-  only the terminal's own protocol traffic, `plain_text.rs` output without its escape sequences, `shell/` project shell
-  terminals).
+  outlives the daemon; `FoundServer`, the server a holder lists with an adopted terminal; none for a holder that runs no
+  companions, which leaves the launch its ordinary terminal); `pty.rs` `PtyCore`, the lifecycle over a terminal either
+  backend started: the reader thread, input (`lock_input` takes the lock on the platform `Pty`, which every write into
+  the terminal is made under), freezing, exit observation, scratch directory and crash-cleanup entry, `fan.rs` the
+  output fan-out of parsed screen, replay ring and attached clients, which also keeps each client's requested size and
+  applies the most recently active client's (a client attaching to a live terminal starts from a first paint of the
+  parsed screen, taken under the fan lock; the daemon answers the program's queries there, so the queries it answers are
+  left out of what clients receive and stream offsets count the bytes delivered), and each client's flow control: a
+  backlog of what is waiting for it, the count of bytes sent and not yet acknowledged (`CREDIT_WINDOW`), and a wake-up
+  for its connection, which takes output through `take_output` and reports what the client has consumed through
+  `acknowledge`; `push` never waits on a client, and a backlog past `BACKLOG_CAP` is replaced by a fresh paint without
+  history (`Outgoing::Paint`), `queries.rs` `QueryScanner`, which cuts the program's output into plain output and the
+  whole sequences of the queries the daemon may answer (and, where the terminal keeps them, the OSC 7501 support query
+  and status reports), `program_status.rs` the status a program reports about itself (Program Status Protocol: a
+  report's body parsed under its limits, `ProgramStatus` the records kept by id, whose root record is the program's own
+  status, and the text that answers the support query; `keep_program_status` and `take_program_status` on `pty.rs` and
+  `fan.rs` turn it on and take what was reported), `display.rs` `DisplayFacts`, the colours and cell size a client
+  reports (until it does, `DisplaySeed` weighs the launch's appearance against the daemon-wide last report kept in
+  `DisplayFallback` on `AppState`, whichever is more recent, else the dark default), `activity.rs` which attached client
+  was active most recently (it sent input or an explicit `activate` frame; an attach takes precedence only until a
+  deadline `attach` returns, `ATTACH_CLAIM` after it), whose size the terminal takes and whose display facts the answers
+  use, `ringbuf.rs` the ring, which recent output and `output_since` (the trust-dialog press in `src/session/trust/`
+  reads it) read, `snapshot/` `TerminalSnapshot`, the parsed terminal (it answers queries, `answers.rs` `take_in`, which
+  also keeps the status reports out of what clients receive and answers the support query, the display facts set by
+  `set_display` and the colour-scheme mode 2031 included, and `take_in_allowing`, which answers or delivers only the
+  queries a replay's rule admits; it flattens into a preview, serialises as the first paint, in `paint.rs`, which is
+  also what an exited shell's attach and a client's repaint after falling behind send, and, once asked, reports the
+  title changes the output makes after it has drawn something; `cells.rs` writes cells back as escape sequences for the
+  preview and the first paint, `unexposed.rs` tracks the scroll region, cursor style and title `alacritty_terminal`
+  keeps private, `save.rs` saves the terminal as the bytes that rebuild it, or says it cannot reproduce the state, which
+  makes the saved screen inexact, and `unended.rs` keeps the escape sequence or UTF-8 character the output has begun and
+  not ended), `saved_screen.rs` what a planned restart hands the next daemon of a terminal (`SavedScreen`, the saved
+  screen, and `ReplayRule`, under which the tail kept since the handover is replayed: `save_screen`, `restore_screen`
+  and `begin_replay` on `pty.rs`), titles (`title.rs` reads them off the output's own OSC 0/2 sequences, or off the
+  snapshot's title changes where `TermFacts::host_renders`) and the spinner glyphs they start with, `reply_route.rs`
+  which client's answer to a query passed through to clients reaches the program, `query_log.rs` the log of how long the
+  queries an agent's host waits on took to be answered, `input_class.rs` input that is only the terminal's own protocol
+  traffic, `plain_text.rs` output without its escape sequences, `shell/` project shell terminals).
 - `src/session/` — one running agent process (`LiveSession`; `LiveSession::host_renders` says whether its titles
   come off the parsed screen's title changes and a provider's placeholder reads as an empty input box), input and
   message-write gates (the daemon's own writes,
