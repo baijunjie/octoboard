@@ -204,7 +204,12 @@ function Gallery(): React.ReactElement {
         <div className="preview-context" data-category={scenario.category}>
           <div className="preview-location">{scenario.group} <span aria-hidden> / </span><strong className="category-badge">{category.label}</strong></div>
           <h1>{scenario.title}</h1>
-          {scenario.description && <p className="description">{scenario.description}</p>}
+          {scenario.description && (
+            <details key={scenario.id}>
+              <summary>Description</summary>
+              <p className="description">{scenario.description}</p>
+            </details>
+          )}
         </div>
         <header aria-label="Preview controls">
           <div className="group">

@@ -7,6 +7,73 @@ import { type FocusVisibleProps, hasKeyboardFocus, ScrollShadow, scrollShadowAut
  * be clear of the fade, so whatever scrolls the list by hand keeps this margin too. */
 export const FADE_SIZE = 24;
 
+/** The mask of a sticky heading's surface-coloured exit overlay. It grows from the covered edge
+ * only as the section pushes the heading above its pinned position, keeping pinned content clear. */
+function stickyHeadingExitMask(displacement: number): string {
+  const covered = Math.max(0, displacement);
+  return covered === 0 ? "none" : `linear-gradient(to bottom, #000 ${covered}px, transparent ${covered + Math.min(covered, FADE_SIZE)}px)`;
+}
+
+/** One watch per scroller for all its pinned headings and strips, including headings the virtualizer
+ * positions. The overlay fades their contents without fading their opaque surface or replacing any
+ * descendant's own mask. A nested scroller owns its own headings. */
+function useStickyExitFade(ref: RefObject<HTMLElement | null>, enabled = true): void {
+  useLayoutEffect(() => {
+    const scroller = ref.current;
+    if (!enabled || !scroller) return;
+    let headings: HTMLElement[] = [];
+    let frame: number | undefined;
+    const nearestScroller = (heading: HTMLElement) => {
+      for (let parent = heading.parentElement; parent; parent = parent.parentElement) {
+        if (/^(auto|scroll|hidden|overlay)$/.test(getComputedStyle(parent).overflowY)) return parent;
+      }
+      return undefined;
+    };
+    const measure = () => {
+      const top = scroller.getBoundingClientRect().top + scroller.clientTop;
+      const placements = headings.map((heading) => {
+        const box = heading.getBoundingClientRect();
+        const offset = parseFloat(getComputedStyle(heading).top) || 0;
+        const covered = Math.max(0, top + offset - box.top);
+        return { heading, covered, height: Math.min(box.height, covered + Math.min(covered, FADE_SIZE)) };
+      });
+      for (const { heading, covered, height } of placements) {
+        heading.style.setProperty("--sticky-exit-height", `${height}px`);
+        heading.style.setProperty("--sticky-exit-mask", stickyHeadingExitMask(covered));
+      }
+    };
+    const resize = new ResizeObserver(measure);
+    const watch = () => {
+      resize.disconnect();
+      headings = Array.from(scroller.querySelectorAll<HTMLElement>("[data-sticky-heading]")).filter((heading) => nearestScroller(heading) === scroller);
+      resize.observe(scroller);
+      for (const heading of headings) {
+        resize.observe(heading);
+        if (heading.parentElement) resize.observe(heading.parentElement);
+      }
+      measure();
+    };
+    // A scroll's virtualizer can commit its new positions after the event's other listeners ran.
+    const schedule = () => {
+      frame ??= requestAnimationFrame(() => { frame = undefined; measure(); });
+    };
+    const mutation = new MutationObserver(watch);
+    mutation.observe(scroller, { childList: true, subtree: true });
+    scroller.addEventListener("scroll", schedule, { passive: true });
+    watch();
+    return () => {
+      resize.disconnect();
+      mutation.disconnect();
+      scroller.removeEventListener("scroll", schedule);
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      for (const heading of headings) {
+        heading.style.removeProperty("--sticky-exit-height");
+        heading.style.removeProperty("--sticky-exit-mask");
+      }
+    };
+  });
+}
+
 type Orientation = "vertical" | "horizontal";
 
 /** The top scroll padding of a list with sticky headings `headingHeight` tall: what scrolls into view
@@ -250,6 +317,7 @@ type FadedScrollerProps = Omit<React.ComponentProps<typeof ScrollShadow>, "size"
  */
 export function FadedScroller({ orientation = "vertical", region, style, className, ref: forwarded, stickyHeadingHeight, stickySurface, fade = true, endInset, ...props }: FadedScrollerProps): React.ReactElement {
   const ref = useObjectRef(forwarded);
+  useStickyExitFade(ref, fade && orientation === "vertical" && stickyHeadingHeight !== undefined);
   const strips = useScrollbarStrips(ref, orientation);
   const rest = useFadeAtRest(ref, undefined);
   const [visibility, setVisibility] = useState<ScrollShadowVisibility>("none");
@@ -333,7 +401,7 @@ function StickyFadeFrame({ children, visibility, gutter, topOffset, bottomGutter
 
 /** A scroller with sticky section headings or one pinned row, virtualized or not, that has to be the
  * element itself: native scrolling and its collection role stay on the element, while fades paint in
- * a shared stacking context below the pinned element. Unlike `FadedScroller` it does not follow
+ * a shared stacking context below the pinned element. Unlike `FadedScroller` its top fade does not follow
  * `data-sticky-heading`: the top fade sits at the fixed `stickyHeadingHeight`, so a caller whose
  * pinned element can be absent passes 0 then. */
 export function useStickyScrollFade({ ref: forwarded, className, stickyHeadingHeight, stickySurface }: {
@@ -347,6 +415,7 @@ export function useStickyScrollFade({ ref: forwarded, className, stickyHeadingHe
   wrap: (children: React.ReactNode) => React.ReactElement;
 } {
   const ref = useObjectRef(forwarded);
+  useStickyExitFade(ref);
   const [visibility, setVisibility] = useState<ScrollShadowVisibility>("none");
   const [gutter, setGutter] = useState(0);
   const [bottomGutter, setBottomGutter] = useState(0);

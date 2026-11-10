@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { beforeEach, expect, it, onTestFinished } from "vitest";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { FadedScroller, useScrollFade } from "./scrollFade";
-import { fakeTimers, runOutTimers } from "../../test/clock";
+import { FADE_SIZE, FadedScroller, useScrollFade, useStickyScrollFade } from "./scrollFade";
+import { FAKE_FRAME_MS, fakeTimers, runOutTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -75,6 +75,131 @@ function mount(element: React.ReactElement): { scroller: () => HTMLElement; rere
     rerender: (next) => act(() => root.render(next)),
   };
 }
+
+type StickyApi = "component" | "hook";
+
+function StickyHooked({ children, id }: { children: React.ReactNode; id?: string }): React.ReactElement {
+  const { props, wrap } = useStickyScrollFade({ className: "", stickyHeadingHeight: 40 });
+  return wrap(<div {...props} data-testid="scroller" id={id} style={{ ...props.style, overflowY: "auto" }}>{children}</div>);
+}
+
+function StickyScroller({ api, children, fade = true, orientation = "vertical", id }: { api: StickyApi; children: React.ReactNode; fade?: boolean; orientation?: "vertical" | "horizontal"; id?: string }): React.ReactElement {
+  return api === "hook" ? <StickyHooked id={id}>{children}</StickyHooked> : <FadedScroller data-testid="scroller" id={id} stickyHeadingHeight={40} fade={fade} orientation={orientation} style={{ overflowY: "auto" }}>{children}</FadedScroller>;
+}
+
+/** jsdom has no layout: the heading's live top and size stand in for a section pushing it offscreen. */
+function stickyGeometry(measure: (element: HTMLElement) => { top: number; height: number }): void {
+  const bounds = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const { top, height } = measure(this);
+    return { top, bottom: top + height, left: 0, right: 100, width: 100, height, x: 0, y: top, toJSON() {} };
+  });
+  onTestFinished(() => bounds.mockRestore());
+}
+
+const exitHeight = (heading: HTMLElement) => heading.style.getPropertyValue("--sticky-exit-height");
+const exitMask = (heading: HTMLElement) => heading.style.getPropertyValue("--sticky-exit-mask");
+
+/** Drain the queued scroll frame, then assert after extra frames as well, so later work cannot change the result. */
+async function settleStickyExit(): Promise<void> {
+  await settle();
+  await act(async () => { await vi.advanceTimersByTimeAsync(FAKE_FRAME_MS * 3); });
+}
+
+it.each(["component", "hook"] as const)("%s fades each marked heading from its own pin offset, without replacing its content's masks", async (api) => {
+  let displacement = -8;
+  const offsets = { list: 0, category: 0, settings: -16, session: 60 };
+  stickyGeometry((element) => ({ top: element.dataset.kind ? 100 + offsets[element.dataset.kind as keyof typeof offsets] - displacement : 100, height: 100 }));
+  const { scroller } = mount(<StickyScroller api={api}>{Object.entries(offsets).map(([kind, offset]) => (
+    <div key={kind} data-sticky-heading data-kind={kind} style={{ top: offset, maskImage: "linear-gradient(to right, black, transparent)" }}>
+      <span style={{ maskImage: "linear-gradient(to left, black, transparent)" }}>{kind}</span>
+    </div>
+  ))}</StickyScroller>);
+  const headings = [...scroller().querySelectorAll<HTMLElement>("[data-sticky-heading]")];
+  const ownMasks = headings.map((heading) => [heading.style.maskImage, heading.firstElementChild!.getAttribute("style")]);
+  for (const heading of headings) expect(exitHeight(heading)).toBe("0px");
+  for (const next of [0, 4, FADE_SIZE * 2, 0]) {
+    displacement = next;
+    act(() => scroller().dispatchEvent(new Event("scroll")));
+    await settleStickyExit();
+    for (const heading of headings) {
+      expect(exitHeight(heading)).toBe(`${next + Math.min(next, FADE_SIZE)}px`);
+      expect(exitMask(heading)).toBe(next === 0 ? "none" : `linear-gradient(to bottom, #000 ${next}px, transparent ${next + Math.min(next, FADE_SIZE)}px)`);
+    }
+    expect(headings.map((heading) => [heading.style.maskImage, heading.firstElementChild!.getAttribute("style")])).toEqual(ownMasks);
+  }
+});
+
+it.each(["component", "hook"] as const)("%s discovers headings added after mount and updates their fade after a resize", async (api) => {
+  let height = 20;
+  const observers = new Set<() => void>();
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(private callback: () => void) { observers.add(callback); }
+    observe() { observers.add(this.callback); }
+    unobserve() {}
+    disconnect() { observers.delete(this.callback); }
+  });
+  onTestFinished(() => { vi.unstubAllGlobals(); });
+  stickyGeometry((element) => ({ top: element.hasAttribute("data-sticky-heading") ? 70 : 100, height }));
+  const { scroller } = mount(<StickyScroller api={api}>{null}</StickyScroller>);
+  const heading = document.createElement("div");
+  heading.setAttribute("data-sticky-heading", "");
+  heading.style.top = "0px";
+  await act(async () => { scroller().append(heading); });
+  expect(exitHeight(heading)).toBe("20px");
+  height = 100;
+  act(() => [...observers].forEach((resize) => resize()));
+  expect(exitHeight(heading)).toBe(`${30 + FADE_SIZE}px`);
+  height = 5;
+  act(() => [...observers].forEach((resize) => resize()));
+  expect(exitHeight(heading)).toBe("5px");
+});
+
+it("leaves a nested scroller's headings to their own watcher", async () => {
+  stickyGeometry((element) => ({ top: element.id === "inner" ? 200 : element.dataset.kind === "inner" ? 190 : element.hasAttribute("data-sticky-heading") ? 95 : 100, height: 100 }));
+  const { scroller } = mount(<StickyScroller api="component">
+    <div data-sticky-heading data-kind="outer" style={{ top: 0 }}>Outer</div>
+    <StickyScroller api="hook" id="inner"><div data-sticky-heading data-kind="inner" style={{ top: 0 }}>Inner</div></StickyScroller>
+    <div style={{ overflowY: "auto" }}><div data-sticky-heading data-kind="unowned">Unowned</div></div>
+  </StickyScroller>);
+  expect(exitHeight(scroller().querySelector<HTMLElement>('[data-kind="outer"]')!)).toBe("10px");
+  expect(exitHeight(scroller().querySelector<HTMLElement>('[data-kind="inner"]')!)).toBe("20px");
+  expect(exitHeight(scroller().querySelector<HTMLElement>('[data-kind="unowned"]')!)).toBe("");
+  await settleStickyExit();
+});
+
+it("clears exit overlays and pending scroll work when fading is disabled", async () => {
+  stickyGeometry((element) => ({ top: element.hasAttribute("data-sticky-heading") ? 90 : 100, height: 100 }));
+  const content = <div data-sticky-heading style={{ top: 0 }}>Heading</div>;
+  const { scroller, rerender } = mount(<StickyScroller api="component">{content}</StickyScroller>);
+  const heading = scroller().querySelector<HTMLElement>("[data-sticky-heading]")!;
+  expect(exitHeight(heading)).toBe("20px");
+  act(() => scroller().dispatchEvent(new Event("scroll")));
+  rerender(<StickyScroller api="component" fade={false}>{content}</StickyScroller>);
+  await settleStickyExit();
+  expect(exitHeight(heading)).toBe("");
+  expect(exitMask(heading)).toBe("");
+  act(() => scroller().dispatchEvent(new Event("scroll")));
+  await settleStickyExit();
+  expect(exitHeight(heading)).toBe("");
+});
+
+it("adds no heading exit overlay to a horizontal scroller", () => {
+  stickyGeometry(() => ({ top: 90, height: 100 }));
+  const { scroller } = mount(<StickyScroller api="component" orientation="horizontal"><div data-sticky-heading style={{ top: 0 }}>Heading</div></StickyScroller>);
+  expect(exitHeight(scroller().querySelector<HTMLElement>("[data-sticky-heading]")!)).toBe("");
+});
+
+it.each(["component", "hook"] as const)("%s removes overlay state when its scroller unmounts, including a queued scroll update", async (api) => {
+  stickyGeometry((element) => ({ top: element.hasAttribute("data-sticky-heading") ? 90 : 100, height: 100 }));
+  const { scroller, rerender } = mount(<StickyScroller api={api}><div data-sticky-heading style={{ top: 0 }}>Heading</div></StickyScroller>);
+  const heading = scroller().querySelector<HTMLElement>("[data-sticky-heading]")!;
+  expect(exitHeight(heading)).toBe("20px");
+  act(() => scroller().dispatchEvent(new Event("scroll")));
+  rerender(<div data-testid="scroller" />);
+  await settleStickyExit();
+  expect(exitHeight(heading)).toBe("");
+  expect(exitMask(heading)).toBe("");
+});
 
 const marked = (el: HTMLElement) => el.hasAttribute("data-scrolls-sideways");
 

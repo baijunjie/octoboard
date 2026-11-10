@@ -857,7 +857,9 @@ not one to copy — a HeroUI `TabListContainer` uses its own 64 px fade. Suppres
 keyboard focus, as specified under "Visible focus", so the revealed tab and its full ring stay visible.
 
 Where a sticky heading occupies the top of a faded list, the top scroll padding includes both the heading's height
-and the fade's size, so a focused row is visible below them. The heading itself stays clear of the fade.
+and the fade's size, so a focused row is visible below them. A heading held at its pinned position stays clear of the
+fade. When its section pushes it above that position, its contents fade out at that boundary while its background
+stays opaque over the list. The incoming heading stays clear as it reaches its pinned position.
 
 The same holds sideways for a table with a pinned column: the Settings accounts table pins its Actions column to the
 end of a horizontal scroller, so the scroller's end scroll padding is the fade's size plus the pinned column's measured

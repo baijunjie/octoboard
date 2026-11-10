@@ -73,7 +73,11 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
     const measure = () => {
       const top = scroller.getBoundingClientRect().top;
       const heading = Array.from(headings).find((element) => element.getBoundingClientRect().bottom > top);
-      setStickyHeadingHeight(heading?.getBoundingClientRect().height ?? 0);
+      const categoryBottom = heading?.getBoundingClientRect().bottom ?? top;
+      const subheading = heading?.parentElement?.querySelector("h3")
+        ? Array.from(heading.parentElement.querySelectorAll<HTMLElement>("[data-sticky-heading]")).find((element) => element !== heading && element.getBoundingClientRect().bottom > categoryBottom)
+        : undefined;
+      setStickyHeadingHeight((heading?.getBoundingClientRect().height ?? 0) + (subheading?.getBoundingClientRect().height ?? 0));
     };
     const observer = new ResizeObserver(measure);
     headings.forEach((heading) => observer.observe(heading));
@@ -278,8 +282,20 @@ function StickyProcessNote({ children }: { children: React.ReactNode }): React.R
 
 function ProcessCategory({ title, note, children }: { title: string; note: string; children: React.ReactNode }): React.ReactElement {
   const headingId = useId();
+  const sectionRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const section = sectionRef.current;
+    const heading = section?.querySelector<HTMLElement>(":scope > [data-sticky-heading]");
+    if (!section || !heading) return;
+    // The note can wrap after a resize or language change; the session headings follow its actual height.
+    const measure = () => section.style.setProperty("--process-category-height", `${heading.getBoundingClientRect().height}px`);
+    const observer = new ResizeObserver(measure);
+    observer.observe(heading);
+    measure();
+    return () => observer.disconnect();
+  }, []);
   return (
-    <section aria-labelledby={headingId} className="flex min-w-0 shrink-0 flex-col gap-2">
+    <section ref={sectionRef} aria-labelledby={headingId} className="flex min-w-0 shrink-0 flex-col gap-2">
       <StickyHeading variant="category" id={headingId} note={note}>{title}</StickyHeading>
       {children}
     </section>
@@ -325,9 +341,9 @@ function TreeGroup({ group, acting, onStop, onKeep }: {
   const heading = session ? sessionDisplayTitle(t, session) : t("processes.sessionUnknown");
   return (
     <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-2">
-      <h4 id={headingId} className="text-sm font-medium">
+      <StickyHeading variant="subcategory" id={headingId} offset="var(--process-category-height, 0px)">
         <FadeOverflow as="span" dir="auto" className="block" titleWhenClipped={heading}>{heading}</FadeOverflow>
-      </h4>
+      </StickyHeading>
       <TreeList trees={group.trees} acting={acting} offersKeep onStop={onStop} onKeep={onKeep} labelledBy={headingId} />
     </section>
   );

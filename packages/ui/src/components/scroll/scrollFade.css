@@ -1,0 +1,14 @@
+/* The overlay inherits the pinned surface's live theme and hover colour. Only the overlay is
+   masked: the surface keeps scrolling rows hidden, and descendants keep their own masks. */
+[data-sticky-heading]::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: 10;
+  height: var(--sticky-exit-height, 0px);
+  pointer-events: none;
+  background-color: inherit;
+  mask-image: var(--sticky-exit-mask, none);
+  -webkit-mask-image: var(--sticky-exit-mask, none);
+}

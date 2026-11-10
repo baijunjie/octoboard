@@ -451,6 +451,8 @@ body {
 
 @import "./primitives/ScrollShadow.css";
 
+@import "./components/scroll/scrollFade.css";
+
 @import "./sessions/sessionBranches.css";
 
 @import "./primitives/Code.css";

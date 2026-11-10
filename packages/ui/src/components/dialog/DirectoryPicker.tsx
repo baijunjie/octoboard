@@ -236,8 +236,8 @@ function DirectoryList({ listRef, entries, showParent, onOpen }: {
             // through. A shadow paints the 4px the list keeps above the row in the same colour,
             // beneath the focus ring's own shadow layers, so the entries do not pass through that
             // strip either and the ring stays whole. Of the sticky-heading props only the scroll
-            // hold of the focus handlers does anything here: the scroll margin and the heading
-            // marker are for a heading's inner controls and for `FadedScroller`.
+            // hold of the focus handlers and the exit fade apply here: the scroll margin is for a
+            // heading's inner controls, and the marker registers this row with the shared scroll fade.
             <ListBoxItem
               {...pinnedFocus}
               data-marquee-scope

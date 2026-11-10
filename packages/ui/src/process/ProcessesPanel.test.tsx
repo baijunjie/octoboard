@@ -5,6 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { windowAttention } from "../components/announce/windowTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
+import { stickyScrollPaddingTop } from "../components/scroll/scrollFade";
 import { CONTROL_TOOLTIP_DELAY_MS, enter, mountForTooltip, openTooltip } from "../components/hint/tooltipTestSupport";
 import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
@@ -216,6 +217,60 @@ it("groups a project's trees under the sessions' titles and puts those no sessio
   expect(panel().textContent).toContain("These processes belong to no session. They are never stopped automatically; only you can stop them.");
   const group = [...panel().querySelectorAll("section")].find((section) => section.querySelector(":scope > [data-sticky-heading] > h3")?.textContent === "Project processes")!;
   expect([...group.querySelectorAll("li")].map((row) => row.textContent)).toEqual([expect.stringContaining("node kept.js"), expect.stringMatching(/node old\.js.*Directory deleted/)]);
+});
+
+it("keeps focus scroll padding below both heading levels as notes resize and the list reaches another session or category", async () => {
+  let categoryHeight = 60;
+  const sessionHeight = 20;
+  let visible: "first" | "second" | "project" = "first";
+  const observers = new Set<() => void>();
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(private callback: () => void) { observers.add(callback); }
+    observe() {}
+    unobserve() {}
+    disconnect() { observers.delete(this.callback); }
+  });
+  onTestFinished(() => { vi.unstubAllGlobals(); });
+  const bounds = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    let top = 100;
+    let height = 0;
+    if (this.hasAttribute("data-sticky-heading")) {
+      const title = this.querySelector("h3, h4")?.textContent;
+      if (title === "Session processes") {
+        top = visible === "project" ? -200 : 100;
+        height = categoryHeight;
+      } else if (title === "Fix search") {
+        top = visible === "first" ? 100 + categoryHeight : -200;
+        height = sessionHeight;
+      } else if (title === "Add filters") {
+        top = visible === "first" ? 600 : visible === "second" ? 100 + categoryHeight : -100;
+        height = sessionHeight;
+      } else if (title === "Project processes") {
+        top = visible === "project" ? 100 : 1000;
+        height = categoryHeight;
+      }
+    }
+    return { top, bottom: top + height, left: 0, right: 300, width: 300, height, x: 0, y: top, toJSON() {} };
+  });
+  onTestFinished(() => bounds.mockRestore());
+  await mount({ project }, async () => ({
+    type: "processes_listed", id: null,
+    trees: [tree("1:1"), tree("2:2", { session_id: second.id }), tree("3:3", { session_id: undefined })],
+  }));
+  const scroller = panel().querySelector<HTMLElement>(".overflow-y-auto")!;
+  expect(scroller.style.scrollPaddingTop).toBe(`${stickyScrollPaddingTop(categoryHeight + sessionHeight)}px`);
+
+  categoryHeight = 90;
+  act(() => [...observers].forEach((resize) => resize()));
+  expect(scroller.style.scrollPaddingTop).toBe(`${stickyScrollPaddingTop(categoryHeight + sessionHeight)}px`);
+
+  visible = "second";
+  act(() => scroller.dispatchEvent(new Event("scroll")));
+  expect(scroller.style.scrollPaddingTop).toBe(`${stickyScrollPaddingTop(categoryHeight + sessionHeight)}px`);
+
+  visible = "project";
+  act(() => scroller.dispatchEvent(new Event("scroll")));
+  expect(scroller.style.scrollPaddingTop).toBe(`${stickyScrollPaddingTop(categoryHeight)}px`);
 });
 
 it("stops a tree on request, drops it from the list and says so", async () => {

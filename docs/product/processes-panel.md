@@ -33,7 +33,9 @@ Each category heading and its explanatory note stay together at the top of the s
 passes through it; the next category's heading and note replace the previous pair. The first category starts close below
 the header, or below the session filter while it is shown. Its note sits directly beneath the heading. Category headings
 are 14px semibold, smaller than the 16px semibold panel title. Session group headings use the same 14px size in medium
-weight and the normal foreground colour, and scroll with their contents.
+weight and the normal foreground colour. Each session heading stays beneath the category heading and note while its
+group scrolls, with the next session's heading replacing it. The Project processes heading and note replace both
+levels when that category reaches the top.
 
 **With a session filtered on**, only that session's trees are listed, with no heading, and no project processes. A
 note leads the nonempty list, saying that its processes stop automatically when the session ends, and stays at the
@@ -41,8 +43,10 @@ top while the list scrolls. **A console session's panel** lists its own trees th
 process lists none. The note is absent while loading and in the empty state.
 
 Category headings with their notes and the standalone note have the same space above and below, and align with the
-cards' outer edges. Their background covers the content scrolling underneath; the list fades below the whole pinned
-area, and keyboard focus scrolls controls into view below it even when the note wraps.
+cards' outer edges. Their background, and that of the session headings, covers the content scrolling underneath; the
+list fades below the whole pinned area, including the session heading, and keyboard focus scrolls controls into view
+below it even when the note wraps. For a pinned heading's fade as its section pushes it out, see "The edge that hides
+content fades" in `docs/product/scrolling-surfaces.md`.
 
 Within a group, trees are oldest first. A heading too long for its line fades out where it is cut (see "Names too
 long for their space" in `docs/product/labels-and-tooltips.md`).

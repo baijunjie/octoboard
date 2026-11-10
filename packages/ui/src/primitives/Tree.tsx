@@ -132,7 +132,7 @@ export function TreeSection({ id, className, children }: { id: string; className
 /** A `TreeSection`'s heading, which sticks to the top of the list while its section is in view. */
 export function TreeHeader({ className, children, ...data }: DataAttributes & { className?: string; children: React.ReactNode }): React.ReactElement {
   return (
-    <AriaTreeHeader {...data} {...definedProps({ className })}>
+    <AriaTreeHeader {...data} data-sticky-heading="" className={`relative ${className ?? ""}`}>
       {children}
     </AriaTreeHeader>
   );

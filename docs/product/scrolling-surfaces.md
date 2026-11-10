@@ -32,6 +32,11 @@ alone, are in "The surfaces that fade" below.
   `docs/product/right-pane-panels.md`). The file viewer's long lines, read by scrolling sideways while
   wrapping is off, fade at neither side (see "Wrapping long lines" in `docs/product/file-viewer.md`).
 
+A heading or strip pinned at the top of a vertically scrolling surface stays clear while it is pinned or approaching
+its pinned position. When its section pushes it upward past that position, its contents fade from the upper edge as
+it leaves, over a band that grows with the displacement up to 24 px. Its background stays opaque, covering the content
+scrolling beneath it. This applies to nested headings as well: each fades when pushed above its own pinned position.
+
 **Some surfaces draw no scrollbar at all**, so the fade is what says there is more: the rail's column of console
 avatars, too narrow for a scrollbar (see "The rail" in `docs/product/window-layout.md`), focus mode's strip of chips,
 and a strip of tabs, which also shows a small chevron at each end that has
