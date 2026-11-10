@@ -117,11 +117,11 @@ Linux verification, including holder services, cgroups, service restarts and com
 ## Milestones
 
 - 01 Windows holder feasibility (closed)
-- [02 Process holders](02-process-holders.md)
+- 02 Process holders (closed)
 - 03 Planned restart handover (closed)
 - [04 Desktop updates keep sessions running](04-desktop-update-handover.md)
 - 05 Program status reports (closed)
 - 06 Conflict-checked writes (closed)
 - 07 Control-channel heartbeat (closed)
-- [08 Codex app server in the holder](08-codex-server-in-holder.md) — needs 02 and Codex's private app server, which is in place
+- 08 Codex app server in the holder (closed)
 - [09 Final confirmation](09-final-confirmation.md)

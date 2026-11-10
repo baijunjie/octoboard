@@ -22,7 +22,9 @@
 - The update restart sends the planned-stop request rather than the ordinary shutdown:
   - [x] On macOS the application bundle has already been replaced, so the old daemon makes its planned stop and the
         new application's daemon adopts the holders.
-  - [ ] On Windows the installer runs only after that planned stop.
+  - [x] On Windows the installer runs only after that planned stop. Real NSIS process-start events place the installer
+        after the daemon's successful planned stop. Evidence: `/tmp/windows-desktop-evidence/beta42-installer-events.json`
+        and `beta42-desktop.log`.
 - [x] The restart's escalation repeats the planned-stop request rather than the ordinary shutdown, and waits long
       enough for the screens to be saved. A daemon killed in the end leaves its sessions to crash recovery.
 - [x] Every quit tells the daemon it is quitting before the application exits, without waiting for an answer, the
@@ -35,6 +37,11 @@
 - [ ] A system shutdown, restart or logout is told apart from a quit: it asks for no confirmation, and the daemon
       makes its ordinary stop, freezing each preview, before the system goes on. On Windows the application passes
       the system's end-session notice on to the daemon, as far as the time the system allows.
+  - [x] Windows: real sign-out and shutdown completed the daemon's ordinary stop with exit 0 and retained previews;
+        an update restart overlapping sign-out kept the preview and started no installer or automatic relaunch.
+        Evidence: `/tmp/windows-desktop-evidence/signout-fixed-preview.json`, `system-shutdown-samples.jsonl`,
+        `system-shutdown-preview.json` and `overlap44-installer-and-relaunch-check.json`.
+  - [ ] macOS: real logout, shutdown and their overlap with the update restart (see the remaining list).
 - [x] Where the planned stop has saved a screen and the holders then die with the system, the session interrupted at
       the next start shows that screen as its preview.
 - [x] The update restart's confirmation appears only when some session would be interrupted: a holder outside the
@@ -47,13 +54,13 @@
       survived, with Codex queue delivery and shell input working.
       Evidence: `/tmp/octoboard-remaining-20261110-7fd0/REPORT.md` (cross-schema update records).
 - [x] The adopted sessions' hooks, MCP bridge and git gate run from their build's copy and keep working through
-      their holder's relay (milestone 02), while the installation is replaced (verified on macOS; the Windows
-      installer meeting no file in use is milestone 02's Handoff).
+      their holder's relay (milestone 02), while the installation is replaced (verified on macOS, and on Windows,
+      where the installer met no file in use: `/tmp/windows-desktop-evidence/REPORT.md`).
 
 ## Implementation plan
 
 - [x] Route the update restart and the application's loss through the planned stop on macOS.
-- [ ] The same on Windows.
+- [x] The same on Windows. Evidence: `/tmp/windows-desktop-evidence/REPORT.md` (signed NSIS updates and application kill).
 - [x] Change the update restart's confirmation and the quit paths.
 - [ ] Change the system shutdown path.
 
@@ -177,15 +184,35 @@ On 2026-11-10, main `035746de6` also passed macOS startup-time quit and a real s
 The scratch next build added only an empty-table v3→v4 migration and verification metadata/version overrides; it
 was never committed. Evidence: `/tmp/octoboard-remaining-20261110-7fd0/REPORT.md`.
 
+**Windows desktop follow-up, 2026-11-10.** A temporary standard user's interactive logon verified application-kill
+survival and recovery, a plain quit, the native repeated-quit escape hatch with an actual stalled JavaScript event
+loop, and two signed local-feed NSIS updates over working Codex, Claude and shell terminals. The second update
+preserved previously exact screens without an inexact mark; process-start events place the installer after the
+successful planned stop, and an independent installation of the same payload matches all seven shipped files.
+Evidence: `/tmp/windows-desktop-evidence/REPORT.md`, `app-kill-offline-survival.json`, `plain-quit-relaunch.json`,
+`unresponsive-quit-relaunch.json`, `beta42-after-session.json`, `beta42-installer-events.json` and `reference42-compare.json`.
+
+A real sign-out exposed the daemon being terminated before the shell's shutdown request reached it. The desktop
+now sets its shutdown order before the daemon's default order; the repeated real sign-out ended all observed
+processes within 2213 ms, with daemon exit 0 and the interrupted session's last preview retained. The exact Windows
+API test passed. Evidence: `/tmp/windows-desktop-evidence/signout-fixed-system-result.json`, `signout-fixed-desktop.log`,
+`signout-fixed-preview.json` and `test-desktop-priority.log`. Ordinary quits also exposed a holder left with unreleased
+terminal records; its generation-checked ordinary-parting cleanup passed three precise Windows regressions and a
+real ordinary quit, leaving no holder or agent behind. Evidence: `fixed-holder-quit-processes-after.json` and
+`fixed-holder-quit-preview.json` under the same evidence root.
+
+Real Windows shutdown also passed: the observed product processes ended within 2452 ms, daemon exit 0, and after
+booting and signing in again the interrupted session retained its 1678-byte last preview. For the update/sign-out
+overlap, a proxy delayed only the holder's handover request; the real system notification reached the app while its
+planned stop was under way. The four-second escalation ended the daemon at its deadline, preserving the preview;
+no installer or automatic application restart started before the next manual launch. The downloaded beta.44 update
+was left for the next start. Evidence: `/tmp/windows-desktop-evidence/system-shutdown-desktop.log`,
+`system-shutdown-preview.json`, `overlap44-desktop.log`, `update-signout-overlap-preview.json` and
+`overlap44-installer-and-relaunch-check.json`. The normal sign-out and shutdown completed normally; the deliberately
+delayed overlap exercised the bounded kill fallback. No sign-in blocker remains.
+
 **Remaining, each a real run:**
-1. A system shutdown, on macOS (not done, since it would end the verification machine's own session): log out, and
-   separately shut down, with sessions working, also during an update restart's planned stop: no confirmation, no
-   relaunch, and at the next start every session interrupted with its last screen as its preview.
-2. Windows, from an interactive desktop logon, blocked on the sign-in password of the VM user `bjj`; the VM's working
-   directory `C:\Users\bjj\windows-verification` keeps the source, the build and the isolated data. Killing the
-   application leaves every session running at the next launch; a plain quit, and the stopped-responding escape hatch,
-   end every session. With two built versions: a real update restart over working sessions and a shell terminal, every
-   one running in the new version with its exact screen; the installer starting only after the planned stop, completing
-   with holders running from the build copy and no Abort/Retry/Ignore prompt, every installed file replaced; sign-out
-   and shutdown stopping the daemon within the time Windows allows, with the sessions interrupted and their previews
-   kept; and a sign-out overlapping an update restart starting no installer once the session end has begun.
+1. macOS: log out and separately shut down with sessions working, also during an update restart's planned stop: no
+   confirmation, no relaunch, and at the next start every session interrupted with its last screen as its preview.
+   This was not run on the verification machine, since it would end that machine's own session. All Windows items
+   above are verified; final fixture cleanup and VM state are recorded in `/tmp/windows-desktop-evidence/REPORT.md`.

@@ -328,9 +328,9 @@ detach and the file location they use. The holder is started as measured: detach
 daemon's jobs, and where breakaway is refused, created with the desktop application as its parent process; with no
 application to name, it starts inside the job and its terminals end with it, which is logged. That survival inside
 the job is not guaranteed, and neither is the parent fallback's when the desktop application is itself in the same
-outer job. The evidence below comes from an OpenSSH session standing in for a desktop logon: confirming it from a
-standard user's desktop logon, with the daemon started by the desktop application, is a verification item before
-release.
+outer job. The detached launch and the refused-breakaway fallback were also confirmed from a standard user's
+interactive desktop logon: the desktop application started the daemon, and the holder stayed outside its jobs and
+survived it. The measurements below retain the scope of the original OpenSSH harness.
 
 A pseudoconsole lives as long as the process that created it and its handles, not as long as the process that started
 that process, so a holder that owns the pseudoconsoles can keep a session's programs running while the daemon is gone.
@@ -581,8 +581,10 @@ Each has an established solution unless noted; any outstanding manual verificati
   `gdi32.dll`, as the daemon has, is sent neither the logoff nor the shutdown notice (Microsoft's documentation of
   `SetConsoleCtrlHandler` says so, and Windows 11 behaved as documented in a real logoff and a real shutdown). The
   system ends the user's processes and the daemon's log shows no orderly stop. The desktop app's sidecar is the
-  exception as far as time allows: the app passes the system's end of session on and asks it for its ordinary stop,
-  which has about four seconds before the system ends everything. What is left is dealt with at the next start, as
+  exception as far as time allows: before starting the daemon, the app sets its shutdown level to `0x300`, ahead of
+  the daemon's default `0x280` (`SetProcessShutdownParameters`, higher levels first). It passes the confirmed system
+  end of session on and asks for the daemon's ordinary stop, within four seconds. Equal default levels let Windows
+  terminate the daemon's hidden console before that request reaches it. What is left is dealt with at the next start, as
   after a crash ("Crashes and forced termination" in `docs/product/application-lifecycle.md`), and the process ledger's
   start-up reconciliation stops the attributed processes its records name that are still running. A held update is not
   installed at such an exit, and the next start offers it again.
