@@ -26,7 +26,7 @@ export function useAppNavigation({
   setSelectedSessionId,
   archiveOpen,
   archiveScope,
-  setArchiveScope,
+  setArchiveScopeByUser,
   setArchiveRestore,
   archiveViewStates,
   revealArchive,
@@ -51,7 +51,8 @@ export function useAppNavigation({
   setSelectedSessionId: (id: string | undefined) => void;
   archiveOpen: boolean;
   archiveScope: ArchiveScope | undefined;
-  setArchiveScope: (scope: ArchiveScope | undefined) => void;
+  /** Changes what the archive view shows or closes it, as a move the user made (`useArchiveView`). */
+  setArchiveScopeByUser: (scope: ArchiveScope | undefined) => void;
   setArchiveRestore: (state: ArchiveViewState | undefined) => void;
   /** How far each scope's archive list was loaded and scrolled, by `archiveKey`. */
   archiveViewStates: { readonly current: Map<string, ArchiveViewState> };
@@ -94,7 +95,7 @@ export function useAppNavigation({
       const owner = target.session !== selectedSessionId ? ownerForSession(session) : asideOwner;
       setAsideOwner(ownerAfterMove(owner, session, target.console, projects));
       setArchiveRestore(target.archive && archiveViewStates.current.get(archiveKey(target.archive)));
-      setArchiveScope(target.archive);
+      setArchiveScopeByUser(target.archive);
       if (target.archive) revealArchive();
     },
     // Focus a move leaves nowhere goes to the terminal, or, where that takes none (no session, or
@@ -116,7 +117,7 @@ export function useAppNavigation({
     holdForPress();
     navigation.joinPressVisits(releasePress);
     selectConsole(shownConsole.id);
-    setArchiveScope(undefined);
+    setArchiveScopeByUser(undefined);
   };
   const stableCommitPreview = useStableHandler(commitPreview);
   const stableBack = useStableHandler(navigation.back);

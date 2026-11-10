@@ -19,15 +19,12 @@ function mount() {
   Object.defineProperty(reduced, "matches", { value: false, writable: true });
   vi.stubGlobal("matchMedia", () => reduced);
   const container = document.body.appendChild(document.createElement("div"));
-  const terminal = document.body.appendChild(document.createElement("button"));
   const root = createRoot(container);
-  const focusTerminal = () => terminal.focus();
   const view = { console: console_, sessions: [], consoles: new Map(), projects: new Map(), accounts: [], defaultNames: {}, providers: [], onSelect() {}, onReopen() {}, onOpenDialog() {}, dialogOpen: false, onClose() {} };
-  const show = (open: boolean) => act(() => root.render(<ArchiveLayer view={open ? view : undefined} focusTerminal={focusTerminal} />));
+  const show = (open: boolean) => act(() => root.render(<ArchiveLayer view={open ? view : undefined} />));
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
-    terminal.remove();
     vi.unstubAllGlobals();
   });
   show(true);
@@ -36,14 +33,12 @@ function mount() {
     Object.defineProperty(event, "animationName", { value: name });
     act(() => container.querySelector("section")!.dispatchEvent(event));
   };
-  return { container, terminal, reduced, show, end };
+  return { container, reduced, show, end };
 }
 
-it("hands off focus and disables a closing archive immediately, then removes it at its own animation end", () => {
-  const { container, terminal, show, end } = mount();
-  act(() => container.querySelector("button")!.focus());
+it("disables a closing archive immediately, then removes it at its own animation end", () => {
+  const { container, show, end } = mount();
   show(false);
-  expect(document.activeElement).toBe(terminal);
   expect(container.querySelector("[inert][aria-hidden=true] section[data-active=false]")).not.toBeNull();
   end("unrelated-animation");
   expect(container.querySelector("section")).not.toBeNull();

@@ -27,7 +27,7 @@ export function useConsoleSwitch({
   asideOwnerState,
   asideOwner,
   setAsideOwner,
-  setArchiveScope,
+  setArchiveScopeByUser,
 }: {
   ready: boolean;
   projects: ReadonlyMap<string, Project>;
@@ -40,7 +40,8 @@ export function useConsoleSwitch({
   /** The aside's owner while what it names is there. */
   asideOwner: AsideOwner | undefined;
   setAsideOwner: (owner: AsideOwner | undefined) => void;
-  setArchiveScope: (scope: ArchiveScope | undefined) => void;
+  /** Changes what the archive view shows or closes it, as a move the user made (`useArchiveView`). */
+  setArchiveScopeByUser: (scope: ArchiveScope | undefined) => void;
 }) {
   const { store } = useDaemon();
   // An owner that is gone leaves no aside, and is not brought back by anything that appears later.
@@ -86,7 +87,7 @@ export function useConsoleSwitch({
   const switchConsole = (consoleId: string) => {
     if (consoleId === currentConsoleId) return;
     selectConsole(consoleId);
-    setArchiveScope(undefined);
+    setArchiveScopeByUser(undefined);
     showLastSession(consoleId, { selection: true, owner: true });
   };
   const stableSwitchConsole = useStableHandler(switchConsole);

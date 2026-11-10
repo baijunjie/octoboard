@@ -122,6 +122,7 @@ export function useTerminalController({
     return () => {
       resizeObserver.disconnect();
       controller.dispose();
+      controllerRef.current = undefined;
     };
     // One controller for the life of the view; what changes while it lives comes through `latest`, bar the
     // callbacks and options documented as read once.

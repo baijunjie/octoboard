@@ -13,10 +13,20 @@ With no session selected, the terminal's area shows a full empty panel (see "The
 `docs/product/empty-states.md`). It offers the next creation action for the current console and focus scope (see "A
 console with nothing in it" below); otherwise a terminal glyph, a heading saying no session is selected and a line
 asking for a session to be selected. With no button in that panel, the terminal cannot take keyboard focus: whatever
-would hand focus to it (hiding a pane that holds focus, or the session going away while the terminal holds it) puts
-focus on the top bar's first enabled control instead, and leaves it on nothing when it is already on nothing. With **no
+would hand focus to it (hiding a pane that holds focus, for one) puts focus on the top bar's first enabled control
+instead, and leaves it on nothing when it is already on nothing. While the archive view is open, focus meant for the
+terminal goes to the archive view instead (see "The archive view" in `docs/product/archive-view.md`). With **no
 console at all** there is no terminal in the window and the welcome screen fills the content panel instead (see
 `docs/product/welcome-screen.md`).
+
+**When the session on screen goes away while keyboard focus is in its terminal**, focus is handed on to the creation
+action the empty panel now offers, or, with none, to the top bar's first enabled control; after a tap, to the top bar's
+first enabled control (see "Focus after a tap" in `docs/product/moving-focus-between-regions.md`). Where the user
+cleared the selection — a console with no session to show chosen from the rail, say, or Back to where none was
+selected — the focus ring follows the input that cleared it: it shows after a key, and not after a pointer press. Where
+the selected session's record goes away by itself, which nobody chose, the ring shows, except after a tap. The same
+holds when focus is in an archived session's history instead of the terminal (see "Keyboard focus" in
+`docs/product/session-history.md`).
 
 ## Typing and the mouse
 
@@ -416,4 +426,6 @@ The sidebar's empty lists stay compact alongside this panel (see "Empty rows" in
   focus between regions with F6" in `docs/product/moving-focus-between-regions.md`). A panel with no button is skipped.
   Focus that is on nothing is left on nothing. When the creation button goes away while holding focus, because a session
   is selected or the console's sessions or projects change from this window or another client, focus goes to the
-  terminal when it can take it, otherwise to the top bar's first enabled control.
+  terminal when it can take it, otherwise to the creation action the panel offers next, if any, and else to the top
+  bar's first enabled control, with its focus ring showing; after a tap, to the top bar's first enabled control with no
+  ring.

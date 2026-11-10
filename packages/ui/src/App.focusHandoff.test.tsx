@@ -4,7 +4,7 @@
 // line), the update notice and the connection banner. Each case drives the removal by what removes the control in
 // the app, so the handoff is shown to run, not only to land in the right place once it does.
 import { act } from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 
@@ -157,7 +157,7 @@ it.each([
   expect(regionOfFocus()).toBe("terminal");
   expect(document.activeElement?.textContent).toBe("New console session");
   expect(document.activeElement).not.toBe(document.body);
-  expect(document.querySelector("[data-focus-visible]") !== null).toBe(ringed);
+  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(ringed);
   expect(getInteractionModality()).toBe(modality);
 });
 
@@ -166,6 +166,83 @@ it("hands focus on with the ring when the record of the archived session on scre
 
   await deliver(daemon, { type: "session_deleted", session: archived.id });
   expect(document.querySelector("[data-region=terminal] [role=region][tabindex]")).toBeNull();
-  expect(document.activeElement).not.toBe(document.body);
+  // The same place as from a live terminal: the empty state's action, which is offered here.
+  expect(regionOfFocus()).toBe("terminal");
+  expect(document.activeElement?.textContent).toBe("New console session");
+  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(true);
   expect(getInteractionModality()).toBe("keyboard");
+});
+
+it.each([
+  ["pointer", false],
+  ["keyboard", true],
+] as const)("hands focus on from a live session's terminal, without forcing the ring, when %s selects a console with no session to show, ringed only after a key", async (modality, ringed) => {
+  stubWindow();
+  const daemon = fakeDaemon(snapshotState({ consoles: [console_, other], projects: [project], sessions: [live] }));
+  mountApp(daemon);
+  await pressElement(row(live.title));
+  const input = agentInput() as HTMLElement | null;
+  expect(input).not.toBeNull();
+  act(() => input!.focus());
+  expect(document.activeElement).toBe(input);
+
+  // The press is made by the input that sets the modality, as in the history case above.
+  const avatar = railConsole(other.name)!;
+  if (modality === "pointer") press(avatar, "mouse");
+  else tap(avatar, "Enter");
+  await act(async () => {});
+  expect(railConsole(other.name)?.getAttribute("aria-current")).toBe("true");
+  expect(regionOfFocus()).toBe("terminal");
+  expect(document.activeElement?.textContent).toBe("New console session");
+  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(ringed);
+  expect(getInteractionModality()).toBe(modality);
+});
+
+it("hands focus on from a live session's terminal to the empty state's action, with the ring even after a pointer press, when its record is deleted", async () => {
+  stubWindow();
+  withModality("pointer");
+  const daemon = fakeDaemon(snapshotState({ consoles: [console_], projects: [project], sessions: [live] }));
+  mountApp(daemon);
+  await pressElement(row(live.title));
+  act(() => (agentInput() as HTMLElement).focus());
+  withModality("pointer");
+
+  await deliver(daemon, { type: "session_deleted", session: live.id });
+  expect(agentInput()?.closest("[inert]")).not.toBeNull();
+  expect(regionOfFocus()).toBe("terminal");
+  expect(document.activeElement?.textContent).toBe("New console session");
+  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(true);
+  expect(getInteractionModality()).toBe("keyboard");
+});
+
+it("hands focus on from a live session's terminal to the top bar, with no ring, when its record is deleted after a tap", async () => {
+  stubWindow();
+  const daemon = fakeDaemon(snapshotState({ consoles: [console_], projects: [project], sessions: [live] }));
+  mountApp(daemon);
+  await pressElement(row(live.title));
+  act(() => (agentInput() as HTMLElement).focus());
+  withModality("pointer");
+  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch" }));
+  onTestFinished(() => void document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse" })));
+
+  await deliver(daemon, { type: "session_deleted", session: live.id });
+  expect(regionOfFocus()).toBe("topbar");
+  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(false);
+  expect(getInteractionModality()).toBe("pointer");
+});
+
+it("hands focus on from a live session's terminal to the top bar, not the empty state's action, when a tap selects a console with no session to show", async () => {
+  stubWindow();
+  withModality("pointer");
+  const daemon = fakeDaemon(snapshotState({ consoles: [console_, other], projects: [project], sessions: [live] }));
+  mountApp(daemon);
+  await pressElement(row(live.title));
+  act(() => (agentInput() as HTMLElement).focus());
+
+  press(railConsole(other.name)!, "touch");
+  await act(async () => {});
+  expect(railConsole(other.name)?.getAttribute("aria-current")).toBe("true");
+  expect(regionOfFocus()).toBe("topbar");
+  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(false);
+  expect(getInteractionModality()).toBe("pointer");
 });

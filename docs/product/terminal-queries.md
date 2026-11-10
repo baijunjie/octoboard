@@ -93,4 +93,5 @@ Every other query reaches every attached client, and each client's terminal answ
 - **A client showing a read-only screen answers nothing**: an interrupted session's saved preview, a session frozen for
   archiving, and a shell terminal whose shell has exited.
 - **A report that the terminal gained or lost keyboard focus is not an answer**: each client's report reaches the
-  program as that client's own input.
+  program as that client's own input. When a session switch moves keyboard focus to the newly shown terminal, any
+  resulting report is sent to that session.

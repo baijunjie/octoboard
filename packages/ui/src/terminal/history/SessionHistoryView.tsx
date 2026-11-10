@@ -22,6 +22,7 @@ import { useSession } from "../../store";
 import { useOctoboardTheme } from "../../preferences/theme";
 import { RendererBoundary } from "../../viewer/code/codeRenderer";
 import { FencedCode } from "../../viewer/markdown/FencedCode";
+import { useHeldWhileHidden } from "../useHeldWhileHidden";
 import { useSessionHistory } from "./useSessionHistory";
 import { useFocusVisibleProps } from "../../primitives";
 
@@ -41,6 +42,7 @@ export function SessionHistoryView({
   session,
   onSelectSession,
   restoreFocus,
+  exposed = true,
 }: {
   session: Pick<Session, "id" | "context" | "started_at" | "ended_at" | "bound_to">;
   /** Shows a session as selecting it in the sidebar would; without it the owner is not linked. */
@@ -48,6 +50,8 @@ export function SessionHistoryView({
   /** Where focus goes when the owner link goes away while it holds focus; without it, to the
    * messages, or to the view itself while there are none. */
   restoreFocus?: () => void;
+  /** False while the view is inert under a panel or the archive view: its status sentence is held until it is exposed. */
+  exposed?: boolean;
 }): React.ReactElement {
   const t = useT();
   const { history, reload } = useSessionHistory(session.id);
@@ -61,7 +65,7 @@ export function SessionHistoryView({
   };
   const held = useFocusHandoff(focusMessagesOrView);
   const messages = history.state === "loaded" ? history.messages.filter((message): message is ConversationMessage => message.speaker !== "octoboard") : [];
-  const spoken =
+  const sentence =
     history.state === "loading"
       ? t("history.loading")
       : history.state === "unavailable"
@@ -69,6 +73,7 @@ export function SessionHistoryView({
         : history.state === "loaded" && messages.length === 0
           ? t("history.empty")
           : undefined;
+  const spoken = useHeldWhileHidden(sentence, !exposed);
   return (
     <section
       ref={rootRef}

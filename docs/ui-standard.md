@@ -765,14 +765,32 @@ meanwhile keeps it, and the restore cannot take focus back from the terminal aft
 Selecting another session while focus is in the history on screen is not such a move: a sidebar row's press keeps
 focus where it is, so the history it replaces drops focus to `<body>`, but the user made the switch, whether from a
 row, Back and Forward, the rail or the history's owner link. Selecting none is the user's move too: a console with no
-session to show, chosen from the rail's avatars, say, or Back to where none was selected. `TerminalPane` hands focus
-on, ahead of `useFocusHandoff`, the way focus meant for the agent terminal goes (the new history, a live session's
-terminal, a covering panel, the empty state's action or else the top bar when none is selected, or the top bar after a
-tap) without setting the modality, so the ring follows the input that selected: none after a pointer press, shown after a
-key. Where nothing there can take focus (a live session held by an account switch, say), `useFocusHandoff` still moves
-it to the top bar with the ring, as focus then lands where the user did not aim. A session that goes away by itself,
-its record gone while it is still the selected one, goes through `useFocusHandoff` with the ring on, as any control
-taken away does.
+session to show, chosen from the rail's avatars, say, or Back to where none was selected. The live terminal is a second
+source of such focus: clearing the selection turns it inert under focus, which would drop it to `<body>` with no event.
+`TerminalPane` hands focus on, in a layout effect for the terminal and, for the history, ahead of `useFocusHandoff`, to
+where focus meant for the agent terminal goes, in this order of precedence (the first that applies): a covering panel,
+the open archive view (see below), after a tap the top bar, then the new history, a live session's terminal, and with
+no session shown the empty state's action, else the top bar. It sets no modality of its own, so the ring follows the
+input that selected: none after a pointer press, shown after a key. Where nothing there can take focus (a live session
+held by an account switch, say), `useFocusHandoff` still moves it to the top bar with the ring, as focus then lands
+where the user did not aim. An empty state's creation button that goes away under focus (its list gaining content)
+goes through `useFocusHandoff` too, with the ring: to the next empty-state action if there is one, else the top bar. A session that goes away by itself, its record gone while it is still the selected one, is
+not the user's move, and from the history or the live terminal alike it reaches the same destination through the same
+restore, with the ring on (`ringForAutomaticFocus`, so not after a tap): from the history through `useFocusHandoff`,
+as any control taken away does, from the terminal through the layout effect.
+
+While the archive view is open, the whole agent pane under it (the terminal, the history, the covers and the bars) is
+inert, so Tab from the view's last control cannot reach what is hidden under it, and the pane's spoken sentences are
+held until the view closes (the history's own status sentence too; its failure alert is not held). Focus meant for the
+agent terminal lands on the view's root, which takes focus itself a moment after it opens, so a handoff must not pass
+over the top bar on the way; a covering panel excepted, and after a tap included, as the root takes no text. Focus in
+the pane when the view opens goes there at once, not to `<body>`. When the view closes, focus it held (or that fell to
+`<body>`) is handed on once the view has closed and the pane is reachable again, to where focus meant for the agent
+terminal goes, from one place after the commit, so it sees the pane as it now is (with no session shown, the empty
+state's action else the top bar). The modality follows who closed it: a close the user makes leaves it alone, so the
+ring follows the input that closed it, and a close nobody made (what the view lists is gone) forces the ring, like any
+automatic move. The user's closes are Close, Escape, selecting or opening a session or creating a console from this
+window, Back and Forward, committing a preview and a console switch (the rail, a process jump).
 
 After a tap (`interactionIsTouch` in `packages/ui/src/input/touchInput.ts`: the last press was a finger; a mouse, a trackpad
 or any key counts as not, so an iPad with a keyboard keeps the desktop rules) two things change. An automatic move does
@@ -781,10 +799,11 @@ is no keyboard to follow it with, and a ring left on a top-bar control would als
 standing. And the window does not move focus into a terminal on its own initiative, since a terminal's text field
 raises the on-screen keyboard over the content the user tapped to see: a floating panel lands on its first control that
 takes no text (`focusLandingWithoutText`; the Report panel lands on its page, marked `data-touch-landing`), focus meant
-for the agent terminal goes to a covering panel's first such control or else the top bar's first control, so it never
-falls to `<body>`, and a tapped session pick does not focus the terminal. The file filter field's incomplete-search
-mark, as the search completes, hands focus to the field's input, but after a tap to the filter toggle instead. A tap on
-a text field still focuses it, and form dialogs still focus their first field, since the user opened them to fill in.
+for the agent terminal goes to a covering panel's first such control, else the open archive view's root, else the top
+bar's first control, so it never falls to `<body>`, and a tapped session pick does not focus the terminal. The file
+filter field's incomplete-search mark, as the search completes, hands focus to the field's input, but after a tap to the
+filter toggle instead. A tap on a text field still focuses it, and form dialogs still focus their first field, since
+the user opened them to fill in.
 
 A separator of collapsed lines taken off the screen is such a move: the bar for the run past a diff's last hunk goes
 once the daemon's reply says that hunk reaches the end of the file, and the handoff to the code frame sets the
@@ -1694,10 +1713,11 @@ in the sidebar, the rail or the menu bar.
   screen is, the reconnecting status whether the process can be reached; both can show at once, each in its own
   place, never folded into one mark. A note that would be announced while the cover is shown waits until the cover,
   and the loading cover after it, are gone.
-- **While the agent area is inert** (a maximized or floating panel over it), the agent pane's sentences — the cover's,
-  the immediate and the delayed pending sentence, the no-process bar's and the recovered-display note's — are held and
-  each said once on exposure, as "Announcing a change" sets out for an inert subtree; a pending sentence is dropped
-  instead when exposure lands focus on the cover, whose description reads the same copy.
+- **While the agent area is inert** (a maximized or floating panel over it) **or the archive view covers the pane**,
+  the agent pane's sentences — the cover's, the immediate and the delayed pending sentence, the no-process bar's and
+  the recovered-display note's — are held and each said once on exposure, as "Announcing a change" sets out for an
+  inert subtree; a pending sentence is dropped instead when exposure lands focus on the cover, whose description reads
+  the same copy. The archived history's status sentence is held the same way; its failure alert is not.
 
 #### How a mark is drawn and opened
 
@@ -2040,7 +2060,8 @@ element, an error from `role="alert"`.
   the focus move, a delay past both, not at the moment the state changes.
 - A status written into an `inert` subtree is lost, a live announcer (`liveAnnouncerProps`) included: the agent area is
   inert while a maximized panel covers it or a floating panel stands over it (`agentAreaInert` in
-  `packages/ui/src/App.tsx`, passed to `TerminalPane` as `exposed`). A view whose status regions can sit there holds each
+  `packages/ui/src/App.tsx`), and the pane under the open archive view is inert as a whole; either one makes
+  `exposed` false for `TerminalPane` and the history in it. A view whose status regions can sit there holds each
   sentence that arrives or changes meanwhile and writes it once the area is exposed again, `AFTER_FOCUS_MOVE_DELAY_MS`
   after the focus move the exposure makes (`useHeldWhileHidden`, or the `deferred` of `useAnnouncedOnRise`), unless that
   focus move lands on a region that already reads the same copy (`useHeldWhileHidden`'s `stillDue`). A sentence

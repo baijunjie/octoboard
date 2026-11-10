@@ -122,8 +122,9 @@ unavailable or failed state.
   itself when the connection to the daemon comes back. Reopen remains available on the floating bar.
 
 None of these states opens an error alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`).
-Assistive technology is told the loading, empty and unavailable states as they begin; a failed request is announced by
-its failure when it appears after the history was drawn.
+Assistive technology is told the loading, empty and unavailable states as they begin, or, while the archive view covers
+the history, once it has closed (see "The archive view" in `docs/product/archive-view.md`); a failed request is
+announced by its failure when it appears after the history was drawn.
 
 ## Keyboard focus
 
@@ -148,11 +149,10 @@ history.
 Selecting another session while keyboard focus is in the history — from a sidebar row, Back or Forward, the rail or the
 owner link — hands focus to the terminal of what is now shown: another archived session's history as described above, a
 live session's terminal, or a panel covering the terminal; after a tap, as described in "Focus after a tap" in
-`docs/product/moving-focus-between-regions.md`. Selecting no session from the history does the same — a console with no
-session to show chosen from the rail, say, or Back to where none was selected: focus goes to the creation action the
-empty panel offers, or else to the top bar's first enabled control (see "With no session selected" in
-`docs/product/session-terminal.md`). Either way the focus ring follows the input that made the selection: it shows after
+`docs/product/moving-focus-between-regions.md`. The focus ring follows the input that made the selection: it shows after
 a key, and not after a pointer press. Where nothing there can take focus, such as a live session shown as switching its
 account (see `docs/product/switching-session-accounts.md`), focus goes to the top bar's first enabled control with its
-ring showing. A selected session whose record goes away by itself is not a selection the user made: focus is handed on
-with its ring showing.
+ring showing. Selecting no session from the history, or the selected session's record going away by itself, hands focus
+on as the session going away from a live terminal does (see "With no session selected" in
+`docs/product/session-terminal.md`). While the archive view is open, the history cannot hold focus at all (see "The
+archive view" in `docs/product/archive-view.md`).

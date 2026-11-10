@@ -33,6 +33,7 @@ export function TerminalSurface({
   setLinkRef,
   padding,
   inert,
+  rootInert,
   covered = false,
   mountMarker,
   editMenu,
@@ -50,6 +51,8 @@ export function TerminalSurface({
   padding: string;
   /** The terminal is out of reach (no session to show, switching, or its process cannot be reached). */
   inert?: boolean;
+  /** The whole view is out of reach, the cover, the notice bar and what is drawn over the terminal with it. */
+  rootInert?: boolean;
   /** A cover hides the terminal (every cover is opaque): no focus ring is drawn for it. */
   covered?: boolean;
   /** A `data-*` attribute that marks the mount element, for what looks for a terminal by it. */
@@ -66,6 +69,7 @@ export function TerminalSurface({
       ref={ref}
       className={covered ? className : `${className} ${ring}`}
       style={{ "--terminal-background": XTERM_THEMES[colorTheme].background, backgroundColor: "var(--terminal-background)" } as React.CSSProperties}
+      inert={rootInert}
       {...rootProps}
       {...focusVisible}
       onFocus={(event) => { focusVisible.onFocus?.(event); onFocus?.(event); }}

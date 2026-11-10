@@ -8,6 +8,7 @@ import { PATH_VAR_PARAMS } from "../components/text/literalParams";
 import { focusTopBar } from "../components/focus/regionFocus";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
+import { ringForAutomaticFocus } from "../input/touchInput";
 import { useLatest } from "../components/hooks/useLatest";
 import { Message, useT } from "../i18n/react";
 import { liveAnnouncerProps } from "../primitives";
@@ -44,8 +45,9 @@ interface TerminalPaneProps {
   /** A modal dialog is open over the window, which hides the pane from assistive technology: the
    * no-process bar's sentence is written once it has closed and its focus move has been spoken. */
   modalOpen?: boolean;
-  /** False while a maximized or floating panel makes the agent area inert, where a status region's text is lost,
-   * even in a live announcer: the pane's sentences are held until it is exposed again, and said once then. */
+  /** False while a maximized or floating panel makes the agent area inert, or the archive view covers the pane
+   * (`behindArchive`): a status region's text is lost then, even in a live announcer, so the pane's sentences are held
+   * until it is exposed again, and said once then. */
   exposed?: boolean;
   /** Adds a project when the current console already has a console session but no projects. */
   onAddProject?: () => void;
@@ -66,13 +68,15 @@ interface TerminalPaneProps {
   /** Shows a session as selecting it in the sidebar would: the history of an archived session links
    * to its owner with it. */
   onSelectSession?: (session: Session) => void;
-  /** Where focus goes when a control that held it inside the pane goes away (the history's owner
-   * link, Reconnect, a creation action), in place of the pane's own terminal, which a panel
-   * covering the agent area can leave out of reach. */
+  /** Where focus goes when what held it inside the pane goes away (the history's owner link, Reconnect, a
+   * creation action, the live terminal when the session does, the pane turning inert under the archive view), in
+   * place of the pane's own terminal, which a panel or the archive view covering the agent area can leave out of reach. */
   restoreFocus?: () => void;
   /** Whether no session is selected. A missing `session` is then the user's own choice (a console
    * with none to show); otherwise it is a selected session whose record went away. */
   noSelection?: boolean;
+  /** The archive view is open over the pane: the whole pane is inert, so Tab from the view cannot reach it. */
+  behindArchive?: boolean;
   ref?: React.Ref<TerminalPaneHandle>;
 }
 
@@ -82,6 +86,9 @@ export interface TerminalPaneHandle {
    * Tab belongs to the agent and this is how the keyboard reaches any of them. With nothing to focus
    * it goes to the top bar, except from `<body>`, which is left alone (`focusTerminal`). */
   focus: () => void;
+  /** Hands focus on from what is going away or inert in the pane, as `focus` does for focus meant for the terminal,
+   * but also from `<body>`: with no session shown, to the empty state's action, else the top bar. */
+  handOff: () => void;
 }
 
 /**
@@ -95,7 +102,7 @@ export function TerminalPane({
   onResume,
   resuming = false,
   modalOpen = false,
-  exposed = true,
+  exposed: exposedProp = true,
   onAddProject,
   newSession,
   noAgents,
@@ -105,9 +112,12 @@ export function TerminalPane({
   onSelectSession,
   restoreFocus,
   noSelection = false,
+  behindArchive = false,
   ref,
 }: TerminalPaneProps): React.ReactElement {
   const t = useT();
+  // The archive view over the pane makes it inert as a whole, as a panel over the agent area does.
+  const exposed = exposedProp && !behindArchive;
   const { terminalUrl, terminalReconnectDelay } = useDaemon();
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -146,11 +156,46 @@ export function TerminalPane({
     } else if (hasSessionRef.current) controllerRef.current?.focus();
     else if (document.activeElement !== document.body) focusTopBar();
   }, [hasSessionRef, archivedRef, pendingRef]);
-  // The session going away turns the terminal inert, and focus inside it would then fall to
-  // `<body>` with no event; hand it to the top bar first.
+  // With no session shown, focus lands on the empty state's action when one is offered, else on the top bar.
+  const focusEmptyStateOrTopBar = () => {
+    const action = emptyRef.current?.querySelector("button");
+    if (action) action.focus();
+    else focusTopBar();
+  };
+  const focusPane = () => {
+    const button = coverRef.current?.querySelector("button");
+    if (button) {
+      button.focus();
+      return;
+    }
+    // The empty state's action button is this region's only control while it is offered,
+    // so focus asked for the terminal goes there rather than out to the top bar — it is what
+    // F6 lands on, which `App` makes the region a stop for. Not from `<body>`, as
+    // `focusTerminal` has it: `refocusIfLost` asks at mount, and launching must not pull focus
+    // onto a control.
+    const action = emptyRef.current?.querySelector("button");
+    if (action && document.activeElement !== document.body) action.focus();
+    else focusTerminal();
+  };
+  // Where focus goes when what held it in the pane is gone, for the effects below that hand it on, `useFocusHandoff` and the handle's `handOff`.
+  // Without a session `focusTerminal` leaves `<body>` alone, as the app's launch must not pull focus onto a
+  // control, and focus can still be inside the pane (the terminal turning inert under it); a handoff
+  // moves it on either way.
   const noSession = session === undefined;
+  const handOffFocus = () => {
+    (restoreFocus ?? focusPane)();
+    if (!noSession) return;
+    const active = document.activeElement;
+    if (active === document.body || (rootRef.current?.contains(active) && !emptyRef.current?.contains(active))) focusEmptyStateOrTopBar();
+  };
+  // The session going away turns the terminal inert, and focus inside it would then fall to `<body>`
+  // with no event; it is handed on first. Where the user cleared the selection, with the modality the
+  // input left, as the history's switch below does; where the selected session's record went away by
+  // itself, with the ring, as `useFocusHandoff` does.
   useLayoutEffect(() => {
-    if (noSession && rootRef.current?.contains(document.activeElement)) focusTopBar();
+    if (!noSession || !rootRef.current?.contains(document.activeElement)) return;
+    if (!noSelection) ringForAutomaticFocus();
+    handOffFocus();
   }, [noSession]);
   // The session on screen turning archived makes the terminal inert under focus, which falls to
   // `<body>` with no event; it goes to the history first.
@@ -162,63 +207,15 @@ export function TerminalPane({
   const switchHeld = useAccountSwitchHeld(session);
   const switching = switchHeld && !isArchived;
   const focusWasInTerminalRef = useRef(false);
-  useLayoutEffect(() => {
-    if (switching) focusWasInTerminalRef.current = rootRef.current?.contains(document.activeElement) ?? false;
-    else if (focusWasInTerminalRef.current) {
-      focusWasInTerminalRef.current = false;
-      if (document.activeElement === document.body) focusTerminal();
-    }
-  }, [switching, focusTerminal]);
-  const held = useFocusHandoff(restoreFocus ?? focusTerminal);
-  // Selecting another session, or none, replaces the history, and focus in it falls to `<body>` (a
-  // sidebar row's or a rail avatar's press leaves focus where it was). The user made that move, so
-  // focus goes where focus meant for the terminal goes — the new history, a live session's terminal,
-  // or, with none selected, the empty state's action or the top bar — with the modality the
-  // selecting input left: no ring after a pointer press, unlike `held`, which turns the ring on for
-  // a control that went away by itself. `held` cannot tell the two apart, so this runs first, as a
-  // layout effect, and leaves it nothing to do; where nothing there takes focus, `held` still moves
-  // it to the top bar with the ring. Not when the selected session's record went away: nobody
-  // selected that, and `held` hands focus on with the ring. The flag goes while no history is shown
-  // or it is inert, as focus can leave it then without a blur.
+  const held = useFocusHandoff(handOffFocus);
   const historyFocusedRef = useRef(false);
+  // The archive view opening turns the pane inert under focus, which falls to `<body>` with no event until the
+  // view takes focus itself; it goes there at once.
   useLayoutEffect(() => {
-    if (!historyFocusedRef.current || document.activeElement !== document.body) return;
-    historyFocusedRef.current = false;
-    if (session === undefined && !noSelection) return;
-    (restoreFocus ?? focusTerminal)();
-    // `focusTerminal` leaves `<body>` alone without a session, as the app's launch must not pull
-    // focus onto a control; this one is a handoff.
-    if (session === undefined && document.activeElement === document.body) {
-      const action = emptyRef.current?.querySelector("button");
-      if (action) action.focus();
-      else focusTopBar();
-    }
-  }, [session?.id]);
-  useLayoutEffect(() => {
-    if (!isArchived || resuming) historyFocusedRef.current = false;
-  }, [isArchived, resuming]);
+    if (behindArchive && rootRef.current?.contains(document.activeElement)) handOffFocus();
+  }, [behindArchive]);
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      focus: () => {
-        const button = coverRef.current?.querySelector("button");
-        if (button) {
-          button.focus();
-          return;
-        }
-        // The empty state's action button is this region's only control while it is offered,
-        // so focus asked for the terminal goes there rather than out to the top bar — it is what
-        // F6 lands on, which `App` makes the region a stop for. Not from `<body>`, as
-        // `focusTerminal` has it: `refocusIfLost` asks at mount, and launching must not pull focus
-        // onto a control.
-        const action = emptyRef.current?.querySelector("button");
-        if (action && document.activeElement !== document.body) action.focus();
-        else focusTerminal();
-      },
-    }),
-    [focusTerminal],
-  );
+  useImperativeHandle(ref, () => ({ focus: focusPane, handOff: handOffFocus }), [focusTerminal, restoreFocus, noSession]);
   const noProcess = session ? hasNoProcess(session.status) : false;
   // A starting session's agent is still being launched, so there is no process to connect to and
   // nothing saved to show. The pane waits, covered, for the status that says it is up, and
@@ -271,7 +268,7 @@ export function TerminalPane({
     project: session?.project_id,
     viewFile: onViewFile,
   });
-  useEffect(() => {
+  const syncSession = useCallback(() => {
     const controller = controllerRef.current;
     if (!controller) return;
     // A session without a process is resumed by the caller before it is ever attached to directly (selecting
@@ -321,7 +318,41 @@ export function TerminalPane({
     // terminal on every status update. Only the user's Reconnect (`reconnectNow`) retries then.
     if (controller.currentSessionId === session.id && attemptsSpent()) return;
     attachCurrent(true);
-  }, [session, noProcess, isArchived, isStarting, attachCurrent, terminalUrl]);
+  }, [session, noProcess, isArchived, isStarting, livePending, attachCurrent, terminalUrl, resetAttempts, attemptsSpent]);
+  // A focus handoff can run in this commit's layout effects. Bind the controller first, so the
+  // input's focus report belongs to the session now shown rather than the previous socket.
+  useLayoutEffect(syncSession, [syncSession]);
+  // The controller is built in a passive mount effect. Its first attachment follows that mount;
+  // later session changes have already been synchronized before focus is handed on.
+  useEffect(syncSession, []);
+
+  // Selecting another session, or none, replaces the history, and focus in it falls to `<body>` (a
+  // sidebar row's or a rail avatar's press leaves focus where it was). The user made that move, so
+  // focus goes where focus meant for the terminal goes — the new history, a live session's terminal,
+  // or, with none selected, the empty state's action or the top bar — with the modality the
+  // selecting input left: no ring after a pointer press, unlike `held`, which turns the ring on for
+  // a control that went away by itself. `held` cannot tell the two apart, so this runs first, as a
+  // layout effect, and leaves it nothing to do; where nothing there takes focus, `held` still moves
+  // it to the top bar with the ring. Not when the selected session's record went away: nobody
+  // selected that, and `held` hands focus on with the ring. The flag goes while no history is shown
+  // or it is inert (resuming, or under the archive view), as focus can leave it then without a blur.
+  useLayoutEffect(() => {
+    if (!historyFocusedRef.current || document.activeElement !== document.body) return;
+    historyFocusedRef.current = false;
+    if (session === undefined && !noSelection) return;
+    handOffFocus();
+  }, [session?.id]);
+  useLayoutEffect(() => {
+    if (!isArchived || resuming || behindArchive) historyFocusedRef.current = false;
+  }, [isArchived, resuming, behindArchive]);
+
+  useLayoutEffect(() => {
+    if (switching) focusWasInTerminalRef.current = rootRef.current?.contains(document.activeElement) ?? false;
+    else if (focusWasInTerminalRef.current) {
+      focusWasInTerminalRef.current = false;
+      if (document.activeElement === document.body) focusTerminal();
+    }
+  }, [switching, focusTerminal]);
 
   // A reopen that is refused ends with the session still archived and its history no longer
   // inert; focus that fell to `<body>` while it was goes back to the history.
@@ -363,9 +394,9 @@ export function TerminalPane({
         : { sessionId: session.id, sentence: t("terminal.notRunning"), action: t("terminal.resume") }
       : undefined;
   // A sentence that arrives or changes under a modal (selecting an interrupted session on an account
-  // whose sharing change did not finish asks first), or while a maximized or floating panel makes the agent
-  // area inert, would be written into a hidden region, and closing the modal or the panel moves focus over
-  // it, so it waits for that and the focus move (`useHeldWhileHidden`).
+  // whose sharing change did not finish asks first), or while the pane is not exposed (a panel or the
+  // archive view over it), would be written into a hidden region, and closing the modal or the cover
+  // moves focus over it, so it waits for that and the focus move (`useHeldWhileHidden`).
   const barSaid = useHeldWhileHidden(noProcessBar?.sentence, modalOpen || !exposed);
   const pendingCover = livePending && session ? { label: sessionDisplayTitle(t, session), title: t("terminal.holderPending.title"), body: t("terminal.holderPending.body") } : undefined;
   const pendingSaid = useAnnouncedWhilePending(session?.id, livePending, t("terminal.holderPending.sentence"), coverHasFocus);
@@ -390,7 +421,7 @@ export function TerminalPane({
     else if (!covered) setAfterPending(false);
   }, [livePending, covered]);
   const recoveredSaid = useAnnouncedOnRise(session?.id, session?.screen_inexact === true, t("terminal.recovered.title"), livePending || afterPending || !exposed);
-  // The cover's and the pending sentences are lost the same way while the agent area is inert, a live
+  // The cover's and the pending sentences are lost the same way while the pane is not exposed, a live
   // announcer included, so they are held until it is exposed too.
   // Exposing the area usually moves focus into the pending cover, whose description reads the same copy.
   const notOnCover = () => !coverHasFocus();
@@ -410,6 +441,7 @@ export function TerminalPane({
       setLinkRef={setLinkRef}
       padding="session-terminal-inset py-2"
       inert={!session || isArchived || switching || livePending}
+      rootInert={behindArchive}
       covered={covered}
       editMenu={session && !isArchived && <TerminalEditMenu key={session.id} sessionId={session.id} controllerRef={controllerRef} contextTargetRef={containerRef} />}
     >
@@ -426,7 +458,7 @@ export function TerminalPane({
           inert={resuming}
           className="contents"
         >
-          <SessionHistoryView key={session.id} session={session} onSelectSession={onSelectSession} restoreFocus={restoreFocus ?? focusTerminal} />
+          <SessionHistoryView key={session.id} session={session} onSelectSession={onSelectSession} restoreFocus={restoreFocus ?? focusTerminal} exposed={exposed} />
         </div>
       )}
       {cover && (

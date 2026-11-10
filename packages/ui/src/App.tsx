@@ -92,7 +92,7 @@ export function App(): React.ReactElement {
   const providers = useProviders();
   // Keeps Settings out of the way of the question's dialog.
   const questionPending = usePendingQuestion();
-  const { terminalRef, welcomeRef, agentAreaRef, focusTerminal } = useTerminalFocus();
+  const { terminalRef, welcomeRef, agentAreaRef, focusTerminal, handOffToTerminal } = useTerminalFocus();
   const { selectedSessionId, selectedSession, setSelectedSessionId } = useSelectedSession();
   const [dialogRequest, setDialogRequest] = useState<DialogRequest>();
   const { linkedFile, viewLinkedFile, setLinkedFile, closeLinkedFile } = useLinkedFile({ focusTerminal });
@@ -172,7 +172,7 @@ export function App(): React.ReactElement {
   const agentAreaInert = covered || floatingShown;
   const {
     archiveScope,
-    setArchiveScope,
+    setArchiveScopeByUser,
     archiveConsole,
     archiveProject,
     archiveBoundTo,
@@ -184,7 +184,7 @@ export function App(): React.ReactElement {
     closeArchive,
     onArchiveViewState,
     stableOpenArchive,
-  } = useArchiveView({ consoles, projects, revealArchive, sidebarOpen: panes.sidebarOpen, closeSidebar: panes.closeSidebar, focusTerminal });
+  } = useArchiveView({ consoles, projects, revealArchive, sidebarOpen: panes.sidebarOpen, closeSidebar: panes.closeSidebar, handOffToTerminal });
 
   useFirstConsoleHandoff(hosts !== undefined && noConsoles, dialogRequest?.kind === "new-console");
 
@@ -245,7 +245,7 @@ export function App(): React.ReactElement {
     asideOwnerState,
     asideOwner,
     setAsideOwner,
-    setArchiveScope,
+    setArchiveScopeByUser,
   });
   // A removed project's browser state has nothing left to apply to.
   useEffect(() => {
@@ -327,7 +327,8 @@ export function App(): React.ReactElement {
     setSelectionByUser,
     setOwnerByUser,
     archiveOpen,
-    setArchiveScope,
+    setArchiveScopeByUser,
+    closeArchive,
     focusTerminal,
     resumeSession,
     asideFloats,
@@ -408,7 +409,7 @@ export function App(): React.ReactElement {
     setSelectedSessionId,
     archiveOpen,
     archiveScope,
-    setArchiveScope,
+    setArchiveScopeByUser,
     setArchiveRestore,
     archiveViewStates,
     revealArchive,
@@ -640,7 +641,6 @@ export function App(): React.ReactElement {
                     The scroll container casts the sidebar shadow. */}
                 <div ref={agentAreaRef} inert={agentAreaInert} className={`relative flex min-h-0 ${asideFloats ? "min-w-0 flex-1" : "min-w-[400px] flex-[1_1_400px]"} pane-docked:z-1`}>
                   <ArchiveLayer
-                    focusTerminal={focusTerminal}
                     view={archiveOpen && archiveConsole ? {
                       console: archiveConsole,
                       project: archiveProject,
@@ -668,6 +668,7 @@ export function App(): React.ReactElement {
                     onViewFile={viewLinkedFile}
                     onSelectSession={stableSelectSession}
                     restoreFocus={focusTerminal}
+                    behindArchive={archiveOpen}
                     noSelection={selectedSessionId === undefined}
                     session={selectedSession}
                     onResume={resumeSession}

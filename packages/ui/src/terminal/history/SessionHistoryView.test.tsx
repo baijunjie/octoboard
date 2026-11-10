@@ -2,9 +2,9 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FIRST_WRITE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
+import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { isolate } from "../../i18n/isolate";
@@ -187,6 +187,74 @@ it("speaks an unavailable and an empty history through a status", async () => {
   const empty = await mount({ type: "session_history", id: null, session: "s-1", messages: [] });
   await act(async () => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
   expect(empty.querySelector("[role=status]")?.textContent).toContain("No messages in this session");
+});
+
+describe("its status sentence while the history is not exposed", () => {
+  /** The view mounted on `reply` with the status region past its first write delay; `show` renders it again exposed or not. */
+  async function mountHeld(reply: Event | Error, exposed: boolean) {
+    fakeTimers();
+    request.mockImplementation(async () => {
+      if (reply instanceof Error) throw reply;
+      return reply;
+    });
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    const show = (now: boolean) => act(async () => root.render(host(<SessionHistoryView session={session} exposed={now} />)));
+    await show(exposed);
+    await act(async () => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
+    return { container, show };
+  }
+  const status = (container: HTMLElement) => container.querySelector("[role=status]")?.textContent;
+
+  it.each([
+    ["an empty history", { type: "session_history", id: null, session: "s-1", messages: [] } as Event, "No messages in this session"],
+    ["an unavailable one", { type: "session_history", id: null, session: "s-1", messages: [], unavailable: true } as Event, "Reopen the session to see its terminal."],
+  ])("holds the sentence of %s while it sits under the archive view, and says it once after the focus move that exposure makes", async (_case, reply, sentence) => {
+    const { container, show } = await mountHeld(reply, false);
+    await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS * 3));
+    expect(status(container) ?? "").toBe("");
+    await show(true);
+    await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
+    expect(status(container) ?? "").toBe("");
+    await act(async () => void vi.advanceTimersByTime(1));
+    expect(status(container)).toContain(sentence);
+  });
+
+  it("holds the loading sentence while not exposed, and says it once exposed", async () => {
+    request.mockImplementation(() => new Promise(() => {}));
+    fakeTimers();
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    const show = (exposed: boolean) => act(async () => root.render(host(<SessionHistoryView session={session} exposed={exposed} />)));
+    await show(false);
+    await act(async () => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS + AFTER_FOCUS_MOVE_DELAY_MS));
+    expect(status(container) ?? "").toBe("");
+    await show(true);
+    await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+    expect(status(container)).toBe("Loading history…");
+  });
+
+  it("does not say a sentence again that was already written when the view is covered and exposed again", async () => {
+    const { container, show } = await mountHeld({ type: "session_history", id: null, session: "s-1", messages: [] }, true);
+    await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+    expect(status(container)).toContain("No messages in this session");
+    const writes = vi.fn();
+    const observer = new MutationObserver(writes);
+    observer.observe(container, { childList: true, characterData: true, subtree: true });
+    await show(false);
+    await show(true);
+    await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS * 3));
+    expect(observer.takeRecords()).toEqual([]);
+    expect(status(container)).toContain("No messages in this session");
+    observer.disconnect();
+  });
+
+  it("does not hold a failure's alert, which is not a status sentence", async () => {
+    const { container } = await mountHeld(new Error("gone"), false);
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("Could not load the history of this session");
+  });
 });
 
 it("shows a loading state until the reply arrives", async () => {

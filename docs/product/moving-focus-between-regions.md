@@ -102,7 +102,8 @@ treats a device whose primary input cannot hover, such as a phone, as if the las
 - **Focus handed to the terminal when what held it goes away or is hidden** — a panel closing, a pane going — is not put
   in the terminal. While a maximized panel or a panel floating over the terminal covers it (see "Maximizing a panel" and
   "At 768 px and below: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), focus goes to that
-  panel's first control that takes no text; otherwise to the top bar's first enabled control.
+  panel's first control that takes no text; otherwise to the archive view while it is open (see "The archive view" in
+  `docs/product/archive-view.md`), and else to the top bar's first enabled control.
 - **A panel that floats over the terminal opened by a tap** takes focus on its first control that takes no text: in the
   Terminal panel a control of its header, not the shell; in the report panel the report page.
 - **Focus moved on the window's own initiative** — handed on as the part holding it goes away, returned after a press

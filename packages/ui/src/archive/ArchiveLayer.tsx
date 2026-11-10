@@ -1,8 +1,6 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 
 import { onReducedMotion, prefersReducedMotion } from "../components/motion/reducedMotion";
-import { ringForAutomaticFocus } from "../input/touchInput";
-import { useLatest } from "../components/hooks/useLatest";
 import { ArchiveView } from "./ArchiveView";
 
 /** How long the exit waits for its animation to end before it removes the view anyway. */
@@ -10,12 +8,12 @@ export const EXIT_FALLBACK_MS = 290;
 
 type View = React.ComponentProps<typeof ArchiveView>;
 
-/** Keeps the last archive on screen for its exit without delaying selection or navigation. */
-export function ArchiveLayer({ view, focusTerminal }: { view: View | undefined; focusTerminal: () => void }): React.ReactElement | null {
+/** Keeps the last archive on screen for its exit without delaying selection or navigation. Focus held in the
+ * closing view is handed on by `useArchiveView`, not here. */
+export function ArchiveLayer({ view }: { view: View | undefined }): React.ReactElement | null {
   const [retained, setRetained] = useState(view);
   const open = view !== undefined;
   const rootRef = useRef<HTMLDivElement>(null);
-  const latestFocusTerminal = useLatest(focusTerminal);
 
   useLayoutEffect(() => {
     if (view) setRetained(view);
@@ -23,10 +21,6 @@ export function ArchiveLayer({ view, focusTerminal }: { view: View | undefined; 
 
   useLayoutEffect(() => {
     if (open || !retained) return;
-    if (rootRef.current?.contains(document.activeElement) || document.activeElement === document.body) {
-      ringForAutomaticFocus();
-      latestFocusTerminal.current();
-    }
     const finish = () => setRetained(undefined);
     if (prefersReducedMotion()) {
       finish();
@@ -45,7 +39,7 @@ export function ArchiveLayer({ view, focusTerminal }: { view: View | undefined; 
       root?.removeEventListener("animationend", ended);
       stopReduced();
     };
-  }, [open, retained, latestFocusTerminal]);
+  }, [open, retained]);
 
   const shown = view ?? retained;
   if (!shown) return null;

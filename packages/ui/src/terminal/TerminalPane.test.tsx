@@ -316,6 +316,13 @@ function addTopBar(): HTMLButtonElement {
   return topBar.appendChild(document.createElement("button"));
 }
 
+/** The empty state's action offered by `noAgents: "add"`. */
+const emptyAction = (container: HTMLElement) => Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Add agent");
+
+/** Whether the element holding focus shows the focus ring: `[data-focus-visible]` anywhere in the pane would also
+ * match the terminal's own surface, which draws the ring around its input. */
+const focusedElementRinged = () => document.activeElement?.hasAttribute("data-focus-visible") ?? false;
+
 /** A pane mounted beside the top bar focus falls back to and a control elsewhere to put focus on:
  * the three cases below all turn on where focus goes while the terminal is empty. `show` renders
  * again with the props it is given, the mount's own where it is given none. */
@@ -351,12 +358,26 @@ it("keeps focus off the covered terminal while no session is selected", () => {
   expect(FakeController.last.focuses).toBe(1);
 });
 
-it("hands focus to the top bar when the session goes away while the terminal holds it", () => {
-  const { container, topBarButton, show } = mountEmpty({ session });
-  const input = container.querySelector("[dir=ltr]")!.appendChild(document.createElement("textarea"));
-  input.focus();
-  show({});
-  expect(document.activeElement).toBe(topBarButton);
+describe("handing focus on through the handle, as the closing archive view does", () => {
+  it.each([
+    ["offers an action", { noAgents: "add" as const }, true],
+    ["offers none", {}, false],
+  ])("lands focus left on <body> with no session on the empty state's action or else the top bar when the empty state %s", (_case, props, action) => {
+    const { container, handle, topBarButton } = mountEmpty(props);
+    expect(document.activeElement).toBe(document.body);
+    // Focus asked for the terminal leaves <body> alone, so that the app's launch pulls it nowhere.
+    act(() => handle.current?.focus());
+    expect(document.activeElement).toBe(document.body);
+    act(() => handle.current?.handOff());
+    expect(document.activeElement).toBe(action ? emptyAction(container) : topBarButton);
+  });
+
+  it("lands focus left on <body> with a session on the window's restore", () => {
+    const restoreFocus = vi.fn();
+    const { handle } = mountEmpty({ session, restoreFocus });
+    act(() => handle.current?.handOff());
+    expect(restoreFocus).toHaveBeenCalledOnce();
+  });
 });
 
 it("offers Add project in place of the select-a-session line while the console is bare", () => {
@@ -589,8 +610,6 @@ describe("selecting another session while focus is in the history", () => {
     return pane;
   }
 
-  const emptyAction = (container: HTMLElement) => Array.from(container.querySelectorAll("button")).find((b) => b.textContent === "Add agent");
-
   it.each([
     ["archived", "pointer", false],
     ["archived", "keyboard", true],
@@ -661,6 +680,21 @@ describe("selecting another session while focus is in the history", () => {
     expect(getInteractionModality()).toBe("keyboard");
   });
 
+  it.each([
+    ["offers an action", true],
+    ["offers no action", false],
+  ] as const)("hands focus to where it goes from a live terminal, with the ring even after a pointer press, when the selected session's record goes away and the empty state %s", async (_case, offered) => {
+    const bar = addTopBar();
+    const props = offered ? { noAgents: "add" as const } : {};
+    const { container, show } = await mountFocusedHistory("pointer", props);
+    show({ ...props, session: undefined, noSelection: false });
+    await act(async () => {});
+    expect(document.activeElement).toBe(offered ? emptyAction(container) : bar);
+    // The test's top bar is a plain button, which draws no ring of its own; the modality is what the ring follows.
+    if (offered) expect(focusedElementRinged()).toBe(true);
+    expect(getInteractionModality()).toBe("keyboard");
+  });
+
   it("does not take focus back for the terminal when focus was not in the history", async () => {
     const restoreFocus = vi.fn();
     const { container, show } = mountArchived({ restoreFocus });
@@ -675,6 +709,153 @@ describe("selecting another session while focus is in the history", () => {
     expect(controller.focuses).toBe(focuses);
     expect(document.activeElement).toBe(outside);
     expect(container.querySelector("[data-focus-visible]")).toBeNull();
+  });
+});
+
+describe("clearing the selection while focus is in a live session's terminal", () => {
+  /** A live pane with focus in its terminal and the modality of the input that put it there, restored after the test. */
+  function mountFocusedLive(modality: "keyboard" | "pointer", props: Partial<React.ComponentProps<typeof TerminalPane>> = {}) {
+    withModality(modality);
+    const pane = mountEmpty({ session, ...props });
+    const input = terminalInput(pane.container);
+    act(() => input.focus());
+    expect(document.activeElement).toBe(input);
+    return pane;
+  }
+
+  it.each([
+    ["cleared by the user", "pointer", false, true, "pointer"],
+    ["cleared by the user", "keyboard", true, true, "keyboard"],
+    ["gone by itself", "pointer", true, false, "keyboard"],
+    ["gone by itself", "keyboard", true, false, "keyboard"],
+  ] as const)("hands focus to the empty state's action when the session is %s after a %s press, ringed: %s", (_case, modality, ringed, noSelection, after) => {
+    const { container, show } = mountFocusedLive(modality, { noAgents: "add" });
+    show({ session: undefined, noAgents: "add", noSelection });
+    expect(document.activeElement).toBe(emptyAction(container));
+    expect(focusedElementRinged()).toBe(ringed);
+    expect(getInteractionModality()).toBe(after);
+  });
+
+  it.each([
+    ["cleared by the user", "pointer", true],
+    ["gone by itself", "keyboard", false],
+  ] as const)("hands focus to the top bar when the session is %s and the empty state offers no action, leaving modality %s after a pointer press", (_case, after, noSelection) => {
+    const { container, topBarButton, show } = mountFocusedLive("pointer");
+    show({ session: undefined, noSelection });
+    expect(container.querySelector("[data-region=terminal] button")).toBeNull();
+    expect(document.activeElement).toBe(topBarButton);
+    expect(getInteractionModality()).toBe(after);
+  });
+
+  it.each([
+    ["cleared by the user", true],
+    ["gone by itself", false],
+  ] as const)("leaves a tap's destination to the window's restore, not the empty state's action, when the session is %s, with no ring", (_case, noSelection) => {
+    // After a tap the window's `focusTerminal` lands on the top bar rather than on something that takes text; the
+    // pane must not move focus on from there to the action it offers.
+    const restoreFocus = vi.fn(() => document.querySelector<HTMLElement>("[data-region=topbar] button")!.focus());
+    const pane = mountFocusedLive("pointer", { noAgents: "add", restoreFocus });
+    const { topBarButton } = pane;
+    document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch" }));
+    onTestFinished(() => void document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse" })));
+    pane.show({ session: undefined, noAgents: "add", noSelection, restoreFocus });
+    expect(restoreFocus).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(topBarButton);
+    expect(focusedElementRinged()).toBe(false);
+    expect(getInteractionModality()).toBe("pointer");
+  });
+
+  it.each([
+    ["cleared by the user", true],
+    ["gone by itself", false],
+  ] as const)("hands focus to the window's restore first when the session is %s, then on to the empty state's action if that leaves it on <body>", (_case, noSelection) => {
+    // The window's restore leaves `<body>` alone with no session, as at launch.
+    const restoreFocus = vi.fn();
+    const { container, show } = mountFocusedLive("keyboard", { noAgents: "add", restoreFocus });
+    show({ session: undefined, noAgents: "add", noSelection, restoreFocus });
+    expect(restoreFocus).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(emptyAction(container));
+  });
+
+  it.each([
+    ["cleared by the user", true],
+    ["gone by itself", false],
+  ] as const)("moves nothing when the session is %s while focus is outside the pane", (_case, noSelection) => {
+    const { elsewhere, show } = mountEmpty({ session, noAgents: "add" });
+    withModality("pointer");
+    act(() => elsewhere.focus());
+    show({ session: undefined, noAgents: "add", noSelection });
+    expect(document.activeElement).toBe(elsewhere);
+    expect(focusedElementRinged()).toBe(false);
+    expect(getInteractionModality()).toBe("pointer");
+  });
+});
+
+describe("while the archive view covers the pane", () => {
+  const root = (container: HTMLElement) => container.querySelector("[data-region=terminal]");
+  /** Every control in the pane sits under an inert ancestor, so Tab from the view cannot reach it. */
+  const unreachable = (container: HTMLElement) => Array.from(container.querySelectorAll("button, a, [tabindex]")).every((control) => control.closest("[inert]") !== null);
+
+  it("keeps the terminal inert, and reachable again once the view is going", () => {
+    const { container, show } = mountEmpty({ session, behindArchive: true });
+    expect(container.querySelector("[inert]")?.contains(container.querySelector("[dir=ltr]"))).toBe(true);
+    show({ session, behindArchive: false });
+    expect(container.querySelector("[inert]")).toBeNull();
+  });
+
+  it("makes the whole pane inert, so an archived session's controls cannot be reached", async () => {
+    const owner = sessionOf("s-owner", "c-1", undefined, "Release captain", "idle");
+    setState({ sessions: new Map([[owner.id, owner]]) });
+    const { container, show } = mountArchived({ session: { ...archived, bound_to: owner.id }, onSelectSession: () => {}, behindArchive: true });
+    await act(async () => {});
+    expect(root(container)?.hasAttribute("inert")).toBe(true);
+    expect(container.querySelector("header button")).not.toBeNull();
+    expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent === "Reopen")).toBe(true);
+    expect(unreachable(container)).toBe(true);
+    show({ session: { ...archived, bound_to: owner.id }, onSelectSession: () => {}, behindArchive: false });
+    expect(root(container)?.hasAttribute("inert")).toBe(false);
+  });
+
+  it("makes the no-process bar's Resume unreachable too", () => {
+    const { container } = mountEmpty({ session: sessionOf("s-int", "c-1", undefined, "Stopped", "interrupted"), behindArchive: true });
+    expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent === "Resume")).toBe(true);
+    expect(unreachable(container)).toBe(true);
+  });
+
+  it("makes a cover's controls unreachable too", () => {
+    const { container } = mountEmpty({ session, behindArchive: true });
+    for (let i = 0; i < 5; i++) failAttempt();
+    FakeController.last.settle("closed");
+    expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent === "Reconnect")).toBe(true);
+    expect(unreachable(container)).toBe(true);
+  });
+
+  it.each([
+    ["the live terminal", false],
+    ["the history", true],
+  ] as const)("hands focus held in %s to the window's restore as the view opens, leaving the modality alone", async (_where, inHistory) => {
+    withModality("pointer");
+    const restoreFocus = vi.fn(() => stand.focus());
+    const stand = document.body.appendChild(document.createElement("button"));
+    const pane = inHistory ? mountArchived({ restoreFocus }) : mountEmpty({ session, restoreFocus });
+    await act(async () => {});
+    if (inHistory) act(() => pane.handle.current?.focus());
+    else act(() => terminalInput(pane.container).focus());
+    expect(pane.container.contains(document.activeElement)).toBe(true);
+    pane.show({ ...(inHistory ? {} : { session }), restoreFocus, behindArchive: true });
+    expect(restoreFocus).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(stand);
+    expect(getInteractionModality()).toBe("pointer");
+  });
+
+  it("moves nothing as the view opens when focus is outside the pane", () => {
+    withModality("pointer");
+    const restoreFocus = vi.fn();
+    const { elsewhere, show } = mountEmpty({ session, restoreFocus });
+    act(() => elsewhere.focus());
+    show({ session, restoreFocus, behindArchive: true });
+    expect(restoreFocus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(elsewhere);
   });
 });
 
@@ -1738,6 +1919,35 @@ describe("the pane's sentences while the agent area is inert", () => {
       expect(spokenText(container)).toEqual([]);
       advance(1);
       expect(spokenText(container)).toEqual(["This session is archived"]);
+    });
+
+    it("holds the sentences while the archive view covers the pane, with no say of the window's `exposed`", async () => {
+      request.mockResolvedValueOnce({ type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } as never);
+      const { container, show } = mountArchived({ behindArchive: true });
+      await act(async () => {});
+      advance(READ_TIME_MS + AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(spokenText(container)).toEqual([]);
+      show({ behindArchive: false });
+      advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+      expect(spokenText(container)).toEqual([]);
+      advance(1);
+      expect(spokenText(container)).toEqual(["This session is archived"]);
+    });
+
+    it("holds a no-process bar's sentence the same way while the archive view covers the pane", () => {
+      const container = document.body.appendChild(document.createElement("div"));
+      const root = createRoot(container);
+      roots.push(root);
+      const show = (behindArchive: boolean) => act(() => root.render(host(<TerminalPane session={interrupted} behindArchive={behindArchive} onResume={async () => true} onAddAgent={() => {}} />)));
+      show(true);
+      speak();
+      advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+      expect(spokenText(container)).toEqual([]);
+      show(false);
+      advance(AFTER_FOCUS_MOVE_DELAY_MS - 1);
+      expect(spokenText(container)).toEqual([]);
+      advance(1);
+      expect(spokenText(container)).toEqual(["Not running"]);
     });
 
     it("keeps a sentence already written in its region as the area goes inert and back", () => {

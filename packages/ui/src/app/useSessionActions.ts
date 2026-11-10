@@ -21,7 +21,8 @@ export function useSessionActions({
   setSelectionByUser,
   setOwnerByUser,
   archiveOpen,
-  setArchiveScope,
+  setArchiveScopeByUser,
+  closeArchive,
   focusTerminal,
   resumeSession,
   asideFloats,
@@ -38,7 +39,10 @@ export function useSessionActions({
   setSelectionByUser: (id: string | undefined) => void;
   setOwnerByUser: (owner: AsideOwner | undefined) => void;
   archiveOpen: boolean;
-  setArchiveScope: (scope: ArchiveScope | undefined) => void;
+  /** Changes what the archive view shows or closes it, as a move the user made (`useArchiveView`). */
+  setArchiveScopeByUser: (scope: ArchiveScope | undefined) => void;
+  /** Closes the archive view at once, for a close the user made (`useArchiveView`). */
+  closeArchive: () => void;
   focusTerminal: () => void;
   resumeSession: (sessionId: string) => Promise<boolean>;
   asideFloats: boolean;
@@ -57,7 +61,7 @@ export function useSessionActions({
     setSelectionByUser(sessionId);
     // The reply that names the session has already been applied to the store by the time this runs.
     setOwnerByUser(ownerForSession(store.getState().sessions.get(sessionId)));
-    setArchiveScope(undefined);
+    setArchiveScopeByUser(undefined);
   };
 
   const selectSession = (session: Session, { enterFocus = false, resume = true } = {}) => {
@@ -71,7 +75,9 @@ export function useSessionActions({
     const nextFocus = focusAfterSelect(focus, session, enterFocus, store.getState().sessions);
     if (nextFocus !== focus) setFocus(nextFocus);
     if (archiveOpen) {
-      setArchiveScope(undefined);
+      // Closed first, so `focusTerminal` finds the terminal rather than the view; every caller is an
+      // event or a native menu's listener.
+      closeArchive();
       focusTerminal();
     }
     // An interrupted session is resumed by selecting it, unless `resume` is off; an archived one only
