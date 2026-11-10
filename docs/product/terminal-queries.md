@@ -30,6 +30,10 @@ a browser, a phone), and most queries are answered by Octoboard itself rather th
 - **The Program Status Protocol's support query** (`OSC 7501 ; ?`) is answered by Octoboard in every session's
   terminal, whichever its agent, on every host; in a shell terminal of the Terminal panel it reaches the clients, none of
   which answers it. See "The support query" in `docs/product/program-status-reports.md`.
+- **While no daemon is connected to the process holder a terminal runs in** — the daemon restarting, or the holder not
+  reachable for now — the holder answers only the primary device attributes, and every other query above goes
+  unanswered; which of the two answers a query is decided by when the program asks it. See "Terminal queries while
+  no daemon is connected" in `docs/product/process-holders.md`.
 
 ## The colours and sizes a program reads
 

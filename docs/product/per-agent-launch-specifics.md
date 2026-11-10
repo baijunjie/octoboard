@@ -227,7 +227,10 @@ it shows the approval in the terminal, where it can be answered (measured on Cod
 **Its lifetime.** The server belongs to the running session, and runs as long as its terminal does. When the terminal
 exits, the server is ended. When the server exits by itself, the terminal is ended too, as if the agent had exited by
 itself rather than been ended by Octoboard, since it would otherwise wait for the server to come back for good. A
-holder that runs both does this itself, whether or not a daemon is connected to it. The server is in the launch's
+holder that runs both does this itself, whether or not a daemon is connected to it, and the server ends with the
+holder however the holder ends, killed outright included. A server left running by a holder of an earlier build that
+ended without it is stopped by the next daemon start as part of what that launch left behind (see "Automatic stopping
+and its boundaries" in `docs/product/background-processes.md`). The server is in the launch's
 process containment and leads a process session of its own (on a Windows daemon host, a job of its own inside the
 launch's job); what that means for the background-process lists is in "Automatic stopping and its boundaries" in
 `docs/product/background-processes.md`.

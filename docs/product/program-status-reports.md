@@ -27,7 +27,10 @@ whose status reports give.
 - **A program asks whether the protocol is supported with `OSC 7501 ; ? ST`**, where `ST` is `ESC \` or `BEL`.
 - **Octoboard answers it in every session's terminal, at once, whether or not any client is attached, on every host** —
   on Windows also in a terminal running on the system's own console host — and takes it out of the output, as it does
-  the queries it answers itself (see "Queries Octoboard answers itself" in `docs/product/terminal-queries.md`).
+  the queries it answers itself (see "Queries Octoboard answers itself" in `docs/product/terminal-queries.md`). The
+  exception is a query the program asks while no daemon is connected to the process holder its terminal runs in: the
+  holder answers only the device attributes, so the support query goes unanswered (see "Terminal queries while no
+  daemon is connected" in `docs/product/process-holders.md`).
 - **The answer** is `OSC 7501 ; ? : states=idle,working,done,blocked,error : kinds=permission,question,auth ST`, written
   without spaces and ended with the same terminator the query used: every state and kind of revision 0.4 is supported.
 

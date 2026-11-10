@@ -3,7 +3,9 @@
 The two macOS privacy permissions the agents running in Octoboard's terminals can need: **Screen Recording**, which
 agents use to take screenshots of what they built, and **Accessibility**, which lets them drive another application's
 interface. macOS attributes such a request to the application responsible for the process that made it, which is
-Octoboard rather than the agent, so the system's own prompt names Octoboard, appears in the middle of a task and says
+Octoboard rather than the agent — also for an agent a process holder runs from its copy of the build outside the
+application (see "The copy of the build holders run from" in `docs/product/process-holders.md`) — so the system's own
+prompt names Octoboard, appears in the middle of a task and says
 nothing about why — and Octoboard cannot intercept a prompt one of its agents raised. Settings' **Permissions** section
 (see "Permissions" in `docs/product/settings.md`) is therefore the place to grant them deliberately beforehand, and a
 paragraph above the rows says as much — shown only together with the rows, so not outside the macOS application, not

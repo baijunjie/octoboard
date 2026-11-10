@@ -83,8 +83,9 @@ file, for a later start to try again; the sessions it may run are interrupted li
 
 ### After a quit of the application
 
-Every quit of the desktop application leaves its quit record, `~/.octoboard/application-quit` (see "The quit note" in
-`docs/product/application-lifecycle.md`). Every daemon start reads it — whether the desktop application started the
+A quit of the desktop application, and the system ending the user's session, leaves the quit record,
+`~/.octoboard/application-quit`, whenever the application had a daemon of its own that may run holders (see "The quit
+note" in `docs/product/application-lifecycle.md`). Every daemon start reads it — whether the desktop application started the
 daemon or it was started on its own — before it takes any holder over or starts any terminal, and while it holds the
 lock that keeps one daemon per data directory, and ends the holders the quit left with their programs instead of taking
 them over:
