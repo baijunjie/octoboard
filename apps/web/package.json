@@ -18,7 +18,7 @@
     "@nuxtjs/i18n": "^10.6.0",
     "@nuxtjs/sitemap": "^8.6.2",
     "@octoboard/ui": "workspace:*",
-    "nuxt": "^4.6.0",
+    "nuxt": "^4.6.4",
     "nuxt-gtag": "^5.0.0",
     "vue": "^3.5.22",
     "vue-router": "^5.4.0"
