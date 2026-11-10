@@ -39,9 +39,10 @@ the Grok Build section's "Leader mode leaves the TUI's stop to a `SIGKILL` of th
 **Grok Build 1.0.70** on 2026-11-02. What "The agents on Windows" says was measured in November 2026 on Windows 11 23H2
 on **Claude Code 2.1.318** and **2.1.319**, **Codex 0.166.0** (the stop, the hook commands and the app server also on
 **0.163.0**) and **Grok Build 1.0.77**. What the Claude Code section says about the calls of one message overlapping was
-measured on **Claude Code 2.1.319** on 2026-11-10. All three rewrite their hook surface, their payload fields, their
-configuration layering and their on-disk layout on upgrade, so check a detail here against the installed version before
-relying on it.
+measured on **Claude Code 2.1.319** on 2026-11-10, and what the Grok Build section says about the calls of one response
+running side by side on **Grok Build 1.0.77** on the same day. All three rewrite their hook surface, their payload
+fields, their configuration layering and their on-disk layout on upgrade, so check a detail here against the installed
+version before relying on it.
 
 The permission-resume note below distinguishes the native implementations in **Claude Code 2.1.274** and **2.1.319**.
 Grok's permission-mode startup and resume behavior was measured on **Grok Build 1.0.77** with isolated configuration,
@@ -791,6 +792,26 @@ teardown fire carries none of them, so the two are distinguishable by payload sh
   seven minutes, past its `max_retries` of 8, and never ended the turn. It was provoked by setting the key
   `endpoints.models_base_url` (Grok Build 1.0.46) in a throw-away `GROK_HOME`, with the user's `auth.json` linked in,
   to a local stand-in answering HTTP 400.
+
+**The calls of one response run side by side, and one can end while `ask_user_question` waits on the user** (1.0.77,
+measured on 2026-11-10 in a PTY against a local stand-in for its inference API, in Ask, Auto and Always-approve modes;
+the captures are `apps/daemon/testdata/grok_hooks_*.jsonl`). Grok first takes the calls one at a time, in order: each
+fires `PreToolUse` and gets its permission decision (a rule, Auto's classifier, or a prompt) before the next call's
+`PreToolUse` fires. Then it runs them all at once. With a `run_terminal_command` running `sleep 6` and an
+`ask_user_question` in one response, in either order, the shell command's `PostToolUse` came about 6 s after the
+question's `Notification` `elicitation_dialog`, with the question still on screen. A background `spawn_subagent`'s
+`PostToolUse` was emitted 1–3 ms after that notification (by the payloads' `timestamp`; the two hook processes start
+together, so they arrive in either order), and a foreground one's when its subagent finished. With the question first,
+the other call's `PreToolUse` follows the question's, and in Auto mode the question appears only once the classifier has
+decided on that other call. A permission prompt, by contrast, holds the whole response: no call of it starts, not even
+one that needs no permission, until the prompt is answered (checked against the process list), and a question in the
+same response appears only after it. Work an earlier response left running does not end through a post event either: a
+command put in the background (`block_until_ms: 0`) fires its `PostToolUse` at once and reports its completion as a
+`Notification` `task_complete`, and a background subagent's own events carry `subagentType` and the subagent's own
+`sessionId`. So a post event says only that its own call ended, and which call a hand was raised for has to be kept by
+`toolUseId` (also `tool_use_id`), which `PreToolUse`, both post events and `PermissionDenied` carry; `Notification`, for
+`permission_prompt` and `elicitation_dialog` alike, names no call. The terminal title keeps its spinner while a question
+waits, and is prefixed with `⚠ Action Required - ` while a permission prompt does.
 
 **Some Grok turns produce no stop event at all** (bash mode, builtin slash commands, cancel-and-send, rewinds). The
 backstop is `Notification` with `idle_prompt`: a turn cancelled before its first token emitted no stop event of any

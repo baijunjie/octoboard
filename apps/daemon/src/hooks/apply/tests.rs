@@ -667,6 +667,252 @@ async fn a_question_waits_through_the_end_of_another_call() {
     assert!(!session.paused);
 }
 
+/// A Grok Build session at `status` with a live stand-in, which is returned to keep it alive.
+fn grok_session(
+    name: &str,
+    status: SessionStatus,
+) -> (
+    Arc<AppState>,
+    crate::test_support::ScratchDir,
+    crate::test_support::StandIn,
+) {
+    let (state, dir) = app_state(name);
+    state
+        .store
+        .insert_console(&crate::test_support::console(&dir))
+        .unwrap();
+    let mut session = crate::test_support::console_session("s", status);
+    session.agent = AgentId::GROK;
+    state.store.insert_session(&session).unwrap();
+    let live = crate::test_support::idle_stand_in_of("s", AgentId::GROK);
+    state.register_live(live.clone());
+    (state, dir, live)
+}
+
+/// Grok Build's hook events of turns whose one response ran another call beside an
+/// `ask_user_question`, the other call ending while the question waited (1.0.77; see
+/// `testdata/grok-hook-captures.md`).
+const GROK_QUESTION_BESIDE_OTHER_CALL: [(&str, &str); 2] = [
+    (
+        "question first, then a shell command",
+        include_str!("../../../testdata/grok_hooks_question_first_beside_shell.jsonl"),
+    ),
+    (
+        "background subagent, then the question",
+        include_str!("../../../testdata/grok_hooks_background_subagent_beside_question.jsonl"),
+    ),
+];
+
+/// From the question's start to its own end, nothing another call of the same response does —
+/// its start, its end, the subagent it started — lowers the hand; the question's end does, and
+/// the turn then ends as usual.
+#[tokio::test]
+async fn a_grok_question_waits_through_the_other_calls_of_its_response() {
+    let is = |line: &str, event: &str| {
+        let payload: serde_json::Value = serde_json::from_str(line).unwrap();
+        payload["hook_event_name"] == event && payload["tool_name"] == "ask_user_question"
+    };
+    for (capture, lines) in GROK_QUESTION_BESIDE_OTHER_CALL {
+        let (state, _dir, _live) =
+            grok_session("server-grok-question-other-call", SessionStatus::Idle);
+        let lines: Vec<&str> = lines.lines().collect();
+        let asked = lines
+            .iter()
+            .position(|line| is(line, "PreToolUse"))
+            .expect("the capture asks a question");
+        let answered = lines
+            .iter()
+            .position(|line| is(line, "PostToolUse"))
+            .expect("the capture answers the question");
+        for line in &lines[..asked] {
+            apply_hook(&state, "s", line.as_bytes());
+        }
+        for line in &lines[asked..answered] {
+            apply_hook(&state, "s", line.as_bytes());
+            assert_eq!(
+                status_of(&state),
+                SessionStatus::WaitingUser,
+                "{capture}: after {line}"
+            );
+        }
+        for line in &lines[answered..] {
+            apply_hook(&state, "s", line.as_bytes());
+        }
+        let session = state.store.get_session("s").unwrap().unwrap();
+        assert_eq!(session.status, SessionStatus::Idle, "{capture}");
+        assert!(!session.paused, "{capture}");
+    }
+}
+
+/// A Grok Build hook event about the tool call `id` of `tool`.
+fn grok_call_hook(event: &str, id: &str, tool: &str) -> Vec<u8> {
+    serde_json::json!({
+        "hook_event_name": event,
+        "toolName": tool,
+        "toolUseId": id,
+    })
+    .to_string()
+    .into_bytes()
+}
+
+/// Whichever event ends a Grok turn, or denies the question's own call, a hand raised for a
+/// question that never ended comes down with it, and a later call's end is then an ordinary
+/// move to work.
+#[tokio::test]
+async fn a_grok_turn_end_or_denial_lowers_the_hand_of_a_question_still_waiting() {
+    for (event, id, expected) in [
+        ("UserPromptSubmit", "", SessionStatus::Working),
+        ("StopCancelled", "", SessionStatus::Idle),
+        ("StopFailure", "", SessionStatus::Idle),
+        ("Stop", "", SessionStatus::Idle),
+        ("PermissionDenied", "q", SessionStatus::Working),
+    ] {
+        let (state, _dir, _live) =
+            grok_session("server-grok-question-ended-by", SessionStatus::Idle);
+        apply_hook(&state, "s", br#"{"hook_event_name": "UserPromptSubmit"}"#);
+        apply_hook(
+            &state,
+            "s",
+            &grok_call_hook("PreToolUse", "q", "ask_user_question"),
+        );
+        assert_eq!(status_of(&state), SessionStatus::WaitingUser, "{event}");
+
+        apply_hook(&state, "s", &grok_call_hook(event, id, "ask_user_question"));
+        assert_eq!(status_of(&state), expected, "{event}");
+
+        // Nothing is waiting any more, so another call's end is work again.
+        apply_hook(
+            &state,
+            "s",
+            &grok_call_hook("PostToolUse", "t2", "run_terminal_command"),
+        );
+        assert_eq!(status_of(&state), SessionStatus::Working, "{event}");
+    }
+}
+
+/// A Grok Build permission prompt names no call and holds back the other calls of its response,
+/// so the next call to end lowers it, as before.
+#[tokio::test]
+async fn a_grok_permission_prompt_comes_down_with_the_next_call_to_end() {
+    let (state, _dir, _live) = grok_session("server-grok-prompt-next-end", SessionStatus::Idle);
+    apply_hook(&state, "s", br#"{"hook_event_name": "UserPromptSubmit"}"#);
+    apply_hook(
+        &state,
+        "s",
+        &grok_call_hook("PreToolUse", "t1", "run_terminal_command"),
+    );
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hook_event_name": "Notification", "notificationType": "permission_prompt"}"#,
+    );
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+
+    apply_hook(
+        &state,
+        "s",
+        &grok_call_hook("PostToolUse", "t1", "run_terminal_command"),
+    );
+    assert_eq!(status_of(&state), SessionStatus::Working);
+}
+
+/// Whichever way another call of the question's response ends or is stopped — a failure, a denial
+/// — and whichever of its own events arrives, a waiting question keeps its hand up, and its own
+/// failure then lowers it.
+#[tokio::test]
+async fn a_grok_question_waits_through_the_failure_or_denial_of_another_call() {
+    let (state, _dir, _live) =
+        grok_session("server-grok-question-failed-call", SessionStatus::Idle);
+    let hook = |event, id, tool| apply_hook(&state, "s", &grok_call_hook(event, id, tool));
+    hook("UserPromptSubmit", "", "");
+    hook("PreToolUse", "q", "ask_user_question");
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+
+    for (event, id) in [
+        ("PreToolUse", "t1"),
+        ("PostToolUseFailure", "t1"),
+        ("PermissionDenied", "t2"),
+        ("PostToolUse", "t3"),
+    ] {
+        hook(event, id, "run_terminal_command");
+        assert_eq!(
+            status_of(&state),
+            SessionStatus::WaitingUser,
+            "{event} {id}"
+        );
+    }
+
+    hook("PostToolUseFailure", "q", "ask_user_question");
+    assert_eq!(status_of(&state), SessionStatus::Working);
+}
+
+/// A question's own end does not lower the hand while another question of the response still
+/// waits; the last one's end does.
+#[tokio::test]
+async fn a_grok_hand_stays_up_until_every_waiting_question_has_ended() {
+    let (state, _dir, _live) = grok_session("server-grok-two-questions", SessionStatus::Idle);
+    let hook = |event, id| apply_hook(&state, "s", &grok_call_hook(event, id, "ask_user_question"));
+    hook("UserPromptSubmit", "");
+    hook("PreToolUse", "q1");
+    hook("PreToolUse", "q2");
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+
+    hook("PostToolUse", "q1");
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+
+    hook("PostToolUse", "q2");
+    assert_eq!(status_of(&state), SessionStatus::Working);
+}
+
+/// A subagent's events are ignored whole: one that carries the question's own call id neither
+/// ends the call nor moves the session.
+#[tokio::test]
+async fn a_grok_subagents_events_do_not_end_a_waiting_question() {
+    let (state, _dir, _live) = grok_session("server-grok-question-subagent", SessionStatus::Idle);
+    let hook = |event, id| apply_hook(&state, "s", &grok_call_hook(event, id, "ask_user_question"));
+    hook("UserPromptSubmit", "");
+    hook("PreToolUse", "q");
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+
+    for event in ["PostToolUse", "PostToolUseFailure", "PermissionDenied"] {
+        let body = serde_json::json!({
+            "hook_event_name": event,
+            "toolName": "ask_user_question",
+            "toolUseId": "q",
+            "subagentType": "general-purpose",
+        })
+        .to_string();
+        apply_hook(&state, "s", body.as_bytes());
+        assert_eq!(status_of(&state), SessionStatus::WaitingUser, "{event}");
+    }
+
+    // The session's own end of the question still lowers the hand.
+    hook("PostToolUse", "q");
+    assert_eq!(status_of(&state), SessionStatus::Working);
+}
+
+/// `idle_prompt` ends no call: the other call's end that follows it still leaves the question's
+/// hand up, until the question ends.
+#[tokio::test]
+async fn a_grok_idle_prompt_does_not_end_a_waiting_question() {
+    let (state, _dir, _live) =
+        grok_session("server-grok-question-idle-prompt", SessionStatus::Idle);
+    let hook = |event, id, tool| apply_hook(&state, "s", &grok_call_hook(event, id, tool));
+    hook("UserPromptSubmit", "", "");
+    hook("PreToolUse", "q", "ask_user_question");
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hookEventName": "Notification", "notificationType": "idle_prompt"}"#,
+    );
+
+    hook("PostToolUse", "t1", "run_terminal_command");
+    assert_eq!(status_of(&state), SessionStatus::WaitingUser);
+
+    hook("PostToolUse", "q", "ask_user_question");
+    assert_eq!(status_of(&state), SessionStatus::Working);
+}
+
 /// A helper agent's tool events carry an `agent_id` and no `agent_type`: they are not the
 /// session's work, so an idle session stays idle.
 #[tokio::test]

@@ -613,12 +613,147 @@ fn other_claude_events_say_nothing_of_tool_calls() {
     }
 }
 
-/// Only Claude Code's hooks tell calls apart; every other agent's events leave its status mapping
-/// as it was.
+/// Grok Build's tool events say what a session is doing: its ask-the-user tool's start raises the
+/// hand, whichever spelling names the tool, any other start is work, and every tool event that
+/// ends a call, or stops one that will never run, is work too.
 #[test]
-fn only_claude_code_reports_tool_call_changes() {
+fn a_grok_tool_event_sets_waiting_for_a_question_and_working_otherwise() {
+    for payload in [
+        json!({"toolName": "ask_user_question"}),
+        json!({"tool_name": "ask_user_question"}),
+    ] {
+        assert_eq!(
+            of(AgentId::GROK).status("PreToolUse", &payload),
+            Some(SessionStatus::WaitingUser),
+            "{payload}"
+        );
+    }
+    for payload in [
+        json!({"toolName": "run_terminal_command"}),
+        json!({"tool_name": "spawn_subagent"}),
+        json!({}),
+    ] {
+        assert_eq!(
+            of(AgentId::GROK).status("PreToolUse", &payload),
+            Some(SessionStatus::Working),
+            "{payload}"
+        );
+    }
+    for event in ["PostToolUse", "PostToolUseFailure", "PermissionDenied"] {
+        assert_eq!(
+            of(AgentId::GROK).status(event, &json!({"toolName": "ask_user_question"})),
+            Some(SessionStatus::Working),
+            "{event}"
+        );
+    }
+}
+
+/// Grok Build's `PreToolUse` starts a call under its `toolUseId`, read in either spelling, with its
+/// tool but not its input, and only its own ask-the-user tool starts one that waits on the user.
+#[test]
+fn a_grok_tool_start_opens_a_call_and_only_a_question_waits() {
+    let shell = json!({
+        "toolName": "run_terminal_command",
+        "toolInput": {"command": "sleep 6"},
+        "toolUseId": "t1",
+    });
+    assert_eq!(
+        of(AgentId::GROK).tool_call_change("PreToolUse", &shell),
+        Some(ToolCallChange::Started {
+            id: Some("t1"),
+            call: CallShape {
+                tool: Some("run_terminal_command"),
+                input: None,
+            },
+            waits_on_user: false,
+        })
+    );
+    let question = json!({
+        "tool_name": "ask_user_question",
+        "tool_input": {"questions": []},
+        "tool_use_id": "t2",
+    });
+    assert_eq!(
+        of(AgentId::GROK).tool_call_change("PreToolUse", &question),
+        Some(ToolCallChange::Started {
+            id: Some("t2"),
+            call: CallShape {
+                tool: Some("ask_user_question"),
+                input: None,
+            },
+            waits_on_user: true,
+        })
+    );
+}
+
+/// Either post event ends the call it names, and so does the denial of a call that will never
+/// run; an event that names none ends an unnamed call.
+#[test]
+fn a_grok_post_event_or_denial_ends_its_own_call() {
+    for event in ["PostToolUse", "PostToolUseFailure", "PermissionDenied"] {
+        for payload in [json!({"toolUseId": "t1"}), json!({"tool_use_id": "t1"})] {
+            assert_eq!(
+                of(AgentId::GROK).tool_call_change(event, &payload),
+                Some(ToolCallChange::Ended { id: Some("t1") }),
+                "{event} {payload}"
+            );
+        }
+        assert_eq!(
+            of(AgentId::GROK).tool_call_change(event, &json!({})),
+            Some(ToolCallChange::Ended { id: None }),
+            "{event}"
+        );
+    }
+}
+
+/// A new prompt, any of the turn's three ends and a session's start leave no call open.
+#[test]
+fn a_grok_prompt_or_turn_end_ends_every_call() {
+    for event in [
+        "UserPromptSubmit",
+        "Stop",
+        "StopFailure",
+        "StopCancelled",
+        "SessionStart",
+    ] {
+        assert_eq!(
+            of(AgentId::GROK).tool_call_change(event, &json!({})),
+            Some(ToolCallChange::AllEnded),
+            "{event}"
+        );
+    }
+}
+
+/// A permission prompt or a question's dialog names no call, and Grok's permission prompts hold
+/// back every other call, so neither is a call waiting on the user; nor are the other events.
+#[test]
+fn other_grok_events_say_nothing_of_tool_calls() {
+    for payload in [
+        json!({"notificationType": "permission_prompt"}),
+        json!({"notificationType": "elicitation_dialog"}),
+        json!({"notificationType": "idle_prompt"}),
+    ] {
+        assert_eq!(
+            of(AgentId::GROK).tool_call_change("Notification", &payload),
+            None,
+            "{payload}"
+        );
+    }
+    for event in ["SubagentStart", "SubagentStop", "SessionEnd", "PreCompact"] {
+        assert_eq!(
+            of(AgentId::GROK).tool_call_change(event, &json!({})),
+            None,
+            "{event}"
+        );
+    }
+}
+
+/// Only Claude Code's and Grok Build's hooks tell calls apart; every other agent's events leave
+/// its status mapping as it was.
+#[test]
+fn only_claude_code_and_grok_build_report_tool_call_changes() {
     let payload = json!({"tool_name": "Bash", "tool_input": {}, "tool_use_id": "t1"});
-    for agent in [AgentId::CODEX, AgentId::GROK, AgentId::TEST] {
+    for agent in [AgentId::CODEX, AgentId::TEST] {
         for event in [
             "PreToolUse",
             "PermissionRequest",

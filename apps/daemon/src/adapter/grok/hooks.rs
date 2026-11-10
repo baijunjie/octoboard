@@ -6,13 +6,22 @@
 //! marks a subagent's payload (the default). Its `Stop` also carries a `backgroundTasks`, but
 //! nothing records how it is shaped or whether the work outlives the turn, so it is not read.
 //!
+//! A post event says only that its own call ended, and one response's calls run side by side
+//! (1.0.77): each call fires `PreToolUse` and gets its permission decision in turn, and then they
+//! all run at once, so a shell command or a subagent started beside an `ask_user_question` can
+//! end while the question waits on the user. So a hand raised for a question stays up until the
+//! question's own call ends, which takes the calls told apart
+//! ([`HookInterpreter::tool_call_change`]).
+//!
 //! A turn cancelled before its first token fires nothing at all, so its terminal title is watched
 //! from its `UserPromptSubmit`, and again from each event that brings it back from waiting on the
 //! user (`crate::session::title_interrupt`).
 
 use serde_json::Value;
 
-use crate::hooks::{text_field, HookInterpreter, RecordWatch, TurnEnd, TurnOutcome};
+use crate::hooks::{
+    text_field, CallShape, HookInterpreter, RecordWatch, ToolCallChange, TurnEnd, TurnOutcome,
+};
 use crate::protocol::{AgentId, SessionStatus};
 
 pub(super) struct GrokHooks;
@@ -24,12 +33,17 @@ impl HookInterpreter for GrokHooks {
             "UserPromptSubmit" | "PostToolUse" | "PostToolUseFailure" | "PermissionDenied" => {
                 Some(SessionStatus::Working)
             }
-            "PreToolUse" => match field(payload, "toolName", "tool_name") {
-                tool if tool.is_some() && tool == AgentId::GROK.descriptor().ask_question_tool => {
+            "PreToolUse" => {
+                if AgentId::GROK.descriptor().is_ask_question_tool(field(
+                    payload,
+                    "toolName",
+                    "tool_name",
+                )) {
                     Some(SessionStatus::WaitingUser)
+                } else {
+                    Some(SessionStatus::Working)
                 }
-                _ => Some(SessionStatus::Working),
-            },
+            }
             // Only the per-turn fire means the turn ended. The teardown fire carries
             // `reason: "shutdown"` and is the session going away, which the process exit reports.
             "Stop" if is_shutdown(payload) => None,
@@ -104,6 +118,39 @@ impl HookInterpreter for GrokHooks {
             "StopFailure" => true,
             "Notification" => notification_type(payload) == Some("agent_error"),
             _ => false,
+        }
+    }
+
+    /// `PreToolUse`, both post events and `PermissionDenied` name their call by `toolUseId` (also
+    /// `tool_use_id`). Only the question's own call waits on the user: a permission prompt
+    /// (`Notification` `permission_prompt`, which names no call) holds back every other call of its
+    /// response until it is answered (1.0.77), so no other call ends while it is up. A prompt, a
+    /// turn's end and a session's start leave no call open.
+    fn tool_call_change<'a>(&self, event: &str, payload: &'a Value) -> Option<ToolCallChange<'a>> {
+        let id = || field(payload, "toolUseId", "tool_use_id");
+        match event {
+            "PreToolUse" => {
+                // No input: a call's shape serves only to match a permission prompt to it, and a
+                // Grok Build prompt is never matched to a call (see above).
+                let call = CallShape {
+                    tool: field(payload, "toolName", "tool_name"),
+                    input: None,
+                };
+                let waits_on_user = AgentId::GROK.descriptor().is_ask_question_tool(call.tool);
+                Some(ToolCallChange::Started {
+                    id: id(),
+                    call,
+                    waits_on_user,
+                })
+            }
+            // A denied call never runs, so no post event follows it.
+            "PostToolUse" | "PostToolUseFailure" | "PermissionDenied" => {
+                Some(ToolCallChange::Ended { id: id() })
+            }
+            "UserPromptSubmit" | "Stop" | "StopFailure" | "StopCancelled" | "SessionStart" => {
+                Some(ToolCallChange::AllEnded)
+            }
+            _ => None,
         }
     }
 

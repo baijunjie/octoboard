@@ -37,11 +37,6 @@ use crate::protocol::{AgentId, BackgroundTask, SessionStatus};
 
 pub(super) struct ClaudeHooks;
 
-/// Whether `tool` is Claude Code's own ask-the-user tool, a question waiting on a person.
-fn is_question(tool: Option<&str>) -> bool {
-    tool.is_some() && tool == AgentId::CLAUDE.descriptor().ask_question_tool
-}
-
 /// The ids of every `<task-id>…</task-id>` in a prompt.
 fn task_ids(prompt: &str) -> Vec<String> {
     prompt
@@ -63,7 +58,10 @@ impl HookInterpreter for ClaudeHooks {
             // The tool name is in the payload rather than the event: Claude Code's own
             // ask-the-user tool is a question waiting on a person, every other tool is work.
             "PreToolUse" => {
-                if is_question(payload.get("tool_name").and_then(Value::as_str)) {
+                if AgentId::CLAUDE
+                    .descriptor()
+                    .is_ask_question_tool(payload.get("tool_name").and_then(Value::as_str))
+                {
                     Some(SessionStatus::WaitingUser)
                 } else {
                     Some(SessionStatus::Working)
@@ -207,7 +205,7 @@ impl HookInterpreter for ClaudeHooks {
         match event {
             "PreToolUse" => {
                 let call = call();
-                let waits_on_user = is_question(call.tool);
+                let waits_on_user = AgentId::CLAUDE.descriptor().is_ask_question_tool(call.tool);
                 Some(ToolCallChange::Started {
                     id: id(),
                     call,

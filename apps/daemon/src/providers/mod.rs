@@ -237,6 +237,11 @@ impl ProviderCode {
 }
 
 impl ProviderDescriptor {
+    /// Whether `tool` is the provider's own ask-the-user tool, a question waiting on a person.
+    pub fn is_ask_question_tool(&self, tool: Option<&str>) -> bool {
+        tool.is_some() && tool == self.ask_question_tool
+    }
+
     /// The provider's setting with this id.
     pub fn setting(&self, id: &str) -> Option<&'static SettingDescriptor> {
         self.settings.iter().find(|setting| setting.id == id)
