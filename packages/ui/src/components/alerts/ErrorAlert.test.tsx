@@ -2,7 +2,7 @@
 import { Alert } from "@heroui/react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "./errorAlerts";
 import { CodedError } from "../../errors/codedError";
@@ -11,6 +11,8 @@ import { AlertButton } from "./AlertButton";
 import { ErrorAlert } from "./ErrorAlert";
 import { FailureAlert } from "./FailureAlert";
 import { InlineReference } from "../../i18n/InlineReference";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
+import { fakeTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -69,6 +71,64 @@ it("does not announce a failure that was there as its view opened", () => {
   expect(container.querySelector('[role="alert"]')).toBeNull();
   render(<ErrorAlert title="Work unavailable" announce>Quota used up.</ErrorAlert>);
   expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
+it("waits the focus-feedback delay for each failure attempt without replacing its recovery control", async () => {
+  fakeTimers();
+  const alert = (attempt: number) => (
+    <ErrorAlert title="Could not read" announce announceKey={attempt} announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} delayEachAttempt actions={<button type="button">Try again</button>}>
+      Connection closed.
+    </ErrorAlert>
+  );
+  const { container, render } = mount(alert(0));
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS); });
+  const firstAnnouncement = container.querySelector('[role="alert"]');
+  expect(firstAnnouncement?.textContent).toBe("Could not readConnection closed.");
+  const retry = container.querySelector("button")!;
+  act(() => retry.focus());
+  render(alert(1));
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS); });
+  expect(container.querySelector('[role="alert"]')).not.toBe(firstAnnouncement);
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe("Could not readConnection closed.");
+  expect(container.querySelector("button")).toBe(retry);
+  expect(document.activeElement).toBe(retry);
+});
+
+it("does not let an earlier attempt's pending timer announce a replacement failure before its own delay", async () => {
+  fakeTimers();
+  const alert = (attempt: number) => (
+    <ErrorAlert title="Could not read" announce announceKey={attempt} announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} delayEachAttempt>
+      Connection closed.
+    </ErrorAlert>
+  );
+  const { container, render } = mount(alert(0));
+  const halfDelay = AFTER_FOCUS_MOVE_DELAY_MS / 2;
+  await act(async () => { await vi.advanceTimersByTimeAsync(halfDelay); });
+  render(alert(1));
+  await act(async () => { await vi.advanceTimersByTimeAsync(halfDelay); });
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(halfDelay); });
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe("Could not readConnection closed.");
+});
+
+it("keeps the original mount delay across attempts by default and announces later attempts immediately", async () => {
+  fakeTimers();
+  const alert = (attempt: number) => (
+    <ErrorAlert title="Could not read" announce announceKey={attempt} announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}>
+      Attempt {attempt} failed.
+    </ErrorAlert>
+  );
+  const { container, render } = mount(alert(0));
+  const halfDelay = AFTER_FOCUS_MOVE_DELAY_MS / 2;
+  await act(async () => { await vi.advanceTimersByTimeAsync(halfDelay); });
+  render(alert(1));
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(halfDelay); });
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe("Could not readAttempt 1 failed.");
+  render(alert(2));
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe("Could not readAttempt 2 failed.");
 });
 
 it("keeps the structured diagnostics of a failure behind the Alert's Details, and opens no error alert dialog for it", () => {

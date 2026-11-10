@@ -21,7 +21,7 @@ import { sessionOrderPreference } from "../store";
 import { markdownStyle } from "../viewer/markdown/markdownStyle";
 import { FOCUS_GRACE_MS, ImportConfigurationDialog } from "./ImportConfigurationDialog";
 import { agentSettingLinesOf, cardTitled, mountDialog, openTab, press, settingGroupsOf, settingLinesAcrossGroups, settingLinesOf } from "./testSupport";
-import { fakeTimers } from "../test/clock";
+import { fakeTimers, runOutTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -411,6 +411,79 @@ it("offers to choose the file again where a failed refresh cannot be retried", a
   expect(text()).toContain("Choose the file again.");
   expect(Array.from(document.body.querySelectorAll("button")).some((b) => b.textContent === "Try again")).toBe(false);
   expect(importButton().getAttribute("aria-disabled")).toBe("true");
+});
+
+/** Commits each pending timer separately, so focus feedback settles before the failure becomes an alert. */
+async function refreshFailureDelay(): Promise<void> {
+  const deadline = Date.now() + AFTER_FOCUS_MOVE_DELAY_MS;
+  while (Date.now() < deadline) {
+    expect(document.body.querySelector('[role="alert"]')).toBeNull();
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    await act(async () => { await vi.advanceTimersToNextTimerAsync(); });
+  }
+  expect(Date.now()).toBe(deadline);
+}
+
+it.each([
+  { code: "configuration_version_unsupported", action: "Choose file", other: "Try again" },
+  { code: "connection_closed", action: "Try again", other: "Choose file" },
+])("waits for Import's unavailable feedback before announcing a $code refresh failure with $action", async ({ code, action, other }) => {
+  fakeTimers();
+  let inspections = 0;
+  const mounted = await reviewing({
+    reply: (body) => {
+      if (body.type !== "inspect_configuration" || ++inspections === 1) return reply(body);
+      return Promise.reject(new CodedError("Could not read the configuration", code, {}));
+    },
+  });
+  await checkSettings();
+  runOutTimers();
+  const importing = importButton();
+  act(() => importing.focus());
+  runOutTimers();
+  moveTo(mounted.store, 2);
+  await act(async () => {});
+  expect(text()).toContain("Could not read the file again");
+  expect(importing.getAttribute("aria-disabled")).toBe("true");
+  const labels = Array.from(document.body.querySelectorAll("button"), (button) => button.textContent);
+  expect(labels).toContain(action);
+  expect(labels).not.toContain(other);
+  await refreshFailureDelay();
+  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Could not read the file again");
+  expect(document.activeElement).toBe(importing);
+});
+
+it("waits afresh before announcing a repeated refresh failure while Try again stays mounted and keeps focus", async () => {
+  fakeTimers();
+  const fail: Array<(error: CodedError) => void> = [];
+  let inspections = 0;
+  const mounted = await reviewing({
+    reply: (body) => {
+      if (body.type !== "inspect_configuration" || ++inspections === 1) return reply(body);
+      return new Promise((_, reject) => fail.push(reject));
+    },
+  });
+  await checkSettings();
+  runOutTimers();
+  moveTo(mounted.store, 2);
+  const failure = new CodedError("Connection closed", "connection_closed", {});
+  await act(async () => fail[0]!(failure));
+  await refreshFailureDelay();
+  const firstAnnouncement = document.body.querySelector('[role="alert"]');
+  expect(firstAnnouncement?.textContent).toContain("Could not read the file again");
+  const retry = Array.from(document.body.querySelectorAll("button")).find((button) => button.textContent === "Try again")!;
+  act(() => retry.focus());
+  runOutTimers();
+  await act(async () => retry.click());
+  expect(retry.hasAttribute("data-pending")).toBe(true);
+  expect(text()).toContain("Could not read the file again");
+  expect(document.body.querySelector('[role="alert"]')).toBe(firstAnnouncement);
+  await act(async () => fail[1]!(failure));
+  expect(retry.hasAttribute("data-pending")).toBe(false);
+  await refreshFailureDelay();
+  expect(document.body.querySelector('[role="alert"]')).not.toBe(firstAnnouncement);
+  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Could not read the file again");
+  expect(document.activeElement).toBe(retry);
 });
 
 it("does not read the preview again for a setting the import does not write", async () => {

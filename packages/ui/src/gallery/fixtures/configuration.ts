@@ -1064,6 +1064,20 @@ export const configurationScenarios: Scenario[] = [
     ],
   },
   {
+    id: "configuration-import-review-reread-refused",
+    group: GROUP,
+    category: "exceptional",
+    title: "Import review, the file must be chosen again",
+    description: "The review is out of date and the daemon can no longer read the file's format version. An Alert above the review says why, followed by Choose file again and a Choose file button instead of Try again. Import stays unavailable until a current file is read; its description is the Alert's title.",
+    state: { ...state, settings: { ...state.settings!, versions: { ...state.settings!.versions, auto_pull_repositories: 2 } } },
+    configuration: {
+      file: { name: FILE.name, text: JSON.stringify({ format: "octoboard-configuration", version: 3, settings: carriedSettings(CLONE_DIR_SETTINGS.settings!), consoles: [] }) },
+      inspection: CLONE_DIR_SETTINGS,
+      reinspection: failure("configuration_version_unsupported", { version: "3", oldest: "1", supported: "2" }, "configuration format version 3 is not supported"),
+    },
+    steps: [...importFromSettings, chooseFile],
+  },
+  {
     id: "configuration-import-refused-unreadable",
     group: GROUP,
     category: "exceptional",

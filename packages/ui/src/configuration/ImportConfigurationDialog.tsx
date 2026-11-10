@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { AlertButton } from "../components/alerts/AlertButton";
 import { FailureAlert } from "../components/alerts/FailureAlert";
 import { ChangeAnnouncer } from "../components/announce/ChangeAnnouncer";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { useLatest } from "../components/hooks/useLatest";
@@ -431,6 +432,8 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
               }}
               pending={refreshing}
               announce
+              announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
+              delayEachAttempt
               attempt={refreshFailure.attempt}
             />
           </div>

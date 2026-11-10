@@ -432,6 +432,7 @@ export function createConfigurationReplies(
   reportProgress: (event: ImportProgressEvent) => void,
   holdLanguage: (tag: string) => void,
 ): (body: ClientRequestBody) => Event | Promise<Event> | undefined {
+  let inspectedOnce = false;
   return (body) => {
     switch (body.type) {
       case "export_configuration": {
@@ -440,9 +441,11 @@ export function createConfigurationReplies(
         return { type: "configuration_exported", id: null, document: exportedDocument(getState(), body, providerSettingChoices()) };
       }
       case "inspect_configuration": {
+        if (inspectedOnce && fixture?.reinspection) return fail(fixture.reinspection);
         const inspection = fixture?.inspection;
         if (inspection === undefined) return refuseUnfillable("the scenario gives no inspection to answer inspect_configuration with");
         if ("code" in inspection) return fail(inspection);
+        inspectedOnce = true;
         return { type: "configuration_inspected", ...inspection };
       }
       case "import_configuration": {

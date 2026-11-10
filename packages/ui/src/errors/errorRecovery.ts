@@ -240,13 +240,13 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
 }
 
 /** The failures whose answer is the state of what was asked about — branches with no shared history,
- * not a repository, outside the project, too large, not a valid path — so asking again gives the same
+ * not a repository, outside the project, too large, not a valid path or configuration document — so asking again gives the same
  * answer and no Try again is offered. Whether asking again can change the answer to `error`: false for such a
  * failure, where a Try again would only fail the same way. */
 export function retryCanHelp(error: unknown): boolean {
   if (!(error instanceof CodedError)) return true;
   const recovery = codeRecord(error.code)?.recovery;
-  return !(recovery === "gitHistory" || recovery === "repository" || recovery === "scope" || recovery === "limit" || error.code === CODE.invalid_path);
+  return !(recovery === "gitHistory" || recovery === "repository" || recovery === "scope" || recovery === "limit" || recovery === "configuration" || error.code === CODE.invalid_path);
 }
 
 /** The remedy for a file or folder an action on the project's files no longer finds: it is found again in the project's

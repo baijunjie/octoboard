@@ -9,6 +9,24 @@ import type { ImportProgressFixture } from "./fixture";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import { handledImportItems, importDisagreement, importProgressDisagreement, withClientValuesEcho } from "./fixtureConfiguration";
 
+it("answers the first inspection, then refuses later reads with the staged reinspection error", async () => {
+  const inspection = inspected({ consoles: [] });
+  const reinspection = { code: "configuration_version_unsupported", params: { version: "3", oldest: "1", supported: "2" }, message: "unsupported configuration version" };
+  const daemon = createFixtureDaemon({ configuration: { inspection, reinspection } });
+  const request = { type: "inspect_configuration" as const, document: {} };
+  await expect(daemon.request(request)).resolves.toMatchObject({ type: "configuration_inspected", ...inspection });
+  await expect(daemon.request(request)).rejects.toMatchObject({ code: reinspection.code, params: reinspection.params });
+  await expect(daemon.request(request)).rejects.toMatchObject({ code: reinspection.code, params: reinspection.params });
+});
+
+it("keeps answering repeated inspections when no reinspection refusal is staged", async () => {
+  const inspection = inspected({ consoles: [] });
+  const daemon = createFixtureDaemon({ configuration: { inspection } });
+  for (let read = 0; read < 2; read += 1) {
+    await expect(daemon.request({ type: "inspect_configuration", document: {} })).resolves.toMatchObject({ type: "configuration_inspected", ...inspection });
+  }
+});
+
 const project = (name: string, status: ImportedProject["status"], via: ImportedProject["via"] = null): ImportedProject => ({
   name,
   status,

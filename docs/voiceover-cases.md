@@ -152,6 +152,9 @@ commands. Native accessibility trees were read separately (VoiceOver off or on) 
 | E15 | Local main `263bfa3f88e77e1f507eacddf2b26380d5ccc5f3` (E14's source and daemon) with the UI repairs of `docs/voiceover-results` applied to its UI sources as a patch, before the follow-up changes measured on E17: the recovered mark's handoff waiting two frames from the mark and from its explanation (`shell/TitleBar.tsx`), the terminal ring from react-aria's text-input rule (`terminal/TerminalSurface.tsx`), the shell mark keyed by its terminal (`terminal/shell/ShellTerminalPanel.tsx`) and the recovered sentence deferred while the agent area is inert (`terminal/TerminalPane.tsx`, `App.tsx`) | The same packaged entry as E14, fixing recovered-mark focus handoff, terminal focus indication, shell mark identity and recovered delivery while the agent area is inert. Native rechecks use the repaired production UI. Follow-up changes are measured separately on E17. |
 | E16 | UI tree equal to main `8aba9fc5e`: built from `fix/row-axpress-delete` at `28ee0d0dc` in its own detached worktree (`git diff --stat 28ee0d0dc 8aba9fc5e -- packages/ui` is empty) | The same isolated desktop/daemon fixture as E15, with this UI's assets rather than E15's focus repairs. Native AXPress and actual VO-Space on session/project rows, plus the separate unused-session Delete shortcut. |
 | E17 | UI from `docs/voiceover-results` at `727a782e705dbb61e9d99655041ffbe1a0b76356` | Rebuilt packaged `Octoboard Recovery Verify`, identifier and ad-hoc signing identifier `dev.octoboard.verify.recovery.vo14`, with this branch's complete production UI via an absolute `frontendDist`. The isolated E14 daemon source, holder-runtime repair and scratch routing/timing/update fixtures are unchanged. Re-listens the follow-up handoff/ring mechanisms and the new held-sentence paths. |
+| E18 | Local main `bd3282721bd8b543e908d45ad7e9b0ed07036190`, with only the opt-in scratch import scheduling gate in the daemon | Packaged `Octoboard Checked VoiceOver`, identifier and ad-hoc signing identifier `dev.octoboard.verify.manual-checked-vo-20261110`; real isolated daemon and two real clients. SA-Q, SA-R, ALERT-2, ALERT-4 and the ALERT-3 baseline; no synthetic result events. |
+| E19 | E18 with `errors/errorRecovery.ts` from `docs/checked-write-voiceover`: configuration-document refusals cannot be retried | Rebuilt UI in the same isolated bundle. The recovery action passes, but the focused Import state feedback masks the immediate re-read alert (ALERT-3 / KNW-14). |
+| E20 | E19 plus the branch's `configuration/ImportConfigurationDialog.tsx` re-read alert delay and `components/announce/useAlertAnnouncement.ts` per-attempt delay | Final rebuilt production UI in the same isolated bundle; ALERT-3 re-listens initial failure, repeated failure, changed recovery, keyboard landing and successful retry. The scratch daemon and input-fault transport are unchanged. |
 
 E14, E15 and E16 used macOS 26.2 (25C56), arm64, English application text, Simplified Chinese VoiceOver, and light
 appearance (E16's from its own-window screenshots) on 2026-11-10 JST. Reports use native AppleScript `content of last phrase`, requested every 25 ms, with
@@ -310,6 +313,38 @@ mapping macOS WebKit supplies, not a literal HTML serialization. E6 captured few
 limits rather than claiming this complete mapping. PLAIN-1 and PLAIN-2 are hand-built regions and state their own native
 mapping.
 
+E18–E20 used macOS 26.2 (25C56), arm64, English application text, Simplified Chinese VoiceOver and light appearance
+on 2026-11-10 JST. The bundle was `Octoboard Checked VoiceOver`, build-time and ad-hoc signing identifier
+`dev.octoboard.verify.manual-checked-vo-20261110`, with a throwaway HOME/TMPDIR/agent configuration and the real daemon.
+No user application, data or credentials were used. The credential-free CLI supplied availability only; these cases
+opened no agent sessions. Native speech was sampled through AppleScript's `content of last phrase` every 25 ms,
+with actual read times, foreground PID and lock state recorded; native AX streams and own-window screenshots were
+captured separately. No synthetic VoiceOver output or UI state events were used.
+
+The local evidence root is `/private/tmp/octoboard-gui-20261110-67e2/checked-voiceover/`; the case directory names below
+are under its `evidence/`. Each has `steps.jsonl`, `phrases.jsonl`, `changed-phrases.json`, `ax-stream.jsonl`, before/after
+AX snapshots and `after.png`. `provenance.json`, `scratch-timing.patch`, `repair-source.patch`,
+`repair-ui-assets.sha256.json`, `final-repair-source.patch` and `final-ui-assets.sha256.json` identify the source,
+fixture patch and assets. `proxy-events.jsonl`, `requests.jsonl` and `control.jsonl` correlate real requests and replies.
+Only the verification transport's request timing was controlled for save conflicts. For import-result conflicts,
+the scratch daemon's opt-in file gate paused after the initial version check and before applying; a second client
+then made the conflicting writes, and every conflict was produced by the real version checks. Re-read failures used
+the explicitly described transport faults in ALERT-3, never fabricated result events.
+
+The later FileViewer regression check narrowed the repeated-delay change to the import caller. The shared
+`useAlertAnnouncement` keeps its original mount-only behavior. `ErrorAlert`'s opt-in `delayEachAttempt`, passed only
+by the import re-read `FailureAlert`, keys its title/summary component by the failure attempt: the same delayed
+remount heard on E20, with recovery controls outside it. No additional listening result is claimed for this scoping
+change; the import's rendered announcement mechanism and timing are unchanged, and the viewer's existing delayed
+read-failure tests remain the regression contract.
+
+The earliest alert-modal attempts had stale VoiceOver cursor tracking after the new webview opened. They are retained
+and excluded as ALERT-2 states. Only the run's owned VoiceOver was restarted, and switching to Finder and back restored
+tracking; a cursor read on the actual submitted control preceded the accepted modal recording and the final failure
+run. Harness attempts with no matching inspection request, or stopped by the helper's disabled-control guard, are
+excluded from product verdicts. `SUMMARY.json` lists accepted cases, failures and exclusions. The run's apps, daemon,
+proxy and VoiceOver were stopped afterwards; `cleanup.json` records the exact owned PIDs.
+
 ## Cases
 
 ### Summary
@@ -337,6 +372,8 @@ mapping.
 | [SA-N Viewer notice after paint, then an empty status](#sa-n-viewer-notice-after-paint-then-an-empty-status) | `FileNotice` through `StatusAnnouncer`, then clear; first-paint large-file notice without an announcement region | Pass for the recorded branches and focus handoff; native live attributes not sampled |
 | [SA-O Project-removal inspection failure after tick and retry](#sa-o-project-removal-inspection-failure-after-tick-and-retry) | `DelayedAnnouncer` before `StatusAnnouncer`, per-failure wait inside the removal dialog | Pass: missing Git tick/retry; malformed config tick and untick (E13) |
 | [SA-P Project Git retry beside a row button](#sa-p-project-git-retry-beside-a-row-button) | `useGitRetryAnnouncement` through `AttendedStatusAnnouncer`, alternating trailing no-break space | Pass: two still-missing-Git retries in the sidebar (E13) |
+| [SA-Q Checked form fields replaced by another client](#sa-q-checked-form-fields-replaced-by-another-client) | per-change attended status inside each active form | Pass for all four callers, singular replacement with field focus kept |
+| [SA-R Import review read again, including a successful retry's focus handover](#sa-r-import-review-read-again-including-a-successful-retrys-focus-handover) | per-change attended status after refresh or retry | Pass for ordinary refresh and successful retry |
 | [RCV-1 Recovered display after uncover, attention and exposure](#rcv-1-recovered-display-after-uncover-attention-and-exposure) | attended rise through `StatusAnnouncer`, read-time clear | Pass for listed agent/shell variants; baseline inert loss repaired; responsive floating unconfirmed |
 | [RCV-2 Recovered mark removed while it or its explanation holds focus](#rcv-2-recovered-mark-removed-while-it-or-its-explanation-holds-focus) | disappearing-source handoff and visible keyboard landing | Pass for separately listed repaired destinations; baseline failures retained |
 | [RCV-3 Pending cover entry, delayed sentence and recovery](#rcv-3-pending-cover-entry-delayed-sentence-and-recovery) | named focused cover and conditional attended status | Pass for listed focus/delayed paths; double-reading sequence and immediate modal silence recorded |
@@ -352,12 +389,15 @@ mapping.
 | [PLAIN-1 Text change in a mounted plain status](#plain-1-text-change-in-a-mounted-plain-status) | `role="status"` replaced in place inside a modal | Pass (first build) |
 | [PLAIN-2 Persistent visible status with an action](#plain-2-persistent-visible-status-with-an-action) | plain `role="status"` filled in place | Pass |
 | [ALERT-1 A conflicted file read fails](#alert-1-a-conflicted-file-read-fails) | delayed `PaneFailure` alert inside the viewer | Pass for file-not-found |
+| [ALERT-2 Checked-write refusal opens the error alert](#alert-2-checked-write-refusal-opens-the-error-alert) | focus on the named and described error modal | Pass for console save and import-submit conflicts |
+| [ALERT-3 Import re-read failure and its recovery](#alert-3-import-re-read-failure-and-its-recovery) | delayed alert per failure attempt, recovery controls retained | Pass after fixing KNW-13 and KNW-14; failed history retained |
+| [ALERT-4 Import finishes with settings conflicts](#alert-4-import-finishes-with-settings-conflicts) | delayed alert in the selected result region | Pass for application and account settings conflicts |
 | [WARN-1 Deletion warning order and checked option descriptions](#warn-1-deletion-warning-order-and-checked-option-descriptions) | warning title, session list and consequence text; checkbox name and hint | Pass (history; superseded by WARN-3) |
 | [WARN-2 Trust prompt caution prefix and description](#warn-2-trust-prompt-caution-prefix-and-description) | hidden caution prefix, visible title, then agent-specific text | Pass in packaged app with fixture Codex CLI (history; superseded by WARN-5) |
 | [WARN-3 Deletion warning modal with option notes outside the checkbox](#warn-3-deletion-warning-modal-with-option-notes-outside-the-checkbox) | warning modal: plain body, session list and consequences; checkbox name and an external note through `aria-describedby` | Pass for focus and sequential reading; opening announcement unconfirmed |
 | [WARN-4 Remove project with running sessions and a lookup-failure mark](#warn-4-remove-project-with-running-sessions-and-a-lookup-failure-mark) | warning modal with running sessions; external note; a separate mark after the checkbox | Pass |
 | [WARN-5 Trust prompt caution as plain body text](#warn-5-trust-prompt-caution-as-plain-body-text) | the caution as one plain paragraph, no prefix or title | Pass for sequential reading; opening announcement unconfirmed |
-| [Known not to work](#known-not-to-work) | twelve failing or negative observations (KNW-1 to KNW-12; each names the case that replaced it) | **Fail** (history) |
+| [Known not to work](#known-not-to-work) | fourteen failing or negative observations (KNW-1 to KNW-14; each names the case that replaced it) | **Fail** (history) |
 | [OPEN-1 Import result dialog rename](#open-1-import-result-dialog-rename) | focus move onto a renamed dialog | Unconfirmed |
 | [OPEN-2 Startup failure page alert](#open-2-startup-failure-page-alert) | delayed `EmptyPanel` alert on a page with no focus move | Unconfirmed |
 
@@ -1956,6 +1996,149 @@ mapping.
   behavior is consistent with the hidden first target working in this WebKit build; internal DOM event targeting was
   not instrumented. Other composite roles, other engines and the Delete keyboard/discovery path need separate proof.
 
+### SA-Q Checked form fields replaced by another client
+
+- **Location and state change.** E18, 2026-11-10 JST: a locally edited Name in the console, project and account
+  dialogs, and the locally edited Default clone directory in Settings → Git, replaced while the field retained focus.
+  A second authenticated control WebSocket changed the same real record. No save was in flight in these four cases.
+- **Mechanism.** `packages/ui/src/components/announce/ChangedElsewhereAnnouncer.tsx`
+  (`ChangedElsewhereAnnouncer`) → `components/announce/ChangeAnnouncer.tsx` (`ChangeAnnouncer`) →
+  `AttendedStatusAnnouncer` → `StatusAnnouncer`. Callers are `dialogs/ConsoleDialog.tsx` (`ConsoleDialog`),
+  `dialogs/ProjectDialog.tsx` (`ProjectDialog`), `settings/accounts/AccountDialog.tsx` (`AccountDialog`) and
+  `settings/CloneDirSetting.tsx` (`CloneDirSetting`), all relative to `packages/ui/src/`.
+- **Wiring and native rendering.** An empty region remounted per change, written after 1500 ms of attended time and
+  emptied after `READ_TIME_MS`; its text is its own content, with no label or description from another element.
+  The native node was `AXGroup` / `AXApplicationStatus`, live `polite`, atomic `true`, relevant `additions text`.
+  It stayed exposed inside the active dialog; the account dialog was above Settings. Field focus stayed put as the
+  current value replaced the draft. The AX stream records both the populated status and its later empty state.
+- **Result.** Pass: automatic native last-phrase output, separately recorded for every caller:
+
+  | Caller | Exact automatic phrase | Evidence directory |
+  |---|---|---|
+  | `ConsoleDialog` | `Changed elsewhere: Name. The current value is shown.` | `20261110T084927-console-replaced` |
+  | `ProjectDialog` | `Changed elsewhere: Name. The current value is shown.` | `20261110T085007-project-replaced` |
+  | `AccountDialog` | `Changed elsewhere: Name. The current value is shown.` | `20261110T085141-account-replaced` |
+  | `CloneDirSetting` | `Changed elsewhere: Default clone directory. The current value is shown.` | `20261110T085210-clone-directory-replaced` |
+
+- **Reuse scope.** The measured singular replacement, attended window, exposed active dialog and retained field
+  focus. Other field labels use the same composition; plural replacements, rapid overlapping changes, attention
+  loss/return and replacement beneath a covering modal were not heard. The old KNW-2 warning about a hidden region
+  still applies; this pass does not certify that exposure. The output property's identical-repeat limit applies.
+
+### SA-R Import review read again, including a successful retry's focus handover
+
+- **Location and state change.** E18, 2026-11-10 JST: Settings → Configuration → Import, a settings-only file in
+  review, then a second client changed `auto_pull_repositories`. The daemon genuinely inspected the original document
+  again. A second case retried after the connection failure of ALERT-3.
+- **Mechanism.** `packages/ui/src/configuration/ImportConfigurationDialog.tsx` (`ImportConfigurationDialog`,
+  `refreshed`) → `components/announce/ChangeAnnouncer.tsx` (`ChangeAnnouncer`). No dialog was closed to announce it.
+- **Wiring and native rendering.** The same empty, per-count region and attended 1500 ms wait as SA-Q; own text,
+  native `AXGroup` / `AXApplicationStatus`, live `polite`, atomic `true`, relevant `additions text`. It was exposed
+  inside the import dialog above Settings. In the ordinary refresh focus remained on Import. In the successful retry
+  the removed Try again button handed focus to Import before the status was written; the region later emptied.
+- **Result.** Pass: `The file was read again because settings changed.` was spoken automatically in both
+  `20261110T085550-import-review-reread` and `20261110T085619-import-reread-retry-success`. E20 also re-listened to
+  the successful retry after the delay repair: `20261110T091525-final-reread-success-verified`.
+- **Reuse scope.** These two attended focus relations and one completed refresh at a time, not attention transitions,
+  a covering modal or rapidly replaced inspections. The import result's dialog rename remains OPEN-1.
+
+### ALERT-2 Checked-write refusal opens the error alert
+
+- **Location and state change.** E18, 2026-11-10 JST: a console Name save was held on the verification transport;
+  a second client changed the same real console before that unchanged save was forwarded. The real daemon rejected
+  its old `base_versions` with `write_conflict`. A separate import request used the same race with settings versions.
+- **Mechanism.** The form's save failure through `components/dialog/dialogHooks.ts` (`useDialogAction`),
+  `shell/ErrorAlerts.tsx` (`ErrorAlertHost`) and `components/dialog/Dialog.tsx` (`Dialog`); the import caller is
+  `configuration/ImportConfigurationDialog.tsx` (`ImportConfigurationDialog`, its conflict-specific catch), under
+  `packages/ui/src/`.
+- **Wiring and native rendering.** The modal is named by its heading and described by its body. Native `AXGroup` /
+  `AXApplicationAlertDialog`, live `assertive`, atomic `false`, relevant `additions text`; its title/name was
+  `Could not save the console` or `Could not import the configuration`. Focus moved from the submitted control to
+  the alert, and the underlying form stayed hidden. No separate ChangedElsewhere status was emitted for the
+  replacement during the outstanding save.
+- **Result.** Pass, keyboard submission, automatic speech:
+  - `20261110T085456-write-conflict-calibrated`: `Could not save the console A change was made elsewhere after you
+    last saw this, so nothing was saved. Check the current value, then make your change again. 网页警告对话框`.
+  - `20261110T085826-import-submit-conflict-alert`: `Could not import the configuration Settings changed after the
+    file was read. Choose the file again to read it with the current settings. 网页警告对话框`.
+- **Capture limits and reuse scope.** The first two console attempts, `20261110T085239-write-conflict-alert` and
+  `20261110T085335-write-conflict-keyboard`, captured only Save while the VoiceOver cursor remained on the underlying
+  Name field. They are excluded from both pass and product-failure claims: after restarting only the owned VoiceOver
+  and switching away/back, the cursor was proved on Save before the passing repetition. This case covers a genuine
+  checked-write refusal over an open form, not every alert, pointer submission or unattended opening.
+
+### ALERT-3 Import re-read failure and its recovery
+
+- **Location and state change.** E18–E20, 2026-11-10 JST: a second client changed settings while an import review was
+  open. One verification transport disconnected only the ensuing inspection request, producing the real connection
+  failure; another substituted version 999 in that request, producing the daemon's real
+  `configuration_version_unsupported` response. The latter is explicit transport input fault injection, not a naturally
+  changing file or a claim about compatibility across daemon versions. The UI kept its original in-memory document.
+- **Mechanism.** `packages/ui/src/configuration/ImportConfigurationDialog.tsx` (`ImportConfigurationDialog`,
+  `refreshFailure`) → `components/alerts/FailureAlert.tsx` (`FailureAlert`) → `ErrorAlert` and
+  `components/announce/useAlertAnnouncement.ts` (`useAlertAnnouncement`). `errors/errorRecovery.ts` (`retryCanHelp`)
+  chooses whether retrying the unchanged document can help.
+- **Wiring and native rendering.** Only the title and summary form the alert; remedy and controls stay outside it.
+  Native `AXGroup` / `AXApplicationAlert`, live `assertive`, atomic `true`, relevant `additions text`, inside the
+  exposed import dialog. In E20 the text is first ordinary durable content; 1500 ms after each new failure attempt
+  the announcing part is remounted with `role="alert"`. The recovery controls remain mounted during a retry, and
+  a pending retry leaves the unchanged old failure alone. A newer attempt cancels an older pending announcement.
+  Import remains focusable but unavailable, with the failure title as its description.
+- **Historical results.**
+  - E18 `20261110T085607-import-reread-disconnected`: the immediate alert was heard as `Could not read the file
+    again The daemon control connection closed.`, followed by the reconnect notice. The subsequent successful retry
+    is SA-R; this does not prove the immediate alert survives Import's own state feedback in every focus relation.
+  - E18 `20261110T085643-import-reread-choose-again`: the version error's title and summary were heard, but the
+    recovery failed: Try again was offered for an unchanged unsupported document. Preserved as KNW-13.
+  - E19 `20261110T090347-import-reread-choose-again-repaired`: Choose file and its remedy were correctly rendered,
+    but with Import focused only its changed name was spoken (including a repeated name); the error summary was
+    absent. This is a failure, preserved as KNW-14. `20261110T090359-import-reread-unavailable-to-choose-file` separately
+    heard `Choose file 按钮` after Return on unavailable Import; that focus pass does not repair the missing alert.
+- **Final result.** E20 pass, separately measured after repairing the recovery classification and the per-attempt delay:
+
+  - Connection failure phrase: `Could not read the file again The daemon control connection closed.`
+  - Version failure phrase: `Could not read the file again This file's format version ( 999 ) is not one this version of  Octoboard  can read. It reads versions  1  to  3 .`
+
+  | State and focus | Automatic native output | Evidence directory |
+  |---|---|---|
+  | First connection failure, Import retains focus | Connection failure phrase after 1500 ms, following the button-name/reconnect feedback | `20261110T091208-final-reread-first-failure` |
+  | Retry still fails, Try again retains focus | Connection failure phrase after a fresh 1500 ms wait | `20261110T091219-final-reread-repeat-failure` |
+  | Retry now reports unsupported format; the focused recovery button becomes Choose file | Version failure phrase after a fresh 1500 ms wait | `20261110T091411-final-reread-to-choose-file-relisten` |
+  | Return on unavailable Import | `Choose file 按钮`, with cursor/focus on the recovery button; this is user-triggered focus feedback, not the automatic failure announcement | `20261110T091503-final-unavailable-import-keyboard-to-choose` |
+  | Later connection failure, then successful retry | Connection failure phrase, then SA-R's successful read phrase after focus returns to Import | `20261110T091515-final-reread-before-success-verified`, `20261110T091525-final-reread-success-verified` |
+
+  The button-name feedback can still contain repetition before the delayed error (the raw phrase logs retain it).
+  This pass establishes delivery of the complete delayed error, not elimination of VoiceOver's control-name feedback.
+- **Reuse scope.** The recorded first failure, retry failure, retry-to-different-recovery and successful retry paths,
+  inside the attended import dialog with the listed focus destinations. The delay covers the control's own state
+  speech and focus handover. It does not certify another caller with different timing, an unattended window or a
+  covering modal. Error details and every daemon error code were not read; the transport fixtures establish these
+  rendered states and announcements, not the real-world causes of those errors.
+
+### ALERT-4 Import finishes with settings conflicts
+
+- **Location and state change.** E18, 2026-11-10 JST: an import carrying application and account settings passed its
+  initial version check, then a verification-only daemon scheduling gate paused it before applying records/settings.
+  A second client changed `auto_pull_repositories` and `auto_select_account`. Releasing the gate let the real later
+  writes reject their stale versions and return both `settings_error` and `accounts.agent_settings_error` with
+  `write_conflict`; no result or error event was fabricated.
+- **Mechanism.** `packages/ui/src/configuration/ImportResult.tsx` (`ImportResult`, `settingsContent` and
+  `accountsContent`) → `components/alerts/ErrorAlert.tsx` (`ErrorAlert`), both with the existing 1500 ms
+  `AFTER_FOCUS_MOVE_DELAY_MS` gate.
+- **Wiring and native rendering.** Named title and own summary text inside the result's selected region; remedy is
+  separate. Native `AXGroup` / `AXApplicationAlert`, live `assertive`, atomic `true`, relevant `additions text`.
+  Settings was selected first; the sampled final focus was the result's Close control. The account tab was selected
+  separately and kept focus while its delayed alert appeared. Both regions were exposed inside the import dialog.
+- **Result.** Pass, automatic speech:
+  - `20261110T090027-import-result-settings-conflict`: `Could not import settings Settings changed while the
+    configuration was being imported.`
+  - `20261110T090048-import-result-account-settings-conflict-relisten`: `Could not import agent account settings
+    Settings changed while the configuration was being imported.`
+- **Reuse scope.** These two conflict-result branches and their measured focus relations, including the tab switch;
+  not every result failure, result-dialog renaming (OPEN-1), unattended delivery or every ordering of several failures.
+  `20261110T090036-import-result-account-settings-conflict` used a selector missing the tab's “needs attention” suffix
+  and never selected the tab; it is excluded, not a failing product case.
+
 ### Known not to work
 
 These patterns were heard failing or heard to leave a gap. Do not reuse them, and do not treat an implementation of
@@ -2094,6 +2277,25 @@ tree equal to main `505f1c2fc`, with the holder-runtime repair `30eb3e434`) and 
   input (`20261110T014344-g2-agent-explanation`).
 - **Replaced by.** RCV-2 (E15), whose rows land on the terminal input or the surviving tab.
 
+#### KNW-13 A configuration re-read offers a retry that cannot change the document
+
+- **What and where.** E18, ALERT-3, `20261110T085643-import-reread-choose-again`: the real daemon rejected an
+  inspection whose transport-injected format version was unsupported. The UI still held the same in-memory document.
+- **Result.** The error title and summary were spoken, but only Try again was offered. `retryCanHelp` did not classify
+  the configuration recovery domain as an unchanged-input refusal, so the intended Choose file recovery was absent.
+  This failure concerns the recovery action, not the successfully heard alert text.
+- **Replaced by.** E19 corrected the action; E20 ALERT-3 heard the corrected action and delayed error together.
+
+#### KNW-14 Import's state feedback masks an immediate re-read error
+
+- **What and where.** E19, ALERT-3, `20261110T090347-import-reread-choose-again-repaired`: focus rested on Import
+  when it became unavailable with a new accessible description at the same time the error's `role="alert"` mounted.
+- **Result.** The native alert contained the complete title and summary, but only Import's changed name was heard,
+  including repetition. Manually reaching Choose file passed separately; it did not establish automatic error speech.
+- **Replaced by.** E20 ALERT-3 waits 1500 ms before the alert, including on each new failure attempt, and heard the
+  complete error after the control's feedback. Control-name repetition can still precede it; the repaired aspect is
+  the missing error announcement.
+
 ### OPEN-1 Import result dialog rename
 
 - **Location and state change.** The configuration import's result step: the dialog's title becomes "Import finished"
@@ -2164,20 +2366,21 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `report/ReportPanel.tsx` | list failure mark's words | none | none | Region mounted through every state of the panel. Not heard. |
 | `sidebar/useGitRetryAnnouncement.tsx`, through `AttendedStatusAnnouncer` | "Git check failed" after a Try again on the branch badge's Git-missing mark that still finds no Git | SA-P for the sidebar `ProjectNode` placement (E13); other placements have no complete match | Heard | Mounted empty outside the row button; two request-answer writes after the attended wait, alternating trailing no-break space, row focus restored and automatic clear heard. Focus-mode header/group placements and window-attention transitions were not heard. |
 | `dialogs/BranchCleanupOptions.tsx`, `DelayedAnnouncer` | the sentence of the project-removal dialog's "Other worktrees unknown" mark after inspection fails, and after a still-failing missing-Git retry | SA-O for the recorded tick/retry/untick paths (E13) | Heard | Region mounted empty with the Trash option; each failure delayed 1500 ms, pending retry empties it for a same-words repeat. Missing Git tick/retry and malformed config tick were heard; untick cleared it. Unattended windows and other focus relations were not heard. |
-| `dialogs/ConsoleDialog.tsx`, `dialogs/ProjectDialog.tsx`, `settings/accounts/AccountDialog.tsx`, through `ChangedElsewhereAnnouncer` | the fields the user had edited that were replaced because they changed elsewhere | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | `ChangeAnnouncer` is remounted per change and written `AFTER_FOCUS_MOVE_DELAY_MS` of attended time after it arrives, inside the open dialog with focus kept in the form, and cleared `READ_TIME_MS` after the write. A write while another modal covers the dialog (Settings over the console dialog, an error alert for another failure) is the KNW-2 shape, where the announcement is lost. Not heard. |
-| `settings/CloneDirSetting.tsx`, through `ChangedElsewhereAnnouncer` | the clone directory field replaced over what was typed because it changed elsewhere | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | The same region as the dialogs', in the Settings dialog beside the field. A write while another modal covers Settings (an error alert for another failure) is the KNW-2 shape, where the announcement is lost. Not heard. |
-| `configuration/ImportConfigurationDialog.tsx`, through `ChangeAnnouncer` | the file was read again because settings changed | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | Written after the same delay, which also outlasts the focus handed on when a failed read's Alert goes away. Not heard. |
+| `dialogs/ConsoleDialog.tsx`, `dialogs/ProjectDialog.tsx`, `settings/accounts/AccountDialog.tsx`, through `ChangedElsewhereAnnouncer` | the fields the user had edited that were replaced because they changed elsewhere | SA-Q, separately heard for each dialog (E18) | Heard for listed variants | Singular Name replacement, focused field retained, attended window, exposed inside the active dialog, per-change 1500 ms wait and automatic clear. Plural, overlap, attention and covering-modal variants remain outside the recording; KNW-2 still applies to a hidden region. |
+| `settings/CloneDirSetting.tsx`, through `ChangedElsewhereAnnouncer` | the clone directory field replaced over what was typed because it changed elsewhere | SA-Q (E18) | Heard for listed variant | Singular directory replacement while focus remains in the Settings field; same native status and per-change attended wait as the dialog cases. Covering-modal and unattended variants were not heard. |
+| `configuration/ImportConfigurationDialog.tsx`, through `ChangeAnnouncer` | the file was read again because settings changed | SA-R (E18, E20) | Heard for listed variants | Ordinary refresh with Import focused, and successful retry with focus handed from Try again to Import; 1500 ms attended wait and later clear. The inline failure alerts are measured separately in ALERT-3, not as this status. |
 | `terminal/TerminalPane.tsx`, through `useAttendedDelivery` | "Recovered terminal display" when `screen_inexact` rises under the open session (`useAnnouncedOnRise`, `clearAfterRead`); the pending cover's sentence when a session is opened already pending (`useAnnouncedWhilePending`'s `delayed`) | RCV-1 for recovered rise; RCV-3 for the separately listed delayed pending relations | Heard for listed variants | Listed for `useAttendedDelivery`: the attended wait after a focus move that delivers these sentences (RCV-1, RCV-3). Two regions mounted with the pane inside a `liveAnnouncerProps` wrapper, so a write beside an unrelated modal stays exposed. Each sentence is queued per session and written `AFTER_FOCUS_MOVE_DELAY_MS` of attended time later, the wait restarted on each return to the window; it is dropped unsaid when the session changes, the flag turns off or the pending period ends first. A rise under the pending cover is queued only once that cover and the loading cover after it are gone, as is a rise still waiting when a new pending cover comes up, so the wait follows the uncover and its focus return. The delayed pending sentence is skipped when the cover has focus as the wait ends. RCV-6 heard it held through maximized-panel inertness and either spoken on exposure or consumed silently when the cover holds focus. The RCV cases give the measured terminal-specific attention, cover and destination relations; responsive inert floating remains unconfirmed. |
 | `terminal/shell/ShellTerminalView.tsx`, through `useAttendedDelivery` | "Recovered terminal display" when `screen_inexact` rises while the tab is shown; the pending cover's sentence when a tab is shown already pending | RCV-1 and RCV-3 for their listed shell relations | Heard for listed variants | Listed for `useAttendedDelivery`, as the pane's: the attended wait after a focus move that delivers these sentences (RCV-1, RCV-3). The regions are mounted with each showing of the tab, at the default first delay, which the attended wait outlasts; hiding the tab drops a queued sentence. A rise under the pending cover is queued as the cover lifts (no loading cover follows); RCV-1 and RCV-3 keep the pointer and keyboard destinations separate. |
 
-Totals: of 41 callers (the three dialogs of one row count as three, and the terminal views' attended regions count apart from their other regions), 17 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
+Totals: of 41 callers (the three dialogs of one row count as three, and the terminal views' attended regions count apart from their other regions), 22 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
 `AccountLoginAnnouncer`, `PermissionsSection`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
 `ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`, `useGitRetryAnnouncement`, `DelayedAnnouncer`, and the
-attended regions of `TerminalPane` and `ShellTerminalView`), 5 are candidates (`ImportReview`, `ChangeList`,
-`FilesPanel`, `TerminalPane` and `ShellTerminalView` for their other regions) and 19 have no complete match (`ShellTerminalPanel`, `SpotNotice`,
-`BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the fifteen unmatched callers listed after it, the three dialogs counted as three). Of
+attended regions of `TerminalPane` and `ShellTerminalView`, `ConsoleDialog`, `ProjectDialog`, `AccountDialog`,
+`CloneDirSetting` and `ImportConfigurationDialog`), 5 are candidates (`ImportReview`, `ChangeList`,
+`FilesPanel`, `TerminalPane` and `ShellTerminalView` for their other regions) and 14 have no complete match (`ShellTerminalPanel`, `SpotNotice`,
+`BlockFallback`, the account switch outcome in `app/useSessionRequests.ts`, and the ten unmatched callers listed after it). Of
 the heard callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer` matches the E10
-table and owned-account details paths recorded in SA-D; the other fifteen match for some writes only, with SA-N's
+table and owned-account details paths recorded in SA-D; the other twenty match for some writes only, with SA-N's
 native-capture limits stated in that case. Of the candidates, `ImportReview` matches for every write it makes;
 `ChangeList`, `FilesPanel`, `TerminalPane` and `ShellTerminalView` for some.
 
@@ -2217,6 +2420,9 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   session, a used session and a project, with the baseline failure kept as KNW-11. Still open: the independent Delete
   shortcut's keyboard route (the generated Space did not delete; its VoiceOver name and discovery were not recorded),
   and the `tab`, `menuitem` and `listitem` roles of other composite rows.
+- Checked-write speech: SA-Q, SA-R and ALERT-2 to ALERT-4 cover the separately listed attended form, refusal,
+  re-read and result-conflict paths. Plural/overlapping field replacements, attention transitions and a covering modal
+  remain outside their reuse scope; KNW-13 and KNW-14 retain the failed recovery and immediate-alert histories.
 - Import result dialog rename: not yet listened to (OPEN-1).
 - Startup failure page alert (daemon-failed and crash pages): not yet listened to (OPEN-2). No case matches an alert
   inserted after the first paint on a page the window opens on, with no focus move.

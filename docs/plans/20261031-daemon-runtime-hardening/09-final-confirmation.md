@@ -27,8 +27,10 @@
       `configuration.import.conflict`, `configuration.import.refreshFailedTitle`,
       `configuration.import.refreshFailedChooseAgain`, `configuration.import.reviewUpdated`, and the
       `configuration.import.result.*.conflict` keys with their `.remedy`.
-- [ ] A VoiceOver listening pass of the checked-write announcements and alerts, recorded in `docs/voiceover-cases.md`:
-      an open form's field replaced by a change elsewhere (`ChangedElsewhereAnnouncer`), the `write_conflict` alert,
-      the import review read again because settings changed (`configuration.import.reviewUpdated`, in
-      `ImportConfigurationDialog`), the import re-read failure and the import result's conflict alert. They were seen
-      rendered in the real application and browser on 2026-11-10, not heard.
+- [x] A VoiceOver listening pass of the checked-write announcements and alerts, recorded in `docs/voiceover-cases.md`:
+      SA-Q separately heard `ConsoleDialog`, `ProjectDialog`, `AccountDialog` and `CloneDirSetting` field replacements;
+      SA-R heard `ImportConfigurationDialog` read the review again and retry successfully; ALERT-2 heard the real
+      `write_conflict` alert and import-submit refusal; ALERT-3 heard the re-read failure, repeated failure and Choose file
+      recovery after fixing the action and announcement delay (KNW-13 and KNW-14 retain the earlier failures); and
+      ALERT-4 heard both the application-settings and account-settings conflict results. The cases state their measured
+      attended focus relations and the variants outside their reuse scope.

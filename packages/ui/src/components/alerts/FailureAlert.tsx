@@ -30,6 +30,7 @@ export function FailureAlert({
   announce,
   attempt,
   announceDelayMs,
+  delayEachAttempt,
   status,
   className,
 }: {
@@ -43,6 +44,7 @@ export function FailureAlert({
   announce: boolean;
   attempt?: number;
   announceDelayMs?: number;
+  delayEachAttempt?: boolean;
   status?: AlertStatus;
   className?: string;
 }): React.ReactElement {
@@ -63,6 +65,7 @@ export function FailureAlert({
       announce={announce}
       announceKey={attempt}
       announceDelayMs={announceDelayMs}
+      delayEachAttempt={delayEachAttempt}
       status={status}
       remedy={retry || !otherwise ? errorRemedy(message) : otherwise.remedy}
       details={errorDetails(message)}

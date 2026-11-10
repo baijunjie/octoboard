@@ -123,6 +123,9 @@ export interface ConfigurationFixture {
   /** What `inspect_configuration` answers: the inspection, or the daemon error refusing the
    * document. A scenario that opens a file gives it. */
   inspection?: Omit<Inspection, "type"> | FixtureError;
+  /** The refusal of later inspections after the initial read succeeds: a review that has become stale can no longer
+   * be read, for example after reconnecting to a daemon that cannot read the file's format version. */
+  reinspection?: FixtureError;
   /** What `import_configuration` answers: the result, a daemon error refusing the request, or
    * `"pending"` for an import that is never answered (a long clone). A scenario that applies an
    * import gives it. */

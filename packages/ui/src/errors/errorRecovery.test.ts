@@ -4,9 +4,22 @@ import { expect, it } from "vitest";
 import { CodedError } from "./codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { errorPresentation } from "./errorPresentation";
-import { additionalRecovery, appDataRecovery, classifyError, modelChangeRecovery, pathLinkRecovery } from "./errorRecovery";
+import { additionalRecovery, appDataRecovery, classifyError, modelChangeRecovery, pathLinkRecovery, retryCanHelp } from "./errorRecovery";
 import { ActionableError } from "./actionableError";
 import { hasErrorRemedy } from "../components/alerts/errorPartPresence";
+
+it.each([
+  "configuration_not_recognised", "configuration_unreadable", "configuration_version_unsupported",
+  "import_accounts_missing", "import_agent_missing", "import_resolution_invalid", "import_settings_missing",
+])("does not offer a retry for the unchanged configuration rejected as %s", (code) => {
+  expect(retryCanHelp(new CodedError("Rejected configuration", code, {}))).toBe(false);
+});
+
+it("keeps a connection failure and unknown failures retryable", () => {
+  expect(retryCanHelp(new CodedError("Connection closed", "connection_closed", {}))).toBe(true);
+  expect(retryCanHelp(new CodedError("Future failure", "a_future_code", {}))).toBe(true);
+  expect(retryCanHelp(new Error("Unexpected failure"))).toBe(true);
+});
 
 it.each([
   ["path_not_found", "path"], ["source_unavailable", "sourceGone"], ["path_already_exists", "pathExists"], ["session_locked", "unlock"],

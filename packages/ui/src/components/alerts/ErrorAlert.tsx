@@ -8,6 +8,23 @@ import { AlertContent, AlertDescription, AlertIndicator, AlertTitle } from "../.
 
 export type { AlertStatus };
 
+function AlertMessage({ textId, title, announce, announceKey, announceDelayMs, children }: {
+  textId?: string;
+  title: React.ReactNode;
+  announce: boolean;
+  announceKey?: number;
+  announceDelayMs?: number;
+  children: React.ReactNode;
+}): React.ReactElement {
+  const announcement = useAlertAnnouncement(announce, announceKey, announceDelayMs);
+  return (
+    <div id={textId} key={announcement.key} role={announcement.role} className="flex min-w-0 max-w-full flex-col items-start">
+      <AlertTitle>{title}</AlertTitle>
+      {children && <AlertDescription>{children}</AlertDescription>}
+    </div>
+  );
+}
+
 /**
  * Durable failure or warning content shown among other content: one that blocks (a lookup a form makes), one about a
  * whole area laid out top down, or one about the whole view; never a whole subject that failed (`EmptyPanel`) or one at
@@ -36,7 +53,8 @@ export type { AlertStatus };
  * move (a dialog opening onto its field, focus handed to Try again) or as a control's own state change is spoken (a
  * checkbox ticked): VoiceOver drops what is announced within about 300 ms of one, so the announcing part is replaced by
  * an alert after the delay (`AFTER_FOCUS_MOVE_DELAY_MS`), and until then the text is only shown. Like `announce`, it is
- * read as the Alert mounts.
+ * read as the Alert mounts. `delayEachAttempt` also restarts that delay for each new `announceKey`, for a retry whose
+ * own state feedback or focus handover would otherwise mask the next failure; recovery controls stay mounted.
  */
 export function ErrorAlert({
   id,
@@ -45,6 +63,7 @@ export function ErrorAlert({
   announce = false,
   announceKey,
   announceDelayMs,
+  delayEachAttempt = false,
   status = "danger",
   remedy,
   details,
@@ -59,6 +78,7 @@ export function ErrorAlert({
   announce?: boolean;
   announceKey?: number;
   announceDelayMs?: number;
+  delayEachAttempt?: boolean;
   status?: AlertStatus;
   /** The one main thing to do, shown under the description and not announced. */
   remedy?: React.ReactNode;
@@ -67,16 +87,14 @@ export function ErrorAlert({
   children?: React.ReactNode;
   className?: string;
 }): React.ReactElement {
-  const announcement = useAlertAnnouncement(announce, announceKey, announceDelayMs);
   return (
     <div id={id} className={`min-w-0 shrink-0 text-start ${className}`}>
       <AlertFrame status={status} className="flex-wrap">
         <AlertIndicator />
         <AlertContent className="min-w-40 basis-0">
-          <div id={textId} key={announcement.key} role={announcement.role} className="flex min-w-0 max-w-full flex-col items-start">
-            <AlertTitle>{title}</AlertTitle>
-            {children && <AlertDescription>{children}</AlertDescription>}
-          </div>
+          <AlertMessage key={delayEachAttempt ? announceKey : undefined} textId={textId} title={title} announce={announce} announceKey={announceKey} announceDelayMs={announceDelayMs}>
+            {children}
+          </AlertMessage>
           {remedy && <AlertDescription>{remedy}</AlertDescription>}
         </AlertContent>
         {(actions || details) && (
