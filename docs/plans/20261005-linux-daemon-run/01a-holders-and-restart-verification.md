@@ -8,7 +8,7 @@
 - Depends on milestone 01's Linux build, command surface and launch cgroup support. The holder, handover and companion implementations already exist; Linux verification remains outstanding.
 - Blocked for the systemd cases until the daemon runs as a systemd user service, each holder has its own delegated user unit, and the service successor's key can reach clients without being journalled or put in its owner record, arguments or environment.
 - Linux verification is deferred by the user because Linux is not released. No container, test suite, clippy run or hands-on verification is to be resumed as part of this documentation move.
-- Mixed-platform wording is preserved verbatim below; only its Linux portion belongs here. The macOS and Windows portions remain in the runtime-hardening plan. References in transferred text to holder/systemd prerequisites mean the requirements collected in this milestone. In particular, "milestone 02's systemd parts" denotes the transferred holder-service requirement, not this topic's UI milestone 02.
+- Mixed-platform wording is preserved verbatim below; only its Linux portion belongs here. The macOS and Windows portions were verified and closed with the runtime-hardening plan. References in transferred text to holder/systemd prerequisites mean the requirements collected in this milestone. In particular, "milestone 02's systemd parts" denotes the transferred holder-service requirement, not this topic's UI milestone 02.
 
 ## Holder requirements
 
