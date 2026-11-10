@@ -493,8 +493,7 @@ async fn a_screen_saved_at_the_handover_is_restored_with_the_tail_replayed_over_
         };
         assert!(shown, "{reported} {inexact}: {:?}", live.screen_text());
         if !marked {
-            // Nothing redraws an exact screen; give a resize the time it would have taken.
-            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            assert_eq!(live.repaint_nudges(), 0, "an exact screen was redrawn");
             assert!(
                 !live.screen_text().contains("size 24 80"),
                 "{reported} {inexact}: an exact screen was redrawn: {:?}",

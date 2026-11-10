@@ -6,6 +6,47 @@ use std::collections::VecDeque;
 
 const MAX_BUFFERED_INPUT: usize = 1024 * 1024;
 const SETTLE: Duration = Duration::from_secs(3);
+
+/// Tests give the stand-in up to PATIENCE to show each handshake; timeout proofs override the
+/// window and drive its clock. Read on the writer's or recovery scheduler's thread, before work
+/// moves to another thread.
+fn swap_settle() -> Duration {
+    #[cfg(test)]
+    {
+        SETTLE_OVERRIDE
+            .with(std::cell::Cell::get)
+            .unwrap_or(crate::test_support::PATIENCE)
+    }
+    #[cfg(not(test))]
+    SETTLE
+}
+
+#[cfg(test)]
+thread_local! {
+    static SETTLE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+}
+
+#[cfg(test)]
+struct SwapClock {
+    now: std::sync::Mutex<Instant>,
+    reads: std::sync::atomic::AtomicUsize,
+}
+
+#[cfg(test)]
+thread_local! {
+    static SWAP_CLOCK_OVERRIDE: std::cell::RefCell<Option<Arc<SwapClock>>> = const { std::cell::RefCell::new(None) };
+}
+
+fn swap_now() -> Instant {
+    #[cfg(test)]
+    if let Some(clock) = SWAP_CLOCK_OVERRIDE.with(|value| value.borrow().clone()) {
+        let now = *clock.now.lock().expect("swap clock lock poisoned");
+        clock.reads.fetch_add(1, Ordering::Release);
+        return now;
+    }
+    Instant::now()
+}
+
 /// How long the screen may still show a message written into an empty composer as if it were
 /// typed there: Claude Code draws a pasted message in its box before it takes the Enter after it
 /// (some 20 ms in 2.1.316).
@@ -256,7 +297,7 @@ impl LiveSession {
             } {
                 return true;
             }
-            if Instant::now() >= deadline {
+            if swap_now() >= deadline {
                 return false;
             }
             std::thread::sleep(Duration::from_millis(10));
@@ -317,7 +358,7 @@ impl LiveSession {
             return self.write_empty_message_input(message, prompt, allow_mixed);
         }
         let transaction = Transaction(self);
-        let deadline = Instant::now() + SETTLE;
+        let deadline = swap_now() + swap_settle();
         if self.swap_key().is_err() {
             self.release_input_protection();
             return Err(blocked("the session could not stash its composer"));
@@ -580,6 +621,7 @@ impl LiveSession {
         };
         let id = self.id.clone();
         let launch = self.launch_id.clone();
+        let settle = swap_settle();
         runtime.spawn_blocking(move || {
             let Some(live) = state.live_session(&id).filter(|live| live.launch_id == launch) else { return; };
             let output_before = live.output_total();
@@ -591,7 +633,7 @@ impl LiveSession {
                 let expired = {
                     let swap = live.swap.lock().expect("input swap lock poisoned");
                     swap.pending
-                        && swap.pending_since.is_some_and(|since| since.elapsed() >= SETTLE)
+                        && swap.pending_since.is_some_and(|since| since.elapsed() >= settle)
                         && !matches!(swap.phase, Some(RecoveryPhase::Replaying | RecoveryPhase::ReleasePending | RecoveryPhase::Fragmented | RecoveryPhase::TakenOver))
                 };
                 if expired {
@@ -694,13 +736,17 @@ mod tests {
         }
     }
 
-    fn wait_until(mut condition: impl FnMut() -> bool) {
+    fn wait_until(condition: impl FnMut() -> bool) {
+        wait_until_because(
+            condition,
+            "input transaction did not reach the expected phase",
+        );
+    }
+
+    fn wait_until_because(mut condition: impl FnMut() -> bool, message: &str) {
         let deadline = Instant::now() + crate::test_support::PATIENCE;
         while !condition() {
-            assert!(
-                Instant::now() < deadline,
-                "input transaction did not reach the expected phase"
-            );
+            assert!(Instant::now() < deadline, "{message}");
             std::thread::sleep(Duration::from_millis(5));
         }
     }
@@ -779,7 +825,7 @@ mod tests {
         let writer = live.clone();
         let send =
             std::thread::spawn(move || crate::session::term::send_message(&writer, "second"));
-        std::thread::sleep(Duration::from_millis(100));
+        wait_until(|| live.swap.lock().unwrap().message_written.is_none());
         live.on_output(&draw("", false, AgentId::CLAUDE));
         send.join().unwrap().unwrap();
         assert_eq!(live.input_writes(), 2, "two payloads and no stash key");
@@ -851,6 +897,32 @@ mod tests {
             assert!(!live.input_swap_active());
         }
     }
+    /// Holds the protection clock still until the fixture has shown each handshake phase.
+    /// Install both overrides on the writer thread, where the production getters read them.
+    fn controlled_send(
+        live: &Arc<LiveSession>,
+    ) -> (
+        Arc<SwapClock>,
+        std::thread::JoinHandle<std::result::Result<(), PartialWrite>>,
+    ) {
+        let clock = Arc::new(SwapClock {
+            now: std::sync::Mutex::new(Instant::now()),
+            reads: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let writer = live.clone();
+        let writer_clock = clock.clone();
+        let send = std::thread::spawn(move || {
+            SETTLE_OVERRIDE.with(|value| value.set(Some(SETTLE)));
+            SWAP_CLOCK_OVERRIDE.with(|value| *value.borrow_mut() = Some(writer_clock));
+            let result = crate::session::term::send_message(&writer, "peer");
+            SWAP_CLOCK_OVERRIDE.with(|value| *value.borrow_mut() = None);
+            SETTLE_OVERRIDE.with(|value| value.set(None));
+            result
+        });
+        wait_until(|| clock.reads.load(Ordering::Acquire) >= 2);
+        (clock, send)
+    }
+
     #[test]
     fn a_restore_timeout_releases_keys_without_retrying_the_written_payload() {
         let live = crate::test_support::fake_live_session(
@@ -863,22 +935,20 @@ mod tests {
         .with_composer();
         live.enable_native_stash(true);
         live.on_output(&draw("draft", false, AgentId::CLAUDE));
-        let started = Instant::now();
-        let writer = live.clone();
-        let send = std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"));
-        wait_until(|| live.input_swap_active());
+        let (clock, send) = controlled_send(&live);
         // Saving and restoring share one protection window; a slow save cannot buy another one.
-        std::thread::sleep(SETTLE * 2 / 3);
+        *clock.now.lock().unwrap() += SETTLE * 2 / 3;
         live.on_output(&draw("", true, AgentId::CLAUDE));
         wait_until(|| live.swap.lock().unwrap().phase == Some(RecoveryPhase::Submitted));
         live.write_terminal_input(b"user typing\r").unwrap();
+        *clock.now.lock().unwrap() += SETTLE - SETTLE * 2 / 3;
+        wait_until_because(
+            || send.is_finished(),
+            "restoration restarted the protection window",
+        );
         assert!(
             send.join().unwrap().is_ok(),
             "the written payload must never be retried"
-        );
-        assert!(
-            started.elapsed() < SETTLE + Duration::from_secs(1),
-            "restoration restarted the protection window"
         );
         assert!(!live.input_swap_active());
         assert_eq!(live.swap.lock().unwrap().bytes, 0);
@@ -903,10 +973,10 @@ mod tests {
         live.enable_native_stash(true);
         live.on_output(&draw("draft", false, AgentId::CLAUDE));
         live.write_terminal_input(b"draft").unwrap();
-        let writer = live.clone();
-        let send = std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"));
-        wait_until(|| live.input_swap_active());
+        let (clock, send) = controlled_send(&live);
         live.write_terminal_input(b"X\r").unwrap();
+        *clock.now.lock().unwrap() += SETTLE;
+        wait_until(|| send.is_finished());
         assert!(send.join().unwrap().is_ok());
         assert!(!live.input_swap_active());
         assert!(!live.native_stash.load(Ordering::Acquire));
@@ -936,11 +1006,10 @@ mod tests {
         live.enable_native_stash(true);
         live.on_output(&draw("draft", false, AgentId::CLAUDE));
         live.write_terminal_input(b"draft").unwrap();
-        let writer = live.clone();
-        std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"))
-            .join()
-            .unwrap()
-            .unwrap();
+        let (clock, send) = controlled_send(&live);
+        *clock.now.lock().unwrap() += SETTLE;
+        wait_until(|| send.is_finished());
+        send.join().unwrap().unwrap();
         let mut notices = Vec::new();
         while let Ok(event) = events.try_recv() {
             match event {
@@ -1046,13 +1115,13 @@ mod tests {
         state.register_live(live.clone());
         live.enable_native_stash(true);
         live.on_output(&draw("draft", false, AgentId::CLAUDE));
-        let writer = live.clone();
-        let send = std::thread::spawn(move || crate::session::term::send_message(&writer, "peer"));
-        wait_until(|| live.input_swap_active());
+        let (clock, send) = controlled_send(&live);
         live.on_output(&draw("", true, AgentId::CLAUDE));
         wait_until(|| live.swap.lock().unwrap().phase == Some(RecoveryPhase::Submitted));
         live.write_terminal_input(b"old edit\r").unwrap();
         live.on_output(b"\x1b[2J\x1b[HResume this conversation?\r\nEnter to confirm \xc2\xb7 Esc to dismiss\r\n");
+        *clock.now.lock().unwrap() += SETTLE;
+        wait_until(|| send.is_finished());
         assert!(send.join().unwrap().is_ok());
         assert_eq!(live.swap.lock().unwrap().bytes, b"old edit\r".len());
         let before = live.input_writes();
@@ -1227,9 +1296,11 @@ mod tests {
         {
             let mut swap = live.swap.lock().unwrap();
             swap.pending = true;
-            swap.pending_since = Some(Instant::now() - SETTLE * 2);
+            swap.pending_since = Some(Instant::now());
         }
+        SETTLE_OVERRIDE.set(Some(Duration::ZERO));
         live.on_output(&draw("", false, AgentId::CLAUDE));
+        SETTLE_OVERRIDE.set(None);
         wait_for_recovery_pass(&live);
         assert_eq!(
             live.swap.lock().unwrap().phase,

@@ -56,6 +56,13 @@ fn ensure_supported(rows: u16, cols: u16) -> anyhow::Result<()> {
 pub struct PtyCore {
     /// The owner's id, for the log.
     label: String,
+    #[cfg(test)]
+    exit_watch_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    #[cfg(test)]
+    repaint_nudges: AtomicUsize,
+    #[cfg(test)]
+    connections_ended: AtomicUsize,
+
     pub pid: u32,
     /// The terminal and the child on it, here or in a holder: reads, writes, resizing, the
     /// hang-up and signals all go through it. Every write is made under its input lock
@@ -175,6 +182,13 @@ impl PtyCore {
         let size = backend.size().unwrap_or(Size { rows: 24, cols: 80 });
         Self {
             label: new.label,
+            #[cfg(test)]
+            exit_watch_task: Mutex::new(None),
+            #[cfg(test)]
+            repaint_nudges: AtomicUsize::new(0),
+            #[cfg(test)]
+            connections_ended: AtomicUsize::new(0),
+
             pid: backend.pid().0,
             backend,
             reader: Mutex::new(None),
@@ -197,6 +211,43 @@ impl PtyCore {
             before_scratch_removal: Mutex::new(new.before_scratch_removal),
             kill_session_leftovers: new.kill_session_leftovers,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn keep_exit_watch_task(&self, task: tokio::task::JoinHandle<()>) {
+        *self
+            .exit_watch_task
+            .lock()
+            .expect("exit watch lock poisoned") = Some(task);
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn await_exit_watch(&self) {
+        let task = self
+            .exit_watch_task
+            .lock()
+            .expect("exit watch lock poisoned")
+            .take()
+            .expect("exit watcher started");
+        tokio::time::timeout(crate::test_support::PATIENCE, task)
+            .await
+            .expect("exit watcher never finished")
+            .expect("exit watcher failed");
+    }
+
+    #[cfg(test)]
+    pub(crate) fn repaint_nudges(&self) -> usize {
+        self.repaint_nudges.load(Ordering::Acquire)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn connection_ended(&self) {
+        self.connections_ended.fetch_add(1, Ordering::Release);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn connections_ended(&self) -> usize {
+        self.connections_ended.load(Ordering::Acquire)
     }
 
     /// The process's pid, as its host knows it.
@@ -610,6 +661,9 @@ impl PtyCore {
     /// held PTY back to it after a resize its holder could not take while out of reach.
     /// **Blocks** on the answers of the terminal's host.
     pub fn nudge_repaint(&self) -> anyhow::Result<()> {
+        #[cfg(test)]
+        self.repaint_nudges.fetch_add(1, Ordering::Release);
+
         let _resizing = self.resize_lock.lock().expect("resize mutex poisoned");
         let (rows, cols) = self.fan.screen_size();
         let nudged = if rows > 1 { rows - 1 } else { rows + 1 };

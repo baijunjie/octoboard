@@ -4,20 +4,14 @@
 //! terminals are leaked, since dropping one releases it in the holder), a second for the daemon
 //! that starts next.
 
-use std::time::{Duration, Instant};
-
 use super::*;
 use crate::holder::companion_test_support::{directory_of, socket_kind, touching};
 use crate::holder::protocol::{CompanionEndpoint, Ready, SpawnSpec};
 use crate::platform::term::Size;
 use crate::test_support::{is_running, kill, programs, KillOnDrop, ScratchDir, PATIENCE};
 
-fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
-    let deadline = Instant::now() + PATIENCE;
-    while !done() {
-        assert!(Instant::now() < deadline, "{what}");
-        std::thread::sleep(Duration::from_millis(20));
-    }
+fn wait_until(what: &str, done: impl FnMut() -> bool) {
+    assert!(crate::session::wait::wait_for(PATIENCE, done), "{what}");
 }
 
 fn spec(companion: bool) -> SpawnSpec {
@@ -149,8 +143,7 @@ fn a_companion_that_exited_before_the_next_daemon_linked_reads_as_exited() {
     kill(companion_pid);
 
     // Linked again until the holder has seen the companion go, which it does on its own time.
-    let deadline = Instant::now() + PATIENCE;
-    loop {
+    wait_until("the companion was never listed as exited", || {
         let next = in_process(dir.join("holders")).expect("holders");
         let found = next.adopt_existing(unresolved()).found;
         let exited = found[0].terminals[0]
@@ -160,19 +153,15 @@ fn a_companion_that_exited_before_the_next_daemon_linked_reads_as_exited() {
             .server
             .exited();
         if exited {
-            return;
+            return true;
         }
-        assert!(
-            Instant::now() < deadline,
-            "the companion was never listed as exited"
-        );
         // Parted from, and the terminals leaked as the previous daemon's are: dropping a found
         // terminal releases it in its holder.
         next.shutdown();
         std::mem::forget(found);
         drop(next);
-        std::thread::sleep(Duration::from_millis(50));
-    }
+        false
+    });
 }
 
 /// A companion no terminal has bound is ended through the link, which removes its endpoint.

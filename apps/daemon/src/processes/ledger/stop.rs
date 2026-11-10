@@ -13,7 +13,27 @@ use crate::platform::proc::{self, ContainerId, Polite, Sent, Signal};
 use crate::protocol::UnstoppedReason;
 
 /// How long a process asked to stop has before it is killed.
+#[cfg_attr(test, allow(dead_code))]
 pub(super) const STOP_GRACE: Duration = Duration::from_secs(3);
+
+/// Read on the stopping thread so a test's short timeout stays local to that stop.
+fn stop_grace() -> Duration {
+    #[cfg(test)]
+    {
+        STOP_GRACE_OVERRIDE
+            .get()
+            .unwrap_or(crate::test_support::PATIENCE)
+    }
+    #[cfg(not(test))]
+    STOP_GRACE
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Raised by a test to end the grace once its concurrent action is done; read once on the stopping thread.
+    pub(super) static GRACE_ENDED: std::cell::RefCell<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>> = const { std::cell::RefCell::new(None) };
+    pub(super) static STOP_GRACE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+}
 
 #[cfg(test)]
 thread_local! {
@@ -54,8 +74,17 @@ pub(super) fn stop(
         .copied()
         .filter(|id| signal(id, Signal::Polite(Polite::Terminate)))
         .collect();
-    let deadline = Instant::now() + STOP_GRACE;
+    #[cfg(test)]
+    let grace_ended = GRACE_ENDED.with(|slot| slot.borrow().clone());
+    let deadline = Instant::now() + stop_grace();
     while !asked.is_empty() && Instant::now() < deadline {
+        #[cfg(test)]
+        if grace_ended
+            .as_ref()
+            .is_some_and(|ended| ended.load(std::sync::atomic::Ordering::Acquire))
+        {
+            break;
+        }
         std::thread::sleep(Duration::from_millis(50));
         asked.retain(Identity::is_running);
     }

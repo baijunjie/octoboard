@@ -2216,6 +2216,27 @@ async fn a_session_moved_during_the_wait_is_left_alone() {
     assert_eq!(fixture.launched(), 0);
 }
 
+/// Registration precedes the kill, so the relaunch's watcher owns the end under its claim.
+async fn end_first_relaunch_when_registered(fixture: &Fixture) {
+    let (state, started) = (fixture.state.clone(), fixture.started.clone());
+    assert!(
+        crate::test_support::within(crate::test_support::PATIENCE, move || {
+            let started = started.lock().unwrap();
+            started.first().is_some_and(|first| {
+                state
+                    .live_session("w")
+                    .is_some_and(|live| std::ptr::eq(live.as_ref(), first.as_ref()))
+            })
+        })
+        .await,
+        "the first relaunch was registered"
+    );
+    let process = (*fixture.started.lock().unwrap()[0]).clone();
+    tokio::task::spawn_blocking(move || process.terminate())
+        .await
+        .unwrap();
+}
+
 /// A relaunch that starts and dies within the settling time is the switch's failure to report;
 /// the owner is not also told that the process "ended on its own", only that the session could
 /// not be brought back, if it could not.
@@ -2225,22 +2246,14 @@ async fn a_relaunch_that_dies_is_reported_as_the_outcome_not_as_ending_on_its_ow
     let (started, launches) = (fixture.started.clone(), fixture.launches.clone());
     let env = fixture.env();
     // The first process starts and dies; the restore's starts and stays.
-    let calls = Arc::new(AtomicUsize::new(0));
-    let launch = move |request: LaunchRequest| {
-        let launched = stand_in_launch(&started, &launches, || {})(request)?;
-        if calls.fetch_add(1, Ordering::SeqCst) == 0 {
-            let process = launched.session.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_millis(300));
-                process.terminate();
-            });
-        }
-        Ok(launched)
-    };
-
-    try_switch(&fixture.state, "w", move || Ok(env), launch)
-        .await
-        .expect("brought back up, so not an error");
+    let launch = move |request: LaunchRequest| stand_in_launch(&started, &launches, || {})(request);
+    crate::coordinator::restart::SWITCH_SETTLE_OVERRIDE.set(Some(crate::test_support::PATIENCE));
+    let (switched, ()) = tokio::join!(
+        try_switch(&fixture.state, "w", move || Ok(env), launch),
+        end_first_relaunch_when_registered(&fixture),
+    );
+    crate::coordinator::restart::SWITCH_SETTLE_OVERRIDE.set(None);
+    switched.expect("brought back up, so not an error");
 
     assert_eq!(
         fixture.worker().account_id,
@@ -2290,7 +2303,8 @@ async fn a_relaunch_that_dies_after_a_switch_asked_for_still_tells_the_owner() {
     let (started, launches) = (fixture.started.clone(), fixture.launches.clone());
     let env = fixture.env();
 
-    let failed = crate::coordinator::account_switch::switch_session_account_if(
+    crate::coordinator::restart::SWITCH_SETTLE_OVERRIDE.set(Some(crate::test_support::PATIENCE));
+    let switching = crate::coordinator::account_switch::switch_session_account_if(
         &fixture.state,
         "w",
         Some(Some("claude-a".to_string())),
@@ -2299,18 +2313,11 @@ async fn a_relaunch_that_dies_after_a_switch_asked_for_still_tells_the_owner() {
         None,
         LaunchEdit::default(),
         move || Ok(env),
-        move |request| {
-            let launched = stand_in_launch(&started, &launches, || {})(request)?;
-            let process = launched.session.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_millis(300));
-                process.terminate();
-            });
-            Ok(launched)
-        },
-    )
-    .await
-    .expect_err("the relaunch did not stay up");
+        move |request| stand_in_launch(&started, &launches, || {})(request),
+    );
+    let (switched, ()) = tokio::join!(switching, end_first_relaunch_when_registered(&fixture));
+    crate::coordinator::restart::SWITCH_SETTLE_OVERRIDE.set(None);
+    let failed = switched.expect_err("the relaunch did not stay up");
     let coded = failed.error.downcast_ref::<CodedError>().expect("coded");
     assert_eq!(coded.code, error_code::SWITCH_DID_NOT_COME_UP);
 
@@ -2629,23 +2636,29 @@ async fn a_second_trigger_under_a_switchs_claim_does_not_pick_the_account_just_l
     let second = async {
         // The turn it continues fails once the session is relaunched on its new account, while
         // the claim is still held.
-        let deadline = Instant::now() + crate::test_support::PATIENCE;
-        while !(fixture.state.is_launching("w")
-            && fixture.worker().account_id.as_deref() == Some("claude-a")
-            && fixture
-                .state
-                .live_session("w")
-                .is_some_and(|live| !std::ptr::eq(live.as_ref(), fixture.worker_process.as_ref())))
-        {
-            assert!(
-                Instant::now() < deadline,
-                "the switched process did not come up"
-            );
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
+        let (state, previous) = (fixture.state.clone(), (*fixture.worker_process).clone());
+        assert!(
+            crate::test_support::within(crate::test_support::PATIENCE, move || {
+                state.is_launching("w")
+                    && state
+                        .session_record("w")
+                        .is_ok_and(|worker| worker.account_id.as_deref() == Some("claude-a"))
+                    && state
+                        .live_session("w")
+                        .is_some_and(|live| !std::ptr::eq(live.as_ref(), previous.as_ref()))
+            })
+            .await,
+            "the switched process did not come up"
+        );
         fixture.failed_turn().await;
     };
+    // The first settle ends only once the second trigger has found its claim held.
+    let waiting = Arc::new(tokio::sync::Notify::new());
+    CLAIM_WAITING.with(|slot| slot.replace(Some(waiting.clone())));
+    crate::coordinator::restart::SWITCH_SETTLED.with(|slot| slot.replace(Some(waiting)));
     tokio::join!(fixture.failed_turn(), second);
+    CLAIM_WAITING.with(|slot| slot.replace(None));
+    crate::coordinator::restart::SWITCH_SETTLED.with(|slot| slot.replace(None));
 
     // The default account still reads as having quota, but the first switch left it.
     assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-b"));

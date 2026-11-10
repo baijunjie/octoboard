@@ -367,6 +367,11 @@ struct Shared {
     adopted: Mutex<Vec<Arc<Link>>>,
     /// The holders that could not be linked to at start, by id, while they are tried again.
     pending: Mutex<HashMap<String, RegistryEntry>>,
+    #[cfg(test)]
+    pending_attempts: std::sync::atomic::AtomicUsize,
+    /// Attempts to end a holder by its process, including work dispatched to another thread.
+    #[cfg(test)]
+    holder_signal_attempts: std::sync::atomic::AtomicUsize,
     /// The daemon is parting from its holders: none is tried again from now on.
     stopping: AtomicBool,
     /// The parting is planned ([`Holders::begin_planned_stop`], [`Holders::part_planned`]): every
@@ -467,6 +472,10 @@ impl Holders {
             on_lost: sweep_after_loss(config.builds.clone(), config.registry_dir.clone()),
             adopted: Mutex::new(Vec::new()),
             pending: Mutex::new(HashMap::new()),
+            #[cfg(test)]
+            pending_attempts: std::sync::atomic::AtomicUsize::new(0),
+            #[cfg(test)]
+            holder_signal_attempts: std::sync::atomic::AtomicUsize::new(0),
             stopping: AtomicBool::new(false),
             planned: AtomicBool::new(false),
             quit: OnceLock::new(),
@@ -1223,6 +1232,8 @@ impl Shared {
                     if self.end_quit_target_by_process(&entry) {
                         break Err(Vec::new());
                     }
+                    #[cfg(test)]
+                    self.pending_attempts.fetch_add(1, Ordering::Release);
                 }
             }
         };
@@ -1246,6 +1257,8 @@ impl Shared {
                         link.part(true);
                     } else {
                         link.part(false);
+                        #[cfg(test)]
+                        self.holder_signal_attempts.fetch_add(1, Ordering::Release);
                         end_by_process(&self.registry_dir, &entry);
                     }
                     return;
@@ -1321,6 +1334,8 @@ impl Shared {
     /// holder is gone after it.
     fn ending_by_process(&self, entry: &RegistryEntry) -> Ending {
         let (registry_dir, entry) = (self.registry_dir.clone(), entry.clone());
+        #[cfg(test)]
+        self.holder_signal_attempts.fetch_add(1, Ordering::Release);
         Box::new(move || {
             end_by_process(&registry_dir, &entry);
             Ended::by_process(holder_gone(&registry_dir, &entry.holder_id))
@@ -1463,6 +1478,8 @@ pub(super) fn end_process(identity: &ProcessIdentity) -> std::io::Result<()> {
 /// each terminal had kept, for the screens no daemon will show again. **Blocks.**
 fn refuse(link: &Arc<Link>, registry_dir: &Path, entry: &RegistryEntry) -> Ended {
     let Some(terminals) = link.adopt() else {
+        #[cfg(test)]
+        link.holder_signal_attempts.fetch_add(1, Ordering::Release);
         end_by_process(registry_dir, entry);
         return Ended::by_process(holder_gone(registry_dir, &entry.holder_id));
     };
@@ -1490,6 +1507,8 @@ fn refuse(link: &Arc<Link>, registry_dir: &Path, entry: &RegistryEntry) -> Ended
     // A program whose end is not confirmed may run on in the holder, which the daemon would then
     // publish as gone: the holder is ended by its process, and what it ran is gone only if it is.
     tracing::warn!(holder = %entry.holder_id, "a terminal's end was not confirmed; the holder is ended by its process");
+    #[cfg(test)]
+    link.holder_signal_attempts.fetch_add(1, Ordering::Release);
     end_by_process(registry_dir, entry);
     Ended {
         gone: holder_gone(registry_dir, &entry.holder_id),

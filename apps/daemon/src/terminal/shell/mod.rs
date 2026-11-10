@@ -706,7 +706,9 @@ async fn end(process: Arc<ShellProcess>) {
 /// its record, and its exit, which leaves the record exited and lets every attached client go
 /// once the shell's last output has reached them.
 fn watch(state: Arc<AppState>, process: Arc<ShellProcess>) {
-    tokio::spawn(async move {
+    #[cfg(test)]
+    let watched = process.clone();
+    let task = tokio::spawn(async move {
         loop {
             tokio::time::sleep(POLL_INTERVAL).await;
             // A terminal handed over is the next daemon's to watch: an exit seen from here on is
@@ -738,6 +740,10 @@ fn watch(state: Arc<AppState>, process: Arc<ShellProcess>) {
         });
         process.close_output();
     });
+    #[cfg(test)]
+    watched.keep_exit_watch_task(task);
+    #[cfg(not(test))]
+    drop(task);
 }
 
 mod busy;

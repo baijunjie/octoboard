@@ -1275,14 +1275,7 @@ mod tests {
         let note = deliver_report(&state, "worker", done_report()).expect("delivered");
 
         assert!(note.contains("project session"), "{note}");
-        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
-        let output = loop {
-            let output = String::from_utf8_lossy(&live.recent_output(8 * 1024)).into_owned();
-            if output.contains("worker") || std::time::Instant::now() >= deadline {
-                break output;
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        };
+        let output = crate::test_support::output_containing(&live, "worker");
         assert!(
             output.contains("Report from your child session, the project session `worker`"),
             "{output}"
@@ -1332,14 +1325,7 @@ mod tests {
             "it said nothing. Check it with `{}`.",
             catalogue::qualified_tool_name(AgentId::GROK, "get_session")
         );
-        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
-        let output = loop {
-            let output = String::from_utf8_lossy(&live.recent_output(8 * 1024)).into_owned();
-            if output.contains(&wanted) || std::time::Instant::now() >= deadline {
-                break output;
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        };
+        let output = crate::test_support::output_containing(&live, &wanted);
         assert!(output.contains(&wanted), "{output}");
     }
 
@@ -1434,14 +1420,7 @@ mod tests {
         synthesise_report(&state, "waiting-coordinator", turn(), 0);
         synthesise_report(&state, "idle-coordinator", turn(), 0);
 
-        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
-        let output = loop {
-            let output = String::from_utf8_lossy(&hub.recent_output(8 * 1024)).into_owned();
-            if output.contains("idle-coordinator") || std::time::Instant::now() >= deadline {
-                break output;
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        };
+        let output = crate::test_support::output_containing(&hub, "idle-coordinator");
         assert!(
             output
                 .contains("Report from your child session, the project session `idle-coordinator`"),
@@ -1584,7 +1563,7 @@ mod tests {
         assert!(heard.contains("nothing-left-running"), "{heard}");
         // The first turn's hold began before the second's and has long run out; waiting it out
         // once more leaves no delivery of it in flight when the hub is read.
-        tokio::time::sleep(COMPLETION_NOTICE_SETTLE).await;
+        crate::test_support::runtime_advanced(COMPLETION_NOTICE_SETTLE).await;
         let heard = hub_heard(&state, &hub).await;
         assert!(!heard.contains("waiting-for-the-other-review"), "{heard}");
 
@@ -1610,7 +1589,10 @@ mod tests {
             )
             .unwrap();
 
-        let err = deliver_report(&state, "worker", done_report()).expect_err("refused");
+        crate::messaging::delivery::OWNER_CLAIM_WAIT_OVERRIDE.set(Some(Duration::from_millis(50)));
+        let result = deliver_report(&state, "worker", done_report());
+        crate::messaging::delivery::OWNER_CLAIM_WAIT_OVERRIDE.set(None);
+        let err = result.expect_err("refused");
 
         let coded = err.downcast_ref::<CodedError>().expect("coded");
         assert_eq!(coded.code, error_code::SESSION_NOT_RUNNING, "{err}");
@@ -1643,16 +1625,14 @@ mod tests {
             )
             .unwrap();
         let claim = state.begin_launch("hub").unwrap();
-        let reporting = {
-            let state = state.clone();
-            std::thread::spawn(move || deliver_report(&state, "worker", done_report()))
-        };
-
-        std::thread::sleep(Duration::from_millis(300));
-        assert!(!reporting.is_finished(), "the report waits for the claim");
-        state.set_session_locked("worker", true).expect("not busy");
-        drop(claim);
-        let note = reporting.join().unwrap().expect("delivered");
+        let note = crate::messaging::delivery::when_owner_claim_waits(
+            claim,
+            || {
+                state.set_session_locked("worker", true).expect("not busy");
+            },
+            || deliver_report(&state, "worker", done_report()),
+        )
+        .expect("delivered");
 
         assert!(note.contains("was not archived"), "{note}");
         assert_eq!(kept_texts(&state).len(), 1);
@@ -1676,20 +1656,17 @@ mod tests {
         };
         state.store.insert_session(&heir).unwrap();
         let claim = state.begin_launch("hub").unwrap();
-        let handing_off = {
-            let state = state.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(Duration::from_millis(300));
+        crate::messaging::delivery::when_owner_claim_waits(
+            claim,
+            || {
                 state.store.transfer_binding("hub", "heir", None).unwrap();
                 let mut hub = state.session_record("hub").unwrap();
                 hub.status = SessionStatus::Archived;
                 state.store.update_session(&hub).unwrap();
-                drop(claim);
-            })
-        };
-
-        deliver_report(&state, "worker", done_report()).expect("delivered to the heir");
-        handing_off.join().unwrap();
+            },
+            || deliver_report(&state, "worker", done_report()),
+        )
+        .expect("delivered to the heir");
 
         assert!(kept_texts(&state).is_empty());
         assert_eq!(state.store.kept_messages("heir").unwrap().len(), 1);

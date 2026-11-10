@@ -278,6 +278,11 @@ pub(super) struct Link {
     /// How many connections the link has been served over.
     #[cfg(test)]
     connections: AtomicUsize,
+    #[cfg(test)]
+    pub(super) reconnect_attempts: AtomicUsize,
+    /// Attempts to signal the holder, counted before dispatching work to another thread.
+    #[cfg(test)]
+    pub(super) holder_signal_attempts: AtomicUsize,
     next_request: AtomicU64,
     replies: Mutex<HashMap<u64, std_mpsc::Sender<FromHolder>>>,
     spawns: Mutex<HashMap<String, std_mpsc::Sender<FromHolder>>>,
@@ -394,6 +399,10 @@ impl Link {
             revokes: Mutex::new(Vec::new()),
             #[cfg(test)]
             connections: AtomicUsize::new(0),
+            #[cfg(test)]
+            reconnect_attempts: AtomicUsize::new(0),
+            #[cfg(test)]
+            holder_signal_attempts: AtomicUsize::new(0),
             next_request: AtomicU64::new(1),
             replies: Mutex::new(HashMap::new()),
             spawns: Mutex::new(HashMap::new()),
@@ -650,6 +659,8 @@ impl Link {
                 Err(err) => {
                     tracing::warn!(holder = %self.entry.holder_id, %err, "the holder could not be linked to again; trying again later");
                     pause = Some(self.next_pause());
+                    #[cfg(test)]
+                    self.reconnect_attempts.fetch_add(1, Ordering::Release);
                 }
             }
         }
@@ -738,6 +749,11 @@ impl Link {
         self.pending.load(Ordering::Acquire)
     }
 
+    #[cfg(test)]
+    pub(super) fn lost(&self) -> bool {
+        !self.alive() && !self.recovering.load(Ordering::Acquire) && !self.pending()
+    }
+
     /// Gives the holder no more terminals: it is told to drain now if it is linked, or once it is
     /// linked again.
     pub(super) fn retire(&self) {
@@ -796,6 +812,8 @@ impl Link {
 
     /// Ends the holder's process (see [`super::end_process`]) without blocking the runtime.
     async fn end_holder(&self, identity: ProcessIdentity) {
+        #[cfg(test)]
+        self.holder_signal_attempts.fetch_add(1, Ordering::Release);
         let ended = tokio::task::spawn_blocking(move || super::end_process(&identity)).await;
         if !matches!(ended, Ok(Ok(()))) {
             tracing::warn!(holder = %self.entry.holder_id, "ending the holder failed; it is left running");

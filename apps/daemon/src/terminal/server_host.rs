@@ -626,14 +626,10 @@ mod tests {
             host.end();
             assert!(server.exited());
             crate::test_support::assert_stops_running(pid);
-            let deadline = std::time::Instant::now() + PATIENCE;
-            while directory.exists() {
-                assert!(
-                    std::time::Instant::now() < deadline,
-                    "the endpoint was not removed"
-                );
-                std::thread::sleep(std::time::Duration::from_millis(20));
-            }
+            assert!(
+                crate::session::wait::wait_for(PATIENCE, || !directory.exists()),
+                "the endpoint was not removed"
+            );
             drop(host);
             drop((issued, holders));
         }

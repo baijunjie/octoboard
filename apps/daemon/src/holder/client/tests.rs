@@ -398,22 +398,23 @@ async fn a_link_that_cannot_be_opened_again_for_now_is_pending_and_never_ends_th
     .await
     .unwrap();
 
-    let deadline = Instant::now() + PATIENCE;
-    while !link.pending() {
-        assert!(Instant::now() < deadline, "the link never became pending");
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    let pending = link.clone();
+    assert!(crate::test_support::within(PATIENCE, move || pending.pending()).await);
     assert!(!link.alive());
-    // Several tries later the holder still runs.
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    let retried = link.clone();
+    assert!(
+        crate::test_support::within(PATIENCE, move || {
+            retried.reconnect_attempts.load(Ordering::Acquire) >= 3
+        })
+        .await,
+        "the link was not tried again"
+    );
     assert!(crate::test_support::is_running(stand_in.pid as i32));
     assert!(link.pending(), "a refused connection lost the link");
 
     stand_in.end();
-    while link.pending() {
-        assert!(Instant::now() < deadline, "the link is still pending");
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    let lost = link.clone();
+    assert!(crate::test_support::within(PATIENCE, move || lost.lost()).await);
     assert!(!link.alive());
     assert_eq!(link.connections(), 1);
     tokio::task::spawn_blocking(move || drop(holders))
@@ -525,13 +526,16 @@ async fn a_link_that_drops_to_a_holder_without_a_registry_file_is_lost_and_nothi
     .await
     .unwrap();
 
-    let deadline = Instant::now() + PATIENCE;
-    while link.alive() {
-        assert!(Instant::now() < deadline, "the link is still alive");
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-    // Long enough for a signal sent in error to have landed.
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    let finished = link.clone();
+    assert!(crate::test_support::within(PATIENCE, move || finished.lost()).await);
+    assert_eq!(link.holder_signal_attempts.load(Ordering::Acquire), 0);
+    assert_eq!(
+        holders
+            .shared
+            .holder_signal_attempts
+            .load(Ordering::Acquire),
+        0
+    );
     assert!(crate::test_support::is_running(pid as i32));
     assert_eq!(link.connections(), 1, "the link was opened again");
     stand_in.kill().ok();
@@ -576,7 +580,14 @@ async fn a_holder_that_runs_but_cannot_be_linked_to_is_pending_until_it_is_gone(
     .unwrap();
     assert!(adoption.found.is_empty());
     assert_eq!(adoption.pending, vec!["unlinkable".to_string()]);
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    let retried = holders.shared.clone();
+    assert!(
+        crate::test_support::within(PATIENCE, move || {
+            retried.pending_attempts.load(Ordering::Acquire) >= 2
+        })
+        .await,
+        "the holder was not tried again"
+    );
     assert!(crate::test_support::is_running(stand_in.pid as i32));
     assert!(registry::read(&registry_dir, "unlinkable").is_some());
 
@@ -1609,16 +1620,13 @@ async fn a_launch_in_a_holder_that_runs_no_companions_is_told_so_and_sends_none(
         // The revoke is the last frame the launch sends, so all it sent before has arrived once it
         // has.
         drop(issued);
-        let deadline = Instant::now() + PATIENCE;
-        while !received
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|text| text.contains(r#""type":"revoke_launch""#))
-        {
-            assert!(Instant::now() < deadline, "the revoke never arrived");
-            std::thread::sleep(Duration::from_millis(20));
-        }
+        wait_for("the revoke never arrived", || {
+            received
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|text| text.contains(r#""type":"revoke_launch""#))
+        });
         let texts = received.lock().unwrap().clone();
         for kind in ["open_endpoint", "start_companion", "end_companion"] {
             assert!(
@@ -1641,7 +1649,7 @@ fn bound_companion(link: &Arc<Link>) -> (HeldCompanion, HeldTerminal) {
             "t1",
             Command::new("/bin/true"),
             Ready::SocketExists,
-            Duration::from_secs(5),
+            PATIENCE,
             None,
         )
         .expect("the holder starts the companion");
@@ -1656,12 +1664,8 @@ fn bound_companion(link: &Arc<Link>) -> (HeldCompanion, HeldTerminal) {
 }
 
 /// Waits until `done`, which is told what the test is waiting for if it never comes.
-fn wait_for(what: &str, mut done: impl FnMut() -> bool) {
-    let deadline = Instant::now() + PATIENCE;
-    while !done() {
-        assert!(Instant::now() < deadline, "{what}");
-        std::thread::sleep(Duration::from_millis(20));
-    }
+fn wait_for(what: &str, done: impl FnMut() -> bool) {
+    assert!(crate::session::wait::wait_for(PATIENCE, done), "{what}");
 }
 
 /// A holder gone for good takes the companion its terminal bound with it: here the holder ends on
@@ -1704,18 +1708,13 @@ async fn a_bound_companion_stays_while_the_link_is_pending_and_exits_once_the_ho
     })
     .await
     .unwrap();
-    let deadline = Instant::now() + PATIENCE;
-    while !link.pending() {
-        assert!(Instant::now() < deadline, "the link never became pending");
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    let pending = link.clone();
+    assert!(crate::test_support::within(PATIENCE, move || pending.pending()).await);
     assert!(!companion.exited(), "a pending link made it read as exited");
 
     stand_in.end();
-    while link.pending() {
-        assert!(Instant::now() < deadline, "the link is still pending");
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    let lost = link.clone();
+    assert!(crate::test_support::within(PATIENCE, move || lost.lost()).await);
     assert!(companion.exited());
     tokio::task::spawn_blocking(move || drop((terminal, companion, link, holders)))
         .await

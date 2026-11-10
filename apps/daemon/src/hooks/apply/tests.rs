@@ -234,6 +234,7 @@ async fn a_grok_prompt_watches_the_title_for_a_cancel_no_hook_reports() {
 /// turn that carries on once the hand comes down: the watch is armed again from there.
 #[tokio::test]
 async fn a_grok_card_s_title_does_not_end_the_turn_that_carries_on_after_it() {
+    let _settle = crate::session::title_interrupt::without_settle();
     let (state, dir) = app_state("server-grok-title-card");
     state
         .store
@@ -261,14 +262,14 @@ async fn a_grok_card_s_title_does_not_end_the_turn_that_carries_on_after_it() {
     );
     assert_eq!(status(&state), SessionStatus::WaitingUser);
     live.on_output(at_prompt);
-    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    crate::session::title_interrupt::polls_settled().await;
     apply_hook(
         &state,
         "s",
         br#"{"hook_event_name": "PostToolUse", "toolName": "ask_user_question"}"#,
     );
     assert_eq!(status(&state), SessionStatus::Working);
-    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    crate::session::title_interrupt::polls_settled().await;
     assert_eq!(
         status(&state),
         SessionStatus::Working,

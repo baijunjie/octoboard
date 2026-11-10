@@ -50,9 +50,27 @@ can exhaust waits bounded in single seconds even when the code under test behave
   set; only the test proving the window runs out sets a short override (`settle` and
   `SETTLE_OVERRIDE` in `apps/daemon/src/session/interrupt/mod.rs` are the shape). The override
   reaches only the test's own thread, so the code reads the getter there and passes the value on
-  before the work moves onto `spawn_blocking` or another thread. Where a window cannot be routed
-  through such a getter, the fixture does its one-time setup first and uses only shell builtins
-  after it, so no exec lands inside that window.
+  before the work moves onto `spawn_blocking` or another thread, and in async code before its
+  first `.await`. Where a window cannot be routed through such a getter, the fixture does its
+  one-time setup first and uses only shell builtins after it, so no exec lands inside that window.
+- Widening to `PATIENCE` costs nothing only where the window ends early on the awaited answer.
+  Where a passing test has to see the window run out, or needs it held open until its own
+  concurrent action is done — a fixture that ignores TERM inside a stop grace, a second trigger
+  that must find a claim still held — the widened window makes every passing run wait the whole of
+  `PATIENCE`. There, end the window on an event instead: the production wait also returns on a
+  `#[cfg(test)]` signal taken from a `thread_local!` — a `tokio::sync::Notify` the other path
+  notifies once it reaches the point the test needs (`CLAIM_WAITING` in
+  `apps/daemon/src/coordinator/auto_switch.rs` ending `SWITCH_SETTLED` in
+  `apps/daemon/src/coordinator/restart.rs`; a `Notify` keeps a permit, so it does not matter which
+  side gets there first), or a flag the test raises after its action (`GRACE_ENDED` in
+  `apps/daemon/src/processes/ledger/stop.rs`). A window a passing test always waits out in full
+  keeps its real figure under test (`switch_settle` in `restart.rs`), and a case where the window is
+  not what is tested sets a zero override once its fixture is ready.
+- Do not prove that something did not happen by sleeping a fixed window first. Give the
+  production path a `#[cfg(test)]` observable — a counter, or the `JoinHandle` of the task that
+  would act — and wait on it or assert it; a counter for work handed to `spawn_blocking` or another
+  thread is incremented before the handoff, so it is final once the call under test returns
+  (`holder_signal_attempts` in `apps/daemon/src/holder/client/mod.rs`).
 
 To recognise it: failures only under a parallel run, a run far slower than usual,
 `--test-threads=1` passing, and a trivial exec (`/usr/bin/true`) timed in a loop alongside the

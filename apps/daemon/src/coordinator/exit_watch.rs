@@ -54,7 +54,9 @@ pub(crate) fn end_process_for_test(state: &Arc<AppState>, id: &str) {
 /// watching and records nothing: the process is the next daemon's.
 pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
     let state = state.clone();
-    tokio::spawn(async move {
+    #[cfg(test)]
+    let watched = live.clone();
+    let task = tokio::spawn(async move {
         loop {
             tokio::time::sleep(EXIT_POLL_INTERVAL).await;
             // Once a planned stop hands the terminals over, the session is the next daemon's: an
@@ -143,6 +145,10 @@ pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
         }
         live.settle_exit();
     });
+    #[cfg(test)]
+    watched.keep_exit_watch_task(task);
+    #[cfg(not(test))]
+    drop(task);
 }
 
 #[cfg(test)]

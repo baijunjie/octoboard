@@ -42,7 +42,17 @@ const HOLD_SLACK: Duration = Duration::from_secs(3 * 60);
 /// How long a failed turn waits for another claim on its session to end before it is judged. A
 /// switch keeps its claim past the relaunch until the process has stayed up a few seconds, and the
 /// turn it continues may fail within that time.
+#[cfg_attr(test, allow(dead_code))]
 const CLAIM_WAIT: Duration = Duration::from_secs(15);
+
+fn claim_wait() -> Duration {
+    #[cfg(test)]
+    {
+        crate::test_support::PATIENCE
+    }
+    #[cfg(not(test))]
+    CLAIM_WAIT
+}
 
 /// Runtime waits belong to the failed turn and process, never to an idle session in general.
 pub(crate) struct RecoveryState {
@@ -690,12 +700,26 @@ async fn end_hold(state: &Arc<AppState>, id: &str, token: &Arc<()>, until: i64) 
     switch_after_failed_turn_captured(state, id, Some(trigger), snapshot, launch).await;
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Notified when a failed turn finds the session's claim held, so a test can keep that claim until then.
+    static CLAIM_WAITING: std::cell::RefCell<Option<Arc<tokio::sync::Notify>>> = const { std::cell::RefCell::new(None) };
+}
+
 /// Waits up to [`CLAIM_WAIT`] for the claim on the session `id` to be released, so that a turn that
 /// failed under one (the continued turn of a switch that has just relaunched it) is judged once
 /// the session is free, and not dropped. A claim still held then leaves the session to be refused
 /// as busy.
 async fn wait_for_claim(state: &Arc<AppState>, id: &str) {
-    let deadline = Instant::now() + CLAIM_WAIT;
+    let deadline = Instant::now() + claim_wait();
+    #[cfg(test)]
+    if state.is_launching(id) {
+        CLAIM_WAITING.with(|slot| {
+            if let Some(waiting) = slot.borrow_mut().take() {
+                waiting.notify_one();
+            }
+        });
+    }
     while state.is_launching(id) && Instant::now() < deadline {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }

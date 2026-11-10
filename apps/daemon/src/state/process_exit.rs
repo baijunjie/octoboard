@@ -26,7 +26,18 @@ const SHUTDOWN_HOOK_SETTLE: Duration = Duration::from_millis(500);
 /// outbox write is cut short after its current message. Bounded, because the update or restart
 /// that asked for the stop waits on it; what is still running then is the next daemon's to adopt
 /// as after a crash, and a step that has not begun by then does not begin.
+#[cfg_attr(test, allow(dead_code))]
 const HANDOVER_BARRIER_WAIT: Duration = Duration::from_secs(5);
+
+/// A test coordinating an admitted operation must not race the production barrier deadline.
+fn handover_barrier_wait() -> Duration {
+    #[cfg(test)]
+    {
+        crate::test_support::PATIENCE
+    }
+    #[cfg(not(test))]
+    HANDOVER_BARRIER_WAIT
+}
 
 /// [`SHUTDOWN_HOOK_SETTLE`], widened to `PATIENCE` under test so a test holding an event back is
 /// not raced by it.
@@ -178,7 +189,7 @@ impl AppState {
     pub async fn settle_for_planned_stop(self: &Arc<Self>) -> Vec<Arc<LiveSession>> {
         // Before the flags below: an operation still admitted may be waiting for the exit of a
         // process it ended to be recorded, which nothing records once the handover has begun.
-        if !self.raise_handover_barrier(HANDOVER_BARRIER_WAIT).await {
+        if !self.raise_handover_barrier(handover_barrier_wait()).await {
             tracing::warn!("operations admitted before the planned stop were still running when its wait ran out; the terminals they change may be adopted as after a crash");
         }
         self.shutting_down.store(true, Ordering::Release);

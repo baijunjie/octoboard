@@ -42,6 +42,25 @@ use super::resume::resumable_agent_session_id;
 /// device-code approval — so a switch to such an account counts as having come up.
 const SWITCH_SETTLE: Duration = Duration::from_secs(4);
 
+/// A relaunch that stays up uses the short default even under test: the whole window is waited
+/// out. A test acting on its next stand-in while it settles can widen that one window on the
+/// calling thread; a restore that follows uses the default again.
+fn switch_settle() -> Duration {
+    #[cfg(test)]
+    if let Some(settle) = SWITCH_SETTLE_OVERRIDE.with(std::cell::Cell::take) {
+        return settle;
+    }
+    SWITCH_SETTLE
+}
+
+#[cfg(test)]
+thread_local! {
+    /// A test's signal that ends the next switch settle in place of its timer; taken on the calling thread before any
+    /// await.
+    pub(super) static SWITCH_SETTLED: std::cell::RefCell<Option<Arc<tokio::sync::Notify>>> = const { std::cell::RefCell::new(None) };
+    pub(super) static SWITCH_SETTLE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+}
+
 /// How long a restart waits for the process it ended to be recorded down: [`SWITCH_STOP_TIMEOUT`],
 /// shortened by a test.
 #[cfg_attr(not(test), allow(unused_variables))]
@@ -323,10 +342,20 @@ pub(crate) fn record_needs_shell_env(session: &Session) -> bool {
 /// [`SWITCH_SETTLE`]. One that is has been seen to come up, so its end from then on is the agent's
 /// own and is told to the owner as any is.
 pub(super) async fn came_up_under_claim(state: &Arc<AppState>, id: &str) -> bool {
+    let settle = switch_settle();
     let Some(live) = state.live_session(id) else {
         return false;
     };
-    let up = came_up(&live, SWITCH_SETTLE).await;
+    #[cfg(test)]
+    let settle = if let Some(settled) = SWITCH_SETTLED.with(|slot| slot.borrow_mut().take()) {
+        tokio::time::timeout(crate::test_support::PATIENCE, settled.notified())
+            .await
+            .expect("the test never released the switch settle");
+        Duration::ZERO
+    } else {
+        settle
+    };
+    let up = came_up(&live, settle).await;
     if up {
         live.release_watch();
     }

@@ -1796,28 +1796,31 @@ fn a_launch_being_ended_keeps_nothing_and_each_end_returns_once_it_is_done() {
         Some(live.launch_id.as_str())
     );
 
+    let grace_ended = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let ends: Vec<_> = (0..2)
         .map(|_| {
             let (ledger, launch) = (Arc::clone(&ledger), live.launch_id.clone());
+            let grace_ended = grace_ended.clone();
             std::thread::spawn(move || {
+                stop::GRACE_ENDED.with(|slot| slot.replace(Some(grace_ended)));
                 ledger.end_launch(&launch);
+                stop::GRACE_ENDED.with(|slot| slot.replace(None));
                 child_id.is_running()
             })
         })
         .collect();
-    let deadline = Instant::now() + PATIENCE;
-    while !ledger
-        .book()
-        .launches
-        .get(&live.launch_id)
-        .is_some_and(|launch| launch.ending)
-    {
-        assert!(Instant::now() < deadline, "the launch never began ending");
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    assert!(
+        crate::session::wait::wait_for(PATIENCE, || ledger
+            .book()
+            .launches
+            .get(&live.launch_id)
+            .is_some_and(|launch| launch.ending)),
+        "the launch never began ending"
+    );
     assert!(ledger
         .keep_trees(&[child_id.key()], &[], &in_a_project())
         .is_ok_and(|kept| kept.is_empty()));
+    grace_ended.store(true, std::sync::atomic::Ordering::Release);
     for end in ends {
         assert!(
             !end.join().unwrap(),
@@ -1964,6 +1967,8 @@ fn a_removed_directory_process_that_outlives_sigkill_is_tried_again_only_later()
     assert!(launch_of(ledger, pid).is_some());
     std::fs::remove_dir(&work).unwrap();
 
+    // The fixture is ready and ignores TERM; this case tests kill retries, not the grace window.
+    stop::STOP_GRACE_OVERRIDE.set(Some(Duration::ZERO));
     stop::SPARED.with_borrow_mut(|spared| spared.insert(pid));
     ledger.tick();
     stop::SPARED.with_borrow_mut(|spared| spared.remove(&pid));
@@ -1982,6 +1987,7 @@ fn a_removed_directory_process_that_outlives_sigkill_is_tried_again_only_later()
         .insert(id, Some(Instant::now() - super::STUBBORN_RETRY));
     ledger.tick();
     assert_stops_running(pid);
+    stop::STOP_GRACE_OVERRIDE.set(None);
 }
 
 /// The daemon ending an agent reads the table first, so that what the agent started a moment
@@ -2345,15 +2351,22 @@ fn a_process_kept_while_a_stop_runs_is_not_signalled() {
         let _ignoring = KillOnDrop(vec![ignoring]);
         let kept = std::sync::atomic::AtomicBool::new(false);
         let target = identity(ignoring);
+        let grace_ended = Arc::new(std::sync::atomic::AtomicBool::new(false));
         std::thread::scope(|scope| {
-            let stopping = scope.spawn(|| {
-                stop::stop(&[target], &|_| {
+            let grace = grace_ended.clone();
+            let kept = &kept;
+            let stopping = scope.spawn(move || {
+                stop::GRACE_ENDED.with(|slot| slot.replace(Some(grace)));
+                let result = stop::stop(&[target], &|_| {
                     kept.load(std::sync::atomic::Ordering::Acquire)
-                })
+                });
+                stop::GRACE_ENDED.with(|slot| slot.replace(None));
+                result
             });
             // Kept once the stop has asked it to terminate, so within the grace before the kill.
             let was_asked = crate::session::wait::wait_for(PATIENCE, || asked.exists());
             kept.store(true, std::sync::atomic::Ordering::Release);
+            grace_ended.store(true, std::sync::atomic::Ordering::Release);
             assert!(was_asked, "the stop never asked it to terminate");
             assert!(stopping.join().unwrap().is_empty());
         });
@@ -2404,6 +2417,8 @@ fn a_process_that_outlives_sigkill_is_tried_again_only_later() {
     ledger.scan(false);
     assert_eq!(launch_of(ledger, pid).as_deref(), Some(ENDED));
 
+    // The fixture is ready and ignores TERM; this case tests kill retries, not the grace window.
+    stop::STOP_GRACE_OVERRIDE.set(Some(Duration::ZERO));
     stop::SPARED.with_borrow_mut(|spared| spared.insert(pid));
     ledger.tick();
     stop::SPARED.with_borrow_mut(|spared| spared.remove(&pid));
@@ -2415,6 +2430,7 @@ fn a_process_that_outlives_sigkill_is_tried_again_only_later() {
     ledger.end_launch(&first.launch_id);
     ledger.tick();
     assert_stops_running(pid);
+    stop::STOP_GRACE_OVERRIDE.set(None);
 }
 
 /// The daemon takes a tag it inherited out of its own environment, so that nothing it starts

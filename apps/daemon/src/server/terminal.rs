@@ -627,6 +627,8 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String, hi
             ),
         ));
     }
+    #[cfg(test)]
+    pty.connection_ended();
 }
 
 /// Sends `client` what is waiting for it, as its credit allows; `false` once its stream is over or
@@ -937,7 +939,14 @@ mod tests {
         .expect("the refused reply counts as an answer lost");
 
         socket.close(None).await.unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        assert!(
+            crate::test_support::within(PATIENCE, {
+                let live = live.clone();
+                move || live.connections_ended() == 1
+            })
+            .await,
+            "the terminal connection never ended"
+        );
         let (mut refused, mut lost) = (0, 0);
         while let Ok(event) = events.try_recv() {
             if let Event::Error { code, .. } = event {

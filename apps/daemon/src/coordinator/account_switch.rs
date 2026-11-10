@@ -594,7 +594,7 @@ pub(crate) async fn restore_after_failed_switch(
     // Under an account switch's claim, so that the process it starts is watched as the switch's
     // was. Another claim on the session (a transfer of branches, a binding change) is waited for
     // rather than given up on: the session is down and nobody else will bring it back.
-    let deadline = Instant::now() + RESTORE_CLAIM_WAIT;
+    let deadline = Instant::now() + restore_claim_wait();
     let claim = loop {
         let claimed = match admission {
             Some(admission) => state.begin_account_switch_admitted(id, true, admission),
@@ -638,7 +638,17 @@ pub(crate) async fn restore_after_failed_switch(
 }
 
 /// How long a restore waits for another claim on the session to end before it gives up.
+#[cfg_attr(test, allow(dead_code))]
 const RESTORE_CLAIM_WAIT: Duration = Duration::from_secs(15);
+
+fn restore_claim_wait() -> Duration {
+    #[cfg(test)]
+    {
+        crate::test_support::PATIENCE
+    }
+    #[cfg(not(test))]
+    RESTORE_CLAIM_WAIT
+}
 
 /// Whether `err` says another launch or claim holds the session.
 fn is_already_starting(err: &anyhow::Error) -> bool {

@@ -33,6 +33,14 @@ struct Daemon {
     started: Vec<String>,
 }
 
+/// The terminals the welcome of `daemon` lists.
+fn listed(daemon: &Daemon) -> &[crate::holder::protocol::TerminalInfo] {
+    match &daemon.welcome {
+        FromHolder::Welcome { terminals, .. } => terminals,
+        other => panic!("{other:?}"),
+    }
+}
+
 impl Daemon {
     async fn send(&mut self, message: ToHolder) {
         let text = serde_json::to_string(&message).unwrap();
@@ -166,20 +174,24 @@ impl Daemon {
                 signal: crate::holder::protocol::SignalKind::Kill,
             })
             .await;
-            loop {
-                self.send(ToHolder::Reap {
-                    id: id.to_string(),
-                    req,
-                })
-                .await;
-                match self.reply_to(req).await {
-                    FromHolder::Answer {
-                        answer: Answer::Reaped { reaped: false, .. },
-                        ..
-                    } => tokio::time::sleep(Duration::from_millis(20)).await,
-                    _ => break,
+            tokio::time::timeout(PATIENCE, async {
+                loop {
+                    self.send(ToHolder::Reap {
+                        id: id.to_string(),
+                        req,
+                    })
+                    .await;
+                    match self.reply_to(req).await {
+                        FromHolder::Answer {
+                            answer: Answer::Reaped { reaped: false, .. },
+                            ..
+                        } => tokio::time::sleep(Duration::from_millis(20)).await,
+                        _ => break,
+                    }
                 }
-            }
+            })
+            .await
+            .expect("the terminal was not reaped");
             self.send(ToHolder::Release { id: id.to_string() }).await;
         }
     }
@@ -270,6 +282,27 @@ impl Running {
 
     async fn link(&self) -> Daemon {
         self.link_as(None).await
+    }
+
+    /// Reads fresh welcomes until the holder has recorded `done`; process exits reach its
+    /// snapshot asynchronously, so a welcome taken just after a kill can still list them alive.
+    async fn link_when(&self, mut done: impl FnMut(&Daemon) -> bool) -> Daemon {
+        let mut last = None;
+        let result = tokio::time::timeout(PATIENCE, async {
+            loop {
+                let daemon = self.link().await;
+                if done(&daemon) {
+                    return daemon;
+                }
+                last = Some(listed(&daemon).to_vec());
+                drop(daemon);
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await;
+        result.unwrap_or_else(|_| {
+            panic!("the holder never listed the expected state; last listed: {last:?}")
+        })
     }
 
     /// As [`Self::link`], or `None` when the holder closes the link before its welcome.
@@ -1300,13 +1333,9 @@ mod companions {
         assert!(ended, "{} was not removed", shown.display());
     }
 
-    /// The terminals the welcome of `daemon` lists.
-    fn listed(daemon: &Daemon) -> &[crate::holder::protocol::TerminalInfo] {
-        match &daemon.welcome {
-            FromHolder::Welcome { terminals, .. } => terminals,
-            other => panic!("{other:?}"),
-        }
-    }
+    /// This case proves readiness runs out; a server that never creates its socket needs no
+    /// opportunity to answer inside the window.
+    const NEVER_READY_WAIT: Duration = Duration::from_millis(500);
 
     impl Daemon {
         /// The endpoint the holder opens for the companion of the terminal `id`, or why not.
@@ -1550,28 +1579,18 @@ mod companions {
         kill(companion as i32);
 
         // The next daemon finds both ended, once the holder has seen them go.
-        let deadline = Instant::now() + PATIENCE;
-        let mut next = loop {
-            let daemon = holder.link().await;
-            let both_ended = listed(&daemon).iter().any(|terminal| {
-                terminal.id == "t1"
-                    && terminal.exited
-                    && terminal
-                        .companion
-                        .as_ref()
-                        .is_some_and(|found| found.exited)
-            });
-            if both_ended {
-                break daemon;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "the terminal was not ended with its companion: {:?}",
-                listed(&daemon)
-            );
-            drop(daemon);
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        };
+        let mut next = holder
+            .link_when(|daemon| {
+                listed(daemon).iter().any(|terminal| {
+                    terminal.id == "t1"
+                        && terminal.exited
+                        && terminal
+                            .companion
+                            .as_ref()
+                            .is_some_and(|found| found.exited)
+                })
+            })
+            .await;
         next.end_ids(&["t1"]).await;
         drop(next);
         holder.ended().await;
@@ -1794,7 +1813,7 @@ mod companions {
                 21,
                 sh("exec sleep 60"),
                 Ready::SocketExists,
-                Duration::from_millis(500),
+                NEVER_READY_WAIT,
             )
             .await
             .expect_err("a companion that never listens is not ready");

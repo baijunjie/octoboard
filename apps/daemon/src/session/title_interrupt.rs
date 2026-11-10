@@ -56,15 +56,57 @@ use crate::state::AppState;
 /// that the session follows a cancel in about a second.
 const SETTLE: Duration = Duration::from_secs(1);
 
+#[cfg(test)]
+thread_local! {
+    static SETTLE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+}
+
+/// Lets a test drive the watch's polling clock without waiting on its wall-clock title stamps.
+/// The watch captures this on its caller's thread before it spawns.
+#[cfg(test)]
+pub(crate) fn without_settle() -> impl Drop {
+    struct Reset(Option<Duration>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            SETTLE_OVERRIDE.with(|value| value.set(self.0));
+        }
+    }
+    Reset(SETTLE_OVERRIDE.with(|value| value.replace(Some(Duration::ZERO))))
+}
+
+fn settle() -> Duration {
+    #[cfg(test)]
+    if let Some(value) = SETTLE_OVERRIDE.with(std::cell::Cell::get) {
+        return value;
+    }
+    SETTLE
+}
+
 /// How often the watch looks at the title.
 const POLL: Duration = Duration::from_millis(250);
 
+/// Runs the watch through its next polling opportunities on the runtime's controlled clock.
+#[cfg(test)]
+pub(crate) async fn polls_settled() {
+    crate::test_support::runtime_advanced(POLL * 2).await;
+}
+
 /// Whether `activity` went back to the prompt after `armed`, the count when the watch was armed,
 /// and has stayed there for [`SETTLE`] by `now`.
+#[cfg(test)]
 fn settled_at_prompt(activity: &TitleActivity, armed: u64, now: Instant) -> bool {
+    settled_at_prompt_after(activity, armed, now, SETTLE)
+}
+
+fn settled_at_prompt_after(
+    activity: &TitleActivity,
+    armed: u64,
+    now: Instant,
+    settle: Duration,
+) -> bool {
     activity
         .at_prompt_since(armed)
-        .is_some_and(|at| now.saturating_duration_since(at) >= SETTLE)
+        .is_some_and(|at| now.saturating_duration_since(at) >= settle)
 }
 
 /// Starts watching the terminal title of `session_id`, a session a hook has just moved into
@@ -81,6 +123,7 @@ pub fn watch(state: &Arc<AppState>, session_id: &str, generation: u64) {
     let Some(cancel) = crate::adapter::provider(live.agent).screen().title_cancel() else {
         return;
     };
+    let settle = settle();
     let armed = live.title_activity().stops();
     let live = Arc::downgrade(&live);
     let state = state.clone();
@@ -88,7 +131,7 @@ pub fn watch(state: &Arc<AppState>, session_id: &str, generation: u64) {
     tokio::spawn(async move {
         let at_prompt = || {
             live.upgrade().map(|live| {
-                settled_at_prompt(&live.title_activity(), armed, Instant::now())
+                settled_at_prompt_after(&live.title_activity(), armed, Instant::now(), settle)
                     && live.agent_dialog().is_none()
             })
         };
@@ -255,10 +298,6 @@ mod tests {
         assert!(!settled_at_prompt(&activity, armed, start + SETTLE * 10));
     }
 
-    /// Long enough for a watch to have seen a settled title and acted on it, for a check that it
-    /// did not: the settle is timed on the real clock, which the test cannot move on.
-    const ACTED: Duration = Duration::from_millis(SETTLE.as_millis() as u64 * 3);
-
     struct Fixture {
         live: StandIn,
         state: Arc<AppState>,
@@ -332,6 +371,7 @@ mod tests {
 
     fn armed(fixture: &Fixture) -> u64 {
         let generation = fixture.state.begin_record_watch("s");
+        let _settle = without_settle();
         watch(&fixture.state, "s", generation);
         generation
     }
@@ -370,7 +410,8 @@ mod tests {
         replay(&fixture.live, CANCEL_TITLES);
         armed(&fixture);
         replay(&fixture.live, IDLE_TITLE);
-        assert!(!reaches_within(&fixture.state, SessionStatus::Idle, ACTED).await);
+        polls_settled().await;
+        assert_ne!(status(&fixture.state), Some(SessionStatus::Idle));
     }
 
     /// The title is back at the prompt while a permission dialog waits as well; the hook that
@@ -384,7 +425,8 @@ mod tests {
             .state
             .apply_reported_status_if("s", SessionStatus::Working, SessionStatus::WaitingUser)
             .unwrap());
-        assert!(!reaches_within(&fixture.state, SessionStatus::Idle, ACTED).await);
+        polls_settled().await;
+        assert_ne!(status(&fixture.state), Some(SessionStatus::Idle));
         assert_eq!(status(&fixture.state), Some(SessionStatus::WaitingUser));
         assert!(
             !fixture.state.last_turn_abnormal("s"),
@@ -403,8 +445,10 @@ mod tests {
             .hook_queues
             .push("s", bytes::Bytes::from_static(b"{}"));
         replay(&fixture.live, CANCEL_TITLES);
-        assert!(
-            !reaches_within(&fixture.state, SessionStatus::Idle, SETTLE + SETTLE / 2).await,
+        polls_settled().await;
+        assert_ne!(
+            status(&fixture.state),
+            Some(SessionStatus::Idle),
             "nothing may move while an event is queued"
         );
         fixture.state.hook_queues.complete("s");
@@ -421,7 +465,8 @@ mod tests {
         );
         assert!(fixture.live.look_for_dialog().current.is_some());
         replay(&fixture.live, CANCEL_TITLES);
-        assert!(!reaches_within(&fixture.state, SessionStatus::Idle, ACTED).await);
+        polls_settled().await;
+        assert_ne!(status(&fixture.state), Some(SessionStatus::Idle));
     }
 
     /// A watch the next prompt retired does not end the turn that prompt opened.
@@ -431,7 +476,8 @@ mod tests {
         armed(&fixture);
         fixture.state.end_record_watch("s");
         replay(&fixture.live, CANCEL_TITLES);
-        assert!(!reaches_within(&fixture.state, SessionStatus::Idle, ACTED).await);
+        polls_settled().await;
+        assert_ne!(status(&fixture.state), Some(SessionStatus::Idle));
     }
 
     /// Ctrl-C before Grok Build's first token, the user's own or `interrupt_session`'s, fires no
@@ -476,8 +522,10 @@ mod tests {
             .hook_queues
             .push("s", bytes::Bytes::from_static(b"{}"));
         replay(&fixture.live, GROK_TURN_END_TITLES);
-        assert!(
-            !reaches_within(&fixture.state, SessionStatus::Idle, SETTLE + SETTLE / 2).await,
+        polls_settled().await;
+        assert_ne!(
+            status(&fixture.state),
+            Some(SessionStatus::Idle),
             "nothing may move while an event is queued"
         );
         assert_eq!(fixture.state.close_turn("s", false), TurnClose::OwesReport);
@@ -496,6 +544,7 @@ mod tests {
         let fixture = grok_fixture("grok-tool");
         armed(&fixture);
         replay(&fixture.live, GROK_TOOL_TITLES);
-        assert!(!reaches_within(&fixture.state, SessionStatus::Idle, ACTED).await);
+        polls_settled().await;
+        assert_ne!(status(&fixture.state), Some(SessionStatus::Idle));
     }
 }

@@ -423,16 +423,64 @@ pub(crate) async fn write_notice_to_owner_off_runtime(
 }
 
 /// How long [`write_to_owner`] waits for a claim on the owner to end.
-#[cfg(not(test))]
+#[cfg_attr(test, allow(dead_code))]
 const OWNER_CLAIM_WAIT: Duration = Duration::from_secs(15);
+
+/// Read on the thread waiting out the claim, so a timeout test's override is local to it.
+fn owner_claim_wait() -> Duration {
+    #[cfg(test)]
+    {
+        OWNER_CLAIM_WAIT_OVERRIDE
+            .with(std::cell::Cell::get)
+            .unwrap_or(crate::test_support::PATIENCE)
+    }
+    #[cfg(not(test))]
+    OWNER_CLAIM_WAIT
+}
+
 #[cfg(test)]
-const OWNER_CLAIM_WAIT: Duration = Duration::from_secs(1);
+thread_local! {
+    pub(super) static OWNER_CLAIM_WAIT_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+    static OWNER_CLAIM_WAITING: std::cell::RefCell<Option<std::sync::mpsc::Sender<()>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Runs `change` only after `deliver` has found the owner's claim and begun waiting for it.
+#[cfg(test)]
+pub(super) fn when_owner_claim_waits<T: Send>(
+    claim: crate::state::LaunchClaim,
+    change: impl FnOnce(),
+    deliver: impl FnOnce() -> T + Send,
+) -> T {
+    let (waiting, observed) = std::sync::mpsc::channel();
+    std::thread::scope(|threads| {
+        let delivery = threads.spawn(move || {
+            OWNER_CLAIM_WAITING.with(|slot| slot.replace(Some(waiting)));
+            let result = deliver();
+            OWNER_CLAIM_WAITING.with(|slot| slot.replace(None));
+            result
+        });
+        observed
+            .recv_timeout(crate::test_support::PATIENCE)
+            .expect("the delivery began waiting for the owner's claim");
+        change();
+        drop(claim);
+        delivery.join().unwrap()
+    })
+}
 
 /// Waits up to [`OWNER_CLAIM_WAIT`] for the claim on the session `id` to be released.
 ///
 /// **Blocks** the thread, which is a blocking one.
 fn wait_out_claim(state: &Arc<AppState>, id: &str) {
-    let deadline = Instant::now() + OWNER_CLAIM_WAIT;
+    let deadline = Instant::now() + owner_claim_wait();
+    #[cfg(test)]
+    if state.is_launching(id) {
+        OWNER_CLAIM_WAITING.with(|slot| {
+            if let Some(waiting) = slot.borrow_mut().take() {
+                let _ = waiting.send(());
+            }
+        });
+    }
     while state.is_launching(id) && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(100));
     }

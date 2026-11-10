@@ -10,7 +10,6 @@ use serde_json::json;
 
 use super::*;
 use crate::coordinator::adopt::adopt_found;
-use crate::coordinator::exit_watch;
 use crate::coordinator::test_support::{found_in, left_running_script};
 use crate::holder::client::in_process;
 use crate::platform::term::Size;
@@ -131,8 +130,17 @@ async fn a_planned_stop_leaves_every_terminal_running_and_saves_its_screen_for_t
     );
     assert!(state.is_handing_over());
 
-    // Past several polls of the exit watchers.
-    tokio::time::sleep(exit_watch::EXIT_POLL_INTERVAL * 4).await;
+    state
+        .live_session("s1")
+        .expect("the session is live")
+        .await_exit_watch()
+        .await;
+    state
+        .shell_terminals
+        .process("t2")
+        .expect("the shell is held")
+        .await_exit_watch()
+        .await;
     assert_eq!(
         state.session_record("s1").unwrap().status,
         SessionStatus::Working
@@ -197,8 +205,17 @@ async fn a_program_that_ends_while_the_terminals_are_handed_over_is_not_recorded
             "a program never ended"
         );
     }
-    // Past several polls of the exit watchers.
-    tokio::time::sleep(exit_watch::EXIT_POLL_INTERVAL * 4).await;
+    state
+        .live_session("s1")
+        .expect("the session is live")
+        .await_exit_watch()
+        .await;
+    state
+        .shell_terminals
+        .process("t2")
+        .expect("the shell is held")
+        .await_exit_watch()
+        .await;
     assert_eq!(
         state.session_record("s1").unwrap().status,
         SessionStatus::Working

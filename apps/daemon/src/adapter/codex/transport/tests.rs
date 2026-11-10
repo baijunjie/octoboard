@@ -405,11 +405,10 @@ fn a_session_with_no_conversation_yet_holds_the_message_and_retries() {
     );
     drop(transport.endpoint.connect());
     server.join().unwrap();
-    let deadline = Instant::now() + PATIENCE;
-    while !retried.load(Ordering::Acquire) {
-        assert!(Instant::now() < deadline, "the queue was never retried");
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    assert!(
+        crate::session::wait::wait_for(PATIENCE, || retried.load(Ordering::Acquire)),
+        "the queue was never retried"
+    );
 }
 
 /// Messages that keep waiting for the session's conversation are told of once the wait has
@@ -418,10 +417,9 @@ fn a_session_with_no_conversation_yet_holds_the_message_and_retries() {
 #[test]
 fn a_long_wait_is_told_once_and_withdrawn_when_the_message_goes_in() {
     let (mut transport, listener, token) = loopback();
-    let notice_after = Duration::from_millis(50);
     Arc::get_mut(&mut transport.shared)
         .unwrap()
-        .held_notice_after = notice_after;
+        .held_notice_after = Duration::ZERO;
     transport.shared.identify("main");
     let held = Arc::new(Mutex::new(Vec::new()));
     let released = Arc::new(Mutex::new(Vec::new()));
@@ -453,9 +451,6 @@ fn a_long_wait_is_told_once_and_withdrawn_when_the_message_goes_in() {
         let error = transport.send("hello", "id").unwrap_err();
         assert_eq!(error.error.kind(), io::ErrorKind::WouldBlock);
         assert!(error.error.get_ref().unwrap().is::<term::HeldByServer>());
-        // The wait is measured on the real clock from the first message held, so it has lasted
-        // long enough to be told of by the next one; a slower run only makes it longer.
-        std::thread::sleep(notice_after);
     }
     assert_eq!(*held.lock().unwrap(), [held_code()]);
     assert!(released.lock().unwrap().is_empty());
@@ -966,11 +961,10 @@ fn the_thread_watch_takes_the_first_user_thread_started() {
     });
     let rpc = transport.endpoint.connect().unwrap();
     watch_for_thread(rpc, transport.shared.clone());
-    let deadline = Instant::now() + PATIENCE;
-    while !ready.load(Ordering::Acquire) {
-        assert!(Instant::now() < deadline, "no thread was identified");
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    assert!(
+        crate::session::wait::wait_for(PATIENCE, || ready.load(Ordering::Acquire)),
+        "no thread was identified"
+    );
     assert_eq!(transport.shared.thread().as_deref(), Some("main"));
     server.join().unwrap();
 }
@@ -1640,11 +1634,10 @@ fn an_adopted_transport_without_the_conversation_takes_the_user_thread_started_l
         // The watch ends once it has the thread, which closes its connection.
         while receive(&mut socket).is_some() {}
     });
-    let deadline = Instant::now() + PATIENCE;
-    while !ready.load(Ordering::Acquire) {
-        assert!(Instant::now() < deadline, "no thread was identified");
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    assert!(
+        crate::session::wait::wait_for(PATIENCE, || ready.load(Ordering::Acquire)),
+        "no thread was identified"
+    );
     assert_eq!(transport.shared.thread().as_deref(), Some("main"));
     serving.join().unwrap();
 }
@@ -1665,14 +1658,10 @@ fn an_adopted_transport_over_a_server_that_is_gone_reports_it_once_the_session_a
         held: Box::new(|_| {}),
         released: Box::new(|_| {}),
     });
-    let deadline = Instant::now() + PATIENCE;
-    while !reported.load(Ordering::Acquire) {
-        assert!(
-            Instant::now() < deadline,
-            "the server's end was not reported"
-        );
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    assert!(
+        crate::session::wait::wait_for(PATIENCE, || reported.load(Ordering::Acquire)),
+        "the server's end was not reported"
+    );
 }
 
 /// What waits in the queue under an id that starts with the launch's was queued by Octoboard,

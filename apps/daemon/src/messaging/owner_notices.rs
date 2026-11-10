@@ -629,8 +629,6 @@ fn released_text(released: &Session, former_owner: Option<&str>, note: Option<&s
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use super::*;
     use crate::messaging::texts::{is_waiting_notice, waiting_notice_session};
     use crate::protocol::Role;
@@ -913,14 +911,12 @@ mod tests {
     fn a_notice_waits_out_a_claim_on_an_interrupted_owner_and_is_kept() {
         let (state, _dir) = interrupted_hub_state("reporting-notice-under-claim");
         let claim = state.begin_launch("hub").unwrap();
-        let releasing = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(300));
-            drop(claim);
-        });
-
         let worker = state.session_record("worker").unwrap();
-        tell_owner_it_ended(&state, &worker);
-        releasing.join().unwrap();
+        crate::messaging::delivery::when_owner_claim_waits(
+            claim,
+            || {},
+            || tell_owner_it_ended(&state, &worker),
+        );
 
         let kept = kept_texts(&state);
         assert_eq!(kept.len(), 1, "{kept:?}");
