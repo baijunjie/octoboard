@@ -82,5 +82,8 @@
   directories; real agent CLIs' launches on Linux are what the end-to-end run above checks.
 
 - **Verification stopped, 2026-11-10**: Linux is not released; the user deferred all further Linux verification. The two verification containers were removed, with `cg-cargo-home`, `cg-target`, `cg-target2` and `cg-rust:1.99.1` retained. The checked command and port-file items above were observed against scratch build f762ce64a; they do not establish the remaining end-to-end, restart, live-agent stop or cgroup criteria.
-- **Build handoff**: `group_name` currently uses `?` inside a closure returning `String`, so Linux compilation fails. A scratch fix evaluated `prefix(instance)?` before that closure and allowed a binary to be built; the user then requested docs only, so that fix is not delivered here. Reapply and verify the fix when Linux work resumes. Linux test run not done (user deferred); the interrupted run did not establish a suite result.
+- **Build handoff**: `group_name` currently uses `?` inside a closure returning `String`, so Linux compilation fails. A scratch fix evaluated `prefix(instance)?` before that closure and allowed a binary to be built; the user then requested docs only, so that fix is not delivered here. Reapply and verify the fix when Linux work resumes. Linux test run not done (user deferred); the interrupted run did not establish a suite result. Before it was stopped, its log showed
+  `holder::server::tests::input_reaches_the_program_and_a_resize_reaches_its_terminal` FAILED, with no failure details
+  printed yet; it was not rerun. Hand checks of input and a 24x80 to 10x40 resize in a real held shell worked. Rerun
+  that test first when Linux work resumes and fix it if it still fails.
 - **Holder and service follow-up**: milestone 01a holds the Linux holder, crash-hook, service restart and companion requirements, including their service and key-delivery prerequisites.
