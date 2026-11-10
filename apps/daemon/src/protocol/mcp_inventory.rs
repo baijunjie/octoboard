@@ -9,7 +9,7 @@ use super::agents::AgentId;
 
 /// How an agent's account stands with the MCP servers and connectors it has, read through the
 /// agent's own CLI at `read_at`. Runtime state of the daemon: never stored.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AccountMcpInventory {
     pub agent: AgentId,
@@ -29,14 +29,14 @@ pub struct AccountMcpInventory {
 
 /// Why an account's MCP servers and connectors could not be read. The reason is a closed set the
 /// client words itself; `detail` is what the agent or the daemon said, for the cases it helps.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct McpInventoryUnavailable {
     pub reason: McpInventoryFailure,
     pub detail: Option<String>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum McpInventoryFailure {
@@ -53,7 +53,7 @@ pub enum McpInventoryFailure {
 }
 
 /// A connector the agent's platform hosts for the account.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PlatformConnector {
     /// The agent's own identifier for the connector.
@@ -64,7 +64,7 @@ pub struct PlatformConnector {
     pub plugins: Vec<String>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConnectorState {
@@ -74,7 +74,7 @@ pub enum ConnectorState {
 }
 
 /// An MCP server configured for the account.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LocalMcpServer {
     pub name: String,
@@ -94,7 +94,7 @@ pub struct LocalMcpServer {
     pub oauth_sign_in: bool,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum McpSignInState {
@@ -105,7 +105,7 @@ pub enum McpSignInState {
     Unknown,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum McpRuntimeState {
@@ -115,7 +115,7 @@ pub enum McpRuntimeState {
 }
 
 /// How a sign-in to or sign-out of an MCP server ended (`account_mcp_server_auth_ended`).
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct McpServerAuthOutcome {
     pub status: McpServerAuthStatus,
@@ -123,7 +123,7 @@ pub struct McpServerAuthOutcome {
     pub detail: Option<String>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum McpServerAuthStatus {

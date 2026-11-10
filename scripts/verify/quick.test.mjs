@@ -152,6 +152,20 @@ test("every path the quick lists name exists", () => {
   for (const test of CRATE_WIDE_TESTS.daemon) for (const file of test.covers) assert.ok(existsSync(path.join(root, "apps/daemon", file)), file);
 });
 
+test("a change to a wire type file runs the protocol contract tests: bindings, schema, compatibility guard and cross-check", () => {
+  const names = CRATE_WIDE_TESTS.daemon.filter((test) => test.filter === "protocol::").map((test) => test.test);
+  for (const name of ["committed_bindings_are_current", "committed_schema_is_current", "the_schema_only_grows_since_the_last_release", "the_bindings_and_the_schema_agree_on_every_property"]) {
+    assert.ok(names.includes(name), name);
+  }
+  for (const test of CRATE_WIDE_TESTS.daemon.filter((entry) => entry.filter === "protocol::")) {
+    assert.ok(test.covers.includes("src/protocol/requests.rs"), test.test);
+    assert.ok(test.covers.includes("src/providers/mod.rs"), test.test);
+  }
+  const { mode, args } = rustTests(["apps/daemon/src/protocol/requests.rs"]);
+  assert.equal(mode, "related");
+  assert.ok(args.includes("protocol::"));
+});
+
 test("every crate-wide filter is the path of a module that defines the test it exists for", () => {
   const crateDirs = { daemon: "apps/daemon", native: "apps/desktop/src-tauri" };
   const sources = (directory) => walk(directory).filter((file) => file.endsWith(".rs"));

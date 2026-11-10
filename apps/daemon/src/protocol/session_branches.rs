@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// is, or a linked worktree with such a branch checked out. What `inspect_session_branches`
 /// reports, and what an archive or a deletion leaves behind. A project's removal also takes
 /// worktrees bound to no session (`inspect_project_removal`).
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SessionBranchItem {
     pub kind: SessionBranchKind,
@@ -43,7 +43,7 @@ pub struct SessionBranchItem {
 }
 
 /// Why a `failed` [`SessionBranchItem`] is left, as a client words it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionBranchCause {
@@ -54,7 +54,7 @@ pub enum SessionBranchCause {
     ProtectedFolder,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionBranchKind {
@@ -64,7 +64,7 @@ pub enum SessionBranchKind {
 
 /// Where a bound item stands. `uncommitted_changes`, `submodules`, `unmerged` and `locked` are what
 /// a forced removal takes; `checked_out`, `project_folder` and `failed` are left whatever is asked.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionBranchState {
@@ -90,16 +90,16 @@ pub enum SessionBranchState {
 
 /// A bound item a request names, as `SessionBranchItem` names it and in the state the user was
 /// shown it in: a forced removal goes only while the item still stands that way.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct SessionBranchTarget {
     pub kind: SessionBranchKind,
     pub repository: String,
     #[serde(default)]
-    #[cfg_attr(test, ts(optional = nullable))]
+    #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
     pub branch: Option<String>,
     #[serde(default)]
-    #[cfg_attr(test, ts(optional = nullable))]
+    #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
     pub path: Option<String>,
     pub state: SessionBranchState,
     #[serde(default)]
@@ -108,6 +108,6 @@ pub struct SessionBranchTarget {
     /// The branch's `tip` as the user was shown it: a forced `git branch -D`, after an archive, a
     /// deletion or a project's removal, goes only while the branch still points there.
     #[serde(default)]
-    #[cfg_attr(test, ts(optional = nullable))]
+    #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
     pub tip: Option<String>,
 }

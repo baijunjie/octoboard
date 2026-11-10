@@ -10,7 +10,7 @@ use super::records::Account;
 use crate::providers::SettingValue;
 
 /// When Prevent sleep holds the daemon's host awake (`Settings.keep_awake`).
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum KeepAwakeWhen {
@@ -42,7 +42,7 @@ impl KeepAwakeWhen {
 /// The app-wide user settings the daemon stores, and the account list alongside them: a record
 /// that already grows without a new request shape or a new event for every addition, which is
 /// why the accounts live here rather than in a record of their own.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct Settings {
     /// Whether explicitly closing a project Terminal panel closes its idle shell terminals.

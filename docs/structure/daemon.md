@@ -96,7 +96,15 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   is the `Code` registry (a core code can be made only there; a provider's code only through `Code::of_provider` from
   its declaration), `errors.rs` the one mapping from a failure to an `error` reply (with `CodedError::require_offered`,
   which refuses an operation a provider does not offer as `provider_unsupported`), `version.rs` the protocol generation and the daemon's version the `hello` frame states, `host.rs` `HostInfo`, the snapshot's `host` (os, path style, file links, whether the host can be held awake, and how the host names its Trash and settings app, built from `platform::HostFacts`), `bindings.rs` the test
-  that renders the types (and the generation) into `packages/ui/src/protocol.generated.ts`.
+  that renders the types (and the generation) into `packages/ui/src/protocol.generated.ts`, `schema.rs` the one that
+  renders them as JSON Schema into `contracts/protocol/`, `crosscheck.rs` the one that holds the two renderings to the
+  same optional and nullable fields, property by property, and checks that every `ts(...)` attribute that narrows a
+  field has a `schemars(...)` counterpart; `schema.rs` also holds the field helpers `nullable` and `required_nullable`
+  that a field uses to say what its Rust type does not. `compatibility/` is the compatibility guard: the schema may only
+  grow against the snapshot of the last release in `contracts/protocol/released/` (`release.json` and that release's
+  schema files), unless `GENERATION` is raised. `mod.rs` holds the record, the check and the test on the real files,
+  `norm.rs` reads a schema node as the values it accepts, `compare.rs` compares two of them by direction, and
+  `release:version` refreshes the snapshot ([`apps/desktop/scripts/`](../../apps/desktop/scripts/README.md)).
 - `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode and `background.rs` the user's `start`, `stop`, `restart` and `status`, and the start of a planned restart's successor, and `installation.rs` the path the daemon launches a successor, or `start` its daemon, from.
 
 ### Coordinator role
@@ -581,8 +589,12 @@ new site is never excused: it goes under `platform`.
 ## Where new code goes
 
 - A new control-socket request: its types in `src/protocol/` (and `PROTOCOL.md`), its handler under `src/coordinator/`
-  reached from the dispatcher in `mod.rs`; regenerate `packages/ui/src/protocol.generated.ts` by running the
-  `protocol::bindings` test with `OCTOBOARD_WRITE_BINDINGS=1` (the same test fails when the file is stale). It follows
+  reached from the dispatcher in `mod.rs`; regenerate `packages/ui/src/protocol.generated.ts` and the schema in
+  `contracts/protocol/` by running the `protocol::bindings` and `protocol::schema` tests with
+  `OCTOBOARD_WRITE_BINDINGS=1` (the same tests fail when the files are stale). A wire type derives `JsonSchema`
+  beside `TS` (both under `cfg(test)`), and a doc comment on it or its field is the description native clients read; a
+  field whose Rust type says less than the protocol narrows both renderings, and `protocol::crosscheck` fails when it
+  narrows only one. It follows
   the conventions in `PROTOCOL.md`'s "What every client implements" section (naming, tri-state update fields, wire paths,
   and what raises the protocol generation).
 - A new code the daemon names a failure or notice by: a `pub const` of the matching module in `src/protocol/codes.rs`
@@ -707,5 +719,8 @@ New code uses these rather than a second implementation. None is enforced by a c
 | How a provider's CLI is installed and updated; the installed and latest version of a CLI, and its update | `AgentProvider::cli_packaging` (`CliPackaging`, `src/adapter/mod.rs`), read only by `src/agents/cli/` |
 | Name a failure or notice on the wire | `Code` in `src/protocol/codes.rs`; failure to `error` reply through `src/protocol/errors.rs` |
 
-The wire contract with the UI is held by two checks: `protocol::bindings` (the generated TypeScript must match the Rust
-types) and the UI's `daemonCodes.test.ts` (every code the daemon declares has a record and wording in the UI).
+The wire contract is held by five checks: `protocol::bindings` (the generated TypeScript must match the Rust types),
+`protocol::schema` (the JSON Schema in `contracts/protocol/` must match them), `protocol::crosscheck` (the two must
+agree on every property), `protocol::compatibility` (the schema only grows against the last release's snapshot unless
+`GENERATION` is raised) and the UI's `daemonCodes.test.ts` (every code the daemon declares has a record and wording in
+the UI).

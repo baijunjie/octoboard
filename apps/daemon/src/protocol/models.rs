@@ -7,7 +7,7 @@ use super::codes::Code;
 use super::errors::{params, Params};
 
 /// What a `set_session_model` did (`Event::SessionModelSet`).
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelChangeOutcome {
@@ -20,7 +20,7 @@ pub enum ModelChangeOutcome {
 }
 
 /// Where the `default_model` of a `list_agent_models` answer came from.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DefaultModelSource {
@@ -32,7 +32,7 @@ pub enum DefaultModelSource {
 }
 
 /// One model an agent offers, as `list_agent_models` reports it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AgentModel {
     /// What Octoboard passes to the agent as its model: an alias Claude Code resolves itself, or
@@ -62,7 +62,7 @@ pub struct AgentModel {
 
 /// Why `list_agent_models` has no list, as a coded message of the same shape as an `error`. It
 /// travels inside a reply because failing to ask the agent must never fail the form that asked.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ModelsUnavailable {
     pub code: Code,

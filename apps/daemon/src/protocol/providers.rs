@@ -9,7 +9,7 @@ use crate::providers::{
 };
 
 /// One registered provider, as `snapshot` carries it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ProviderInfo {
     pub id: AgentId,

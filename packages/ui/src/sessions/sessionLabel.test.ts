@@ -55,7 +55,7 @@ describe("statusLabel", () => {
 });
 
 describe("sessionDisplayTitle", () => {
-  it.each([undefined, null, "", " \n ", "octoboard", " octoboard "])("keeps the created name for an absent or identical title: %s", (terminal_title) => {
+  it.each([undefined, "", " \n ", "octoboard", " octoboard "])("keeps the created name for an absent or identical title: %s", (terminal_title) => {
     const session = sessionOf("s", "c", "p", "octoboard", "idle", { terminal_title });
     expect(sessionDisplayTitle(t, session)).toBe("octoboard");
   });

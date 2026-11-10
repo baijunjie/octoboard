@@ -27,6 +27,9 @@ The repository root is two workspace roots at once:
   (`apps/desktop/src-tauri/`), built into one `target/` directory.
 
 `apps/` holds the deliverables, one directory per thing that ships; `packages/` holds code shared between them.
+`contracts/protocol/` holds the protocol's JSON Schema, which a daemon test renders from the wire types and native
+clients are generated from, and `contracts/protocol/released/`, the snapshot of the last release that a daemon test holds
+the schema to (see "Versions and compatibility" in `apps/daemon/PROTOCOL.md`).
 
 ## Structure docs
 

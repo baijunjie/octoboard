@@ -93,6 +93,14 @@ export function uiTests(files, exists = () => true) {
   return { mode: "related", files: [...new Set([...related, ...UI_DISK_TESTS])] };
 }
 
+// The files that declare wire types, which derive `TS` and `JsonSchema` together.
+const WIRE_TYPE_FILES = [
+  "src/protocol/accounts.rs", "src/protocol/agent_cli.rs", "src/protocol/agents.rs", "src/protocol/browse.rs", "src/protocol/configuration.rs", "src/protocol/events.rs",
+  "src/protocol/git_workflow.rs", "src/protocol/history.rs", "src/protocol/host.rs", "src/protocol/mcp_inventory.rs", "src/protocol/models.rs", "src/protocol/path_links.rs", "src/protocol/processes.rs",
+  "src/protocol/providers.rs", "src/protocol/quotas.rs", "src/protocol/records.rs", "src/protocol/requests.rs", "src/protocol/session_branches.rs", "src/protocol/settings.rs",
+  "src/protocol/terminal.rs", "src/providers/mod.rs",
+];
+
 // Tests of one crate that check the whole crate, so a change to any module can fail them: they run
 // with every set of module filters for that crate. `quick.test.mjs` fails when a crate has files of
 // the kinds they check (`covers`) that are not named here.
@@ -100,12 +108,10 @@ export function uiTests(files, exists = () => true) {
 // have to follow the test when it moves: a filter that matches no test runs nothing and fails nothing.
 export const CRATE_WIDE_TESTS = {
   daemon: [
-    { filter: "protocol::", test: "committed_bindings_are_current", why: "the wire-type contract (`protocol/bindings.rs`) covers every type deriving `TS`", covers: [
-      "src/protocol/accounts.rs", "src/protocol/agent_cli.rs", "src/protocol/agents.rs", "src/protocol/browse.rs", "src/protocol/configuration.rs", "src/protocol/events.rs",
-      "src/protocol/git_workflow.rs", "src/protocol/history.rs", "src/protocol/host.rs", "src/protocol/mcp_inventory.rs", "src/protocol/models.rs", "src/protocol/path_links.rs", "src/protocol/processes.rs",
-      "src/protocol/providers.rs", "src/protocol/quotas.rs", "src/protocol/records.rs", "src/protocol/requests.rs", "src/protocol/session_branches.rs", "src/protocol/settings.rs",
-      "src/protocol/terminal.rs", "src/providers/mod.rs",
-    ] },
+    { filter: "protocol::", test: "committed_bindings_are_current", why: "the wire-type contract (`protocol/bindings.rs`) covers every type deriving `TS`", covers: WIRE_TYPE_FILES },
+    { filter: "protocol::", test: "committed_schema_is_current", why: "the schema contract (`protocol/schema.rs`) covers every type deriving `JsonSchema`", covers: WIRE_TYPE_FILES },
+    { filter: "protocol::", test: "the_schema_only_grows_since_the_last_release", why: "the compatibility guard (`protocol/compatibility/`) compares the rendering of every wire type with the last release's snapshot", covers: WIRE_TYPE_FILES },
+    { filter: "protocol::", test: "the_bindings_and_the_schema_agree_on_every_property", why: "the cross-check (`protocol/crosscheck.rs`) compares both renderings of every wire type and scans every source file that derives `TS`", covers: [...WIRE_TYPE_FILES, "src/protocol/crosscheck.rs"] },
     { filter: "records::history::", test: "every_opening_octoboard_writes_with_is_matched", why: "scans every source file for `*_OPENING` constants", covers: ["src/records/history.rs"] },
     { filter: "layering_tests::", test: "every_top_level_module_depends_only_downward_or_as_listed", why: "scans every source file's `crate::` paths against the daemon's layer order", covers: ["src/layering_tests/scan.rs"] },
   ],

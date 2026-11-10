@@ -10,7 +10,7 @@ use super::agents::{AgentId, Launch, PerAgent};
 use super::fields::present_option;
 use super::git_workflow::GitWorkflowOverride;
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionKind {
@@ -28,7 +28,7 @@ impl SessionKind {
     }
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Origin {
@@ -43,7 +43,7 @@ pub enum Origin {
 /// (`packages/ui/src/sessions/sessionColours.ts`), not here. A stored label must stay readable,
 /// so once a release has stored it, one is renamed or removed only together with a schema version
 /// step (`SCHEMA_VERSION` in `apps/daemon/src/store/schema.rs`).
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConsoleSessionColour {
@@ -87,7 +87,7 @@ impl ConsoleSessionColour {
     ];
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
@@ -117,7 +117,7 @@ impl SessionStatus {
     }
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostKind {
@@ -125,7 +125,7 @@ pub enum HostKind {
     Ssh,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectSource {
@@ -135,7 +135,7 @@ pub enum ProjectSource {
     Git,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Host {
     pub id: String,
@@ -144,7 +144,7 @@ pub struct Host {
     pub ssh_config: Option<String>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct Console {
     pub id: String,
@@ -211,7 +211,7 @@ impl Console {
 /// of pinning nothing. Its name is [`DEFAULT_ACCOUNT_NAME`] until the user gives it one of their
 /// own (`Settings::default_account_names`, set by `set_default_account_name`), and it cannot be
 /// created or removed.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Account {
     pub id: String,
@@ -257,7 +257,7 @@ pub struct Account {
 /// [`NotDetermined`](Availability::NotDetermined) is where every run of the daemon starts, and
 /// only a completed login-shell snapshot ever moves an agent out of it — a snapshot that times out
 /// or fails leaves it there, rather than being read as [`Unavailable`](Availability::Unavailable).
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Availability {
@@ -272,7 +272,7 @@ pub enum Availability {
 /// only by the user's own updates. Travels to a client inside `Event::Snapshot` and
 /// `Event::AgentAvailabilityUpdated`, one entry per agent, always three of them: the
 /// not-yet-determined state is carried by `availability` itself rather than by the entry's absence.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AgentAvailability {
     pub agent: AgentId,
@@ -305,7 +305,7 @@ pub fn default_account_name_in(
 /// What a project says about one agent's account, which is one more state than a console's
 /// reference has: a console's is an account or the agent's default account, while a project can
 /// also decline to say and leave the choice to its console.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ProjectAccount {
@@ -331,7 +331,7 @@ impl ProjectAccount {
     }
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub id: String,
@@ -384,35 +384,39 @@ pub struct Project {
 
 /// How much the main conversation's latest request carried, as the agent's own session record
 /// shows it: a gauge of whether continuing the session is getting expensive, not a running total.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionContext {
     pub tokens: u64,
     /// The context-window limit, present only once the agent has given one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub window: Option<u64>,
     /// The share of the window in use, in whole percent, by the agent's own formula. Present only
     /// together with `window`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub used_percent: Option<u8>,
 }
 
 /// One piece of work a session's agent left running in the background when its turn ended: a
 /// shell command, a monitor, an MCP call or an agent, as the agent itself lists it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackgroundTask {
     /// The agent's id for the task; the same id its completion notification names.
     pub id: String,
     /// The agent's name for the kind of task (`type` in its payload), absent when it gave none.
     #[serde(default, rename = "type", skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub kind: Option<String>,
     /// What the task is, as the agent describes it, absent when it gave none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub description: Option<String>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
@@ -431,7 +435,7 @@ pub struct RecordTitles {
     pub prompt: Option<String>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
@@ -456,6 +460,7 @@ pub struct Session {
     /// the agent sent it; the record a client receives carries the session's resolved title
     /// instead, which may come from the agent's records and so be set while no terminal title is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub terminal_title: Option<String>,
     /// The titles the agent's own records give the session. Stored, never sent.
     #[serde(skip)]
@@ -463,19 +468,23 @@ pub struct Session {
     /// The session's last known context size, retained after archiving. Absent until reported,
     /// and again after a compaction until the next request.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub context: Option<SessionContext>,
     /// The model the agent's records show the session running with, as the agent spells it. Unlike
     /// `model`, which is the launch override, this is what was observed; absent until reported.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub observed_model: Option<String>,
     /// The reasoning effort the agent's records show the session running with.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub observed_effort: Option<String>,
     /// The reasoning effort the agent runs `observed_model` at by itself, where the records name
     /// that model but no effort and the agent's catalogue gives it a default
     /// (`crate::records::default_effort`). Never stored: it is filled in on the record a client
     /// receives (`AppState::wire_session`), and absent otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub default_effort: Option<String>,
     pub status: SessionStatus,
     /// The work the agent has left running in the background while the session is `Idle`: the
@@ -566,7 +575,7 @@ pub struct Session {
         deserialize_with = "present_option",
         skip_serializing_if = "Option::is_none"
     )]
-    #[cfg_attr(test, ts(optional))]
+    #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
     pub model: Option<Option<String>>,
     /// The reasoning effort override, with the same inheritance rule as `model`.
     #[serde(
@@ -574,7 +583,7 @@ pub struct Session {
         deserialize_with = "present_option",
         skip_serializing_if = "Option::is_none"
     )]
-    #[cfg_attr(test, ts(optional))]
+    #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
     pub effort: Option<Option<String>>,
     /// The compatibility switches (provider settings declaring `compatibility_with`) this session
     /// holds its own value for, by setting id; only what it holds, so one left out follows the
@@ -601,7 +610,7 @@ impl Session {
 /// faces the user (`show_page`). It belongs to that session, not to its console or project:
 /// `session_id` is the session that pushed it, of either kind. Every page is kept, so the
 /// panel can be paged back through.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct Page {
     pub id: String,
@@ -612,7 +621,7 @@ pub struct Page {
 
 /// One entry of a directory listing. Only directories are ever listed — a project is a directory —
 /// so there is no "is this a directory" field to carry.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct DirEntry {
     pub name: String,
@@ -620,7 +629,7 @@ pub struct DirEntry {
     pub is_git_repo: bool,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GitActivity {
@@ -636,7 +645,7 @@ pub enum GitActivity {
 /// `refresh_git_status` asks for it, with the local branch header also re-read when the project's
 /// refs change — the daemon keeps no timer of its own for this (see `apps/daemon/PROTOCOL.md`'s
 /// "Daemon behaviour, per project").
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct GitStatus {
     pub project: String,
@@ -666,7 +675,7 @@ pub struct GitStatus {
 }
 
 /// Whether a shell terminal's shell is still running.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ShellTerminalState {
@@ -679,7 +688,7 @@ pub enum ShellTerminalState {
 /// A plain shell the daemon runs in a project's directory, beside its agent sessions. Live state
 /// held in memory, not stored in SQLite but for the name the user gave it: the record lasts as
 /// long as the shell, which its holder keeps running across a restart of the daemon.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ShellTerminal {
     pub id: String,
@@ -719,7 +728,7 @@ pub struct ShellTerminal {
 
 /// How a holder that runs a session's process or a shell terminal's shell stands, when it cannot
 /// be reached.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HolderLink {

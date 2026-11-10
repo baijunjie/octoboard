@@ -129,10 +129,12 @@ impl<'de, T: Deserialize<'de> + Default> Deserialize<'de> for PerAgent<T> {
 /// The model and reasoning effort an agent's sessions are launched with, in the agent's own
 /// spelling, and the compatibility switches the level holds. `null` leaves the choice to the
 /// agent.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Launch {
+    #[cfg_attr(test, schemars(transform = super::schema::nullable))]
     pub model: Option<String>,
+    #[cfg_attr(test, schemars(transform = super::schema::nullable))]
     pub effort: Option<String>,
     /// The compatibility switches (provider settings declaring `compatibility_with`) this level
     /// holds its own value for, by setting id: only the values it holds, so a switch left out
@@ -176,14 +178,14 @@ impl<'de, T: Deserialize<'de>> Deserialize<'de> for Change<T> {
 /// A change to one agent's launch settings: absent fields leave their values alone. A model or
 /// effort of `null` or a blank string uses the agent's own default; compatibility entries follow
 /// the level behind on `null` and hold their own boolean otherwise.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Default, Deserialize)]
 pub struct LaunchChange {
     #[serde(default, deserialize_with = "present_option")]
-    #[cfg_attr(test, ts(optional))]
+    #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
     pub model: Present<String>,
     #[serde(default, deserialize_with = "present_option")]
-    #[cfg_attr(test, ts(optional))]
+    #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
     pub effort: Present<String>,
     /// Per compatibility switch: absent leaves it alone, `null` goes back to following the level
     /// behind, a boolean holds the level's own value.

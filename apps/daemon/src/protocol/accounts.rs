@@ -11,7 +11,7 @@ use super::fields::is_zero;
 
 /// What `delete_account` with `trash_directory` would do with an account's config directory, as
 /// `inspect_account_trash` answers.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum AccountTrashOutcome {
@@ -41,7 +41,11 @@ pub enum AccountTrashOutcome {
     Unlookable {
         #[serde(skip_serializing_if = "Option::is_none")]
         #[cfg_attr(test, ts(optional))]
-        #[cfg_attr(test, ts(type = "\"unreadable\" | \"other_unlooked\""))]
+        #[cfg_attr(
+            test,
+            ts(type = "\"unreadable\" | \"other_unlooked\""),
+            schemars(extend("enum" = ["unreadable", "other_unlooked"]))
+        )]
         cause: Option<String>,
     },
     /// A look did not answer within the short time the inspection allows: nothing is said against
@@ -50,7 +54,7 @@ pub enum AccountTrashOutcome {
 }
 
 /// What `AccountTrashOutcome::Shared` shares the directory with.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AccountTrashSharing {
@@ -60,7 +64,7 @@ pub enum AccountTrashSharing {
 }
 
 /// Where an account's login is.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LoginStatus {
@@ -80,7 +84,7 @@ pub enum LoginStatus {
 }
 
 /// An account's login as the daemon last saw it. Runtime state: never stored.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AccountLogin {
     pub agent: AgentId,
@@ -101,7 +105,7 @@ pub struct AccountLogin {
 }
 
 /// An owned account's sharing state as the daemon holds it now. Runtime state: never stored.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AccountSharing {
     pub account: String,
@@ -126,7 +130,7 @@ pub struct AccountSharing {
 }
 
 /// What runs under an account's directory that a change of its sharing must not move files under.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AccountInUse {
     /// The account's sessions working under its directory: in the middle of a turn, with
@@ -139,7 +143,7 @@ pub struct AccountInUse {
 }
 
 /// How far a change of an account's sharing has got.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SharingProgress {
     /// The direction: turning sharing on, or off.
@@ -161,7 +165,7 @@ pub struct SharingProgress {
 /// the same agent changes, then ending the account's idle sessions, changing the entries, and
 /// resuming those sessions. `waiting` and `stopping` are left out when there is nothing to wait
 /// for or stop, and `resuming` when nothing was stopped.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SharingPhase {
@@ -173,7 +177,7 @@ pub enum SharingPhase {
 
 /// A change of an account's sharing that did not complete, in the form `account_sharing_failed`
 /// gives it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SharingFailure {
     /// The direction of the change.
@@ -187,7 +191,7 @@ pub struct SharingFailure {
 }
 
 /// What an item was left as by an operation that could not finish it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SharingLeft {
@@ -206,7 +210,7 @@ pub enum SharingLeft {
 
 /// Why something could not be brought in line, for a client to explain it in plain words; the
 /// failure's `detail` keeps the system's own text.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SharingCause {
@@ -252,7 +256,7 @@ impl SharingCause {
 }
 
 /// An item an operation could not bring in line.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SharingItemFailure {
     /// An entry of the account's directory, or for a conversation the agent's own id of it.
@@ -267,7 +271,7 @@ pub struct SharingItemFailure {
 }
 
 /// Why a login failed.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LoginFailure {
     pub code: Code,

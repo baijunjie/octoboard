@@ -8,7 +8,7 @@ use super::agents::AgentId;
 use super::codes::Code;
 
 /// How an agent's CLI was installed, which decides the command that updates it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CliInstallMethod {
@@ -24,7 +24,7 @@ pub enum CliInstallMethod {
 }
 
 /// Where an update of a CLI is.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CliUpdateState {
@@ -34,7 +34,7 @@ pub enum CliUpdateState {
 }
 
 /// An update of an agent's CLI as the daemon last saw it. Runtime state: never stored.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AgentCliUpdate {
     pub state: CliUpdateState,
@@ -50,7 +50,7 @@ pub struct AgentCliUpdate {
 }
 
 /// One agent's installed CLI as the daemon last checked it. Runtime state: never stored.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AgentCliStatus {
     pub agent: AgentId,

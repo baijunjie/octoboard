@@ -31,10 +31,14 @@ pub const CONFIGURATION_FORMAT: &str = "octoboard-configuration";
 /// sharing flag; 3 dropped the sidebar order setting.
 pub const CONFIGURATION_VERSION: u32 = 3;
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConfigurationDocument {
-    #[cfg_attr(test, ts(type = "\"octoboard-configuration\""))]
+    #[cfg_attr(
+        test,
+        ts(type = "\"octoboard-configuration\""),
+        schemars(extend("const" = "octoboard-configuration"))
+    )]
     pub format: String,
     pub version: u32,
     /// The Octoboard version that produced the document, for diagnosing one that misbehaves. An
@@ -46,6 +50,7 @@ pub struct ConfigurationDocument {
     /// The account structure. Present exactly when the export included it; a reader that does not
     /// know the field ignores it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub accounts: Option<DocumentAccounts>,
     /// The consoles exported, which may be none.
     pub consoles: Vec<DocumentConsole>,
@@ -53,13 +58,14 @@ pub struct ConfigurationDocument {
 
 /// The account structure of this machine, never a credential: which agents the user has added and
 /// each agent's accounts.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentAccounts {
     /// The agents the user has added, in their order. Absent when the exporting machine had not
     /// yet decided the list (it was still finding out which agents are installed), which on import
     /// adds none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub added_agents: Option<Vec<AgentId>>,
     /// One entry for each agent that has an account of its own, a named default account or a
     /// turned-off default account, in `AgentId::ALL` order.
@@ -74,7 +80,7 @@ pub struct DocumentAccounts {
 /// the tags of each agent and the user's choices for the agents' provider settings. They travel
 /// with the accounts, since they only mean something to the agents and accounts of the machine
 /// they are applied to.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentAgentSettings {
     pub auto_select_account: bool,
@@ -95,7 +101,7 @@ pub struct DocumentAgentSettings {
     pub provider_settings: BTreeMap<String, BTreeMap<String, SettingValue>>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentAgentAccounts {
     pub agent: AgentId,
@@ -106,7 +112,7 @@ pub struct DocumentAgentAccounts {
 
 /// What the document says of an agent's default account. Its directory is whatever the agent
 /// resolves on the machine, so it is not carried.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentDefaultAccount {
     /// The name the user gave it; `null` when it is unnamed.
@@ -121,7 +127,7 @@ pub struct DocumentDefaultAccount {
 /// An account the user owns. Its id, its login, everything the agent keeps in its directory and
 /// whether it shares the agent's default configuration (which moves files outside Octoboard's own
 /// directory, so it is turned on by hand) stay behind.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentAccount {
     pub name: String,
@@ -134,7 +140,7 @@ pub struct DocumentAccount {
 
 /// A section of Settings whose application settings an export can carry and an import apply on
 /// its own; the Agent accounts section is the accounts region instead.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SettingsSection {
@@ -181,7 +187,7 @@ impl SettingsSection {
 
 /// The client-held sorting choices of the General section: how sessions and projects are ordered.
 /// Each part is the id of an order, which the daemon neither reads nor checks.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DocumentSessionOrder {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -200,7 +206,7 @@ pub struct DocumentSessionOrder {
 /// carried when any of its keys is. A field's position sets the key order of an exported file and
 /// of the generated TypeScript, so within its section's group it follows the order of that
 /// section's rows on the Settings page.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DocumentSettings {
     // General.
@@ -265,7 +271,7 @@ pub struct DocumentSettings {
     /// The default clone directory as `~/<relative path>` under the exporting machine's home
     /// directory (also `~` for the home directory itself), otherwise the absolute path, whatever
     /// the export's paths choice. An import applies it only when the user asks to, and it must be
-    /// usable here (absolute, or starting with `~/`). `null` in a document upgraded from version
+    /// usable here (absolute, or starting with `~/`). Absent in a document upgraded from version
     /// 1, which did not carry it: importing it leaves this machine's as it is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
@@ -437,7 +443,7 @@ impl DocumentSettings {
 /// whose entry holds the reference (`accounts.claude` is a Claude Code account), so it is not
 /// repeated here, where a hand-edited document could contradict it. The importing machine rebinds
 /// the reference to the account of that agent and name.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountName {
     pub name: String,
@@ -445,7 +451,7 @@ pub struct AccountName {
 
 /// A project's choice of account for one agent; `ProjectAccount` with the account named rather
 /// than numbered.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ProjectAccountRef {
@@ -460,7 +466,7 @@ pub enum ProjectAccountRef {
 }
 
 /// A console's own settings and the projects associated with it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentConsole {
     pub name: String,
@@ -484,7 +490,7 @@ pub struct DocumentConsole {
 /// project, absent for a directory that is not a repository or a repository with no remote, and
 /// also when the export left paths out and the remote is not one that can be cloned from (a local
 /// path would reveal one).
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentProject {
     pub name: String,
@@ -506,7 +512,7 @@ pub struct DocumentProject {
 }
 
 /// Which consoles an export holds. On the wire it is the request's `consoles` field.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExportedConsoles {
@@ -518,7 +524,7 @@ pub enum ExportedConsoles {
 
 /// Which directory a project is placed in. [`DirectoryChoice`] is the caller's pick of one, and
 /// this is the bare name that results report.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DirectoryChoiceKind {
@@ -543,7 +549,7 @@ impl DirectoryChoiceKind {
 }
 
 /// The choice made for one project when applying.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DirectoryChoice {
@@ -566,7 +572,7 @@ impl DirectoryChoice {
 
 /// The directory each choice would use for a project, present only for the choices its state
 /// allows.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct DirectoryOffers {
     pub exported_path: Option<String>,
@@ -592,7 +598,7 @@ impl DirectoryOffers {
 
 /// The choice for the project at `project` of the document's console at `console`, both indexes
 /// into the document as it was sent.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Deserialize)]
 pub struct ProjectResolution {
     pub console: usize,
@@ -602,14 +608,14 @@ pub struct ProjectResolution {
 
 /// An account reference of the document that names no account of its agent on this machine, and
 /// so is bound to that agent's default account.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AccountFallback {
     pub agent: AgentId,
     pub name: String,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedProject {
     pub name: String,
@@ -623,7 +629,8 @@ pub struct InspectedProject {
     pub offers: DirectoryOffers,
     #[cfg_attr(
         test,
-        ts(type = "\"exported_path\" | \"default_clone_dir\" | \"clone\" | null")
+        ts(type = "\"exported_path\" | \"default_clone_dir\" | \"clone\" | null"),
+        schemars(extend("enum" = ["exported_path", "default_clone_dir", "clone", null]))
     )]
     pub default: Option<DirectoryChoiceKind>,
     /// What the clone-dependent choices (`default_clone_dir`, `clone`) come to under the document's
@@ -636,13 +643,14 @@ pub struct InspectedProject {
 
 /// The offers of a project, and the choice an import would preselect, with the clone-dependent
 /// ones worked out against another default clone directory than this machine's.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct OffersUnderCloneDir {
     pub offers: DirectoryOffers,
     #[cfg_attr(
         test,
-        ts(type = "\"exported_path\" | \"default_clone_dir\" | \"clone\" | null")
+        ts(type = "\"exported_path\" | \"default_clone_dir\" | \"clone\" | null"),
+        schemars(extend("enum" = ["exported_path", "default_clone_dir", "clone", null]))
     )]
     pub default: Option<DirectoryChoiceKind>,
 }
@@ -650,7 +658,7 @@ pub struct OffersUnderCloneDir {
 /// The application settings a document carries, beside the value this machine has now, so a client
 /// can show what applying them would change. A key the document does not carry is reported as this
 /// machine's value, so its line reads as no change.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedSettings {
     pub auto_close_idle_shell_terminals: bool,
@@ -696,7 +704,7 @@ pub struct InspectedSettings {
 
 /// The settings of the Agent accounts section a document carries, beside the value this machine
 /// has now, so a client can show what applying them would change.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedAgentSettings {
     pub auto_select_account: bool,
@@ -724,7 +732,7 @@ pub struct InspectedAgentSettings {
     pub current_agent_tags: BTreeMap<String, Vec<String>>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedConsole {
     pub name: String,
@@ -732,7 +740,7 @@ pub struct InspectedConsole {
     pub projects: Vec<InspectedProject>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ImportStatus {
@@ -747,7 +755,7 @@ pub enum ImportStatus {
 }
 
 /// Why something was not created or applied: an `error` reply's `code`, `params` and `message`.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportFailure {
     pub code: Code,
@@ -757,7 +765,7 @@ pub struct ImportFailure {
 
 /// One thing an import creates or applies, named by its place in the document: the indices are
 /// those of `resolutions` and `account_resolutions`.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ImportItem {
@@ -782,7 +790,7 @@ pub enum ImportItem {
 }
 
 /// Where an item of a running import stands.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum ImportItemState {
@@ -801,7 +809,7 @@ pub enum ImportItemState {
     NotAttempted,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedProject {
     pub name: String,
@@ -815,14 +823,18 @@ pub struct ImportedProject {
     pub account_fallbacks: Vec<AccountFallback>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedConsole {
     /// The id of the console created; absent when it could not be created.
     pub console: Option<String>,
     pub name: String,
     /// `created` or `failed`.
-    #[cfg_attr(test, ts(type = "\"created\" | \"failed\""))]
+    #[cfg_attr(
+        test,
+        ts(type = "\"created\" | \"failed\""),
+        schemars(extend("enum" = ["created", "failed"]))
+    )]
     pub status: ImportStatus,
     pub error: Option<ImportFailure>,
     /// Empty unless the console was created.
@@ -833,7 +845,7 @@ pub struct ImportedConsole {
 
 /// The choice made for one account of the document when applying: another directory, or leaving
 /// the account out. Exactly one of the two is given.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Deserialize)]
 pub struct AccountResolution {
     pub agent: AgentId,
@@ -849,7 +861,7 @@ pub struct AccountResolution {
 }
 
 /// What importing one account of the document would do.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AccountStatus {
@@ -864,7 +876,7 @@ pub enum AccountStatus {
     Invalid,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedAccount {
     pub name: String,
@@ -885,7 +897,7 @@ pub struct InspectedAccount {
     pub disabled: bool,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedAgentAccounts {
     pub agent: AgentId,
@@ -903,7 +915,7 @@ pub struct InspectedAgentAccounts {
     pub default_disabled_applies: bool,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedAccounts {
     /// The agents of the document not yet on this machine's added agents, which importing would
@@ -914,7 +926,7 @@ pub struct InspectedAccounts {
     pub agent_settings: Option<InspectedAgentSettings>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AccountOutcome {
@@ -927,7 +939,7 @@ pub enum AccountOutcome {
     Failed,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedAccount {
     pub name: String,
@@ -937,7 +949,7 @@ pub struct ImportedAccount {
     pub error: Option<ImportFailure>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedAgentAccounts {
     pub agent: AgentId,
@@ -949,7 +961,7 @@ pub struct ImportedAgentAccounts {
     pub default_disabled_applied: Option<bool>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedAccounts {
     /// The agents appended to the added agents, in the order they were.

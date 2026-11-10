@@ -10,7 +10,7 @@ use super::errors::{params, Params};
 pub use crate::providers::QuotaWindowKind;
 
 /// One window of an account's plan quota.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct QuotaWindow {
     pub kind: QuotaWindowKind,
@@ -34,7 +34,7 @@ impl QuotaWindow {
 
 /// One of an account's rate limit reset credits that can still be used, as its provider describes
 /// it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ResetCredit {
     pub id: String,
@@ -50,7 +50,7 @@ pub struct ResetCredit {
 
 /// The rate limit reset credits of an account that can be used now. Only present while there is at
 /// least one.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ResetCredits {
     /// How many credits can be used, whatever the list below holds.
@@ -62,7 +62,7 @@ pub struct ResetCredits {
 }
 
 /// What the provider did with a request to use a reset credit (`reset_credit_used`).
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ResetCreditOutcome {
@@ -79,7 +79,7 @@ pub enum ResetCreditOutcome {
 
 /// Why an account's quota has no windows, as a coded message of the same shape as an `error`. It
 /// is part of the reading rather than a failure of anything else.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct QuotaUnavailable {
     pub code: Code,
@@ -99,7 +99,7 @@ impl QuotaUnavailable {
 
 /// The plan quota of one account as the agent's own CLI last reported it. Runtime state of the
 /// daemon: never stored and never part of an exported configuration.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AccountQuota {
     pub agent: AgentId,

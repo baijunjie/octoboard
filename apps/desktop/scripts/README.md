@@ -36,7 +36,8 @@ in the environment wins.
 - `release-desktop.mjs` (`pnpm release:version`) — prepares a version commit in an isolated worktree, checks it and
   pushes it with its annotated tag to start release CI (see "Releasing by tag"); `--platforms` makes a version for one
   platform. It refuses a version while the daemon's holder floor (`FLOOR` in `apps/daemon/src/holder/compat.rs`) is not
-  the greatest stable `desktop-v*` tag below it (`0.0.0` while none is tagged). Its version-file preparation, argument
+  the greatest stable `desktop-v*` tag below it (`0.0.0` while none is tagged). Its version commit also refreshes the
+  snapshot of the protocol schema in `contracts/protocol/released/`. Its version-file preparation, argument
   parsing and release orchestration are tested by
   `release-desktop.test.mjs`.
 - `tag-message.mjs` — prints the notes or the platforms of a tag message read from standard input, for
@@ -270,7 +271,10 @@ The command:
    `release/desktop-v<version>` in `.worktrees/desktop-v<version>` from main.
 2. Updates `apps/desktop/package.json`, the root `Cargo.toml` and only the two workspace package versions in
    `Cargo.lock`. `cargo metadata --locked` validates that lockfile without updating external dependencies. It installs
-   dependencies with `pnpm install --frozen-lockfile`, stages exactly the three version files and makes one version
+   dependencies with `pnpm install --frozen-lockfile`, and runs the protocol compatibility guard
+   (`protocol::compatibility`) against the previous release's snapshot in `contracts/protocol/released/`, so a break
+   in the commits main carries since that release stops here. It then refreshes the snapshot to the current schema
+   files and protocol generation, stages the three version files and the snapshot, nothing else, and makes one version
    commit through the normal Git hooks.
 3. Rebases onto main, runs `pnpm verify --quick`, fast-forwards main and removes the release worktree and branch.
 4. Runs `pnpm verify --release --fresh --head <release-commit>` locally on the version commit, regardless of the

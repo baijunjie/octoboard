@@ -8,7 +8,7 @@ use super::fields::is_false;
 
 /// Where a project's files are read from, as `project_source` reports it. See "Project sources" in
 /// `apps/daemon/PROTOCOL.md`.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectSourceInfo {
     pub project: String,
@@ -31,7 +31,7 @@ pub struct ProjectSourceInfo {
     pub git_error_code: Option<super::codes::Code>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct GitSourceInfo {
     /// The repository's identity: that of its common git directory.
@@ -44,7 +44,7 @@ pub struct GitSourceInfo {
     pub worktrees: Vec<WorktreeInfo>,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct WorktreeInfo {
     pub id: String,
@@ -64,7 +64,7 @@ pub struct WorktreeInfo {
 }
 
 /// One entry of a project directory listing.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct BrowseEntry {
     /// The entry's name, as a wire path.
@@ -83,7 +83,7 @@ pub struct BrowseEntry {
     pub ignored: bool,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntryKind {
@@ -94,7 +94,7 @@ pub enum EntryKind {
     Other,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LinkTarget {
@@ -108,7 +108,7 @@ pub enum LinkTarget {
 }
 
 /// Which content a `read_project_file` reads. Absent means `live`.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ReadFrom {
@@ -126,7 +126,7 @@ pub enum ReadFrom {
 }
 
 /// What a file body was actually read from, so a reply identifies the content it carries.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ContentSource {
@@ -139,12 +139,13 @@ pub enum ContentSource {
     Commit {
         commit: String,
         #[serde(default)]
+        #[cfg_attr(test, schemars(transform = super::schema::nullable))]
         branch: Option<String>,
         blob: String,
     },
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ContentKind {
@@ -155,7 +156,7 @@ pub enum ContentKind {
 }
 
 /// A file body. Exactly one of `text` and `data` is set, by `kind`.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct FileContent {
     pub size: u64,
@@ -169,7 +170,7 @@ pub struct FileContent {
 /// Which of a worktree's uncommitted changes an entry is: `HEAD` against the index (`staged`), the
 /// index against the files on disk (`unstaged`), or a file on disk Git does not track and does not
 /// ignore (`untracked`). Part of a change's identity, so one path can be a change in two groups.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChangeGroup {
@@ -179,7 +180,7 @@ pub enum ChangeGroup {
 }
 
 /// What one side of a change is.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SideKind {
@@ -190,7 +191,7 @@ pub enum SideKind {
 
 /// One side of a change in a change listing. See "Changes and comparisons" in
 /// `apps/daemon/PROTOCOL.md`.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum ChangeSide {
@@ -208,7 +209,7 @@ pub enum ChangeSide {
 }
 
 /// How a path is in conflict, as `git status` tells the stages apart.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConflictKind {
@@ -223,7 +224,7 @@ pub enum ConflictKind {
 
 /// The lines a change adds and removes, as `git diff --numstat` counts them. See "Changes and
 /// comparisons" in `apps/daemon/PROTOCOL.md`.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct LineStats {
     pub added: u64,
@@ -233,7 +234,7 @@ pub struct LineStats {
 /// One entry of a change listing: a change between two sides, or a path in conflict, which is
 /// not a two-sided change at all. `stats` is what the change adds and removes, absent where the
 /// daemon does not count it (see "Changes and comparisons" in `apps/daemon/PROTOCOL.md`).
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "group", rename_all = "snake_case")]
 pub enum ChangeEntry {
@@ -276,7 +277,7 @@ pub enum ChangeEntry {
 
 /// How a `read_project_change` or a `read_project_comparison_change` names one side of the
 /// change to read.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum SideRef {
@@ -289,7 +290,7 @@ pub enum SideRef {
 }
 
 /// The change a `read_project_change` reads: its group and its two sides, as the listing gave them.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ChangeRef {
     pub group: ChangeGroup,
@@ -300,7 +301,7 @@ pub struct ChangeRef {
 /// One local branch of a project's repository, as `list_project_branches` lists it: its name below
 /// `refs/heads/`, as a wire path, and the object id its reference named when it was listed — the
 /// commit at its tip, unless the branch is broken (a missing object, or not a commit).
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BranchInfo {
     pub name: String,
@@ -321,7 +322,7 @@ pub struct BranchInfo {
 
 /// A branch's upstream: the remote-tracking branch, as a wire path below `refs/remotes/` (such as
 /// `origin/main`), and the object id its reference names.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UpstreamInfo {
     pub name: String,
@@ -330,7 +331,7 @@ pub struct UpstreamInfo {
 
 /// The session working on a branch now, with the title that session had when it became
 /// responsible — the record outlives the session, which a project's deletion takes with it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BranchOriginInfo {
     /// The session working on the branch: the one whose own git reported creating it until the
@@ -347,7 +348,7 @@ pub struct BranchOriginInfo {
 /// resolved to. A comparison reply reports both; a read of one of its changes names both back, with
 /// the comparison's `base`, and the commits alone decide what is read. `remote` says the branch is
 /// a remote-tracking one, named below `refs/remotes/`, rather than a local one.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComparisonEndpoint {
     pub branch: String,
@@ -364,7 +365,7 @@ pub struct ComparisonEndpoint {
 /// first parent's (`None` for a commit with no parent, whose changes are against the empty tree),
 /// its subject line, and its changes against that parent that touch the project, each in the
 /// `committed` group.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CommitChanges {
     pub commit: String,
@@ -375,7 +376,7 @@ pub struct CommitChanges {
 
 /// The change a `read_project_comparison_change` or a `read_project_commit_change` reads: its two
 /// sides, as the listing gave them.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ComparedChangeRef {
     pub old: SideRef,
@@ -384,7 +385,7 @@ pub struct ComparedChangeRef {
 
 /// The version of one side of a change as a diff reply reported it, which a body request names back
 /// so the bodies are read only from the sides the patch was made from.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum SideVersion {
@@ -393,7 +394,7 @@ pub enum SideVersion {
 }
 
 /// One side of a change as `read_project_change` or `read_project_comparison_change` read it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum SideRead {
@@ -418,7 +419,7 @@ pub enum SideRead {
 /// older one in, and the request itself. Kept apart from `Request` because these are served
 /// under their own budgets and on their own outbound lane — see "Browsing a project" in
 /// `apps/daemon/PROTOCOL.md`.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Deserialize)]
 pub struct BrowseRequest {
     #[serde(default)]
@@ -434,6 +435,7 @@ pub struct BrowseRequest {
     #[cfg_attr(test, ts(optional = nullable))]
     pub asked_by_person: bool,
     #[serde(flatten)]
+    #[cfg_attr(test, schemars(with = "super::schema::Flattened<BrowseBody>"))]
     pub body: BrowseBody,
 }
 
@@ -457,7 +459,7 @@ pub const BROWSE_REQUEST_TYPES: &[&str] = &[
     "read_project_commit_change_bodies",
 ];
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BrowseBody {
@@ -562,7 +564,7 @@ pub enum BrowseBody {
         project: String,
         commit: String,
         #[serde(default)]
-        #[cfg_attr(test, ts(optional = nullable))]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         parent: Option<String>,
         change: ComparedChangeRef,
     },
@@ -571,7 +573,7 @@ pub enum BrowseBody {
         project: String,
         commit: String,
         #[serde(default)]
-        #[cfg_attr(test, ts(optional = nullable))]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         parent: Option<String>,
         change: ComparedChangeRef,
         old: SideVersion,

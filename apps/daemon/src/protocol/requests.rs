@@ -23,7 +23,7 @@ use crate::providers::SettingValue;
 
 /// The appearance a client has resolved for its window, sent with a launch so Grok's theme matches
 /// the terminal that will show it. It is not stored: a later launch sends its own.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TerminalAppearance {
@@ -39,17 +39,18 @@ pub enum TerminalAppearance {
 /// `console`, `project`, `session` — because one flattened object carries both: a request field
 /// named `id` would collide with the envelope's and silently lose one of the two, leaving the
 /// daemon acting on the request id as if it were a record id.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Deserialize)]
 pub struct Request {
     #[serde(default)]
     #[cfg_attr(test, ts(optional))]
     pub id: Option<String>,
     #[serde(flatten)]
+    #[cfg_attr(test, schemars(with = "super::schema::Flattened<RequestBody>"))]
     pub body: RequestBody,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RequestBody {
@@ -92,7 +93,7 @@ pub enum RequestBody {
         /// Absent leaves the setting alone; an explicit `null` makes project sessions follow
         /// `default_agent` again.
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         project_session_agent: Option<Option<AgentId>>,
         /// Each agent's account: an agent left out is left alone; an explicit `null` clears it
         /// back to that agent's default account. A reference that names no account of that agent
@@ -113,11 +114,11 @@ pub enum RequestBody {
         /// Absent leaves the avatar alone; an explicit `null` (or a blank string) clears it back
         /// to the default glyph.
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         icon: Option<Option<String>>,
         /// Absent leaves the addition alone; an explicit `null` (or a blank string) clears it.
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         console_session_prompt: Option<Option<String>>,
         /// The version of each field this request changes that the client read it at (the
         /// record's `versions`), by path. Absent or empty means the write is not checked. A path
@@ -172,7 +173,11 @@ pub enum RequestBody {
         /// project it adds. A `development` that is none of `in_place`, `branch` or `worktree`, or
         /// a `delivery` that is none of `ask`, `merge` or `pull_request`, is refused.
         #[serde(default)]
-        #[cfg_attr(test, ts(optional, type = "Partial<GitWorkflowOverride>"))]
+        #[cfg_attr(
+            test,
+            ts(optional, type = "Partial<GitWorkflowOverride> | null"),
+            schemars(transform = super::schema::nullable)
+        )]
         git_workflow: Option<GitWorkflowOverride>,
     },
     UpdateProject {
@@ -185,7 +190,7 @@ pub enum RequestBody {
         /// present `null` into the outer `Option` as `None`, exactly as if the field had not been
         /// sent.
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         default_agent: Option<Option<AgentId>>,
         /// Each agent's account as a [`ProjectAccount`]: an agent left out is left alone; an
         /// explicit `null` puts it back to inheriting the console's reference. An account that
@@ -207,7 +212,7 @@ pub enum RequestBody {
         tags: Option<Vec<String>>,
         /// Absent leaves the description alone; an explicit `null` (or a blank string) clears it.
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         description: Option<Option<String>>,
         /// Absent leaves the project's git workflow settings alone. Within it, per item: absent
         /// leaves it alone, an explicit `null` goes back to following the application-wide value,
@@ -371,7 +376,7 @@ pub enum RequestBody {
         /// are listed. Listing an agent the document carries nothing for is refused with
         /// `import_agent_missing`.
         #[serde(default)]
-        #[cfg_attr(test, ts(optional = nullable))]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         apply_agents: Option<Vec<AgentId>>,
         /// The choices for document accounts; one that names an account the document lacks,
         /// names one twice, gives both or neither of `directory` and `leave_out`, or gives a
@@ -389,7 +394,7 @@ pub enum RequestBody {
         /// `configuration_import_progress` events broadcast while it runs; absent means none are
         /// sent.
         #[serde(default)]
-        #[cfg_attr(test, ts(optional = nullable))]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         import_id: Option<String>,
         /// Whether, applying the `git` section, to take the document's default clone directory;
         /// absent means true. Without it this machine's own stays, and the clones this import makes
@@ -421,15 +426,15 @@ pub enum RequestBody {
         /// refers to. A reference that names no account of the session's agent is refused with
         /// `unknown_account`.
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         account: Option<Option<String>>,
         /// Absent inherits the project's (or console's) current setting; null or blank uses the
         /// agent's own default. A string is trimmed and kept for every later launch.
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         model: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         effort: Option<Option<String>>,
         /// The compatibility switches (provider settings declaring `compatibility_with`) the
         /// session holds its own value for, by setting id, with the rule `effort` has: absent for a
@@ -500,7 +505,11 @@ pub enum RequestBody {
     SwitchSessionAccount {
         session: String,
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(type = "string | null"))]
+        #[cfg_attr(
+            test,
+            ts(type = "string | null"),
+            schemars(transform = super::schema::required_nullable)
+        )]
         account: Option<Option<String>>,
         /// See `OpenSession::terminal_appearance`.
         #[serde(default)]
@@ -516,10 +525,10 @@ pub enum RequestBody {
     SetSessionModel {
         session: String,
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         model: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         effort: Option<Option<String>>,
         /// The compatibility switches (provider settings declaring `compatibility_with`) the
         /// session holds its own value for, by setting id, with the rule `effort` has: absent for a
@@ -545,13 +554,13 @@ pub enum RequestBody {
         session: String,
         agent: AgentId,
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         account: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         model: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         effort: Option<Option<String>>,
         /// The compatibility switches (provider settings declaring `compatibility_with`) the
         /// session holds its own value for, by setting id, with the rule `effort` has: absent for a
@@ -597,6 +606,7 @@ pub enum RequestBody {
     /// the trees kept under it (`kept: true`). See `crate::coordinator::processes`.
     ListProcesses {
         #[serde(flatten)]
+        #[cfg_attr(test, schemars(with = "super::schema::Flattened<ProcessTarget>"))]
         target: ProcessTarget,
     },
     /// How many process trees each project and each console session has: running sessions' trees,
@@ -741,13 +751,13 @@ pub enum RequestBody {
         #[cfg_attr(test, ts(optional))]
         agent: Option<AgentId>,
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         account: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         model: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         effort: Option<Option<String>>,
         /// The compatibility switches (provider settings declaring `compatibility_with`) the
         /// session holds its own value for, by setting id, with the rule `effort` has: absent for a
@@ -925,7 +935,11 @@ pub enum RequestBody {
     /// account are not affected.
     SetAccountDisabled {
         agent: AgentId,
-        #[cfg_attr(test, ts(type = "string | null"))]
+        #[cfg_attr(
+            test,
+            ts(type = "string | null"),
+            schemars(transform = super::schema::required_nullable)
+        )]
         account: Option<String>,
         disabled: bool,
     },
@@ -939,7 +953,11 @@ pub enum RequestBody {
     SetProviderSetting {
         agent: AgentId,
         setting: String,
-        #[cfg_attr(test, ts(type = "boolean | string | null"))]
+        #[cfg_attr(
+            test,
+            ts(type = "boolean | string | null"),
+            schemars(transform = super::schema::required_nullable)
+        )]
         value: Option<SettingValue>,
     },
     /// Sets whether an account shares the agent's default configuration. A null account names
@@ -949,7 +967,11 @@ pub enum RequestBody {
     /// Turning sharing on for an account of an agent whose provider lacks `config_sharing` is
     /// refused with `provider_unsupported` (operation `config_sharing`).
     SetAccountSharing {
-        #[cfg_attr(test, ts(type = "string | null"))]
+        #[cfg_attr(
+            test,
+            ts(type = "string | null"),
+            schemars(transform = super::schema::required_nullable)
+        )]
         account: Option<String>,
         share: bool,
     },
@@ -983,7 +1005,7 @@ pub enum RequestBody {
     StartAccountLogin {
         agent: AgentId,
         #[serde(default)]
-        #[cfg_attr(test, ts(optional = nullable))]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         account: Option<String>,
     },
     /// Uses one of an account's rate limit reset credits, after the user confirmed it: the credit
@@ -1001,7 +1023,7 @@ pub enum RequestBody {
     UseResetCredit {
         agent: AgentId,
         #[serde(default)]
-        #[cfg_attr(test, ts(optional = nullable))]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         account: Option<String>,
     },
     /// Reads the MCP servers and platform connectors of an account through the agent's own CLI
@@ -1018,7 +1040,7 @@ pub enum RequestBody {
     ReadAccountMcpInventory {
         agent: AgentId,
         #[serde(default)]
-        #[cfg_attr(test, ts(optional = nullable))]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         account: Option<String>,
         #[serde(default)]
         refresh: bool,
@@ -1038,7 +1060,7 @@ pub enum RequestBody {
     SignInAccountMcpServer {
         agent: AgentId,
         #[serde(default)]
-        #[cfg_attr(test, ts(optional = nullable))]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         account: Option<String>,
         server: String,
     },
@@ -1051,7 +1073,7 @@ pub enum RequestBody {
     SignOutAccountMcpServer {
         agent: AgentId,
         #[serde(default)]
-        #[cfg_attr(test, ts(optional = nullable))]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         account: Option<String>,
         server: String,
     },
@@ -1061,7 +1083,7 @@ pub enum RequestBody {
     CancelAccountMcpSignIn {
         agent: AgentId,
         #[serde(default)]
-        #[cfg_attr(test, ts(optional = nullable))]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         account: Option<String>,
         server: String,
     },
@@ -1070,7 +1092,7 @@ pub enum RequestBody {
     CancelAccountLogin {
         agent: AgentId,
         #[serde(default)]
-        #[cfg_attr(test, ts(optional = nullable))]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         account: Option<String>,
     },
     /// Checks the installed CLI of the agents it selects, in the background: its version, how it
@@ -1084,7 +1106,7 @@ pub enum RequestBody {
     /// versions" in `PROTOCOL.md`.
     CheckAgentClis {
         #[serde(default)]
-        #[cfg_attr(test, ts(optional = nullable))]
+        #[cfg_attr(test, ts(optional = nullable), schemars(transform = super::schema::nullable))]
         agent: Option<AgentId>,
     },
     /// Updates an agent's installed CLI with the command its install method names (`<cli> update`
@@ -1251,13 +1273,15 @@ pub enum RequestBody {
     /// the caller does not know it, which counts every one and answers `known: false`. Answered
     /// with `handover_check`; never refused.
     HandoverCheck {
+        #[cfg_attr(test, schemars(transform = super::schema::required_nullable))]
         holder_floor: Option<String>,
+        #[cfg_attr(test, schemars(transform = super::schema::required_nullable))]
         target_version: Option<String>,
     },
 }
 
 /// What a `list_processes` asks about: one session, or one project.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum ProcessTarget {

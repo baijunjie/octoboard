@@ -55,6 +55,11 @@ export const SWEEP_SHARED = ["scripts/verify/lock.mjs"];
 // daemon crate and talks to the daemon only over its WebSocket.
 export const WIRE_PROTOCOL = ["apps/daemon/src/protocol/", "packages/ui/src/protocol.ts", "packages/ui/src/protocol.generated.ts"];
 
+// The protocol schema, `contracts/protocol/*.schema.json`, is written by a daemon test from the Rust types
+// (`protocol/schema.rs`), which fails when it is stale; `contracts/protocol/released/` is the snapshot of the last
+// release that the daemon's compatibility guard (`protocol/compatibility/`) compares it with. Nothing else reads it yet.
+export const PROTOCOL_SCHEMA = ["contracts/"];
+
 // Markdown the daemon reads with `include_str!`, which the daemon rule's Markdown exclusion would otherwise leave
 // unchecked: the agent instructions compiled into the compatibility sources, and the protocol document, whose table of
 // each role's tools a test (`session_tools/catalogue/tests.rs`) compares with the catalogues. `scope.test.mjs` fails
@@ -124,6 +129,7 @@ export const RULES = [
   // Cross-package reads. Each also selects `verify`, whose tests check that the paths named here exist.
   { match: [...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS, ...WEB_RESOLVES_UI], consumers: ["verify", "ui", "web"], why: "the website imports these modules, builds its preview from them, or resolves the package through its `exports` map" },
   { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon"], why: "the wire protocol is kept in step across the daemon and the UI: the UI reads the generated types, which the daemon writes from its own, and a UI test (`daemonCodes.test.ts`) reads the daemon's code registry from `protocol/codes.rs`" },
+  { match: PROTOCOL_SCHEMA, consumers: ["verify", "daemon"], why: "the protocol schema is written by a daemon test from the daemon's types, and the same test fails when it is stale; the compatibility guard reads it and its release snapshot" },
   { match: DESKTOP_CONTRACT, consumers: ["verify", "ui", "native"], why: "the UI side of the contract with the desktop shell" },
   { match: SWEEP_SHARED, consumers: ["verify", "ui"], why: "the UI's gallery sweep, which its tests run, imports it" },
   { match: DAEMON_READS_UI, consumers: ["verify", "ui", "daemon"], why: "a daemon test parses it" },

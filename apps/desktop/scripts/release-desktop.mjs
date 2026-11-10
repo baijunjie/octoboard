@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Prepares a version in its own worktree, then pushes main and its annotated tag together. The tag starts
-// release CI after local application checks; signing, notarization and publishing stay there. Failed
-// preparations are left for inspection.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+// Prepares a version in its own worktree (its version files and a refreshed snapshot of the protocol schema), then
+// pushes main and its annotated tag together. The tag starts release CI after local application checks; signing,
+// notarization and publishing stay there. Failed preparations are left for inspection.
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -11,6 +11,13 @@ import { windowsToolchainProblems } from "../../../scripts/lib/windows-toolchain
 import { compareVersions, HOLDER_FLOOR_FILE, parsePlatforms, platformsTrailer, readHolderFloor, tag } from "./release-manifest.mjs";
 
 const VERSION_FILES = ["apps/desktop/package.json", "Cargo.toml", "Cargo.lock"];
+// The protocol schema and the snapshot of it as last released, which the daemon's compatibility guard
+// (`protocol/compatibility/`) compares the current schema with.
+const SCHEMA_DIRECTORY = "contracts/protocol";
+const SNAPSHOT_DIRECTORY = `${SCHEMA_DIRECTORY}/released`;
+const SNAPSHOT_RECORD = "release.json";
+const SCHEMA_SUFFIX = ".schema.json";
+const PROTOCOL_GUARD_TEST = "protocol::compatibility::the_schema_only_grows_since_the_last_release";
 // A release is only made when the daemon's holder floor (`FLOOR`) names the previous stable release, or the initial
 // value while there is none.
 const INITIAL_HOLDER_FLOOR = "0.0.0";
@@ -35,6 +42,23 @@ export function versionFiles(root, version) {
     files["Cargo.lock"] = files["Cargo.lock"].replace(record, (_all, before, _old, after) => `${before}${version}${after}`);
   }
   return { current, files };
+}
+
+// Refreshes the snapshot of the protocol schema to what `version` carries: the current schema files, and a record of
+// the version and of the protocol generation they state.
+export function refreshProtocolSnapshot(root, version) {
+  const directory = path.join(root, SCHEMA_DIRECTORY);
+  const names = readdirSync(directory, { withFileTypes: true }).filter((entry) => entry.isFile() && entry.name.endsWith(SCHEMA_SUFFIX)).map((entry) => entry.name).sort();
+  if (names.length === 0) throw new Error(`${SCHEMA_DIRECTORY} holds no ${SCHEMA_SUFFIX} files to snapshot.`);
+  const texts = names.map((name) => readFileSync(path.join(directory, name), "utf8"));
+  const generations = new Set(texts.map((text) => JSON.parse(text)["x-octoboard-protocol"]?.generation));
+  const [generation] = generations;
+  if (generations.size !== 1 || !Number.isInteger(generation)) throw new Error(`The schema files in ${SCHEMA_DIRECTORY} do not state one protocol generation.`);
+  const snapshot = path.join(root, SNAPSHOT_DIRECTORY);
+  mkdirSync(snapshot, { recursive: true });
+  for (const entry of readdirSync(snapshot)) if (entry.endsWith(SCHEMA_SUFFIX)) rmSync(path.join(snapshot, entry));
+  names.forEach((name, index) => writeFileSync(path.join(snapshot, name), texts[index]));
+  writeFileSync(path.join(snapshot, SNAPSHOT_RECORD), `${JSON.stringify({ version, generation }, null, 2)}\n`);
 }
 
 // The versions of the stable releases already tagged, locally or on origin.
@@ -137,9 +161,20 @@ export function releaseDesktop({ root, version, notes, platforms = parsePlatform
     for (const [file, text] of Object.entries(files)) writeFileSync(path.join(worktree, file), text);
     command(worktree, "cargo", ["metadata", "--locked", "--format-version", "1"], { stdio: ["ignore", "pipe", "inherit"] });
     command(worktree, "pnpm", ["install", "--frozen-lockfile"]);
-    command(worktree, "git", ["add", "--", ...VERSION_FILES]);
-    if (gitChecked(worktree, "diff", "--cached", "--name-only").split("\n").sort().join("\n") !== [...VERSION_FILES].sort().join("\n")) {
-      throw new Error("The staged files differ from the three version files. Inspect the release worktree.");
+    // The guard runs against the snapshot of the previous release first: once the snapshot is refreshed it compares the
+    // schema with itself, so the commits main carries since the last release are only checked here.
+    const guard = command(worktree, "node", ["scripts/cargo.mjs", "test", "--bin", "octoboardd", "--", "--exact", PROTOCOL_GUARD_TEST], { stdio: ["ignore", "pipe", "inherit"] });
+    log(guard);
+    // Cargo succeeds when a filter matches no test, so a renamed guard would otherwise pass silently.
+    const passed = [...(guard ?? "").matchAll(/^test result: ok\. (\d+) passed/gm)].reduce((sum, match) => sum + Number(match[1]), 0);
+    if (passed !== 1) throw new Error(`${PROTOCOL_GUARD_TEST} did not run exactly once (${passed} tests passed): the daemon test was renamed or moved, so the protocol compatibility guard did not check the release.`);
+    refreshProtocolSnapshot(worktree, version);
+    command(worktree, "git", ["add", "--all", "--", ...VERSION_FILES, SNAPSHOT_DIRECTORY]);
+    // The version files, and nothing but the snapshot besides them: it is staged whole, so a file it did not change is
+    // not listed.
+    const staged = gitChecked(worktree, "diff", "--cached", "--name-only").split("\n");
+    if (!VERSION_FILES.every((file) => staged.includes(file)) || !staged.every((file) => VERSION_FILES.includes(file) || file.startsWith(`${SNAPSHOT_DIRECTORY}/`))) {
+      throw new Error("The staged files differ from the three version files and the protocol snapshot. Inspect the release worktree.");
     }
     command(worktree, "git", ["commit", "-m", `chore(desktop): release ${version}`]);
     command(worktree, "git", ["rebase", "main"]);

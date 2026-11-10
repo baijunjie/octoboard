@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// Client-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY input
 /// and never reach this type.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TermControl {
@@ -49,7 +49,7 @@ pub enum TermControl {
 }
 
 /// Daemon-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY output.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TermEvent {

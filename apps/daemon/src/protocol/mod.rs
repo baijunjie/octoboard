@@ -54,3 +54,9 @@ pub use version::{DAEMON_VERSION, GENERATION};
 
 #[cfg(test)]
 mod bindings;
+#[cfg(test)]
+mod compatibility;
+#[cfg(test)]
+mod crosscheck;
+#[cfg(test)]
+mod schema;

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { gitChecked, runResult } from "../../../scripts/lib/git.mjs";
-import { holderFloorProblem, parseOptions, releaseDesktop, versionFiles } from "./release-desktop.mjs";
+import { holderFloorProblem, parseOptions, refreshProtocolSnapshot, releaseDesktop, versionFiles } from "./release-desktop.mjs";
 import { readTagMessage } from "./release-manifest.mjs";
 
 import { assertRepositoryEnvironmentCleared } from "../../../scripts/verify/environment.mjs";
@@ -27,6 +27,10 @@ function fixture(t) {
   writeFileSync(path.join(root, "Cargo.lock"), '# Lockfile\nversion = 4\n\n[[package]]\nname = "octoboard"\nversion = "0.1.0-beta.1"\n\n[[package]]\nname = "octoboardd"\nversion = "0.1.0-beta.1"\n\n[[package]]\nname = "external"\nversion = "0.1.0-beta.1"\n');
   mkdirSync(path.join(root, "apps/daemon/src/holder"), { recursive: true });
   writeFileSync(path.join(root, "apps/daemon/src/holder/compat.rs"), 'pub const FLOOR: &str = "0.0.0";\n');
+  // The protocol schema of generation 3, and the snapshot of the last release, which carried generation 2 and no schema.
+  mkdirSync(path.join(root, "contracts/protocol/released"), { recursive: true });
+  for (const name of ["control-input", "terminal-output"]) writeFileSync(path.join(root, `contracts/protocol/${name}.schema.json`), `${JSON.stringify({ "x-octoboard-protocol": { generation: 3 }, name })}\n`);
+  writeFileSync(path.join(root, "contracts/protocol/released/release.json"), '{\n  "version": "0.1.0-beta.1",\n  "generation": 2\n}\n');
   git("add", ".");
   git("commit", "-qm", "base");
   git("init", "--bare", "-q", "-b", "main", remote);
@@ -36,6 +40,7 @@ function fixture(t) {
   const calls = [];
   const options = { root, version: "0.1.0-beta.2", notes: "## Fixes\n\n- Keep # headings.\n", log: () => {}, toolchainProblems: () => [], run: (name, args, config) => {
     calls.push({ name, args, cwd: config.cwd });
+    if (name === "node" && args.includes("--exact")) return { status: 0, stdout: "test result: ok. 0 passed; 0 failed\ntest result: ok. 1 passed; 0 failed\n" };
     if (name !== "git") return { status: 0 };
     return runResult(name, args, { ...config, stdio: ["pipe", "pipe", "pipe"] });
   } };
@@ -51,6 +56,56 @@ test("updates both version sources and only the workspace records in the lockfil
   assert.equal(files["Cargo.lock"].split("0.1.0-beta.2").length - 1, 2);
   assert.match(files["Cargo.lock"], /name = "external"\nversion = "0.1.0-beta.1"/);
   assert.match(readFileSync(path.join(root, "Cargo.toml"), "utf8"), /beta\.1/);
+});
+
+test("refreshes the protocol snapshot to the current schema files and their generation, dropping stale ones", (t) => {
+  const { root } = fixture(t);
+  const snapshot = path.join(root, "contracts/protocol/released");
+  writeFileSync(path.join(snapshot, "stale.schema.json"), "{}\n");
+  refreshProtocolSnapshot(root, "0.1.0-beta.2");
+  assert.deepEqual(readdirSync(snapshot).sort(), ["control-input.schema.json", "release.json", "terminal-output.schema.json"]);
+  assert.equal(readFileSync(path.join(snapshot, "control-input.schema.json"), "utf8"), readFileSync(path.join(root, "contracts/protocol/control-input.schema.json"), "utf8"));
+  assert.deepEqual(JSON.parse(readFileSync(path.join(snapshot, "release.json"), "utf8")), { version: "0.1.0-beta.2", generation: 3 });
+});
+
+test("refuses to snapshot schema files that state no single generation, or none", (t) => {
+  const { root } = fixture(t);
+  writeFileSync(path.join(root, "contracts/protocol/terminal-output.schema.json"), '{"x-octoboard-protocol":{"generation":4}}\n');
+  assert.throws(() => refreshProtocolSnapshot(root, "0.1.0-beta.2"), /one protocol generation/);
+  rmSync(path.join(root, "contracts/protocol/control-input.schema.json"));
+  rmSync(path.join(root, "contracts/protocol/terminal-output.schema.json"));
+  assert.throws(() => refreshProtocolSnapshot(root, "0.1.0-beta.2"), /no \.schema\.json files/);
+});
+
+test("snapshots only the schema files directly in the schema directory, creating the snapshot directory when it is absent", (t) => {
+  const { root } = fixture(t);
+  const directory = path.join(root, "contracts/protocol");
+  rmSync(path.join(directory, "released"), { recursive: true });
+  writeFileSync(path.join(directory, "notes.json"), "{}\n");
+  mkdirSync(path.join(directory, "nested.schema.json"));
+  mkdirSync(path.join(directory, "sub"));
+  writeFileSync(path.join(directory, "sub/inner.schema.json"), '{"x-octoboard-protocol":{"generation":9}}\n');
+  refreshProtocolSnapshot(root, "0.1.0-beta.2");
+  assert.deepEqual(readdirSync(path.join(directory, "released")).sort(), ["control-input.schema.json", "release.json", "terminal-output.schema.json"]);
+  assert.deepEqual(JSON.parse(readFileSync(path.join(directory, "released/release.json"), "utf8")), { version: "0.1.0-beta.2", generation: 3 });
+});
+
+test("refuses a schema file that states no generation, and leaves the snapshot as it was", (t) => {
+  const { root } = fixture(t);
+  const snapshot = path.join(root, "contracts/protocol/released");
+  const record = readFileSync(path.join(snapshot, "release.json"), "utf8");
+  writeFileSync(path.join(root, "contracts/protocol/terminal-output.schema.json"), '{"name":"terminal-output"}\n');
+  assert.throws(() => refreshProtocolSnapshot(root, "0.1.0-beta.2"), /one protocol generation/);
+  assert.deepEqual(readdirSync(snapshot), ["release.json"]);
+  assert.equal(readFileSync(path.join(snapshot, "release.json"), "utf8"), record);
+});
+
+test("writes the record as readable JSON ending in a line break", (t) => {
+  const { root } = fixture(t);
+  refreshProtocolSnapshot(root, "0.1.0-beta.2");
+  const text = readFileSync(path.join(root, "contracts/protocol/released/release.json"), "utf8");
+  assert.ok(text.endsWith("}\n"));
+  assert.deepEqual(JSON.parse(text), { version: "0.1.0-beta.2", generation: 3 });
 });
 
 test("rejects nonincreasing, invalid and metadata-only versions before writing", (t) => {
@@ -99,6 +154,11 @@ test("publishes one version commit and an annotated tag atomically, keeping hook
   releaseDesktop(options);
   const releaseTag = "desktop-v0.1.0-beta.2";
   assert.equal(git("rev-list", "--count", "HEAD"), "2");
+  // The one version commit carries the refreshed protocol snapshot with the version files.
+  assert.deepEqual(git("show", "--name-only", "--format=", "HEAD").split("\n").sort(), [
+    "Cargo.lock", "Cargo.toml", "apps/desktop/package.json", "contracts/protocol/released/control-input.schema.json", "contracts/protocol/released/release.json", "contracts/protocol/released/terminal-output.schema.json",
+  ]);
+  assert.deepEqual(JSON.parse(git("show", "HEAD:contracts/protocol/released/release.json")), { version: options.version, generation: 3 });
   assert.equal(git("cat-file", "-t", releaseTag), "tag");
   assert.equal(git("tag", "-l", "--format=%(contents)", releaseTag), options.notes.trim());
   assert.equal(git("--git-dir", remote, "rev-parse", "main"), git("rev-parse", "HEAD"));
@@ -172,6 +232,80 @@ test("dirty worktrees and existing local or remote tags are refused without crea
   assert.deepEqual(calls, []);
 });
 
+const isGuard = (name, args) => name === "node" && args.includes("--bin") && args.at(-1).startsWith("protocol::compatibility::");
+
+test("the protocol guard runs against the previous release's snapshot, before it is refreshed", (t) => {
+  const { root, options } = fixture(t);
+  const worktree = path.join(root, ".worktrees/desktop-v0.1.0-beta.2");
+  let seen;
+  const run = options.run;
+  releaseDesktop({ ...options, run: (name, args, config) => {
+    if (isGuard(name, args)) {
+      assert.equal(config.cwd, worktree);
+      seen = JSON.parse(readFileSync(path.join(worktree, "contracts/protocol/released/release.json"), "utf8"));
+    }
+    return run(name, args, config);
+  } });
+  assert.deepEqual(seen, { version: "0.1.0-beta.1", generation: 2 });
+});
+
+test("a protocol break fails before the version commit is made, leaving the snapshot as it was", (t) => {
+  const { root, remote, git, options } = fixture(t);
+  const before = git("rev-parse", "HEAD");
+  const run = options.run;
+  assert.throws(() => releaseDesktop({ ...options, run: (name, args, config) => (isGuard(name, args) ? { status: 1 } : run(name, args, config)) }), /node scripts\/cargo\.mjs failed/);
+  const worktree = path.join(root, ".worktrees/desktop-v0.1.0-beta.2");
+  assert.equal(gitChecked(worktree, "rev-parse", "HEAD"), before);
+  assert.deepEqual(JSON.parse(readFileSync(path.join(worktree, "contracts/protocol/released/release.json"), "utf8")), { version: "0.1.0-beta.1", generation: 2 });
+  assert.equal(git("rev-parse", "HEAD"), before);
+  assert.equal(git("--git-dir", remote, "rev-parse", "main"), before);
+  assert.equal(git("tag", "--list", "desktop-v0.1.0-beta.2"), "");
+});
+
+test("a guard that matches no test fails the release before the version commit", (t) => {
+  const { root, git, options } = fixture(t);
+  const before = git("rev-parse", "HEAD");
+  const run = options.run;
+  assert.throws(() => releaseDesktop({ ...options, run: (name, args, config) => (isGuard(name, args) ? { status: 0, stdout: "test result: ok. 0 passed; 0 failed\n" } : run(name, args, config)) }), /did not run exactly once \(0 tests passed\)/);
+  assert.equal(gitChecked(path.join(root, ".worktrees/desktop-v0.1.0-beta.2"), "rev-parse", "HEAD"), before);
+  assert.equal(git("tag", "--list", "desktop-v0.1.0-beta.2"), "");
+});
+
+test("a guard run that reports more than one passed test fails the release before the version commit", (t) => {
+  const { root, git, options } = fixture(t);
+  const before = git("rev-parse", "HEAD");
+  const run = options.run;
+  assert.throws(() => releaseDesktop({ ...options, run: (name, args, config) => (isGuard(name, args) ? { status: 0, stdout: "test result: ok. 2 passed; 0 failed\n" } : run(name, args, config)) }), /did not run exactly once \(2 tests passed\)/);
+  assert.equal(gitChecked(path.join(root, ".worktrees/desktop-v0.1.0-beta.2"), "rev-parse", "HEAD"), before);
+  assert.equal(git("tag", "--list", "desktop-v0.1.0-beta.2"), "");
+});
+
+test("a guard run that reports nothing at all fails the release", (t) => {
+  const { options } = fixture(t);
+  const run = options.run;
+  assert.throws(() => releaseDesktop({ ...options, run: (name, args, config) => (isGuard(name, args) ? { status: 0 } : run(name, args, config)) }), /did not run exactly once \(0 tests passed\)/);
+});
+
+test("the guard runs the one test by its exact name", (t) => {
+  const { options } = fixture(t);
+  let guard;
+  const run = options.run;
+  releaseDesktop({ ...options, run: (name, args, config) => {
+    if (isGuard(name, args)) guard = args;
+    return run(name, args, config);
+  } });
+  assert.ok(guard.includes("--exact"), guard.join(" "));
+  assert.equal(guard.at(-1), "protocol::compatibility::the_schema_only_grows_since_the_last_release");
+});
+
+test("the guard test the release names exists at its module path in the daemon", () => {
+  const [, modulePath] = /PROTOCOL_GUARD_TEST = "protocol::([^"]+)"/.exec(readFileSync(new URL("./release-desktop.mjs", import.meta.url), "utf8"));
+  const [module, name] = modulePath.split("::");
+  const directory = new URL(`../../daemon/src/protocol/${module}/`, import.meta.url);
+  const source = readFileSync(new URL("mod.rs", directory), "utf8");
+  assert.match(source, new RegExp(String.raw`#\[test\]\s*fn ${name}\(`));
+});
+
 test("a failed quick check retains the release branch and leaves main and the remote unchanged", (t) => {
   const { root, remote, git, options } = fixture(t);
   const before = git("rev-parse", "HEAD");
@@ -236,6 +370,32 @@ test("a remote tag refusal leaves both remote refs unchanged because the push is
   assert.equal(git("--git-dir", remote, "rev-parse", "main"), before);
   assert.equal(git("--git-dir", remote, "tag", "--list"), "");
   assert.equal(git("cat-file", "-t", "desktop-v0.1.0-beta.2"), "tag");
+});
+
+test("the release commit drops a stale snapshot file along with the version files", (t) => {
+  const { root, git, options } = fixture(t);
+  writeFileSync(path.join(root, "contracts/protocol/released/stale.schema.json"), "{}\n");
+  git("add", ".");
+  git("commit", "-qm", "stale snapshot file");
+  releaseDesktop(options);
+  assert.equal(gitChecked(root, "ls-tree", "--name-only", "HEAD", "contracts/protocol/released/").split("\n").sort().join(","), [
+    "contracts/protocol/released/control-input.schema.json", "contracts/protocol/released/release.json", "contracts/protocol/released/terminal-output.schema.json",
+  ].join(","));
+});
+
+test("a file staged beyond the version files and the snapshot refuses the release commit", (t) => {
+  const { git, options } = fixture(t);
+  const run = options.run;
+  const before = git("rev-parse", "HEAD");
+  assert.throws(() => releaseDesktop({ ...options, run: (name, args, config) => {
+    const result = run(name, args, config);
+    if (name === "pnpm" && args[0] === "install") {
+      writeFileSync(path.join(config.cwd, "stray.txt"), "not part of a release");
+      gitChecked(config.cwd, "add", "stray.txt");
+    }
+    return result;
+  } }), /staged files differ/);
+  assert.equal(git("rev-parse", "HEAD"), before);
 });
 
 test("a concurrent main commit during verification prevents tagging and pushing", (t) => {

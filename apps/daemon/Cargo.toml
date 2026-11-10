@@ -111,3 +111,8 @@ tokio = { version = "1", features = ["full", "test-util"] }
 # Renders the wire types as TypeScript for the contract test (`protocol::bindings`); test builds
 # only, so the release binary carries nothing of it.
 ts-rs = { version = "12.0.1", default-features = false, features = ["serde-compat", "serde-json-impl", "no-serde-warnings"] }
+
+# Renders the wire types as JSON Schema for the schema contract test (`protocol::schema`), the
+# language-neutral description in `contracts/protocol/`; test builds only, like `ts-rs`. The version
+# the lockfile already resolves for other dependencies.
+schemars = "=1.2.2"

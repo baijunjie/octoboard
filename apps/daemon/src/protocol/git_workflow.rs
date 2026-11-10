@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::fields::present_option;
 
 /// How finished work leaves its branch.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GitDelivery {
@@ -20,7 +20,7 @@ pub enum GitDelivery {
 }
 
 /// Where a project session is asked to develop.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GitDevelopment {
@@ -42,7 +42,7 @@ pub const GIT_WORKFLOW_ITEMS: [&str; 5] = [
 ];
 
 /// The values the git workflow settings take, application-wide or resolved for a project.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GitWorkflowSettings {
     pub development: GitDevelopment,
@@ -74,18 +74,23 @@ impl Default for GitWorkflowSettings {
 }
 
 /// A project's own choices; an item left `None` follows the application-wide value.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GitWorkflowOverride {
+    #[cfg_attr(test, schemars(transform = super::schema::nullable))]
     pub development: Option<GitDevelopment>,
+    #[cfg_attr(test, schemars(transform = super::schema::nullable))]
     pub squash_before_delivery: Option<bool>,
+    #[cfg_attr(test, schemars(transform = super::schema::nullable))]
     pub rebase_before_delivery: Option<bool>,
+    #[cfg_attr(test, schemars(transform = super::schema::nullable))]
     pub delivery: Option<GitDelivery>,
+    #[cfg_attr(test, schemars(transform = super::schema::nullable))]
     pub revert_gate: Option<bool>,
 }
 
 /// A change to the application-wide values: an item left `None` is left alone.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 pub struct GitWorkflowSettingsChanges {
     #[serde(default)]
@@ -120,23 +125,23 @@ impl From<GitWorkflowSettings> for GitWorkflowSettingsChanges {
 
 /// A change to a project's override. Per item, absent leaves it alone, an explicit `null` goes
 /// back to following the application-wide value, and a value sets the project's own.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 pub struct GitWorkflowOverrideChanges {
     #[serde(default, deserialize_with = "present_option")]
-    #[cfg_attr(test, ts(optional))]
+    #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
     pub development: Option<Option<GitDevelopment>>,
     #[serde(default, deserialize_with = "present_option")]
-    #[cfg_attr(test, ts(optional))]
+    #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
     pub squash_before_delivery: Option<Option<bool>>,
     #[serde(default, deserialize_with = "present_option")]
-    #[cfg_attr(test, ts(optional))]
+    #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
     pub rebase_before_delivery: Option<Option<bool>>,
     #[serde(default, deserialize_with = "present_option")]
-    #[cfg_attr(test, ts(optional))]
+    #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
     pub delivery: Option<Option<GitDelivery>>,
     #[serde(default, deserialize_with = "present_option")]
-    #[cfg_attr(test, ts(optional))]
+    #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
     pub revert_gate: Option<Option<bool>>,
 }
 

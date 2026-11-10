@@ -4,7 +4,7 @@ use serde::Serialize;
 
 /// A group of one launch's processes as the user sees it: a top process — one whose parent is not
 /// the same launch's — and its descendants of that launch.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProcessTree {
     /// The top process, as `<pid>:<start>`: what a stop or a keep names the tree by.
@@ -36,7 +36,7 @@ pub struct ProcessTree {
 }
 
 /// Why a tree cannot be kept.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UnkeepableReason {
@@ -48,7 +48,7 @@ pub enum UnkeepableReason {
 /// How many trees there are under one project, or for one console session, in the count of
 /// every project's and console session's trees. It names a project or a console session, never
 /// both.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProcessCount {
     /// The project the trees are listed under; absent for a console session.
@@ -64,7 +64,7 @@ pub struct ProcessCount {
 }
 
 /// A process a `stop_processes` left running: still running once the stop was through with it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UnstoppedProcess {
     /// The tree the process was stopped with, as the request named it.
@@ -76,7 +76,7 @@ pub struct UnstoppedProcess {
 }
 
 /// Why a process is still running after a stop.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UnstoppedReason {

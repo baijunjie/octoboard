@@ -6,7 +6,7 @@ use crate::platform::names::PathStyle;
 use crate::platform::{HostFacts, HostOs, SettingsName, TrashName};
 
 /// The operating system of the daemon's host.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostOsName {
@@ -16,7 +16,7 @@ pub enum HostOsName {
 }
 
 /// How the daemon's host writes an absolute path.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostPathStyle {
@@ -25,7 +25,7 @@ pub enum HostPathStyle {
 }
 
 /// How the daemon's host names the place a move to the Trash puts things.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostTrashName {
@@ -35,7 +35,7 @@ pub enum HostTrashName {
 
 /// What the daemon's host calls the app its system settings are changed in, for wording a remedy
 /// that has the user change one there.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostSettingsName {
@@ -45,7 +45,7 @@ pub enum HostSettingsName {
 
 /// The daemon host's own facts, which a client takes from the host and never from its own
 /// platform, since the two may be different machines.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct HostInfo {
     pub os: HostOsName,

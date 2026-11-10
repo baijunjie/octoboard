@@ -36,7 +36,7 @@ use super::records::{
 use super::session_branches::SessionBranchItem;
 use super::settings::Settings;
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
@@ -337,10 +337,10 @@ pub enum Event {
         /// For `handoff`: the model and effort the call asked for, as `Session::model` states an
         /// override: absent when the call left it out, null for the agent's own default.
         #[serde(skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         model: Option<Option<String>>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(optional), schemars(transform = super::schema::nullable))]
         effort: Option<Option<String>>,
         /// For `handoff`: the compatibility switches the call asked the receiving session to hold,
         /// by setting id; empty for every other request and where it asked for none.
@@ -467,6 +467,7 @@ pub enum Event {
         import_id: String,
         item: ImportItem,
         #[serde(flatten)]
+        #[cfg_attr(test, schemars(with = "super::schema::Flattened<ImportItemState>"))]
         state: ImportItemState,
     },
     /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole
@@ -735,7 +736,7 @@ impl Notice {
 }
 
 /// What approving a `session_request` does.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionRequestAction {
@@ -756,7 +757,7 @@ pub enum SessionRequestAction {
 }
 
 /// Why a `session_request` stopped waiting.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionRequestEnding {

@@ -74,6 +74,8 @@ refused until the rule is widened (`host_allowed` in `apps/daemon/src/request_gu
 ## What every client implements
 
 The conventions a client has to follow whatever it does, each in a few lines; the details stay in the sections linked.
+Each request's, event's and record's fields, with their types and meaning, are in the schema in `contracts/protocol/`
+(see "Versions and compatibility").
 
 ### Framing and the envelope
 
@@ -92,8 +94,9 @@ other event without an `id` is a broadcast and goes to every connected client, w
 ### Absent, null and given
 
 - An update field is tri-state: a key left out leaves the value alone, `null` clears it, a value sets it. In the
-  generated TypeScript such a field reads `?: T | null`. A client generator for another language has to tell a missing
-  key from `null` (Swift's `Codable`, for one, does not by default).
+  generated TypeScript such a field reads `?: T | null`, and in the schema it is left out of `required` and allows
+  `null`. A client generator for another language has to tell a missing key from `null` (Swift's `Codable`, for one,
+  does not by default).
 - In a create, an absent field takes the default. An absent boolean is false.
 - Instants are milliseconds since the epoch.
 
@@ -156,11 +159,29 @@ Within one generation the protocol only grows, and each side tolerates what it d
   `generation` closes the socket, does not reconnect, and tells the user both versions. A `snapshot` arriving with no
   hello before it comes from a daemon older than the hello and is treated as a mismatch.
 
-The generation is `GENERATION` in `apps/daemon/src/protocol/version.rs`. The TypeScript bindings,
-`packages/ui/src/protocol.generated.ts`, are rendered from the wire types with
-`OCTOBOARD_WRITE_BINDINGS=1 cargo test -p octoboardd bindings`, which also writes the generation as
-`PROTOCOL_GENERATION`, so a client built from them cannot drift from the daemon's number; without the variable the
-test fails when the committed file is out of date.
+The generation is `GENERATION` in `apps/daemon/src/protocol/version.rs`. A daemon test, the compatibility guard, holds
+the current schema to the last release's: against the snapshot in `contracts/protocol/released/` (a `release.json`
+naming the release and its generation, and that release's schema files once it carried them) a change may only add,
+until `GENERATION` is raised. Inputs may only accept more and outputs only give more; the guard does not compare output
+enum values, which may grow within a generation. `release:version` refreshes the snapshot in its version commit. Two
+descriptions are rendered from the wire types and committed, each by a daemon test that fails when the committed files
+are out of date and, run with `OCTOBOARD_WRITE_BINDINGS=1`, rewrites them instead:
+
+- **The JSON Schema** (draft 2020-12) in `contracts/protocol/`, the language-neutral description a client in another
+  language is generated from: `OCTOBOARD_WRITE_BINDINGS=1 cargo test -p octoboardd protocol::schema`. Each file is
+  one channel and direction (`control-input`, `control-output`, `terminal-input`, `terminal-output`) and is the schema
+  of one text frame on it, with every named type a `$defs` entry and each field's meaning in its `description`; its
+  `x-octoboard-protocol` states the generation, the channel and the direction. A request is described as the daemon
+  reads it and an event as the daemon writes it, so a type both sides send can differ between the files. A property
+  that may be left out allows `null` only where the protocol lets a client send one, whether as a value of its own,
+  as in a tri-state update field, or as the same as leaving the key out, or where the daemon writes one; a code is a
+  plain string. A property is often a `$ref` with sibling keywords (a description, a narrowing `enum`), which apply
+  together with the reference, as from draft 2019-09 on. This document keeps the rules that hold across requests and
+  events and the behaviour behind them; the schema has each field's type, and a daemon test holds the schema and the
+  TypeScript bindings below to the same optional and nullable fields.
+- **The TypeScript bindings**, `packages/ui/src/protocol.generated.ts`:
+  `OCTOBOARD_WRITE_BINDINGS=1 cargo test -p octoboardd bindings`, which also writes the generation as
+  `PROTOCOL_GENERATION`, so a client built from them cannot drift from the daemon's number.
 
 ### The MCP contract
 

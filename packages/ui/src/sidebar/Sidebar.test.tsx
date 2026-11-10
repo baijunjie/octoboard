@@ -401,7 +401,7 @@ it("updates a session's visible and accessible name as the daemon title changes"
   const changed = `${isolate("Compare layouts")}｜${isolate(session.title)}`;
   expect(row().textContent).toContain(changed);
   expect(row().getAttribute("aria-label")).toContain(isolate(changed));
-  render({ sessions: [hub1, { ...session, terminal_title: null }] });
+  render({ sessions: [hub1, { ...session, terminal_title: undefined }] });
   expect(row().textContent).toContain(session.title);
   expect(row().textContent).not.toContain("｜");
 });

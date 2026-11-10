@@ -44,7 +44,12 @@ pub const PROVIDER_COUNT: usize = REGISTRY.len();
 /// as text, leaving them out of what it loads.
 ///
 /// Serialized as the id string, and generated for the clients as `Agent`, a plain `string`.
-#[cfg_attr(test, derive(ts_rs::TS), ts(rename = "Agent"))]
+#[cfg_attr(
+    test,
+    derive(ts_rs::TS, schemars::JsonSchema),
+    ts(rename = "Agent"),
+    schemars(rename = "Agent")
+)]
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AgentId(&'static str);
 
@@ -288,7 +293,7 @@ pub(crate) fn settings_where<V>(
 
 /// One setting of a provider, declared by its descriptor. The values the user chose are kept
 /// per provider and setting id, never as a field of their own.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct SettingDescriptor {
     /// Unique within its provider; snake_case.
@@ -307,7 +312,7 @@ pub struct SettingDescriptor {
 }
 
 /// What values a setting takes.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SettingKind {
@@ -318,7 +323,7 @@ pub enum SettingKind {
 }
 
 /// One choice of a [`SettingKind::Choice`] setting.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct SettingChoice {
     pub value: &'static str,
@@ -328,7 +333,7 @@ pub struct SettingChoice {
 }
 
 /// What a switch is while the user has made no choice for it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SwitchDefault {
@@ -337,7 +342,7 @@ pub enum SwitchDefault {
 }
 
 /// The value of a provider setting: a switch's on or off, or the chosen choice.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SettingValue {
@@ -433,7 +438,7 @@ pub struct DetectionMarkers {
 
 /// What a provider can do that not every provider can, declared so that code and the UI branch
 /// on it rather than on which provider it is.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct Capabilities {
     /// Accepts an id for a new conversation, so Octoboard's session id can be the agent's;
@@ -456,7 +461,7 @@ pub struct Capabilities {
 }
 
 /// How writing a message into the provider's session differs from the plain case.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct DeliveryQuirks {
     /// A write is confirmed only by the agent's report of the prompt it sent, and is marked unsent
@@ -471,7 +476,7 @@ pub struct DeliveryQuirks {
 
 /// The kind of a quota window. Not every provider has every kind: Claude Code has `session`,
 /// `weekly` and `weekly_model`, Codex `session` and `weekly`, Grok Build `credit_period`.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QuotaWindowKind {
@@ -498,7 +503,7 @@ impl QuotaWindowKind {
 }
 
 /// What a provider's own interface calls the five-hour window.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionWindowName {
@@ -519,7 +524,7 @@ impl SessionWindowName {
 }
 
 /// How the provider's own interface names its quota windows, which Octoboard's wording follows.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct QuotaWindowNaming {
     /// The kinds of window the provider reports at all.
@@ -531,7 +536,7 @@ pub struct QuotaWindowNaming {
 }
 
 /// How a model id of the provider is shown.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct ModelDisplay {
     /// Whether an id of the form `<prefix><family>-<major>-<minor>[-<patch>...][-<date>]` reads as

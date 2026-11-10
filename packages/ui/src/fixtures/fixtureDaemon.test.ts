@@ -2535,6 +2535,13 @@ describe("the fixture daemon's git workflow settings", () => {
     const added = [...daemon.store.getState().projects.values()].find((project) => project.path === "/Users/dev/code/new");
     expect(added?.git_workflow).toEqual({ ...FOLLOWING_GIT_WORKFLOW, development: "in_place" });
   });
+
+  it("lets an added project follow every application-wide value when the request's git workflow is null", async () => {
+    const daemon = daemonWith();
+    await daemon.request({ type: "add_project", console_id: console_.id, source: "local", path: "/Users/dev/code/new", git_workflow: null });
+    const added = [...daemon.store.getState().projects.values()].find((project) => project.path === "/Users/dev/code/new");
+    expect(added?.git_workflow).toEqual(FOLLOWING_GIT_WORKFLOW);
+  });
 });
 
 describe("the fixture daemon's process ledger", () => {

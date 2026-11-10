@@ -3,7 +3,7 @@
 use serde::Serialize;
 
 /// What a path asked about in `probe_path_links` names.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PathLinkKind {
@@ -12,7 +12,7 @@ pub enum PathLinkKind {
     None,
 }
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize)]
 pub struct PathLink {
     /// The path as asked.
@@ -35,7 +35,7 @@ pub struct PathLink {
 
 /// A file in the project, as `read_project_file` names it: the file a path link names, or the one
 /// a directory link shows.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PathLinkView {
     /// The worktree it is in; absent for the project's own directory.

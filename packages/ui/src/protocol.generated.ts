@@ -422,11 +422,11 @@ export type BackgroundTask = {
   /**
    * The agent's name for the kind of task (`type` in its payload), absent when it gave none.
    */
-  type?: string | null,
+  type?: string,
   /**
    * What the task is, as the agent describes it, absent when it gave none.
    */
-  description?: string | null,
+  description?: string,
 };
 
 /**
@@ -789,7 +789,7 @@ export type ConfigurationDocument = {
    * The account structure. Present exactly when the export included it; a reader that does not
    * know the field ignores it.
    */
-  accounts?: DocumentAccounts | null,
+  accounts?: DocumentAccounts,
   /**
    * The consoles exported, which may be none.
    */
@@ -1006,7 +1006,7 @@ export type DocumentAccounts = {
    * yet decided the list (it was still finding out which agents are installed), which on import
    * adds none.
    */
-  added_agents?: Array<Agent> | null,
+  added_agents?: Array<Agent>,
   /**
    * One entry for each agent that has an account of its own, a named default account or a
    * turned-off default account, in `AgentId::ALL` order.
@@ -1213,7 +1213,7 @@ export type DocumentSettings = {
    * The default clone directory as `~/<relative path>` under the exporting machine's home
    * directory (also `~` for the home directory itself), otherwise the absolute path, whatever
    * the export's paths choice. An import applies it only when the user asks to, and it must be
-   * usable here (absolute, or starting with `~/`). `null` in a document upgraded from version
+   * usable here (absolute, or starting with `~/`). Absent in a document upgraded from version
    * 1, which did not carry it: importing it leaves this machine's as it is.
    */
   default_clone_dir?: string,
@@ -3031,8 +3031,8 @@ export type Request = {
    * or a field left out, or blank, means the agent's own default.
    */
   launch?: Partial<PerAgent<{
-    model?: string,
-    effort?: string,
+    model?: string | null,
+    effort?: string | null,
     compatibility?: {
       [key in string]: boolean
     }
@@ -3042,8 +3042,8 @@ export type Request = {
    * project and session name none, with the same rule as `launch`.
    */
   project_session_launch?: Partial<PerAgent<{
-    model?: string,
-    effort?: string,
+    model?: string | null,
+    effort?: string | null,
     compatibility?: {
       [key in string]: boolean
     }
@@ -3121,8 +3121,8 @@ export type Request = {
    * field left out, or blank, means the agent's own default.
    */
   launch?: Partial<PerAgent<{
-    model?: string,
-    effort?: string,
+    model?: string | null,
+    effort?: string | null,
     compatibility?: {
       [key in string]: boolean
     }
@@ -3148,7 +3148,7 @@ export type Request = {
    * project it adds. A `development` that is none of `in_place`, `branch` or `worktree`, or
    * a `delivery` that is none of `ask`, `merge` or `pull_request`, is refused.
    */
-  git_workflow?: Partial<GitWorkflowOverride>,
+  git_workflow?: Partial<GitWorkflowOverride> | null,
 }
   | {
   "type": "update_project",
@@ -3884,8 +3884,8 @@ export type RequestBody = {
    * or a field left out, or blank, means the agent's own default.
    */
   launch?: Partial<PerAgent<{
-    model?: string,
-    effort?: string,
+    model?: string | null,
+    effort?: string | null,
     compatibility?: {
       [key in string]: boolean
     }
@@ -3895,8 +3895,8 @@ export type RequestBody = {
    * project and session name none, with the same rule as `launch`.
    */
   project_session_launch?: Partial<PerAgent<{
-    model?: string,
-    effort?: string,
+    model?: string | null,
+    effort?: string | null,
     compatibility?: {
       [key in string]: boolean
     }
@@ -3974,8 +3974,8 @@ export type RequestBody = {
    * field left out, or blank, means the agent's own default.
    */
   launch?: Partial<PerAgent<{
-    model?: string,
-    effort?: string,
+    model?: string | null,
+    effort?: string | null,
     compatibility?: {
       [key in string]: boolean
     }
@@ -4001,7 +4001,7 @@ export type RequestBody = {
    * project it adds. A `development` that is none of `in_place`, `branch` or `worktree`, or
    * a `delivery` that is none of `ask`, `merge` or `pull_request`, is refused.
    */
-  git_workflow?: Partial<GitWorkflowOverride>,
+  git_workflow?: Partial<GitWorkflowOverride> | null,
 }
 | {
   "type": "update_project",
@@ -4793,28 +4793,28 @@ export type Session = {
    * the agent sent it; the record a client receives carries the session's resolved title
    * instead, which may come from the agent's records and so be set while no terminal title is.
    */
-  terminal_title?: string | null,
+  terminal_title?: string,
   /**
    * The session's last known context size, retained after archiving. Absent until reported,
    * and again after a compaction until the next request.
    */
-  context?: SessionContext | null,
+  context?: SessionContext,
   /**
    * The model the agent's records show the session running with, as the agent spells it. Unlike
    * `model`, which is the launch override, this is what was observed; absent until reported.
    */
-  observed_model?: string | null,
+  observed_model?: string,
   /**
    * The reasoning effort the agent's records show the session running with.
    */
-  observed_effort?: string | null,
+  observed_effort?: string,
   /**
    * The reasoning effort the agent runs `observed_model` at by itself, where the records name
    * that model but no effort and the agent's catalogue gives it a default
    * (`crate::records::default_effort`). Never stored: it is filled in on the record a client
    * receives (`AppState::wire_session`), and absent otherwise.
    */
-  default_effort?: string | null,
+  default_effort?: string,
   status: SessionStatus,
   /**
    * The work the agent has left running in the background while the session is `Idle`: the
@@ -5036,12 +5036,12 @@ export type SessionContext = {
   /**
    * The context-window limit, present only once the agent has given one.
    */
-  window?: number | null,
+  window?: number,
   /**
    * The share of the window in use, in whole percent, by the agent's own formula. Present only
    * together with `window`.
    */
-  used_percent?: number | null,
+  used_percent?: number,
 };
 
 export type SessionKind = "console" | "project";

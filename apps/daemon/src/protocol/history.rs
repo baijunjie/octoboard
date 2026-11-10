@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use super::agents::AgentId;
 
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionRecordPresence {
@@ -15,7 +15,7 @@ pub enum SessionRecordPresence {
 }
 
 /// Who said a message in a session's history.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HistorySpeaker {
@@ -28,7 +28,7 @@ pub enum HistorySpeaker {
 }
 
 /// One message of a session's history, as `read_session_history` returns it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HistoryMessage {
     pub speaker: HistorySpeaker,
@@ -43,7 +43,7 @@ pub struct HistoryMessage {
 }
 
 /// Where a conversation is held, as `locate_conversation_to_resume` reports it.
-#[cfg_attr(test, derive(ts_rs::TS))]
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ConversationLocation {
