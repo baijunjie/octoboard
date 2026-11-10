@@ -9,6 +9,7 @@ import { ErrorAlerts } from "./shell/ErrorAlerts";
 import { errorAlerts } from "./components/alerts/errorAlerts";
 import { App } from "./App";
 import { stubWindow } from "./appTestSupport";
+import { PANE_INSET_MS } from "./layout/paneDockMotion";
 import { setProjectBrowserMode } from "./project-browser/browserPreferences";
 import { useProjectBrowserState } from "./project-browser/browserState";
 import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "./components/announce/StatusAnnouncer";
@@ -155,7 +156,7 @@ it.each([false, true])("has no toggle for the pane itself, only a panel's, which
   expect(toggle("Hide files panel")).not.toBeNull();
 });
 
-it("floats the hidden pane in while the pointer rests on a toggle, and docks it when the toggle is pressed", async () => {
+it("keeps a closed docked panel hidden on hover and opens it when its toggle is pressed", async () => {
   fakeTimers();
   document.documentElement.style.setProperty("--peek-gap", "8px");
   onTestFinished(() => {
@@ -173,9 +174,10 @@ it("floats the hidden pane in while the pointer rests on a toggle, and docks it 
     button.dispatchEvent(pointer("pointerover"));
     button.dispatchEvent(pointer("pointerenter"));
   });
-  expect(container.querySelector(`[data-browser="${project.id}"]`)).not.toBeNull();
-  expect(asidePane().classList.contains("fixed")).toBe(true);
+  await act(async () => { await vi.advanceTimersByTimeAsync(PANE_INSET_MS); });
+  expect(container.querySelector(`[data-browser="${project.id}"]`)).toBeNull();
   await press("Show files panel");
+  expect(container.querySelector(`[data-browser="${project.id}"]`)).not.toBeNull();
   expect(asidePane().classList.contains("fixed")).toBe(false);
   expect(toggle("Hide files panel")).not.toBeNull();
 });

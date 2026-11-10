@@ -19,8 +19,8 @@ in `docs/product/pane-docking.md`). At **768 px and below**, one panel floats at
 panel floats over the terminal" below).
 
 The panel toggles and each card's Close panel control decide which cards are open. With none open the pane takes no
-width, and hover can preview one card without opening it. A docked Report or Terminal panel can be maximized over
-the terminal's area (see "Maximizing a panel" below).
+width and stays hidden until a panel is opened. A docked Report or Terminal panel can be maximized over the
+terminal's area (see "Maximizing a panel" below).
 
 How wide the right pane is and how it is resized is in "Pane widths" and "Resizing the sidebar and the right pane"
 in `docs/product/pane-docking.md`.
@@ -56,8 +56,8 @@ size and weight, and icon buttons. Header heights and alignment are in "The wind
   `docs/product/report-panel.md`);
 - the kind's own icon buttons, at the trailing side;
 - in the Report and Terminal panels' headers, **Maximize panel**, or **Restore panel size** while it is maximized, there
-  whenever the panel is docked, alone or not, and not while the whole group floats, while it is a hover preview, or
-  while it floats alone at 768 px and below (see "Maximizing a panel" below); Files and Processes have neither;
+  whenever the panel is docked, alone or not, and not while the whole group floats or while it floats alone at
+  768 px and below (see "Maximizing a panel" below); Files and Processes have neither;
 - **Close panel** (see "Opening and closing panels" below).
 
 The title is at most 160 px wide; a longer one fades out, with its full text as its tooltip while it is cut (see
@@ -160,13 +160,12 @@ toggles while a console session does, and none while nothing owns it (see "The t
 - It tells assistive technology whether its panel is expanded: expanded while the panel is on screen.
 
 A panel counts as **on screen** while docked, maximized, in a revealed floating group, or floating alone at 768 px and
-below. Cards in a hidden floating group are not on screen. A single-card hover preview is not an open panel.
+below. Cards in a hidden floating group are not on screen.
 
 While docked, pressing a toggle:
 
-- **while its panel is not open** opens it, which docks the pane if no panel was open, a floating card included (see
-  "Floating a panel in" below); opening the Terminal panel this way also starts a shell when the project has none (see
-  "Starting a terminal" in `docs/product/terminal-panel.md`);
+- **while its panel is not open** opens it, which shows the docked pane if no panel was open; opening the Terminal
+  panel this way also starts a shell when the project has none (see "Starting a terminal" in `docs/product/terminal-panel.md`);
 - **while its panel is on screen** closes it, a maximized panel included, and closing the last panel hides the pane.
 
 While the whole group floats, pressing a panel toggle opens a closed card and reveals the group. **If the group is
@@ -191,8 +190,8 @@ mode (see `docs/product/focus-mode.md`). It holds **Terminal**, then **Files**, 
 toggle's icon; the Report panel is not offered there. The submenu's own icon, a window with a panel at its side, is
 mirrored under a right-to-left language (see "What is mirrored" in `docs/product/right-to-left-layout.md`).
 
-- **An entry is left out while its panel of that project is on screen** (see "The panel toggles in the top bar" above)
-  **or floating in** on hover (see "Floating a panel in" below), and offered otherwise — in particular whenever the
+- **An entry is left out while its panel of that project is on screen** (see "The panel toggles in the top bar" above),
+  and offered otherwise — in particular whenever the
   right pane belongs to another owner, or that panel is closed. With every entry left out, the submenu is left out.
 - **Choosing an entry** gives the right pane to the project (see "What the right pane shows" in
   `docs/product/window-layout.md`) and opens that panel in the project's stack, as pressing its toggle while the panel
@@ -211,25 +210,25 @@ Above **768 px**, the right pane has a group toggle before its individual panel 
 
 - **When the right group can dock**, the toggle switches between docking the whole group and floating it over the
   terminal. The choice is remembered per client and independently of which cards are open. Floating immediately reveals
-  the group; docking keeps the open cards and returns their width to the row. Its icon distinguishes docked and
+  any open cards; docking keeps the open cards and returns their width to the row. Its icon distinguishes docked and
   floating, and its label describes the action it will take.
 - **When the right group cannot dock**, it floats automatically. The group toggle only reveals it, including when
-  pressed repeatedly, and never changes the docking preference. Its label offers to show the panels.
+  pressed repeatedly, and never changes the docking preference. With no open cards it leaves the group hidden. Its
+  label offers to show the panels.
 - **Hover entry and dismissal** follow "A hidden pane floats in on hover" in `docs/product/pane-docking.md`: the group
-  icon and individual panel icons reveal immediately; the 48 px end-edge strip reveals after 200 ms. No hover entry
-  operates at 768 px and below or on a device whose primary input cannot hover.
+  icon and individual panel icons reveal the open floating group immediately; the 48 px end-edge strip reveals it
+  after 200 ms. Hovering a closed panel's icon reveals only the cards already open in that group. No hover entry
+  operates while the group is docked, at 768 px and below, or on a device whose primary input cannot hover.
 - **All open cards float together**, using their usual columns, gaps and height proportions, with no dimmed layer and no
   change to the agent terminal's size. Their contents stay alive while the group is hidden. The total-width handle,
   column-width handle and the height handles between stacked cards remain usable. A resize drag keeps the group visible,
   and the total-width handle follows the same viewport cap as the group. Floating cards offer no Maximize panel control;
   a remembered maximization is shown restored while the group floats and returns on docking.
-- **With no open cards**, hover previews the hovered panel, or an available panel from the group icon or edge. Moving
-  between panel icons changes that preview. With the group docked but its column empty or folded under a maximized
-  panel, an individual panel icon can still preview that panel over the terminal. Pressing its toggle opens it normally.
-  A preview has no Maximize panel control, and Close panel dismisses it. An empty docked column previews without a
-  total-width handle; a floating group keeps its total-width handle even while previewing one card.
-- **Closing the last open card** dismisses the floating group. It does not leave a preview behind or immediately reopen
-  one. Revealing one side hides the other floating side.
+- **With no open cards**, the group stays hidden. Hovering its group icon, a panel icon or the end-edge strip opens
+  nothing. In docked mode, including an empty column or one folded under a maximized panel, hover opens nothing either.
+  Pressing a panel's toggle opens that panel normally.
+- **Closing the last open card** dismisses the floating group. It stays hidden until a panel is opened explicitly.
+  Revealing one side hides the other floating side.
 
 ## At 768 px and below: one panel floats over the terminal
 
@@ -345,9 +344,8 @@ in its place, the archive view included — and nothing else:
   the window's end edge, and the pane's width handle goes with it. Opening or closing another panel meanwhile — its
   toggle, Open panel in a project's action menu — brings the docked pane back or folds it again, and leaves the
   maximized panel maximized.
-- **Floating another panel in**: with the docked pane folded away, resting the mouse on another panel's toggle floats
-  its card in over the maximized panel, as in "Floating a panel in" above; pressing the toggle docks it beside the
-  maximized card.
+- **Opening another panel**: with the docked pane folded away, pressing another panel's toggle opens it beside the
+  maximized card. Hovering the toggle leaves it closed.
 
 If keyboard focus was in the terminal's area when Maximize panel is pressed, it moves into the maximized panel first,
 where `F6` would land in it (see "Moving focus between regions with F6" in
@@ -389,9 +387,9 @@ pushes pages. With no project session of that project selected, the stack has no
 - **A page pushed** to a session with none brings the panel and its toggle in, the panel open unless the user closed it
   for that session (see "What is remembered" below).
 - **When the session's last page is deleted** (see "Withdrawing pages" in `docs/product/report-panel.md`), the panel and
-  its toggle go at once, docked or floating, and the pane goes too when that was its only open panel. A card the Report
-  toggle had floated in on hover goes with them. Keyboard focus held in the panel or on the toggle is handed to the
-  agent terminal, as when a panel holding focus closes (see "Panels and keyboard focus" below).
+  its toggle go at once, docked or floating, and the pane goes too when that was its only open panel. An open Report
+  card in a floating group goes with them. Keyboard focus held in the panel or on the toggle is handed to the agent
+  terminal, as when a panel holding focus closes (see "Panels and keyboard focus" below).
 - **At 768 px and below**, a Report panel floating over the terminal that went because its pages were deleted does not
   float back by itself when a page is pushed later: only its toggle comes back, and pressing it floats the panel again.
 
@@ -432,7 +430,7 @@ Each panel is a **named region** — the Files panel named for the project's fil
 Terminal panel for the project's terminals, the report panel "Report" — and each is a stop of its own in the `F6` cycle,
 in stacking order (Report, Terminal, Files, Processes), except that a maximized panel comes first (see "Moving focus
 between regions with F6" in `docs/product/moving-focus-between-regions.md`). Cards in a revealed floating group and a
-panel floating alone at 768 px and below are stops; a hidden group and a single-card hover preview are skipped.
+panel floating alone at 768 px and below are stops; a hidden group is skipped.
 
 **Closing a panel that holds keyboard focus hands focus to the terminal** — or, where the terminal cannot take it,
 where it goes instead (see "With no session selected" in `docs/product/session-terminal.md`). So does the right pane

@@ -36,7 +36,7 @@ and closing the popover" in `docs/product/processes-on-the-rail.md`).
 **A region not on screen is skipped**: a docked sidebar the user has hidden, the floating sidebar while it is closed,
 the rail at 768 px and below while that sidebar overlay is closed, the rail then coming in only with it (see "At 768 px
 and below: the rail comes in with the sidebar" in `docs/product/sidebar-drawer.md`), a hover preview of a hidden sidebar
-that could dock, a single-card hover preview, hidden floating groups, the right pane's panels when nothing owns the pane
+that could dock, hidden floating groups, the right pane's panels when nothing owns the pane
 or none of its panels is open, a panel with nothing to take focus (a Files panel while it is still loading, see "Loading
 the project pane" in `docs/product/project-pane.md`), the terminal and the archive view while a maximized panel covers
 them (see "Maximizing a panel" in `docs/product/right-pane-panels.md`) or a panel floats over them at 768 px and below

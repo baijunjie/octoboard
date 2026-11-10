@@ -14,9 +14,8 @@ technology the panel is a region named for the project's terminals.
 
 **A shell is started only when the user asks for one**:
 
-- **opening the Terminal panel with its toggle** in the top bar while the project has no terminal, a floating Terminal
-  card docked by pressing its toggle included (see "The panel toggles in the top bar" in
-  `docs/product/right-pane-panels.md`);
+- **opening the Terminal panel with its toggle** in the top bar while the project has no terminal (see "The panel
+  toggles in the top bar" in `docs/product/right-pane-panels.md`);
 - **Terminal under Open panel** in a project's action menu while the project has no terminal, which opens the panel as
   its toggle does (see "Opening a panel from a project's action menu" in `docs/product/right-pane-panels.md`);
 - **New terminal**, the "+" button on the tab row below the panel's header;
@@ -68,7 +67,7 @@ time is not closed later
 when it becomes idle unless the user closes the panel again. A close removes the terminal for every client, with its
 output, under the same section.
 
-Merely hiding a hover preview or the floating group, switching projects, changing the window width, opening another
+Merely hiding the floating group, switching projects, changing the window width, opening another
 panel in a narrow window, opening the sidebar overlay or opening an archive view does not close terminals.
 
 ## Tabs

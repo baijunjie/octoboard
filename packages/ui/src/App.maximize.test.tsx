@@ -4,6 +4,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
 import { stubWindow } from "./appTestSupport";
+import { PANE_INSET_MS } from "./layout/paneDockMotion";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "./components/announce/StatusAnnouncer";
 import { windowAttention } from "./components/announce/windowTestSupport";
 import { PanelHeader } from "./components/panel/PanelHeader";
@@ -164,7 +165,7 @@ it("restores the layout and uncovers the agent terminal when the maximized panel
   expect(isCovered("[data-region=terminal]")).toBe(false);
 });
 
-it("floats Files in from its toggle beside the maximized Terminal panel, and docks it on a press", async () => {
+it("keeps Files closed on hover beside the maximized Terminal panel and docks it on a press", async () => {
   fakeTimers();
   mountApp();
   await maximizeTerminal();
@@ -179,12 +180,10 @@ it("floats Files in from its toggle beside the maximized Terminal panel, and doc
     button.dispatchEvent(pointer("pointerover"));
     button.dispatchEvent(pointer("pointerenter"));
   });
-  // The card floats in a pane of its own, the maximized panel staying where it is.
-  const floating = document.querySelector<HTMLElement>("[data-pane=aside]");
-  expect(floating?.classList.contains("fixed")).toBe(true);
-  expect(floating?.querySelector("#panel-files")).not.toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(PANE_INSET_MS); });
+  expect(filesCard()).toBeNull();
+  expect(document.querySelector("[data-pane=aside].fixed")).toBeNull();
   expect(terminalCard()!.hasAttribute("data-panel-maximized")).toBe(true);
-  expect(floating?.contains(terminalCard())).toBe(false);
 
   await pressElement(toggle("Show files panel"));
   expect(document.querySelector("[data-pane=aside]")?.classList.contains("fixed")).toBe(false);

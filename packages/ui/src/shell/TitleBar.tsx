@@ -163,8 +163,8 @@ interface TitleBarProps {
   /** One control per kind of panel the pane's owner has, at the window's end. A control toggles a
    * visible card or reveals it in a hidden floating group. `open` is whether the panel
    * is on screen (the button then keeps the fills of a pressed one, and `Icon` shows which), and
-   * `regionId` is the panel's id while it is in the document. The pointer resting on one while no
-   * panel is open floats the pane in (`onHoverChange`). A toggle that goes away while it has focus
+   * `regionId` is the panel's id while it is in the document. The pointer resting on one reveals
+   * the open floating group (`onHoverChange`). A toggle that goes away while it has focus
    * (its panel has nothing to show any more) hands it to `focusTerminal`. */
   panelToggles?: ReadonlyArray<{
     kind: string;

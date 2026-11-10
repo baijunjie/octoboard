@@ -8,6 +8,8 @@ import { App } from "./App";
 import { stubWindow } from "./appTestSupport";
 import { PanelHeader } from "./components/panel/PanelHeader";
 import { mountForTooltip } from "./components/hint/tooltipTestSupport";
+import { visibility } from "./layout/panelVisibility";
+import { PANE_INSET_MS } from "./layout/paneDockMotion";
 import { consoleOf, pageOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 import { PlatformProvider } from "./platform/react";
 import type { Event, Project } from "./protocol";
@@ -232,7 +234,7 @@ it("clears a failed listing once the store holds a list, so a later snapshot doe
   expect(toggle("Show report panel")).toBeNull();
 });
 
-it("takes back the card a hovered Report toggle floated in when the last page is deleted, handing focus on", async () => {
+it("takes back an open Report card revealed by hover when the last page is deleted, handing focus on", async () => {
   fakeTimers();
   document.documentElement.style.setProperty("--peek-gap", "8px");
   onTestFinished(() => {
@@ -241,9 +243,9 @@ it("takes back the card a hovered Report toggle floated in when the last page is
   const { push, receive } = mountApp();
   await push("s-one", "page-1");
   await pressElement(row("First work"));
-  await pressElement(toggle("Hide report panel"));
   await pressElement(toggle("Hide files panel"));
-  expect(reportCard()).toBeNull();
+  act(() => visibility.aside.set(false));
+  expect(reportCard()!.closest("[data-pane=aside]")!.hasAttribute("inert")).toBe(true);
 
   const button = toggle("Show report panel")!;
   const pointer = (type: string) => new PointerEvent(type, { pointerType: "mouse", bubbles: type !== "pointerenter" });
@@ -251,7 +253,9 @@ it("takes back the card a hovered Report toggle floated in when the last page is
     button.dispatchEvent(pointer("pointerover"));
     button.dispatchEvent(pointer("pointerenter"));
   });
+  await act(async () => { await vi.advanceTimersByTimeAsync(PANE_INSET_MS); });
   expect(reportCard()).not.toBeNull();
+  expect(reportCard()!.closest("[data-pane=aside]")!.hasAttribute("inert")).toBe(false);
   act(() => reportCard()!.querySelector<HTMLElement>("[data-in-report]")!.focus());
   act(() => setInteractionModality("pointer"));
 

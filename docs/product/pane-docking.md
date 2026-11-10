@@ -51,8 +51,8 @@ current automatic column-width adjustment in the right pane.
 A sidebar the user has hidden takes no width at all once it is hidden, and neither does one only floating in: its
 width goes to the terminal. While the sidebar's docked column is easing closed, it still takes the width it has
 reached (see "Hiding the sidebar" below). A right pane with none of its panels open, or with no owner, is not in the
-row, takes no width and stops holding back the sidebar's width; one only floating a panel in takes none either, and
-nor does a whole floating right group or a mobile panel.
+row, takes no width and stops holding back the sidebar's width; a floating right group or a mobile panel takes none
+either.
 
 Anything that changes the terminal's size — resizing the window, resizing a pane, hiding or showing the sidebar, the
 right pane coming or going as its first panel opens or its last closes or with its owner — resizes the agent's
@@ -96,16 +96,15 @@ docked column is easing and at 768 px and below. The floating sidebar uses the s
 
 The right pane's handle is available while docked and while its whole group floats, including when it floats
 automatically. It remains reachable at the floating group's inner edge and changes the group's total width. It is
-absent for a single-card preview of an empty docked column, a mobile panel and a column folded away under a
-maximized panel (see "Maximizing a panel" in `docs/product/right-pane-panels.md`). Its pointer target is 6 px wide just
+absent for a mobile panel and a column folded away under a maximized panel (see "Maximizing a panel" in
+`docs/product/right-pane-panels.md`). Its pointer target is 6 px wide just
 inside the cards' inner edge while docked, clear of the terminal's scrollbar, and 24 px wide while floating, centred
 on the 8 px gap. Resizing a floating sidebar or right group keeps it revealed throughout the drag and does
 not resize the agent terminal.
 
 **A floating right pane can widen to the sidebar's content-side edge**, keeping the cards' usual insets. Its maximum
 total width is the window's width less the **48 px rail** and the width of the docked sidebar while shown. With the
-sidebar hidden or itself floating, only the rail is reserved. This applies to both a floating group and a single-card
-hover preview, above 768 px; floating widths have no fixed 720 px cap.
+sidebar hidden or itself floating, only the rail is reserved. Above 768 px, floating widths have no fixed 720 px cap.
 
 **Each pane's chosen width is remembered per client**, in that client's own browser storage, as the appearance choice
 is (see "Where the choice is stored" in `docs/product/appearance.md`); without that storage a choice lasts until the
@@ -145,9 +144,9 @@ and size" in `docs/product/session-terminal.md`).
 ### A hidden pane floats in on hover
 
 Above 768 px, the sidebar can float in while its docked column is hidden or it cannot dock. The right pane can reveal
-its whole floating group, or preview one card when its docked column is empty or folded under a maximized panel (see
-"Floating a panel in" in `docs/product/right-pane-panels.md`). This is a **floating pane**. The sidebar floats in as a
-card inset from the window chrome and the window's edges, with rounded corners, a hairline edge and the light card
+its open cards as a floating group (see "Floating a panel in" in `docs/product/right-pane-panels.md`). This is a
+**floating pane**. The sidebar floats in as a card inset from the window chrome and the window's edges, with rounded
+corners, a hairline edge and the light card
 shadow (see "The window chrome and the content panel" in `docs/product/window-layout.md`); the right pane floats in as
 its panel's own card, which looks the same (see "The panel cards" in `docs/product/right-pane-panels.md`). The hairline
 is 0.5 px on a display of 2× pixel density or more and 1 px below that, and it takes no space, so the card is exactly
@@ -162,10 +161,11 @@ above).
   an avatar reveals that console, and moving between avatars while the sidebar is out previews them immediately. Moving
   to the sidebar toggle or resting on blank rail space restores the current console. Hover never selects a console (see
   "Previewing a console from the rail" in `docs/product/console-switcher.md`).
-- **What brings up the right pane**: reaching its group toggle or a panel toggle reveals it immediately. While the group
-  floats, resting for **200 ms** in the **48 px strip at the window's end edge**, below the top bar, reveals it too.
-  Briefly crossing the strip cancels the reveal. The strip follows the logical end edge under a right-to-left language.
-  With no cards open it previews an available card; with cards open it reveals their whole group.
+- **What brings up the right pane**: while the group floats and has open cards, reaching its group toggle or any panel
+  toggle reveals the whole group immediately. Resting for **200 ms** in the **48 px strip at the window's end edge**,
+  below the top bar, reveals it too. Briefly crossing the strip cancels the reveal. The strip follows the logical end
+  edge under a right-to-left language. With no cards open, or while the group is docked, hover reveals nothing; see
+  "Floating a panel in" in `docs/product/right-pane-panels.md`.
 - Touch and pen bring up neither, and on a device whose primary input cannot hover — a phone, or a tablet's touch screen
   — neither floats in at all, whatever pointer is used: the sidebar is shown with its toggle and a panel opened by
   pressing its toggle.
@@ -206,9 +206,9 @@ above).
   button, does not, and the card goes once the pointer leaves, as it would have before the press.
 - **Only one at a time**: bringing one up sends the other away. Floating the right pane in also closes the sidebar's
   overlay, and opening the floating sidebar sends a floating right pane away.
-- **Pressing the sidebar toggle or the right group toggle** when that side cannot dock reveals it without hiding it or
-  changing a docking preference. Individual right-panel toggles open or close their cards, keeping the other cards
-  revealed and hiding the group when the last card closes. Activating a stored open card's toggle while the group is
+- **Pressing the sidebar toggle or the right group toggle** when that side cannot dock reveals the sidebar or any open
+  right-panel cards without hiding them or changing a docking preference. Individual right-panel toggles open or close
+  their cards, keeping the other cards revealed and hiding the group when the last card closes. Activating a stored open card's toggle while the group is
   hidden only reveals it. See "The panel toggles in the top bar" in `docs/product/right-pane-panels.md`. When that side
   can dock, the right group toggle docks the group, the sidebar toggle docks its hover card, and a docked right pane's
   panel toggle opens or closes its panel normally.

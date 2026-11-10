@@ -122,7 +122,7 @@ export interface PaneToggles {
   sidebarDocked: boolean;
   /** The hidden docked sidebar floating over the terminal, from its toggle or a console's avatar. */
   sidebarPeek: SidebarPeek;
-  /** The aside's floating, from a panel kind's toggle while no panel is open. */
+  /** Reveals the aside's open cards while the group floats. */
   asidePeek: PanePeek & {
     /** Ends the float at once; focus inside the pane goes to the terminal first unless `handFocus`
      * is false, for a pane that is being docked and so stays on screen. */
@@ -145,7 +145,7 @@ export interface PaneToggles {
  * and widening the window until it fits has to be able to close the overlay.
  *
  * The aside's stored panel stack is independent of its docking choice. A floating group uses
- * `asidePeek` to reveal all its open cards; with none open it previews a hovered kind instead.
+ * `asidePeek` to reveal all its open cards; with none open the group stays hidden.
  * Mobile interaction (`useAsideFloats`) shows only one panel at a time.
  * Likewise a hidden docked sidebar floats in from its toggle or a console's avatar on the rail
  * (`sidebarPeek`). Leaving a floating pane (or Escape) hides it again. The two never float
@@ -153,8 +153,8 @@ export interface PaneToggles {
  *
  * `isNarrow` means the sidebar cannot fit beside the terminal.
  * `hasSidebar` is whether the sidebar is rendered at all (it is not while there is no console);
- * `asidePeekable` is whether the aside may reveal its floating group or preview an empty docked
- * column, with an owner and outside mobile interaction. Neither pane floats in on a
+ * `asidePeekable` is whether the aside may reveal its open floating group, with an owner and
+ * outside mobile interaction. Neither pane floats in on a
  * device whose primary input cannot hover. `focusTerminal` is where keyboard focus goes when the
  * pane holding it is hidden.
  * `drawer` is the drawer's open state when the caller keeps it, for what has to know it before this
