@@ -1083,6 +1083,12 @@ pub(crate) fn shutdown_requested() -> impl std::future::Future<Output = ()> {
     }
 }
 
+/// Whether ordinary parting also ends the holder itself, so terminal state not released before
+/// the daemon stops cannot keep it running after a quit.
+pub(crate) fn holder_ends_at_ordinary_parting() -> bool {
+    true
+}
+
 /// The planned-restart requests the host delivers to the daemon: none on Windows (see
 /// [`request_restart`]).
 pub(crate) struct RestartRequests;

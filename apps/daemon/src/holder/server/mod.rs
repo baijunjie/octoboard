@@ -12,8 +12,9 @@
 //! A holder outlives its daemon: the programs go on running when the link drops, their output kept
 //! in the tails for the daemon that links next. It exits once it has no terminal, no start
 //! under way, no companion awaiting its terminal or being ended, and either no daemon is linked
-//! or the linked one has said to drain. A link that drops without the daemon having parted is
-//! recorded as a crash, for the next welcome to say.
+//! or the linked one has said to drain. On Windows an ordinary parting ends the holder and any
+//! remaining terminal records; a planned handover preserves them. A link that drops without the
+//! daemon having parted is recorded as a crash, for the next welcome to say.
 //!
 //! A daemon that stops on purpose for another to take over hands its terminals over
 //! ([`ToHolder::Handover`]): each terminal its link follows is marked where its output stops going
@@ -61,7 +62,7 @@ use super::protocol::{
     OfflineAnswer, QueryKind, Ready, SpawnSpec, ToHolder, WireError,
 };
 use super::registry::{self, RegistryEntry};
-use crate::platform::proc::ProcessIdentity;
+use crate::platform::proc::{self, ProcessIdentity};
 use crate::platform::proc_table;
 use crate::platform::term as host_term;
 use crate::platform::term::Command;
@@ -410,8 +411,9 @@ impl Holder {
     }
 
     /// The link `generation` is over. A link another took over from changes nothing. Otherwise the
-    /// terminals keep their programs, and keep the output in their tails; the holder exits if that
-    /// leaves it with nothing to serve ([`Self::settle`]).
+    /// terminals keep their programs and output tails, except on Windows after an ordinary
+    /// parting, which ends the holder and any records still awaiting release. Otherwise it exits
+    /// once nothing remains to serve ([`Self::settle`]).
     ///
     /// `ending` is how it ended: a link that dropped without the daemon having parted counts as a
     /// crash.
@@ -423,6 +425,12 @@ impl Holder {
             let mut slot = self.link();
             if slot.generation != generation {
                 return;
+            }
+            // An ordinary stop must finish even a terminal whose program ended before its
+            // release reached us. Serialize this with a takeover, so an older daemon cannot
+            // end what a newer one owns.
+            if proc::holder_ends_at_ordinary_parting() && matches!(&ending, Ending::Parted(false)) {
+                self.exit.send(true).ok();
             }
             slot.current = None;
             slot.sink = None;
@@ -602,6 +610,9 @@ impl Holder {
     /// last is then not known, which the frame telling a link it was taken over says.
     fn admit(&self, run_id: Option<String>) -> bool {
         let mut slot = self.link();
+        if *self.exit.borrow() {
+            return false;
+        }
         let Some(run_id) = run_id else {
             if let Some(last) = slot.last_run.take() {
                 slot.superseded_runs.insert(last);
@@ -937,7 +948,7 @@ async fn serve_link(holder: Arc<Holder>, socket: WebSocket) {
     let handed_over: HashSet<String> = handed_over.into_iter().collect();
     if !holder.admit(run_id) {
         tracing::warn!(
-            "a daemon the holder was taken over from tried to link again; it is refused"
+            "a daemon link was refused because the holder is ending or its run was superseded"
         );
         let by = holder.link().last_run.clone();
         tell_superseded(&mut wire_out, by).await;
@@ -1000,6 +1011,12 @@ async fn serve_link(holder: Arc<Holder>, socket: WebSocket) {
     // attached to it, and the link's own sink is not known to anything else before that.
     let generation = {
         let mut slot = holder.link();
+        // Admission and installation of a connection are separate: an ordinary stop may have
+        // won the slot after this connection was admitted.
+        if *holder.exit.borrow() {
+            writer.abort();
+            return;
+        }
         if let Some(older) = slot.current.replace(closing) {
             older.send_replace(Some(Closing::Superseded));
         }

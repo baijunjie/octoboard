@@ -534,6 +534,11 @@ pub(crate) fn shutdown_requested() -> impl std::future::Future<Output = ()> {
     }
 }
 
+/// Whether ordinary parting also ends the holder itself: terminal releases govern its exit.
+pub(crate) fn holder_ends_at_ordinary_parting() -> bool {
+    false
+}
+
 /// The planned-restart requests the host delivers to the daemon: `SIGUSR1`, which
 /// [`request_restart`] sends.
 pub(crate) struct RestartRequests(Option<tokio::signal::unix::Signal>);

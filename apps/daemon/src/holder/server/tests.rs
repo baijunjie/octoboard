@@ -892,6 +892,108 @@ async fn a_planned_parting_is_what_the_next_welcome_reports_instead_of_a_crash()
     holder.ended().await;
 }
 
+#[cfg(windows)]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ordinary_parting_ends_a_holder_with_an_unreleased_exited_terminal() {
+    let holder = Running::start().await;
+    let mut daemon = holder.link().await;
+    daemon
+        .spawn("t1", programs::echo("last screen").term_command())
+        .await;
+    daemon.output_until_exit("t1").await;
+    // The process is gone, but its final reap and release never reached the holder.
+    daemon.send(ToHolder::Parting { handover: false }).await;
+    daemon.socket.close(None).await.ok();
+    drop(daemon);
+    holder.ended().await;
+}
+
+#[cfg(windows)]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_planned_parting_keeps_an_unreleased_exited_terminal_for_the_next_daemon() {
+    let holder = Running::start().await;
+    let mut daemon = holder.link().await;
+    daemon
+        .spawn("t1", programs::echo("kept screen").term_command())
+        .await;
+    daemon.output_until_exit("t1").await;
+    daemon.send(ToHolder::Parting { handover: true }).await;
+    daemon.socket.close(None).await.ok();
+    while daemon.next().await.is_some() {}
+    drop(daemon);
+
+    let mut next = holder.link().await;
+    assert!(listed(&next)
+        .iter()
+        .any(|terminal| terminal.id == "t1" && terminal.exited));
+    assert!(matches!(
+        &next.welcome,
+        FromHolder::Welcome {
+            last_parting: LastParting::Handover,
+            ..
+        }
+    ));
+    next.end_ids(&["t1"]).await;
+    drop(next);
+    holder.ended().await;
+}
+
+#[cfg(windows)]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_older_links_ordinary_parting_does_not_end_the_newer_daemons_holder() {
+    let holder = Running::start().await;
+    let mut older = holder.link_as(Some("older")).await;
+    let command = crate::test_support::fixture::Steps::new()
+        .read_input()
+        .program("held-terminal")
+        .term_command();
+    let pid = pid_of(&older.spawn("t1", command).await) as i32;
+    let mut guard = crate::test_support::KillOnDrop(vec![pid]);
+    older.send(ToHolder::Parting { handover: false }).await;
+    // A reply behind the parting proves the holder read it before the takeover. The old link
+    // has not closed yet, so its final frames remain valid until the newer generation is in place.
+    older
+        .send(ToHolder::Query {
+            id: "t1".into(),
+            req: 1,
+            what: QueryKind::Size,
+        })
+        .await;
+    assert!(matches!(
+        older.reply_to(1).await,
+        FromHolder::Answer {
+            answer: Answer::Size { size: Some(_) },
+            ..
+        }
+    ));
+    let mut newer = holder.link_as(Some("newer")).await;
+    while older.next().await.is_some() {}
+    drop(older);
+    assert!(listed(&newer)
+        .iter()
+        .any(|terminal| terminal.id == "t1" && !terminal.exited));
+    newer
+        .send(ToHolder::Query {
+            id: "t1".into(),
+            req: 2,
+            what: QueryKind::Size,
+        })
+        .await;
+    assert!(matches!(
+        newer.reply_to(2).await,
+        FromHolder::Answer {
+            answer: Answer::Size { size: Some(_) },
+            ..
+        }
+    ));
+    assert!(is_running(pid), "the newer daemon's program was ended");
+    newer.end_ids(&["t1"]).await;
+    drop(newer);
+    holder.ended().await;
+    assert!(!is_running(pid));
+    guard.0.clear();
+}
+
 /// A handover marks each terminal the link follows behind the output it was sent and sends it no
 /// more output: the next welcome says where the mark falls in the tail with the token, and the
 /// tail keeps the history before the mark and holds what was printed after it from there on, so

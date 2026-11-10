@@ -59,6 +59,9 @@ holder and what it starts as the daemon's own; see [`../processes/ledger/README.
   it has no terminal, no spawn pending, no companion awaiting its terminal and none being ended, and either no daemon
   is linked or the daemon sent `drain`. The daemon's ordinary
   stop ends every terminal itself, after which the holders exit; a planned stop hands them over instead ("Handover").
+  On Windows an ordinary parting of the current link also ends the holder when an exited terminal has not been
+  released. That decision is made under the connection slot's lock: later handshakes are refused, and a link already
+  taken over cannot end the newer daemon's holder.
   One daemon is linked at a time; a newer link takes the holder over. The held terminals never enter the daemon's crash
   table (a holder has its own, which ends its programs when it crashes).
 - **Relay.** The helpers call the holder, which relays to the linked daemon. A report (nobody waits on it) is answered at
