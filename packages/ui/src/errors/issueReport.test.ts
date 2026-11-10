@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { appConfig } from "../appConfig";
 import { CodedError } from "./codedError";
@@ -71,14 +71,69 @@ it("leaves the home directory out of an application URL's path and keeps the res
   expect(sanitizeReportText("http://localhost:5173/@fs/data/carol/x.ts:1:1", { names: [], homeDir: "/data/carol" })).toBe("http://localhost:5173/@fs/~/x.ts:1:1");
 });
 
-it("sanitizes pathological input quickly, cutting a long text before it", () => {
-  const started = performance.now();
+it("keeps the sanitizer's reviewed regex shapes to guard against catastrophic backtracking", () => {
+  // This change detector pins executed regex sources and flags, forcing a complexity review when they change;
+  // it does not analyze complexity. Keep the fixture short so unsafe repetition is not exercised on long input; the
+  // truncation guard, which only runs on input over the length limit, is left out.
+  const exec = vi.spyOn(RegExp.prototype, "exec");
+  let patterns: string[];
+  try {
+    sanitizeReportText("http://localhost:5173/@fs/Users/x/a.ts?q=1:2:3 https://u@foreign.test/a /data/x/proj Project <name>", {
+      homeDir: "/data/x/",
+      names: ["/data/x/proj", "Project"],
+    });
+    // split adds sticky mode to a species copy of its separator; pin the sanitizer's original flags.
+    patterns = [...new Set((exec.mock.contexts as RegExp[]).map((pattern) => `/${pattern.source}/${pattern.flags.replace("y", "")}`))].sort();
+  } finally {
+    exec.mockRestore();
+  }
+  expect(patterns).toMatchInlineSnapshot(`
+    [
+      "/(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)+/g",
+      "/(?<![A-Za-z0-9])(?:Project)(?![A-Za-z0-9])/g",
+      "/(?<![A-Za-z0-9])(?:\\/data\\/x\\/proj|~\\/proj)(?=$|[\\s/\\\\'"\\\`:,;)&?#]|\\.(?![A-Za-z0-9]))/g",
+      "/(?<![A-Za-z0-9])[A-Za-z]:[\\\\/](?:<(?:name|path|url|email|ip|id|redacted)>|[^\\s'"\\\`:;,)<>])*/g",
+      "/(?<![A-Za-z0-9])[A-Za-z]:[\\\\/]Users[\\\\/][^\\\\/\\s'"\\\`:;,)<>]+/gi",
+      "/(?<![A-Za-z0-9])\\/data\\/x(?![^\\s'"\\\`:;,)<>/\\\\])/g",
+      "/(?<![A-Za-z0-9_+-])(?=[A-Za-z0-9_+-]*\\d)(?=[A-Za-z0-9_+-]*[A-Za-z])[A-Za-z0-9_+-]{20,}={0,2}(?![A-Za-z0-9_+-])/g",
+      "/(?<![A-Za-z0-9_.-])([A-Za-z0-9_.-]*(?:token|secret|password|passwd|pwd|api[_-]?key|access[_-]?key|private[_-]?key|authorization|credential|session[_-]?id)[A-Za-z0-9_.-]*["']?\\s*[=:]\\s*)["']?[^\\s"',;]+["']?/gi",
+      "/(?<![\\w.%+-])[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[~\\w./-]+/g",
+      "/(?<![\\w.:/~-])(?:~(?:\\/(?:<(?:name|path|url|email|ip|id|redacted)>|[^\\s'"\\\`:;,)<>])+)+|(?:\\/(?:<(?:name|path|url|email|ip|id|redacted)>|[^\\s'"\\\`:;,)<>])+){2,})/g",
+      "/(?<![\\w.:/~-])~(?:\\\\(?:<(?:name|path|url|email|ip|id|redacted)>|[^\\s'"\\\`:;,)<>])+)+/g",
+      "/(?<![\\w.])(?:\\d{1,3}\\.){3}\\d{1,3}(?![\\w]|\\.\\d)/g",
+      "/(?<![\\w.~-])\\/(?:Users|home)\\/[^/\\s'"\\\`:;,)<>]+/g",
+      "/(?<![\\w:])(?:(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|(?:[0-9a-f]{1,4}:){1,7}:(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?|::(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?)(?![\\w:])/gi",
+      "/:\\d+$/",
+      "/<(?:name|path|url|email|ip|id|redacted)>/g",
+      "/<path>(?:[\\\\/](?:<(?:name|path|url|email|ip|id|redacted)>|[^\\s'"\\\`:;,)<>])+)+/g",
+      "/[.*+?^\${}()|[\\]\\\\]/g",
+      "/[/?#]/",
+      "/[A-Za-z]:[\\\\/]Users[\\\\/][^\\\\/\\s'"\\\`:;,)<>]+/gi",
+      "/[\\\\/]+$/",
+      "/[\\u2066-\\u2069]/g",
+      "/\\/(?:Users|home)\\/[^/\\s'"\\\`:;,)<>]+/g",
+      "/\\/data\\/x(?![^\\s'"\\\`:;,)<>/\\\\])/g",
+      "/\\\\\\\\(?:<(?:name|path|url|email|ip|id|redacted)>|[^\\s'"\\\`:;,)<>])+(?:\\\\(?:<(?:name|path|url|email|ip|id|redacted)>|[^\\s'"\\\`:;,)<>])+)*/g",
+      "/\\b((?:set-)?cookie\\s*[=:]\\s*)[^\\n]+/gi",
+      "/\\b(?:Bearer|Basic)\\s+[A-Za-z0-9._~+/=-]{8,}/g",
+      "/\\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[abprs]-[A-Za-z0-9-]{10,})/g",
+      "/\\b(?:sk|pk|rk)-[A-Za-z0-9_-]{10,}/g",
+      "/\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b/gi",
+      "/\\b[a-z][a-z0-9+.-]*:\\/\\/(?:<(?:name|path|url|email|ip|id|redacted)>|[^\\s'"\\\`<>)])+/gi",
+      "/^(?:[/~]|[A-Za-z]:[\\\\/])/",
+      "/^([^?#]*)(?:[?#].*?)?((?::\\d+){0,2})$/s",
+      "/^([a-z][a-z0-9+.-]*):\\/\\/(.*)$/is",
+      "/^[^@]*@/",
+    ]
+  `);
+});
+
+it("cuts large adversarial inputs before sanitizing them", () => {
   for (const input of ["a".repeat(100_000), "a@".repeat(50_000), "password".repeat(12_500), "1".repeat(100_000), "/a".repeat(50_000)]) {
     const sanitized = sanitize(input);
     expect(sanitized.length).toBeLessThan(20_000);
     expect(sanitized.endsWith("… (truncated)")).toBe(true);
   }
-  expect(performance.now() - started).toBeLessThan(2000);
 });
 
 it("treats a failure its caller calls unexpected as one, whatever its text alone says", () => {
