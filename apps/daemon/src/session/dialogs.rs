@@ -264,6 +264,10 @@ mod tests {
     const CODEX_CREDIT_LIMIT_NOTIFY: &str = "  You've reached your workspace credit limit\n  Your workspace is out of credits. Ask your workspace owner to add more. Notify owner?\n\u{203a} 1. Yes\n  2. No (default)\n";
     const CODEX_LIMIT_INCREASE: &str = "  Usage limit reached\n  Request a limit increase from your owner to continue using codex. Request increase?\n\u{203a} 1. Yes\n  2. No (default)\n";
     const GROK_USAGE_LIMIT: &str = "You hit your weekly limit.\n1 (○) Upgrade tier\n2 (○) Buy more credits\n3 (○) Try Again\n↑/↓ navigate · y copy Enter :submit / Shift+x :dismiss\n";
+    // Grok Build 1.0.77's layout as measured, with the dismiss key in the bottom bar rather than
+    // the modal; and the same screen with the focus on the scrollback, where that bar changes.
+    const GROK_USAGE_LIMIT_1077: &str = "  \u{2503}  You hit your weekly limit.\n  \u{2503}\n  \u{2503}  1 (\u{25CB}) Upgrade tier      Upgrade to a higher tier for more usage\n  \u{2503}  2 (\u{25CB}) Buy more credits  Purchase credits to keep using Grok Build\n  \u{2503}  3 (\u{25CB}) Try Again         Resubmit the last prompt once you have usage again\n  \u{2503}\n  \u{2503}  \u{2191}/\u{2193} navigate \u{B7} y copy                    Enter:submit\n\n  Tab:next answer  \u{2502}  Esc:scrollback  \u{2502}  Shift+x:dismiss\n";
+    const GROK_USAGE_LIMIT_1077_SCROLLBACK: &str = "  \u{2503}  You hit your weekly limit.\n  \u{2503}\n  \u{2503}  1 (\u{25CB}) Upgrade tier      Upgrade to a higher tier for more usage\n  \u{2503}  2 (\u{25CB}) Buy more credits  Purchase credits to keep using Grok Build\n  \u{2503}  3 (\u{25CB}) Try Again         Resubmit the last prompt once you have usage again\n  \u{2503}\n  \u{2503}  \u{2191}/\u{2193} navigate \u{B7} y copy                    Enter:submit\n\n  Tab/Space:question  \u{2502}  Ctrl+e:collapse thinking  \u{2502}  Ctrl+x:shortcuts\n";
     const CLAUDE_NOTICE: &str = "⏺ Agent(Slow probe agent)\n────────\n  We're changing auto mode to no longer charge for classifier requests in Claude Code.\n  Nothing breaks: auto mode keeps working, and its classifier requests are billed as before.\n  Enter to continue · Esc to cancel\n";
     // Claude Code 2.1.307's agent screens, as measured.
     const SUBAGENT_VIEW: &str = "❯ SUBAGENT-SLOW work slowly\n──── Slow probe agent ─\n❯ Message @general-purpose…\n  ◯ main\n  ⏺ general-purpose  Slow probe agent  8s · ↑ 20 tokens\n";
@@ -313,6 +317,12 @@ mod tests {
             ),
             (AgentId::CODEX, CODEX_LIMIT_INCREASE, "codex_usage_limit"),
             (AgentId::GROK, GROK_USAGE_LIMIT, "grok_usage_limit"),
+            (AgentId::GROK, GROK_USAGE_LIMIT_1077, "grok_usage_limit"),
+            (
+                AgentId::GROK,
+                GROK_USAGE_LIMIT_1077_SCROLLBACK,
+                "grok_usage_limit",
+            ),
             (AgentId::CLAUDE, SUBAGENT_VIEW, "claude_subagent_view"),
             (
                 AgentId::CLAUDE,

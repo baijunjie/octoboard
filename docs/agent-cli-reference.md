@@ -942,6 +942,23 @@ failed" line, no modal, and submits a queued prompt by itself. An HTTP 400 fires
 How Octoboard holds its writes around these hooks and screens is in "Messages held until a session can take them" in
 `docs/product/message-delivery.md`.
 
+**The usage-limit screen again** (1.0.77, scratch `GROK_HOME` and `HOME`, fake key, `[endpoints] models_base_url` and
+`xai_api_base_url` both pointed at a local stub; with only the first set, the key probe went to xAI, failed, and Grok
+began its grok.com device sign-in). A 402 fires `UserPromptSubmit`, `Notification` `agent_error` and `StopFailure`
+(`error` `invalid_request`) with no automatic retry, and `updates.jsonl` records the turn as `turn_completed` with `stop_reason`
+`error` and "status 402" in its result. The modal reads as in 1.0.67, each option followed by a description ("Resubmit
+the last prompt once you have usage again" for Try Again), but its own last row is "↑/↓ navigate · y copy" with
+"Enter:submit" at its right, and the dismiss key moved to the bottom bar: "Tab:next answer │ Esc:scrollback │
+Shift+x:dismiss". Option 1 is highlighted first. In the one sample taken, the `agent_error` hook reached its command
+before the modal was on screen, unlike 1.0.67. Try Again, by "3" or by the arrows and Enter, shows "Trying again…" and
+fires `UserPromptSubmit` with the original prompt and a new `promptId`; a retry refused again fires `agent_error` and
+`StopFailure` and redraws the modal, and one that succeeds ends with `Stop` (`end_turn`). Each retry writes its own
+`user_message_chunk` and `turn_completed`. Shift+x dismisses it with no hook. Esc moves the focus to the scrollback:
+the modal stays drawn, the bottom bar becomes "Tab/Space:question │ Ctrl+e:collapse thinking │ Ctrl+x:shortcuts", and
+Shift+x does nothing until Tab brings the focus back. `idle_prompt` came 60 s after the `StopFailure` with the modal
+still up. The 400 and 429 cases behaved as in 1.0.67. Choosing 1 or 2, or Enter on the first highlight, was not tried
+on this build, since on 1.0.67 it opened a purchase page.
+
 **Keys that interrupt a turn** (1.0.70, in a PTY against a local stand-in for its inference API). Esc does not stop a
 turn; Ctrl-C does. While the model streams, Ctrl-C fires `StopCancelled` (`reason` `user_interrupt`) 50–190 ms later
 and the screen shows "Turn cancelled by user". Before the first token arrives it fires no hook at all — no
