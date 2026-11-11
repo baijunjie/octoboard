@@ -231,6 +231,9 @@ async fn run_daemon(
     }
     // What a helper asks through a holder waits until the adopted sessions exist.
     state.begin_adoption();
+    // The background work each session's agent had left running, loaded into memory before the
+    // holders' relayed reports apply on top of it; the adoption keeps or clears it by the launch.
+    state.load_saved_background(&paths::background_tasks_path());
     // The messages the previous daemon's planned stop left queued, written once the adoption is
     // over into the sessions adopted running the process they were queued for.
     state.load_restart_outbox(&paths::restart_outbox_path());
@@ -251,6 +254,15 @@ async fn run_daemon(
     // end it: the sessions marked interrupted, the run directory cleared, the previous run's
     // processes stopped.
     let adopted = coordinator::adopt::adopt(&state, &paths::run_dir()).await;
+    // What no process was adopted or claimed for is of a process that is gone. A session claimed
+    // keeps its entry for a holder linked to later.
+    state.retain_saved_background(|session| {
+        adopted
+            .sessions
+            .iter()
+            .chain(&adopted.claimed)
+            .any(|kept| kept == session)
+    });
     state.end_adoption();
     if quit_targets.is_some() {
         // Before anything that can start a terminal: the server and the resume of the interrupted

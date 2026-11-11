@@ -1,6 +1,8 @@
 //! What is dropped when a session, a project or a record is removed: each registry's entry
 //! for it, the saved output and the handoff package.
 
+use std::sync::Arc;
+
 use super::AppState;
 use crate::protocol::Event;
 
@@ -45,7 +47,8 @@ impl AppState {
         self.forget_ended_turn(id);
     }
 
-    pub(super) fn forget_session_bookkeeping(&self, id: &str) {
+    /// Drops what is held for a session whose process has left.
+    pub(super) fn forget_session_bookkeeping(self: &Arc<Self>, id: &str) {
         self.cancel_recoveries(id);
         self.revoke_mcp_tokens(id);
         self.turns.lock().expect("turn lock poisoned").remove(id);
@@ -54,6 +57,7 @@ impl AppState {
             .lock()
             .expect("background tasks lock poisoned")
             .remove(id);
+        self.forget_saved_background(id);
         self.tool_calls
             .lock()
             .expect("tool call lock poisoned")

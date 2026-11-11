@@ -158,6 +158,9 @@ impl AppState {
 
     /// Releases the claim on session `id` that [`Self::claim_unlinked`] made, and publishes it.
     pub fn release_unlinked_claim(&self, id: &str) {
+        // A claim released with no process adopted for it leaves its saved background work with
+        // nothing to be given back to.
+        self.release_saved_background(id);
         self.release_launch(id);
         self.publish_session_by_id(id);
     }

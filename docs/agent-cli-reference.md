@@ -83,7 +83,11 @@ hold state against.
   executable lists peer messages among the prompts that fire `UserPromptSubmit` (with `source` `system`; not measured),
   so a mapping that reads that event as the input box being sent has to leave both out. `/clear` does not end a running
   background shell: the next `Stop` after the `SessionStart` with source `clear` still listed it (measured through
-  `-p --input-format stream-json`; the interactive TUI is unmeasured).
+  `-p --input-format stream-json`; the interactive TUI is unmeasured). A local interactive `--resume <id>` does not
+  start a background subagent the previous process left running again: it fires only `SessionStart` with source
+  `resume` and writes a `<task-notification>` with `<status>stopped</status>` to the transcript alone, so no
+  `UserPromptSubmit` fires (measured on 2.1.322 and 2.1.319). An agent the model revives with `SendMessage` fires
+  `SubagentStart` inside that turn and is listed in the turn's `Stop`.
 - `StopFailure` — mutually exclusive with `Stop`: a turn that ends in an API error fires only `StopFailure`, so a
   mapping keyed on `Stop` alone leaves that session looking busy forever. It does not mean the session died; in the
   interactive TUI it stays alive at the prompt. It carries `error`, an optional `error_details` (the raw HTTP status

@@ -223,9 +223,23 @@ work: `id`, and `type` and `description` where Claude Code gives them.
 - A subagent stop that would leave nothing running takes effect only after about **2 seconds**, so one subagent handing
   over to the next does not make the session flash to another status at its prompt in between; a turn end, a subagent
   starting, or another subagent stop within that time decides the list instead.
-- The list goes when the session's process ends — archived, interrupted, switched to another account or handed off.
-  The launch's background work is stopped except for processes the user kept, under "Automatic stopping and its
-  boundaries" in `docs/product/background-processes.md`.
+- The list survives Octoboard's own restart, planned or after a crash, while the session's process keeps running in its
+  process holder: it is written to disk whenever it changes (see `~/.octoboard/background-tasks.json` under "Files
+  Octoboard owns" in `docs/product/application-lifecycle.md`), and a session Octoboard takes over again after the restart
+  gets it back when the process taken over is the one that left that work, so it keeps reading as *working in
+  background* until Claude Code reports again. What Claude Code reported while Octoboard was down is applied on top of
+  it. A subagent stop still waiting out the 2 seconds above when Octoboard went down counts as having emptied the list.
+- When the process taken over is another one than the process that left the saved list, the saved list is dropped,
+  together with the subagent starts, stops and finished-work notices reported on top of it, which say nothing of what
+  the earlier process left; a turn end reported meanwhile, which lists everything still running, stands. A session kept
+  claimed for a process holder that cannot be connected to yet (see "A holder that cannot be connected to" in
+  `docs/product/process-holders.md`) shows no list until that holder's terminal is taken over, and then gets the list
+  back on the same terms; the saved list of a session whose process is not taken over at all is dropped.
+- The list goes when the session's process ends — archived, interrupted, switched to another account, restarted for a
+  change of model or switches, or handed off. The launch's background work is stopped except for processes the user
+  kept, under "Automatic stopping and its boundaries" in `docs/product/background-processes.md`. A session resumed or
+  restarted on its conversation starts with no list: Claude Code does not start stopped background agents again when it
+  resumes a conversation, and one the agent itself starts again in the new process is listed by that turn's end.
 - It is given only while the session is at its prompt: in any other status the session shows that status and no list,
   and what was last listed shows again if it comes back to its prompt without a new turn end.
 - Clearing the conversation with `/clear` does not end work running in the background (measured on Claude Code 2.1.303),

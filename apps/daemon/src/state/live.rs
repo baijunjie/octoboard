@@ -273,7 +273,7 @@ impl AppState {
     /// What the daemon drops once session `id` has left the live map ([`Self::remove_live`]):
     /// the sharing status is published again when it was the current session (`was_current`),
     /// and its bookkeeping goes either way.
-    pub(crate) fn after_live_removed(&self, id: &str, was_current: bool) {
+    pub(crate) fn after_live_removed(self: &Arc<Self>, id: &str, was_current: bool) {
         if was_current {
             self.publish_account_sharing();
         }

@@ -451,6 +451,9 @@ fn adopt_session(
     if let Some(token) = &meta.mcp_token {
         state.restore_mcp_token(&meta.session_id, token);
     }
+    // Before the session is live: nothing may see it live with work not confirmed for its launch,
+    // and a persist must not tag that work with the live launch.
+    state.restore_background_work(&meta.session_id, &live.launch_id);
     // The ledger follows the launch from here, before the reconcile reads its file.
     state.process_ledger.containment_adopted(&live.launch_id);
     state.register_live(live.clone());

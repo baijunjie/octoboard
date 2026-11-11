@@ -46,6 +46,7 @@ mod agent_availability;
 pub(crate) mod application_note;
 mod auto_switch;
 mod background;
+mod background_store;
 pub(crate) mod bindings;
 mod claims;
 mod field_versions;
@@ -290,10 +291,15 @@ pub struct AppState {
     /// dropped with the record.
     ended_turns: Mutex<HashMap<String, late_turn_end::EndedTurn>>,
     /// The background work each session's agent last said it left running
-    /// (`Session::background_tasks`). Held in memory only: the work belongs to the agent process
-    /// and goes with it, so nothing is worth keeping across a daemon restart. Dropped with the
-    /// session's other bookkeeping.
+    /// (`Session::background_tasks`). Held in memory, with a copy in `saved_background`: the work
+    /// belongs to the agent process and goes with it, but a daemon that restarts leaves the
+    /// process running and loses this map, so the copy is loaded into it at start and an adopted
+    /// session keeps it when it is of the launch adopted.
+    /// Dropped with the session's other bookkeeping.
     background_tasks: Mutex<HashMap<String, BackgroundWork>>,
+    /// The file `background_tasks` is copied to on every change, and what the previous daemon left
+    /// in it; see [`background_store`].
+    saved_background: background_store::SavedBackground,
     /// The tool calls of each session's current turn its hooks have reported open or waiting on
     /// the user (`tool_calls`). Held in memory only: they belong to the agent process's turn.
     /// Dropped with the session's other bookkeeping.
@@ -410,6 +416,7 @@ impl AppState {
             request_hands: Mutex::new(HashMap::new()),
             ended_turns: Mutex::new(HashMap::new()),
             background_tasks: Mutex::new(HashMap::new()),
+            saved_background: Default::default(),
             tool_calls: Mutex::new(HashMap::new()),
             default_efforts: Mutex::new(HashMap::new()),
             next_tasks_ticket: std::sync::atomic::AtomicU64::new(0),

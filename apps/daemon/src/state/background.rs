@@ -1,10 +1,11 @@
-//! Each session's background tasks and default effort, held in memory, with the delayed emptying
-//! of the task list.
+//! Each session's background tasks and default effort, held in memory (the tasks copied to a file,
+//! see `super::background_store`), with the delayed emptying of the task list.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
+use super::background_store::{Current, SavedWork};
 use super::AppState;
 use crate::hooks::BackgroundTasksChange;
 use crate::protocol::{BackgroundTask, SessionStatus};
@@ -30,6 +31,18 @@ pub(super) struct BackgroundWork {
     /// `SubagentStart` applies the emptying at once, before adding itself; a completion
     /// notification does neither.
     pending_empty: Option<u64>,
+    /// Set while the work was loaded at start and its session's process has not been found yet;
+    /// the work is hidden until then, see [`AppState::restore_background_work`].
+    loaded: Option<Loaded>,
+}
+
+/// How the work loaded at start stands, until its session's process is found.
+enum Loaded {
+    /// As loaded, saved for this launch.
+    Saved(String),
+    /// A full list ([`BackgroundTasksChange::Replace`]) was applied since the work was loaded: the
+    /// work is then wholly what the reporting process says, whatever launch it was saved for.
+    Replaced,
 }
 
 impl BackgroundWork {
@@ -47,6 +60,9 @@ impl BackgroundWork {
         match change {
             BackgroundTasksChange::Replace(list) => {
                 self.pending_empty = None;
+                if self.loaded.is_some() {
+                    self.loaded = Some(Loaded::Replaced);
+                }
                 self.started.clear();
                 self.remember_descriptions(&list);
                 self.tasks = list;
@@ -98,6 +114,33 @@ impl BackgroundWork {
         !std::mem::take(&mut self.tasks).is_empty()
     }
 
+    /// What is kept of the work across a daemon restart, for the process of `launch`: the tasks and
+    /// the descriptions. The rest is about the next two seconds, which a restart does not carry.
+    /// The tasks are none while the emptying is waiting out [`EMPTY_TASKS_DELAY`]: a restart in
+    /// that time must not give back a subagent that has stopped. `None` when there is neither.
+    fn saved(&self, launch: &str) -> Option<SavedWork> {
+        let tasks = if self.pending_empty.is_some() {
+            Vec::new()
+        } else {
+            self.tasks.clone()
+        };
+        (!tasks.is_empty() || !self.descriptions.is_empty()).then(|| SavedWork {
+            launch: launch.to_string(),
+            tasks,
+            descriptions: self.descriptions.clone(),
+        })
+    }
+
+    /// The work as [`Self::saved`] kept it, not shown until its session's process is found.
+    pub(super) fn restored(saved: SavedWork) -> Self {
+        Self {
+            tasks: saved.tasks,
+            descriptions: saved.descriptions,
+            loaded: Some(Loaded::Saved(saved.launch)),
+            ..Self::default()
+        }
+    }
+
     /// Whether there is nothing left at all, descriptions included, to keep a map entry for.
     fn is_empty(&self) -> bool {
         self.tasks.is_empty() && self.pending_empty.is_none() && self.descriptions.is_empty()
@@ -143,37 +186,152 @@ impl AppState {
         {
             return;
         }
-        let (changed, deferred) = {
+        let (changed, deferred, saved_changed) = {
             let mut all = self
                 .background_tasks
                 .lock()
                 .expect("background tasks lock poisoned");
             let work = all.entry(id.to_string()).or_default();
             let before = work.tasks.clone();
+            let was_pending = work.pending_empty.is_some();
             let ticket = self
                 .next_tasks_ticket
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let deferred = work.apply(change, tokio::time::Instant::now(), ticket);
             let changed = work.tasks != before;
+            // What is saved differs from the list while an emptying waits, so a change of that
+            // alone changes it too.
+            let saved_changed = changed || was_pending != work.pending_empty.is_some();
             if work.is_empty() {
                 all.remove(id);
             }
-            (changed, deferred)
+            (changed, deferred, saved_changed)
         };
         if let Some(ticket) = deferred {
             let state = self.clone();
             let id = id.to_string();
             tokio::spawn(async move {
                 tokio::time::sleep(EMPTY_TASKS_DELAY).await;
-                state.empty_background_tasks_if_pending(&id, ticket);
+                // Writes the file, which blocks.
+                let _ = tokio::task::spawn_blocking(move || {
+                    state.empty_background_tasks_if_pending(&id, ticket)
+                })
+                .await;
             });
+        }
+        if saved_changed {
+            self.persist_background_tasks(id);
         }
         if changed {
             self.publish_if_idle(id);
         }
     }
 
+    /// Copies the session's work to the file, as it is now. The file is written under the saved
+    /// copy's own lock and the work is read under that, never the other way round, so the hot
+    /// lock on the map is not held across the write, and the last of two changes to get here
+    /// writes what is current. The session's process is looked up under that lock too, so the last
+    /// writer saves the launch that is current. A session with no process is not copied and its
+    /// saved entry is left as it is: the entry is keyed by the launch. **Blocks** on the file.
+    fn persist_background_tasks(&self, id: &str) {
+        self.saved_background.sync(id, || {
+            let Some(live) = self.live_session(id) else {
+                return Current::Unchanged;
+            };
+            Current::Work(
+                self.background_tasks
+                    .lock()
+                    .expect("background tasks lock poisoned")
+                    .get(id)
+                    .and_then(|work| work.saved(&live.launch_id)),
+            )
+        });
+    }
+
+    /// Removes the saved entry of `id` off the async runtime, as
+    /// [`Self::drop_saved_background_unless_live`] does; the caller has dropped the work in memory
+    /// already. A change that is persisted after the session's process left finds no process and
+    /// leaves the entry alone, so it cannot bring a removed entry back. Where there is no runtime
+    /// the entry is removed at once.
+    pub(super) fn forget_saved_background(self: &Arc<Self>, id: &str) {
+        let state = self.clone();
+        let id = id.to_string();
+        let remove = move || state.drop_saved_background_unless_live(&id);
+        match tokio::runtime::Handle::try_current() {
+            Ok(runtime) => {
+                runtime.spawn_blocking(remove);
+            }
+            Err(_) => remove(),
+        }
+    }
+
+    /// Removes the saved entry of `id`, unless the session has a process by the time it is
+    /// removed: that one's entry and work are its own. The work in memory is left alone: its
+    /// caller has dropped it, and a process launched since may have reported work of its own.
+    /// **Blocks** on the file.
+    fn drop_saved_background_unless_live(&self, id: &str) {
+        self.saved_background.sync(id, || {
+            if self.live_session(id).is_some() {
+                Current::Unchanged
+            } else {
+                Current::Work(None)
+            }
+        });
+    }
+
+    /// [`Self::drop_saved_background_unless_live`], and the work held in memory as well, which the
+    /// file's entry was loaded into: for a claim released with no process adopted for it, whose
+    /// work nothing else drops. **Blocks** on the file.
+    pub(super) fn release_saved_background(&self, id: &str) {
+        self.saved_background.sync(id, || {
+            if self.live_session(id).is_some() {
+                return Current::Unchanged;
+            }
+            self.background_tasks
+                .lock()
+                .expect("background tasks lock poisoned")
+                .remove(id);
+            Current::Work(None)
+        });
+    }
+
+    /// Settles the adopted session `id`'s background work, which [`Self::load_saved_background`]
+    /// loaded and the reports since were applied on top of, once the session is found running the
+    /// launch `launch`: kept when the work was saved for this launch, was not loaded (it came from
+    /// reports alone), or was wholly replaced by a report since it was loaded; cleared when it was
+    /// left by another launch, whose process is gone, and only partial reports (a start, a stop, a
+    /// completion) were applied on top of it, which say nothing of what that launch left.
+    /// The saved copy then follows what memory holds. Called as the session is adopted, before it
+    /// is registered live, so that nothing sees the session live with work not confirmed for its
+    /// launch. **Blocks** on the file.
+    pub(crate) fn restore_background_work(&self, id: &str, launch: &str) {
+        {
+            let mut all = self
+                .background_tasks
+                .lock()
+                .expect("background tasks lock poisoned");
+            match all.get_mut(id) {
+                Some(work) if matches!(&work.loaded, Some(Loaded::Saved(saved)) if saved != launch) =>
+                {
+                    all.remove(id);
+                }
+                Some(work) => work.loaded = None,
+                None => {}
+            }
+        }
+        self.saved_background.sync(id, || {
+            Current::Work(
+                self.background_tasks
+                    .lock()
+                    .expect("background tasks lock poisoned")
+                    .get(id)
+                    .and_then(|work| work.saved(launch)),
+            )
+        });
+    }
+
     /// Empties the list once a subagent's stop has stood, unless something took its ticket back.
+    /// **Blocks** on the file.
     fn empty_background_tasks_if_pending(self: &Arc<Self>, id: &str, ticket: u64) {
         let changed = {
             let mut all = self
@@ -187,6 +345,7 @@ impl AppState {
             changed
         };
         if changed {
+            self.persist_background_tasks(id);
             self.publish_if_idle(id);
         }
     }
@@ -254,14 +413,16 @@ impl AppState {
         }
     }
 
-    /// The background work the agent last listed for the session; empty when none, or when the
-    /// session has not been seen to leave any. Whether it is worth showing depends on the status:
-    /// see [`Self::shown_background_tasks`].
+    /// The background work the agent last listed for the session; empty when none, when the
+    /// session has not been seen to leave any, or while the work is what the previous daemon saved
+    /// and the session's adoption has not confirmed it ([`Self::restore_background_work`]).
+    /// Whether it is worth showing depends on the status: see [`Self::shown_background_tasks`].
     pub fn background_tasks_of(&self, id: &str) -> Vec<BackgroundTask> {
         self.background_tasks
             .lock()
             .expect("background tasks lock poisoned")
             .get(id)
+            .filter(|work| work.loaded.is_none())
             .map(|work| work.tasks.clone())
             .unwrap_or_default()
     }

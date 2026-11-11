@@ -802,3 +802,266 @@ async fn compatibility_only_change_relaunches_running_session_and_failure_restor
         .unwrap();
     assert_eq!(writes, 2, "one change and one rollback");
 }
+
+/// One hook event of session `s`, applied the way the hook route applies it: queued, then
+/// drained.
+fn hook(state: &Arc<AppState>, payload: serde_json::Value) {
+    state.hook_queues.push("s", payload.to_string().into());
+    crate::hooks::apply::drain_hook_queue(state, "s");
+}
+
+/// The background subagent Claude Code (2.1.322) lists in a `Stop` or `SubagentStop`, as it
+/// lists it.
+fn listed_sleeper() -> serde_json::Value {
+    serde_json::json!([{
+        "id": "a645cb2f11b0d2884",
+        "type": "subagent",
+        "status": "running",
+        "description": "slow sleeper",
+        "agent_type": "general-purpose",
+    }])
+}
+
+/// What clients were last shown of session `s`, as its status and the ids of its background
+/// tasks, and whether any of what they were shown was a plain idle.
+fn last_shown(
+    events: &mut tokio::sync::broadcast::Receiver<Event>,
+) -> (Option<(SessionStatus, Vec<String>)>, bool) {
+    let (mut last, mut plain_idle) = (None, false);
+    while let Ok(event) = events.try_recv() {
+        if let Event::SessionUpserted { session } = event {
+            let ids: Vec<String> = session
+                .background_tasks
+                .iter()
+                .map(|task| task.id.clone())
+                .collect();
+            plain_idle |= session.status == SessionStatus::Idle && ids.is_empty();
+            last = Some((session.status, ids));
+        }
+    }
+    (last, plain_idle)
+}
+
+/// A model change ends a process that left a subagent working in the background, which drops the
+/// list with the process; the relaunch's continue prompt revives the subagent (Claude Code does not
+/// on its own), and the turn's end that holds it shows the session idle with it running, under the
+/// change's claim and once the claim is let go, through the subagent's own events and a helper
+/// agent's, until the turn its hand-back opens ends with nothing left. The events are the ones
+/// Claude Code 2.1.322 sends for that sequence.
+#[tokio::test]
+async fn a_subagent_revived_after_a_model_change_shows_as_background_work() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-model-revived-subagent");
+    let record = dir
+        .join("default-claude")
+        .join("projects/slug/a0000000-0000-4000-8000-000000000001.jsonl");
+    std::fs::create_dir_all(record.parent().unwrap()).unwrap();
+    // A turn a usage limit stopped, so the relaunch carries it on with Octoboard's continue prompt.
+    std::fs::write(
+        &record,
+        concat!(
+            r#"{"type":"user","message":{"role":"user","content":"hello"}}"#,
+            "\n",
+            r#"{"type":"assistant","isApiErrorMessage":true,"error":"rate_limit","#,
+            r#""apiError":"usage_limit_reached","message":{"role":"assistant","#,
+            r#""stop_reason":"stop_sequence","content":[{"type":"text","text":"limit"}]}}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+    state
+        .store
+        .insert_session(&Session {
+            has_conversation: true,
+            agent_session_id: Some("a0000000-0000-4000-8000-000000000001".to_string()),
+            ..project_session("s", AgentId::CLAUDE, SessionStatus::Idle)
+        })
+        .unwrap();
+    let first = idle_stand_in("s");
+    state.register_live(first.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, first.clone());
+    // The first process's turn ends holding the subagent.
+    hook(
+        &state,
+        serde_json::json!({"hook_event_name": "UserPromptSubmit", "prompt_id": "t0", "prompt": "go"}),
+    );
+    hook(
+        &state,
+        serde_json::json!({"hook_event_name": "Stop", "prompt_id": "t0", "background_tasks": listed_sleeper()}),
+    );
+    assert_eq!(state.background_tasks_of("s").len(), 1);
+
+    let started = Arc::new(std::sync::Mutex::new(
+        Vec::<crate::test_support::StandIn>::new(),
+    ));
+    let launches = Arc::new(std::sync::Mutex::new(
+        Vec::<crate::test_support::Launched>::new(),
+    ));
+    // The claim stays held after the relaunch until the new process's turn has ended.
+    let settled = Arc::new(tokio::sync::Notify::new());
+    crate::coordinator::restart::SWITCH_SETTLED.with(|slot| slot.replace(Some(settled.clone())));
+    let mut events = state.subscribe();
+
+    let change = set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            compatibility: Default::default(),
+            model: Some(Some("opus".to_string())),
+            effort: None,
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        crate::test_support::stand_in_launch(&started, &launches, || {}),
+    );
+    let relaunched = async {
+        let (watching, previous) = (state.clone(), first.clone());
+        assert!(
+            crate::test_support::within(crate::test_support::PATIENCE, move || {
+                watching.is_launching("s")
+                    && watching
+                        .live_session("s")
+                        .is_some_and(|live| !std::ptr::eq(live.as_ref(), previous.as_ref()))
+            })
+            .await,
+            "the relaunched process did not come up"
+        );
+        // The list went with the process that ended.
+        assert!(state.background_tasks_of("s").is_empty());
+        assert!(state.is_prompted_on_launch("s"));
+        hook(
+            &state,
+            serde_json::json!({"hook_event_name": "SessionStart", "source": "resume"}),
+        );
+        hook(
+            &state,
+            serde_json::json!({
+                "hook_event_name": "UserPromptSubmit",
+                "prompt_id": "t1",
+                "prompt": crate::messaging::texts::continue_prompt(None),
+            }),
+        );
+        let send = serde_json::json!({
+            "tool_name": "SendMessage",
+            "tool_input": {"to": "a645cb2f11b0d2884", "message": "continue"},
+            "tool_use_id": "toolu_send",
+            "prompt_id": "t1",
+        });
+        let event = |name: &str, base: &serde_json::Value| {
+            let mut payload = base.clone();
+            payload["hook_event_name"] = name.into();
+            payload
+        };
+        hook(&state, event("PreToolUse", &send));
+        // Claude Code posts the two in the same millisecond, in either order; both fall inside the
+        // turn.
+        hook(
+            &state,
+            serde_json::json!({
+                "hook_event_name": "SubagentStart",
+                "prompt_id": "t1",
+                "agent_id": "a645cb2f11b0d2884",
+                "agent_type": "general-purpose",
+            }),
+        );
+        hook(&state, event("PostToolUse", &send));
+        hook(
+            &state,
+            serde_json::json!({"hook_event_name": "PostToolBatch", "prompt_id": "t1"}),
+        );
+        hook(
+            &state,
+            serde_json::json!({
+                "hook_event_name": "Stop",
+                "prompt_id": "t1",
+                "background_tasks": listed_sleeper(),
+            }),
+        );
+        let record = state.session_record("s").unwrap();
+        assert_eq!(record.status, SessionStatus::Idle);
+        assert_eq!(state.background_tasks_of("s").len(), 1);
+        // Shown starting while the change still has its claim.
+        assert_eq!(state.wire_session(record).status, SessionStatus::Starting);
+        settled.notify_one();
+    };
+    let (outcome, ()) = tokio::join!(change, relaunched);
+    crate::coordinator::restart::SWITCH_SETTLED.with(|slot| slot.replace(None));
+    assert!(matches!(
+        outcome.unwrap(),
+        ModelChange::Restarted { continued: true }
+    ));
+    assert!(!state.is_launching("s"));
+    let sleeper = vec!["a645cb2f11b0d2884".to_string()];
+    let (shown, _) = last_shown(&mut events);
+    assert_eq!(shown, Some((SessionStatus::Idle, sleeper.clone())));
+
+    // The subagent's own tool calls, and a helper agent's stop that lists it, leave it so.
+    let call = serde_json::json!({
+        "prompt_id": "t1",
+        "agent_id": "a645cb2f11b0d2884",
+        "agent_type": "general-purpose",
+        "tool_name": "Bash",
+        "tool_input": {"command": "sleep 15"},
+        "tool_use_id": "toolu_sleep",
+    });
+    for name in ["PreToolUse", "PostToolUse", "PostToolBatch"] {
+        let mut payload = call.clone();
+        payload["hook_event_name"] = name.into();
+        hook(&state, payload);
+    }
+    hook(
+        &state,
+        serde_json::json!({
+            "hook_event_name": "SubagentStop",
+            "prompt_id": "t1",
+            "agent_id": "ad9f0566a1c4dd04e",
+            "agent_type": "",
+            "background_tasks": listed_sleeper(),
+        }),
+    );
+    let record = state.session_record("s").unwrap();
+    assert_eq!(record.status, SessionStatus::Idle);
+    let shown_now = state.wire_session(record);
+    assert_eq!(shown_now.status, SessionStatus::Idle);
+    assert_eq!(shown_now.background_tasks.len(), 1);
+    let (_, plain_idle) = last_shown(&mut events);
+    assert!(!plain_idle, "shown idle with nothing running");
+
+    // The hand-back opens a turn; the subagent's stop inside it changes nothing, and the turn's end
+    // lists nothing left.
+    hook(
+        &state,
+        serde_json::json!({
+            "hook_event_name": "UserPromptSubmit",
+            "prompt_id": "t2",
+            "prompt": "Another Claude session sent a message:\n<agent-message from=\"a645cb2f11b0d2884\">\n\
+                       [Subagent hand-back] The report follows:\n  DONE\n</agent-message>",
+        }),
+    );
+    assert_eq!(status_of(&state, "s"), Some(SessionStatus::Working));
+    hook(
+        &state,
+        serde_json::json!({
+            "hook_event_name": "SubagentStop",
+            "prompt_id": "t2",
+            "agent_id": "a645cb2f11b0d2884",
+            "agent_type": "general-purpose",
+            "background_tasks": listed_sleeper(),
+        }),
+    );
+    assert_eq!(status_of(&state, "s"), Some(SessionStatus::Working));
+    let (_, plain_idle) = last_shown(&mut events);
+    assert!(!plain_idle, "shown idle before the hand-back's turn ended");
+    hook(
+        &state,
+        serde_json::json!({"hook_event_name": "Stop", "prompt_id": "t2", "background_tasks": []}),
+    );
+    assert_eq!(status_of(&state, "s"), Some(SessionStatus::Idle));
+    assert!(state.background_tasks_of("s").is_empty());
+    let (shown, _) = last_shown(&mut events);
+    assert_eq!(shown, Some((SessionStatus::Idle, Vec::new())));
+
+    stop_process(&state, state.live_session("s").unwrap())
+        .await
+        .unwrap();
+}

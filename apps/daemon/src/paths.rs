@@ -106,6 +106,12 @@ pub fn restart_screens_path() -> PathBuf {
     data_dir().join("restart-screens.json")
 }
 
+/// The background work of each running session, which every daemon keeps up to date as it changes
+/// and the next one reads as it starts; see `crate::state::background_store`.
+pub fn background_tasks_path() -> PathBuf {
+    data_dir().join("background-tasks.json")
+}
+
 /// The messages a planned stop left queued for the next daemon, which that daemon queues again and
 /// deletes as it starts; see `crate::messaging::restart_outbox`.
 pub fn restart_outbox_path() -> PathBuf {

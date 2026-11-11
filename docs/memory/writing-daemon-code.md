@@ -9,6 +9,17 @@ on `LiveSession` or a map on `AppState` loses it with the process, and a resume 
 process ending always moves the session out of — working, a live waiting-for-user prompt, dormant, background tasks,
 an account switch under way — may live in process memory. (Source: user instruction)
 
+Process memory is not the same as the daemon's memory: a daemon that restarts, planned or after a crash, loses
+everything it held without ending any session's process, since the process holders keep them running and the next daemon
+adopts them. A state that ends with the process but is not reported again after an adoption — the background tasks are
+one: the agent lists them only at its next turn end or subagent stop — needs a copy outside memory, written on every
+change (`apps/daemon/src/state/background_store.rs`); without it the adopted session reads as another status until the
+agent next says something. Load that copy into memory at daemon start, right after `begin_adoption`, not when each
+session is adopted: the reports the holders kept over the restart carry only the session id and are released after at
+most the relay's adoption wait, so they can arrive before a session's adoption, and a copy seeded there overwrites them
+with older state. Until the adoption confirms the session runs the launch the copy was saved for, keep it hidden from
+clients and from what is persisted, and drop it if the launch differs.
+
 When such a state follows from how a turn ended, do not rely on the agent's hook for it alone: a process killed
 mid-turn fires no hook, so every write that records the process ending has to set it too. Judge it on the agent's own
 status at that moment, not the stored one, which something other than the agent can hold (a waiting session request

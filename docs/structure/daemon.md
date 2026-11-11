@@ -18,8 +18,9 @@ serde. The crate is a member of the root Cargo workspace beside the desktop shel
 `src/main.rs` hands a named CLI mode to `cli::run`; otherwise it takes the instance lock, binds `127.0.0.1` (on the
 top-level `--port` when given, else on an OS-assigned port, which is what the desktop shell starts), opens the store,
 generates the per-launch key (or reads the one its predecessor hands it on stdin, `--key-stdin`), loads the screens
-a planned stop saved (`state::restart_screens`, kept until each is consumed) and the messages it left queued
-(`messaging::restart_outbox`, deleted as read), adopts what the holders kept running (`coordinator::adopt`),
+a planned stop saved (`state::restart_screens`, kept until each is consumed), the messages it left queued
+(`messaging::restart_outbox`, deleted as read) and the background work each session's agent had left running
+(`state::background_store`, loaded before the adoption and pruned after it to the sessions adopted or claimed), adopts what the holders kept running (`coordinator::adopt`),
 keeps claimed what a holder it cannot link to yet runs (`coordinator::unlinked`), marks the other sessions interrupted,
 clears the run directory but for the adopted and claimed sessions' scratch directories, writes the owner record beside
 the lock (`instance_lock::Owner`, the pid identity, the port and whether it follows an application), prints the
@@ -176,7 +177,9 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   write Octoboard's database the user can fix (read-only data folder, full disk, a file that cannot be opened or read)
   as `store_write_failed`.
 - `src/state/` — `AppState` (`mod.rs`) with one file per concern of live state (running sessions, claims, status,
-  titles, turns, the tool calls a turn's hooks reported open or waiting on the user (`tool_calls.rs`), sharing status, git
+  titles, turns, the tool calls a turn's hooks reported open or waiting on the user (`tool_calls.rs`), the background
+  work each session's agent said it left running (`background.rs`) with its copy in the data directory that survives a
+  daemon restart (`background_store.rs`, `paths::background_tasks_path`), sharing status, git
   status, requests, availability, hooks to the automatic account switch, whether the host is held awake
   (`keep_awake.rs`), forgetting a record, the adoption gate a holder's relayed requests wait on, the sessions claimed
   for a holder that cannot be linked to (`unlinked.rs`), the stop asked for, its escalation and the refusals of a

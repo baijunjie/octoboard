@@ -171,6 +171,47 @@ async fn a_running_sessions_terminal_is_adopted_with_its_token_scratch_directory
     assert!(scratch.is_dir());
 }
 
+/// The background work the previous daemon saved comes back for the session adopted running the
+/// launch it was saved for, before the session is live, and not for one adopted running another.
+#[tokio::test(flavor = "multi_thread")]
+async fn saved_background_work_comes_back_for_the_same_launch_only() {
+    let (state, dir) = console_with_project_and_accounts("adopt-background");
+    record(&state, "s1", SessionStatus::Idle);
+    record(&state, "s2", SessionStatus::Idle);
+    let run_dir = dir.join("run");
+    let (scratch1, scratch2) = (run_dir.join("s1"), run_dir.join("s2"));
+    std::fs::create_dir_all(&scratch1).unwrap();
+    std::fs::create_dir_all(&scratch2).unwrap();
+    let pids = left_behind(
+        &dir,
+        vec![
+            ("t1", session_meta("s1", &scratch1), programs::sleep(60)),
+            ("t2", session_meta("s2", &scratch2), programs::sleep(60)),
+        ],
+    );
+    let _guard = KillOnDrop(pids);
+    let saved = dir.join("background-tasks.json");
+    std::fs::write(
+        &saved,
+        r#"{"version":1,"sessions":{
+            "s1":{"launch":"launch-s1","tasks":[{"id":"a","type":"subagent"}]},
+            "s2":{"launch":"an-earlier-launch","tasks":[{"id":"b","type":"subagent"}]}}}"#,
+    )
+    .unwrap();
+    state.load_saved_background(&saved);
+
+    let (_next, found) = found_in(&dir);
+    let adopted = adopt_in_blocking(&state, found, run_dir).await;
+
+    assert_eq!(adopted.sessions.len(), 2);
+    let tasks = state.background_tasks_of("s1");
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].id, "a");
+    assert!(state.background_tasks_of("s2").is_empty());
+    let record = state.session_record("s1").unwrap();
+    assert_eq!(state.wire_session(record).background_tasks.len(), 1);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn only_the_scratch_directory_the_daemon_made_for_the_session_is_kept() {
     let (state, dir) = console_with_project_and_accounts("adopt-scratch");
@@ -717,6 +758,105 @@ async fn a_session_claimed_for_a_holder_that_is_gone_is_interrupted_once_it_is_k
     );
     assert_eq!(state.process_ledger.followed_session("launch-s1"), None);
     assert!(!state.is_launching("s1"));
+}
+
+/// The background work saved for a session claimed for a holder that cannot be linked to yet is
+/// kept meanwhile and given back when that holder's terminal is taken over later, as the same
+/// launch's.
+#[tokio::test(flavor = "multi_thread")]
+async fn saved_background_work_of_a_claimed_session_is_given_back_when_its_holder_is_linked_later()
+{
+    let (state, dir) = console_with_project_and_accounts("adopt-unlinked-background");
+    record(&state, "s1", SessionStatus::Idle);
+    let run_dir = dir.join("run");
+    let scratch = run_dir.join("s1");
+    std::fs::create_dir_all(&scratch).unwrap();
+    let pids = left_behind(
+        &dir,
+        vec![("t1", session_meta("s1", &scratch), programs::sleep(60))],
+    );
+    let _guard = KillOnDrop(pids);
+    let holder = only_holder(&dir);
+    state
+        .store
+        .record_held_terminal(&launched_in(&holder, "s1", "launch-s1"))
+        .unwrap();
+    let saved = dir.join("background-tasks.json");
+    std::fs::write(
+        &saved,
+        r#"{"version":1,"sessions":{
+            "s1":{"launch":"launch-s1","tasks":[{"id":"a","type":"subagent"}]}}}"#,
+    )
+    .unwrap();
+    state.load_saved_background(&saved);
+
+    let adopted = claim_in_blocking(&state, vec![holder.clone()], run_dir.clone()).await;
+    assert_eq!(adopted.claimed, ["s1"]);
+    assert!(state.background_tasks_of("s1").is_empty());
+
+    let (_next, found) = found_in(&dir);
+    let taken = adopt_in_blocking(&state, found, run_dir.clone()).await;
+    assert_eq!(taken.sessions, ["s1"]);
+    {
+        let (state, run_dir) = (state.clone(), run_dir.clone());
+        tokio::task::spawn_blocking(move || {
+            unlinked::settle_holder(&state, &holder, Some(taken.sessions.as_slice()), &run_dir);
+            unlinked::finish(&state, &run_dir);
+        })
+        .await
+        .unwrap();
+    }
+
+    let tasks = state.background_tasks_of("s1");
+    assert_eq!(tasks.len(), 1);
+    assert_eq!(tasks[0].id, "a");
+    let file: Value = serde_json::from_slice(&std::fs::read(&saved).unwrap()).unwrap();
+    assert!(
+        file["sessions"].get("s1").is_some(),
+        "the entry was dropped"
+    );
+}
+
+/// The background work saved for a session claimed for a holder that turns out to be gone is
+/// dropped with the claim: there is no process left that it could belong to.
+#[tokio::test(flavor = "multi_thread")]
+async fn saved_background_work_of_a_session_claimed_for_a_gone_holder_is_dropped() {
+    let (state, dir) = console_with_project_and_accounts("adopt-unlinked-gone-background");
+    record(&state, "s1", SessionStatus::Idle);
+    let run_dir = dir.join("run");
+    state
+        .store
+        .record_held_terminal(&launched_in("gone", "s1", "launch-s1"))
+        .unwrap();
+    let saved = dir.join("background-tasks.json");
+    std::fs::write(
+        &saved,
+        r#"{"version":1,"sessions":{
+            "s1":{"launch":"launch-s1","tasks":[{"id":"a","type":"subagent"}]}}}"#,
+    )
+    .unwrap();
+    state.load_saved_background(&saved);
+    let adopted = claim_in_blocking(&state, vec!["gone".to_string()], run_dir.clone()).await;
+    assert_eq!(adopted.claimed, ["s1"]);
+    assert!(saved.exists(), "dropped before the holder is settled");
+
+    tokio::task::spawn_blocking({
+        let state = state.clone();
+        move || {
+            unlinked::settle_holder(&state, "gone", None, &run_dir);
+            unlinked::finish(&state, &run_dir);
+        }
+    })
+    .await
+    .unwrap();
+
+    assert!(
+        !saved.exists(),
+        "the entry of a session with no process stayed"
+    );
+    // Hidden work cannot show that memory was cleared: the adoption would give it back.
+    state.restore_background_work("s1", "launch-s1");
+    assert!(state.background_tasks_of("s1").is_empty());
 }
 
 /// A session in a running status that no record places stays claimed while a holder that cannot
