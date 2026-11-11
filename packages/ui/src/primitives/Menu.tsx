@@ -68,15 +68,19 @@ export function MenuPopover({ at, className, children }: {
 const KEEP_DISABLED = { disabledBehavior: "selection" } as object;
 
 /** HeroUI's dropdown menu, holding `MenuItem`s, `MenuChoices`, `MenuSeparator`s and `Submenu`s. `onAction` is told the
- * id of the item chosen, in this menu or a submenu below it; `autoFocusFirst` focuses its first item as it opens. A
- * disabled item stays reachable by the arrow keys and announced, though it cannot be chosen. */
-export function MenuList({ onAction, autoFocusFirst, children }: {
+ * id of the item chosen, in this menu or a submenu below it. `autoFocus` is what takes focus as it opens, its first item
+ * or the menu itself; left out, that follows how its trigger opened it. A disabled item stays reachable by the arrow
+ * keys and announced, though it cannot be chosen.
+ *
+ * react-aria keeps the trigger's choice from its last opening until the next one through the trigger, so a menu opened
+ * some other way (a context menu) gives `autoFocus` for each opening. */
+export function MenuList({ onAction, autoFocus, children }: {
   onAction: (id: string) => void;
-  autoFocusFirst?: boolean;
+  autoFocus?: "first" | "menu";
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <Dropdown.Menu onAction={(key) => onAction(String(key))} {...(autoFocusFirst && { autoFocus: "first" as const })} {...KEEP_DISABLED}>
+    <Dropdown.Menu onAction={(key) => onAction(String(key))} {...definedProps({ autoFocus: autoFocus && (autoFocus === "menu" ? true : "first") })} {...KEEP_DISABLED}>
       {children as React.ReactElement}
     </Dropdown.Menu>
   );

@@ -25,7 +25,7 @@ import { BadgedControl, Menu, MenuPopover, MenuTrigger, partSelector } from "../
 
 /** The entries of a menu given as a function, read when the menu opens (the popover mounts its content
  * then), so that what they judge against the clock is the time they are looked at. */
-function ResolvedMenuItems({ source, onGone, autoFocus }: { source: ActionMenuEntry[] | (() => ActionMenuEntry[]); onGone: () => void; autoFocus?: "first" }): React.ReactElement {
+function ResolvedMenuItems({ source, onGone, autoFocus }: { source: ActionMenuEntry[] | (() => ActionMenuEntry[]); onGone: () => void; autoFocus?: "first" | "menu" }): React.ReactElement {
   // The popover unmounts its content only once its exit animation has run, which is when the menu
   // has really left the page.
   const goneRef = useLatest(onGone);
@@ -88,10 +88,13 @@ export function ActionMenu({
   const contextOpenRef = useLatest(onContextOpen);
   const leavesContextRef = useLatest(leavesContextToBrowser);
   const [isOpen, setIsOpen] = useState(false);
-  // Where a right-click opened the menu; `null` while it is anchored to its trigger.
+  // Where a context open (a right-click, or the Menu key or Shift+F10) placed the menu; `null` while it is anchored to
+  // its trigger.
   const [pointerAt, setPointerAt] = useState<{ x: number; y: number } | null>(null);
   // Whether the Menu key or Shift+F10 opened the menu, which then focuses its first item; a
-  // right-click's menu focuses the menu itself, as react-aria's does for a pointer.
+  // right-click's menu focuses the menu itself, as react-aria's does for a pointer. Either is given to
+  // the menu for every context open, since react-aria would otherwise reuse the focus its trigger's
+  // last opening chose (the first item after a key or a screen reader's press).
   const [openedByKey, setOpenedByKey] = useState(false);
   // Counts the context opens, which remount the menu's content: a menu opened again while its popover is still
   // mounted (a second right-click, which closes and opens it within one gesture) would otherwise keep the content
@@ -291,7 +294,7 @@ export function ActionMenu({
             them is that much wider, so the label beside them keeps the room it has next to glyphs. */}
         <MenuPopover className="min-w-48 max-w-72 has-[[data-kbd-spelled]]:max-w-82" at={pointerAt ?? undefined}>
           <MenuShortcutScope value={isOpen}>
-            <ResolvedMenuItems key={openCount} source={items} onGone={onPopoverGone} autoFocus={openedByKey ? "first" : undefined} />
+            <ResolvedMenuItems key={openCount} source={items} onGone={onPopoverGone} autoFocus={pointerAt ? (openedByKey ? "first" : "menu") : undefined} />
           </MenuShortcutScope>
         </MenuPopover>
       </Menu>

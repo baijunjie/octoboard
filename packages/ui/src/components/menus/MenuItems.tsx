@@ -93,9 +93,9 @@ function PanelBody({ children }: { children: (context: ActionMenuPanelContext) =
   );
 }
 
-/** `autoFocus` is the root menu's, for a menu opened from the keyboard on its context target, which
- * focuses its first item as a menu opened from its trigger with the keyboard does. */
-export function MenuItems({ entries: source, autoFocus }: { entries: ActionMenuEntry[]; autoFocus?: "first" }): React.ReactElement {
+/** `autoFocus` is the root menu's, for a menu opened on its context target: the keyboard's focuses its first item
+ * as a menu opened from its trigger with the keyboard does, a right-click's the menu itself. */
+export function MenuItems({ entries: source, autoFocus }: { entries: ActionMenuEntry[]; autoFocus?: "first" | "menu" }): React.ReactElement {
   const entries = useResolvedMenuEntries(source);
   const t = useT();
   const shortcutsActive = useContext(MenuShortcutScope);
@@ -243,7 +243,7 @@ export function MenuItems({ entries: source, autoFocus }: { entries: ActionMenuE
       // Selection and closing stay react-aria's, including entries that keep their menu open.
       activateMenuItem(item);
     }}>
-      <MenuList onAction={run} autoFocusFirst={autoFocus === "first"}>
+      <MenuList onAction={run} autoFocus={autoFocus}>
         {nodes}
       </MenuList>
     </div>

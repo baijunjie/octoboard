@@ -517,7 +517,10 @@ describe("a disabled item", () => {
 });
 
 describe("the Menu key and Shift+F10 on the context target", () => {
-  function mountTarget(leavesContextToBrowser?: (event: MouseEvent) => boolean): { target: HTMLElement; inner: HTMLElement } {
+  function mountTarget(
+    leavesContextToBrowser?: (event: MouseEvent) => boolean,
+    items: ActionMenuEntry[] = [{ label: "Delete", icon: Trash2, onClick: () => {} }],
+  ): { target: HTMLElement; inner: HTMLElement } {
     const container = document.body.appendChild(document.createElement("div"));
     const root = createRoot(container);
     unmount = () => {
@@ -529,7 +532,7 @@ describe("the Menu key and Shift+F10 on the context target", () => {
       return (
         <div ref={ref} tabIndex={0} data-testid="target">
           <span tabIndex={-1} data-testid="inner" />
-          <ActionMenu label="Actions of X" items={[{ label: "Delete", icon: Trash2, onClick: () => {} }]} contextTargetRef={ref} leavesContextToBrowser={leavesContextToBrowser} />
+          <ActionMenu label="Actions of X" items={items} contextTargetRef={ref} leavesContextToBrowser={leavesContextToBrowser} />
         </div>
       );
     }
@@ -587,6 +590,40 @@ describe("the Menu key and Shift+F10 on the context target", () => {
       target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }));
     });
     await vi.waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("menu"));
+  });
+
+  // react-aria keeps the focus strategy of the trigger's last opening (the first item for a screen reader's press or a
+  // key, the last for ArrowUp) and hands it to every later opening that does not go through the trigger. Enter and
+  // Space leave the same strategy as a screen reader's press, so only the press stands for them. The menu has two items
+  // so that the first and the last are told apart.
+  it.each([
+    ["a screen reader's press", (trigger: HTMLElement) => trigger.click()],
+    ["ArrowUp", (trigger: HTMLElement) => void trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }))],
+  ])("focuses the menu on a right-click and the first item on the Menu key after %s opened it from its trigger", async (_, openFromTrigger) => {
+    const { target } = mountTarget(undefined, [
+      { label: "Delete", icon: Trash2, onClick: () => {} },
+      { label: "Archive", icon: Trash2, onClick: () => {} },
+    ]);
+    const trigger = target.querySelector<HTMLElement>("button")!;
+    const closeMenu = async () => {
+      act(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+      await vi.waitFor(() => expect(document.querySelector("[role=menu]")).toBeNull());
+    };
+    act(() => trigger.focus());
+    await act(async () => openFromTrigger(trigger));
+    await vi.waitFor(() => expect(document.activeElement?.closest("[role=menu]")).not.toBeNull());
+    await closeMenu();
+
+    act(() => {
+      target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }));
+    });
+    await vi.waitFor(() => expect(document.querySelector("[role=menu]")).not.toBeNull());
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("menu"));
+    await closeMenu();
+
+    act(() => target.focus());
+    act(() => void target.dispatchEvent(new KeyboardEvent("keydown", { key: "ContextMenu", bubbles: true, cancelable: true })));
+    await vi.waitFor(() => expect(document.activeElement).toBe(document.querySelectorAll("[role=menuitem]")[0]));
   });
 
   // A browser's second right-click while the menu is open: the surface behind a modal menu is inert, so the press lands on

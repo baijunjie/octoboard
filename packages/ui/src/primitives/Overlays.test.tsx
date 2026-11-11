@@ -52,7 +52,7 @@ it("leaves a menu's popover dialog unnamed, keeps a disabled item reachable, and
     <Menu open onOpenChange={() => {}}>
       <MenuTrigger label="More actions">…</MenuTrigger>
       <MenuPopover>
-        <MenuList onAction={onAction} autoFocusFirst>
+        <MenuList onAction={onAction} autoFocus="first">
           <MenuItem id="rename" textValue="Rename">Rename</MenuItem>
           <MenuItem id="off" textValue="Off" disabled>Off</MenuItem>
         </MenuList>
