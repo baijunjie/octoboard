@@ -11,11 +11,21 @@ import { ALL_COMMANDS, clientCapabilities, isAvailable, SHORTCUT_GROUPS } from "
 import type { SettingsSectionId } from "./sections";
 
 /** What decides which settings a section shows: the platform's capabilities, whether the daemon's host can be held
- * awake, and the daemon's settings. */
+ * awake, the daemon's settings, and what the reads of the system that some of them wait on have answered. */
 export interface SettingsSearchContext {
   platform: PlatformAdapter;
   keepAwake: boolean;
   settings: Settings;
+  /** What each read says of the settings that wait on it, as the section decides it (see `searchReads`): a row with
+   * no capability to read from is never counted, and one with it is counted from the answer on. */
+  reads: {
+    /** The launch-at-login row is on screen. */
+    launchAtLogin: boolean;
+    /** The permission rows are on screen. */
+    macosPermissions: boolean;
+    /** The permissions could not be read, so the section shows an alert in place of the rows. */
+    macosPermissionsUnreadable: boolean;
+  };
 }
 
 /** A part of an entry's text: a message, or one worded with parameters that are not the user's to change. */
@@ -25,7 +35,8 @@ type SearchText = PlainMessageKey | ((t: Translate) => string);
  * section's own (`SettingsSearchBlock`). Its text is its name and every wording its description can take, together
  * with the heading of its group (the `title` of the `SettingsGroup` it sits in, which the row inherits) and its
  * section's name. A description that follows the row's value (a switch's position, a choice) is searched in all its
- * wordings, so that changing the value while searching never takes the row out from under the user. `shown` says
+ * wordings, so that changing the value while searching never takes the row out from under the user. A block's
+ * `description` lists the words it is found by, whether or not the block shows them. `shown` says
  * whether the section renders it in this context; one it renders in every context has none. */
 export interface SettingsSearchEntry<Id extends string = string> {
   id: Id;
@@ -85,7 +96,7 @@ const INDEX = {
       label: "settings.launchAtLogin.label",
       description: ["settings.launchAtLogin.description.on", "settings.launchAtLogin.description.off", "settings.launchAtLogin.description.requiresApproval"],
       group: STARTUP,
-      shown: ({ platform }) => platform.launchAtLogin !== undefined,
+      shown: ({ platform, reads }) => platform.launchAtLogin !== undefined && reads.launchAtLogin,
     },
     daemonSwitch("resume_sessions_on_start", STARTUP),
     {
@@ -147,13 +158,26 @@ const INDEX = {
       id: "permissions.screenRecording",
       label: "settings.permissions.screenRecording.label",
       description: ["settings.permissions.screenRecording.description"],
-      shown: ({ platform }) => platform.macosPermissions !== undefined,
+      shown: ({ platform, reads }) => platform.macosPermissions !== undefined && reads.macosPermissions,
     },
     {
       id: "permissions.accessibility",
       label: "settings.permissions.accessibility.label",
       description: ["settings.permissions.accessibility.description"],
-      shown: ({ platform }) => platform.macosPermissions !== undefined,
+      shown: ({ platform, reads }) => platform.macosPermissions !== undefined && reads.macosPermissions,
+    },
+    // What the section shows in place of the rows when the read failed, found by what the rows would have been.
+    {
+      id: "permissions.unreadable",
+      label: "settings.permissions.unreadable.title",
+      description: [
+        "settings.permissions.unreadable",
+        "settings.permissions.screenRecording.label",
+        "settings.permissions.screenRecording.description",
+        "settings.permissions.accessibility.label",
+        "settings.permissions.accessibility.description",
+      ],
+      shown: ({ platform, reads }) => platform.macosPermissions !== undefined && reads.macosPermissionsUnreadable,
     },
   ],
   // Its description is where notifications stand, not what the setting does, so it is not searched.

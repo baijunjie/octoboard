@@ -21,7 +21,7 @@ const DESKTOP: PlatformAdapter = {
   appMenu: { onSettingsRequested: () => () => {}, setLabels: async () => {} },
 };
 
-const context = (overrides: Partial<SettingsSearchContext> = {}): SettingsSearchContext => ({ platform: BROWSER, keepAwake: false, settings: DEFAULT_SETTINGS, ...overrides });
+const context = (overrides: Partial<SettingsSearchContext> = {}): SettingsSearchContext => ({ platform: BROWSER, keepAwake: false, settings: DEFAULT_SETTINGS, reads: { launchAtLogin: true, macosPermissions: true, macosPermissionsUnreadable: false }, ...overrides });
 const withSettings = (changes: Partial<Settings>): Settings => ({ ...DEFAULT_SETTINGS, ...changes });
 
 const SECTION_LABELS: Record<SettingsSectionId, Parameters<typeof sectionMatches>[1]> = {
@@ -105,6 +105,36 @@ describe("sectionMatches", () => {
     it("is counted only where the platform gives it", () => {
       expect(find("app-behavior", "launch at login", context({ platform: BROWSER })).ids.has("launch-at-login")).toBe(false);
       expect(find("app-behavior", "launch at login", context({ platform: DESKTOP })).ids.has("launch-at-login")).toBe(true);
+      // Nor is it counted before the system has said what it is (the row is not on screen until then).
+      const unread = { launchAtLogin: false, macosPermissions: false, macosPermissionsUnreadable: false };
+      expect(find("app-behavior", "launch at login", context({ platform: DESKTOP, reads: unread })).ids.has("launch-at-login")).toBe(false);
+    });
+
+    describe("the macOS permissions", () => {
+      const MAC_PERMISSIONS: PlatformAdapter = { ...DESKTOP, macosPermissions: { status: async () => ({ screenRecording: true, accessibility: true }), request: async () => false, openSystemSettings: async () => {} } };
+      const reads = (changes: Partial<SettingsSearchContext["reads"]>): SettingsSearchContext["reads"] => ({ launchAtLogin: true, macosPermissions: false, macosPermissionsUnreadable: false, ...changes });
+
+      it("counts the rows only once the read has reported the grants, and only where the platform has the capability", () => {
+        const rows = (given: SettingsSearchContext) => [...find("permissions", "permissions", given).ids].sort();
+        expect(rows(context({ platform: MAC_PERMISSIONS, reads: reads({ macosPermissions: true }) }))).toEqual(["permissions.accessibility", "permissions.screenRecording"]);
+        expect(rows(context({ platform: MAC_PERMISSIONS, reads: reads({ macosPermissions: false }) }))).toEqual([]);
+        expect(rows(context({ platform: BROWSER, reads: reads({ macosPermissions: true }) }))).toEqual([]);
+      });
+
+      it("counts the alert in place of the rows only while the read has failed, and only where the platform has the capability", () => {
+        const counted = (given: SettingsSearchContext) => [...find("permissions", "could not read the permissions", given).ids];
+        expect(counted(context({ platform: MAC_PERMISSIONS, reads: reads({ macosPermissionsUnreadable: true }) }))).toEqual(["permissions.unreadable"]);
+        // Pending, or answered with the grants: no alert.
+        expect(counted(context({ platform: MAC_PERMISSIONS, reads: reads({}) }))).toEqual([]);
+        expect(counted(context({ platform: MAC_PERMISSIONS, reads: reads({ macosPermissions: true }) }))).toEqual([]);
+        expect(counted(context({ platform: BROWSER, reads: reads({ macosPermissionsUnreadable: true }) }))).toEqual([]);
+      });
+
+      it("finds the alert by the permissions the rows would have been, and not by a word that neither has", () => {
+        const unreadable = context({ platform: MAC_PERMISSIONS, reads: reads({ macosPermissionsUnreadable: true }) });
+        for (const query of ["screen recording", "accessibility", "permissions"]) expect([...find("permissions", query, unreadable).ids]).toEqual(["permissions.unreadable"]);
+        expect(find("permissions", "zzzznope", unreadable).ids.size).toBe(0);
+      });
     });
 
     it("does not count a section's whole set by its name where the platform has none of it", () => {

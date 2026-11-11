@@ -16,7 +16,9 @@ import { testDaemon } from "../test/testDaemon";
 import { matchesWidthQuery } from "../test/viewport";
 import { UpdatesProvider } from "../updates/UpdatesProvider";
 import { SettingsDialog } from "./SettingsDialog";
+import { SettingsReadsProvider } from "./SettingsReadsProvider";
 import { SETTINGS_SECTION_IDS, type SettingsSectionId } from "./sections";
+import { searchReads, useSettingsReads, type SettingsReads } from "./settingsReads";
 import { SETTINGS_SEARCH_INDEX, type SettingsSearchContext, type SettingsSearchEntry } from "./settingsSearch";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -67,13 +69,22 @@ const CASES: { name: string; platform: PlatformAdapter; state: Partial<State> }[
   },
 ];
 
-async function mountSection(section: SettingsSectionId, platform: PlatformAdapter, state: Partial<State>): Promise<Element> {
+/** What the search is told of the reads, worked out by the same function the dialog uses from a read of its own on
+ * the same platform, so that these tests do not state the readiness the dialog is meant to compute. */
+function ReadsProbe({ onReads }: { onReads: (reads: SettingsReads) => void }): null {
+  onReads(useSettingsReads());
+  return null;
+}
+
+async function mountSection(section: SettingsSectionId, platform: PlatformAdapter, state: Partial<State>): Promise<{ panel: Element; reads: SettingsSearchContext["reads"] }> {
+  let dialogReads!: SettingsReads;
   const daemon = testDaemon({ state: { connectionState: "open", ...state }, request: async (): Promise<Event> => ({ type: "ack", id: null }) });
   mountHost(
     <LanguageProvider>
       <ThemeProvider>
         <UpdatesProvider firstCheckDelayMs={null}>
           <SettingsDialog initialSection={section} onClose={() => {}} />
+          <SettingsReadsProvider><ReadsProbe onReads={(reads) => { dialogReads = reads; }} /></SettingsReadsProvider>
         </UpdatesProvider>
       </ThemeProvider>
     </LanguageProvider>,
@@ -81,16 +92,16 @@ async function mountSection(section: SettingsSectionId, platform: PlatformAdapte
   );
   // The rows that wait on a read of the platform (launch at login, the macOS permissions, the running version).
   for (let turn = 0; turn < 3; turn += 1) await act(flushPromises);
-  return document.querySelector('[role="tabpanel"]')!;
+  return { panel: document.querySelector('[role="tabpanel"]')!, reads: searchReads(dialogReads) };
 }
 
 describe.each(CASES)("in $name", ({ platform, state }) => {
-  const context: SettingsSearchContext = { platform, keepAwake: state.host?.keep_awake === true, settings: state.settings as Settings };
   // The Permissions section is listed only where the system has privacy grants to give.
   const sections = SETTINGS_SECTION_IDS.filter((id) => id !== "permissions" || platform.host.os === "macos");
 
   it.each(sections)("the %s section renders exactly the entries the search index shows for it, each in its group and worded as indexed", async (section) => {
-    const panel = await mountSection(section, platform, state);
+    const { panel, reads } = await mountSection(section, platform, state);
+    const context: SettingsSearchContext = { platform, keepAwake: state.host?.keep_awake === true, settings: state.settings as Settings, reads };
     const rendered = [...panel.querySelectorAll<HTMLElement>("[data-settings-search-id]")];
     const entries = SETTINGS_SEARCH_INDEX[section].filter((entry) => !entry.shown || entry.shown(context));
     expect(rendered.map((element) => element.dataset.settingsSearchId)).toEqual(entries.map((entry) => entry.id));
@@ -109,5 +120,45 @@ describe.each(CASES)("in $name", ({ platform, state }) => {
       const wordings = entry.description.map(worded);
       expect(wordings.some((wording) => description.startsWith(wording)), `"${description}" is none of ${JSON.stringify(wordings)}`).toBe(true);
     }
+  });
+});
+
+/** Mounts `section` on the desktop shell with the reads of the system answering as given, and holds the section's
+ * rendered entries to the index's under the readiness the dialog works out. */
+async function renderedMatchesIndex(section: SettingsSectionId, overrides: Partial<PlatformAdapter>): Promise<{ rendered: (string | undefined)[]; indexed: string[] }> {
+  const platform: PlatformAdapter = { ...CASES[0]!.platform, ...overrides };
+  const state = CASES[0]!.state;
+  const { panel, reads } = await mountSection(section, platform, state);
+  const context: SettingsSearchContext = { platform, keepAwake: true, settings: state.settings as Settings, reads };
+  return {
+    rendered: [...panel.querySelectorAll<HTMLElement>("[data-settings-search-id]")].map((element) => element.dataset.settingsSearchId),
+    indexed: SETTINGS_SEARCH_INDEX[section].filter((entry) => !entry.shown || entry.shown(context)).map((entry) => entry.id),
+  };
+}
+
+describe("before the reads of the system have answered", () => {
+  const pending = new Promise<never>(() => {});
+  const waiting: Partial<PlatformAdapter> = {
+    launchAtLogin: { status: () => pending, set: async () => "disabled", openSystemSettings: async () => {} },
+    macosPermissions: { status: () => pending, request: async () => false, openSystemSettings: async () => {} },
+  };
+
+  it.each([
+    ["app-behavior", "launch-at-login"],
+    ["permissions", "permissions.screenRecording"],
+  ] as const)("the %s section renders exactly the entries the index shows, without %s", async (section, waitingId) => {
+    const { rendered, indexed } = await renderedMatchesIndex(section, waiting);
+    expect(rendered).toEqual(indexed);
+    expect(indexed).not.toContain(waitingId);
+  });
+});
+
+describe("when the permissions cannot be read", () => {
+  it("the Permissions section renders exactly the entries the index shows, the alert in place of the rows", async () => {
+    const { rendered, indexed } = await renderedMatchesIndex("permissions", {
+      macosPermissions: { status: () => Promise.reject(new Error("no such command")), request: async () => false, openSystemSettings: async () => {} },
+    });
+    expect(rendered).toEqual(indexed);
+    expect(indexed).toEqual(["permissions.unreadable"]);
   });
 });

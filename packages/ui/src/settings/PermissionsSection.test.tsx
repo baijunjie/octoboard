@@ -11,6 +11,7 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 import type { MacosPermissionsCapability, MacosPermissionsStatus, PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import { PermissionsSection } from "./PermissionsSection";
+import { SettingsReadsProvider } from "./SettingsReadsProvider";
 import { BROWSER_HOST } from "../test/hosts";
 import { fakeTimers } from "../test/clock";
 
@@ -59,7 +60,9 @@ async function mount({
   await act(async () => {
     root.render(
       <PlatformProvider value={platform}>
-        <PermissionsSection />
+        <SettingsReadsProvider>
+          <PermissionsSection />
+        </SettingsReadsProvider>
       </PlatformProvider>,
     );
   });

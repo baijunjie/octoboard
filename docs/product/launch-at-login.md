@@ -8,9 +8,9 @@ nothing to open.
 ## The switch shows the system's state
 
 Octoboard keeps no choice of its own for this: the system's login entry is the setting, and the switch shows where it
-stands. It is read when the row first appears, which is only once that read has answered, and again whenever the window
-regains focus, so a change the user made in the system's own list (below) shows on returning to Octoboard. A read that
-fails shows the switch off. A read that was under way when the user turned the switch is dropped, so it cannot put back
+stands. It is read once when Settings opens, whichever section it opens on, and the row appears only once that read has
+answered; it is read again every time the window regains focus while Settings is open, so a change the user made in the
+system's own list (below) shows on returning to Octoboard. A read that fails shows the switch off. A read that was under way when the user turned the switch is dropped, so it cannot put back
 the state from before the change.
 
 The entry is in one of three states:

@@ -12,6 +12,7 @@ import type { MacosPermissionKind } from "../platform";
 import { usePlatform } from "../platform/react";
 import { SettingRow } from "./SettingRow";
 import { LeadRows, SettingsLead } from "./SettingsLead";
+import { SettingsSearchBlock } from "./settingsSearchFilter";
 import { useMacosPermissions } from "./useMacosPermissions";
 import { useSectionRefocus } from "./useSectionRefocus";
 import { raiseError } from "../components/alerts/raiseError";
@@ -67,7 +68,7 @@ const PERMISSIONS = [
 export function PermissionsSection(): React.ReactElement {
   const t = useT();
   const { macosPermissions } = usePlatform();
-  const { status, loaded, unreadable, refused, pending, request, openSystemSettings } = useMacosPermissions();
+  const { status, loaded, shown, unreadable, refused, pending, request, openSystemSettings } = useMacosPermissions();
   // Whether a read had come in before this render: grants that become unreadable on a later read (the
   // one on each window focus) are announced, while a section that opens on an unreadable first read
   // shows it as part of what it opened with. `ErrorAlert` reads `announce` when it mounts.
@@ -131,7 +132,7 @@ export function PermissionsSection(): React.ReactElement {
   };
 
   // Where each permission stands, for its row and for the section's status region.
-  const rows = status
+  const rows = shown && status
     ? PERMISSIONS.map((permission) => {
       const granted = status[permission.kind];
       // Accessibility is never granted in place: its request only shows the system's dialog and
@@ -164,7 +165,15 @@ export function PermissionsSection(): React.ReactElement {
     // A shell that cannot be asked is not a shell with nothing to report: on macOS the command
     // always answers, so a refused read means the IPC itself is broken (a missing ACL entry, say),
     // and saying "only in the macOS app" there would misdiagnose the one platform that has this.
-    if (unreadable) return <ErrorAlert announce={settled} title={t("settings.permissions.unreadable.title")}><Message id="settings.permissions.unreadable" /></ErrorAlert>;
+    // A block of the search (`permissions.unreadable`), so that a search for the permissions finds the alert rather
+    // than an empty state.
+    if (unreadable) {
+      return (
+        <SettingsSearchBlock id="permissions.unreadable">
+          <ErrorAlert announce={settled} title={t("settings.permissions.unreadable.title")}><Message id="settings.permissions.unreadable" /></ErrorAlert>
+        </SettingsSearchBlock>
+      );
+    }
     if (!rows) return line("settings.permissions.unavailable");
 
     return (

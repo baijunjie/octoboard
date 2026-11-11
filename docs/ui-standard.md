@@ -767,13 +767,15 @@ panels' marks) and the handoffs of panes and panels taken away keep `HandoffOnUn
 restore follows them.
 
 The Settings search re-matches its rows whenever what it matches changes without the user touching the query (the
-language changed, a setting changed from another window), so a row can go away under focus, even a control whose own
-change made it go. Value-dependent wordings are all indexed so that changing a control never takes its own row away;
-for what remains, `useFocusRescue` (`packages/ui/src/settings/`) is the dialog's last fallback after the sections' own
-handoffs: once focus has fallen, it moves focus to the search field with the ring (`ringForAutomaticFocus`), and after
-a tap to the selected section tab instead, or to Close while nothing is found, since the field would raise the
-on-screen keyboard. Focus moved elsewhere in the dialog meanwhile is left alone, except the dialog's focus scope
-catching the fall on its first control, Close.
+language changed, a setting changed from another window, a read of the system answered or failed), so a row can go
+away under focus, even a control whose own change made it go. Such a re-match never moves the panel: the section on
+screen stays while it is listed, and only a tab press or a navigation request changes it. Value-dependent wordings are
+all indexed so that changing a control never takes its own row away; for what remains, `useFocusRescue`
+(`packages/ui/src/settings/`) is the dialog's last fallback after the sections' own handoffs: once focus has fallen, it
+moves focus to the search field with the ring (`ringForAutomaticFocus`), and after a tap to the selected section tab
+instead, or to Close while nothing is found, since the field would raise the on-screen keyboard. Focus moved elsewhere
+in the dialog meanwhile is left alone, except the focus scope catching the fall on its first control, Close, which
+Chromium's does when the focused element is removed and WebKit's does not (focus stays on `<body>` until the rescue).
 
 A third shape is for a source whose explanation popover restores focus itself, from a frame of its own, as the popover
 goes with the source: the agent title bar's recovered-display mark, whose focus goes to the terminal. Focus on the mark

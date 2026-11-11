@@ -11,6 +11,7 @@ import type { LaunchAtLoginCapability, LaunchAtLoginStatus, PlatformAdapter } fr
 import { BROWSER_HOST, MAC_HOST } from "../test/hosts";
 import { mountHost } from "../test/mountHost";
 import { LaunchAtLoginSetting } from "./LaunchAtLoginSetting";
+import { SettingsReadsProvider } from "./SettingsReadsProvider";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -25,7 +26,9 @@ function mount(launchAtLogin?: LaunchAtLoginCapability) {
   const platform: PlatformAdapter = { kind: "tauri", host: MAC_HOST, launchAtLogin };
   return mountHost(
     <LanguageProvider>
-      <LaunchAtLoginSetting />
+      <SettingsReadsProvider>
+        <LaunchAtLoginSetting />
+      </SettingsReadsProvider>
     </LanguageProvider>,
     { platform },
   );
@@ -36,7 +39,9 @@ const toggleOf = (container: HTMLElement) => container.querySelector<HTMLInputEl
 it("has no row without the capability, as in a browser", async () => {
   const container = mountHost(
     <LanguageProvider>
-      <LaunchAtLoginSetting />
+      <SettingsReadsProvider>
+        <LaunchAtLoginSetting />
+      </SettingsReadsProvider>
     </LanguageProvider>,
     { platform: { kind: "browser", host: BROWSER_HOST } },
   );
@@ -53,6 +58,19 @@ it.each<{ status: LaunchAtLoginStatus; checked: boolean; text: string }>([
   await act(async () => {});
   expect(toggleOf(container)!.checked).toBe(checked);
   expect(container.textContent).toContain(text);
+});
+
+it("shows the switch off when the system cannot say, which a press then tries to change", async () => {
+  const set = vi.fn<(enabled: boolean) => Promise<LaunchAtLoginStatus>>(() => Promise.resolve("enabled"));
+  const container = mount(login({ status: () => Promise.reject(new Error("no such command")), set }));
+  await act(async () => {});
+  expect(toggleOf(container)).not.toBeNull();
+  expect(toggleOf(container)!.checked).toBe(false);
+  await act(async () => {
+    toggleOf(container)!.click();
+  });
+  expect(set).toHaveBeenCalledExactlyOnceWith(true);
+  expect(toggleOf(container)!.checked).toBe(true);
 });
 
 it("reads the state again when the window is focused, as the user can change it in the system's list", async () => {

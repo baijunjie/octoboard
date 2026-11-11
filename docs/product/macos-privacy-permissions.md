@@ -50,9 +50,12 @@ regains focus (below). Both permissions are in practice switched on in System Se
 raises the system's dialog asking to let Octoboard control the computer, whose effect is that Octoboard appears in
 System Settings' own list, so the user only flips a switch there instead of adding the application by hand.
 
-**A change made outside Octoboard is picked up when the window comes back.** The grants are read again every time the
-window regains focus, so one granted or revoked in System Settings — the only way Accessibility is ever granted — takes
-effect in this section on the user's return. For assistive technology the section has one status region of its own, not
+**A change made outside Octoboard is picked up when the window comes back.** The grants are read once when Settings
+opens, whichever section it opens on, and again every time the window regains focus while this section is on screen or
+the Settings search field holds words to search for (see `docs/product/searching-settings.md`). A return of focus at any
+other time reads nothing then; instead the grants are read once when this section is next shown or a search next starts.
+Switching to this section with no return of focus since the last read reads nothing. So one granted or revoked in System
+Settings — the only way Accessibility is ever granted — takes effect in this section on the user's return. For assistive technology the section has one status region of its own, not
 shown on screen, which says where both permissions stand in one announcement, one message of whole sentences per
 permission naming it and its state; for a permission whose request in this window came back without the grant, that
 message carries the same guidance the row gives on switching it on in System Settings. It speaks about 1.5 seconds
@@ -78,7 +81,8 @@ which macOS keeps no refusal for.
 saying that permissions can only be managed in the macOS application. Where a desktop shell is there but the read of the
 grants fails, the section is instead a red alert titled that the permissions could not be read, saying that the system
 did not report which have been granted, which opens no error alert (see "Failures shown on the screen" in
-`docs/product/error-alerts.md`). Until the first read comes back the section shows neither line and nothing else either.
+`docs/product/error-alerts.md`). The Settings search finds that alert in place of the rows (see "Some parts of Settings
+are found differently" in `docs/product/searching-settings.md`). Until the first read comes back the section shows neither line and nothing else either.
 
 ## Other consents programs ask for
 

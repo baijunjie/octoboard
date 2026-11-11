@@ -39,6 +39,13 @@ only the desktop application has, **Prevent sleep** where the daemon's host can 
 sleep** while it is on, the Git rows shown while sessions work on a branch or in a worktree of their own, the
 Permissions rows, the Configuration rows where files can be saved and opened — matches only while it is shown.
 
+**Rows that wait on a read of the system** — **Launch at login** in App behavior and the Screen Recording and
+Accessibility rows in Permissions — appear only once Settings has read the system's state, and the search counts and
+lists them only from that answer on, so a row and its count appear together and a count never takes in a row that is not
+on screen. A launch-at-login read that fails still shows the row, off, and it is counted. When the reads are made is in
+"The switch shows the system's state" in `docs/product/launch-at-login.md` and in "A change made outside Octoboard is
+picked up when the window comes back" in `docs/product/macos-privacy-permissions.md`.
+
 Some parts of Settings are found differently:
 
 - **Keyboard shortcuts**: each command the client lists is a setting of its own, found by its command's name and its
@@ -48,6 +55,10 @@ Some parts of Settings are found differently:
   section's name or by "Agents" (in the current language), never by an agent's or an account's name.
 - **Trusted folders**: the list of folders is one block, found by the section's name or by the words of the section's
   opening paragraph, never by a folder's path.
+- **Permissions, when its read fails**: the alert saying the permissions could not be read, which the section shows in
+  place of the two rows (see `docs/product/macos-privacy-permissions.md`), is one block. It is found by its own title
+  and text, by the names and descriptions of the Screen Recording and Accessibility rows it stands in for, and by the
+  section's name, so a search for a permission finds the alert, counted as one, rather than saying no setting matches.
 - **Notifications** and the About section's **Updates** row are found by their name only, since their line of text says
   where things stand rather than what the setting does. So are **Website**, **GitHub repository** and **Issue
   tracker**, whose addresses are not searched.
@@ -62,8 +73,11 @@ The user's own data — account names, directories, folder paths — is never se
   before the badge, which stays in view.
 - **The section on screen shows only its matching rows and blocks.** A group with no matching row is hidden, heading and
   all. The section's own heading stays.
-- When the selected section has no match, the first listed section is shown instead. Every change to the query makes
-  the section on screen the selected one, so clearing the field keeps the section the user was looking at.
+- **The section on screen stays while it is listed.** A re-match the user did not make — the language changing, a
+  setting changed from another window, a read of the system answering — never moves it. Only once it is no longer
+  listed does the first listed section take its place, and that section then stays in turn, even when the earlier one
+  is listed again. Pressing a section's tab always shows that section. While nothing matches anywhere, the section on
+  screen stays as it was, hidden. Clearing the field keeps whichever section is on screen.
 - **With nothing matching anywhere**, the tabs and the section give way to an empty state saying no setting matches.
 - The dialog tells assistive technology politely how many settings match across every section, or that no setting
   matches the search, as the result changes; the empty state itself is not read, being said by that announcement (see

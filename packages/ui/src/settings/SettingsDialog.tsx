@@ -34,6 +34,7 @@ import { ShortcutsSection } from "./ShortcutsSection";
 import { matches as keyMatches } from "../shortcuts/binding";
 import { FIND_BINDING } from "../shortcuts/commands";
 import { SETTINGS_SECTION_IDS, type SettingsNavigation, type SettingsSectionId } from "./sections";
+import { SettingsReadsProvider } from "./SettingsReadsProvider";
 import { SettingsSearchProvider } from "./settingsSearchFilter";
 import { SettingsFocusContext } from "./useSectionRefocus";
 import { useFocusRescue } from "./useFocusRescue";
@@ -116,19 +117,24 @@ function SectionPanel({ id, stickyHeadingHeight, hidden, children }: { id: strin
  * when given, the first section otherwise; `navigation` says the same and more (see its prop).
  *
  * The search field above the sections filters them by the settings they hold (`SETTINGS_SEARCH_INDEX`, see
- * `useSettingsQuery`): while it has words in it, only the sections with a match are listed, each with how many, the
- * selected one (moved to the first listed when it has none) shows only its matching rows, and with no match anywhere
- * an empty state takes the place of the tabs' panel, which stays mounted, hidden with the tabs, so that what was
- * typed in it survives. Tabs and rows that a search takes away or brings back move with the shared list motion.
- * Escape in the field clears it before it closes the dialog, and clearing keeps the section on screen. A navigation
- * request clears it, so the section it asks for is shown whole; one that names no section keeps the section on
- * screen. Find (`FIND_BINDING`) focuses the field and selects its text.
+ * `useSettingsQuery`): while it has words in it, only the sections with a match are listed, each with how many; the
+ * section on screen, which stays while it is listed and gives way to the first listed otherwise, shows only its
+ * matching rows; and with no match anywhere an empty state takes the place of the tabs' panel, which stays mounted,
+ * hidden with the tabs, so that what was typed in it survives. A row that waits on a read of the system (launch at
+ * login, the macOS permissions) is counted once the read has answered, as it appears. Tabs and rows that a search takes
+ * away or brings back move with the shared list motion. Escape in the field clears it before it closes the dialog, and
+ * clearing keeps the section on screen. A navigation request clears it, so the section it asks for is shown whole; one
+ * that names no section keeps the section on screen. Find (`FIND_BINDING`) focuses the field and selects its text.
  */
-export function SettingsDialog({
-  initialSection = SETTINGS_SECTION_IDS[0],
-  navigation,
-  onClose,
-}: {
+export function SettingsDialog(props: SettingsDialogProps): React.ReactElement {
+  return (
+    <SettingsReadsProvider>
+      <SettingsDialogContent {...props} />
+    </SettingsReadsProvider>
+  );
+}
+
+interface SettingsDialogProps {
   /** The section to open on, for a dialog that asks for no `navigation`. A typo must not compile: a key that
    * names no section renders no panel and never focuses a tab, which would lose the dialog's keyboard rules. */
   initialSection?: SettingsSectionId;
@@ -137,7 +143,11 @@ export function SettingsDialog({
    * focus for `account`. */
   navigation?: SettingsNavigation;
   onClose: () => void;
-}): React.ReactElement {
+}
+
+/** The dialog inside the reads of the system its rows wait on (`SettingsReadsProvider`): the search counts a row
+ * from the same answer the row appears on. */
+function SettingsDialogContent({ initialSection = SETTINGS_SECTION_IDS[0], navigation, onClose }: SettingsDialogProps): React.ReactElement {
   const t = useT();
   const host = useHost();
   // The privacy grants are the system's own on macOS alone: managed in the app there (`permissionsPane`), and in a
@@ -145,8 +155,7 @@ export function SettingsDialog({
   const sectionIds = SETTINGS_SECTION_IDS.filter((id) => id !== "permissions" || host.permissionsPane || host.os === "macos");
   const isNarrow = useIsNarrow();
   const fullScreen = isNarrow;
-  const [sectionId, setSectionId] = useState<SettingsSectionId>(navigation?.section ?? initialSection);
-  const search = useSettingsQuery({ sectionIds, sectionLabel: (id) => SECTIONS[id].label, selectedId: sectionId, select: setSectionId });
+  const search = useSettingsQuery({ sectionIds, sectionLabel: (id) => SECTIONS[id].label, initialId: navigation?.section ?? initialSection });
   const { matches, countOf, listedIds, shownId } = search;
   const searching = search.words.length > 0;
   // While nothing matches anywhere, the section on screen keeps its tab and panel, hidden, rather than unmounting them.
@@ -170,7 +179,7 @@ export function SettingsDialog({
   useEffect(() => {
     if (!navigation || navigation.nonce === lastNonce.current) return;
     lastNonce.current = navigation.nonce;
-    setSectionId(navigation.section ?? shownId);
+    if (navigation.section) search.select(navigation.section);
     search.clear();
     setAddAgentPending(navigation.addAgent);
     setAccountPending(navigation.account);
@@ -285,7 +294,7 @@ export function SettingsDialog({
       <Tabs
         orientation={isNarrow ? "horizontal" : "vertical"}
         selectedKey={shownId}
-        onSelectionChange={(key) => setSectionId(key as SettingsSectionId)}
+        onSelectionChange={(key) => search.select(key as SettingsSectionId)}
         className="contents"
       >
         {/* A direct child of `Tabs`, as HeroUI's styling of it expects; it is the section column

@@ -9,7 +9,7 @@ import { currentLanguage, setLanguage } from "../i18n/language";
 import { LanguageProvider } from "../i18n/react";
 import { ThemeProvider } from "../preferences/theme";
 import { UpdatesProvider } from "../updates/UpdatesProvider";
-import type { PlatformAdapter } from "../platform";
+import type { LaunchAtLoginCapability, MacosPermissionsCapability, PlatformAdapter } from "../platform";
 import type { Event } from "../protocol";
 import type { State } from "../store";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
@@ -196,16 +196,41 @@ describe("while a query is entered", () => {
     expect(selectedTab()?.textContent).toContain("Git");
   });
 
-  it("commits the section it showed as selected when the query changes", async () => {
+  it("keeps the section on screen across a query nothing matches, one both it and another match, and a clear", async () => {
     await open({ section: "git" });
     await search("sorting");
     expect(selectedTab()?.textContent).toContain("General");
-    // Git has a match for this query too, which would take the selection back to it had General not been committed.
+    await search("zzzznope");
     await search("e");
+    // Git has a match for this query too, which would take the section back to it had General not been kept.
     expect(tabNames().some((name) => name?.startsWith("Git,"))).toBe(true);
     expect(selectedTab()?.textContent).toContain("General");
     await search("");
     expect(selectedTab()?.textContent).toContain("General");
+  });
+
+  it("keeps the section on screen, and its panel mounted, when a language switch finds nothing and the search is matched again", async () => {
+    framesAsTimers();
+    const previous = currentLanguage();
+    onTestFinished(() => { act(() => setLanguage(previous)); });
+    await open({ section: "about" });
+    await search("language");
+    expect(selectedTab()?.textContent).toContain("General");
+    const shown = panel()!;
+    const row = shown.querySelector('[data-settings-search-id="language"]')!;
+    act(() => setLanguage("de"));
+    await settleFrames();
+    expect(shownTabs()).toEqual([]);
+    act(() => setLanguage("en"));
+    await settleFrames();
+    expect(selectedTab()?.textContent).toContain("General");
+    expect(panel()).toBe(shown);
+    expect(shown.querySelector('[data-settings-search-id="language"]')).toBe(row);
+    act(() => setLanguage("de"));
+    await settleFrames();
+    await click(clearButton());
+    expect(selectedTab()?.textContent).toContain("Allgemein");
+    expect(panel()).toBe(shown);
   });
 
   it("keeps a half-typed value of a hidden row, which comes back with the row", async () => {
@@ -557,5 +582,313 @@ describe("focus a re-match takes away", () => {
     expect(shownTabs()).toEqual([selectedTab()]);
     expect(selectedTab()?.textContent).not.toContain("General");
     expect(document.activeElement).toBe(selectedTab());
+  });
+});
+
+describe("a row that waits on a read of the system", () => {
+  it("is not counted by the search until the read it waits on has answered, and then counts and appears together (launch at login)", async () => {
+    const read = deferredRead<"disabled">();
+    const platform: PlatformAdapter = {
+      kind: "tauri",
+      host: MAC_HOST,
+      launchAtLogin: { status: () => read.promise, set: async () => "disabled", openSystemSettings: async () => {} },
+    };
+    fakeTimers();
+    await open({ section: "app-behavior", platform });
+    await act(async () => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
+    await search("launch at login");
+    // No tab and no count for a row that is not on screen: the search finds nothing yet.
+    expect(shownTabs()).toEqual([]);
+    expect(status()).toBe("No setting matches the search.");
+    expect(shownEntries()).toEqual([]);
+    await read.resolve("disabled");
+    expect(tabNames()).toEqual(["App behavior, 1 matching setting"]);
+    expect(shownEntries()).toEqual(["launch-at-login"]);
+    expect(panel()!.querySelector('[data-settings-search-id="launch-at-login"]')).not.toBeNull();
+  });
+
+  it("is not counted until the macOS permissions have been read, and then counts and appears together", async () => {
+    const read = deferredRead<typeof GRANTED>();
+    const platform: PlatformAdapter = {
+      kind: "tauri",
+      host: MAC_HOST,
+      macosPermissions: { status: () => read.promise, request: async () => false, openSystemSettings: async () => {} },
+    };
+    fakeTimers();
+    await open({ section: "general", platform });
+    await act(async () => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
+    await search("screen recording");
+    expect(shownTabs()).toEqual([]);
+    expect(status()).toBe("No setting matches the search.");
+    await read.resolve({ screenRecording: false, accessibility: true });
+    expect(tabNames()).toEqual(["Permissions, 1 matching setting"]);
+    expect(selectedTab()?.textContent).toContain("Permissions");
+    expect(shownEntries()).toEqual(["permissions.screenRecording"]);
+  });
+
+  it("reads once when Settings opens on Permissions, the section and the search sharing the dialog's read", async () => {
+    const read = vi.fn(async () => ({ screenRecording: true, accessibility: true }));
+    const platform: PlatformAdapter = { kind: "tauri", host: MAC_HOST, macosPermissions: { status: read, request: async () => false, openSystemSettings: async () => {} } };
+    await open({ section: "permissions", platform });
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** A desktop shell on macOS whose permissions read is `status`, the other calls of the capability doing nothing. */
+function macPlatform(status: MacosPermissionsCapability["status"]): PlatformAdapter {
+  return { kind: "tauri", host: MAC_HOST, macosPermissions: { status, request: async () => false, openSystemSettings: async () => {} } };
+}
+const GRANTED = { screenRecording: true, accessibility: true };
+const unreadable = () => Promise.reject(new Error("no such command"));
+const refocus = () => act(async () => void window.dispatchEvent(new Event("focus")));
+const settle = async () => { for (let turn = 0; turn < 3; turn += 1) await act(flushPromises); };
+const alertText = () => panel()?.querySelector('[data-slot="alert-root"]')?.textContent;
+const tabLabelled = (name: string) => tabs().find((tab) => tab.textContent?.includes(name))!;
+
+/** A read that answers when `resolve` is called, which returns once the dialog has taken the answer. */
+function deferredRead<T>() {
+  let answer!: (value: T) => void;
+  const promise = new Promise<T>((done) => { answer = done; });
+  return { promise, resolve: async (value: T) => { answer(value); await settle(); } };
+}
+
+describe("a launch-at-login read that fails", () => {
+  it("still shows the row, off, and counts it", async () => {
+    const platform: PlatformAdapter = {
+      kind: "tauri",
+      host: MAC_HOST,
+      launchAtLogin: { status: () => Promise.reject(new Error("no such command")), set: async () => "disabled", openSystemSettings: async () => {} },
+    };
+    await open({ section: "app-behavior", platform });
+    await search("launch at login");
+    expect(tabNames()).toEqual(["App behavior, 1 matching setting"]);
+    expect(shownEntries()).toEqual(["launch-at-login"]);
+    const toggle = panel()!.querySelector<HTMLInputElement>('[data-settings-search-id="launch-at-login"] input[role="switch"]');
+    expect(toggle).not.toBeNull();
+    expect(toggle!.checked).toBe(false);
+  });
+});
+
+describe("when the permissions cannot be read", () => {
+  it.each(["accessibility", "screen", "permissions"])("a search for %s lists the Permissions tab with 1 match and shows the alert, never an empty state", async (query) => {
+    fakeTimers();
+    await open({ section: "permissions", platform: macPlatform(unreadable) });
+    await act(async () => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
+    await search(query);
+    expect(tabNames()).toContain("Permissions, 1 matching setting");
+    expect(selectedTab()?.textContent).toContain("Permissions");
+    expect(shownEntries()).toEqual(["permissions.unreadable"]);
+    expect(alertText()).toContain("Could not read the permissions");
+    expect(document.body.textContent).not.toContain("No matching settings");
+    expect(status()).not.toBe("No setting matches the search.");
+  });
+
+  it("brings the Permissions section on screen when the selected one has no match, and announces the one match", async () => {
+    fakeTimers();
+    await open({ section: "general", platform: macPlatform(unreadable) });
+    await act(async () => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
+    await search("accessibility");
+    expect(tabNames()).toEqual(["Permissions, 1 matching setting"]);
+    expect(selectedTab()?.textContent).toContain("Permissions");
+    expect(alertText()).toContain("Could not read the permissions");
+    expect(status()).toBe("1 matching setting");
+  });
+
+  it("hides the alert, which stays in the section, from a query that matches none of it", async () => {
+    await open({ section: "permissions", platform: macPlatform(unreadable) });
+    const block = () => document.querySelector<HTMLElement>('[data-settings-search-id="permissions.unreadable"]');
+    expect(block()).not.toBeNull();
+    expect(block()!.hidden).toBe(false);
+    await search("zzzznope");
+    expect(block()).not.toBeNull();
+    expect(block()!.hidden).toBe(true);
+    expect(shownTabs()).toEqual([]);
+    await search("accessibility");
+    expect(block()!.hidden).toBe(false);
+  });
+
+  it.each([
+    ["is still pending", () => new Promise<never>(() => {})],
+    ["has reported the grants", async () => GRANTED],
+  ])("does not count the alert while the read %s", async (_name, read) => {
+    await open({ section: "permissions", platform: macPlatform(read) });
+    await search("could not read the permissions");
+    expect(shownTabs()).toEqual([]);
+    expect(shownEntries()).toEqual([]);
+  });
+});
+
+describe("a read that later takes the permission rows away", () => {
+  it("moves the count from the rows to the alert, and the rows out of the panel", async () => {
+    const read = vi.fn<MacosPermissionsCapability["status"]>(async () => GRANTED);
+    await open({ section: "permissions", platform: macPlatform(read) });
+    await search("lets agents");
+    expect(tabNames()).toEqual(["Permissions, 2 matching settings"]);
+    expect(shownEntries()).toEqual(["permissions.screenRecording", "permissions.accessibility"]);
+    read.mockImplementation(unreadable);
+    await refocus();
+    await settle();
+    expect(tabNames()).toEqual(["Permissions, 1 matching setting"]);
+    expect(shownEntries()).toEqual(["permissions.unreadable"]);
+    expect(alertText()).toContain("Could not read the permissions");
+  });
+});
+
+describe("when the permissions are read again", () => {
+  const mountWithRead = async (section: SettingsSectionId) => {
+    const read = vi.fn<MacosPermissionsCapability["status"]>(async () => GRANTED);
+    await open({ section, platform: macPlatform(read) });
+    return read;
+  };
+
+  it("reads once when Settings opens, and not on a window focus while another section is shown and nothing is searched", async () => {
+    const read = await mountWithRead("general");
+    expect(read).toHaveBeenCalledTimes(1);
+    await refocus();
+    await settle();
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads again on a window focus while the Permissions section is shown", async () => {
+    const read = await mountWithRead("permissions");
+    await refocus();
+    await settle();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not read again on switching to the Permissions tab when no focus came back", async () => {
+    const read = await mountWithRead("general");
+    await click(tabLabelled("Permissions"));
+    await settle();
+    expect(selectedTab()?.textContent).toContain("Permissions");
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads once on switching to the Permissions tab after a focus return while nobody followed", async () => {
+    const read = await mountWithRead("general");
+    await refocus();
+    await settle();
+    expect(read).toHaveBeenCalledTimes(1);
+    await click(tabLabelled("Permissions"));
+    await settle();
+    expect(read).toHaveBeenCalledTimes(2);
+    await click(tabLabelled("General"));
+    await click(tabLabelled("Permissions"));
+    await settle();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads once on starting a search after a focus return while nobody followed", async () => {
+    const read = await mountWithRead("general");
+    await refocus();
+    await settle();
+    expect(read).toHaveBeenCalledTimes(1);
+    await search("sorting");
+    await settle();
+    expect(read).toHaveBeenCalledTimes(2);
+    await search("");
+    await search("sorting");
+    await settle();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads again on a window focus while the search has words, and stops once it is cleared", async () => {
+    const read = await mountWithRead("general");
+    await search("sorting");
+    await refocus();
+    await settle();
+    expect(read).toHaveBeenCalledTimes(2);
+    await click(clearButton());
+    await refocus();
+    await settle();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps reading for the section when the search ends, the two not cancelling each other", async () => {
+    const read = await mountWithRead("permissions");
+    await search("lets agents");
+    await refocus();
+    await settle();
+    expect(read).toHaveBeenCalledTimes(2);
+    await click(clearButton());
+    await refocus();
+    await settle();
+    expect(read).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps reading for the search when the section leaves, until the search ends", async () => {
+    const read = await mountWithRead("permissions");
+    await search("e");
+    await click(tabLabelled("General"));
+    await settle();
+    expect(selectedTab()?.textContent).toContain("General");
+    expect(panel()!.querySelector('[data-settings-search-id="permissions.accessibility"]')).toBeNull();
+    await refocus();
+    await settle();
+    expect(read).toHaveBeenCalledTimes(2);
+    await click(clearButton());
+    await refocus();
+    await settle();
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("the launch-at-login read", () => {
+  it("is made once for the dialog when it opens on App behavior, and not again by moving between sections", async () => {
+    const status = vi.fn<LaunchAtLoginCapability["status"]>(async () => "disabled");
+    const platform: PlatformAdapter = { kind: "tauri", host: MAC_HOST, launchAtLogin: { status, set: async () => "disabled", openSystemSettings: async () => {} } };
+    await open({ section: "app-behavior", platform });
+    expect(status).toHaveBeenCalledTimes(1);
+    expect(shownEntries()).toContain("launch-at-login");
+    await click(tabLabelled("General"));
+    await click(tabLabelled("App behavior"));
+    expect(shownEntries()).toContain("launch-at-login");
+    expect(status).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the section on screen while a read answers", () => {
+  it("stays where it is when the Permissions section appears in the list ahead of it", async () => {
+    const read = deferredRead<typeof GRANTED>();
+    await open({ section: "about", platform: macPlatform(() => read.promise) });
+    await search("check");
+    expect(tabNames()).toEqual(["Cleanup, 1 matching setting"]);
+    expect(selectedTab()?.textContent).toContain("Cleanup");
+    await read.resolve(GRANTED);
+    expect(tabNames()).toEqual(["Permissions, 1 matching setting", "Cleanup, 1 matching setting"]);
+    expect(selectedTab()?.textContent).toContain("Cleanup");
+    expect(shownEntries()).toEqual(["auto_delete_unresumable_archives"]);
+  });
+
+  it("stays where it is when the read answers, though the section the dialog opened on is now listed", async () => {
+    const read = deferredRead<typeof GRANTED>();
+    await open({ section: "permissions", platform: macPlatform(() => read.promise) });
+    await search("check");
+    expect(tabNames()).toEqual(["Cleanup, 1 matching setting"]);
+    expect(selectedTab()?.textContent).toContain("Cleanup");
+    await read.resolve(GRANTED);
+    expect(tabNames()).toEqual(["Permissions, 1 matching setting", "Cleanup, 1 matching setting"]);
+    expect(selectedTab()?.textContent).toContain("Cleanup");
+  });
+
+  it("shows the section whose tab is pressed, though it is the one the dialog opened on before a search moved away from it", async () => {
+    const read = deferredRead<typeof GRANTED>();
+    await open({ section: "permissions", platform: macPlatform(() => read.promise) });
+    await search("check");
+    await read.resolve(GRANTED);
+    expect(selectedTab()?.textContent).toContain("Cleanup");
+    await click(tabLabelled("Permissions"));
+    expect(selectedTab()?.textContent).toContain("Permissions");
+    expect(panel()?.textContent).not.toContain("Cleanup");
+    expect(shownEntries()).toEqual(["permissions.screenRecording"]);
+  });
+
+  it("falls back to the first listed section only when the one shown is no longer listed", async () => {
+    await open({ section: "about", platform: macPlatform(async () => GRANTED) });
+    await search("sorting");
+    expect(selectedTab()?.textContent).toContain("General");
+    await search("check");
+    expect(tabNames()).toEqual(["Permissions, 1 matching setting", "Cleanup, 1 matching setting"]);
+    expect(selectedTab()?.textContent).toContain("Permissions");
   });
 });
