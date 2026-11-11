@@ -22,8 +22,8 @@
 ## Handoff
 
 - Before the external surface can be reached at a network address, the "The raised hand" section of
-  `docs/product/session-statuses.md` and the "A browser, blocked" row of the Notifications table in
-  `docs/product/settings.md` have to be rewritten. Both assume every browser page is a secure context, which holds today
+  `docs/product/session-statuses.md` and the "A browser, blocked" row of the table under "What the Notifications row shows" in
+  `docs/product/notification-settings.md` have to be rewritten. Both assume every browser page is a secure context, which holds today
   only because the daemon refuses any `Host` but a loopback one. A page reached at a network address over plain `http`
   is not one, and Chrome still exposes `window.Notification` on such an origin: the platform adapter's `typeof
   Notification` guard therefore reports the capability present and the rail's bell appears, while the permission can

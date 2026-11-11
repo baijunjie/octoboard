@@ -53,7 +53,7 @@ keeps its own width, padding and text sizes, being a panel):
   its characters, which is its word boundary.
 - **A tooltip that is a value in full shows in the font family the value is drawn in.** Such a tooltip is a clipped
   label's full text (see "Names too long for their space" below), the full path of Settings' Default clone directory
-  field (see "Default clone directory" in `docs/product/settings.md`) or an OSC 8 hyperlink's target in a terminal (see
+  field (see "Default clone directory" in `docs/product/git-settings.md`) or an OSC 8 hyperlink's target in a terminal (see
   `docs/product/terminal-links.md`). So a value shown in monospace has a monospace tooltip — the session ID under the
   **Copy session ID** item's label, a path set in monospace (a directory path listed in Settings, see "How paths are
   shown" in `docs/product/settings.md`, and the file's path in the file viewer's header details), the Default clone
@@ -64,7 +64,7 @@ keeps its own width, padding and text sizes, being a panel):
 - **A tooltip that is a left-to-right value in full reads as one left-to-right block in every language** — a clipped
   path's, branch name's, session ID's, file name's or account email's full text (see "Names too long for their space"
   below), the full path of Settings' Default clone directory field (see "Default clone directory" in
-  `docs/product/settings.md`) and an OSC 8 hyperlink's target in a terminal (see `docs/product/terminal-links.md`).
+  `docs/product/git-settings.md`) and an OSC 8 hyperlink's target in a terminal (see `docs/product/terminal-links.md`).
   Under a right-to-left language too, it reads from the left, and where it is long enough to wrap, every line starts at
   the tooltip's left edge. A value on one line looks the same in either direction. A tooltip that is a sentence rather
   than a value — even one naming a path or a branch — reads in the window's direction, its lines aligned to the
@@ -212,12 +212,12 @@ label or field does not include it. A section heading carries no help tip.
 Help tips are used in these places:
 
 - Settings' **Automatically pull repositories** row, at the end of the row's name: that the remote is checked every few
-  minutes whichever way the switch is set (see "Git" in `docs/product/settings.md`);
+  minutes whichever way the switch is set (see "Automatically pull repositories" in `docs/product/git-settings.md`);
 - Settings' **Revert gate** row in the Git section, at the end of the row's name: what the gate blocks and how a
-  deliberate undo passes it (see "Protection" in `docs/product/settings.md`);
+  deliberate undo passes it (see "Protection" in `docs/product/git-settings.md`);
 - Settings' **Start usage windows automatically** row in the Agent accounts section, at the end of the row's name: why a
   usage window that has reset waits for the account's next request before it starts counting, and how the switch starts
-  it (see "Start usage windows automatically" in `docs/product/settings.md`);
+  it (see "Start usage windows automatically" in `docs/product/starting-usage-windows.md`);
 - the project dialog's **Default agent** field while associating a parent directory, beside the field's label: what
   "Detect from files" looks for in each repository and what happens to one it cannot decide on (see "The project's
   default agent" in `docs/product/projects.md`);

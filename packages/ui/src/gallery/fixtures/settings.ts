@@ -763,6 +763,32 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
+    id: "settings-search-matches",
+    group: GROUP,
+    category: "normal",
+    title: "Settings search, matches in several sections",
+    description: "The search field sits at the top of the sections column, above the tab list, which keeps only the sections that have a match, each with a count badge at the end of its tab; the longer names (Agent behavior, Trusted folders, Keyboard shortcuts) fade out at the end instead of being cut, with the badge fully visible beside them; hovering a clipped name runs a marquee over it and shows a tooltip with the full name. General is selected and shows only its one matching row, Appearance: the Sorting group has no match, so it is gone with its pinned heading, and the row has no divider under it. At Tablet portrait (768px) and narrower the field is the top row, clear of the close button, with the horizontal tab row below it. The query is the English word \"app\", so another language shows what it finds in its own copy, or the empty state.",
+    state: browserState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.focus(ui.t("settings.search.label")),
+      (ui) => ui.type("app"),
+    ],
+  },
+  {
+    id: "settings-search-no-match",
+    group: GROUP,
+    category: "normal",
+    title: "Settings search, nothing matches",
+    description: "The tab list and the section panel are gone: the dialog shows only the search field and, in place of the panel, the empty state with its icon and \"No matching settings\", centred in the area the panel takes. The close button stays in the corner. Clear the field to bring every section back on the one that was selected.",
+    state: browserState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.focus(ui.t("settings.search.label")),
+      (ui) => ui.type("zzzz"),
+    ],
+  },
+  {
     id: "settings-app-behavior",
     group: GROUP,
     category: "normal",

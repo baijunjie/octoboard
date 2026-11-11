@@ -1,17 +1,18 @@
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useContext, useEffect, useId, useRef, useState } from "react";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useShortcutScopeDescription } from "../components/hooks/useShortcutScopeDescription";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { bindingOf, describeBinding, isModifierCode, sameKeys, type Binding } from "../shortcuts/binding";
-import { ALL_COMMANDS, clientCapabilities, defaultBinding, isAvailable, SHORTCUT_GROUPS, type CommandId, type ShortcutCommand } from "../shortcuts/commands";
+import { ALL_COMMANDS, clientCapabilities, defaultBinding, isAvailable, SHORTCUT_GROUPS, type CommandId, type ShortcutCommand, type ShortcutCommandId } from "../shortcuts/commands";
 import { recordKeys } from "../shortcuts/recording";
 import { BindingKbd } from "../shortcuts/ShortcutKbd";
 import { restoreAllBindings, restoreBinding, setBinding, shortcutOverrides, useBindings } from "../shortcuts/store";
 import type { ShortcutProblem } from "../shortcuts/validate";
 import { SettingRow } from "./SettingRow";
 import { SettingsGroup } from "./SettingsGroup";
+import { SettingsFocusContext } from "./useSectionRefocus";
 import { Button } from "../primitives";
 
 /**
@@ -33,6 +34,7 @@ export function ShortcutsSection(): React.ReactElement {
   const [problem, setProblem] = useState<{ id: CommandId; text: string }>();
   const [announcement, setAnnouncement] = useState<{ text: string; count: number }>();
   const root = useRef<HTMLDivElement>(null);
+  const sectionTab = useContext(SettingsFocusContext);
 
   // The status region speaks a change of its text, so the same words said again (a refusal that
   // repeats) differ by a trailing no-break space on every other turn.
@@ -138,8 +140,10 @@ export function ShortcutsSection(): React.ReactElement {
             variant="secondary"
             className="shrink-0 max-tablet:self-end-safe"
             onPress={() => {
-              // The button goes away with the change, so focus is handed to the list first.
-              root.current?.querySelector<HTMLElement>("[data-shortcut-change]")?.focus();
+              // The button goes away with the change, so focus is handed to the list first: to the first row a search in
+              // Settings leaves shown, or to the section's tab while it hides them all.
+              const shown = [...root.current?.querySelectorAll<HTMLElement>("[data-shortcut-change]") ?? []].find((change) => !change.closest("[hidden], [data-list-motion-ghost]"));
+              (shown ?? sectionTab())?.focus();
               setRecording(undefined);
               setProblem(undefined);
               restoreAllBindings();
@@ -151,7 +155,7 @@ export function ShortcutsSection(): React.ReactElement {
         )}
       </div>
       {groups.map(({ group, commands }) => (
-        <SettingsGroup key={group} title={t(`settings.shortcuts.group.${group}`)}>
+        <SettingsGroup key={group} title={`settings.shortcuts.group.${group}`}>
           {commands.map((command) => (
             <ShortcutRow
               key={command.id}
@@ -183,7 +187,7 @@ function ShortcutRow({
   onCancel,
   onReset,
 }: {
-  command: ShortcutCommand;
+  command: ShortcutCommand & { id: ShortcutCommandId };
   binding: Binding;
   recording: boolean;
   problem?: string;
@@ -201,6 +205,7 @@ function ShortcutRow({
   const differs = command.rebindable && !sameKeys(binding, command.binding, host);
   return (
     <SettingRow
+      searchId={`shortcut.${command.id}`}
       // A step below the group heading above it, so the heading reads as what the rows belong to.
       label={<span className="font-normal text-app-muted">{label}</span>}
       description={problem && (

@@ -231,7 +231,7 @@ in a browser quits anything (see "The daemon on its own" below).
 application, which has no application menu, are the close button of the system's title bar and `Alt+F4`. They all do
 the same thing, deliberately, and what they do is the user's choice: the **Keep running in the background when the
 window is closed** switch in Settings' App behavior section, which is **off to begin with** (see "Keep running in the
-background" in `docs/product/settings.md`).
+background" in `docs/product/app-behavior-settings.md`).
 
 **With the switch off, closing the window quits.** It is an ordinary quit gesture, taking exactly the path `Cmd+Q` takes
 (see "Quitting" below): with a session starting, working, waiting for the user, dormant or working in background, or a
@@ -795,7 +795,7 @@ as under any other.
 
 | Path | Contents |
 |---|---|
-| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages every session pushed, each project's trust permission and the trusted folders (see "The trust permission" in `docs/product/folder-trust.md`), and the settings the daemon keeps for every client (see "How switches save" and "Git" in `docs/product/settings.md`). What the daemon does with an existing file when it starts is under "The database's schema version" below. |
+| `~/.octoboard/octoboard.db` | Consoles, projects, session records, the report panel pages every session pushed, each project's trust permission and the trusted folders (see "The trust permission" in `docs/product/folder-trust.md`), and the settings the daemon keeps for every client (see "How switches save" in `docs/product/settings.md` and `docs/product/git-settings.md`). What the daemon does with an existing file when it starts is under "The database's schema version" below. |
 | `~/.octoboard/consoles/<console id>/` | A console's working directory, where its console sessions run, including the console session instruction file Octoboard writes there, `AGENTS.md`, and `CLAUDE.md`, a link to it, or a file that imports it where the host makes no file links (see "The console session's instruction file" in `docs/product/launching-agents.md`). Removed when the console is deleted. |
 | `~/.octoboard/run/<session id>/` | Per-session scratch space for what a launch injects. Removed when the session's process is gone, and cleared on daemon start, except for the sessions the start adopts from process holders. |
 | `~/.octoboard/output/<session id>` | The saved terminal preview shown for an interrupted session (see "Interrupted and archived sessions" in `docs/product/session-terminal.md` for its capture rules and limits). Written when the process ends while a daemon runs it, including when the daemon stops it on its way out. A daemon that goes down without stopping, or makes a planned stop, writes none, its sessions' processes running on in their process holders; a later daemon start writes it from the screen a planned stop saved, for a session whose holder turns out to be gone (see "The screen of a terminal handed over" in `docs/product/process-holders.md`). Starting a new process discards it, and so does a daemon start adopting the session's running process. Removed with the session's record; on daemon start, any left for a session that no longer exists is removed. |

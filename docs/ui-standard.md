@@ -33,6 +33,13 @@ it dwindles to the exit speck; on a 2x display only that last speck does. The la
 always at full contrast, and the static glyph shown under reduced motion is unaffected. Keeping the stroke at full
 weight instead would change the look the user confirmed. (Source: user decision.)
 
+An override is the Settings dialog's selected section tab while a search is on (`packages/ui/src/settings/SettingsDialog.tsx`).
+The tabs come and go with list motion as the query changes, and a tab the search brings back can be selected in the
+same render, which leaves HeroUI's sliding indicator stuck on the old tab. So while searching the selected tab draws
+the indicator's fill itself, with the same background, shadow and radius in both appearances, and HeroUI's indicator
+stays mounted but invisible, without its transition; with no query HeroUI's indicator is used as usual. (Source: user
+decision.)
+
 Contrast figures are recorded only where they show a threshold is met (especially a minimum close to it), record an
 accepted shortfall, or show why a value was chosen against a threshold. Decorative fills, tints, edges and surface
 steps that are not held to a threshold are described in words, not measured figures: such a figure drifts whenever a
@@ -681,6 +688,9 @@ Every editable text input has a non-empty placeholder, including fields whose cu
   field's value is the list, not the input's text. While the list is empty, the placeholder names that empty state
   like any optional input ("No tags"). Once it holds an item there is no empty state left to name, and leaving the
   input empty keeps the list as it is, so the placeholder invites adding another ("Add a tag").
+- A search field (a `SearchField`, a filter or find field) neither takes an example nor has a default: its placeholder
+  is the standard word for searching, the shared catalog key `common.search` ("Search", 搜索), at every search field
+  alike; its accessible label names what is searched ("Search settings"). (Source: user decision.)
 
 The placeholder is a hint, never an initial input value or a substitute for the field's label, accessible name,
 description or validation. Leaving a field empty retains its existing requiredness and default behavior.
@@ -755,6 +765,15 @@ react-aria there, so `HandoffOnUnmount` sends the destination a `focusin` of its
 the destination would hold focus with no ring. A mark whose focus goes to the start of its panel (the Files and Report
 panels' marks) and the handoffs of panes and panels taken away keep `HandoffOnUnmount` with its ring: no dialog's
 restore follows them.
+
+The Settings search re-matches its rows whenever what it matches changes without the user touching the query (the
+language changed, a setting changed from another window), so a row can go away under focus, even a control whose own
+change made it go. Value-dependent wordings are all indexed so that changing a control never takes its own row away;
+for what remains, `useFocusRescue` (`packages/ui/src/settings/`) is the dialog's last fallback after the sections' own
+handoffs: once focus has fallen, it moves focus to the search field with the ring (`ringForAutomaticFocus`), and after
+a tap to the selected section tab instead, or to Close while nothing is found, since the field would raise the
+on-screen keyboard. Focus moved elsewhere in the dialog meanwhile is left alone, except the dialog's focus scope
+catching the fall on its first control, Close.
 
 A third shape is for a source whose explanation popover restores focus itself, from a frame of its own, as the popover
 goes with the source: the agent title bar's recovered-display mark, whose focus goes to the terminal. Focus on the mark
@@ -1170,6 +1189,10 @@ its needing attention, and a tooltip anchored beside the tab says so, opening on
 tooltip does not wait for a reveal scroll to settle. The marks inside the panel carry the specifics.
 
 ### Hover marquees belong to one text label
+
+Single-line text that may be clipped uses `FadeOverflow` (`packages/ui/src/components/text/FadeOverflow.tsx`: an edge
+fade, a hover marquee and a full-text tooltip while clipped), never an ellipsis (`truncate`, `text-ellipsis`) or a line
+clamp. (Source: user decision.)
 
 A clipped name, heading or detail scrolls only while the pointer is over its own text region. Independent labels
 within a row, card or header have independent hover regions; pointing at neighbouring text, an indicator, padding
@@ -2628,7 +2651,13 @@ additions and removals retain the horizontal presence effect. Pass the tree's pa
 motion so it can tell the two apart. The sidebar's project session body uses the same vertical fold effect as one
 block, with its motion container kept mounted so closing it can animate an inert visual copy; session changes inside
 an open body retain their ordinary collection movement. Static
-choices, a replacement page or directory listing, and fixed result snapshots do not require collection motion.
+choices, a replacement page or directory listing, and fixed result snapshots do not require collection motion. A live
+filter is not such a snapshot: the Settings search moves its section tabs and its rows as the query changes (source:
+user decision). Its rows stay mounted and are hidden with `hidden`, so a half-typed value survives being filtered out;
+`useListMotion` treats an item hidden that way (its own `hidden` or a wrapper's inside the list) as leaving and coming
+back, and a divider rule that skips the last item also skips hidden ones (`:has(~:not([hidden]))`). A list that is not
+rendered now, or was not at its last measure (hidden as a whole), has no layout to compare and takes its layout as it
+stands, so it does not slide items from its corner when it is shown again.
 Collections whose component already provides the same behavior, such as the toast stack, keep that behavior. With
 reduced motion requested, update positions immediately, cancel any entry or movement already running and remove exit
 copies.

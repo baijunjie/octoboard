@@ -1,9 +1,9 @@
 # Keyboard shortcuts
 
 Octoboard's own commands have keyboard shortcuts the user can change, and Settings' **Keyboard shortcuts** section lists
-them together with the keys that belong to the window, the system or the file viewer, which cannot be changed. A
-changed shortcut belongs to the client it was changed in — the desktop app, or one browser — and nowhere else (see
-"Where the shortcuts are kept" below).
+them together with the keys that belong to the window, the system, the file viewer or Settings, which cannot be
+changed. A changed shortcut belongs to the client it was changed in — the desktop app, or one browser — and nowhere else
+(see "Where the shortcuts are kept" below).
 
 What each command does, and when it does nothing, is in the doc of the command itself; this doc covers the keys: which
 there are, how they are changed and how a key press is matched against them.
@@ -90,12 +90,12 @@ and `⌃⇧Tab` on an Apple keyboard, `Ctrl+Tab` and `Ctrl+Shift+Tab` elsewhere.
 | Focus mode | **New session with defaults** | `Shift+Cmd+N` | yes | every client |
 | Application | **Open settings** | `Cmd+,` | yes | every client (in the macOS desktop app its native menu takes the key; wherever there is no native menu — the Windows desktop app and a browser — the page does) |
 | Editing | **Undo**, **Redo**, **Cut**, **Copy**, **Paste**, **Select all** | `Cmd+Z`, `Shift+Cmd+Z`, `Cmd+X`, `Cmd+C`, `Cmd+V`, `Cmd+A` | no | the desktop app (its native menu) |
-| Editing | **Find in file** | `Cmd+F` | no | every client |
+| Editing | **Find** | `Cmd+F` | no | every client |
 | Window | **Hide Octoboard**, **Hide others**, **Toggle full screen**, **Minimize**, **Close window**, **Quit Octoboard** | `Cmd+H`, `Option+Cmd+H`, `Ctrl+Cmd+F`, `Cmd+M`, `Cmd+W`, `Cmd+Q` | no | the desktop app (its native menu) |
 
 **A command the client does not have is not listed**: in a browser, Back and Forward, the console-session keys and the
 native menu's keys are left out, and so is the Window group, which holds nothing else; the Application group holds only
-Open settings and the Editing group only Find in file there. The Windows desktop app, which has no native menu, leaves
+Open settings and the Editing group only Find there. The Windows desktop app, which has no native menu, leaves
 out the same commands but the console-session keys, which it lists. Undo, Redo, Cut, Copy, Paste and Select all, and
 the Window group's keys, are the macOS menu's: elsewhere the engine or the system keeps them (and Ctrl+C interrupts the terminal's program), so the
 page does not take them. Such a command keeps its key all the same, and that key cannot
@@ -104,15 +104,16 @@ be given to another command there either (see "Which combinations are refused" b
 **The released Windows app has none of the web engine's own browser keys.** Its window is drawn by WebView2, whose
 keys for reloading the page (`F5`, `Ctrl+R`), printing it (`Ctrl+P`), finding in the page (`Ctrl+F`, `F3`) and zooming
 it from the keyboard are turned off there, so none of them reloads, prints, opens the engine's find bar or zooms; a key
-that is one of Octoboard's own, such as Find in file's `Ctrl+F`, reaches the page as usual. Editing keys in a text
+that is one of Octoboard's own, such as Find's `Ctrl+F`, reaches the page as usual. Editing keys in a text
 field — select all, copy, paste and the like — are not browser keys and keep working.
 
 What each command does: Back and Forward in "Keyboard shortcuts" in `docs/product/navigation-history.md`; the
 console-session keys in "The switch strip" in `docs/product/focus-mode.md`; the region keys in
 `docs/product/moving-focus-between-regions.md`; Toggle focus mode in "The focus mode shortcut" and the two New session
 commands in "Creating sessions from the keyboard", both in `docs/product/focus-mode.md`; Open settings in "Opening
-and closing Settings" in `docs/product/settings.md`; Find in file, which acts only in the file viewer, in
-`docs/product/finding-in-the-file-viewer.md`; and the native menu's keys in `docs/product/application-lifecycle.md`.
+and closing Settings" in `docs/product/settings.md`; Find, which acts only in the file viewer, where it finds in the
+file (see `docs/product/finding-in-the-file-viewer.md`), and in Settings, where it focuses the search field (see "The
+search field" in `docs/product/searching-settings.md`); and the native menu's keys in `docs/product/application-lifecycle.md`.
 
 ## The Keyboard shortcuts section
 
@@ -161,7 +162,8 @@ command has taken the default meanwhile, the reset is refused: the row says whic
 stays, and focus stays on Reset.
 
 **Restore defaults** gives every command its default back at once, ends any recording, and moves keyboard focus to the
-list's first Change button as the button itself goes away.
+list's first Change button as the button itself goes away — the first one a search in Settings leaves shown, or the
+section's tab while the search shows none (see `docs/product/searching-settings.md`).
 
 ### What assistive technology is told
 

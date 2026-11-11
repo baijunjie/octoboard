@@ -38,7 +38,7 @@ export function NotificationsSection(): React.ReactElement {
   else state = t("settings.notifications.allowed");
 
   return (
-    <SettingRow compact label={t("settings.notifications.label")} description={state}>
+    <SettingRow compact searchId="notifications" label={t("settings.notifications.label")} description={state}>
       {request && status === "undecided" && (
         <Button size="sm" variant="primary" focusOnPress={false} onPress={() => void request()}>
           {t("settings.notifications.enable")}

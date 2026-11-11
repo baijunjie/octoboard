@@ -21,6 +21,6 @@ export function BackgroundRunSetting(): React.ReactElement {
       : iconBrings ? "settings.background.description.off" : "settings.background.description.offIconHidden",
   );
   return (
-    <SwitchSettingRow label={t("settings.background.label")} description={description} isSelected={enabled} onChange={(value) => runInBackground.set(value)} />
+    <SwitchSettingRow searchId="run-in-background" label={t("settings.background.label")} description={description} isSelected={enabled} onChange={(value) => runInBackground.set(value)} />
   );
 }

@@ -13,7 +13,7 @@ request ends, the rule of one request per session, and the outcome message writt
 "Approving requests automatically", "Waiting for the answer", "How a request ends" and "The outcome message" in
 `docs/product/session-requests.md`). It is approved automatically under a setting of its own, **Automatically approve
 resume requests**, independent of the one for `request_session` (see "Automatically approve resume requests" in
-`docs/product/settings.md`). Where those sections say a request refused, timed out or withdrawn started nothing, for
+`docs/product/agent-behavior-settings.md`). Where those sections say a request refused, timed out or withdrawn started nothing, for
 this request it resumed nothing. What follows is what differs.
 
 ## Who is offered the tool

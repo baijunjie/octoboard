@@ -15,6 +15,7 @@ import { useDaemon, useDaemonStore } from "../store";
 import { useHostPaths } from "../components/hooks/useHostPaths";
 import { SettingRow } from "./SettingRow";
 import { LeadRows, SettingsLead } from "./SettingsLead";
+import { SettingsSearchBlock } from "./settingsSearchFilter";
 import { useSectionRefocus } from "./useSectionRefocus";
 import { Button } from "../primitives";
 
@@ -39,35 +40,37 @@ export function TrustedFoldersSection(): React.ReactElement {
       <SettingsLead>
         <Message id="settings.trusted.description" />
       </SettingsLead>
-      <LeadRows>
-        {directories.length === 0 ? (
-          // `-ms-2` cancels the `ps-2` that `EmptyPanel`'s compact row carries for the sidebar rows it was built
-          // for, which here would stand its glyph 8px in from the section's own content edge. Change the two together.
-          <div className="-ms-2 py-2">
-            <EmptyPanel compact icon={FolderOpen} message={t("settings.trusted.empty")} />
-          </div>
-        ) : (
-          <div ref={listRef} className="relative">
-            {directories.map((path) => (
-              <SettingRow compact key={path} motionKey={path} label={<MarkedPath path={path} />}>
-                <TitledControl title={t("settings.trusted.removeTooltip")}>
-                  <Button
-                    size="sm"
-                    variant="danger-soft"
-                    focusOnPress={false}
-                    // The tooltip nearly repeats the accessible name; an empty description keeps it from being read twice.
-                    describedBy=""
-                    label={t("settings.trusted.removeLabel", { path: isolate(path) })}
-                    onPress={() => setRemoving(path)}
-                  >
-                    {t("common.remove")}
-                  </Button>
-                </TitledControl>
-              </SettingRow>
-            ))}
-          </div>
-        )}
-      </LeadRows>
+      <SettingsSearchBlock id="trusted-folders.list">
+        <LeadRows>
+          {directories.length === 0 ? (
+            // `-ms-2` cancels the `ps-2` that `EmptyPanel`'s compact row carries for the sidebar rows it was built
+            // for, which here would stand its glyph 8px in from the section's own content edge. Change the two together.
+            <div className="-ms-2 py-2">
+              <EmptyPanel compact icon={FolderOpen} message={t("settings.trusted.empty")} />
+            </div>
+          ) : (
+            <div ref={listRef} className="relative">
+              {directories.map((path) => (
+                <SettingRow compact key={path} motionKey={path} label={<MarkedPath path={path} />}>
+                  <TitledControl title={t("settings.trusted.removeTooltip")}>
+                    <Button
+                      size="sm"
+                      variant="danger-soft"
+                      focusOnPress={false}
+                      // The tooltip nearly repeats the accessible name; an empty description keeps it from being read twice.
+                      describedBy=""
+                      label={t("settings.trusted.removeLabel", { path: isolate(path) })}
+                      onPress={() => setRemoving(path)}
+                    >
+                      {t("common.remove")}
+                    </Button>
+                  </TitledControl>
+                </SettingRow>
+              ))}
+            </div>
+          )}
+        </LeadRows>
+      </SettingsSearchBlock>
       {removing && (
         <ConfirmDialog
           title={t("settings.trusted.removeTitle")}

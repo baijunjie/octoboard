@@ -9,7 +9,8 @@ const PRESENCE_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
 const EASING = "cubic-bezier(0.2, 0, 0, 1)";
 
 interface ListMotionOptions {
-  /** Rows behind wrappers, such as cached collections and display:contents groups. */
+  /** Rows behind wrappers, such as cached collections and display:contents groups. The rows of another list watched
+   * inside this one are left to that list. */
   descendants?: boolean;
   /** A virtualizer's visible rows: only the same rendered element and identity may move. */
   virtualized?: boolean;
@@ -126,6 +127,9 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   let scrollTop = list.scrollTop;
   let scrollLeft = list.scrollLeft;
   let stopped = false;
+  // Whether the list was rendered at the last measure: a list that is not (`display: none`) measures every row at the
+  // origin, so a measure just after it is shown again compares against nothing.
+  let laidOut = list.getClientRects().length > 0;
   // Where rows moved by hand stand as their caller releases them (`release`), for the next change only.
   let released: Map<HTMLElement, Point> | undefined;
   let releaseTimer: ReturnType<typeof setTimeout> | undefined;
@@ -153,12 +157,24 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   const slides = new Map<HTMLElement, Slide>();
   const entrances = new Map<HTMLElement, Animation>();
   const exits = new Map<string, { element: HTMLElement; animation: Animation }>();
+  // Whether `element` is hidden by its own `hidden` or that of an element between it and the list: such a row is out of
+  // the collection, leaving as a removed row does and coming back as an added one, while it stays mounted. A list that is
+  // itself hidden is not a change of its rows: it is not laid out, so nothing animates until it is shown and measured.
+  const hiddenWithin = (element: HTMLElement) => {
+    const hidden = element.closest("[hidden]");
+    return hidden !== null && hidden !== list && list.contains(hidden);
+  };
+  // A row inside another list that is watched (one nested in this one's descendants) is that list's to move.
+  const ownedByNested = (element: HTMLElement) => {
+    for (let at = element.parentElement; at && at !== list; at = at.parentElement) if (watching.has(at)) return true;
+    return false;
+  };
   const children = () => (descendants || virtualized
     ? Array.from(list.querySelectorAll<HTMLElement>(SELECTOR))
     : Array.from(list.children).filter((child): child is HTMLElement => child instanceof HTMLElement && child.matches(SELECTOR)))
     // A marked group owns its descendants' movement. Animating both would double their travel.
     .filter((child) => {
-      if (child.closest("[data-list-motion-ghost]")) return false;
+      if (child.closest("[data-list-motion-ghost]") || hiddenWithin(child) || ownedByNested(child)) return false;
       const parent = child.parentElement?.closest(SELECTOR);
       return !parent || parent === list || !list.contains(parent);
     });
@@ -198,11 +214,14 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
         if (attribute.name === "id" || attribute.name === "name" || attribute.name === "autofocus" || attribute.name === "data-list-motion" || attribute.name.startsWith("on")) node.removeAttribute(attribute.name);
       }
     }
+    // A row that left by being hidden is copied as it was shown.
+    ghost.removeAttribute("hidden");
     ghost.dataset.listMotionGhost = "";
     ghost.setAttribute("aria-hidden", "true");
     ghost.setAttribute("inert", "");
     const residual = virtualized ? { x: 0, y: 0 } : offset(before.element);
-    let parent = before.parent && list.contains(before.parent) ? before.parent : list;
+    // A copy placed in a hidden element would not be seen: such a row's copy goes to the list.
+    let parent = before.parent && list.contains(before.parent) && !hiddenWithin(before.parent) ? before.parent : list;
     let scrollX = 0;
     let scrollY = 0;
     for (let at = before.parent; at && at !== list; at = at.parentElement) {
@@ -279,6 +298,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     if (stopped) return;
     const rows = children();
     const next = new Map<string, Position>();
+    const rendered = list.getClientRects().length > 0;
     const newWidth = list.clientWidth;
     const newOuterWidth = contentWidth ? list.offsetWidth : outerWidth;
     const newHeight = list.clientHeight;
@@ -316,11 +336,12 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     });
     // In a content-width row, an item that has grown or shrunk on its own (a tab gaining a mark, renamed) is a
     // change of the items, which the ones after it slide along with; every item changing width at once (the
-    // text's zoom or font) is a resize, as is a change of the row's width with none of them changing.
+    // text's zoom or font) is a resize, as is a change of the row's width with none of them changing. A list that is
+    // not rendered now, or was not at the last measure, has no layout to compare: it is taken as it stands.
     const sized = contentWidth ? moves.filter(({ before, position }) => before && before.element === position.element && before.width !== position.width).length : 0;
     const itemResized = sized > 0 && sized < moves.length;
     const resized = width !== newWidth && !(contentWidth && (newOrder !== order || itemResized));
-    const moving = initialized && animate && !prefersReducedMotion() && !resized && (!virtualized || (height === newHeight && !scrolled));
+    const moving = initialized && animate && rendered && laidOut && !prefersReducedMotion() && !resized && (!virtualized || (height === newHeight && !scrolled));
     const followingNestedFit = [...fittingLists].some((nested) => nested !== list && list.contains(nested));
     // A real reorder still slides while a body folds. Size-only frames, including the final
     // frame after its fit is released, follow layout without restarting or cancelling that slide.
@@ -394,6 +415,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     }
     initialized = initialized || rows.length > 0;
     positions = next;
+    laidOut = rendered;
     // A content-width list's own width may have just been held or let go.
     width = contentWidth ? list.clientWidth : newWidth;
     outerWidth = contentWidth ? list.offsetWidth : outerWidth;
@@ -438,7 +460,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     const layoutChanged = virtualized && records.some((record) => record.type === "attributes" && record.attributeName === "style" && record.target instanceof HTMLElement && (record.target.matches(SELECTOR) || record.target.querySelector(SELECTOR)));
     if (keysChanged() || layoutChanged) measure(true);
   });
-  mutations?.observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: virtualized ? ["data-list-motion", "style"] : ["data-list-motion"] });
+  mutations?.observe(list, { childList: true, subtree: true, attributes: true, attributeFilter: virtualized ? ["data-list-motion", "hidden", "style"] : ["data-list-motion", "hidden"] });
   // Only the list, or a scroller between it and its rows, moves the rows and exit copies when it scrolls. A scroller
   // within a row's own content does not: focusing a switch scrolls the clipped wrapper of its hidden input, and a
   // click on a switch that removes a row focuses the switch after that row's exit copy has started.
@@ -569,7 +591,9 @@ function followList<T extends HTMLElement>(initial: ListMotionOptions): ListFoll
 
 /** Keyed rows enter, leave and slide to their new positions in either axis. Removed controls
  * leave only inert visual copies; actions and focus handoffs take effect immediately. Virtual
- * collections distinguish logical changes from newly rendered or recycled identities when supplied keys. */
+ * collections distinguish logical changes from newly rendered or recycled identities when supplied keys.
+ * A row hidden with `hidden` (its own, or a wrapper's inside the list) leaves and comes back as a removed
+ * and an added row do, while staying mounted with its state. */
 export function useListMotion<T extends HTMLElement>({ descendants = false, virtualized = false, keys, folds, contentWidth = false, fitHeight = false, foldPresence = false }: ListMotionOptions = {}): ListMotionRef<T> {
   const [motion] = useState(() => followList<T>({ descendants, virtualized, keys, folds, contentWidth, fitHeight, foldPresence }));
   const focused = useRef<HTMLElement | null>(null);
@@ -597,7 +621,9 @@ export function useListMotion<T extends HTMLElement>({ descendants = false, virt
       for (const timer of pending) clearTimeout(timer);
       motion.stop();
     };
-  }, [motion, virtualized]);
+    // A change of what the list is (a strip turning from a column into a row as wide as its items) watches it anew,
+    // from its layout as it then stands; the watcher reads these only as it starts.
+  }, [motion, virtualized, descendants, contentWidth, fitHeight, foldPresence]);
   useLayoutEffect(() => {
     motion.rendered({ descendants, virtualized, keys, folds, contentWidth, fitHeight, foldPresence });
     const list = motion.ref.current;

@@ -4,8 +4,10 @@ Settings' **Agent accounts** section (see "Agent accounts" in `docs/product/sett
 added, and every account of each, grouped by agent. The section opens with a paragraph saying what an account is — a
 named config directory of an agent, where it keeps its login and conversation history — and that an agent has to be on
 the user's `PATH` for its accounts to be usable. Below that paragraph sit **Automatically select an account**, then
-**Automatically switch accounts at the usage limit**, then **Start usage windows automatically** (see those sections in
-`docs/product/settings.md`), switches for the whole application, not controls on one agent's tab. They stay there while agents are listed, while the
+**Automatically switch accounts at the usage limit**, then **Start usage windows automatically** (see "Automatically
+select an account" in `docs/product/opening-sessions.md`, "Automatically switch accounts at the usage limit" in
+`docs/product/automatic-account-switch.md` and "Start usage windows automatically" in
+`docs/product/starting-usage-windows.md`), switches for the whole application, not controls on one agent's tab. They stay there while agents are listed, while the
 added-agent list is still undecided, and while no agent is added. Below the switches sits the agent strip, which ends in
 the **Add agent** and **Add account** buttons, with the selected agent's accounts under it. What an account is and how
 consoles, projects and sessions use one are in "Agent config directories" in `docs/product/consoles.md`; signing an

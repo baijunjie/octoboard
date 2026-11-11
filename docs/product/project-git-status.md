@@ -371,7 +371,7 @@ worded as Git not being installed or not on `PATH` (see "Recovery and unexpected
 
 ## Automatically pulling repositories
 
-Settings' **Git** section (see "Git" in `docs/product/settings.md`) holds the switch **Automatically pull
+Settings' **Git** section (see "Automatically pull repositories" in `docs/product/git-settings.md`) holds the switch **Automatically pull
 repositories**, **off** to begin with. It is stored by the daemon, so every window and every client sees the same
 value and it survives a restart.
 

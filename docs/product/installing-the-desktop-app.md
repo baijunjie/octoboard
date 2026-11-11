@@ -32,7 +32,7 @@ offered through an application store.
   docs describe of the Windows application holds alike on Windows 10 21H2 and on Windows 11, and on x64 hardware as
   under emulation: the installer, the notification-area icon (see "The notification-area icon on Windows" in
   `docs/product/menu-bar-icon.md`), the Notifications row of Settings and its **Open Windows Settings** button (see
-  "Notifications" in `docs/product/settings.md`), the WebView2 runtime's installation below, and in-app updates.
+  "Opening the system's notification settings" in `docs/product/notification-settings.md`), the WebView2 runtime's installation below, and in-app updates.
 - **WebView2**: the window is drawn with Microsoft Edge WebView2. Where the system lacks that runtime, the installer
   downloads Microsoft's WebView2 bootstrapper and installs the runtime, which needs an internet connection at that
   point; where the runtime is present, nothing is downloaded.

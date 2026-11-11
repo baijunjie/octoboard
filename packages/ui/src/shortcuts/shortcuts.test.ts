@@ -225,7 +225,7 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
       expect(check(defaultBinding("back"))).toEqual({ reason: "conflict", with: "back" });
       expect(check({ code: "KeyV", primary: true })).toEqual({ reason: "conflict", with: "paste" });
       expect(check({ code: "KeyH", primary: true, alt: true })).toEqual({ reason: "conflict", with: "hideOthers" });
-      // Find in file is the file viewer's own, so no command can take the key the viewer's dialog listens for.
+      // Find is the file viewer's and the Settings dialog's own, so no command can take the key their dialogs listen for.
       expect(check({ code: "KeyF", primary: true })).toEqual({ reason: "conflict", with: "find" });
     });
 

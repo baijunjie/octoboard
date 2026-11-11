@@ -80,7 +80,7 @@ Each kind of request has an application setting of its own, all four **off by de
 another: **Automatically approve session requests** for `request_session`, **Automatically approve resume requests**
 for `request_resume_session`, **Automatically approve account switches** for an owner's `switch_session_account`, and
 **Automatically approve handoffs** for an owner's `handoff_session` (see the sections of the same names in
-`docs/product/settings.md`).
+`docs/product/agent-behavior-settings.md`).
 While a `request_session` or `request_resume_session` call's own setting is on, the call, once it passes every check
 made before the user is asked, is **approved at once**, without asking:
 

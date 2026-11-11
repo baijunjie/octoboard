@@ -24,10 +24,10 @@ export function AboutSection(): React.ReactElement {
   const version = useUpdateSelector((state) => state.currentVersion);
   const [licensesOpen, setLicensesOpen] = useState(false);
   const links = [
-    { label: t("settings.about.website.label"), href: appConfig.websiteUrl },
-    { label: t("settings.about.repository.label"), href: appConfig.repositoryUrl },
-    { label: t("settings.about.issues.label"), href: appConfig.issueUrl },
-  ];
+    { searchId: "about.website", label: t("settings.about.website.label"), href: appConfig.websiteUrl },
+    { searchId: "about.repository", label: t("settings.about.repository.label"), href: appConfig.repositoryUrl },
+    { searchId: "about.issues", label: t("settings.about.issues.label"), href: appConfig.issueUrl },
+  ] as const;
   return (
     <>
       <div className="flex items-center gap-4 pb-2">
@@ -38,18 +38,18 @@ export function AboutSection(): React.ReactElement {
         </div>
       </div>
       {updater && <UpdatesSetting />}
-      {links.map(({ label, href }) => (
-        <SettingRow key={href} label={label}>
+      {links.map(({ searchId, label, href }) => (
+        <SettingRow key={href} searchId={searchId} label={label}>
           <ExternalLink href={href}><span dir="ltr">{shown(href)}</span></ExternalLink>
         </SettingRow>
       ))}
-      <SettingRow compact label={t("settings.about.license.label")} description={t("settings.about.license.description", { license: isolate(appConfig.license) })}>
+      <SettingRow compact searchId="about.license" label={t("settings.about.license.label")} description={t("settings.about.license.description", { license: isolate(appConfig.license) })}>
         <ExternalLink href={`${appConfig.repositoryUrl}/blob/main/LICENSE`}>{t("settings.about.license.view")}</ExternalLink>
       </SettingRow>
-      <SettingRow compact label={t("settings.about.thirdParty.label")} description={t("settings.about.thirdParty.description")}>
+      <SettingRow compact searchId="about.third-party" label={t("settings.about.thirdParty.label")} description={t("settings.about.thirdParty.description")}>
         <Button size="sm" variant="outline" onPress={() => setLicensesOpen(true)}>{t("settings.about.thirdParty.open")}</Button>
       </SettingRow>
-      <SettingRow label={t("settings.about.copyright.label")} description={t("settings.about.copyright.description", { year: String(appConfig.copyrightYear), author: isolate(appConfig.author.name) })} />
+      <SettingRow searchId="about.copyright" label={t("settings.about.copyright.label")} description={t("settings.about.copyright.description", { year: String(appConfig.copyrightYear), author: isolate(appConfig.author.name) })} />
       {licensesOpen && <ThirdPartyLicensesDialog onClose={() => setLicensesOpen(false)} />}
     </>
   );

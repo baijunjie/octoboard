@@ -2,6 +2,8 @@ import React, { useRef } from "react";
 
 import { MarkLineBox } from "../components/status/MarkLineBox";
 import { Switch } from "../primitives";
+import type { SettingsSearchId } from "./settingsSearch";
+import { useSettingsSearchFilter } from "./settingsSearchFilter";
 
 /** One setting: its name and, when it has one, a line saying what it does at the start, its control
  * at the end, with a thin divider under every row but the last (the copy of a row a list motion is
@@ -18,8 +20,14 @@ import { Switch } from "../primitives";
  * input has `flex-1` and whose buttons keep their size. Above the tablet boundary `fill` changes
  * nothing. `help` is a help tip that ends the name's line (see "Explanations in help tips" in
  * `docs/product/labels-and-tooltips.md`). `below` is what the row has to say under itself across
- * its whole width (a progress bar, a full-width field such as a tags input), inside its divider. */
+ * its whole width (a progress bar, a full-width field such as a tags input), inside its divider. `searchId` is the
+ * row's entry in `SETTINGS_SEARCH_INDEX`: the row is hidden, not unmounted, while a search in Settings leaves it out,
+ * and a hidden row after it does not keep the last shown row's divider. `motionKey` names the row for a list that
+ * animates the rows around it (`useListMotion`); without one, a row with a `searchId` is named by it, so that it comes
+ * and goes with the list motion of the Settings section it is in as a search hides and shows it. The description is
+ * marked `data-setting-description`, by which `settingsSearch.test.tsx` holds it to its entry's wordings. */
 export function SettingRow({
+  searchId,
   label,
   help,
   description,
@@ -29,6 +37,7 @@ export function SettingRow({
   compact = false,
   fill = false,
 }: {
+  searchId?: SettingsSearchId;
   label: React.ReactNode;
   help?: React.ReactNode;
   description?: React.ReactNode;
@@ -38,15 +47,21 @@ export function SettingRow({
   compact?: boolean;
   fill?: boolean;
 }): React.ReactElement {
+  const { shows } = useSettingsSearchFilter();
   return (
-    <div data-list-motion={motionKey} className="flex flex-col gap-3 groove-b py-4 [&:not(:has(~:not([data-list-motion-exit])))]:border-b-0">
+    <div
+      data-list-motion={motionKey ?? searchId}
+      data-settings-search-id={searchId}
+      hidden={searchId !== undefined && !shows(searchId)}
+      className="flex flex-col gap-3 groove-b py-4 [&:not(:has(~:not([data-list-motion-exit],[hidden])))]:border-b-0"
+    >
       <div className={compact ? "flex items-center justify-between gap-4 tablet:gap-6" : "flex flex-col items-start gap-3 tablet:flex-row tablet:items-center tablet:justify-between tablet:gap-6"}>
         <div className="min-w-0">
           <div className="flex items-start gap-2 text-sm font-medium text-foreground">
             <div className="min-w-0">{label}</div>
             {help && <MarkLineBox size="text-sm">{help}</MarkLineBox>}
           </div>
-          {description && <div className="text-sm text-app-muted">{description}</div>}
+          {description && <div data-setting-description="" className="text-sm text-app-muted">{description}</div>}
         </div>
         {/* A row whose controls all render nothing (`false`) draws no empty box taking the gap. */}
         {React.Children.toArray(children).length > 0 && <div className={compact ? "shrink-0" : fill ? "shrink-0 max-tablet:flex max-tablet:w-full max-tablet:*:min-w-0 max-tablet:*:flex-1" : "shrink-0 max-tablet:self-end-safe"}>{children}</div>}
@@ -110,6 +125,7 @@ export function SettingSwitch({
 
 /** A `SettingRow` whose control is an on/off switch. The switch is named by the visible label. */
 export function SwitchSettingRow({
+  searchId,
   label,
   help,
   description,
@@ -117,6 +133,7 @@ export function SwitchSettingRow({
   onChange,
   motionKey,
 }: {
+  searchId?: SettingsSearchId;
   label: string;
   help?: React.ReactNode;
   description: React.ReactNode;
@@ -125,7 +142,7 @@ export function SwitchSettingRow({
   motionKey?: string;
 }): React.ReactElement {
   return (
-    <SettingRow label={label} help={help} description={description} motionKey={motionKey} compact>
+    <SettingRow searchId={searchId} label={label} help={help} description={description} motionKey={motionKey} compact>
       <SettingSwitch label={label} isSelected={isSelected} onChange={onChange} />
     </SettingRow>
   );

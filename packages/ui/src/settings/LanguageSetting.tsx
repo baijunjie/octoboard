@@ -30,7 +30,7 @@ export function LanguageSetting(): React.ReactElement {
     });
   };
   return (
-    <SettingRow fill label={t("settings.language.label")} description={<Message id="settings.language.sharedDescription" />}>
+    <SettingRow fill searchId="language" label={t("settings.language.label")} description={<Message id="settings.language.sharedDescription" />}>
       <OptionSelect
         inline
         label={t("settings.language.label")}

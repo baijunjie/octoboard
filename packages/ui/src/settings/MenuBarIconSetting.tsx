@@ -13,5 +13,5 @@ export function MenuBarIconSetting(): React.ReactElement {
   const shown = showMenuBarIcon.useValue();
   const inBackground = runInBackground.useValue();
   const description = t(shown ? "settings.menuBarIcon.description.on" : inBackground ? "settings.menuBarIcon.description.offInBackground" : "settings.menuBarIcon.description.off");
-  return <SwitchSettingRow label={t("settings.menuBarIcon.label")} description={description} isSelected={shown} onChange={(value) => showMenuBarIcon.set(value)} />;
+  return <SwitchSettingRow searchId="menu-bar-icon" label={t("settings.menuBarIcon.label")} description={description} isSelected={shown} onChange={(value) => showMenuBarIcon.set(value)} />;
 }

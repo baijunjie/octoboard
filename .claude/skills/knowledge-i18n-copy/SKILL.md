@@ -175,8 +175,9 @@ language; when the app renames something, go back and sync it.
 
 - Make examples concrete enough to be really usable, and keep examples across fields consistent in meaning (if the
   name is a charger, the keyword is a power adapter, not something else).
-- A search field does not correspond to a field to fill in, so it does not follow the example pattern; write it as a
-  prompting question (找什么？ / What are you looking for?).
+- A search field does not correspond to a field to fill in, so it does not follow the example pattern; its placeholder
+  is the standard word "Search" in each language (搜索 in zh-Hans), shared through the one catalog key, and its
+  accessible label names what is searched.
 
 ### Reference and scope
 
@@ -585,7 +586,8 @@ are now wrong or it leaves out one thing, the meaning has changed.
   - A button never takes in-progress text: while its action runs it keeps its own label and shows a spinner before it
     (an icon-only button's spinner replaces its icon), so "In-progress states" applies to status lines and banners
     only, and no catalog carries a pending variant of a button's label (`docs/ui-standard.md`, "Buttons").
-  - A search field's prompting question addresses the user in that language's register (de: Was suchst du?).
+  - A search field's placeholder is the standard word "Search" in each language (zh-Hans 搜索), shared through the one
+    catalog key `common.search`; its accessible label names what is searched ("Search settings").
 
   (the user's decision)
 - **Destructive confirmations**: the destructive Confirm is the form's submit button, so Enter triggers it — no design

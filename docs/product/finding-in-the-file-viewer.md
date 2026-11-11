@@ -29,7 +29,7 @@ The bar floats over the top trailing corner of the content and stays on one row 
 is open, each searched view starts its text below the bar, so the bar covers no line until the text is scrolled under
 it; opening or closing it over scrolled text leaves that text where it was. In order, it holds:
 
-- **The query**, a field whose placeholder asks what is being looked for. It is searched as typed, a space at either
+- **The query**, a field with the placeholder "Search". It is searched as typed, a space at either
   end included, once typing pauses.
 - **The count**: the current match's number and the number of matches, written short — "1/13", or "0/0" when nothing
   matches — and "Invalid", in the failure colour, for a regular expression that does not compile; nothing while the

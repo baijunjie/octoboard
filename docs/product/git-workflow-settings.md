@@ -158,8 +158,8 @@ four items.
 
 **In Settings.** The application-wide values are set in Settings' Git section: where sessions develop, squashing, rebase
 before delivery and delivery in its Development group, which shows the squashing, rebase and delivery rows only while
-development is not on the current branch, and the revert gate in its Protection group, always shown (see "Git" in
-`docs/product/settings.md`).
+development is not on the current branch, and the revert gate in its Protection group, always shown (see
+`docs/product/git-settings.md`).
 
 **In the project dialog.** A project's own values are set under the **Git workflow** tab of the project dialog's
 collapsed Advanced section, both when a project is associated and when it is edited (see "The Advanced section" in

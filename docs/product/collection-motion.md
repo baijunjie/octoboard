@@ -5,7 +5,8 @@
 When items are added, removed, reordered or folded within a visible collection, items that remain visible slide to their
 new positions over **300 ms**. This applies to navigation lists, session cards and archive rows, settings records, the
 rows of Settings' Git section that come and go with its Where sessions develop choice (see "Development" in
-`docs/product/settings.md`), selected tags and wrapping chips, the file and Git change lists and trees, the accounts
+`docs/product/git-settings.md`), the section tabs of Settings and the rows, group headings and blocks of a Settings section
+as a search hides and shows them (see `docs/product/searching-settings.md`), selected tags and wrapping chips, the file and Git change lists and trees, the accounts
 listed in the account quota panel on the rail, the rows of the rail's Processes popover, and tab strips: the agent tabs in Settings' Agent accounts section, in
 the account quota panel and in the console dialog's Advanced section, and the Terminal panel's tabs. The quota meters
 within one account are not such a collection: they appear and disappear without motion as its readings change, and
@@ -48,7 +49,7 @@ Enabling it during an animation stops the effects already in progress and clears
 
 ## A collection's height following its rows
 
-The Development group of Settings' Git section (see "Development" in `docs/product/settings.md`) and the sessions
+The Development group of Settings' Git section (see "Development" in `docs/product/git-settings.md`) and the sessions
 body below each sidebar project have a height that follows their contents. In Settings, when Squash commits before
 delivery, Rebase before delivery and Delivery leave or come back with the Where sessions develop choice, or a row
 grows or shrinks on its own, as when the Where sessions

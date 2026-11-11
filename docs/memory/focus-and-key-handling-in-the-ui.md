@@ -26,6 +26,9 @@ them. Making a region `inert` drops focus the same way. Run the "is focus inside
 or in a `useLayoutEffect`, never in a passive `useEffect`: when the state change comes from a native listener of a
 continuous event (the phone-width swipe's `touchmove`), React runs passive effects after paint, so the browser has
 already moved focus to `<body>`, and the check finds nothing inside the region to hand on.
+jsdom does not drop it: focus stays on an element after it or an ancestor is given `hidden` (only an element hidden
+already refuses `focus()`), so a jsdom test of such a handoff asserts the exact destination; one asserting only that
+focus is not on `<body>` passes with no handoff at all.
 
 Reordering does it too: React reorders keyed children by moving their DOM nodes, and moving the node that holds focus
 blurs it to `<body>`, so a keyboard user on a row loses their place whenever a live status update re-sorts the list.

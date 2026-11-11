@@ -113,4 +113,4 @@ The prefill belongs to the **Report issue** action alone. The issue address is s
 - the alert for an Issue page that could not be opened, which shows the address to open manually (see "Recovery and
   unexpected errors" in `docs/product/error-alerts.md`);
 - the guidance that names the address where the desktop application cannot open links;
-- the **Issue tracker** link in Settings' About section (see "About" in `docs/product/settings.md`).
+- the **Issue tracker** link in Settings' About section (see `docs/product/about-octoboard.md`).

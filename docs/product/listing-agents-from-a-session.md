@@ -16,7 +16,7 @@ and an optional `refresh` (below), and answers:
 ```
 
 - **`auto_select_account`** is the setting of that name (see "Automatically select an account" in
-  `docs/product/settings.md`), read-only, so that a session, which may not be able to read the settings, knows whether
+  `docs/product/opening-sessions.md`), read-only, so that a session, which may not be able to read the settings, knows whether
   an account it leaves out is chosen for it.
 - **`agents`** has one entry per agent a session could be opened on: the added agents that are installed, in the order
   the user keeps the added agents in, or every installed agent while that list is undecided (see "Added agents" in

@@ -171,9 +171,20 @@ Where to start, by question:
 - [Moving focus between regions](product/moving-focus-between-regions.md) — F6 navigation between the window's
   regions.
 - [Keyboard shortcuts](product/keyboard-shortcuts.md) — the changeable shortcuts, how they are matched and shown.
-- [Settings](product/settings.md) — the Settings dialog and each of its sections: General, App behavior, Git, Agent
-  accounts, Agent behavior, Trusted folders, Permissions, Notifications, Keyboard shortcuts, Cleanup, Configuration and
-  About.
+- [Settings](product/settings.md) — the Settings dialog itself: opening and closing, its sections and moving between
+  them, the narrow layout, how switches save, and the short sections (General, Trusted folders, Permissions, Keyboard
+  shortcuts, Cleanup, Configuration) with pointers to the docs of the others.
+- [App behavior settings](product/app-behavior-settings.md) — the App behavior section's rows: launch at login, resume
+  sessions, background run, menu bar icon, Prevent sleep, closing idle terminals.
+- [Git settings](product/git-settings.md) — the Git section's rows: default clone directory, automatic pull,
+  Development and Protection.
+- [Agent behavior settings](product/agent-behavior-settings.md) — the auto-approval switches and Ask questions as
+  choices.
+- [Notification settings](product/notification-settings.md) — the Notifications row per client, asking a browser, and
+  opening the system's notification settings.
+- [About Octoboard](product/about-octoboard.md) — the About section's rows and the third-party licenses dialog.
+- [Searching Settings](product/searching-settings.md) — the Settings search field: what a query matches, how sections,
+  rows and groups are filtered, the empty state, and Find and Escape on the field.
 - [Appearance](product/appearance.md) — light, dark and follow-the-system, and what follows the choice.
 - [Language](product/language.md) — the offered languages, how the choice is made and stored.
 - [Right-to-left layout](product/right-to-left-layout.md) — what is mirrored under a right-to-left language.

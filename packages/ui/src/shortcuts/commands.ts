@@ -64,12 +64,13 @@ const REBINDABLE = [
 
 export type CommandId = (typeof REBINDABLE)[number]["id"];
 
-/** The file viewer's Find in file: its key acts nowhere else, so it is listed for no other command to take. The
- * viewer's dialog matches the key by hand (`isFind`, `viewer/find/useFind.ts`), held to this entry by a test. */
+/** Find: its key acts in the file viewer (find in the file) and in the Settings dialog (the search field), nowhere
+ * else, so it is listed for no other command to take. The viewer's dialog matches the key by hand (`isFind`,
+ * `viewer/find/useFind.ts`), held to this entry by a test; the Settings dialog matches it from here. */
 export const FIND_BINDING: Binding = primary("KeyF");
 
 /** The keys the window, the native menu or one view owns, listed but not changeable. */
-const FIXED: readonly Omit<ShortcutCommand, "rebindable">[] = [
+const FIXED = [
   { id: "nextRegion", label: "settings.shortcuts.command.nextRegion", group: "navigation", binding: { code: "F6" }, availability: "always" },
   { id: "previousRegion", label: "settings.shortcuts.command.previousRegion", group: "navigation", binding: { code: "F6", shift: true }, availability: "always" },
   { id: "undo", label: "settings.shortcuts.command.undo", group: "editing", binding: primary("KeyZ"), availability: "nativeMenu" },
@@ -78,21 +79,24 @@ const FIXED: readonly Omit<ShortcutCommand, "rebindable">[] = [
   { id: "copy", label: "settings.shortcuts.command.copy", group: "editing", binding: primary("KeyC"), availability: "nativeMenu" },
   { id: "paste", label: "settings.shortcuts.command.paste", group: "editing", binding: primary("KeyV"), availability: "nativeMenu" },
   { id: "selectAll", label: "settings.shortcuts.command.selectAll", group: "editing", binding: primary("KeyA"), availability: "nativeMenu" },
-  { id: "find", label: "settings.shortcuts.command.find", group: "editing", binding: FIND_BINDING, availability: "always" },
+  { id: "find", label: "settings.shortcuts.command.findAnywhere", group: "editing", binding: FIND_BINDING, availability: "always" },
   { id: "hide", label: "settings.shortcuts.command.hide", group: "window", binding: primary("KeyH"), availability: "nativeMenu" },
   { id: "hideOthers", label: "settings.shortcuts.command.hideOthers", group: "window", binding: primary("KeyH", { alt: true }), availability: "nativeMenu" },
   { id: "fullScreen", label: "settings.shortcuts.command.fullScreen", group: "window", binding: primary("KeyF", { other: true }), availability: "nativeMenu" },
   { id: "minimize", label: "settings.shortcuts.command.minimize", group: "window", binding: primary("KeyM"), availability: "nativeMenu" },
   { id: "closeWindow", label: "settings.shortcuts.command.closeWindow", group: "window", binding: primary("KeyW"), availability: "nativeMenu" },
   { id: "quit", label: "settings.shortcuts.command.quit", group: "window", binding: primary("KeyQ"), availability: "nativeMenu" },
-];
+] as const satisfies readonly Omit<ShortcutCommand, "rebindable">[];
+
+/** The id of any listed command, rebindable or not. */
+export type ShortcutCommandId = CommandId | (typeof FIXED)[number]["id"];
 
 export const REBINDABLE_COMMANDS: readonly (ShortcutCommand & { id: CommandId })[] = REBINDABLE.map((command) => ({ ...command, rebindable: true }));
 
-export const FIXED_COMMANDS: readonly ShortcutCommand[] = FIXED.map((command) => ({ ...command, rebindable: false }));
+export const FIXED_COMMANDS: readonly (ShortcutCommand & { id: ShortcutCommandId })[] = FIXED.map((command) => ({ ...command, rebindable: false }));
 
 /** Every listed command, grouped in list order. */
-export const ALL_COMMANDS: readonly ShortcutCommand[] = [...REBINDABLE_COMMANDS, ...FIXED_COMMANDS];
+export const ALL_COMMANDS: readonly (ShortcutCommand & { id: ShortcutCommandId })[] = [...REBINDABLE_COMMANDS, ...FIXED_COMMANDS];
 
 export function isCommandId(id: string): id is CommandId {
   return REBINDABLE_COMMANDS.some((command) => command.id === id);

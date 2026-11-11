@@ -10,7 +10,7 @@ import { useStickyHeadingFocus } from "./stickyHeadingFocus";
  * - `subcategory`: a heading within a category, pinned below it at the measured `offset`. */
 export type StickyHeadingVariant = StickyHeadingProps["variant"];
 
-type StickyHeadingProps = { id?: string; children: React.ReactNode } & (
+type StickyHeadingProps = { id?: string; hidden?: boolean; motionKey?: string; children: React.ReactNode } & (
   | { variant: "list"; action?: React.ReactNode; inline?: React.ReactNode }
   | { variant: "group" }
   | { variant: "category"; note: React.ReactNode }
@@ -42,9 +42,12 @@ const PINNED: Record<StickyHeadingVariant, string> = {
  * `action` sits at the row's end, and `inline` (a filter in force) between it and the label, taking
  * the room the two leave and sizing and clipping itself within it; several controls in `action` are
  * spaced by the heading, so a caller hands them over as a fragment. `note` is a line under the title.
+ *
+ * `hidden` hides the heading and `motionKey` names it as an item of a list that animates it (`useListMotion`): both go
+ * on the pinned element, which has to stay a direct child of its section to pin within it.
  */
 export function StickyHeading(props: StickyHeadingProps): React.ReactElement {
-  const { variant, id, children } = props;
+  const { variant, id, hidden, motionKey, children } = props;
   // A pane heading has no fixed height (its owner measures it); it holds no control, so the depth its
   // controls' scroll area would move by does not matter.
   const { className: pinnedFocusClass, ...pinnedFocus } = useStickyHeadingFocus(variant === "category" || variant === "subcategory" ? 0 : STICKY_HEADING_HEIGHT[variant]);
@@ -52,7 +55,7 @@ export function StickyHeading(props: StickyHeadingProps): React.ReactElement {
   const inline = props.variant === "list" ? props.inline : undefined;
   const note = props.variant === "category" ? props.note : undefined;
   return (
-    <div {...pinnedFocus} style={{ ...pinnedFocus.style, ...(props.variant === "subcategory" ? { top: props.offset } : {}) }} className={`sticky ${variant === "category" ? "z-4" : "z-3"} ${PINNED[variant]} ${pinnedFocusClass}`}>
+    <div {...pinnedFocus} hidden={hidden} data-list-motion={motionKey} style={{ ...pinnedFocus.style, ...(props.variant === "subcategory" ? { top: props.offset } : {}) }} className={`sticky ${variant === "category" ? "z-4" : "z-3"} ${PINNED[variant]} ${pinnedFocusClass}`}>
       {variant === "list" ? (
         <div className="mt-2 mb-0.5 px-(--row-content-inset)">
           <div className="flex items-center gap-2">

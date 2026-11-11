@@ -40,6 +40,7 @@ import { useAccountOrder } from "./useAccountOrder";
 import { useReadsMcpInventory } from "./useAccountMcpInventory";
 import { DaemonSwitchSetting } from "../DaemonSwitchSetting";
 import { LeadRows, SettingsLead } from "../SettingsLead";
+import { SettingsSearchBlock, useSettingsSearchFilter } from "../settingsSearchFilter";
 import { SettingsFocusContext, useSectionRefocus } from "../useSectionRefocus";
 
 /** The agent strip's height, the `p-1.5` clearance around its tabs and its 1px rule included. The strip is given
@@ -49,6 +50,9 @@ export const AGENT_STRIP_HEIGHT = 45;
 
 /** Which of an account's dialogs is open: its read-only details, its switches, or its connectors and MCP servers. */
 type AccountView = "details" | "settings" | "mcp";
+
+/** The switches above the agents' list, which apply to every agent. */
+const ACCOUNT_SWITCHES = ["auto_select_account", "auto_switch_on_usage_limit", "auto_start_quota_windows"] as const;
 
 /** How many animation frames (about half a second) `handFocusOnceClosed` waits for a closing dialog to go. */
 export const MAX_FRAMES_TO_WAIT_FOR_CLOSE = 30;
@@ -112,6 +116,7 @@ function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; 
  * that are due, those of every agent and not only of the tab in view, and to check the versions of their CLIs. */
 export function AgentAccountsSection(): React.ReactElement {
   const t = useT();
+  const search = useSettingsSearchFilter();
   const { request, store } = useDaemon();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const added = useDaemonStore((s) => s.settings.added_agents);
@@ -278,72 +283,73 @@ export function AgentAccountsSection(): React.ReactElement {
       <SettingsLead>
         <Message id="settings.accounts.description" params={PATH_VAR_PARAMS} />
       </SettingsLead>
-      <LeadRows ruledBelow>
-        <DaemonSwitchSetting field="auto_select_account" />
-        <DaemonSwitchSetting field="auto_switch_on_usage_limit" />
-        <DaemonSwitchSetting field="auto_start_quota_windows" />
+      {/* The rule under the switches parts them from the agents, so it goes while a search hides the agents. */}
+      <LeadRows ruledBelow={search.shows("accounts.agents")} hidden={!ACCOUNT_SWITCHES.some(search.shows)}>
+        {ACCOUNT_SWITCHES.map((field) => <DaemonSwitchSetting key={field} field={field} />)}
       </LeadRows>
-      {selected === undefined ? (
-        <EmptyPanel
-          icon={Bot}
-          message={t("settings.accounts.noAgents")}
-          description={t("settings.accounts.noAgentsHint")}
-          action={{ label: t("settings.accounts.addAgent"), icon: Bot, onPress: () => setAddingAgent(true) }}
-          actionRef={addAgentButton}
-        />
-      ) : (
-        /* This is the underline strip, unlike the filled tabs that switch the sections. Its list drops the padding
-            the focus ring needs, so it is given back here, and its underline is drawn as a groove like the rows'
-            dividers instead of HeroUI's plain border. The strip pins itself to the top of the section's scroller
-            over the rows, opaque on the dialog's own surface and flush with the scroller's edge
-            (`--section-padding` is the padding the Settings dialog gives the section). */
-        <Tabs variant="underline" className="gap-0" selectedKey={selected} onSelectionChange={(key) => setChosen(key as Agent)}>
-          <AgentTabList
-            {...pinnedFocus}
-            providers={providers}
-            agents={agents}
-            label={t("settings.accounts.agents")}
-            tabRef={added === null ? undefined : tabRef}
-            onReorder={added === null ? undefined : reorder}
-            trailingWidth="pe-[4.75rem]"
-            trailing={
-              <div className="flex items-center gap-1">
-                <IconAction label={t("settings.accounts.addAgent")} icon={Bot} buttonRef={addAgentButton} onPress={() => setAddingAgent(true)} />
-                <IconAction label={t("settings.accounts.add")} icon={UserPlus} onPress={() => setEditing(null)} />
-              </div>
-            }
-            tabActions={added === null ? undefined : (agent) => (
-              <AgentTabActions
-                agent={agent}
-                index={agents.indexOf(agent)}
-                count={agents.length}
-                version={versionEntry(agent)}
-                onSettings={() => setAgentDialog({ view: "settings", agent, from: "actions" })}
-                onVersion={() => setAgentDialog({ view: "version", agent, from: "actions" })}
-                onMove={(by) => move(agent, by)}
-                onRemove={() => setRemovingAgent(agent)}
-              />
-            )}
-            notInstalledTip={(agent) => added !== null && isAgentUnavailable(availability, agent) && (
-              <Message id="settings.accounts.notInstalledTip" params={{ agent: <ProviderName agent={agent} />, ...PATH_VAR_PARAMS }} />
-            )}
-            className={`sticky top-[calc(-1*var(--section-padding))] z-3 h-[45px] w-full groove-b bg-overlay ${pinnedFocus.className}`}
+      <SettingsSearchBlock id="accounts.agents">
+        {selected === undefined ? (
+          <EmptyPanel
+            icon={Bot}
+            message={t("settings.accounts.noAgents")}
+            description={t("settings.accounts.noAgentsHint")}
+            action={{ label: t("settings.accounts.addAgent"), icon: Bot, onPress: () => setAddingAgent(true) }}
+            actionRef={addAgentButton}
           />
-          {agents.map((agent) => (
-            <AgentAccountsPanel
-              key={agent}
-              agent={agent}
-              owned={accounts.filter((account) => account.agent === agent)}
-              onEdit={setEditing}
-              onRemove={setRemoving}
-              onRenameDefault={setRenamingDefault}
-              onOpenAccount={(view, account) => setAccountDialog({ view, agent, account, fromRow: true })}
-              onLogin={(agent, account, returnFocus) => setLoggingIn({ agent, account, start: true, returnFocus })}
-              handOff={handoff.start}
+        ) : (
+          /* This is the underline strip, unlike the filled tabs that switch the sections. Its list drops the padding
+              the focus ring needs, so it is given back here, and its underline is drawn as a groove like the rows'
+              dividers instead of HeroUI's plain border. The strip pins itself to the top of the section's scroller
+              over the rows, opaque on the dialog's own surface and flush with the scroller's edge
+              (`--section-padding` is the padding the Settings dialog gives the section). */
+          <Tabs variant="underline" className="gap-0" selectedKey={selected} onSelectionChange={(key) => setChosen(key as Agent)}>
+            <AgentTabList
+              {...pinnedFocus}
+              providers={providers}
+              agents={agents}
+              label={t("settings.accounts.agents")}
+              tabRef={added === null ? undefined : tabRef}
+              onReorder={added === null ? undefined : reorder}
+              trailingWidth="pe-[4.75rem]"
+              trailing={
+                <div className="flex items-center gap-1">
+                  <IconAction label={t("settings.accounts.addAgent")} icon={Bot} buttonRef={addAgentButton} onPress={() => setAddingAgent(true)} />
+                  <IconAction label={t("settings.accounts.add")} icon={UserPlus} onPress={() => setEditing(null)} />
+                </div>
+              }
+              tabActions={added === null ? undefined : (agent) => (
+                <AgentTabActions
+                  agent={agent}
+                  index={agents.indexOf(agent)}
+                  count={agents.length}
+                  version={versionEntry(agent)}
+                  onSettings={() => setAgentDialog({ view: "settings", agent, from: "actions" })}
+                  onVersion={() => setAgentDialog({ view: "version", agent, from: "actions" })}
+                  onMove={(by) => move(agent, by)}
+                  onRemove={() => setRemovingAgent(agent)}
+                />
+              )}
+              notInstalledTip={(agent) => added !== null && isAgentUnavailable(availability, agent) && (
+                <Message id="settings.accounts.notInstalledTip" params={{ agent: <ProviderName agent={agent} />, ...PATH_VAR_PARAMS }} />
+              )}
+              className={`sticky top-[calc(-1*var(--section-padding))] z-3 h-[45px] w-full groove-b bg-overlay ${pinnedFocus.className}`}
             />
-          ))}
-        </Tabs>
-      )}
+            {agents.map((agent) => (
+              <AgentAccountsPanel
+                key={agent}
+                agent={agent}
+                owned={accounts.filter((account) => account.agent === agent)}
+                onEdit={setEditing}
+                onRemove={setRemoving}
+                onRenameDefault={setRenamingDefault}
+                onOpenAccount={(view, account) => setAccountDialog({ view, agent, account, fromRow: true })}
+                onLogin={(agent, account, returnFocus) => setLoggingIn({ agent, account, start: true, returnFocus })}
+                handOff={handoff.start}
+              />
+            ))}
+          </Tabs>
+        )}
+      </SettingsSearchBlock>
       {added !== null && agents.map((agent, index) => tabs[agent] && (
         <AgentTabMenu
           key={agent}

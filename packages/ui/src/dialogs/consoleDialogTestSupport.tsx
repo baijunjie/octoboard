@@ -6,7 +6,8 @@ import { onTestFinished, vi } from "vitest";
 import { consoleOf } from "../fixtures/builders";
 import { type Account, type Agent, type AgentAvailability, type AgentModel, type Console, type Event, type ModelsUnavailable, type ClientRequestBody } from "../protocol";
 import { TEST_AGENTS } from "../test/testProviders";
-import { createStateStore, DaemonProvider } from "../store";
+import { createStateStore } from "../store";
+import { TestHost } from "../test/TestHost";
 import { buttons, click, inputLabelled, type as typeInto, withoutIsolates } from "../test/dom";
 import { testDaemon } from "../test/testDaemon";
 import { personal, work } from "../fixtures/accountTestSupport";
@@ -74,9 +75,9 @@ export function render(
   });
   act(() =>
     root.render(
-      <DaemonProvider value={daemon}>
+      <TestHost daemon={daemon}>
         <ConsoleDialog console={editing} onClose={() => {}} />
-      </DaemonProvider>,
+      </TestHost>,
     ),
   );
   return request;

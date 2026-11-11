@@ -235,7 +235,7 @@ so a very long text can be cut off for Codex console sessions; Octoboard sets no
 ### The guidance on asking the user
 
 A section headed "Asking the user", in a project session's role description and in the console session's instruction
-file while **Ask questions as choices** is on (see that section in `docs/product/settings.md`), telling the session:
+file while **Ask questions as choices** is on (see that section in `docs/product/agent-behavior-settings.md`), telling the session:
 
 - when the user has to decide something, to ask through its agent's tool for putting a question to the user with
   options to pick from, so the user picks an option directly, rather than listing the options in its reply. A Claude

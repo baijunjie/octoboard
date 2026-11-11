@@ -12,7 +12,7 @@ export function MarkdownStyleSetting(): React.ReactElement {
   const t = useT();
   const style = markdownStyle.useValue();
   return (
-    <SettingRow fill label={t("settings.markdownStyle.label")} description={t("settings.markdownStyle.description")}>
+    <SettingRow fill searchId="markdown-style" label={t("settings.markdownStyle.label")} description={t("settings.markdownStyle.description")}>
       <OptionSelect inline label={t("settings.markdownStyle.label")} options={OPTIONS} value={style} onChange={markdownStyle.set} />
     </SettingRow>
   );

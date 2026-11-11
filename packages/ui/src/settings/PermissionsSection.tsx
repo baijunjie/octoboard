@@ -175,6 +175,7 @@ export function PermissionsSection(): React.ReactElement {
             <SettingRow
               compact
               key={kind}
+              searchId={`permissions.${kind}`}
               label={t(label)}
               description={
                 <>

@@ -134,15 +134,16 @@ export function Tab({ id, label, size, indicator = true, indicatorClassName, ref
 }
 
 /** The panel of the tab keyed `id`. It is mounted only while its tab is selected, unless `keepMounted`: then it stays
- * mounted while unselected, hidden, inert and out of the tab order. */
-export function TabPanel({ id, keepMounted, className, children }: {
+ * mounted while unselected, hidden, inert and out of the tab order. `hidden` hides it, still mounted, while selected. */
+export function TabPanel({ id, keepMounted, hidden, className, children }: {
   id: string;
   keepMounted?: boolean;
+  hidden?: boolean;
   className?: string;
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <HeroTabs.Panel id={id} shouldForceMount={keepMounted} className={className}>
+    <HeroTabs.Panel id={id} shouldForceMount={keepMounted} hidden={hidden} className={className}>
       {children}
     </HeroTabs.Panel>
   );

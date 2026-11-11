@@ -251,7 +251,7 @@ confirmation, bringing a window closed into the background back to ask it, and o
 
 The **Show menu bar icon** switch in Settings' App behavior section — **Show notification area icon** on Windows — is on
 to begin with; turning it off takes the icon out of the menu bar, or out of the notification area, and turning it back
-on puts it back (see "Show menu bar icon" in `docs/product/settings.md`). Nothing else changes while it is hidden: the
+on puts it back (see "Show menu bar icon" in `docs/product/app-behavior-settings.md`). Nothing else changes while it is hidden: the
 menu and the icon's look keep following the sessions, the quota and the keep-awake hold, so the icon comes back as it
 would have been. On macOS the icon keeps its place among the status items rather than being removed and made again.
 

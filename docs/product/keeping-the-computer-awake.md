@@ -2,7 +2,7 @@
 
 The daemon can keep the computer it runs on — the daemon's host — from sleeping while the user is idle, through the
 **Prevent sleep** setting and its **When to prevent sleep** choice in Settings' App behavior section (the rows
-themselves are described in "Prevent sleep" in `docs/product/settings.md`). Prevent sleep is off to begin with. Here,
+themselves are described in "Prevent sleep" in `docs/product/app-behavior-settings.md`). Prevent sleep is off to begin with. Here,
 as in the setting's own words, "the computer" is the daemon's host: for a client connected to a daemon on another
 machine, that machine, not the one the client runs on.
 

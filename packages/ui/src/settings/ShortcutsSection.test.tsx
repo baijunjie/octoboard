@@ -53,6 +53,14 @@ it("lists only the commands this client has, and says the fixed ones cannot be c
   expect(headings.every((heading) => heading.closest("[data-sticky-heading]") !== null && heading.closest("section")?.getAttribute("aria-labelledby") === heading.id)).toBe(true);
 });
 
+it("lists the Find key as Find, a fixed one, not as Find in file", () => {
+  const browser = mount();
+  expect(text(browser)).not.toContain("Find in file");
+  expect(button(browser, "Change the shortcut for Find")).toBeNull();
+  const row = [...browser.querySelectorAll("*")].find((element) => element.children.length === 0 && element.textContent === "Find");
+  expect(row).toBeDefined();
+});
+
 it("lists the desktop app's own commands and the native menu's fixed keys there", () => {
   const app = mount(APP);
   expect(text(app)).toContain("Shortcut changes apply only to this desktop app.");

@@ -126,7 +126,7 @@ export function UpdatesSetting(): React.ReactElement | null {
     );
   return (
     <>
-      <SettingRow label={t("settings.updates.version.label")} description={status}>
+      <SettingRow searchId="updates.version" label={t("settings.updates.version.label")} description={status}>
         <div className="flex items-center gap-2">
           {notes}
           {warning}
@@ -134,7 +134,7 @@ export function UpdatesSetting(): React.ReactElement | null {
         </div>
         <StatusAnnouncer text={failed ? (engaged && !pressedCheck ? failedTitle : undefined) : engaged && state.phase !== "checking" ? status : undefined} />
       </SettingRow>
-      <SettingRow fill label={t("settings.updates.channel.label")} description={t("settings.updates.channel.description")}>
+      <SettingRow fill searchId="updates.channel" label={t("settings.updates.channel.label")} description={t("settings.updates.channel.description")}>
         <OptionSelect inline label={t("settings.updates.channel.label")} options={channels} value={channel} onChange={(value) => updateChannel.set(value)} />
       </SettingRow>
     </>

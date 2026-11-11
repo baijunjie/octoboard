@@ -47,7 +47,7 @@ language only when the daemon holds one; every other one is in every document wh
 
 **App behavior**
 
-- **Resume sessions on start** (see that section in `docs/product/settings.md`), under `resume_sessions_on_start`. The
+- **Resume sessions on start** (see that section in `docs/product/app-behavior-settings.md`), under `resume_sessions_on_start`. The
   review's line for turning it on says that Octoboard will then resume every interrupted session each time it starts,
   including ones interrupted before it last stopped. A document from a build without the setting has no such key, and
   an import of it leaves this machine's choice as it is.
@@ -55,20 +55,20 @@ language only when the daemon holds one; every other one is in every document wh
   the setting — the desktop application (see "Closing the window" in `docs/product/application-lifecycle.md`).
 - **Show menu bar icon**, under `show_menu_bar_icon`, `true` or `false`, carried only by the desktop application (see
   "Hiding the icon" in `docs/product/menu-bar-icon.md`).
-- **Prevent sleep** (see that section in `docs/product/settings.md`), under `keep_awake`, `true` or `false`, and
+- **Prevent sleep** (see that section in `docs/product/app-behavior-settings.md`), under `keep_awake`, `true` or `false`, and
   **When to prevent sleep**, under `keep_awake_when`, `always` or `working` (While sessions work). The daemon holds
   both, so they are in every document whose export chose App behavior, whoever asked for it, a browser included. The
   review's line for turning Prevent sleep on says nothing more than that it turns on. A `keep_awake_when` this build
   does not know leaves this machine's choice as it is. An import applies both whether or not the importing daemon's host
   can be held awake: they are stored there all the same (see "Which computers can be held awake" in
   `docs/product/keeping-the-computer-awake.md`).
-- **Close idle terminals when closing the panel** (see that section in `docs/product/settings.md`), under
+- **Close idle terminals when closing the panel** (see that section in `docs/product/app-behavior-settings.md`), under
   `auto_close_idle_shell_terminals`. The review's line for turning it on says that closing the Terminal panel closes
   idle terminals and keeps terminals with running programs.
 
 **Git**
 
-- **Default clone directory** (see that section in `docs/product/settings.md`), under `default_clone_dir`: as `~/`
+- **Default clone directory** (see that section in `docs/product/git-settings.md`), under `default_clone_dir`: as `~/`
   followed by its path under the exporting machine's home directory when it lies there, and as the absolute path
   otherwise, as an account's directory is written (see "The accounts" in
   `docs/product/configuration-export-and-import.md`). It is written whatever the choice about project paths.
@@ -98,7 +98,7 @@ language only when the daemon holds one; every other one is in every document wh
 - **Automatically approve handoffs** (see the same section), under `auto_approve_handoffs`. The review's line for
   turning it on says that a session's request to hand one of its sessions off to another agent is then approved without
   asking first.
-- **Ask questions as choices** (see that section in `docs/product/settings.md`), under `ask_questions_as_choices`. The
+- **Ask questions as choices** (see that section in `docs/product/agent-behavior-settings.md`), under `ask_questions_as_choices`. The
   review's line for turning it on says that Octoboard then asks sessions started afterwards to put a question that needs
   the user's decision as options to pick from.
 
@@ -123,12 +123,12 @@ empty application settings region, to which a client adds its shortcuts (see "Th
 Under `agent_settings` in the accounts region, in every document that has the accounts region, whichever consoles it
 holds:
 
-- **Automatically select an account** (see that section in `docs/product/settings.md`), under `auto_select_account`.
+- **Automatically select an account** (see that section in `docs/product/opening-sessions.md`), under `auto_select_account`.
   The review's line for turning it on says that a new session then uses the account whose weekly limit resets soonest.
-- **Automatically switch accounts at the usage limit** (see that section in `docs/product/settings.md`), under
+- **Automatically switch accounts at the usage limit** (see that section in `docs/product/automatic-account-switch.md`), under
   `auto_switch_on_usage_limit`. The review's line for turning it on says that a session that stops at its account's
   usage limit is then switched to another account with usage left and carries on.
-- **Start usage windows automatically** (see that section in `docs/product/settings.md`), under
+- **Start usage windows automatically** (see that section in `docs/product/starting-usage-windows.md`), under
   `auto_start_quota_windows`. The review's line for turning it on says that a usage window that has not started
   counting is then started with one small request, which counts a little toward the account's usage limits.
 - **Provider settings** (see "Provider settings" in `docs/product/per-agent-settings.md`), under `provider_settings`, an

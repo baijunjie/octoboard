@@ -81,6 +81,6 @@ names whose value differs from what the form read shows the current value, and t
 were. That replacement is not announced, as the error alert speaks for it.
 
 How each kind of Settings control saves under this rule is with the control: the switches, the choice of when to prevent
-sleep and the git workflow choices in "How switches save" in `docs/product/settings.md`, the default clone directory in "Default clone directory" there,
+sleep and the git workflow choices in "How switches save" in `docs/product/settings.md`, the default clone directory in "Default clone directory" in `docs/product/git-settings.md`,
 and the tags in "Agent tags" in `docs/product/per-agent-settings.md`. A window's own quick successive changes to one of
 them never conflict with one another.

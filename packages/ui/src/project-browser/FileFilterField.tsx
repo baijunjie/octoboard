@@ -47,10 +47,10 @@ export function useFileFilterState(): FileFilterState {
 
 /** Opening the field takes focus; closing it hands focus back to its toggle and drops the keyword and
  * the choice to include ignored files. An empty field closes on blur, while a field holding a filter
- * stays visible. With `ignoredToggle`, the field is followed by the toggle that includes the
- * files Git ignores in the search. With `incomplete`, a warning mark inside the field, before its Clear button, says the results
- * may not be every match. */
-export function FileFilterField({ state, label, placeholder, contextKey, ignoredToggle = false, incomplete = false }: { state: FileFilterState; label: string; placeholder: string; contextKey?: string; ignoredToggle?: boolean; incomplete?: boolean }): React.ReactElement {
+ * stays visible. With `ignoredToggle`, the field is followed by the toggle that includes the files Git ignores in the
+ * search. With `incomplete`, a warning mark inside the field, before its Clear button, says the results may not be
+ * every match. */
+export function FileFilterField({ state, label, contextKey, ignoredToggle = false, incomplete = false }: { state: FileFilterState; label: string; contextKey?: string; ignoredToggle?: boolean; incomplete?: boolean }): React.ReactElement {
   const t = useT();
   // The field is taken away while it may still hold keyboard focus — the toggle closing it is
   // pressed without taking focus itself — and a removal fires no blur, so focus would fall to
@@ -97,7 +97,7 @@ export function FileFilterField({ state, label, placeholder, contextKey, ignored
             variant="secondary"
             className="min-w-0 flex-1"
             inputRef={input}
-            placeholder={placeholder}
+            placeholder={t("common.search")}
             // The mark stands before the Clear button, which keeps the trailing end it has with or without the mark.
             // When the search completes the mark goes, and focus it held goes to the input rather than to the page,
             // ahead of the field's own `useFocusHandoff`. After a tap it leaves focus to that handoff, which takes it

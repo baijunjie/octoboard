@@ -1,6 +1,6 @@
 # Automatic account switch
 
-With **Automatically switch accounts at the usage limit** on (see that section in `docs/product/settings.md`), Octoboard
+With **Automatically switch accounts at the usage limit** on (see that section below), Octoboard
 switches a session to another account of its own agent by itself when the session's turn stops because its account
 reached the plan's usage limit, and the session carries on there. It is the same switch the user's **Switch account**
 and an owner's `switch_session_account` make — the conversation comes along, and the session reads as switching its
@@ -13,6 +13,23 @@ The setting governs only this. **Automatically select an account** decides only 
 only whether an owner's request for a switch asks the user (see "The user's approval of an owner's switch" in
 `docs/product/switching-session-accounts.md`). Octoboard never hands a session off to another agent by itself (see
 `docs/product/handing-off-sessions.md`).
+
+## Automatically switch accounts at the usage limit
+
+The switch is a row of Settings' Agent accounts section (where it sits is in `docs/product/agent-accounts.md`). A
+switch, **off to begin with**: whether Octoboard switches a session to another account of its agent by itself when the
+session's turn stops on its account's usage limit, so that it carries on there. While the switch is off the row's
+description says that, once it is on, a session that stops at its account's usage limit is switched to another account
+with usage left and carries on; while it is on, it says that this is what happens. The daemon stores it as
+`auto_switch_on_usage_limit` and keeps it, so every window shows the same; how it saves is in "How switches save" in
+`docs/product/settings.md`. A console session can neither read nor change it, since it ends sessions' processes and
+spends another account's quota without asking (see "Who reads and changes what" in
+`docs/product/agent-settings-tools.md`); a configuration export that includes the accounts carries it (see "The agent
+account settings an export carries" in `docs/product/settings-in-a-configuration.md`). Turning it on does not act on
+sessions already stopped. Turning it off cancels waits for quota recovery; turning it back on does not restore them.
+While it is on, a turn that stops on the usage limit with no eligible alternative account can continue after a fresh
+successful quota reading, on another account of its agent or on its original account (see "When no account qualifies"
+below).
 
 ## When a session is switched
 

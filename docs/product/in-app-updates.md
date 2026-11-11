@@ -3,8 +3,8 @@
 The desktop application, on macOS and on Windows, updates itself: it looks for a newer version on the release channel the user follows, tells the
 user when it finds one, downloads and installs it only when the user asks, and the new version takes effect the next
 time Octoboard starts. Nothing is ever installed, and Octoboard never restarts, without the user asking. A browser has
-none of this: no checks, no update notice, and no Updates or Update channel rows in Settings (see "About" in
-`docs/product/settings.md`).
+none of this: no checks, no update notice, and no Updates or Update channel rows in Settings (see
+`docs/product/about-octoboard.md`).
 
 ## Update channels
 
@@ -266,8 +266,8 @@ nothing.
 
 ## The Updates and Update channel rows
 
-Settings' About section holds two rows for updates, in the desktop application only (see "About" in
-`docs/product/settings.md`).
+Settings' About section holds two rows for updates, in the desktop application only (see
+`docs/product/about-octoboard.md`).
 
 **Updates** says in a sentence where the application's updates stand, the first that applies of:
 

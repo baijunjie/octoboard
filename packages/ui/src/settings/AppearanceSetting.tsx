@@ -22,7 +22,7 @@ export function AppearanceSetting(): React.ReactElement {
   const t = useT();
   const { choice, setChoice } = useOctoboardTheme();
   return (
-    <SettingRow label={t("settings.appearance.label")} description={t("settings.appearance.description")}>
+    <SettingRow searchId="appearance" label={t("settings.appearance.label")} description={t("settings.appearance.description")}>
       <ToggleButtonGroup
         label={t("settings.appearance.label")}
         selectedKey={choice}

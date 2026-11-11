@@ -102,7 +102,7 @@ export function FindBar({
         describedBy={countId}
         invalid={invalid}
         value={query}
-        placeholder={t("viewer.find.placeholder")}
+        placeholder={t("common.search")}
         dir="auto"
         spellCheck={false}
         autoComplete="off"

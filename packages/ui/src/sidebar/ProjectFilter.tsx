@@ -141,7 +141,7 @@ export function ProjectFilterButton({
               autoFocus
               fullWidth
               variant="secondary"
-              placeholder={t("sidebar.filter.placeholder")}
+              placeholder={t("common.search")}
               clearButton={<FieldClearButton />}
             />
             <TagPicker

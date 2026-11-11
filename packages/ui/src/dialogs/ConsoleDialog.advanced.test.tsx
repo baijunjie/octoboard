@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { consoleOf } from "../fixtures/builders";
 import { type AgentAvailability } from "../protocol";
@@ -157,8 +157,19 @@ it("keeps the default agent, accounts and session instructions notes visible, an
 
 it("moves the Advanced tabs that come and go, none as the section opens, and hands focus on from a tab that goes", async () => {
   const motion = stubListMotion();
+  // jsdom reports no change of size as the collapsed section opens, which a browser's observer does: the tabs are
+  // measured shown, so a tab that goes after it leaves as a copy.
+  const reports: Array<() => void> = [];
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(report: (entries: ResizeObserverEntry[]) => void) { reports.push(() => report([{ target: document.body, borderBoxSize: [{ inlineSize: 0, blockSize: 0 }], contentRect: new DOMRect() } as unknown as ResizeObserverEntry])); }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
+  onTestFinished(() => { vi.unstubAllGlobals(); });
   render(undefined, [], undefined, { claude: "available", codex: "available", grok: "available" });
   await openAdvanced();
+  act(() => reports.forEach((report) => report()));
   expect(motion.played()).toEqual([]);
   const grok = Array.from(document.body.querySelectorAll<HTMLElement>('[role="tab"]')).find((tab) => tab.textContent === "Grok Build")!;
   await clickTab("Grok Build");

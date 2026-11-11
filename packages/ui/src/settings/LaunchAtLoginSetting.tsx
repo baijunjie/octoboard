@@ -92,7 +92,7 @@ export function LaunchAtLoginSetting(): React.ReactElement | null {
   };
 
   return (
-    <SettingRow compact={!requiresApproval} label={t("settings.launchAtLogin.label")} description={description}>
+    <SettingRow compact={!requiresApproval} searchId="launch-at-login" label={t("settings.launchAtLogin.label")} description={description}>
       <div ref={controlsRef} className="flex items-center gap-3" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
         {requiresApproval && (
           <Button size="sm" variant="secondary" focusOnPress={false} onPress={() => void openSettings()}>

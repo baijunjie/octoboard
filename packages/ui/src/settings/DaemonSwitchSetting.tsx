@@ -22,6 +22,7 @@ export function DaemonSwitchSetting({ field, motionKey }: { field: BooleanField;
 
   return (
     <SwitchSettingRow
+      searchId={field}
       motionKey={motionKey}
       label={t(label)}
       help={help && <HelpTip label={t(help.label)}>{t(help.text)}</HelpTip>}

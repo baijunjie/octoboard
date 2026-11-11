@@ -32,7 +32,7 @@ function render(open = false, incompleteOf: () => boolean = () => false) {
     const view: ChangeViewState = { ...fixture, filterOpen, onFilterOpenChange: setFilterOpen, filter, onFilterChange: setFilter };
     return (
       <>
-        <FileFilterField state={view} label="File name contains" placeholder="Filter changes" incomplete={incompleteOf()} />
+        <FileFilterField state={view} label="File name contains" incomplete={incompleteOf()} />
         <ChangeList items={items} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} changeView={view} />
       </>
     );

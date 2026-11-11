@@ -39,7 +39,7 @@ product docs name for parts of the window:
   in `docs/product/labels-and-tooltips.md`). Settings' Default clone directory field reads left to right as one control:
   its folder mark stays beside the path at the field's left edge, rather than sitting at the field's leading edge with
   the path pushed away from it, and the tooltip giving the full path the field abbreviates reads left to right the same
-  way, its leading `/` at the left (see "Default clone directory" in `docs/product/settings.md`). The Browse button
+  way, its leading `/` at the left (see "Default clone directory" in `docs/product/git-settings.md`). The Browse button
   beside the field keeps to the reading direction's end, so it is at the field's left.
 - **A value named inside a sentence keeps its own order**, wherever that sentence appears — a message, a tooltip, a
   `title`, a toast or an accessible name. A path, a branch name, a commit id, a `git` or operating-system message quoted

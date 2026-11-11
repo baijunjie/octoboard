@@ -1,7 +1,7 @@
 # Launch at login
 
 The desktop application can have the system open it when the user logs in, through the **Launch at login** switch in
-Settings' App behavior section (the row itself is described in "Launch at login" in `docs/product/settings.md`). It is
+Settings' App behavior section (the row itself is described in "Launch at login" in `docs/product/app-behavior-settings.md`). It is
 offered on Windows and on macOS 13 and later. macOS 11 and 12 have no row for it, and neither does a browser, which has
 nothing to open.
 
@@ -45,8 +45,8 @@ Turning the switch on while the user has left the entry unapproved is not a fail
 
 When System Settings does not open, an error alert titled "Could not open System Settings" says that it did not open
 and to open it by hand and choose General > Login Items. It has only its acknowledgement button, with no remedy button
-and no request to report an issue, like the Notifications section's (see "Notifications" in
-`docs/product/settings.md`).
+and no request to report an issue, like the Notifications section's (see "Opening the system's notification settings" in
+`docs/product/notification-settings.md`).
 
 ## When a change fails
 

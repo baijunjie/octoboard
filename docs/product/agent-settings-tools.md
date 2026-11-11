@@ -39,7 +39,7 @@ that rule. What is the user's alone is never changed through these tools, by any
   agent the user removed or never added and start sessions on it, and which agents Octoboard runs, and in what order
   they are offered, is the user's own choice;
 - changing whether a new session's account is chosen automatically (see "Automatically select an account" in
-  `docs/product/settings.md`), an agent's provider settings (see "Provider settings" in
+  `docs/product/opening-sessions.md`), an agent's provider settings (see "Provider settings" in
   `docs/product/per-agent-settings.md`) or an agent's tags (see "Agent tags" in the same document), since which agents
   and accounts spend the user's quota, and how, is the user's choice. `get_settings` still returns the first and the
   last, and the provider settings their provider lets sessions read — Claude compatibility and Codex compatibility —
@@ -57,12 +57,12 @@ that rule. What is the user's alone is never changed through these tools, by any
   (see "Approving requests automatically" in `docs/product/session-requests.md`), since a session could otherwise
   approve its own requests;
 - reading or changing whether usage windows are started automatically (see "Start usage windows automatically" in
-  `docs/product/settings.md`), since that spends the user's quota;
+  `docs/product/starting-usage-windows.md`), since that spends the user's quota;
 - reading or changing whether sessions are switched to another account at the usage limit (see "Automatically switch
-  accounts at the usage limit" in `docs/product/settings.md`), since that ends sessions' processes and spends another
+  accounts at the usage limit" in `docs/product/automatic-account-switch.md`), since that ends sessions' processes and spends another
   account's quota without asking;
 - reading or changing whether sessions are asked to put their questions as choices (see "Ask questions as choices" in
-  `docs/product/settings.md`), since that shapes what sessions are told, and a session could otherwise switch off the
+  `docs/product/agent-behavior-settings.md`), since that shapes what sessions are told, and a session could otherwise switch off the
   rule it is given.
 
 Each of those stays the user's own, in the UI. A project's directory, source, host and remote URL are not settings of
@@ -223,12 +223,12 @@ working directory. Neither the avatar itself nor the console's console session i
 | `auto_close_idle_shell_terminals` | Whether explicitly closing a Terminal panel closes its idle terminals (see "Closing the panel" in `docs/product/terminal-panel.md`). |
 | `auto_pull_repositories` | Whether projects behind their upstream are pulled (fast-forwarded) on their own (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). |
 | `auto_delete_unresumable_archives` | Whether archived sessions whose conversation is gone are deleted on their own (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). |
-| `resume_sessions_on_start` | Whether, when the daemon starts, the interrupted sessions are resumed on their own (see "Resume sessions on start" in `docs/product/settings.md` and "Resuming the interrupted sessions at start" in `docs/product/archiving-and-resuming-sessions.md`). |
-| `keep_awake` | Prevent sleep: whether the daemon keeps the computer it runs on awake (see "Prevent sleep" in `docs/product/settings.md`). |
+| `resume_sessions_on_start` | Whether, when the daemon starts, the interrupted sessions are resumed on their own (see "Resume sessions on start" in `docs/product/app-behavior-settings.md` and "Resuming the interrupted sessions at start" in `docs/product/archiving-and-resuming-sessions.md`). |
+| `keep_awake` | Prevent sleep: whether the daemon keeps the computer it runs on awake (see "Prevent sleep" in `docs/product/app-behavior-settings.md`). |
 | `keep_awake_when` | When Prevent sleep holds: `always`, or `working` for while any session is working (see "When the computer is kept awake" in `docs/product/keeping-the-computer-awake.md`). |
-| `auto_select_account` | Whether a new session whose account was not named chooses a usable account automatically, preferring the initial agent's soonest weekly reset and trying another added agent when needed (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/opening-sessions.md`). Read-only. |
+| `auto_select_account` | Whether a new session whose account was not named chooses a usable account automatically, preferring the initial agent's soonest weekly reset and trying another added agent when needed (see "Which account a session uses" and "Automatically select an account" in `docs/product/opening-sessions.md`). Read-only. |
 | `interface_language` | The language the daemon holds, which every window of the user shows and sessions are told to talk to the user in, as its tag, or `null` while it holds none (see "The language the daemon holds" in `docs/product/language.md`). |
-| `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
+| `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/git-settings.md`). |
 | `git_workflow` | The application-wide git workflow settings, as `development`, `squash_before_delivery`, `rebase_before_delivery`, `delivery` and `revert_gate` (see "The five settings" in `docs/product/git-workflow-settings.md`); `squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
 | `provider_settings` | For each agent whose provider declares settings that sessions may read, by its name (`claude`, `codex`, `grok`), each such setting by its id with its value in effect, the default included while the user has made no choice: today `claude_compatibility` for Codex and Grok Build, whether the agent's sessions load Claude Code's configuration, and `codex_compatibility` for Claude Code and Grok Build, whether they load Codex's, each `true` or `false` (see "Provider settings", "Claude compatibility" and "Codex compatibility" in `docs/product/per-agent-settings.md`), as in `{"claude": {"codex_compatibility": false}, "codex": {"claude_compatibility": false}, "grok": {"claude_compatibility": false, "codex_compatibility": false}}`. An agent with no such setting has no entry. Read-only. |
 | `agent_tags` | For each added agent that has tags, by its name (`claude`, `codex`, `grok`), its tags as a list, in the user's order (see "Agent tags" in `docs/product/per-agent-settings.md`); every agent's while the list of added agents is undecided. An agent without tags, and a removed agent, has no entry. Read-only. |

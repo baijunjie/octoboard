@@ -32,14 +32,17 @@ export function GitSection(): React.ReactElement {
 
   return (
     <>
-      <SettingsGroup title={t("settings.git.group.repository")}>
+      <SettingsGroup title="settings.git.group.repository">
         <CloneDirSetting />
         <DaemonSwitchSetting field="auto_pull_repositories" />
       </SettingsGroup>
-      <SettingsGroup title={t("settings.git.group.development")}>
-        <div ref={listRef} className="relative" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
+      <SettingsGroup title="settings.git.group.development">
+        {/* An item of the section's own list motion too, so that it slides as a whole, with its rows, when what is
+            above it comes or goes. */}
+        <div ref={listRef} data-list-motion="git_workflow" className="relative" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
           <SettingRow
             fill
+            searchId="git_workflow.development"
             motionKey="development"
             label={t(GIT_WORKFLOW_ITEMS.development.label)}
             description={t(DEVELOPMENT_CHOICES.find(({ value }) => value === gitWorkflow.development)!.description)}
@@ -57,6 +60,7 @@ export function GitSection(): React.ReactElement {
           {gitWorkflow.development !== "in_place" && (
             <>
               <SwitchSettingRow
+                searchId="git_workflow.squash_before_delivery"
                 motionKey="squash_before_delivery"
                 label={t(GIT_WORKFLOW_ITEMS.squash_before_delivery.label)}
                 description={t(GIT_WORKFLOW_ITEMS.squash_before_delivery.description[gitWorkflow.squash_before_delivery ? "on" : "off"])}
@@ -64,13 +68,14 @@ export function GitSection(): React.ReactElement {
                 onChange={(value) => change({ squash_before_delivery: value })}
               />
               <SwitchSettingRow
+                searchId="git_workflow.rebase_before_delivery"
                 motionKey="rebase_before_delivery"
                 label={t(GIT_WORKFLOW_ITEMS.rebase_before_delivery.label)}
                 description={t(GIT_WORKFLOW_ITEMS.rebase_before_delivery.description[gitWorkflow.rebase_before_delivery ? "on" : "off"])}
                 isSelected={gitWorkflow.rebase_before_delivery}
                 onChange={(value) => change({ rebase_before_delivery: value })}
               />
-              <SettingRow fill motionKey="delivery" label={t(GIT_WORKFLOW_ITEMS.delivery.label)} description={t(GIT_WORKFLOW_ITEMS.delivery.description)}>
+              <SettingRow fill searchId="git_workflow.delivery" motionKey="delivery" label={t(GIT_WORKFLOW_ITEMS.delivery.label)} description={t(GIT_WORKFLOW_ITEMS.delivery.description)}>
                 <OptionSelect<GitDelivery>
                   inline
                   label={t(GIT_WORKFLOW_ITEMS.delivery.label)}
@@ -83,8 +88,9 @@ export function GitSection(): React.ReactElement {
           )}
         </div>
       </SettingsGroup>
-      <SettingsGroup title={t("settings.git.group.protection")}>
+      <SettingsGroup title="settings.git.group.protection">
         <SwitchSettingRow
+          searchId="git_workflow.revert_gate"
           label={t(GIT_WORKFLOW_ITEMS.revert_gate.label)}
           help={
             <HelpTip label={t("settings.gitWorkflow.revertGate.help")}>

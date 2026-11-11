@@ -3,9 +3,26 @@
 A window that has reset does not begin counting again until the account's next request, and until then the agent reports
 it with no reset time: it shows no countdown (see "How an account's quota is shown" in
 `docs/product/account-quotas.md`), and the longer it waits, the later its next reset comes. With **Start usage windows
-automatically** on (see that section in `docs/product/settings.md`), Octoboard makes that first request itself — a
+automatically** on (see "Start usage windows automatically" below), Octoboard makes that first request itself — a
 **kick** — and then reads the account again, so the window starts counting and its countdown shows. A kick uses a little
 of the account's quota. The setting is off by default and applies to every agent alike.
+
+## Start usage windows automatically
+
+The switch is a row of Settings' Agent accounts section (where it sits is in `docs/product/agent-accounts.md`). A
+switch, **off to begin with**: whether Octoboard starts a usage window that has reset but not begun counting by sending
+one small request on its account. While the switch is off the row's description says that once it is on, a usage window
+starts counting once it resets, and while it is on that a usage window starts counting once it resets; either way it
+adds that this counts a little toward the account's usage limits. A "?" help tip at the end of the row's name ("About
+starting usage windows automatically") holds the why and how: a usage window that has reset does not start counting
+until the account's next request, so until then it shows no countdown and the longer it waits the later its next reset
+comes; with the switch on, one small request is sent on that account with the agent's cheapest model to start it. The
+daemon stores it as `auto_start_quota_windows` and keeps it, so every window shows the same; how it saves is in "How
+switches save" in `docs/product/settings.md`. A console session can neither read nor change it, since it spends the
+user's quota (see "Who reads and changes what" in `docs/product/agent-settings-tools.md`); a configuration export that
+includes the accounts carries it (see "The agent account settings an export carries" in
+`docs/product/settings-in-a-configuration.md`). When a request is sent, what it is and what it leaves behind are in the
+sections below.
 
 ## When an account is kicked
 

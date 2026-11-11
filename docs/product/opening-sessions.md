@@ -379,7 +379,7 @@ The account of the session's agent, in descending priority:
 A console session carries no project, so after its own account choice its chain goes straight to the console's
 reference. A project leaves the account to the console for every agent it inherits for, which is how every project
 starts (see "The project's account, model and reasoning effort" in `docs/product/projects.md`). While **Automatically
-select an account** is off (see that section in `docs/product/settings.md`), a session opened without changing the
+select an account** is off (see "Automatically select an account" below), a session opened without changing the
 account picker runs under the project's account for its agent, or the console's, or the agent's default account when
 neither pins anything. The session's account is named in its agent icon's tooltip and its accessible session name (see
 "Session rows" in `docs/product/sidebar-session-rows.md`), and on the line beside the agent icon of its focus mode card
@@ -470,6 +470,23 @@ inherited account. The daemon settles the account the same way for a session tha
 approved handoff is refused naming it too; a handoff that asks the user starts its approval form on it. With no
 qualifying account, or with automatic selection off, the daemon falls back to the caller or project/console inheritance
 rules above.
+
+### Automatically select an account
+
+The switch is a row of Settings' Agent accounts section (where it sits is in `docs/product/agent-accounts.md`). A
+switch, **off to begin with**: whether a new session whose account was not named automatically chooses a usable
+account, preferring the account of its initial agent whose weekly quota resets soonest and trying another added agent
+only when that agent has no usable account. While the switch is off the row's description says what turning it on will
+do, and while it is on it says what is happening now: a new session uses the account whose weekly limit resets soonest,
+so usage left before a reset is not wasted. The daemon stores it as `auto_select_account` and keeps it, so every window
+shows the same; how it saves is in "How switches save" in `docs/product/settings.md`. A console session may read it but
+not change it, as with every setting of Agent accounts, and a configuration export that includes the accounts carries
+it (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
+agent account settings an export carries" in `docs/product/settings-in-a-configuration.md`). Which account is chosen,
+and who applies the choice, are above in "Which account a session uses". Turning it on or off changes no session
+already open. It governs the initial agent and account of new sessions; explicit choices still win, and it does not
+move a session that is already running (see "Automatically switch accounts at the usage limit" in
+`docs/product/automatic-account-switch.md`).
 
 ## Which model and reasoning effort a session uses
 

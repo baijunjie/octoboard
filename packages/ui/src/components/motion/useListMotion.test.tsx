@@ -1132,3 +1132,103 @@ it("lets a nested fitted collection move its surrounding rows without an ancesto
   render(false);
   expect(animate.mock.calls.length).toBeGreaterThan(afterReorder);
 });
+
+it("takes a row hidden in place out of the collection, copying it as it was shown, and brings it back as an added row", () => {
+  function Hiding({ hidden, wrapped }: { hidden: string[]; wrapped: boolean }) {
+    const ref = useListMotion<HTMLDivElement>({ descendants: true });
+    const row = (key: string) => <div key={key} data-list-motion={key} hidden={!wrapped && hidden.includes(key)}><input aria-label={key} /></div>;
+    // A wrapper hidden around a row takes it out as its own `hidden` does; the copy is placed where it can be seen.
+    return <div ref={ref} data-root="">{wrapped ? <div hidden={hidden.includes("a")}>{row("a")}</div> : row("a")}{row("b")}</div>;
+  }
+  for (const wrapped of [false, true]) {
+    vi.clearAllMocks();
+    const host = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(host);
+    const render = (hidden: string[]) => act(() => root.render(<Hiding hidden={hidden} wrapped={wrapped} />));
+    points = { a: [0, 0], b: [0, 40] };
+    render([]);
+    const row = host.querySelector<HTMLElement>('[data-list-motion="a"]')!;
+    const input = row.querySelector("input")!;
+    input.value = "half-typed";
+    points = { b: [0, 0] };
+    render(["a"]);
+    const ghost = host.querySelector<HTMLElement>("[data-list-motion-ghost]")!;
+    expect(ghost.hasAttribute("hidden")).toBe(false);
+    expect(ghost.parentElement!.parentElement).toBe(host.firstElementChild);
+    expect(animate.mock.calls.map(([frames]) => frames)).toEqual([
+      [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(25%)" }],
+      [{ translate: "0px 40px" }, { translate: "0px 0px" }],
+    ]);
+    // Still mounted, with what was typed in it.
+    expect(row.isConnected).toBe(true);
+    points = { a: [0, 0], b: [0, 40] };
+    render([]);
+    expect(host.querySelector<HTMLElement>('[data-list-motion="a"] input')).toBe(input);
+    expect(input.value).toBe("half-typed");
+    expect(animate.mock.calls.slice(2).map(([frames]) => frames)).toContainEqual([{ opacity: 0, transform: "translateX(-25%)" }, { opacity: 1, transform: "none" }]);
+    act(() => root.unmount());
+    host.remove();
+  }
+});
+
+it("leaves the rows of a list watched inside a descendant list to that list", () => {
+  function Inner({ keys }: { keys: string[] }) {
+    const ref = useListMotion<HTMLDivElement>();
+    return <div ref={ref} data-root="inner">{keys.map((key) => <div key={key} data-list-motion={key}>{key}</div>)}</div>;
+  }
+  function Outer({ keys }: { keys: string[] }) {
+    const ref = useListMotion<HTMLDivElement>({ descendants: true });
+    return <div ref={ref} data-root="outer"><div data-list-motion="first">First</div><section><Inner keys={keys} /></section></div>;
+  }
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => { act(() => root.unmount()); host.remove(); });
+  points = { first: [0, 0], a: [0, 40], b: [0, 80] };
+  act(() => root.render(<Outer keys={["a", "b"]} />));
+  points = { first: [0, 0], b: [0, 40] };
+  act(() => root.render(<Outer keys={["b"]} />));
+  // One copy of the row that left and one slide of the row that moved up, from the inner list alone.
+  expect(host.querySelectorAll("[data-list-motion-ghost]")).toHaveLength(1);
+  expect(animate.mock.calls.filter(([frames]) => frames[0].translate !== undefined)).toEqual([[[{ translate: "0px 40px" }, { translate: "0px 0px" }], expect.anything()]]);
+});
+
+it("watches the list anew when what it is changes, a column turning into a strip as wide as its items", () => {
+  function Strip({ contentWidth, keys }: { contentWidth: boolean; keys: string[] }) {
+    const ref = useListMotion<HTMLDivElement>({ contentWidth });
+    return <div ref={ref} data-root="">{keys.map((key) => <div key={key} data-list-motion={key}>{key}</div>)}</div>;
+  }
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => { act(() => root.unmount()); host.remove(); });
+  points = { a: [0, 0], b: [0, 40] };
+  act(() => root.render(<Strip contentWidth={false} keys={["a", "b"]} />));
+  const before = disconnectResize.mock.calls.length;
+  points = { a: [0, 0], b: [80, 0] };
+  width = 160;
+  act(() => root.render(<Strip contentWidth keys={["a", "b"]} />));
+  // The old watcher is gone, and the new one takes the strip as it now stands rather than sliding into it.
+  expect(disconnectResize.mock.calls.length).toBe(before + 1);
+  expect(animate).not.toHaveBeenCalled();
+});
+
+it("takes a list's layout as it stands, without sliding, when it is shown again after not being rendered", () => {
+  function Strip({ keys, hidden }: { keys: string[]; hidden: boolean }) {
+    const ref = useListMotion<HTMLDivElement>({ contentWidth: true });
+    return <div ref={ref} hidden={hidden} data-root="">{keys.map((key) => <div key={key} data-list-motion={key}>{key}</div>)}</div>;
+  }
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => { act(() => root.unmount()); host.remove(); });
+  points = { a: [0, 0], b: [80, 0], c: [160, 0] };
+  act(() => root.render(<Strip keys={["a", "b", "c"]} hidden={false} />));
+  // Hidden with fewer items: every position measures as the origin and the width as nothing.
+  points = {};
+  width = 0;
+  act(() => root.render(<Strip keys={["b"]} hidden />));
+  // Shown again with other items at a different width, which is a change of items for a content-width list.
+  points = { a: [0, 0], b: [80, 0] };
+  width = 160;
+  act(() => root.render(<Strip keys={["a", "b"]} hidden={false} />));
+  expect(animate).not.toHaveBeenCalled();
+  expect(host.querySelectorAll("[data-list-motion-ghost]")).toHaveLength(0);
+});

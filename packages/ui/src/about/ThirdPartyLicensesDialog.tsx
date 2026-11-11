@@ -63,7 +63,7 @@ export function ThirdPartyLicensesList({ licenses }: { licenses: ThirdPartyLicen
         fullWidth
         variant="secondary"
         controls={shown.length === 0 ? undefined : listId}
-        placeholder={t("settings.about.thirdParty.placeholder")}
+        placeholder={t("common.search")}
         clearButton={<FieldClearButton />}
       />
       <p className="text-sm text-app-muted">{t("settings.about.thirdParty.count", { count: shown.length })}</p>

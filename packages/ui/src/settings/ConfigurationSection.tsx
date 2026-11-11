@@ -23,12 +23,12 @@ export function ConfigurationSection(): React.ReactElement {
   if (!configurationFile) return <p className="text-sm text-app-muted">{t("settings.configuration.unavailable")}</p>;
   return (
     <>
-      <SettingRow compact label={t("settings.configuration.export.label")} description={t("settings.configuration.export.description")}>
+      <SettingRow compact searchId="configuration.export" label={t("settings.configuration.export.label")} description={t("settings.configuration.export.description")}>
         <Button size="sm" variant="outline" focusOnPress={false} onPress={() => setExporting(true)}>
           {t("settings.configuration.export.button")}
         </Button>
       </SettingRow>
-      <SettingRow compact label={t("settings.configuration.import.label")} description={t("settings.configuration.import.description")}>
+      <SettingRow compact searchId="configuration.import" label={t("settings.configuration.import.label")} description={t("settings.configuration.import.description")}>
         {/* Unlike Export, it takes focus when pressed: the window's dialog returns focus to it when it closes. */}
         <Button size="sm" variant="outline" onPress={() => openDialogFromAnywhere({ kind: "import-configuration" })}>
           {t("settings.configuration.import.button")}

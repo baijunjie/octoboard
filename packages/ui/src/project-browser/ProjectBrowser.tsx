@@ -154,7 +154,7 @@ export function ProjectBrowser({
               </TabList>
             </TabListContainer>
           </PanelHeader>
-          <FileFilterField contextKey={tab} state={activeFilter} ignoredToggle={mode === "files"} incomplete={mode === "files" && files.searchIncomplete} label={t("browser.filter.label")} placeholder={t(mode === "files" ? "browser.filter.placeholder" : "git.filter.placeholder")} />
+          <FileFilterField contextKey={tab} state={activeFilter} ignoredToggle={mode === "files"} incomplete={mode === "files" && files.searchIncomplete} label={t("browser.filter.label")} />
           {mode === "files" ? <TabPanel key="files" id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <FilesPanel project={project.id} files={files} refreshRef={refreshRef} focusHandoff={filesFocus} />
           </TabPanel> : <TabPanel key="changes" id="changes" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
