@@ -22,6 +22,15 @@ const markdownDrawn = (host: ParentNode, selector: string) => vi.waitFor(async (
   await settleLazyImport();
   expect(host.querySelector(selector)).not.toBeNull();
 }, { timeout: LAZY_IMPORT_TIMEOUT_MS });
+/** The page's headings in order, as `<level> <text>`. */
+const outline = (host: ParentNode) => [...host.querySelectorAll("h1, h2, h3, h4, h5, h6")].map((heading) => `${heading.tagName.toLowerCase()} ${heading.textContent}`);
+/** Waits for the page's headings to be exactly `expected`. A Markdown heading comes in only when the lazily loaded renderer has
+ * drawn, and a callout's or section's heading is there from the first render, so a wait on "some heading of this level" ends
+ * before the Markdown ones are drawn. */
+const outlineIs = (host: ParentNode, expected: string[]) => vi.waitFor(async () => {
+  await settleLazyImport();
+  expect(outline(host)).toEqual(expected);
+}, { timeout: LAZY_IMPORT_TIMEOUT_MS });
 const field_error = (host: ParentNode, name: string) => host.querySelector(`[data-page-field="${name}"] [role=alert]`)?.textContent;
 
 const EVERY_KIND: PageContent = {
@@ -332,9 +341,7 @@ it("keeps the outline in order: the title is an h3, a section's heading an h4, a
       { type: "section", children: [{ type: "markdown", text: "# Without heading" }] },
     ],
   });
-  await markdownDrawn(host, "h5, h6");
-  const headings = [...host.querySelectorAll("h1, h2, h3, h4, h5, h6")].map((heading) => `${heading.tagName.toLowerCase()} ${heading.textContent}`);
-  expect(headings).toEqual(["h3 Page", "h4 Top", "h5 From Markdown", "h4 Part", "h5 Inner", "h5 In section", "h4 Without heading"]);
+  await outlineIs(host, ["h3 Page", "h4 Top", "h5 From Markdown", "h4 Part", "h5 Inner", "h5 In section", "h4 Without heading"]);
 });
 
 it("leaves no wrapper for a column whose content is hidden, and the columns left share the width", async () => {
@@ -369,7 +376,12 @@ it("shows block and inline raw HTML of a Markdown block as text, around the Mark
   expect(host.querySelector("strong")?.textContent).toBe("bold");
   expect(host.textContent).toContain("</details> after ");
   expect(host.querySelector("code")?.textContent).toBe("<b>code</b>");
-  expect(host.querySelector("pre")?.textContent).toContain("<p>fence</p>");
+  // The fence is plain text in a `pre` until the highlighter has drawn it, and then it is the highlighter's own element, with
+  // its text in a shadow root that jsdom leaves empty: a `pre` is not there to find once it has drawn, and when it draws
+  // depends on the load. So the block is only looked for as a code block, and what it holds is checked wherever it can be read.
+  expect(host.querySelector("pre, diffs-container")).not.toBeNull();
+  for (const fence of host.querySelectorAll("pre")) expect(fence.textContent).toContain("<p>fence</p>");
+  expect([...host.querySelectorAll("p")].some((paragraph) => paragraph.textContent === "fence")).toBe(false);
 });
 
 it("draws a link to a heading of a Markdown block as plain text that is not a link", async () => {
@@ -387,7 +399,5 @@ it("starts an untitled page's headings under the panel's own: a section's headin
       { type: "section", children: [{ type: "markdown", text: "# Without heading" }] },
     ],
   });
-  await markdownDrawn(host, "h4");
-  const headings = [...host.querySelectorAll("h1, h2, h3, h4, h5, h6")].map((heading) => `${heading.tagName.toLowerCase()} ${heading.textContent}`);
-  expect(headings).toEqual(["h3 Top", "h4 From Markdown", "h3 Part", "h4 Inner", "h4 In section", "h3 Without heading"]);
+  await outlineIs(host, ["h3 Top", "h4 From Markdown", "h3 Part", "h4 Inner", "h4 In section", "h3 Without heading"]);
 });
