@@ -12,18 +12,20 @@ import { t } from "../i18n/language";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { ThemeProvider } from "../preferences/theme";
 import { ChangeBodiesError, type ViewerChangeSide, type ViewerContent, type ViewerSubject } from "./content";
+import { RENDER_BUDGETS } from "./code/budgets";
 import { diffLayout } from "./code/diffLayout";
 import { FileViewer } from "./FileViewer";
 import type { ViewerNavigation } from "./viewerNavigation";
 import { framesAsTimers, settleFrames } from "../components/dialog/dialogTestSupport";
 import { detailsButton } from "../components/alerts/detailsTestSupport";
 import { enter, leave, openTooltip, press, tap } from "../components/hint/tooltipTestSupport";
-import { markNames, ViewerHost } from "./viewerTestSupport";
+import { chooseItem, closeMenu, markNames, menuEntries, recordSelections, rightClick, ViewerHost } from "./viewerTestSupport";
 import { rawFailureText } from "../errors/errorText";
 import { LAZY_IMPORT_TIMEOUT_MS, settleLazyImport } from "../test/lazyImport";
 import { viewerErrorText } from "./viewerError";
 import { wordWrap } from "./code/wordWrap";
 import { fakeTimers } from "../test/clock";
+import { IS_MAC } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -1117,4 +1119,96 @@ it("brings a line into view once for each file and line asked for, however often
   show(subject, undefined, {}, 3);
   await settleLazyImport();
   expect(scrolls.toLine.mock.calls.map(([, line]) => line)).toEqual([2, 3]);
+});
+
+// The right-click menu of the content area. The renderer is a stand-in here, so its Select All
+// takes the stand-in's markup; that the real one reaches into its shadow root is checked in a page.
+const codeTextOf = (region: HTMLElement) => (region.matches("pre") ? region : region.querySelector("pre")!);
+const textOver = (lines: number) => "x\n".repeat(lines);
+const changedFile = (): ViewerSubject => {
+  const side: ViewerChangeSide = { state: "present", path: "src/c.ts", kind: "file" };
+  return { key: "m", path: "src/c.ts", content: { state: "change", change: { old: side, new: side, patch: "@@ -1 +1 @@\n-a\n+b\n" } } };
+};
+const surfaces: [string, () => ViewerSubject][] = [
+  ["highlighted code", () => textFile("src/a.ts", "const a = 1;\nconst b = 2;\n")],
+  ["a diff", changedFile],
+  ["plain text past the highlight budget", () => textFile("big.txt", textOver(RENDER_BUDGETS.highlightLines + 1))],
+];
+
+it.each(surfaces)("opens a Copy and Select All menu on the content of %s, and Copy only for a selection in it", async (_, subject) => {
+  const writeText = vi.fn(async () => {});
+  show(subject(), undefined, { clipboard: { writeText, readText: async () => "" } });
+  await settleLazyImport();
+  const region = dialog()!.querySelector<HTMLElement>("[role=region]")!;
+  expect(region.hasAttribute("data-find-region") || region.querySelector("[data-find-region]") !== null).toBe(true);
+
+  const first = await rightClick(region);
+  expect(first.defaultPrevented).toBe(true);
+  expect(menuEntries()).toEqual(["Select all"]);
+  await closeMenu();
+
+  document.getSelection()!.selectAllChildren(codeTextOf(region));
+  const selected = document.getSelection()!.toString();
+  expect(selected).not.toBe("");
+  await rightClick(region);
+  expect(menuEntries()).toEqual(["Copy", "Select all"]);
+  await chooseItem("Copy");
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(selected);
+});
+
+it.each(surfaces)("selects only the code of %s with Select All, as the key does", async (_, subject) => {
+  show(subject());
+  await settleLazyImport();
+  const region = dialog()!.querySelector<HTMLElement>("[role=region]")!;
+  const target = region.hasAttribute("data-find-region") ? region : region.querySelector<HTMLElement>("[data-find-region]")!;
+  const selected = recordSelections();
+  await rightClick(region);
+  await chooseItem("Select all");
+  expect(selected).toHaveLength(1);
+  expect(selected[0]).not.toBe("");
+
+  await act(async () => { target.dispatchEvent(new KeyboardEvent("keydown", { key: "a", metaKey: IS_MAC, ctrlKey: !IS_MAC, bubbles: true, cancelable: true })); });
+  expect(selected).toHaveLength(2);
+  expect(selected[1]).toBe(selected[0]);
+  // The title, path and size around the code are not in it.
+  expect(selected[0]).not.toContain(subject().path);
+});
+
+it("shows a copy failure from the content menu as an error with a copy title", async () => {
+  const errors: string[] = [];
+  show(textFile("src/a.ts", "code\n"), undefined, {
+    clipboard: { writeText: async () => { throw new Error("denied"); }, readText: async () => "" },
+    notifications: { notice: () => {}, error: (message) => errors.push(message) },
+  });
+  await settleLazyImport();
+  const region = dialog()!.querySelector<HTMLElement>("[role=region]")!;
+  document.getSelection()!.selectAllChildren(codeTextOf(region));
+  await rightClick(region);
+  await chooseItem("Copy");
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  expect(errorAlerts.getSnapshot()[0]).toMatchObject({ message: "Could not copy the selection", title: "Could not copy" });
+  errorAlerts.acknowledge();
+});
+
+it("opens the content menu from the keyboard on the focused frame", async () => {
+  show(textFile("src/a.ts", "code\n"));
+  await settleLazyImport();
+  const region = dialog()!.querySelector<HTMLElement>("[role=region]")!;
+  act(() => region.focus());
+  const event = new KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true, cancelable: true });
+  await act(async () => { region.dispatchEvent(event); });
+  expect(event.defaultPrevented).toBe(true);
+  expect(menuEntries()).toEqual(["Select all"]);
+});
+
+it.each([
+  ["a binary stand-in", binary],
+  ["an image", { key: "i", path: "a.png", content: { state: "file", body: { kind: "image", mediaType: "image/png", url: "data:image/png;base64,AAAA", size: 4 } } } as ViewerSubject],
+])("gives %s no menu of its own", async (_, subject) => {
+  show(subject);
+  await settleLazyImport();
+  const target = dialog()!.querySelector("img") ?? dialog()!;
+  const event = await rightClick(target);
+  expect(event.defaultPrevented).toBe(false);
+  expect(document.querySelector("[role=menu]")).toBeNull();
 });

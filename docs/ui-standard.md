@@ -2068,12 +2068,20 @@ same items, since nothing on the element tells a keyboard or screen-reader user 
 Settings agent strip is the instance: each tab's menu, plus a "More actions for {agent}" button at the strip's end
 acting on the selected tab. Reordering by dragging has a keyboard counterpart in that menu, labelled by reading order
 ("Move earlier" / "Move later", never left and right, which swap in a right-to-left layout), and the moved item gets
-focus back once it lands.
+focus back once it lands. A context menu opened again before it has gone (a second right-click while it is open) takes
+focus anew, as on its first opening.
+
+A text-editing menu is the exception: on a surface that holds text, a menu whose items mirror the platform's editing
+keys (Copy, Paste, Select all) opens from right-click and the Menu key or Shift+F10 alone, with no visible trigger,
+since the editing keys themselves already do what those items do. It may also hold an item about what lies under the
+pointer, which only a right-click there can offer and a key-opened menu leaves out (the terminal's Open in file manager
+on a path link). The terminal's editing menu and the file viewer's text menu are the instances.
 
 ### Copy actions in menus
 
-Copy actions are top-level items in a group of their own, separated from other actions. A menu shows the items
-immediately; an item awaiting asynchronous data stays disabled until that data arrives, without holding back the
+Copy actions are top-level items in a group of their own, separated from other actions; a text-editing menu (see "A
+context menu has a visible trigger too") keeps its Copy, Paste and Select all together in one group. A menu shows the
+items immediately; an item awaiting asynchronous data stays disabled until that data arrives, without holding back the
 menu or replacing its other items with a loading state. The temporary disabled state carries no reason; a failed
 lookup leaves the affected item disabled with a reason, and reopening the menu retries it.
 

@@ -89,9 +89,10 @@ function regionBlocks(region: Element): TextBlock[] {
   return blocks;
 }
 
-/** The viewer's text surfaces under `container`, in order. */
+/** The viewer's text surfaces under `container`, in order, and `container` itself when it is one. */
 export function findRegions(container: ParentNode): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FIND_REGION_SELECTOR));
+  const within = Array.from(container.querySelectorAll<HTMLElement>(FIND_REGION_SELECTOR));
+  return container instanceof HTMLElement && container.matches(FIND_REGION_SELECTOR) ? [container, ...within] : within;
 }
 
 /** The range covering `[start, end)` of a block's text. */

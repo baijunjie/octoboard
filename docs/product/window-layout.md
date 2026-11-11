@@ -400,7 +400,11 @@ switcher" in `docs/product/console-switcher.md`). The project pane's file and ch
 page" in `docs/product/report-panel.md`).
 
 **The terminal has its own editing menu** in both the desktop app and a browser (see "Copy, paste and selection" in
-`docs/product/session-terminal.md`).
+`docs/product/session-terminal.md`), and so do the file viewer's code regions and rendered Markdown documents (see
+"Selecting and copying" in `docs/product/file-viewer.md`).
 
 **In a browser** the browser's own menu stays everywhere except over the rows, headers and avatars that open an action
-menu, and over the terminal.
+menu, over the terminal, and over the file viewer's text, apart from a link or an image inside a rendered document.
+
+A menu that a second right-click opens again while it is still open takes keyboard focus anew, as on its first
+opening, so the arrow keys and Escape keep working in it.

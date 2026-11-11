@@ -467,3 +467,30 @@ it("hoverTerminalUrl puts the pointer on the first row of a link that wraps in a
   // Cell 4 of row 0 starts it and six cells of the row hold it: the middle is cell 7, in the row's own height.
   expect(moves[0]).toEqual([70, 5]);
 });
+
+it("contextMenuRegion raises a context menu on the region its label names", async () => {
+  document.body.innerHTML = "<div role=\"region\" tabindex=\"0\" aria-label=\"src/a.ts\"></div>";
+  const region = document.querySelector<HTMLElement>("[role=region]")!;
+  const seen: MouseEvent[] = [];
+  region.addEventListener("contextmenu", (event) => seen.push(event));
+  await settle(createUi(document, "en").contextMenuRegion("src/a.ts"));
+  expect(seen).toHaveLength(1);
+  expect(seen[0].button).toBe(2);
+});
+
+it("codeDrawn waits for the renderer to draw into the frame the name finds", async () => {
+  document.body.innerHTML = "<div role=\"region\" tabindex=\"0\" aria-label=\"src/a.ts\"><div id=\"host\"></div></div>";
+  const root = document.getElementById("host")!.attachShadow({ mode: "open" });
+  let done = false;
+  const waiting = createUi(document, "en").codeDrawn("src/a.ts").then(() => { done = true; });
+  await vi.advanceTimersByTimeAsync(500);
+  expect(done).toBe(false);
+  root.innerHTML = "<div data-content>code</div>";
+  await settle(waiting);
+  expect(done).toBe(true);
+});
+
+it("codeDrawn fails on a frame that holds plain text", async () => {
+  document.body.innerHTML = "<div role=\"region\" tabindex=\"0\" aria-label=\"src/a.ts\">plain</div>";
+  await expect(settle(createUi(document, "en").codeDrawn("src/a.ts"))).rejects.toThrow(/never drew its code/);
+});

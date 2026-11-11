@@ -12,6 +12,7 @@ import { eventKey, type Binding, type ModifierHost } from "../shortcuts/binding"
 import type { Daemon, State } from "../store";
 import type { TerminalElement } from "../terminal/terminalTextView";
 import { readHost } from "../platform/host";
+import { renderedCodeRange } from "../viewer/code/rendererDom";
 import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
 import { partSelector } from "../primitives";
 
@@ -264,6 +265,13 @@ export interface Ui {
    * named by the dialog's title, and the startup screen's message. A step cannot press Tab itself:
    * a script's key event moves nothing. */
   tabToRegion: (name: Matcher) => Promise<void>;
+  /** Opens the context menu of the scroll region named `name` (as `tabToRegion` finds it) at its centre, for a
+   * region that is not a pressable control, such as the file viewer's text surfaces. */
+  contextMenuRegion: (name: Matcher) => Promise<void>;
+  /** Waits until the code frame named `name` (a scroll region, as `tabToRegion` finds it) has drawn its highlighted
+   * code: the renderer draws it a moment after the frame is there, and a step that selects the code (Select All)
+   * before then selects nothing. Fails if the frame never draws any, which also catches one that holds plain text. */
+  codeDrawn: (name: Matcher) => Promise<void>;
   /** Scrolls a named grid, tree or list box to a settled offset without moving keyboard focus. */
   scrollCollection: (name: Matcher, top: number) => Promise<void>;
   /** Scrolls the tab panel named `name` (a Settings section, by its tab's name) to a settled offset without moving
@@ -644,6 +652,21 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     return named.filter((element) => !named.some((other) => other !== element && element.contains(other)));
   };
   const find = (matcher: Matcher): HTMLElement | undefined => findAll(matcher)[0];
+  /** The focusable scroll region named `matcher`. */
+  const findRegion = (matcher: Matcher): HTMLElement | undefined =>
+    Array.from(doc.querySelectorAll<HTMLElement>("[role=region][tabindex]")).find((element) => {
+      const name = labelledNameOf(doc, element);
+      return name != null && matches(matcher, name);
+    });
+  /** Raises the context menu at the centre of `element` and lets the menu open. */
+  const rightClick = async (element: HTMLElement): Promise<void> => {
+    const box = element.getBoundingClientRect();
+    element.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true, cancelable: true, button: 2,
+      clientX: box.x + box.width / 2, clientY: box.y + box.height / 2,
+    }));
+    await wait(300);
+  };
   /** The menu item named `matcher`, disabled or not: a disabled item is a row a pointer cannot press, not one to skip.
    * Items in an inert subtree stay out, as everywhere else. */
   const findMenuItem = (matcher: Matcher): HTMLElement | undefined =>
@@ -885,12 +908,12 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
       control.focus();
       await wait(150);
     },
+    async contextMenuRegion(matcher) {
+      await rightClick(await waitFor(() => findRegion(matcher), `No scroll region named ${String(matcher)} to right-click`));
+    },
     async tabToRegion(matcher) {
       for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
-        const region = Array.from(doc.querySelectorAll<HTMLElement>("[role=region][tabindex]")).find((element) => {
-          const name = labelledNameOf(doc, element);
-          return name != null && matches(matcher, name);
-        });
+        const region = findRegion(matcher);
         if (region) {
           // react-aria reads what the focus came from off the last key event, so Tab is sent first.
           (doc.activeElement ?? doc.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
@@ -901,6 +924,12 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
         await wait(POLL_MS);
       }
       throw new Error(`No scroll region named ${String(matcher)}: check the name, and for a region that exists only while its content overflows (a dialog's body, the startup screen's message) that the window is short enough for that`);
+    },
+    async codeDrawn(matcher) {
+      await waitFor(() => {
+        const region = findRegion(matcher);
+        return region && renderedCodeRange(region) ? region : undefined;
+      }, `The code frame named ${String(matcher)} never drew its code`);
     },
     async scrollCollection(matcher, top) {
       const collection = await waitFor(
@@ -1312,13 +1341,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
       await wait(300);
     },
     async contextMenu(matcher) {
-      const control = await waitFor(() => find(matcher), `Nothing to right-click matching ${String(matcher)}`);
-      const box = control.getBoundingClientRect();
-      control.dispatchEvent(new MouseEvent("contextmenu", {
-        bubbles: true, cancelable: true, button: 2,
-        clientX: box.x + box.width / 2, clientY: box.y + box.height / 2,
-      }));
-      await wait(300);
+      await rightClick(await waitFor(() => find(matcher), `Nothing to right-click matching ${String(matcher)}`));
     },
     async press(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);

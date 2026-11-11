@@ -25,6 +25,25 @@ it("finds the regions marked as text to search, and nothing else in the viewer",
   expect(findRegions(document.body)).toHaveLength(1);
 });
 
+it("returns the container itself first when it is a region, then the regions inside it", () => {
+  document.body.innerHTML = '<div id="outer" data-find-region><div id="inner" data-find-region>code</div></div><p>header</p>';
+  const outer = document.getElementById("outer")!;
+  expect(findRegions(outer)).toEqual([outer, document.getElementById("inner")]);
+});
+
+it("returns only the container when it is a region with none inside, and nothing for a plain one", () => {
+  document.body.innerHTML = '<pre id="only" data-find-region>text</pre><div id="plain"><span>x</span></div>';
+  const only = document.getElementById("only")!;
+  expect(findRegions(only)).toEqual([only]);
+  expect(findRegions(document.getElementById("plain")!)).toEqual([]);
+});
+
+it("returns each region once when the container is a region and is searched", () => {
+  const found = region("<pre>one</pre>");
+  expect(findRegions(found)).toEqual([found]);
+  expect(search("one", findRegions(found)).texts).toEqual(["one"]);
+});
+
 it("matches across the tokens of a highlighted line, but not from one line to the next", () => {
   const host = region("<div></div>").firstElementChild!;
   const root = host.attachShadow({ mode: "open" });

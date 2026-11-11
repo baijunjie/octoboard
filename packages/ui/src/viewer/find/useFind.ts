@@ -9,8 +9,8 @@ import { useHost } from "../../platform/react";
 import { DEFAULT_FIND_OPTIONS, findPattern, MAX_FIND_MATCHES, stepMatch, type FindOptions } from "./find";
 import type { FindBar, FindStatus } from "./FindBar";
 import { clearMatches, findMatches, findRegions, hasPlaceholder, paintMatches, revealMatch } from "./findDom";
-import { findSelection } from "./findSelection";
 import { shadowRootsIn } from "../code/rendererDom";
+import { readSelection } from "../textSelection";
 import { setKeyboardModality } from "../../primitives";
 
 /** How long the query rests before the search runs, so typing in a large file is not a search per
@@ -288,7 +288,7 @@ export function useFind({
         event.stopPropagation();
         setKeyboardModality();
         // Match pasting into the single-line query: its value cannot contain CR or LF.
-        const selected = container && !barRef.current?.contains(document.activeElement) ? findSelection(container).replace(/[\r\n]/g, "") : "";
+        const selected = container && !barRef.current?.contains(document.activeElement) ? (readSelection(container)?.text ?? "").replace(/[\r\n]/g, "") : "";
         if (selected) {
           setQuery(selected);
           setSettled(selected);

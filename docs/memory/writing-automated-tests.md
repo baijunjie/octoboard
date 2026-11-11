@@ -228,6 +228,22 @@ focuses the terminal after whatever the sidebar or a hook did with focus. So a j
 on a sidebar control after a selection passes while the app does the opposite. Assert focus in jsdom only for moves
 that select no session; judge where focus lands after a selection in the real app.
 
+## A jsdom test's press behind an open modal overlay reaches handlers a browser never runs
+
+Applies to the `packages/ui` component tests of anything a pointer press does while a react-aria modal overlay is
+open — a `Modal`, a modal popover, an `ActionMenu` (its right-click menus included). In a browser React Aria sets
+`inert` on everything outside the overlay, and an inert element takes no pointer events, so a real press on the page
+behind it targets `<body>`: the handlers of the element under the pointer never run, and focus drops to `<body>`.
+Only the events that come after the press has closed the overlay, and so lifted `inert`, reach that element. jsdom has
+no `inert`, so a press dispatched at the element reaches its handlers and the test runs a path the app never takes. A
+second right-click on the target of an open context menu is the case in point: in a browser the `mousedown` lands on
+`<body>` and closes the menu, and the `contextmenu` that follows reopens it within the same gesture; a test that sent
+both to the target passed while the reopened menu took no focus.
+
+So send such a press to `document.body`, blur whatever had focus behind the overlay, and send the target only the
+events that follow the close, as the right-click-again cases in `packages/ui/src/terminal/TerminalEditMenu.test.tsx`
+and `packages/ui/src/viewer/ViewerEditMenu.test.tsx` do.
+
 ## A jsdom test cannot tell what a selection over the viewer's code copies
 
 Applies to the `packages/ui` viewer tests (`vitest` under jsdom), which mock the rendering library

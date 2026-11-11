@@ -16,7 +16,8 @@ import { markdownView } from "./markdownView";
 import type { MarkdownLocation } from "./markdownLocation";
 import { openableAddress } from "./MarkdownDocument";
 import { LAZY_IMPORT_TIMEOUT_MS, settleLazyImport } from "../../test/lazyImport";
-import { ViewerHost } from "../viewerTestSupport";
+import { IS_MAC } from "../../test/hosts";
+import { chooseItem, closeMenu, menuEntries, recordSelections, rightClick, ViewerHost } from "../viewerTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -84,7 +85,7 @@ const markdownFile = (path = "docs/README.md", text = SOURCE): ViewerSubject => 
 async function open(
   subject: ViewerSubject,
   links?: PlatformAdapter["links"],
-  extra?: { location?: Omit<MarkdownLocation, "path">; request?: RequestHandler },
+  extra?: { location?: Omit<MarkdownLocation, "path">; request?: RequestHandler; clipboard?: PlatformAdapter["clipboard"] },
 ): Promise<HTMLElement> {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -94,7 +95,7 @@ async function open(
   });
   act(() =>
     root.render(
-      <ViewerHost links={links} request={extra?.request}>
+      <ViewerHost links={links} request={extra?.request} clipboard={extra?.clipboard}>
         <ThemeProvider>
           <FileViewer subject={subject} onClose={() => {}} location={extra?.location} />
         </ThemeProvider>
@@ -470,4 +471,76 @@ it("shows a project image and does not fetch one that leaves the project", async
   expect(region().querySelectorAll("img")).toHaveLength(2);
   expect(region().textContent).toContain("secret");
   expect(region().querySelector('img[alt="web"]')?.getAttribute("src")).toBe("https://example.com/a.png");
+});
+
+// The right-click menu of the content area. A selection that reaches into a fenced block's shadow root is
+// checked in a page.
+const clipboardTo = () => {
+  const writeText = vi.fn(async () => {});
+  return { writeText, clipboard: { writeText, readText: async () => "" } };
+};
+
+it("offers Select All alone on the rendered document, and Copy before it for a selection in it", async () => {
+  const { writeText, clipboard } = clipboardTo();
+  await open(markdownFile(), undefined, { clipboard });
+  expect((await rightClick(region())).defaultPrevented).toBe(true);
+  expect(menuEntries()).toEqual(["Select all"]);
+  await closeMenu();
+
+  document.getSelection()!.selectAllChildren(region().querySelector("h1")!);
+  await rightClick(region());
+  expect(menuEntries()).toEqual(["Copy", "Select all"]);
+  await chooseItem("Copy");
+  expect(writeText).toHaveBeenCalledExactlyOnceWith("Title");
+});
+
+it("copies the Markdown source from the menu when the whole document is selected, as the copy key does", async () => {
+  const { writeText, clipboard } = clipboardTo();
+  await open(markdownFile(), undefined, { clipboard });
+  document.getSelection()!.selectAllChildren(region());
+  await rightClick(region());
+  await chooseItem("Copy");
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(SOURCE);
+
+  const key = { clipboardData: { setData: vi.fn() }, preventDefault: vi.fn() };
+  document.getSelection()!.selectAllChildren(region());
+  const copy = new Event("copy", { bubbles: true, cancelable: true });
+  Object.assign(copy, key);
+  act(() => void region().firstElementChild!.dispatchEvent(copy));
+  expect(key.clipboardData.setData).toHaveBeenCalledExactlyOnceWith("text/plain", SOURCE);
+});
+
+it("selects the whole document with the menu's Select All, as the key does", async () => {
+  await open(markdownFile());
+  const selected = recordSelections();
+  await rightClick(region());
+  await chooseItem("Select all");
+  expect(selected).toEqual([region().textContent]);
+
+  await act(async () => { region().dispatchEvent(new KeyboardEvent("keydown", { key: "a", metaKey: IS_MAC, ctrlKey: !IS_MAC, bubbles: true, cancelable: true })); });
+  expect(selected).toEqual([region().textContent, region().textContent]);
+});
+
+it("offers the menu on the Markdown source as on any code, with no source substituted for a copy", async () => {
+  const { writeText, clipboard } = clipboardTo();
+  await open(markdownFile(), undefined, { clipboard });
+  act(() => choice("Show source").click());
+  expect((await rightClick(region())).defaultPrevented).toBe(true);
+  expect(menuEntries()).toEqual(["Select all"]);
+  await closeMenu();
+
+  document.getSelection()!.selectAllChildren(region().querySelector("pre")!);
+  await rightClick(region());
+  expect(menuEntries()).toEqual(["Copy", "Select all"]);
+  await chooseItem("Copy");
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(region().querySelector("pre")!.textContent);
+});
+
+it("opens the document's menu from the keyboard on the focused document", async () => {
+  await open(markdownFile());
+  act(() => region().focus());
+  const event = new KeyboardEvent("keydown", { key: "ContextMenu", bubbles: true, cancelable: true });
+  await act(async () => { region().dispatchEvent(event); });
+  expect(event.defaultPrevented).toBe(true);
+  expect(menuEntries()).toEqual(["Select all"]);
 });

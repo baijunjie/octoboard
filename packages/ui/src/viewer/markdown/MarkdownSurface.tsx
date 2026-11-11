@@ -18,6 +18,7 @@ import { markdownView, MarkdownViewToggle, type MarkdownView } from "./markdownV
 import { useMarkdownLocation } from "./markdownLocation";
 import { copyDocument, isSelectAll, selectDocument } from "../selectAll";
 import { FileNotice } from "../notices";
+import { ViewerEditMenu } from "../ViewerEditMenu";
 import { LoadingOverlay } from "../viewerStates";
 
 // The Markdown renderer, with its library, loads the first time a document is shown.
@@ -141,6 +142,8 @@ function DocumentSurface({
             />
           </Suspense>
         </div>
+        {/* Re-keyed with the region div: the menu listens on that element, so a new one needs its listeners attached again. */}
+        <ViewerEditMenu key={resetKey} region={fade.ref} selectAll={selectDocument} source={text} />
       </FrameSurface>
     </RendererBoundary>
   );

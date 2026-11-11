@@ -65,8 +65,8 @@ under "Reconnecting" below says; it is never dropped silently.
 With a session selected that is not archived, right-clicking its terminal opens an editing menu in both the desktop app
 and a browser. On macOS, Control-click opens it too. With keyboard focus in the terminal, the context-menu key or
 `Shift+F10` opens the same menu; neither key is sent to the agent. Opening it preserves the terminal's selection, and
-closing it returns keyboard focus to the terminal. There is no separate menu button. Copy is a group of its own,
-separated from Paste and Select all by a divider.
+closing it returns keyboard focus to the terminal. There is no separate menu button. Copy, Paste and Select all form
+one group, with no divider between them.
 
 - **Open in file manager** shows a file path link in the file manager on the machine the daemon runs on (see "File
   paths" in `docs/product/terminal-links.md`). It is offered only when the menu was opened with the pointer — a

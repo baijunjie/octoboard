@@ -552,6 +552,8 @@ For example:
   shell terminal that is already gone — asks the user to refresh the affected view or select the current project or
   session again, then retry.
 - A clipboard failure explains granting clipboard access or using the terminal's keyboard copy and paste shortcuts.
+  A failed Copy in the file viewer's text menu asks instead to allow clipboard access if prompted, then copy again or
+  use the keyboard copy shortcut.
 - A failure of Git — Git could not read something (`git_failed`), or a clone or push failed — asks the user to open the
   project's terminal from its action menu, resolve the Git error, including remote access or an unfinished Git
   operation, then retry. A branch switch that failed is local, so its remedy is the same without remote access: it

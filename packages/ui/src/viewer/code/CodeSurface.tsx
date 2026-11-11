@@ -18,6 +18,7 @@ import { FIND_REGION } from "../find/findDom";
 import { focusFirstSeparatorControl, scrollTextToLine, scrollToLine } from "./rendererDom";
 import { useHost } from "../../platform/react";
 import { isSelectAll, selectCode } from "../selectAll";
+import { ViewerEditMenu } from "../ViewerEditMenu";
 import { FileNotice, type NoticeTone } from "../notices";
 import { LoadingOverlay, Unreadable } from "../viewerStates";
 import { BodiesFailureReason } from "../ViewerErrorMessage";
@@ -72,6 +73,7 @@ export function PlainText({
       <pre dir="ltr" {...fade} {...FIND_REGION} onKeyDown={frame.onKeyDown}>
         {text}
       </pre>
+      <ViewerEditMenu region={pre} selectAll={selectCode} />
     </FrameSurface>
   );
 }
@@ -132,6 +134,7 @@ function CodeFrame({
         {!drawn && <LoadingOverlay />}
         <Suspense fallback={trackSuspenseFallback(null)}>{children(onDrawn)}</Suspense>
       </div>
+      <ViewerEditMenu region={fade.ref} selectAll={selectCode} />
     </FrameSurface>
   );
 }

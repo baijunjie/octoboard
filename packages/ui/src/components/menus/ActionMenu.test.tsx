@@ -517,7 +517,7 @@ describe("a disabled item", () => {
 });
 
 describe("the Menu key and Shift+F10 on the context target", () => {
-  function mountTarget(): { target: HTMLElement; inner: HTMLElement } {
+  function mountTarget(leavesContextToBrowser?: (event: MouseEvent) => boolean): { target: HTMLElement; inner: HTMLElement } {
     const container = document.body.appendChild(document.createElement("div"));
     const root = createRoot(container);
     unmount = () => {
@@ -529,7 +529,7 @@ describe("the Menu key and Shift+F10 on the context target", () => {
       return (
         <div ref={ref} tabIndex={0} data-testid="target">
           <span tabIndex={-1} data-testid="inner" />
-          <ActionMenu label="Actions of X" items={[{ label: "Delete", icon: Trash2, onClick: () => {} }]} contextTargetRef={ref} />
+          <ActionMenu label="Actions of X" items={[{ label: "Delete", icon: Trash2, onClick: () => {} }]} contextTargetRef={ref} leavesContextToBrowser={leavesContextToBrowser} />
         </div>
       );
     }
@@ -587,6 +587,50 @@ describe("the Menu key and Shift+F10 on the context target", () => {
       target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }));
     });
     await vi.waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("menu"));
+  });
+
+  // A browser's second right-click while the menu is open: the surface behind a modal menu is inert, so the press lands on
+  // <body>, closing the menu, and the `contextmenu` event that follows opens it again.
+  it("takes focus into the menu when a second right-click closes and opens it within one gesture", async () => {
+    const { target } = mountTarget();
+    const rightClickTarget = async () => {
+      // Both events in one batch, so the popover has not unmounted between them (a browser flushes between its press and its
+      // context menu event).
+      await act(async () => {
+        document.body.dispatchEvent(new MouseEvent("mousedown", { button: 2, bubbles: true, cancelable: true }));
+        target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 30, clientY: 40 }));
+      });
+    };
+    await rightClickTarget();
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("menu"));
+    // What the inert surface does to the menu's focus in a browser.
+    await act(async () => { (document.activeElement as HTMLElement).blur(); });
+    await rightClickTarget();
+    await vi.waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("menu"));
+    act(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    await vi.waitFor(() => expect(document.querySelector("[role=menu]")).toBeNull());
+  });
+
+  it("leaves a right-click the target judges for the browser alone, and still opens from the keyboard there", async () => {
+    const { target, inner } = mountTarget((event) => event.target === inner);
+    const press = new MouseEvent("mousedown", { button: 2, bubbles: true, cancelable: true });
+    inner.dispatchEvent(press);
+    expect(press.defaultPrevented).toBe(false);
+    let unprevented = false;
+    act(() => {
+      unprevented = inner.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    expect(unprevented).toBe(true);
+    expect(document.querySelector("[role=menu]")).toBeNull();
+
+    act(() => target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })));
+    expect(document.querySelector("[role=menu]")).not.toBeNull();
+    act(() => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    await vi.waitFor(() => expect(document.querySelector("[role=menu]")).toBeNull());
+
+    act(() => inner.focus());
+    act(() => void inner.dispatchEvent(new KeyboardEvent("keydown", { key: "ContextMenu", bubbles: true, cancelable: true })));
+    expect(document.querySelector("[role=menu]")).not.toBeNull();
   });
 
   it("leaves a Menu key that an element inside the target has already handled", () => {

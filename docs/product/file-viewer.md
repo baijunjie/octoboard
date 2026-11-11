@@ -238,6 +238,29 @@ title, path and size. Copying a selection that is the whole document puts the fi
 clipboard, the source inside its fenced blocks included, which a selection of the drawn document cannot reach; a
 selection of part of the document copies as what is selected.
 
+**The text menu.** Right-clicking a code region or a rendered Markdown document opens a menu of its text at the
+pointer, in the desktop app and in a browser; on macOS, Control-click opens it too. With keyboard focus on the region,
+or on a control inside it such as a link, the context-menu key or `Shift+F10` opens the same menu. There is no menu
+button. Its items form one group:
+
+- **Copy**, offered only while text inside that region is selected, copies what ⌘C (Ctrl+C off macOS) would copy
+  there: the selected text, or, for a selection that is the whole rendered document, the file's Markdown source. Where
+  the platform has no clipboard, or it refuses, the text is copied through the browser's selection copy instead; only
+  when neither works does an error alert say the selection could not be copied, with its own clipboard remedy (see
+  "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
+- **Select all** does what ⌘A does with keyboard focus on that region (see above): the code alone, or the whole
+  document.
+
+On macOS a right-click on text with nothing selected first selects the word under the pointer, as the platform does,
+so Copy is then offered for that word. The selection survives the menu: closing it without Select all — with Escape,
+a click elsewhere or Copy — leaves the text that was selected when it opened selected, and opening it again before it
+has gone offers the same text. A right-click puts keyboard focus on the region, unless a control inside it already has
+it; closing the menu gives focus back there.
+
+In a browser, a right-click on a link or an image inside a rendered document shows the browser's own menu instead; in
+the desktop app it opens the text menu. Nothing else the viewer shows has this menu: an image shown as an image, a
+stand-in, or an error (see "Notices and stand-ins" above).
+
 While text inside the viewer is selected, the Left and Right arrow keys leave it selected rather than moving to
 another file (see "Moving between files" below).
 

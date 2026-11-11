@@ -48,6 +48,14 @@ export function selectDocument(region: HTMLElement): boolean {
   return true;
 }
 
+/** Whether the selection is the whole of a rendered document, as `selectDocument` makes it. */
+export function isWholeDocumentSelected(region: HTMLElement): boolean {
+  const selection = region.ownerDocument.getSelection();
+  if (!selection || selection.rangeCount !== 1) return false;
+  const range = selection.getRangeAt(0);
+  return range.startContainer === region && range.endContainer === region && range.startOffset === 0 && range.endOffset === region.childNodes.length;
+}
+
 /**
  * Makes a copy of a selection that is the whole of a rendered document put the document's Markdown
  * source on the clipboard: a document selection holds no text for its fenced blocks (see
@@ -60,12 +68,7 @@ export function copyDocument(
   region: HTMLElement,
   source: string,
 ): boolean {
-  const selection = region.ownerDocument.getSelection();
-  if (!event.clipboardData || !selection || selection.rangeCount !== 1) return false;
-  const range = selection.getRangeAt(0);
-  const whole =
-    range.startContainer === region && range.endContainer === region && range.startOffset === 0 && range.endOffset === region.childNodes.length;
-  if (!whole) return false;
+  if (!event.clipboardData || !isWholeDocumentSelected(region)) return false;
   event.clipboardData.setData("text/plain", source);
   event.preventDefault();
   return true;

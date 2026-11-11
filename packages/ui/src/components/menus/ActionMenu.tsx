@@ -44,6 +44,7 @@ export function ActionMenu({
   contextTargetRef,
   contextOnly = false,
   onContextOpen,
+  leavesContextToBrowser,
   onClosed,
 }: {
   label: string;
@@ -71,8 +72,13 @@ export function ActionMenu({
   /** Refreshes actions before opening; runs before the target's own context menu handler. Told where the
    * menu opens (the pointer, or below the focused element for the keyboard) and whether the keyboard did it. */
   onContextOpen?: (opened: { clientX: number; clientY: number; byKey: boolean }) => void;
-  /** Called once the menu has closed and its popover has left the page (after its exit animation),
-   * so focus has gone wherever the closing put it. It is given the trigger when the menu was opened
+  /** Judges a right-click on the target: true leaves it to the browser's own context menu, as for a link or an
+   * image whose menu is how it is opened elsewhere or saved. Not asked of the keyboard gestures. */
+  leavesContextToBrowser?: (event: MouseEvent) => boolean;
+  /** Called once the menu has closed and its popover has left the page (after its exit animation).
+   * Focus has usually gone wherever the closing put it by then, but not without an exit animation
+   * (reduced motion): a menu the pointer opened gives focus back a task later, so this runs while
+   * focus is still on <body>. It is given the trigger when the menu was opened
    * from the keyboard, that is while the trigger held focus, and no pointer press came before the
    * popover was gone; `null` otherwise. Not called when this menu unmounts first. */
   onClosed?: (keyboardTrigger: HTMLElement | null) => void;
@@ -80,12 +86,17 @@ export function ActionMenu({
   const t = useT();
   const host = useHost();
   const contextOpenRef = useLatest(onContextOpen);
+  const leavesContextRef = useLatest(leavesContextToBrowser);
   const [isOpen, setIsOpen] = useState(false);
   // Where a right-click opened the menu; `null` while it is anchored to its trigger.
   const [pointerAt, setPointerAt] = useState<{ x: number; y: number } | null>(null);
   // Whether the Menu key or Shift+F10 opened the menu, which then focuses its first item; a
   // right-click's menu focuses the menu itself, as react-aria's does for a pointer.
   const [openedByKey, setOpenedByKey] = useState(false);
+  // Counts the context opens, which remount the menu's content: a menu opened again while its popover is still
+  // mounted (a second right-click, which closes and opens it within one gesture) would otherwise keep the content
+  // that took focus at its first open, and none would take it now that the surface behind is inert again.
+  const [openCount, setOpenCount] = useState(0);
   // Set only for a pointer-opened menu: react-aria returns focus to the trigger when a menu closes,
   // which is right for the keyboard but would pull it off the terminal for the mouse.
   const pointerFocus = usePointerFocusReturn();
@@ -181,6 +192,7 @@ export function ActionMenu({
     // must not take focus: a target without its own focus handling would pull it off whatever had
     // it (typically the terminal), and the menu returns focus to where it stood at the gesture.
     const onMouseDown = (event: MouseEvent) => {
+      if (leavesContextRef.current?.(event)) return;
       if (isSecondaryPress(event, host, !contextOnly)) {
         event.preventDefault();
         // xterm handles a secondary press itself; leaving it through would change the selection
@@ -189,6 +201,7 @@ export function ActionMenu({
       }
     };
     const onContextMenu = (event: MouseEvent, byKey = false) => {
+      if (!byKey && leavesContextRef.current?.(event)) return;
       event.preventDefault();
       if (contextOnly) event.stopPropagation();
       contextOpenRef.current?.({ clientX: event.clientX, clientY: event.clientY, byKey });
@@ -201,6 +214,7 @@ export function ActionMenu({
       pointerFocus.notePress(adopt);
       setPointerAt({ x: event.clientX, y: event.clientY });
       setOpenedByKey(byKey);
+      setOpenCount((count) => count + 1);
       onOpenChange(true);
     };
     // The Menu key and Shift+F10 are handled here rather than left to the `contextmenu` event they
@@ -224,7 +238,7 @@ export function ActionMenu({
       target.removeEventListener("contextmenu", onContextMenu, contextOnly);
       target.removeEventListener("keydown", onKeyDown, contextOnly);
     };
-  }, [contextTargetRef, contextOnly, contextOpenRef, host]);
+  }, [contextTargetRef, contextOnly, contextOpenRef, leavesContextRef, host]);
 
   // react-aria's popover ignores a press outside it made with anything but the primary button, so
   // a right-click while the menu is open would leave it open (and, on the web, show the browser's
@@ -277,7 +291,7 @@ export function ActionMenu({
             them is that much wider, so the label beside them keeps the room it has next to glyphs. */}
         <MenuPopover className="min-w-48 max-w-72 has-[[data-kbd-spelled]]:max-w-82" at={pointerAt ?? undefined}>
           <MenuShortcutScope value={isOpen}>
-            <ResolvedMenuItems source={items} onGone={onPopoverGone} autoFocus={openedByKey ? "first" : undefined} />
+            <ResolvedMenuItems key={openCount} source={items} onGone={onPopoverGone} autoFocus={openedByKey ? "first" : undefined} />
           </MenuShortcutScope>
         </MenuPopover>
       </Menu>

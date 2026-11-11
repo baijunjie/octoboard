@@ -212,7 +212,7 @@ it("offers the file manager first, then a separator, over a path link, and revea
   await open();
   expect(controller.pathLinkAt).toHaveBeenLastCalledWith(30, 40);
   const entries = [...document.querySelectorAll<HTMLElement>("[role=menuitem], [role=separator]")];
-  expect(entries.map((entry) => entry.getAttribute("role") === "separator" ? "-" : entry.textContent)).toEqual(["Open in file manager", "-", "Copy", "-", "Paste", "Select all"]);
+  expect(entries.map((entry) => entry.getAttribute("role") === "separator" ? "-" : entry.textContent)).toEqual(["Open in file manager", "-", "Copy", "Paste", "Select all"]);
   await choose("Open in file manager");
   expect(controller.revealPathLink).toHaveBeenCalledExactlyOnceWith({ path: "/r/a.ts" });
 });
@@ -222,4 +222,24 @@ it("offers no file manager item to a menu opened with the keyboard, whatever was
   await act(async () => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "ContextMenu", bubbles: true, cancelable: true })); });
   expect(item("Copy")).toBeDefined();
   expect(item("Open in file manager")).toBeUndefined();
+});
+
+it("focuses the terminal when the menu opens, and takes focus into the menu when it is right-clicked open again", async () => {
+  const focusTerminal = vi.spyOn(controller, "focus");
+  await open();
+  expect(focusTerminal).toHaveBeenCalledOnce();
+  // What the inert terminal does to the focus in a browser.
+  await act(async () => { (document.activeElement as HTMLElement).blur(); });
+  // The press lands on <body> and closes the menu, and the `contextmenu` event that follows opens it again; both are batched
+  // here, where a browser flushes between them.
+  const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 30, clientY: 40 });
+  await act(async () => {
+    document.body.dispatchEvent(new MouseEvent("mousedown", { button: 2, bubbles: true, cancelable: true }));
+    input.dispatchEvent(event);
+  });
+  expect(event.defaultPrevented).toBe(true);
+  // The menu itself, as a pointer-opened menu focuses it: the reopened content took focus anew.
+  await vi.waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("menu"));
+  await act(async () => { document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); });
+  expect(document.querySelector("[role=menu]")).toBeNull();
 });

@@ -232,6 +232,14 @@ it("retains explicit clipboard recovery metadata through the queue", () => {
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Allow clipboard access");
 });
 
+it("words the copy remedy of a text surface without the terminal's shortcuts", () => {
+  mount();
+  act(() => errorAlerts.report({ message: "Copy failed", error: new ActionableError("Copy failed", "clipboardCopy") }));
+  const text = document.querySelector('[role="alertdialog"]')?.textContent;
+  expect(text).toContain("Allow clipboard access if prompted. Copy again, or use the keyboard copy shortcut.");
+  expect(text).not.toContain("terminal");
+});
+
 it.each([
   ["connection", ["Try again"]],
   ["path", ["Browse"]],

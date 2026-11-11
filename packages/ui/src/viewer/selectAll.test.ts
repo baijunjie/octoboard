@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
-import { copyDocument, isSelectAll, selectCode, selectDocument } from "./selectAll";
+import { copyDocument, isSelectAll, isWholeDocumentSelected, selectCode, selectDocument } from "./selectAll";
 
 const META = { metaKey: true, ctrlKey: false };
 const CTRL = { metaKey: false, ctrlKey: true };
@@ -76,3 +76,25 @@ it("copies the Markdown source when the whole document is selected, and leaves a
   expect(part.data.size).toBe(0);
   expect(part.prevented()).toBe(false);
 });
+
+it("tells a document selected whole from a part of it, an empty selection and a selection elsewhere", () => {
+  frame().innerHTML = "<h1>Title</h1><p>text</p>";
+  const selection = document.getSelection()!;
+  expect(isWholeDocumentSelected(frame())).toBe(false);
+
+  selectDocument(frame());
+  expect(isWholeDocumentSelected(frame())).toBe(true);
+
+  selection.selectAllChildren(frame().querySelector("p")!);
+  expect(isWholeDocumentSelected(frame())).toBe(false);
+
+  selection.setBaseAndExtent(frame(), 0, frame(), 1);
+  expect(isWholeDocumentSelected(frame())).toBe(false);
+
+  selection.selectAllChildren(document.querySelector("h2")!);
+  expect(isWholeDocumentSelected(frame())).toBe(false);
+
+  selection.removeAllRanges();
+  expect(isWholeDocumentSelected(frame())).toBe(false);
+});
+

@@ -1265,6 +1265,8 @@ const findFor = (query: string): Step => async (ui) => {
   await ui.type(query);
 };
 
+/** The focusable surface that shows the file's code, named by the file's own name. */
+const SESSION_CODE = describing("the code surface of session.ts", (name) => name.includes("session.ts"));
 async function findCodeSubjects(): Promise<ViewerSubject[]> {
   return [file("src/session.ts", newSession)];
 }
@@ -1424,5 +1426,29 @@ export const viewerScenarios: Scenario[] = [
     preferences: { diffLayout: "split" },
     viewer: { subjects: findChangeSubjects },
     steps: [findFor("session")],
+  },
+  {
+    id: "viewer-text-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Text menu with nothing selected",
+    description: "The menu a right-click (or the Menu key) opens on a text surface of the viewer, here the highlighted code, with no text selected: Select all alone, with no Copy. Rendered Markdown, Markdown source, diffs and the plain-text fallback open the same menu; images, PDFs and binary stand-ins have none.",
+    viewer: { subjects: findCodeSubjects },
+    steps: [(ui) => ui.tabToRegion(SESSION_CODE), (ui) => ui.contextMenuRegion(SESSION_CODE)],
+  },
+  {
+    id: "viewer-text-menu-selection",
+    group: GROUP,
+    category: "normal",
+    title: "Text menu with text selected",
+    description: "The same menu with the code selected: Copy, then Select all.",
+    viewer: { subjects: findCodeSubjects },
+    steps: [
+      (ui) => ui.tabToRegion(SESSION_CODE),
+      // Select All takes nothing until the renderer has drawn the code.
+      (ui) => ui.codeDrawn(SESSION_CODE),
+      (ui) => ui.chord({ code: "KeyA", primary: true }),
+      (ui) => ui.contextMenuRegion(SESSION_CODE),
+    ],
   },
 ];
