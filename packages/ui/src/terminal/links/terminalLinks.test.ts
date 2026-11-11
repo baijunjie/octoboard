@@ -521,3 +521,81 @@ describe("the cell under a point", () => {
     expect(rangeHasCell(range, { x: 5, y: 2 })).toBe(false);
   });
 });
+
+// A full-screen program's scrollbar: its thumb is a block element in the terminal's last column,
+// after a blank, on the rows beside it.
+/** `rows` with `thumb` in the last column. */
+const withThumb = (rows: TerminalRow[], thumb = "█"): TerminalRow[] =>
+  rows.map((each) => ({ ...each, cells: [...each.cells.slice(0, -1), thumb] }));
+const thumbed = (...texts: string[]) => withThumb(texts.map((text) => row(text)));
+
+describe("beside a scrollbar's thumb", () => {
+  const SHORT = "see http://a.dev/sel-";
+  const URL = "http://a.dev/sel-account&x=1";
+
+  it("joins an address the program broke short of the last column, whichever row is hovered, and colours its text alone", () => {
+    const rows = thumbed(SHORT, "  account&x=1 more");
+    const link = { url: URL, range: { start: { x: 5, y: 1 }, end: { x: 13, y: 2 } } };
+    expect(brokenAt(rows, 1)).toEqual([link]);
+    expect(brokenAt(rows, 2)).toEqual([link]);
+    // Not the thumb, nor the next row's indent.
+    expect(segmentsOf(rows)).toEqual([
+      { y: 1, col: 4, width: 17 },
+      { y: 2, col: 2, width: 11 },
+    ]);
+    expect(textOf(rows, segmentsOf(rows))).toBe(URL);
+  });
+
+  it("chains a broken address over every row that carries a thumb", () => {
+    const rows = thumbed("http://a.dev/sel-", "  account&theme=", "  light&lang=zh-Hans");
+    expect(brokenAt(rows, 2).map((link) => link.url)).toEqual(["http://a.dev/sel-account&theme=light&lang=zh-Hans"]);
+    expect(brokenAt(rows, 3).map((link) => link.url)).toEqual(["http://a.dev/sel-account&theme=light&lang=zh-Hans"]);
+  });
+
+  it("joins the addresses of a paragraph and of a bullet item in a 107-column terminal", () => {
+    const paragraph = withThumb([
+      cellRow("     A plain paragraph: see http://localhost:5180/gallery.html?scenario=sidebar-console-", 107),
+      cellRow("     session-menu-handoff-and-more&theme=light&lang=zh-Hans for details.", 107),
+    ]);
+    const paragraphUrl = "http://localhost:5180/gallery.html?scenario=sidebar-console-session-menu-handoff-and-more&theme=light&lang=zh-Hans";
+    expect(brokenAt(paragraph, 1).map((link) => link.url)).toEqual([paragraphUrl]);
+    expect(brokenAt(paragraph, 2).map((link) => link.url)).toEqual([paragraphUrl]);
+    expect(textOf(paragraph, segmentsOf(paragraph))).toBe(paragraphUrl);
+
+    const bullet = withThumb([
+      cellRow("     • 项目会话： http://localhost:5180/gallery.html?scenario=sidebar-session-menu-", 107),
+      cellRow("     handoff&theme=light&lang=zh-Hans", 107),
+    ]);
+    const bulletUrl = "http://localhost:5180/gallery.html?scenario=sidebar-session-menu-handoff&theme=light&lang=zh-Hans";
+    expect(brokenAt(bullet, 1).map((link) => link.url)).toEqual([bulletUrl]);
+    expect(brokenAt(bullet, 2).map((link) => link.url)).toEqual([bulletUrl]);
+    expect(textOf(bullet, segmentsOf(bullet))).toBe(bulletUrl);
+  });
+
+  it.each([
+    ["the next row is a separate word", ["http://a.dev/x", "  Hans"]],
+    ["other text follows it on its own row", ["http://a.dev/sel- now", "  account&x=1"]],
+  ])("leaves an address alone when %s", (_rule, texts) => {
+    const rows = thumbed(...texts);
+    for (let y = 1; y <= rows.length; y++) expect(brokenAt(rows, y)).toEqual([]);
+  });
+
+  it("leaves an address alone when the text runs right into a block element in the last column", () => {
+    // No blank before it: it is text, and the address is followed by it.
+    const rows = [withThumb([row("http://a.dev/sel-aaaaaa")])[0], row("  account&x=1")];
+    expect(brokenAt(rows, 1)).toEqual([]);
+    expect(brokenAt(rows, 2)).toEqual([]);
+  });
+
+  it.each(["│"])("leaves an address alone when %s stands alone in the last column after a blank", (character) => {
+    const rows = [withThumb([row("http://a.dev/sel-")], character)[0], row("  account&x=1")];
+    expect(brokenAt(rows, 1)).toEqual([]);
+    expect(brokenAt(rows, 2)).toEqual([]);
+  });
+
+  it("joins a word onto an address that fills its cell in a ruled table with a thumb on every row", () => {
+    const rows = withThumb(ruled([`│ id │ ${FILLED} │`, `│    │ 678${" ".repeat(FILLED.length - 3)} │`]));
+    expect(brokenAt(rows, 2).map((link) => link.url)).toEqual([`${FILLED}678`]);
+    expect(brokenAt(rows, 3).map((link) => link.url)).toEqual([`${FILLED}678`]);
+  });
+});

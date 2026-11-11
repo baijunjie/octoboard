@@ -78,6 +78,27 @@ export function textEnd(cells: string[]): number {
   return end;
 }
 
+/** Whether a cell holds a block element (`█`, `▐`, `▕`, `▓`…), which a scrollbar's thumb is drawn
+ * with. */
+function isBlockElement(cell: string): boolean {
+  return cell.length === 1 && cell >= "\u2580" && cell <= "\u259f";
+}
+
+/**
+ * A row without the scrollbar a full-screen program draws down the terminal's last column: a block
+ * element alone there, after a blank, is taken for its thumb and read as a blank. Grok Build draws
+ * its thumb as `█` and its track as blank cells, so on the rows beside the thumb the scrollbar would
+ * otherwise be the row's last text, text that follows whatever the row ends with, and a block of
+ * lines would never be parted by a blank row. A block element there is never part of an address or
+ * a path, which a blank before it would end anyway; only a row the terminal does not wrap onto the
+ * next one is read so, as on a soft-wrapped line that column carries text on.
+ */
+function withoutScrollbar(row: TerminalRow): TerminalRow {
+  const last = row.cells.length - 1;
+  if (last < 1 || row.cells[last - 1] !== " " || !isBlockElement(row.cells[last])) return row;
+  return { ...row, cells: [...row.cells.slice(0, last), " "] };
+}
+
 /** The cells of a line's rows that belong to it, one after the other. */
 export function lineCells(line: LineRow[]): string[] {
   return line.flatMap(({ row, from, to }) => row.cells.slice(from, to));
@@ -236,7 +257,9 @@ function layoutEvidence(groups: LineRow[][], reach: number): number[] {
 }
 
 /** The rows from `start` to `last` (1-based buffer lines) as groups: a row that is not a
- * continuation and the rows xterm soft-wrapped after it, followed to `limit`. */
+ * continuation and the rows xterm soft-wrapped after it, followed to `limit`. A group's last row is
+ * read without a scrollbar (see `withoutScrollbar`), unless the terminal wraps it onto the next
+ * row. */
 function softWrappedGroups(
   read: (y: number) => TerminalRow | undefined,
   start: number,
@@ -252,6 +275,8 @@ function softWrappedGroups(
       y++;
     }
     if (group.length === 0) break;
+    const end = group[group.length - 1];
+    if (!read(y)?.wrapped) end.row = withoutScrollbar(end.row);
     groups.push(group);
   }
   return groups;

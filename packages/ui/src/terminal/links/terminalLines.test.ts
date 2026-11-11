@@ -1,7 +1,7 @@
 import type { Terminal } from "@xterm/xterm";
 import { expect, it } from "vitest";
 
-import { type LineChain, type LineRow, lineText, logicalLinesIn, terminalRowReader, type TerminalRow } from "./terminalLines";
+import { type LineChain, type LineRow, lineCells, lineText, logicalLinesIn, terminalRowReader, type TerminalRow } from "./terminalLines";
 
 it("reads the empty cell a wide character left at the end of a soft-wrapped row as no text, not a blank", () => {
   // A wide character is a cell of width 2 and a cell of width 0, as xterm holds it.
@@ -49,4 +49,37 @@ it("cuts a chain at the same row whichever rows are asked for", () => {
   expect(spans(logicalLinesIn(read, 50, 50, ALWAYS))).toEqual([[50]]);
   expect(spans(logicalLinesIn(read, 1, 100, ALWAYS)).filter((line) => line.includes(50))).toEqual([[50]]);
   expect(spans(logicalLinesIn(read, 45, 100, ALWAYS)).filter((line) => line.includes(45))).toEqual([[45]]);
+});
+
+// A scrollbar as a full-screen program draws it down the last column: its thumb is a block element.
+const linesOf = (rows: TerminalRow[]) => logicalLinesIn((y) => rows[y - 1], 1, rows.length);
+const cellsOfLine = (rows: TerminalRow[], index: number) => lineCells(linesOf(rows)[index]);
+const thumbRow = (text: string, last: string, wrapped = false): TerminalRow => ({ cells: [...text.padEnd(9), last], wrapped });
+
+it.each(["▀", "█", "▐", "▕", "▓", "░", "▟"])("reads a scrollbar's thumb %s in the last column after a blank as a blank", (thumb) => {
+  const rows = [thumbRow("abc", thumb), thumbRow("def", thumb)];
+  expect(cellsOfLine(rows, 0).at(-1)).toBe(" ");
+  expect(cellsOfLine(rows, 1).at(-1)).toBe(" ");
+  expect(cellsOfLine(rows, 0)).toHaveLength(10);
+});
+
+it.each([
+  ["text runs right into the block element", [..."abc     x", "█"]],
+  ["the last column holds a vertical border", thumbRow("abc", "│").cells],
+  ["the last column holds the character just before the block elements", thumbRow("abc", "╿").cells],
+  ["the last column holds the character just after the block elements", thumbRow("abc", "■").cells],
+  ["the last column holds a letter", thumbRow("abc", "x").cells],
+  ["the last column holds two characters", thumbRow("abc", "██").cells],
+])("keeps the last column as text where %s", (_name, cells) => {
+  const rows: TerminalRow[] = [{ cells, wrapped: false }];
+  expect(cellsOfLine(rows, 0)).toEqual(cells);
+});
+
+it("keeps a block element in the last column as text where the terminal soft-wraps its row onto the next, even when the line is cut there", () => {
+  // Without a chain a line is followed 2048 characters past the rows asked for: at 10 columns, to
+  // row 206, and row 207 carries on from it.
+  const rows = Array.from({ length: 250 }, (_, i) => thumbRow("abc", "█", i > 0));
+  const line = logicalLinesIn((y) => rows[y - 1], 1, 1)[0];
+  expect(line.at(-1)?.y).toBe(206);
+  expect(lineCells(line).at(-1)).toBe("█");
 });

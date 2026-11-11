@@ -16,6 +16,16 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
   open the editing menu described in "Copy, paste and selection" in `docs/product/session-terminal.md`; on a file path
   link it offers **Open in file manager** (see "File paths" below), and it has nothing of its own for a web address.
   Opening a link does not resume an interrupted session or reopen an archived one.
+- **A scrollbar a full-screen program draws down the terminal's last column is no part of a row's text** — as Grok
+  Build draws one when the conversation overflows its view, its thumb a `█`, its track blank cells. A block element
+  (U+2580–U+259F, such as `█`, `▐`, `▕`, `▓` or `░`) alone in the terminal's last column, with a blank cell right
+  before it, is read as a blank; a row the terminal wraps onto the next one is read as written, that column carrying
+  its text on. So where a link is joined across rows (see "An address the program itself breaks onto the next line is
+  joined" under "Web addresses" and "Rows" under "File paths"), text followed on its row only by blanks and such a
+  thumb is still the last text of its row, that row does not reach the terminal's last column, a row blank but for the
+  thumb is a blank row, and a table row with a thumb beside it is still a table row. Any other character in that
+  column — a border such as `│`, a letter — and a block element with no blank before it are still text. The link
+  covers the same cells, and opens the same target, as it would with no scrollbar.
 
 ## Web addresses
 
@@ -64,7 +74,8 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
     long its lines are.
   - **A blank next row, or one whose first non-blank character cannot belong to an address**, ends the link. A piece
     followed by other non-address text on its own row, a border among it, does not join onto a later row — except inside
-    a table, below.
+    a table, below. So an address Grok Build breaks on the first row of a message, at whose right it writes the time,
+    is not joined.
   - **Inside a table drawn with box-drawing borders** — rows whose text starts and ends with a vertical border (`│`, `┃`
     or `║`), as Claude Code draws a Markdown table, and as the sides of a box are drawn — each cell is taken on its own,
     as if it were a row of its own. On consecutive rows whose vertical borders stand at the same columns, a cell's piece

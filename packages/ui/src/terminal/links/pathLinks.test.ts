@@ -494,3 +494,42 @@ it("finds paths in the daemon host's style it is installed with, and Unix paths 
   const unix = await pathProvider(rows, ["/tmp/b.png"]);
   expect(unix(1)?.map(({ text }: { text: string }) => text)).toEqual(["/tmp/b.png"]);
 });
+
+// A full-screen program's scrollbar: its thumb is a block element in the terminal's last column,
+// after a blank, on the rows beside it.
+const withThumb = (rows: TerminalRow[], thumb = "█"): TerminalRow[] =>
+  rows.map((each) => ({ ...each, cells: [...each.cells.slice(0, -1), thumb] }));
+const THUMB_ONLY = withThumb([BLANK])[0];
+
+it("joins a program-broken path whose rows end with a scrollbar's thumb as it joins without one", () => {
+  const rows = [sized(140, "  A line of prose above, shorter."), sized(140, WIDE_PATH), sized(140, "  /icon.png ok")];
+  const beside = withThumb(rows);
+  expect(joinedPaths(beside, 2)).toEqual([WIDE_JOINED]);
+  expect(joinedPaths(beside, 3)).toEqual([WIDE_JOINED]);
+  const joined = (all: TerminalRow[]) => matchesAt(all, 1, 3).find((match) => match.joined);
+  expect(joined(beside)?.segments).toEqual(joined(rows)?.segments);
+  expect(joined(beside)?.ranges).toEqual(joined(rows)?.ranges);
+  expect(joined(beside)?.segments.every(({ col, width }) => col + width < 139)).toBe(true);
+});
+
+it("joins a program-broken path with the thumb on one of its rows only", () => {
+  const rows = [sized(140, WIDE_PATH), sized(140, "  /icon.png ok")];
+  expect(joinedPaths([withThumb(rows)[0], rows[1]], 1, 2)).toEqual([WIDE_JOINED]);
+  expect(joinedPaths([rows[0], withThumb(rows)[1]], 1, 2)).toEqual([WIDE_JOINED]);
+});
+
+it.each([
+  ["above", [LONGER, THUMB_ONLY, sized(140, WIDE_PATH), sized(140, "  /icon.png ok")], 3],
+  ["below", [sized(140, WIDE_PATH), sized(140, "  /icon.png ok"), THUMB_ONLY, LONGER], 1],
+])("does not count a longer line %s a row holding only the thumb as one of the block", (_side, rows, at) => {
+  // The thumb on the separating row alone, and on every row beside it.
+  expect(joinedPaths(rows, at)).toEqual([WIDE_JOINED]);
+  expect(joinedPaths(rows, 1, rows.length)).toContain(WIDE_JOINED);
+  expect(joinedPaths(withThumb(rows), at)).toEqual([WIDE_JOINED]);
+});
+
+it("counts a longer line above a row that holds a border alone in its last column as one of the block", () => {
+  const border = withThumb([BLANK], "│")[0];
+  const rows = [LONGER, border, sized(140, WIDE_PATH), sized(140, "  /icon.png ok")];
+  expect(joinedPaths(rows, 3)).toEqual([]);
+});
