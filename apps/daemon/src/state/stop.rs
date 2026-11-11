@@ -1,7 +1,7 @@
 //! How the daemon's run is asked to end: an ordinary stop, which ends every session as interrupted,
 //! or a planned stop, which leaves every terminal running in its holder for the next daemon to
 //! adopt exactly (`crate::coordinator::planned_stop`). A planned stop whose daemon also starts the
-//! next one is a planned restart, which is refused where no next daemon could come up.
+//! next one is a planned restart, which a daemon that follows an application refuses.
 //!
 //! The stop asked for only ever moves from none to one, or from planned to ordinary, never back:
 //! an ordinary stop takes the place of a planned one, and a planned stop never takes the place of
@@ -37,8 +37,6 @@ pub enum RestartRefusal {
     /// The daemon follows an application (`--parent-pid`), which starts the daemon it talks to
     /// itself.
     FollowsApplication,
-    /// No service manager restarts the daemon, and the host cannot start one in the background.
-    NoSuccessor,
 }
 
 impl RestartRefusal {
@@ -46,7 +44,6 @@ impl RestartRefusal {
     pub fn code(self) -> &'static str {
         match self {
             Self::FollowsApplication => "follows_application",
-            Self::NoSuccessor => "no_successor",
         }
     }
 
@@ -55,10 +52,6 @@ impl RestartRefusal {
         match self {
             Self::FollowsApplication => {
                 "the daemon follows an application, which restarts the daemon it talks to itself"
-            }
-            Self::NoSuccessor => {
-                "no service manager runs the daemon, and this host cannot start the next one in \
-                 the background"
             }
         }
     }
@@ -112,9 +105,6 @@ impl AppState {
     pub fn planned_restart_refusal(&self) -> Option<RestartRefusal> {
         if self.follows_application() {
             return Some(RestartRefusal::FollowsApplication);
-        }
-        if !self.service_managed() && !crate::platform::proc::runs_in_background() {
-            return Some(RestartRefusal::NoSuccessor);
         }
         None
     }
@@ -320,29 +310,20 @@ mod tests {
         );
     }
 
-    /// Where the host can start the next daemon itself, a daemon on its own takes a planned
-    /// restart; where it cannot and no service manager runs it, it refuses for want of one.
+    /// A daemon on its own, which no service manager runs, takes a planned restart: it starts the
+    /// next daemon itself.
     #[tokio::test]
-    async fn a_planned_restart_needs_a_way_to_bring_up_the_next_daemon() {
+    async fn a_daemon_on_its_own_takes_a_planned_restart() {
         let (state, _dir) = app_state("stop-restart-successor");
-        let possible = crate::platform::proc::runs_in_background();
-        match state.request_planned_restart() {
-            Ok(()) => {
-                assert!(possible);
-                assert_eq!(
-                    state.await_stop().await,
-                    StopKind::Planned { successor: true }
-                );
-            }
-            Err(refusal) => {
-                assert!(!possible);
-                assert_eq!(refusal, RestartRefusal::NoSuccessor);
-            }
-        }
+        assert_eq!(state.planned_restart_refusal(), None);
+        assert_eq!(state.request_planned_restart(), Ok(()));
+        assert_eq!(
+            state.await_stop().await,
+            StopKind::Planned { successor: true }
+        );
     }
 
-    /// A daemon a service manager restarts takes a planned restart wherever the host cannot start
-    /// the next daemon itself.
+    /// A daemon a service manager restarts takes a planned restart too.
     #[tokio::test]
     async fn a_service_managed_daemon_takes_a_planned_restart() {
         let (state, _dir) = app_state("stop-restart-managed");

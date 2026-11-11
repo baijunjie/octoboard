@@ -259,8 +259,9 @@ mod tests {
     }
 
     /// What a launch's helpers are given, once they are built from the holder's credentials: the
-    /// MCP command, the HTTP hook URL and the git hooks' environment all name the holder's port and
-    /// the launch's key, and the MCP command and git hooks run the holder's executable.
+    /// MCP command and the HTTP hook URL name the holder's port and the launch's key, the git
+    /// hooks' environment the holder's port and the file the key is in (never the key), and the MCP
+    /// command and git hooks run the holder's executable.
     #[tokio::test(flavor = "multi_thread")]
     async fn the_helpers_of_a_launch_in_a_holder_are_given_the_holders_port_and_the_launch_key() {
         let (state, dir) = app_state("relay-wiring");
@@ -293,9 +294,11 @@ mod tests {
         let (program, args) = crate::adapter::mcp_server_command(&spec);
         assert_eq!(program, issued.exe);
         let port = issued.port.to_string();
-        for wanted in [&port, &issued.key] {
-            assert!(args.contains(wanted), "{args:?}");
-        }
+        assert!(args.contains(&port), "{args:?}");
+        assert!(
+            !args.iter().any(|arg| arg.contains(&issued.key)),
+            "{args:?}"
+        );
         let url = crate::adapter::hook_url("session-1", issued.port, &issued.key);
         assert_eq!(
             url,
@@ -305,16 +308,21 @@ mod tests {
             )
         );
         // The installed git, and dispatchers made in the test's own directory, not the user's.
+        let key_file = crate::key_file::write(&dir, &issued.key).expect("key file");
         let env = crate::session_git_hooks::session_env_under(
             &dir.join("githooks"),
             &crate::test_support::isolated_git_env(),
             &issued.exe,
             "session-1",
             issued.port,
-            &issued.key,
+            &key_file,
         );
         assert!(env.contains(&("OCTOBOARD_DAEMON_PORT".to_string(), port)));
-        assert!(env.contains(&("OCTOBOARD_DAEMON_KEY".to_string(), issued.key.clone())));
+        assert!(env.contains(&(
+            "OCTOBOARD_DAEMON_CREDENTIAL_PATH".to_string(),
+            key_file.to_string_lossy().into_owned()
+        )));
+        assert!(!env.iter().any(|(_, value)| value.contains(&issued.key)));
 
         tokio::task::spawn_blocking(move || drop((issued, holders)))
             .await

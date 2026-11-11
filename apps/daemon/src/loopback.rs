@@ -83,10 +83,12 @@ pub fn is_daemon_lost(err: &std::io::Error) -> bool {
 
 /// A response that was not a success: the daemon turned the call away (a wrong key or a foreign
 /// origin, 401 or 403), could not read it (400) or failed while handling it (5xx), and what follows
-/// is no answer to parse.
+/// is no answer to parse; a caller that knows what the daemon says in refusing a call reads it from
+/// [`error_body`].
 #[derive(Debug)]
 struct ErrorStatus {
     status: u16,
+    body: Vec<u8>,
 }
 
 impl std::fmt::Display for ErrorStatus {
@@ -120,6 +122,13 @@ pub fn error_status(err: &std::io::Error) -> Option<u16> {
         .map(|e| e.status)
 }
 
+/// The body of the daemon's error answer when `err` is one (see [`error_status`]).
+pub fn error_body(err: &std::io::Error) -> Option<&[u8]> {
+    err.get_ref()?
+        .downcast_ref::<ErrorStatus>()
+        .map(|e| e.body.as_slice())
+}
+
 /// Drops the status line and headers, leaving the body of a 2xx response; any other status is an
 /// [`ErrorStatus`] error. A response the daemon did not shape (an axum rejection, say) still
 /// parses: anything before the blank line goes.
@@ -137,14 +146,15 @@ fn split_body(response: Vec<u8>) -> std::io::Result<Vec<u8>> {
                 "the daemon's response has no status line",
             )
         })?;
-    if !(200..300).contains(&status) {
-        return Err(std::io::Error::other(ErrorStatus { status }));
-    }
-    Ok(response
+    let body = response
         .windows(SEPARATOR.len())
         .position(|window| window == SEPARATOR)
         .map(|at| response[at + SEPARATOR.len()..].to_vec())
-        .unwrap_or_default())
+        .unwrap_or_default();
+    if !(200..300).contains(&status) {
+        return Err(std::io::Error::other(ErrorStatus { status, body }));
+    }
+    Ok(body)
 }
 
 #[cfg(test)]
@@ -164,7 +174,7 @@ mod tests {
             .is_empty());
     }
 
-    /// An error answer is told apart from a success by its status, with the body left unread; a
+    /// An error answer is told apart from a success by its status, with its body kept apart; a
     /// 4xx is a refusal and a 5xx a failure.
     #[test]
     fn an_error_status_is_an_error_carrying_the_status() {
@@ -178,6 +188,7 @@ mod tests {
                 format!("HTTP/1.1 {status} X\r\nContent-Length: 2\r\n\r\n{{}}").into_bytes();
             let err = super::split_body(response).unwrap_err();
             assert_eq!(super::error_status(&err), Some(status));
+            assert_eq!(super::error_body(&err), Some(&b"{}"[..]));
             assert!(err.to_string().contains(said), "{err}");
         }
     }

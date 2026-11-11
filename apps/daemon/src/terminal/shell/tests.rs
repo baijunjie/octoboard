@@ -521,6 +521,10 @@ fn a_shell_starts_in_the_snapshot_or_else_in_the_daemons_environment_without_age
             ("PATH", "/inherited/bin"),
             ("CLAUDECODE", "1"),
             ("OCTOBOARD_SESSION_ID", "s1"),
+            ("OCTOBOARD_DAEMON_PORT", "7"),
+            ("OCTOBOARD_DAEMON_KEY", "k"),
+            ("OCTOBOARD_DAEMON_KEY_FILE", "/run/s1/key"),
+            ("OCTOBOARD_DAEMON_CREDENTIAL_PATH", "/run/s1/key"),
             ("OCTOBOARD_PROCESS_TAG", "instance:launch"),
             ("TERM", "dumb"),
         ]

@@ -1,5 +1,6 @@
-//! Claude Code adapter. Injection is by flags only, and `--settings` takes a JSON string whose
-//! `hooks` merge with the project's `.claude/settings.json` rather than replacing them.
+//! Claude Code adapter. Injection is by flags only, and `--settings` takes JSON, in a file the
+//! launch writes owner-only because the daemon's key is in it, whose `hooks` merge with the
+//! project's `.claude/settings.json` rather than replacing them.
 //!
 //! Two flags must never be passed, both of which silently drop the *project's* own configuration —
 //! the exact failure Octoboard's "project configuration must not be overridden" rule exists to
@@ -61,6 +62,7 @@ pub(crate) mod transcript_watch;
 
 use std::path::Path;
 
+use anyhow::Context;
 use serde_json::json;
 
 use super::files::{canonical_project, read_regular_text, SMALL_FILE_LIMIT};
@@ -68,6 +70,7 @@ use super::{
     hook_command, hook_url, AgentProvider, AgentVersion, LaunchPlan, LaunchSpec, NamedTitle,
     COMMAND_HOOK_TIMEOUT_SECS, HTTP_HOOK_TIMEOUT_SECS,
 };
+use crate::hostfs::replace::{replace_beside, Permissions};
 use crate::platform::shell::{self, Arg, Stderr};
 use crate::protocol::AgentId;
 use crate::providers::{claude, ProviderDescriptor};
@@ -114,13 +117,17 @@ const COMMAND_ONLY_EVENTS: &[&str] = &["SessionStart"];
 /// still passes the user's own status line through and reports nothing.
 const STATUS_LINE_SINCE: AgentVersion = (2, 0, 0);
 
+/// The file in the session's scratch directory that holds the `--settings` JSON, owner-only.
+const SETTINGS_FILE: &str = "claude-settings.json";
+
 pub struct ClaudeProvider;
 
 impl ClaudeProvider {
-    /// The `--settings` JSON. A Claude Code that takes HTTP hooks posts each event to the daemon
-    /// itself, so a hook costs no process at all, except for [`COMMAND_ONLY_EVENTS`]; with an older
-    /// or unknown version, or when a settings file's `allowedHttpHookUrls` leaves the daemon's URL
-    /// out (Claude Code then skips every HTTP hook silently), each event runs a command instead.
+    /// The `--settings` JSON, which `plan` writes to an owner-only file. A Claude Code that takes
+    /// HTTP hooks posts each event to the daemon itself, so a hook costs no process at all, except
+    /// for [`COMMAND_ONLY_EVENTS`]; with an older or unknown version, or when a settings file's
+    /// `allowedHttpHookUrls` leaves the daemon's URL out (Claude Code then skips every HTTP hook
+    /// silently), each event runs a command instead.
     /// `async` keeps a slow command off the turn's critical path (a 30 s hook took a turn from
     /// 6.8 s to 36.7 s without it) and `timeout` bounds it regardless; an HTTP hook has no `async`,
     /// and is kept off the critical path by the route answering before the event is applied (see
@@ -144,7 +151,7 @@ impl ClaudeProvider {
                 spec.self_exe,
                 spec.session_id,
                 spec.daemon_port,
-                spec.daemon_key,
+                spec.key_file,
             ),
             "async": true,
             "timeout": COMMAND_HOOK_TIMEOUT_SECS,
@@ -196,10 +203,11 @@ impl ClaudeProvider {
     fn status_line(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> serde_json::Value {
         let user_dir = super::account_dir(AgentId::CLAUDE, pinned, spec.shell_env);
         let own = user_status_line(&user_dir, spec.cwd).unwrap_or_default();
-        let (port, cwd, user_dir) = (
+        let (port, cwd, user_dir, key_file) = (
             spec.daemon_port.to_string(),
             spec.cwd.to_string_lossy(),
             user_dir.to_string_lossy(),
+            spec.key_file.to_string_lossy(),
         );
         let command = shell::command_line(
             Path::new(spec.self_exe),
@@ -211,8 +219,8 @@ impl ClaudeProvider {
                 Arg::Value(spec.session_id),
                 Arg::Word("--port"),
                 Arg::Word(&port),
-                Arg::Word("--key"),
-                Arg::Value(spec.daemon_key),
+                Arg::Word("--key-file"),
+                Arg::Value(&key_file),
                 Arg::Word("--cwd"),
                 Arg::Value(&cwd),
                 Arg::Word("--config-dir"),
@@ -443,8 +451,17 @@ impl AgentProvider for ClaudeProvider {
                 args.push(spec.new_agent_session_id.to_string());
             }
         }
+        // A path, not the JSON: the HTTP hook's URL in it carries the daemon's key, and arguments
+        // can be listed by every user of the machine. `--settings` takes either.
+        let settings_file = spec.scratch.join(SETTINGS_FILE);
+        replace_beside(
+            &settings_file,
+            Self::settings_json(spec, pinned).as_bytes(),
+            Permissions::Private,
+        )
+        .context("writing the session's settings file")?;
         args.push("--settings".to_string());
-        args.push(Self::settings_json(spec, pinned));
+        args.push(settings_file.to_string_lossy().into_owned());
         // What the compatibility source (Codex's) gives: its servers beside Octoboard's own, its
         // skills and prompts as a plugin directory built afresh for every launch, and its
         // instructions after the role text.
@@ -698,12 +715,7 @@ mod tests {
                             .unwrap()
                     );
                 }
-                let at = plan
-                    .args
-                    .iter()
-                    .position(|arg| arg == "--settings")
-                    .unwrap();
-                let settings: serde_json::Value = serde_json::from_str(&plan.args[at + 1]).unwrap();
+                let settings = settings_of(&plan);
                 assert_eq!(
                     settings.get("skipDangerousModePermissionPrompt"),
                     bypass.then_some(&serde_json::Value::Bool(true)),
@@ -805,17 +817,26 @@ mod tests {
         ClaudeProvider.plan(&fixture.spec()).expect("not refused");
     }
 
-    /// The `hooks` table of the `--settings` this launch passes.
-    fn injected_hooks(fixture: &crate::adapter::tests::SpecFixture) -> serde_json::Value {
-        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
-        let settings_index = plan
+    /// The path of the file `plan` passes as `--settings`.
+    fn settings_path_of(plan: &crate::adapter::LaunchPlan) -> std::path::PathBuf {
+        let at = plan
             .args
             .iter()
             .position(|arg| arg == "--settings")
             .expect("--settings is passed");
-        let settings: serde_json::Value =
-            serde_json::from_str(&plan.args[settings_index + 1]).expect("the settings are JSON");
-        settings["hooks"].clone()
+        std::path::PathBuf::from(&plan.args[at + 1])
+    }
+
+    /// The JSON in the file `plan` passes as `--settings`.
+    fn settings_of(plan: &crate::adapter::LaunchPlan) -> serde_json::Value {
+        let text = std::fs::read_to_string(settings_path_of(plan)).expect("the settings file");
+        serde_json::from_str(&text).expect("the settings are JSON")
+    }
+
+    /// The `hooks` table of the `--settings` this launch passes.
+    fn injected_hooks(fixture: &crate::adapter::tests::SpecFixture) -> serde_json::Value {
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        settings_of(&plan)["hooks"].clone()
     }
 
     /// Both layouts match exactly, and a binary whose install tells nothing has no version.
@@ -904,8 +925,11 @@ mod tests {
                     assert_eq!(handler["async"], true, "{event} {version:?}");
                     assert_eq!(
                         handler["command"],
-                        "exec '/opt/octoboard/octoboardd' hook --session 'session-1' --port 4321 \
-                         --key 'feedface' 2>/dev/null",
+                        format!(
+                            "exec '/opt/octoboard/octoboardd' hook --session 'session-1' --port \
+                             4321 --key-file '{}' 2>/dev/null",
+                            fixture.key_file.display()
+                        ),
                         "{event} {version:?}"
                     );
                 }
@@ -919,13 +943,7 @@ mod tests {
 
     /// The `--settings` this launch passes.
     fn injected_settings(fixture: &crate::adapter::tests::SpecFixture) -> serde_json::Value {
-        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
-        let at = plan
-            .args
-            .iter()
-            .position(|arg| arg == "--settings")
-            .expect("--settings is passed");
-        serde_json::from_str(&plan.args[at + 1]).expect("the settings are JSON")
+        settings_of(&ClaudeProvider.plan(&fixture.spec()).expect("plan"))
     }
 
     /// The status line is injected only for a Claude Code known to run one, and names the
@@ -962,7 +980,8 @@ mod tests {
             command(&fixture),
             format!(
                 "exec '/opt/octoboard/octoboardd' status-line --provider claude --session 'session-1' --port 4321 \
-                 --key 'feedface' --cwd '{cwd}' --config-dir '{}'",
+                 --key-file '{}' --cwd '{cwd}' --config-dir '{}'",
+                fixture.key_file.display(),
                 home.join(".claude").display()
             )
         );
@@ -1087,6 +1106,32 @@ mod tests {
             .args
             .iter()
             .any(|arg| arg == "--append-system-prompt"));
+    }
+
+    /// The settings hold the HTTP hook's URL and so the key, which arguments would show to every
+    /// user of the machine: the flag names an owner-only file instead.
+    #[test]
+    fn the_settings_are_passed_as_an_owner_only_file_holding_the_hook_url() {
+        let mut fixture = spec_fixture();
+        fixture.agent_version = Some((2, 1, 306));
+        let plan = ClaudeProvider.plan(&fixture.spec()).expect("plan");
+        let path = settings_path_of(&plan);
+        assert_eq!(path, fixture.scratch.join("claude-settings.json"));
+        let settings = settings_of(&plan);
+        assert_eq!(
+            settings["hooks"]["Stop"][0]["hooks"][0]["url"],
+            "http://127.0.0.1:4321/hook/session-1?key=feedface"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+        assert!(
+            !plan.args.iter().any(|arg| arg.contains("feedface")),
+            "the key is in the arguments"
+        );
     }
 
     #[test]

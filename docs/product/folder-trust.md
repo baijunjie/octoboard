@@ -181,13 +181,19 @@ session's confirmation is pressed at most once per run, so a failed attempt is n
 on the session that Octoboard could not press that agent's confirmation, with the reason, and that they should answer it
 in the terminal. The window shows it as an error alert titled "Could not answer the trust confirmation"; a reason that
 carries the system's text, such as a failed write to the terminal, keeps that text under **Error details**, and one the
-window has no words for is given as something unexpected having gone wrong. The confirmation counts as pressed once it
-is seen to go away — for Grok Build, once Grok has sent its first hook report, within about 12 seconds of the key, and
-the entry it wrote has reached the user's own trust store (see "Carrying Grok Build's trust record" below). When no hook
-report comes to carry the entry — a policy that runs none of Octoboard's hooks — the press counts once the session's
-screen is seen no longer to show the confirmation, and the permission a go-ahead from the trust dialog asked for is
-recorded then; nothing has been carried to the user's trust store at that point, and a hook report that comes later
-still carries the entry.
+window has no words for is given as something unexpected having gone wrong. For Claude Code and Codex the confirmation
+counts as pressed once the agent is seen past it after the Enter: its first hook report arrives, or the confirmation is
+seen gone from the screen and still gone a moment later; a first hook report that has already arrived before the Enter
+shows the agent past the confirmation already, so the Enter is not sent and the attempt ends as for a confirmation that
+is no longer waiting, without a notice. Each agent is given up to **30 seconds** to respond to each step — for Claude
+Code, its cursor reaching "Yes, I trust this folder" after the Down; for both, the terminal going quiet before the Enter
+and the agent getting past the confirmation after it. Each wait ends as soon as what it waits for is seen, so a press
+that succeeds is not slowed, but one that fails is told only once its wait has run out. For Grok Build the confirmation
+counts as pressed once Grok has sent its first hook report, within about 12 seconds of the key, and the entry it wrote
+has reached the user's own trust store (see "Carrying Grok Build's trust record" below). When no hook report comes to
+carry the entry — a policy that runs none of Octoboard's hooks — the press counts once the session's screen is seen no
+longer to show the confirmation, and the permission a go-ahead from the trust dialog asked for is recorded then; nothing
+has been carried to the user's trust store at that point, and a hook report that comes later still carries the entry.
 
 **Recognition is limited to the start of a session.** A confirmation is looked for only in the session's own terminal
 output, and only for as long as it can still come up, so the same words appearing later in a session are never taken

@@ -990,6 +990,7 @@ mod tests {
             1234,
             crate::test_support::TEST_KEY.to_string(),
             "/opt/octoboardd".to_string(),
+            "/opt/octoboardd".to_string(),
             directory.join("output"),
             directory.join("consoles"),
             directory.join("handoff"),

@@ -11,7 +11,11 @@ use tokio_tungstenite::tungstenite::Message;
 use super::*;
 use crate::holder::protocol::{FromHolder, LastParting, SpawnSpec, ToHolder};
 use crate::holder::registry::RegistryEntry;
+#[cfg(target_os = "linux")]
+use crate::platform::proc::Containment;
 use crate::platform::term::Command;
+#[cfg(target_os = "linux")]
+use crate::test_support::cgroups::ChildCgroup;
 use crate::test_support::{ScratchDir, PATIENCE};
 
 /// What the scripted holder does once it has been asked to start a program.
@@ -108,6 +112,11 @@ async fn scripted_holder(
 }
 
 fn holders_over(dir: &ScratchDir, port: u16) -> Holders {
+    holders_over_process(dir, port, String::new())
+}
+
+/// [`holders_over`], with the holder's registry file naming `started` as its process.
+fn holders_over_process(dir: &ScratchDir, port: u16, started: String) -> Holders {
     Holders::new(ClientConfig {
         registry_dir: dir.join("holders"),
         exe: PathBuf::from("/x"),
@@ -120,7 +129,7 @@ fn holders_over(dir: &ScratchDir, port: u16) -> Holders {
                 &RegistryEntry {
                     holder_id: holder_id.to_string(),
                     pid: std::process::id(),
-                    started: String::new(),
+                    started: started.clone(),
                     port,
                     secret: "secret".to_string(),
                     version: "test".to_string(),
@@ -1743,4 +1752,108 @@ async fn a_planned_parting_leaves_a_bound_companion_not_exited() {
     })
     .await
     .unwrap();
+}
+
+/// The credentials a holder issued name the holder that issued them by its registry file's
+/// process, which is where the launch's group is placed.
+#[test]
+fn an_issued_launch_names_the_holder_that_issued_it() {
+    let dir = ScratchDir::new("client-issued-holder");
+    let registry_dir = dir.join("holders");
+    let holders = in_process(registry_dir.clone()).expect("holders");
+    let issued = holders.issue_launch("s1", None).expect("credentials");
+    let entries = registry::list(&registry_dir);
+    assert_eq!(entries.len(), 1);
+    let listed = ProcessIdentity::parse(&entries[0].started).expect("the holder's process");
+    assert_eq!(issued.holder(), Some(listed));
+    // The holders of the tests run in this process.
+    assert_eq!(listed.pid.0, std::process::id());
+}
+
+/// The launches' groups of a holder that runs in a cgroup of its own (a systemd user unit) are
+/// found below it: a daemon that adopts the holder looks there from then on, though it cannot
+/// link to the holder yet.
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread")]
+async fn adopting_a_holder_has_the_groups_below_its_cgroup_found_again() {
+    let Some(cgroup) = ChildCgroup::new("adopt-note") else {
+        return;
+    };
+    let dir = ScratchDir::new("client-adopt-note");
+    // A port nothing listens on, so that the holder is only found pending.
+    let port = {
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("a port");
+        listener.local_addr().unwrap().port()
+    };
+    let stand_in = StandIn::start();
+    cgroup.adopt(stand_in.pid).expect("the holder is moved");
+    let registry_dir = dir.join("holders");
+    registry::write(&registry_dir, &stand_in.entry("noted-host", port)).unwrap();
+    cgroup.make_launch_dir("adopt-note", "l1");
+    assert_eq!(
+        Containment::reopen("adopt-note", "l1").and_then(|c| c.members()),
+        None,
+        "found before the holder was adopted"
+    );
+
+    let (holders, adoption, dir) = tokio::task::spawn_blocking(move || {
+        let holders = holders_over(&dir, port);
+        let adoption = holders.adopt_existing(unresolved());
+        (holders, adoption, dir)
+    })
+    .await
+    .unwrap();
+    assert_eq!(adoption.pending, vec!["noted-host".to_string()]);
+    assert!(Containment::leftovers("adopt-note").contains(&"l1".to_string()));
+    let reopened = Containment::reopen("adopt-note", "l1").expect("the launch");
+    assert_eq!(reopened.members(), Some(Vec::new()));
+    drop(reopened);
+
+    stand_in.end();
+    tokio::task::spawn_blocking(move || drop((holders, adoption)))
+        .await
+        .unwrap();
+    drop((dir, cgroup));
+}
+
+/// Linking to a holder, here one the daemon started, has the groups below the cgroup it runs in
+/// found again.
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread")]
+async fn linking_to_a_holder_has_the_groups_below_its_cgroup_found_again() {
+    let Some(cgroup) = ChildCgroup::new("connect-note") else {
+        return;
+    };
+    let dir = ScratchDir::new("client-connect-note");
+    let stand_in = StandIn::start();
+    cgroup.adopt(stand_in.pid).expect("the holder is moved");
+    cgroup.make_launch_dir("connect-note", "l2");
+    assert_eq!(
+        Containment::reopen("connect-note", "l2").and_then(|c| c.members()),
+        None,
+        "found before the holder was linked to"
+    );
+
+    let (release, released) = tokio::sync::oneshot::channel();
+    let (port, reached) = scripted_holder(Answer::Confirm, released).await;
+    let (_returned, thread) = spawning(holders_over_process(&dir, port, stand_in.started.clone()));
+    tokio::time::timeout(PATIENCE, reached)
+        .await
+        .expect("the spawn reached the holder")
+        .unwrap();
+    assert_eq!(
+        Containment::reopen("connect-note", "l2").and_then(|c| c.members()),
+        Some(Vec::new())
+    );
+
+    release.send(()).unwrap();
+    let (holders, spawned) = tokio::task::spawn_blocking(move || thread.join().unwrap())
+        .await
+        .unwrap();
+    spawned.expect("confirmed");
+    stand_in.end();
+    tokio::task::spawn_blocking(move || drop(holders))
+        .await
+        .unwrap();
+    drop((dir, cgroup));
 }

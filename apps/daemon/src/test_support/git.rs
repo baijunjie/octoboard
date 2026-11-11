@@ -9,15 +9,27 @@ use super::ScratchDir;
 use crate::state::AppState;
 
 /// The environment a test's `git` runs in: this process's own, without any `GIT_*` variable, plus
-/// no global or system configuration. A variable of the developer's shell (`GIT_DIR`, say) cannot
-/// redirect a command, and their own configuration, hooks or signing settings cannot decide what a
-/// test observes.
+/// no global or system configuration, and a home directory that is not the developer's. A variable
+/// of the developer's shell (`GIT_DIR`, say) cannot redirect a command, and their own
+/// configuration, hooks or signing settings cannot decide what a test observes. The home matters
+/// beyond git: an `octoboardd` mode a test's git starts (the session hook helpers) finds the
+/// running daemon through the data directory under it, which would otherwise be the developer's
+/// live `~/.octoboard` and its daemon.
 pub(crate) fn isolated_git_env() -> HashMap<String, String> {
     let mut env: HashMap<String, String> = std::env::vars().collect();
     env.retain(|key, _| !key.starts_with("GIT_"));
     env.insert("GIT_CONFIG_GLOBAL".to_string(), "/dev/null".to_string());
     env.insert("GIT_CONFIG_NOSYSTEM".to_string(), "1".to_string());
+    let home = isolated_home().to_string_lossy().into_owned();
+    env.insert("HOME".to_string(), home.clone());
+    env.insert("USERPROFILE".to_string(), home);
     env
+}
+
+/// The home directory a test's subprocess is given in place of the developer's: absolute, so that
+/// nothing falls back to the account's own home, and never created, so it holds no data directory.
+pub(crate) fn isolated_home() -> PathBuf {
+    std::env::temp_dir().join("octoboardd-test-no-home")
 }
 
 /// The `git` a test runs: the system one, already exec'd countless times, so no

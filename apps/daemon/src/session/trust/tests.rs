@@ -307,6 +307,62 @@ fn take(count: usize, received: &str) -> String {
     )
 }
 
+/// How long a slow agent's stand-in takes to redraw after a key: within the 4 to 7 seconds
+/// Claude Code 2.1.322 took to draw its next screen after the Enter on an ARM64 Windows machine
+/// (measured).
+const SLOW_AGENT: Duration = Duration::from_secs(5);
+
+/// Lets [`SLOW_AGENT`] pass before the stand-in goes on, as an agent slow to redraw would: bash's
+/// own `read -t` on its input, so no exec lands in the middle of the conversation, keeping in
+/// `received` anything it is sent meanwhile. `key` is emptied first: a read that times out leaves
+/// it as it was under the bash macOS ships (3.2), which would append the previous key again.
+fn slow(received: &str) -> String {
+    format!(
+        "key=; IFS= read -r -t {} -n 1 -d '' key; printf '%s' \"$key\" >> {received}",
+        SLOW_AGENT.as_secs_f64()
+    )
+}
+
+/// How long the agent is given to answer a key in a test proving that a wait runs out: nothing
+/// answers the key there, so the window only has to run out, and a short one shows that.
+const SHORT_PATIENCE: Duration = Duration::from_millis(500);
+
+/// Gives the agent [`SHORT_PATIENCE`] to answer each key of a press started on this thread, for as
+/// long as it is held.
+struct ShortPatience;
+
+impl ShortPatience {
+    fn hold() -> Self {
+        RESPONSE_OVERRIDE.with(|patience| patience.set(Some(SHORT_PATIENCE)));
+        Self
+    }
+}
+
+impl Drop for ShortPatience {
+    fn drop(&mut self) {
+        RESPONSE_OVERRIDE.with(|patience| patience.set(None));
+    }
+}
+
+/// Gives the screen [`SHORT_PATIENCE`] to go after the Enter of a press started on this thread
+/// through `answer`, for as long as it is held, while the waits before the Enter keep the full
+/// `PATIENCE`: a test proving that the screen does not go needs those to succeed however slow the
+/// host.
+struct ShortDismissal;
+
+impl ShortDismissal {
+    fn hold() -> Self {
+        DISMISS_OVERRIDE.with(|dismissal| dismissal.set(Some(SHORT_PATIENCE)));
+        Self
+    }
+}
+
+impl Drop for ShortDismissal {
+    fn drop(&mut self) {
+        DISMISS_OVERRIDE.with(|dismissal| dismissal.set(None));
+    }
+}
+
 #[test]
 fn the_screen_is_recognised_although_the_raw_bytes_never_spell_its_words() {
     let raw = String::from_utf8_lossy(SCREEN);
@@ -660,8 +716,8 @@ fn full_script(received: &Path) -> String {
 /// [`full_script`] with a read of `held` bytes between the Down and the redraw. The stand-in
 /// does not redraw until it has them, so a test that writes them once it sees the Down arrive
 /// puts them between the Down and the Enter: the cursor cannot move, and the Enter cannot
-/// follow, before they are in. The test still has to write them within `MOVE_TIMEOUT`, after
-/// which the answer gives up waiting for the cursor.
+/// follow, before they are in. The test still has to write them within the answer's patience
+/// (`response_timeout`), after which it gives up waiting for the cursor.
 fn conversation(received: &Path, held: usize) -> String {
     let r = quoted(received);
     let held_read = if held == 0 {
@@ -725,6 +781,7 @@ fn nothing_is_sent_when_the_cursor_is_not_on_the_first_option() {
 /// The Down goes in and the cursor does not move, so the Enter that would follow is withheld.
 #[test]
 fn enter_is_withheld_when_the_cursor_does_not_move() {
+    let _patience = ShortPatience::hold();
     let dir = scratch("no-move");
     let received = dir.join("received");
     let r = quoted(&received);
@@ -749,7 +806,152 @@ fn enter_is_withheld_when_the_cursor_does_not_move() {
         trust_reason::CURSOR_DID_NOT_MOVE
     );
 
-    assert_eq!(sent(&received), DOWN);
+    // The Down may still be on its way through the PTY when the short wait runs out.
+    assert!(wait_for(PATIENCE, || sent(&received) == DOWN));
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(sent(&received), DOWN, "no Enter was sent");
+}
+
+/// An agent slow to redraw after the Down, as on a slow machine, is waited for: the Enter follows
+/// once the cursor is seen on the option that trusts.
+#[test]
+fn an_agent_slow_to_move_its_cursor_is_still_answered() {
+    let dir = scratch("slow-move");
+    let received = dir.join("received");
+    let r = quoted(&received);
+    let script = [
+        load_captures(),
+        show("SCREEN"),
+        take(3, &r),
+        slow(&r),
+        show("AFTER_DOWN"),
+        take(1, &r),
+        show("DISMISSED"),
+        take(1, &r),
+        "sleep 30".to_string(),
+    ]
+    .join("; ");
+    let live = stand_in("s", AgentId::CLAUDE, &script);
+    let mut sightings = live.trust.take_sightings().expect("receiver");
+    assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
+
+    answer(&live).expect("answered");
+
+    // The stand-in recorded the Enter before it drew the screen the answer waited for.
+    assert_eq!(sent(&received), answer_keys());
+}
+
+/// The agent's first hook after the Enter says it is past the screen, which counts the press
+/// though nothing has been drawn in the screen's place yet.
+#[test]
+fn the_agents_first_hook_after_the_enter_counts_the_press() {
+    let dir = scratch("hook-after-enter");
+    let received = dir.join("received");
+    let r = quoted(&received);
+    // Nothing is drawn after the Enter.
+    let script = [
+        load_captures(),
+        show("SCREEN"),
+        take(3, &r),
+        show("AFTER_DOWN"),
+        take(1, &r),
+        take(1, &r),
+        "sleep 30".to_string(),
+    ]
+    .join("; ");
+    let live = stand_in("s", AgentId::CLAUDE, &script);
+    let mut sightings = live.trust.take_sightings().expect("receiver");
+    assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
+
+    let answering = {
+        let live = live.clone();
+        std::thread::spawn(move || answer(&live))
+    };
+    assert!(wait_for(PATIENCE, || sent(&received) == answer_keys()));
+    live.trust.end_watch();
+
+    answering.join().unwrap().expect("pressed");
+}
+
+/// A hook seen before the Enter shows the agent past the screen already, so the Enter would land
+/// in whatever it shows now: the press ends as not waiting, with nothing to tell the user, and
+/// of the press's keys only the Down has gone in.
+#[test]
+fn a_hook_seen_before_the_enter_ends_the_press_without_sending_it() {
+    let dir = scratch("hook-before-enter");
+    let received = dir.join("received");
+    let chatter: &[u8] = b"\x1b[I";
+    // The stand-in holds its redraw until the chatter is in, so the cursor cannot move, and the
+    // Enter cannot follow, before the hook is raised.
+    let script = conversation(&received, chatter.len());
+    let live = stand_in("s", AgentId::CLAUDE, &script);
+    let mut sightings = live.trust.take_sightings().expect("receiver");
+    assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
+
+    let answering = {
+        let live = live.clone();
+        std::thread::spawn(move || answer(&live))
+    };
+    assert!(wait_for(PATIENCE, || sent(&received) == DOWN));
+    live.trust.end_watch();
+    live.write_input(chatter).expect("the terminal's traffic");
+
+    let err = answering.join().unwrap().expect_err("not waiting");
+    assert!(is_not_waiting(&err), "{err}");
+    assert!(!live.trust.pressed.load(Ordering::Acquire));
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(
+        sent(&received),
+        [DOWN, chatter].concat(),
+        "no Enter was sent"
+    );
+}
+
+/// Presses a stand-in that plays the shell command `after_enter` once it has the Enter and sends
+/// no hook, and asserts that the press fails as the confirmation not having gone away, and is not
+/// counted.
+fn assert_not_dismissed_after_the_enter(scratch_name: &str, after_enter: &str) {
+    let _dismissal = ShortDismissal::hold();
+    let dir = scratch(scratch_name);
+    let received = dir.join("received");
+    let r = quoted(&received);
+    let script = [
+        load_captures(),
+        show("SCREEN"),
+        take(3, &r),
+        show("AFTER_DOWN"),
+        take(1, &r),
+        after_enter.to_string(),
+        "sleep 30".to_string(),
+    ]
+    .join("; ");
+    let live = stand_in("s", AgentId::CLAUDE, &script);
+    let mut sightings = live.trust.take_sightings().expect("receiver");
+    assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
+
+    let err = answer(&live).expect_err("not dismissed");
+    let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+    assert_eq!(coded.code, error_code::TRUST_ANSWER_FAILED);
+    assert_eq!(
+        coded.params["reason_code"],
+        trust_reason::SCREEN_NOT_DISMISSED
+    );
+    assert!(!live.trust.pressed.load(Ordering::Acquire));
+    // The Enter may still be on its way through the PTY when the short wait runs out.
+    assert!(wait_for(PATIENCE, || sent(&received) == answer_keys()));
+}
+
+/// A screen cleared and nothing drawn in its place, with no hook, is not the agent seen past the
+/// screen: the press failed, and the screen is left to the person.
+#[test]
+fn a_cleared_screen_with_nothing_drawn_and_no_hook_fails_the_press() {
+    assert_not_dismissed_after_the_enter("cleared-after-enter", "printf '\\033[2J\\033[H'");
+}
+
+/// The same confirmation drawn again after the Enter means the key did not act on it.
+#[test]
+fn the_same_screen_drawn_again_after_the_enter_fails_the_press() {
+    assert_not_dismissed_after_the_enter("redrawn-after-enter", &show("SCREEN"));
 }
 
 /// An attached terminal reports focus and answers the agent's queries on its own, which says
@@ -934,7 +1136,7 @@ async fn screen_printed(live: &StandIn) {
 /// Waits until the stand-in has been sent the Down and the Enter and has printed the screen
 /// that replaces the trust screen. A test that ended at the Enter would drop the stand-in
 /// while an answer running in the background was still waiting for that screen, and the
-/// runtime would then wait out the answer's `DISMISS_TIMEOUT`.
+/// runtime would then wait out the answer's patience (`response_timeout`).
 ///
 /// The screen is told by the end of it, [`DISMISSED_END`] bytes, anywhere in the recent output:
 /// the bundled Windows console host rewrites some of the mode changes it starts with (it asks
@@ -1284,6 +1486,7 @@ async fn without_remember_the_screen_is_answered_and_no_consent_is_recorded() {
 /// the user is told, whether or not the dialog they confirmed in is still open.
 #[tokio::test]
 async fn a_failed_answer_records_no_consent_and_tells_the_user() {
+    let _patience = ShortPatience::hold();
     let (state, dir) = state_with_project("failed-confirm");
     let mut events = state.subscribe();
     // The stand-in never moves its cursor.
@@ -1321,6 +1524,7 @@ async fn a_failed_answer_records_no_consent_and_tells_the_user() {
 /// An automatic answer that fails is not silent either.
 #[tokio::test]
 async fn an_automatic_answer_that_fails_leaves_a_notice() {
+    let _patience = ShortPatience::hold();
     let (state, dir) = state_with_project("failed-auto");
     let mut events = state.subscribe();
     let script = never_moves_script();
@@ -1623,6 +1827,7 @@ async fn confirming_for_the_parent_directory_records_it_after_the_answer() {
 
 #[tokio::test]
 async fn nothing_is_trusted_when_the_answer_fails_or_is_refused() {
+    let _patience = ShortPatience::hold();
     let (state, dir) = state_with_project("confirm-parent-refused");
     // The stand-in never moves its cursor.
     let script = never_moves_script();

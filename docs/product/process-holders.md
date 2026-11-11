@@ -4,11 +4,11 @@ The agent sessions and the project shell terminals (see `docs/product/shell-term
 daemon. Each runs on a terminal owned by a **process holder**: a separate background process, started by the daemon
 from its own build, that is the parent of every program it runs and keeps them running when the daemon is gone. The
 daemon speaks to each terminal through its holder. This holds for the desktop form on macOS and Windows, and for a
-daemon started on its own (see "The daemon on its own" in `docs/product/application-lifecycle.md`), on Linux as on
+daemon started on its own (see "The daemon on its own" in `docs/product/server-form.md`), on Linux as on
 macOS.
 
 The files holders keep — their registry files, the copies of builds they run from and their logs — are listed in
-"Files Octoboard owns" in `docs/product/application-lifecycle.md`.
+`docs/product/files-octoboard-owns.md`.
 
 ## What a holder runs and when it ends
 
@@ -36,7 +36,7 @@ shell terminal (see "Quitting" in `docs/product/application-lifecycle.md`); the 
 going, and exit.
 
 **A planned stop hands everything over.** A planned restart or a planned stop (see "Planned restart and planned stop"
-in `docs/product/application-lifecycle.md`) — among them the desktop application's restart into an update, and the
+in `docs/product/server-form.md`) — among them the desktop application's restart into an update, and the
 daemon finding the desktop application gone with no word of a quit, as after a crash of the application — tells each
 holder that the daemon is handing its terminals over, saves each
 terminal's screen once it has read all the output the holder sent it up to that point and answered the queries in it,
@@ -244,7 +244,7 @@ the program, no client still owes an answer to such a query, and no answer was l
 middle of an escape sequence longer than **64 KiB**. A screen serves one start: the next daemon takes it out of the saved
 screens once its terminal is taken over or ended, before it takes in any of the output since the handover, so that a
 start after it never answers those queries a second time; one it cannot take out for good is not used (see
-`~/.octoboard/restart-screens.json` in "Files Octoboard owns" in `docs/product/application-lifecycle.md`). The screens
+`~/.octoboard/restart-screens.json` in `docs/product/files-octoboard-owns.md`). The screens
 of a holder that cannot be connected to at that start are kept until it is connected to, by that daemon or a later one,
 a later planned stop carrying them over.
 
@@ -296,6 +296,13 @@ none is, the holder keeps the reports as best it can, at most **1024** of them a
 dropping the oldest past either, and hands them to the next daemon in the order they came, once that daemon has taken
 its sessions over. Past those bounds the oldest reports are lost.
 
+**A launch's helpers lose the holder once the session has ended.** The holder stops taking a launch's key a few
+seconds after the session's process has ended, and exits once it runs nothing more, and the key's file goes with the
+session's scratch directory. A background job the session left running then reaches the holder no more. Its git hooks
+alone go on, to the running daemon by the record it keeps of itself, and only where the holder refuses the key, nothing
+listens on its port, or the key cannot be read — never when the holder answers that it has no daemon (see "The
+session's git hooks" in `docs/product/branch-responsible-session.md`). The other helpers report nothing more.
+
 **A request its caller waits on waits for a daemon.** A question — the revert gate's call, an MCP tool call — is
 passed on at once to a connected daemon. With none connected, the holder holds it up to **30 seconds**, which covers an
 ordinary restart of the daemon, and then fails it as with no daemon running: the revert gate lets the update through
@@ -318,24 +325,47 @@ version are told apart.
 
 ## The copy of the build holders run from
 
-A holder, and the helpers of the launches it runs, run from a copy of their build under
-`~/.octoboard/builds/<build>/` (on Windows `%USERPROFILE%\.octoboard\builds\<build>\`, holding `conpty.dll` and the
-`OpenConsole.exe` of each architecture beside the executable), not from the installation. So an update can replace the
-installed application while sessions run, and on Windows they hold no file of the installation. A copy is removed
-once no holder runs from it. Where the copy cannot be made, the holder runs from the installation instead; that does not
-block a Windows update either: the installer renames the files the holder holds aside and the holder runs on from them
-(see "Downloading and installing" in `docs/product/in-app-updates.md`).
+A holder, and the helpers of the launches it runs other than a project session's git hooks, run from a copy of their
+build under `~/.octoboard/builds/<build>/` (on Windows `%USERPROFILE%\.octoboard\builds\<build>\`, holding `conpty.dll`
+and the `OpenConsole.exe` of each architecture beside the executable), not from the installation. So an update can
+replace the installed application while sessions run, and on Windows they hold no file of the installation. A copy is
+removed once no holder runs from it. Where the copy cannot be made, the holder runs from the installation instead; that
+does not block a Windows update either: the installer renames the files the holder holds aside and the holder runs on
+from them (see "Downloading and installing" in `docs/product/in-app-updates.md`).
+
+The git hooks run the installation's own executable instead: a job a session leaves running can outlive the holder by
+far, and with it the copy, while the installation is replaced in place by an update. Each runs only for as long as a
+git command waits on it, and a Windows update renames a file in use aside as it does for a holder.
 
 ## How a holder is detached
 
 - **macOS and Linux**: a holder runs in a session of its own, so nothing sent to the daemon's process group reaches it.
-- **Linux, under the example systemd user unit** (see "Running as a systemd user service" in
-  `docs/product/application-lifecycle.md`): a holder stays in the unit's cgroup, and systemd ends whatever is in the
-  unit once the daemon's process is gone, so there the programs do not outlive a daemon that crashes or is killed
-  outright, nor a planned restart (see "Running as a systemd user service" in
-  `docs/product/application-lifecycle.md`). A holder run apart from the daemon's unit does not exist yet. An agent launch a holder starts is held in
-  the launch's cgroup group as one the daemon starts would be (see "Which processes belong to a launch" in
-  `docs/product/background-processes.md`).
+  It stays in the daemon's cgroup on Linux, so a service manager that ends whatever is in the daemon's service ends it
+  too.
+- **Linux, under a systemd user manager**: a daemon that a user's systemd manager runs as a service starts each holder
+  as a transient systemd user unit of its own instead, which nothing that ends the daemon's service ends (the example
+  unit is one such service; see "Running as a systemd user service" in `docs/product/server-form.md`). The
+  daemon counts as run by one only on both of these, decided once as it starts: systemd names the daemon's own process
+  as the one it started for a unit (`SYSTEMD_EXEC_PID` equal to the daemon's pid, with an `INVOCATION_ID`, which
+  systemd sets from version 248), and the daemon's cgroup is that of a service, `<name>.service`, directly below its
+  user's manager (`user@<uid>.service`) or below slices in it. A daemon started by hand, from a login's terminal or by
+  `octoboardd start`, has its holders run in a session of its own as above. The holder's unit:
+  - is named `octoboard-holder-<holder id>.service`, described as the application's name followed by "process holder",
+    started with `systemd-run --user`, and removed once it has ended, whether or not it failed;
+  - when stopped, has only the holder signalled (`KillMode=process`), which ends its programs itself;
+  - delegates its cgroup (`Delegate=yes`), in which the groups of the agent launches the holder runs are made (see
+    "Which processes belong to a launch" in `docs/product/background-processes.md`);
+  - is ordered before the daemon's unit (`Before=`), and since systemd stops units in the reverse of that order, a host
+    shutdown or a stop of the user's manager stops the daemon first, which makes its ordinary stop while the programs
+    still run;
+  - discards its output, runs in the holders' registry directory and in the user manager's environment, none of the
+    daemon's being passed, and has a command line naming only the holder's id and the registry directory: no key is in
+    its arguments, its properties or the journal.
+
+  When `systemd-run` fails, the holder is started in a session of its own as above, with a warning in the daemon's log,
+  and so stays in the daemon's service and ends with it. When `systemd-run` has not returned within **15 seconds**, the
+  holder's start fails, and with it the start of the terminal it was for, with no such fallback, since the unit may
+  have started and a second holder with the same id must not.
 - **Windows**: a holder runs detached, with no console, outside the jobs the daemon is in. Where a job does not let it
   break away, it is started as a child of the desktop application instead; that keeps it running only while the
   application is not in the same job. Where neither is possible it starts inside the daemon's job, and its terminals

@@ -21,6 +21,12 @@ place of the symlinked session store, or the probe's own session records land in
 still collects the run's residue, a live-session index, logs and caches among it, so include it in what you tell the
 user the probe left.
 
+A setting the probe needs goes in the configuration of the project it runs in, never in the agent's own config file:
+for Codex `<cwd>/.codex/config.toml`, which Codex layers over `CODEX_HOME/config.toml` once the project is trusted;
+for Claude Code the project's `.claude/settings.local.json`. The agent's home directory, `~/.codex` say, may be the
+user's real one under any `HOME` — a symlink a dotfile manager or a scratch home links to it, or the real `CODEX_HOME`
+a Codex probe keeps for its login — so an edit there changes the user's own setup.
+
 Bring a login into a scratch directory by reference, never by copying the credential file: a token the CLI refreshes
 through a copy is written only to the copy, leaving the user's own file with a token the refresh may have retired. For
 Grok Build, `GROK_AUTH_PATH` set to the absolute path of the user's `~/.grok/auth.json` logs in a scratch `GROK_HOME`
@@ -105,7 +111,11 @@ The daemon derives its data directory — its database, its single-instance lock
 no other setting that moves it. So a probe that does not need a logged-in agent — the protocol, the terminal socket, the
 window's connection — runs the daemon, or a copy of the app, with a throwaway `HOME`: the user's board is untouched and
 it runs alongside their own Octoboard. For a session that draws real output there without a model turn, open a Codex
-session: with no login under that `HOME` it stops at its sign-in screen.
+session: with no login under that `HOME` it stops at its sign-in screen, and with a dummy API key in that `HOME`'s
+Codex `auth.json` (`{"auth_mode":"apikey","OPENAI_API_KEY":"sk-..."}`) it gets past it to idle. Open it right after a
+fresh start: once the daemon's first quota reading finds the account not signed in, `open_session` is refused with
+`account_not_signed_in`. To open another, stop and start the daemon again rather than `restart` it, since `restart`
+prints no key.
 
 **Drive it from a client of its own on the control WebSocket, and build no application for it.** The daemon on its own,
 plus a small client on the control WebSocket (the "`GET /ws/control` — management and status" section of
@@ -121,6 +131,15 @@ Launch it from an emptied environment, `env -i HOME=<dir> TMPDIR=<dir> … /usr/
 names, so a `CLAUDE_CONFIG_DIR`, `CODEX_HOME` or `GROK_HOME` exported there — an agent session exports
 `CLAUDE_CONFIG_DIR` routinely — points the run's agents at the user's own configuration despite the throwaway `HOME`,
 and for Codex and Grok Build at the login kept there too. The same goes for a daemon started straight from the shell.
+
+**On Windows the throwaway home keeps only the daemon's own data apart.** There the data directory comes from
+`USERPROFILE`, so a second daemon started with its own `USERPROFILE` and a `--port` of its own leaves the user's board
+alone. `octoboardd start`, `stop` and `restart` act on the daemon of the data directory their own `USERPROFILE` names,
+so run them with the scratch `USERPROFILE` set too (the "Running in the background from the command line" section of
+`docs/product/server-form.md`). But every agent it runs, its quota readings included, gets the real user's
+`USERPROFILE`, `APPDATA` and `LOCALAPPDATA` back, since the daemon lays the logon's variables (`HKCU\Volatile
+Environment`) over the environment it inherited, so those agents read and write the user's own `.claude.json`, `.codex`
+and `.grok`. Treat such a run as one on the real configuration and report its residue.
 
 A throwaway `HOME` hides Claude Code's keychain login as well. When a run needs it logged in, symlink
 `<throwaway HOME>/Library/Keychains` to the real `~/Library/Keychains`, which brings back every account's login

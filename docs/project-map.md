@@ -22,9 +22,13 @@ Everything revolves around one daemon; every client reaches it only through the 
 The repository root is two workspace roots at once:
 
 - The **pnpm workspace** (`package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`): the `apps/*` and `packages/*`
-  directories that have a `package.json`, namely `apps/desktop/`, `apps/web/` and `packages/ui/`.
+  directories that have a `package.json`, namely `apps/daemon/` (only a build wrapper, see below), `apps/desktop/`,
+  `apps/web/` and `packages/ui/`.
 - The **Cargo workspace** (`Cargo.toml`, `Cargo.lock`): the daemon (`apps/daemon/`) and the desktop shell's Tauri crate
   (`apps/desktop/src-tauri/`), built into one `target/` directory.
+
+The daemon's pnpm package (`@octoboard/daemon`) exists so that `pnpm --filter @octoboard/daemon... build` builds the UI
+first and then the daemon with that UI embedded, the server form of the binary; the desktop sidecar embeds none.
 
 `apps/` holds the deliverables, one directory per thing that ships; `packages/` holds code shared between them.
 `contracts/protocol/` holds the protocol's JSON Schema, which a daemon test renders from the wire types and native

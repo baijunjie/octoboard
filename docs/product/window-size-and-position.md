@@ -29,4 +29,4 @@ browser tab has no window of its own to place, so none of this applies there.
   case too.
 - The frame is decided before the window is shown, so the window is never seen moving into place.
 
-Where the state is kept is in "Files Octoboard owns" in `docs/product/application-lifecycle.md`.
+Where the state is kept is in `docs/product/files-octoboard-owns.md`.

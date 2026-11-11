@@ -51,9 +51,14 @@ holder and what it starts as the daemon's own; see [`../processes/ledger/README.
 ## How it works
 
 - **Helpers.** A launch in a holder has its hook script, MCP command, status line, Claude hook URL and git hook
-  environment name the holder's port, a key the holder issued for the launch before the program starts
-  (`Holders::issue_launch`, bound to the launch's MCP token), and the holder's executable (`terminal::backend::Helpers`).
-  A launch the local backend runs keeps the daemon's. `client::install`, called by `src/main.rs`, makes the daemon use
+  environment name the holder's port and carry a key the holder issued for the launch before the program starts
+  (`Holders::issue_launch`, bound to the launch's MCP token), and all but the git hooks run the holder's executable
+  (`terminal::backend::Helpers`). The hook script, MCP command, status line and git hook environment name the owner-only
+  file the key is written to (`src/key_file.rs`), never the key; Claude Code's hook URL holds the key, in an owner-only
+  settings file. The git hooks run the installation's own executable, which outlives the build copy, and go to the
+  daemon through its owner record once the holder refuses the launch's key or is gone
+  (`src/session_git_hooks/route.rs`), so a newer build's git hook modes may talk to an older holder's helper routes. A
+  launch the local backend runs keeps the daemon's. `client::install`, called by `src/main.rs`, makes the daemon use
   holders; a process that never calls it, the tests' stand-ins included, runs its terminals itself.
 - **Lifetime.** A holder outlives its daemon: when the link drops it keeps its programs and their tails. It exits once
   it has no terminal, no spawn pending, no companion awaiting its terminal and none being ended, and either no daemon
@@ -260,10 +265,13 @@ holder and what it starts as the daemon's own; see [`../processes/ledger/README.
   carries its companion (`FoundTerminal::companion`). The daemon reaches the companion at its endpoint directly, not
   through the link.
 - **Starting a holder.** `Holders` starts one from the build's copy on the first terminal, detached
-  (`platform::proc::start_detached`) so that it outlives the daemon, and waits for its registry file. On Windows, where
-  the daemon's job refuses breakaway, it is started under the desktop application, or with none inside the job, with a
-  warning; survival is not guaranteed then, nor when the application is in the same outer job ("Process holders on
-  Windows" in `docs/architecture.md`).
+  (`platform::proc::start_detached`) so that it outlives the daemon, and waits for its registry file. Under a systemd
+  user manager the holder is started as a user unit of its own instead (`platform::proc::start_in_user_unit`), which a
+  stop or a planned restart of the daemon's unit leaves running, ordered to stop after it at a shutdown; a failed start
+  falls back to the detached one, while a `systemd-run` that does not return in time is an error, since the unit may
+  have started. On Windows, where the daemon's job refuses breakaway, it is started under the desktop application, or
+  with none inside the job, with a warning; survival is not guaranteed then, nor when the application is in the same
+  outer job ("Process holders on Windows" in `docs/architecture.md`).
 - **One holder per build** is the usual allocation, not an invariant: a start keeps one of its build for new terminals
   and drains the others, and a pending link's holder is replaced for new terminals. The terminals of a holder share its
   link, so one whose reader stops taking output holds up the others and the replies to the daemon once its queue
@@ -273,7 +281,7 @@ holder and what it starts as the daemon's own; see [`../processes/ledger/README.
 
 - `server::run`, `server::run_until`, `server::HolderConfig` — run the holder until it has nothing left to serve (the
   `octoboardd holder` mode calls them).
-- `client::install`, `client::current`, `client::ClientConfig`, `client::launch_detached` — make the daemon run its
+- `client::install`, `client::current`, `client::ClientConfig`, `client::launch_holder` — make the daemon run its
   terminals in holders, and reach the installed `Holders`.
 - `Holders::spawn`, `Holders::issue_launch`, `Holders::adopt_existing`, `Holders::sweep_builds`, `Holders::shutdown` — the
   daemon's calls: start a held terminal, have the holder issue a launch's key (`Issued::spawn` then starts the program),

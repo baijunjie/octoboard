@@ -1,34 +1,51 @@
 use std::io;
+use std::os::fd::RawFd;
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use super::cgroup::{Group, Subtree};
+pub(crate) use super::systemd::{start_in_user_unit, user_service_unit};
 
 use super::{
     tag_value, Polite, ProcessId, ProcessIdentity, Sent, SetEnv, Signal, Swept, Unreaped,
     TAG_VARIABLE,
 };
+use crate::platform::descriptors;
 use crate::platform::proc_table::{self, pids};
 
 /// What tells one launch's processes from any other's: the tag every one of them carries in its
 /// environment, which a process inherits from its parent, and on Linux, for an agent launch where
-/// the host lets the daemon make one, a cgroup v2 group they are all in ([`Self::for_launch`]).
-/// Without a group the host lists no members, so what carries the tag is found by reading the
-/// environments of the processes it lists.
+/// the host lets the daemon make one, a cgroup v2 group they are all in ([`Self::for_launch`],
+/// [`Self::for_held_launch`]). Without a group the host lists no members, so what carries the tag
+/// is found by reading the environments of the processes it lists.
 #[derive(Debug, Clone)]
 pub struct Containment {
     tag: String,
-    group: Option<Arc<Group>>,
+    /// The launch's group: set when the containment is made, except for a held launch's, which is
+    /// set once the process that is to start it is known ([`Self::place_with_host`]). Shared by
+    /// the clones, so that they all see it once it is set; set to `None` where there is none.
+    group: Arc<OnceLock<Option<Arc<Group>>>>,
 }
 
 impl Containment {
+    /// A containment with the tag of `launch` of `instance` and the group `group`, already
+    /// settled.
+    fn settled(instance: &str, launch: &str, group: Option<Group>) -> Self {
+        Self {
+            tag: tag_value(instance, launch),
+            group: Arc::new(OnceLock::from(group.map(Arc::new))),
+        }
+    }
+
+    /// The launch's group, once it is settled and where there is one.
+    fn group(&self) -> Option<&Arc<Group>> {
+        self.group.get().and_then(Option::as_ref)
+    }
+
     /// The containment of the launch `launch` of the daemon instance `instance`: its tag alone.
     pub fn create(instance: &str, launch: &str) -> io::Result<Self> {
-        Ok(Self {
-            tag: tag_value(instance, launch),
-            group: None,
-        })
+        Ok(Self::settled(instance, launch, None))
     }
 
     /// The containment of the agent launch `launch` of the daemon instance `instance`: as
@@ -36,12 +53,40 @@ impl Containment {
     /// one, a group of its own below that cgroup, which [`Self::end`] kills and removes. Where it
     /// does not, the launch goes without, which is not an error.
     pub fn for_launch(instance: &str, launch: &str) -> io::Result<Self> {
+        let group = Subtree::below_own().and_then(|base| Group::create(&base, instance, launch));
+        Ok(Self::settled(instance, launch, group))
+    }
+
+    /// The containment of the agent launch `launch` of the daemon instance `instance` that another
+    /// process of the user's (a holder) is to start: as [`Self::for_launch`], except that on Linux
+    /// its group is made below the cgroup of that process, once it is known
+    /// ([`Self::place_with_host`]), since that process may run in a cgroup of its own (a systemd
+    /// user unit) that outlives the daemon's. Until then it has no group and lists no members.
+    pub fn for_held_launch(instance: &str, launch: &str) -> io::Result<Self> {
         Ok(Self {
-            group: Subtree::below_own()
-                .and_then(|base| Group::create(&base, instance, launch))
-                .map(Arc::new),
-            ..Self::create(instance, launch)?
+            tag: tag_value(instance, launch),
+            group: Arc::new(OnceLock::new()),
         })
+    }
+
+    /// Settles the group of a containment made by [`Self::for_held_launch`]: on Linux, made below
+    /// the cgroup of `host`, the process that is to start the launch's program, where that cgroup
+    /// lets this process make one, else none. Does nothing to a containment already settled, and
+    /// leaves none when `host` is no longer running.
+    pub fn place_with_host(&self, host: &ProcessIdentity) {
+        self.group.get_or_init(|| {
+            let base = Subtree::of_process(host)?;
+            base.remember();
+            let (instance, launch) = super::split_tag(&self.tag)?;
+            Group::create(&base, instance, launch).map(Arc::new)
+        });
+    }
+
+    /// Has [`Self::reopen`] and [`Self::leftovers`] look below the cgroup of `host` too, a
+    /// process of the user's that starts launches' programs (a holder), where its groups are made
+    /// ([`Self::place_with_host`]). Nothing is done where there are no groups.
+    pub fn note_host(host: &ProcessIdentity) {
+        Subtree::note(host);
     }
 
     /// Puts what makes the processes started with `environment` the launch's into it.
@@ -49,16 +94,34 @@ impl Containment {
         environment.set_env(TAG_VARIABLE, &self.tag);
     }
 
+    /// Makes `command`'s process start inside the launch's group, by a hook that runs before its
+    /// program does, as nothing it starts can then be left outside; does nothing where there is
+    /// no group. Hooks run in the order they were registered, so one registered before this runs
+    /// first. [`ChildHandle::started`] still moves the process in, in case the hook could not.
+    pub fn enter_before_exec(&self, command: &mut Command) {
+        let Some(procs) = self.group().and_then(|group| group.procs_path()) else {
+            return;
+        };
+        // SAFETY: the hook only calls `Group::enter_from_child`, which makes raw system calls and
+        // nothing else, as is safe between a fork and an exec; `procs` was made before the fork.
+        unsafe {
+            command.pre_exec(move || {
+                Group::enter_from_child(&procs);
+                Ok(())
+            });
+        }
+    }
+
     /// The processes the host says are in the containment, or `None` when it cannot say, and the
     /// callers find them by their environment.
     pub fn members(&self) -> Option<Vec<ProcessId>> {
-        self.group.as_ref()?.members()
+        self.group()?.members()
     }
 
     /// Whether processes can be moved out of the containment, as [`Self::release`] does: where it
     /// has a group, and not for a tag alone.
     pub fn releases_members(&self) -> bool {
-        self.group.is_some()
+        self.group().is_some()
     }
 
     /// The containment of the launch `launch` of the daemon instance `instance`, which another
@@ -67,37 +130,38 @@ impl Containment {
     /// cgroup, as one started from that process does. The group is left to its maker to end and
     /// remove; without it, the launch's processes started here are told by their tag alone.
     pub fn join_launch(instance: &str, launch: &str) -> io::Result<Self> {
-        Ok(Self {
-            group: Subtree::below_own()
-                .and_then(|base| Group::join(&base, instance, launch))
-                .map(Arc::new),
-            ..Self::create(instance, launch)?
-        })
+        let group = Subtree::below_own().and_then(|base| Group::join(&base, instance, launch));
+        Ok(Self::settled(instance, launch, group))
     }
 
     /// The containment of a launch of an earlier run of the daemon, found again by its name, with
-    /// its group while that has not been removed.
+    /// its group while that has not been removed: below the calling process's own cgroup or below
+    /// that of a host it was told of ([`Self::note_host`]).
     pub fn reopen(instance: &str, launch: &str) -> Option<Self> {
-        Some(Self {
-            tag: tag_value(instance, launch),
-            group: Subtree::below_own()
-                .and_then(|base| Group::open(&base, instance, launch))
-                .map(Arc::new),
-        })
+        let group = Subtree::all()
+            .iter()
+            .find_map(|base| Group::open(base, instance, launch));
+        Some(Self::settled(instance, launch, group))
     }
 
     /// The launches of the daemon instance `instance` whose containments are still there from an
     /// earlier run, where the host can list them: the groups left below the calling process's own
-    /// cgroup.
+    /// cgroup and below those of the hosts it was told of ([`Self::note_host`]).
     pub fn leftovers(instance: &str) -> Vec<String> {
-        Subtree::below_own().map_or_else(Vec::new, |base| Group::leftovers(&base, instance))
+        let mut launches: Vec<String> = Subtree::all()
+            .iter()
+            .flat_map(|base| Group::leftovers(base, instance))
+            .collect();
+        launches.sort_unstable();
+        launches.dedup();
+        launches
     }
 
     /// Moves the processes `ids` names that are still running into the containment's group, from
     /// wherever they are; without a group, nothing is done. A process that cannot be moved is
     /// left where it is.
     pub fn adopt(&self, ids: &[ProcessIdentity]) {
-        if let Some(group) = &self.group {
+        if let Some(group) = self.group() {
             group.adopt_running(ids);
         }
     }
@@ -106,9 +170,12 @@ impl Containment {
     /// that its end does not reach them: into `into`'s group, or without one into the cgroup the
     /// containment's group is in. Answers whether none of them is left in the group.
     pub fn release(&self, ids: &[ProcessIdentity], into: Option<&Containment>) -> bool {
-        self.group
-            .as_ref()
-            .is_none_or(|group| group.release(ids, into.and_then(|into| into.group.as_deref())))
+        self.group().is_none_or(|group| {
+            group.release(
+                ids,
+                into.and_then(|into| into.group().map(|group| &**group)),
+            )
+        })
     }
 
     /// Kills whatever is still in the containment's group and removes the group, other than the
@@ -117,12 +184,17 @@ impl Containment {
     /// the group; when one of them cannot be moved, nothing is killed. Without a group,
     /// nothing is done. Answers whether no group is left. **Blocks**, for a moment.
     pub fn end(&self, spared: &[(ProcessIdentity, Option<&Containment>)]) -> bool {
-        let Some(group) = &self.group else {
+        let Some(group) = self.group() else {
             return true;
         };
         let spared: Vec<(ProcessIdentity, Option<&Group>)> = spared
             .iter()
-            .map(|(id, into)| (*id, into.and_then(|into| into.group.as_deref())))
+            .map(|(id, into)| {
+                (
+                    *id,
+                    into.and_then(|into| into.group().map(|group| &**group)),
+                )
+            })
             .collect();
         group.end(&spared)
     }
@@ -139,15 +211,17 @@ impl ChildHandle {
     /// A handle on the child `pid`, just started leading what `_reach` names ([`lead_group`],
     /// [`lead_session`]), which the caller holds unreaped. A containment's tag is in the
     /// environment the child was started with; where the containment has a group, the child is
-    /// moved into it now, with what it has started already. Nothing here hooks the child before
-    /// its program runs, so a process it forked and that moved on before that is the ledger's to
-    /// find; a move that fails is logged and leaves the child to the tag, never failing the start.
+    /// moved into it now, with what it has started already. A child started with
+    /// [`Containment::enter_before_exec`] is in it from before its program ran, so this move only
+    /// covers a hook that could not; one started without may have had a process forked and moved
+    /// on before this, which is the ledger's to find. A move that fails is logged and leaves the
+    /// child to the tag, never failing the start.
     pub fn started(
         pid: ProcessId,
         _reach: super::Reach,
         containment: Option<&Containment>,
     ) -> io::Result<Self> {
-        if let Some(group) = containment.and_then(|containment| containment.group.as_ref()) {
+        if let Some(group) = containment.and_then(Containment::group) {
             if let Err(err) = group.adopt_child(pid) {
                 tracing::warn!(pid = pid.0, %err, "moving a process into its launch's group failed; it is followed by its tag");
             }
@@ -260,16 +334,48 @@ pub(crate) fn start_detached(mut command: Command, _application: Option<u32>) ->
     Ok(())
 }
 
-/// Has `command` start in a session of its own with no controlling terminal, for the daemon the
-/// command line starts to keep running after the login that started it has closed.
-pub(crate) fn run_in_background(command: &mut Command) -> io::Result<()> {
+/// The daemon [`spawn_in_background`] started.
+pub(crate) type BackgroundChild = std::process::Child;
+
+/// Spawns `command` as the daemon the command line runs in the background: in a session of its own
+/// with no controlling terminal, to keep running after the login that started it has closed. Its
+/// stdout and stderr are pipes to the caller, and so is its stdin when `pipe_stdin`, null
+/// otherwise, and those are the only descriptors it inherits. The answer says whether the process
+/// stays in the job of whoever started it, which no process on Unix does.
+pub(crate) fn spawn_in_background(
+    command: &mut Command,
+    pipe_stdin: bool,
+) -> io::Result<(BackgroundChild, bool)> {
+    let stdin = if pipe_stdin {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    };
+    command
+        .stdin(stdin)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     lead_session(command);
-    Ok(())
+    // Worked out here: the child may not look it up.
+    let bound = descriptors::open_bound();
+    // SAFETY: the hook only calls async-signal-safe functions and allocates nothing.
+    unsafe { command.pre_exec(move || mark_inherited_descriptors_close_on_exec(bound)) };
+    command.spawn().map(|child| (child, false))
 }
 
-/// Whether [`run_in_background`] can start a daemon here: always on Unix.
-pub(crate) fn runs_in_background() -> bool {
-    true
+/// Makes every descriptor from 3 up close on `exec`, in the child between `fork` and `exec`, with
+/// `bound` the number to walk below where there is no `close_range`
+/// ([`descriptors::open_bound`]). `std` closes none of the starter's inheritable descriptors beyond
+/// the standard three, and one that is a pipe a reader of the starter's output waits on
+/// (`start 3>&1 | cat`) would be held open by the daemon for as long as it runs. Marking them
+/// close-on-exec rather than closing them leaves the pipe `std` reports an `exec` failure through,
+/// which is close-on-exec itself and has to stay open until then, in place. Async-signal-safe:
+/// system calls only.
+fn mark_inherited_descriptors_close_on_exec(bound: RawFd) -> io::Result<()> {
+    // SAFETY: only this child's own descriptor flags change, and nothing in it needs a descriptor
+    // beyond the standard three after the `exec`.
+    unsafe { descriptors::mark_close_on_exec_from(3, bound) };
+    Ok(())
 }
 
 /// Whether a service manager restarts this daemon on the status a planned restart ends it with:

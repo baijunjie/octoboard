@@ -134,6 +134,11 @@ pub struct AppState {
     /// with that directory.
     pub key: String,
     pub self_exe: String,
+    /// The installation's entry point (`crate::cli::launch_path`), which the session git hook
+    /// dispatchers start: unlike `self_exe` or the copy of the build a holder runs from, an update
+    /// replaces it in place rather than leaving it to be removed, so a job a session left running
+    /// keeps finding it.
+    pub install_exe: String,
     /// The running sessions, plus the ids currently being launched. One lock over both, because
     /// "is this session already running" has to be answered and acted on without a gap: a second
     /// `resume_session` arriving while the first is still forking would otherwise start a second
@@ -355,6 +360,10 @@ pub struct AppState {
     /// claim is granted and no process stays registered from then on, so a launch that was under
     /// way cannot start an agent after the stop.
     shutting_down: AtomicBool,
+    /// The ends of the launches registered once the stop of the sessions had listed them
+    /// (`AppState::register_live`), each on a thread of its own, which the stop waits for
+    /// ([`Self::await_late_ends`]).
+    late_ends: Mutex<Vec<std::thread::JoinHandle<()>>>,
     /// Set once a planned stop has begun to hand the terminals over: from then on nothing of this
     /// daemon records a session's or a shell terminal's exit, which is the next daemon's to find.
     handing_over: AtomicBool,
@@ -393,6 +402,7 @@ impl AppState {
         port: u16,
         key: String,
         self_exe: String,
+        install_exe: String,
         saved_output_dir: std::path::PathBuf,
         consoles_dir: std::path::PathBuf,
         handoff_dir: std::path::PathBuf,
@@ -404,6 +414,7 @@ impl AppState {
             port,
             key,
             self_exe,
+            install_exe,
             live: RwLock::new(LiveSessions::default()),
             mcp_tokens: RwLock::new(HashMap::new()),
             turns: Mutex::new(HashMap::new()),
@@ -487,6 +498,7 @@ impl AppState {
             adoption_hooks: Mutex::new(Vec::new()),
             unlinked: Unlinked::default(),
             shutting_down: AtomicBool::new(false),
+            late_ends: Mutex::new(Vec::new()),
             handing_over: AtomicBool::new(false),
             restart_screens: Default::default(),
             keep_awake_held: AtomicBool::new(false),

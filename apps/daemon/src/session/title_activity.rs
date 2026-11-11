@@ -96,7 +96,7 @@ impl TitleActivity {
 
     /// Whether the title has gone back to the prompt since `armed`, the count of stops taken
     /// earlier, and shows no turn running now.
-    pub fn stopped_since(&self, armed: u64) -> bool {
+    fn stopped_since(&self, armed: u64) -> bool {
         self.stops > armed && !self.working
     }
 

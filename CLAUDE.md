@@ -210,9 +210,9 @@ the earlier steps do not run them separately (the related tests a step runs to c
   before pushing when the UI changed; the pre-push hook does not.
 - Before creating a release tag: `release:version` runs `pnpm verify --release --fresh --head <release-commit>`
   locally before push verification. This application check is unconditional, regardless of the changed files or
-  earlier successful checks, and includes the Windows cross-check of both crates (`pnpm check:windows`), which
-  fails, naming what to install, on a machine without its toolchain. `release.yml` validates and publishes the tag
-  without calling `quality.yml`; the latter remains available on request, including its Linux compilation job, and
-  does not gate publication.
+  earlier successful checks, and includes the Windows cross-check of both crates and a link of the daemon's
+  executable (`pnpm check:windows`), which fails, naming what to install, on a machine without its toolchain.
+  `release.yml` validates and publishes the tag without calling `quality.yml`; the latter remains available on
+  request, including its Linux compilation job, and does not gate publication.
 
 <!-- setup-agent:workflow:end -->

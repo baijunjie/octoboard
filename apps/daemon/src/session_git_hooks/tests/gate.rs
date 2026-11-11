@@ -8,7 +8,6 @@
 //! and how it takes the gate's status.
 
 use std::collections::BTreeSet;
-use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::Ordering;
@@ -16,23 +15,22 @@ use std::sync::atomic::Ordering;
 use crate::platform::shell::posix_interpreter;
 use crate::protocol::{GitDevelopment, GitWorkflowSettingsChanges, SessionKind};
 use crate::session_git_hooks::fixture::{
-    commit_file, gated_fixture, numbered, project, project_with_remote, rev, session_record,
-    set_revert_gate, succeeds, system_exec_path, write_hook, Daemon, Fixture,
+    commit_file, data_dir_of, dispatchers, dispatchers_in, gated_fixture, numbered, project,
+    project_with_remote, rev, session_record, set_revert_gate, succeeds, system_exec_path,
+    write_hook, Daemon, Fixture,
 };
 use crate::session_git_hooks::gate_inputs::{inputs, GateRequest};
+use crate::session_git_hooks::gate_mode;
+use crate::session_git_hooks::route::Routes;
 use crate::session_git_hooks::{render, write_dir, Rendering, BUILT_IN_HOOKS};
-use crate::test_support::{fixture_git, git, ScratchDir, PATIENCE, TEST_KEY};
+use crate::test_support::{fixture_git, git, ClosedPort, ScratchDir, PATIENCE, TEST_KEY};
 use crate::wire_path;
 
 // -- the gate-hook process --------------------------------------------------------
 
-/// A port nothing listens on.
+/// A port nothing listens on, that no parallel test is given.
 fn closed_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
+    ClosedPort::new().port
 }
 
 /// What the stand-in starts for `octoboardd gate-hook` where it is told to run the real one: this
@@ -48,28 +46,60 @@ fn gate_hook_child() {
     let Some(crate::cli::Command::GateHook {
         session,
         port,
-        key,
+        data_dir,
         hook,
     }) = cli.command
     else {
         panic!("not the gate-hook command");
     };
     std::process::exit(crate::session_git_hooks::gate_mode::run(
-        &session, port, &key, &hook,
+        &session,
+        port,
+        // The dispatchers' own, as the helper takes it; never the developer's home.
+        &data_dir.unwrap_or_else(|| crate::test_support::isolated_home().join(".octoboard")),
+        &hook,
     ));
+}
+
+/// What the gate is asked through: the launch's route on `port` with `key`, and the daemon's
+/// route through a data directory that holds no record of a daemon.
+fn launch_route(port: u16, key: &str) -> Routes {
+    Routes {
+        launch: Some((port, key.to_string())),
+        data: crate::test_support::isolated_home().join(".octoboard"),
+    }
+}
+
+/// [`gate_mode::inputs_for`] through `routes`, with the deadlines the gate has.
+fn ask_through(
+    routes: &Routes,
+    session: &str,
+    repo: &Path,
+) -> Option<crate::revert_gate::GateInputs> {
+    gate_mode::inputs_for(routes, session, repo, None, gate_mode::DEADLINES)
 }
 
 /// `git <args>` run as session `a` in `dir`, whose dispatchers start the real gate-hook.
 fn real_gate(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
-    fixture
-        .session_git("a", dir, &[])
+    real_gate_command(fixture, dir, args).output().unwrap()
+}
+
+/// The command [`real_gate`] runs.
+fn real_gate_command(fixture: &Fixture, dir: &Path, args: &[&str]) -> Command {
+    real_gate_command_under(fixture, dispatchers(), dir, args)
+}
+
+/// [`real_gate_command`] with the dispatchers at `hooks`, whose data directory is the one the real
+/// `gate-hook` finds the daemon's records in.
+fn real_gate_command_under(fixture: &Fixture, hooks: &Path, dir: &Path, args: &[&str]) -> Command {
+    let mut command = fixture.session_git_with(hooks, "a", dir, &[]);
+    command
         .env(
             "OCTOBOARD_TEST_GATE_BINARY",
             std::env::current_exe().unwrap(),
         )
-        .args(args)
-        .output()
-        .unwrap()
+        .args(args);
+    command
 }
 
 fn ok(fixture: &Fixture, args: &[&str]) {
@@ -329,9 +359,7 @@ fn the_hook_side_takes_only_an_answer_as_a_reason_to_run_the_gate() {
     let (fixture, _) = project_with_remote();
     let daemon = Daemon::start(&fixture.state);
     let repo = fixture.repo.to_path_buf();
-    let ask = |port: u16, session: &str| {
-        crate::session_git_hooks::gate_mode::inputs_for(port, TEST_KEY, session, &repo, None)
-    };
+    let ask = |port: u16, session: &str| ask_through(&launch_route(port, TEST_KEY), session, &repo);
 
     let answer = ask(daemon.port, "a").expect("an answer");
     assert_eq!(answer.guard, ["main"]);
@@ -340,7 +368,7 @@ fn the_hook_side_takes_only_an_answer_as_a_reason_to_run_the_gate() {
     assert_eq!(ask(daemon.port, "a"), None);
     assert_eq!(ask(closed_port(), "a"), None, "no daemon is no answer");
     assert_eq!(
-        crate::session_git_hooks::gate_mode::inputs_for(daemon.port, "wrong", "a", &repo, None),
+        ask_through(&launch_route(daemon.port, "wrong"), "a", &repo),
         None,
         "a refusal is no answer either, whatever the daemon's body says"
     );
@@ -376,7 +404,7 @@ fn a_holder_with_no_daemon_or_one_that_was_lost_is_no_answer_to_run_the_gate_wit
     for status in [crate::loopback::NO_DAEMON, crate::loopback::DAEMON_LOST] {
         let port = answering_with(status);
         assert_eq!(
-            crate::session_git_hooks::gate_mode::inputs_for(port, TEST_KEY, "a", &repo, None),
+            ask_through(&launch_route(port, TEST_KEY), "a", &repo),
             None,
             "{status}"
         );
@@ -444,7 +472,10 @@ fn an_existing_branch_moving_is_put_to_the_gate_once_and_a_creation_is_not() {
     let (args, input) = calls[0].split_once('\t').unwrap();
     assert_eq!(
         args,
-        format!("gate-hook --session a --port 1 --key {TEST_KEY} reference-transaction prepared")
+        format!(
+            "gate-hook --session a --port 1 --data-dir {} reference-transaction prepared",
+            data_dir_of(dispatchers())
+        )
     );
     assert!(
         updates(input)
@@ -568,6 +599,58 @@ fn a_session_without_the_variables_is_not_gated() {
     assert!(gate_calls(&fixture).is_empty());
 }
 
+/// A git whose environment names the session but no port and no key file (a job the session left
+/// running, with its launch's variables gone) still has its helpers started, without a port, which
+/// is what sends them to the daemon's own route; one that does not name the session has none.
+#[test]
+fn a_session_whose_environment_names_no_port_or_key_file_still_starts_its_helpers() {
+    let fixture = gated_fixture();
+    let without_route = |args: &[&str]| {
+        let mut command = fixture.session_git("a", &fixture.repo, &[]);
+        command
+            .env_remove("OCTOBOARD_DAEMON_PORT")
+            .env_remove("OCTOBOARD_DAEMON_CREDENTIAL_PATH")
+            .args(args);
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+
+    without_route(&["commit", "-q", "--allow-empty", "-m", "next"]);
+    let calls = gate_calls(&fixture);
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    assert_eq!(
+        calls[0].split_once('\t').unwrap().0,
+        format!(
+            "gate-hook --session a --data-dir {} reference-transaction prepared",
+            data_dir_of(dispatchers())
+        )
+    );
+
+    without_route(&["branch", "topic"]);
+    let deadline = std::time::Instant::now() + PATIENCE;
+    let lines = loop {
+        let lines = fixture.report_lines();
+        if lines.iter().any(|line| line.contains("refs/heads/topic")) {
+            break lines;
+        }
+        assert!(std::time::Instant::now() < deadline, "no report: {lines:?}");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    for line in &lines {
+        let args = line.splitn(4, '\t').nth(3).unwrap();
+        assert!(args.starts_with("git-ref --session a "), "{args}");
+        assert!(!args.contains("--port"), "{args}");
+        assert!(
+            args.contains(&format!(" --data-dir {} ", data_dir_of(dispatchers()))),
+            "{args}"
+        );
+    }
+}
+
 #[test]
 fn a_gate_that_cannot_start_lets_the_update_through() {
     let fixture = gated_fixture();
@@ -618,7 +701,10 @@ fn a_push_of_a_branch_is_put_to_the_gate_after_the_users_hook() {
     let (args, input) = calls[0].split_once('\t').unwrap();
     assert_eq!(
         args,
-        format!("gate-hook --session a --port 1 --key {TEST_KEY} pre-push")
+        format!(
+            "gate-hook --session a --port 1 --data-dir {} pre-push",
+            data_dir_of(dispatchers())
+        )
     );
     assert!(input.starts_with("refs/heads/main "), "{input}");
     assert!(input.contains(" refs/heads/main "), "{input}");
@@ -763,6 +849,110 @@ fn a_move_that_undoes_merged_content_is_rejected_until_the_switch_is_turned_off(
         &["update-ref", "refs/heads/main", &squashed, &old],
     );
     assert!(succeeds(output), "the same move, with the same session");
+    assert_eq!(rev(&repo, "main"), squashed);
+}
+
+/// With no `OCTOBOARD_DAEMON_CREDENTIAL_PATH`, an empty one, or one naming a file that is missing,
+/// unreadable, empty or blank, `gate-hook` finds no launch key and goes to the daemon's own route;
+/// with no daemon recorded in the data directory either, it lets the update through.
+#[test]
+fn a_move_the_gate_would_reject_passes_when_neither_route_can_be_used() {
+    let (fixture, _) = project_with_remote();
+    let daemon = Daemon::start(&fixture.state);
+    fixture.port.store(daemon.port, Ordering::Relaxed);
+    let repo = fixture.repo.to_path_buf();
+    let (old, squashed) = squash_with_changed_base(&fixture);
+    let args = ["update-ref", "refs/heads/main", &squashed, &old];
+
+    let with_key = real_gate(&fixture, &repo, &args);
+    assert!(!succeeds(with_key));
+    assert_eq!(rev(&repo, "main"), old);
+
+    let empty = fixture.dir.join("empty-key");
+    std::fs::write(&empty, "").unwrap();
+    let blank = fixture.dir.join("blank-key");
+    std::fs::write(&blank, "\n").unwrap();
+    let missing = fixture.dir.join("missing-key");
+    // A path that names something that cannot be read as a file.
+    let unreadable = fixture.dir.to_path_buf();
+    let no_path = std::ffi::OsString::new();
+    for key_file in [
+        None,
+        Some(no_path.as_os_str()),
+        Some(empty.as_os_str()),
+        Some(blank.as_os_str()),
+        Some(missing.as_os_str()),
+        Some(unreadable.as_os_str()),
+    ] {
+        let mut command = real_gate_command(&fixture, &repo, &args);
+        match key_file {
+            Some(path) => command.env("OCTOBOARD_DAEMON_CREDENTIAL_PATH", path),
+            None => command.env_remove("OCTOBOARD_DAEMON_CREDENTIAL_PATH"),
+        };
+        let output = command.output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        assert!(succeeds(output), "{key_file:?}: {stderr}");
+        assert!(!stderr.contains("revert-gate"), "{key_file:?}: {stderr}");
+        assert_eq!(rev(&repo, "main"), squashed, "{key_file:?}");
+        git(&repo, &["update-ref", "refs/heads/main", &old]);
+    }
+}
+
+/// A job left running after its session ended: the session is archived, its scratch directory and
+/// key file are gone, and nothing listens on the port its environment names any more (the holder
+/// has exited). The gate still asks the daemon, through the record it keeps in the data directory
+/// the dispatchers are under, and still rejects a move it would reject; so does the same job with
+/// no port at all.
+#[test]
+fn a_job_its_session_left_running_is_still_gated_through_the_daemons_record() {
+    let (fixture, _) = project_with_remote();
+    let daemon = Daemon::start(&fixture.state);
+    // The dispatchers' own data directory holds the daemon's records; the home the job's
+    // environment names is not it.
+    let data = fixture.dir.join("data");
+    crate::owner_record::Owner::current(daemon.port, false, true)
+        .expect("this process's identity")
+        .record_in(&data, TEST_KEY)
+        .unwrap();
+    let hooks = dispatchers_in(&data.join("githooks"));
+    let home = crate::test_support::isolated_home();
+    let mut ended = session_record("a", "project");
+    ended.status = crate::protocol::SessionStatus::Archived;
+    ended.ended_at = Some(crate::time::now_millis());
+    fixture.state.store.update_session(&ended).unwrap();
+    fixture.port.store(closed_port(), Ordering::Relaxed);
+    let repo = fixture.repo.to_path_buf();
+    let (old, squashed) = squash_with_changed_base(&fixture);
+    let args = ["update-ref", "refs/heads/main", &squashed, &old];
+
+    for port in [true, false] {
+        let mut command = real_gate_command_under(&fixture, &hooks, &repo, &args);
+        command.env("HOME", &home).env("USERPROFILE", &home).env(
+            "OCTOBOARD_DAEMON_CREDENTIAL_PATH",
+            fixture.dir.join("run/a/key"),
+        );
+        if !port {
+            command.env_remove("OCTOBOARD_DAEMON_PORT");
+        }
+        let output = command.output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        assert!(!succeeds(output), "port {port}: {stderr}");
+        assert!(
+            stderr.contains("[revert-gate] Refusing to move main"),
+            "port {port}: {stderr}"
+        );
+        assert_eq!(rev(&repo, "main"), old, "port {port}");
+    }
+
+    // The control: without the daemon's record the same move goes through.
+    let output = real_gate_command(&fixture, &repo, &args)
+        .env(
+            "OCTOBOARD_DAEMON_CREDENTIAL_PATH",
+            fixture.dir.join("run/a/key"),
+        )
+        .output()
+        .unwrap();
+    assert!(succeeds(output));
     assert_eq!(rev(&repo, "main"), squashed);
 }
 

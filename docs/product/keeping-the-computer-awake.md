@@ -26,7 +26,7 @@ While Prevent sleep is on, the daemon keeps the computer awake according to When
 - **Always**: for as long as the daemon runs. In the desktop application the daemon starts and stops with the
   application, so this is for as long as Octoboard runs — with its window shown or closed into the background; a
   daemon started on its own holds until it is stopped (see "The daemon on its own" in
-  `docs/product/application-lifecycle.md`).
+  `docs/product/server-form.md`).
 - **While sessions work**, the choice to begin with: while at least one session, in any console or project, is
   *starting*, *working*, *dormant* or *working in background*, a *paused* one that still has work running in the
   background included (see `docs/product/session-statuses.md`). A session *waiting for the user* does not count, nor

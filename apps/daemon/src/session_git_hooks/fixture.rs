@@ -28,16 +28,17 @@ use crate::test_support::{
 };
 use crate::time::now_millis;
 
-/// The dispatchers every test here runs git with, written once per test binary under a fixed
-/// name, as a fresh executable per test would pay macOS's first-exec cost each time. Their report
-/// goes to a stand-in for `octoboardd git-ref` that appends what it was started with — its
-/// directory (as Windows spells it where the shell is MSYS's), `GIT_DIR` and arguments — to the
-/// file `OCTOBOARD_TEST_REPORTS` names. The same stand-in answers `octoboardd gate-hook`: it
-/// appends its arguments and the input it was given to the file `OCTOBOARD_TEST_GATES` names and
-/// exits with the status `OCTOBOARD_TEST_GATE_STATUS` holds, 0 when unset, as the gate would for a
-/// rejection (3) or any other outcome. With `OCTOBOARD_TEST_GATE_BINARY` set to the test binary it
-/// instead runs the real `gate-hook` in that binary (see `tests::gate::gate_hook_child`), against
-/// whatever daemon the session's port names.
+/// The dispatchers every test here runs git with, written once per test binary under a fixed name,
+/// as a fresh executable per test would pay macOS's first-exec cost each time. Their report goes to
+/// a stand-in for `octoboardd git-ref` that appends what it was started with — its directory (as
+/// Windows spells it where the shell is MSYS's), `GIT_DIR`, what the file
+/// `OCTOBOARD_DAEMON_CREDENTIAL_PATH` names holds and arguments — to the file
+/// `OCTOBOARD_TEST_REPORTS` names. The same stand-in answers `octoboardd gate-hook`: it appends its
+/// arguments and the input it was given to the file `OCTOBOARD_TEST_GATES` names and exits with the
+/// status `OCTOBOARD_TEST_GATE_STATUS` holds, 0 when unset, as the gate would for a rejection (3)
+/// or any other outcome. With `OCTOBOARD_TEST_GATE_BINARY` set to the test binary it instead runs
+/// the real `gate-hook` in that binary (see `tests::gate::gate_hook_child`), against whatever
+/// daemon the session's port names.
 pub(crate) fn dispatchers() -> &'static Path {
     static DIR: OnceLock<PathBuf> = OnceLock::new();
     DIR.get_or_init(|| dispatchers_for(&system_exec_path(), &[]))
@@ -52,18 +53,39 @@ pub(crate) fn system_exec_path() -> String {
     String::from_utf8(output.stdout).unwrap().trim().to_string()
 }
 
-/// Dispatchers written as for a git with `exec_path` that reads `system_files`.
+/// Dispatchers written as for a git with `exec_path` that reads `system_files`, under a data
+/// directory of their own that nothing writes a daemon's records to, so a helper that falls back to
+/// the daemon's route finds none.
 pub(crate) fn dispatchers_for(exec_path: &str, system_files: &[PathBuf]) -> PathBuf {
-    let state = std::env::temp_dir().join("octoboardd-test-githooks/state");
+    let state = std::env::temp_dir().join("octoboardd-test-data/githooks/state");
     std::fs::create_dir_all(&state).unwrap();
     dispatchers_with(exec_path, system_files, &state)
 }
 
 /// [`dispatchers_for`] with a state directory of the caller's.
 pub(crate) fn dispatchers_with(exec_path: &str, system_files: &[PathBuf], state: &Path) -> PathBuf {
-    let temp = std::env::temp_dir();
+    let root = std::env::temp_dir().join("octoboardd-test-data/githooks");
+    write_dispatchers(&root, exec_path, system_files, state)
+}
+
+/// The usual dispatchers written under `root`, a directory of the caller's, with their state
+/// directory beside them. A fresh executable each, so for a test that needs the path itself.
+pub(crate) fn dispatchers_in(root: &Path) -> PathBuf {
+    let state = root.join("state");
+    std::fs::create_dir_all(&state).unwrap();
+    write_dispatchers(root, &system_exec_path(), &[], &state)
+}
+
+/// Dispatchers for the stand-in under `root`, as for a git with `exec_path` that reads
+/// `system_files`, with `state` as their state directory.
+fn write_dispatchers(
+    root: &Path,
+    exec_path: &str,
+    system_files: &[PathBuf],
+    state: &Path,
+) -> PathBuf {
     let stand_in = installed(
-        "octoboardd-test-git-ref",
+        "octoboardd-test-hook-helper",
         "#!/bin/sh\n\
          if [ \"$1\" = gate-hook ]; then\n\
          if [ -n \"${OCTOBOARD_TEST_GATE_BINARY-}\" ]; then\n\
@@ -73,11 +95,10 @@ pub(crate) fn dispatchers_with(exec_path: &str, system_files: &[PathBuf], state:
          printf '%s\\t%s\\n' \"$*\" \"$(tr '\\n' ' ')\" >>\"${OCTOBOARD_TEST_GATES:-/dev/null}\"\n\
          exit \"${OCTOBOARD_TEST_GATE_STATUS:-0}\"\n\
          fi\n\
-         printf '%s\\t%s\\t%s\\n' \"$(pwd -W 2>/dev/null || pwd)\" \"${GIT_DIR-}\" \"$*\" \
-         >>\"$OCTOBOARD_TEST_REPORTS\"\n",
+         printf '%s\\t%s\\t%s\\t%s\\n' \"$(pwd -W 2>/dev/null || pwd)\" \"${GIT_DIR-}\" \
+         \"$(cat \"${OCTOBOARD_DAEMON_CREDENTIAL_PATH-}\" 2>/dev/null)\" \"$*\" >>\"$OCTOBOARD_TEST_REPORTS\"\n",
         true,
     );
-    let root = temp.join("octoboardd-test-githooks");
     let names: BTreeSet<String> = BUILT_IN_HOOKS.iter().map(|n| n.to_string()).collect();
     let script = render(&Rendering {
         interpreter: shell::posix_interpreter(),
@@ -86,7 +107,7 @@ pub(crate) fn dispatchers_with(exec_path: &str, system_files: &[PathBuf], state:
         state,
         system_files,
     });
-    write_dir(&root, &names, &script).unwrap()
+    write_dir(root, &names, &script).unwrap()
 }
 
 /// A file of `body` under a fixed name in the temporary directory, written by renaming one of this
@@ -103,6 +124,20 @@ pub(crate) fn installed(name: &str, body: &str, executable: bool) -> PathBuf {
         std::fs::rename(&own, &path).unwrap();
     }
     path
+}
+
+/// The data directory the dispatchers `hooks` are under, as the dispatchers pass it to the helpers:
+/// `<data>/githooks/<hash>` has it two levels up, spelled as the shell does.
+pub(crate) fn data_dir_of(hooks: &Path) -> String {
+    shell::posix_path(hooks.parent().and_then(Path::parent).unwrap())
+}
+
+/// A key file holding [`TEST_KEY`] under a fixed name in the temporary directory, the file the
+/// sessions' environments name.
+pub(crate) fn test_key_file() -> PathBuf {
+    static FILE: OnceLock<PathBuf> = OnceLock::new();
+    FILE.get_or_init(|| installed("octoboardd-test-key", TEST_KEY, false))
+        .clone()
 }
 
 /// A session of `project` that started a minute ago and is still running.
@@ -203,7 +238,8 @@ impl Fixture {
     }
 
     /// `git <args>` in `dir` as the agent of `session` runs it: with the variables a project
-    /// session is launched with, after any `GIT_CONFIG_*` entries of the user's own in `user`.
+    /// session is launched with, after any `GIT_CONFIG_*` entries of the user's own in `user` (a
+    /// `GIT_CONFIG_PARAMETERS` there has the injected entry put after it, as a launch does).
     pub(crate) fn session_git(&self, session: &str, dir: &Path, user: &[(&str, &str)]) -> Command {
         self.session_git_with(dispatchers(), session, dir, user)
     }
@@ -216,19 +252,19 @@ impl Fixture {
         dir: &Path,
         user: &[(&str, &str)],
     ) -> Command {
-        let slot = user
+        let parameters = user
             .iter()
-            .find(|(key, _)| *key == "GIT_CONFIG_COUNT")
-            .map_or(0, |(_, count)| count.parse().unwrap());
+            .find(|(key, _)| *key == "GIT_CONFIG_PARAMETERS")
+            .map_or("", |(_, value)| value);
         let mut command = fixture_git(dir);
         command
             .envs(user.iter().copied())
             .envs(injected(
-                slot,
+                parameters,
                 hooks,
                 session,
                 self.port.load(Ordering::Relaxed),
-                TEST_KEY,
+                &test_key_file(),
             ))
             .env("OCTOBOARD_TEST_REPORTS", &*self.reports)
             .env("OCTOBOARD_TEST_GATES", &*self.gates);
@@ -307,15 +343,19 @@ impl Fixture {
 /// One line of the stand-in's: the session it reported for and the report `octoboardd git-ref`
 /// would have posted.
 pub(crate) fn parse_report(line: &str) -> (String, RefReport) {
-    let mut fields = line.splitn(3, '\t');
+    let mut fields = line.splitn(4, '\t');
     let cwd = PathBuf::from(fields.next().unwrap());
     let git_dir = fields.next().unwrap();
+    let key = fields.next().unwrap();
     let args: Vec<&str> = fields.next().unwrap().split(' ').collect();
     let session = args[args.iter().position(|a| *a == "--session").unwrap() + 1].to_string();
     assert_eq!(
-        args[args.iter().position(|a| *a == "--key").unwrap() + 1],
-        TEST_KEY,
-        "the git-ref invocation carries the daemon's key"
+        key, TEST_KEY,
+        "the git-ref invocation finds the daemon's key in the file its environment names"
+    );
+    assert!(
+        !args.contains(&"--key") && !line.rsplit('\t').next().unwrap().contains(TEST_KEY),
+        "the git-ref invocation carries no key in its arguments"
     );
     let head = args
         .iter()

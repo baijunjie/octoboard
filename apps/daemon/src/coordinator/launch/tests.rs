@@ -1069,3 +1069,46 @@ fn launch_overrides_are_written_and_published_together_once() {
         Err(tokio::sync::broadcast::error::TryRecvError::Empty)
     ));
 }
+
+/// A launch hands the git hook dispatchers the installation's entry point, which an update replaces
+/// in place, not the running image or a holder's copy of the build, which go away under a job its
+/// session left running.
+#[tokio::test(start_paused = true)]
+async fn a_launch_names_the_installation_for_the_git_hooks() {
+    use std::sync::Mutex;
+    let (state, dir) = crate::test_support::app_state("launch-install-exe");
+    state
+        .store
+        .insert_console(&console(AgentId::CODEX, &dir))
+        .unwrap();
+    let mut project = project_of("console-1", "project-1");
+    project.path = dir.to_string_lossy().into_owned();
+    state.store.insert_project(&project).unwrap();
+    let mut session = bare_session("s", SessionKind::Project);
+    session.agent = AgentId::CODEX;
+    session.project_id = Some(project.id.clone());
+    session.status = SessionStatus::Interrupted;
+    state.store.insert_session(&session).unwrap();
+    let observed = Arc::new(Mutex::new(None));
+    let seen = observed.clone();
+    let claim = state.begin_launch("s").unwrap();
+    let result = relaunch_session_with(
+        &state,
+        &claim,
+        "s",
+        None,
+        false,
+        Some(std::collections::HashMap::new()),
+        None,
+        move |request| {
+            *seen.lock().unwrap() = Some((request.install_exe.clone(), request.self_exe.clone()));
+            Err(anyhow::anyhow!("fixture stops before creating a process"))
+        },
+    )
+    .await;
+    assert!(result.is_err());
+    tokio::time::advance(crate::test_support::PATIENCE).await;
+    let (install_exe, self_exe) = observed.lock().unwrap().clone().expect("a launch request");
+    assert_eq!(install_exe, crate::test_support::INSTALL_EXE);
+    assert_ne!(install_exe, self_exe);
+}

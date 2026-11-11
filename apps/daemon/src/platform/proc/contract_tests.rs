@@ -9,6 +9,10 @@ use std::time::{Duration, Instant};
 use super::*;
 use crate::platform::proc_table::{self, EnvRead};
 use crate::platform::test_helper::{self, write_pid, PID_FILE, ROLE};
+#[cfg(target_os = "linux")]
+use crate::test_support::assert_detached_session_leader;
+#[cfg(target_os = "linux")]
+use crate::test_support::cgroups::{cgroup_of, grouped_launch};
 use crate::test_support::{
     assert_gone_by, is_running, wait_for_pid, KillOnDrop, ScratchDir, PATIENCE,
 };
@@ -71,6 +75,8 @@ fn wait_for_unreaped_exit(child: &ChildHandle) {
 ///   its own.
 /// - `lead_orphan`: starts an `orphan_detached` helper, waits for it to exit, writes the pid of the
 ///   process it left, and waits to be ended.
+/// - `start_background_beside_inheritable`: see [`background_beside_inheritable`]; it
+///   exits once done.
 #[test]
 fn a_helper_process() {
     let (Ok(role), Some(pid_file)) = (std::env::var(ROLE), std::env::var_os(PID_FILE)) else {
@@ -142,9 +148,173 @@ fn a_helper_process() {
             write_pid(pid_file, wait_for_pid(&middle_file) as u32);
             None
         }
+        "start_background_beside_inheritable" => {
+            background_beside_inheritable(pid_file);
+            return;
+        }
         other => panic!("unknown role {other}"),
     };
     std::thread::sleep(PATIENCE * 2);
+}
+
+/// A process started for the background keeps the stdio the starter piped, which carries the
+/// daemon's handshake, and runs on its own until it is ended.
+#[test]
+fn a_process_started_in_the_background_keeps_its_pipes() {
+    use std::io::{BufRead, BufReader};
+
+    let dir = ScratchDir::new("proc-background");
+    let pid_file = dir.join("background");
+    let mut command = Command::new(test_helper::program());
+    command
+        .args(test_helper::args(
+            "platform::proc::contract_tests::a_helper_process",
+        ))
+        .env(ROLE, "park")
+        .env(PID_FILE, &pid_file);
+    let (mut child, _in_starter_job) =
+        spawn_in_background(&mut command, false).expect("the background start spawns");
+    let mut guard = KillOnDrop(vec![child.id() as i32]);
+
+    // The test binary prints a blank line before "running 1 test": read until that line, which the
+    // pipe carries to this reader, or the end of the pipe, within a bound.
+    let mut reader = BufReader::new(child.stdout.take().expect("stdout was piped"));
+    let mut seen = String::new();
+    for _ in 0..8 {
+        let mut line = String::new();
+        if reader.read_line(&mut line).expect("a line on the pipe") == 0 {
+            break;
+        }
+        seen.push_str(&line);
+        if line.contains("running") {
+            break;
+        }
+    }
+    assert!(seen.contains("running 1 test"), "{seen:?}");
+    assert_eq!(wait_for_pid(&pid_file), child.id() as i32);
+
+    child.kill().expect("the child is ended");
+    child.wait().expect("the child is reaped");
+    guard.0.clear();
+    // Held to here, so the pipe stays open while the child runs.
+    drop(reader);
+}
+
+/// A program that cannot be started is reported by the background start, which marks the
+/// starter's descriptors close-on-exec between `fork` and `exec` without touching the pipe `std`
+/// reports a failed `exec` through.
+#[cfg(unix)]
+#[test]
+fn a_program_that_cannot_be_started_in_the_background_is_an_error() {
+    let mut command = Command::new("/nonexistent/octoboard-background-test");
+    let err = spawn_in_background(&mut command, false).err();
+    assert_eq!(
+        err.map(|err| err.kind()),
+        Some(std::io::ErrorKind::NotFound)
+    );
+}
+
+/// A process started for the background inherits nothing of the starter's but its pipes: an
+/// inheritable handle or descriptor the starter holds, as the standard handles a shell gives it
+/// are (and a descriptor such as `3>&1`), is not kept open by the process (see
+/// [`background_beside_inheritable`]).
+#[test]
+fn a_process_started_in_the_background_inherits_nothing_else() {
+    let dir = ScratchDir::new("proc-background-handles");
+    let pid_file = dir.join("starter");
+    let mut starter = start("start_background_beside_inheritable", &pid_file, |_| {});
+    let mut guard = KillOnDrop(vec![starter.id() as i32]);
+    wait_for_exit(&mut starter);
+    guard.0.clear();
+    let outcome = std::fs::read_to_string(pid_file.with_extension("outcome"))
+        .unwrap_or_else(|err| format!("the starter wrote no outcome: {err}"));
+    assert_eq!(outcome, "ok");
+}
+
+/// What the `start_background_beside_inheritable` helper does: holds the write end of a pipe open
+/// for inheritance (a handle on Windows, a descriptor above the standard three on Unix), starts a
+/// `park` helper the plain way and another for the background ([`spawn_in_background`]), lets go
+/// of the write end, and writes to the `outcome` sibling of `pid_file` `ok` when a read on the
+/// pipe ends only once the plain helper has been ended (which shows the handle was inheritable),
+/// while the other runs on; what went otherwise if not. Then it ends both. It runs in a process
+/// of its own, where no other test starts a process meanwhile that would inherit the write end
+/// too and hold the read up.
+fn background_beside_inheritable(pid_file: &Path) {
+    use std::io::Read;
+    use std::sync::mpsc;
+
+    let (mut reader, writer) = std::io::pipe().expect("a pipe");
+    make_inheritable(&writer);
+
+    let plain_file = pid_file.with_extension("plain");
+    let mut plain = start("park", &plain_file, |_| {});
+    let background_file = pid_file.with_extension("background");
+    let mut command = Command::new(test_helper::program());
+    command
+        .args(test_helper::args(
+            "platform::proc::contract_tests::a_helper_process",
+        ))
+        .env(ROLE, "park")
+        .env(PID_FILE, &background_file);
+    let (mut background, _in_starter_job) =
+        spawn_in_background(&mut command, false).expect("the background start spawns");
+    wait_for_pid(&plain_file);
+    wait_for_pid(&background_file);
+    drop(writer);
+
+    // The read ends only once no process holds the write end; it goes on in a thread of its own
+    // until then.
+    let (ended_tx, ended) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut byte = [0u8; 1];
+        let _ = ended_tx.send(reader.read(&mut byte).map(|read| read == 0));
+    });
+    let outcome = if ended.recv_timeout(Duration::from_millis(500)).is_ok() {
+        "the read ended while the plain helper ran: the write end was not inheritable"
+    } else {
+        plain.kill().expect("the plain helper is ended");
+        plain.wait().expect("the plain helper is reaped");
+        if !matches!(ended.recv_timeout(PATIENCE / 2), Ok(Ok(true))) {
+            "the read did not end once the plain helper was ended: the background helper holds \
+             the write end"
+        } else if !is_running(background.id() as i32) {
+            "the background helper ended"
+        } else {
+            "ok"
+        }
+    };
+    plain.kill().ok();
+    plain.wait().ok();
+    background.kill().ok();
+    background.wait().ok();
+    std::fs::write(pid_file.with_extension("outcome"), outcome).expect("the outcome is written");
+}
+
+/// Makes `writer` inherited by every process started the plain way.
+#[cfg(windows)]
+fn make_inheritable(writer: &std::io::PipeWriter) {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{SetHandleInformation, HANDLE_FLAG_INHERIT};
+
+    // SAFETY: the handle is open.
+    let marked = unsafe {
+        SetHandleInformation(
+            writer.as_raw_handle(),
+            HANDLE_FLAG_INHERIT,
+            HANDLE_FLAG_INHERIT,
+        )
+    };
+    assert_ne!(marked, 0, "the write end is made inheritable");
+}
+
+/// Makes `writer` inherited by every process started the plain way: `std` makes it close-on-exec.
+#[cfg(unix)]
+fn make_inheritable(writer: &std::io::PipeWriter) {
+    use std::os::fd::AsRawFd;
+
+    // SAFETY: the descriptor is open; clearing its flags only changes it for this process.
+    let cleared = unsafe { libc::fcntl(writer.as_raw_fd(), libc::F_SETFD, 0) };
+    assert_ne!(cleared, -1, "the write end is made inheritable");
 }
 
 /// What a helper that does not take a polite request to terminate does to ask for it.
@@ -438,20 +608,6 @@ fn a_launch_is_found_again_after_the_daemon_that_started_it_exits() {
     }
 }
 
-/// The containment of an agent launch with the group a Linux host lets the calling process make,
-/// or `None`, said on the test's output, where it does not: a plain container's read-only
-/// `/sys/fs/cgroup`, a cgroup owned by someone else.
-#[cfg(target_os = "linux")]
-fn grouped_launch(name: &str) -> Option<(String, Containment)> {
-    let launch = format!("{name}-{}", std::process::id());
-    let containment = Containment::for_launch("contract", &launch).expect("the containment");
-    if containment.members().is_none() {
-        eprintln!("skipped: no writable cgroup v2 subtree to make a launch's group in");
-        return None;
-    }
-    Some((launch, containment))
-}
-
 /// The identity of the running process `pid`.
 #[cfg(target_os = "linux")]
 fn identity_of(pid: i32) -> ProcessIdentity {
@@ -464,10 +620,7 @@ fn identity_of(pid: i32) -> ProcessIdentity {
 /// Starts `role` leading a session of its own into `containment`, as an agent is started.
 #[cfg(target_os = "linux")]
 fn start_in(containment: &Containment, role: &str, pid_file: &Path) -> (Child, ChildHandle) {
-    let child = start(role, pid_file, |command| {
-        Reach::Session.lead(command);
-        containment.prepare(command);
-    });
+    let child = start_entering_only(containment, role, pid_file);
     let handle = ChildHandle::started(ProcessId(child.id()), Reach::Session, Some(containment))
         .expect("the child is taken on");
     (child, handle)
@@ -478,7 +631,7 @@ fn start_in(containment: &Containment, role: &str, pid_file: &Path) -> (Child, C
 #[cfg(target_os = "linux")]
 #[test]
 fn a_launch_s_group_ends_what_its_process_started_however_it_detached() {
-    let Some((_, containment)) = grouped_launch("group-end") else {
+    let Some((_, containment)) = grouped_launch("contract", "group-end") else {
         return;
     };
     let dir = ScratchDir::new("proc-group-end");
@@ -486,17 +639,7 @@ fn a_launch_s_group_ends_what_its_process_started_however_it_detached() {
     let (mut leader, handle) = start_in(&containment, "lead_orphan", &pid_file);
     let orphan = wait_for_pid(&pid_file);
     let mut guard = KillOnDrop(vec![leader.id() as i32, orphan]);
-    let info = proc_table::list()
-        .expect("the process table is listed")
-        .into_iter()
-        .find(|info| info.pid == orphan)
-        .expect("the orphan runs");
-    assert_ne!(info.ppid, leader.id() as i32, "the orphan was reparented");
-    assert_eq!(
-        info.sid,
-        Some(ContainerId(orphan as u32)),
-        "it leads its own session"
-    );
+    assert_detached_session_leader(orphan, leader.id());
 
     let members = containment.members().expect("the group is read");
     assert!(members.contains(&ProcessId(leader.id())), "{members:?}");
@@ -519,7 +662,7 @@ fn a_launch_s_group_ends_what_its_process_started_however_it_detached() {
 #[cfg(target_os = "linux")]
 #[test]
 fn what_a_launch_s_group_spares_outlives_its_end() {
-    let Some((_, containment)) = grouped_launch("group-spare") else {
+    let Some((_, containment)) = grouped_launch("contract", "group-spare") else {
         return;
     };
     let dir = ScratchDir::new("proc-group-spare");
@@ -573,7 +716,7 @@ fn what_a_launch_s_group_spares_outlives_its_end() {
 #[cfg(target_os = "linux")]
 #[test]
 fn a_leftover_group_is_found_again_and_removed_once_empty() {
-    let Some((launch, containment)) = grouped_launch("group-leftover") else {
+    let Some((launch, containment)) = grouped_launch("contract", "group-leftover") else {
         return;
     };
     assert!(Containment::leftovers("contract").contains(&launch));
@@ -594,7 +737,7 @@ fn a_leftover_group_is_found_again_and_removed_once_empty() {
 #[cfg(target_os = "linux")]
 #[test]
 fn a_joined_launch_s_group_takes_what_is_started_and_stays_its_maker_s() {
-    let Some((launch, containment)) = grouped_launch("group-join") else {
+    let Some((launch, containment)) = grouped_launch("contract", "group-join") else {
         return;
     };
     let joined = Containment::join_launch("contract", &launch).expect("the containment");
@@ -609,6 +752,95 @@ fn a_joined_launch_s_group_takes_what_is_started_and_stays_its_maker_s() {
     assert!(containment.end(&[]), "the group is gone");
     wait_for_unreaped_exit(&handle);
     assert!(!wait_for_exit(&mut child).success());
+    assert_eq!(containment.members(), None);
+    guard.0.clear();
+}
+
+/// The identity of this test process.
+fn own_identity() -> ProcessIdentity {
+    ProcessIdentity {
+        pid: ProcessId(std::process::id()),
+        start_micros: proc_table::start_of(std::process::id() as i32).expect("the process runs"),
+    }
+}
+
+/// A held launch carries its tag as any launch does, whatever a host makes of the placement and
+/// of noting a host, which change nothing of it.
+#[test]
+fn a_held_launch_carries_its_tag_whether_or_not_it_is_placed() {
+    let launch = format!("held-tag-{}", std::process::id());
+    let held = Containment::for_held_launch("contract", &launch).expect("the containment");
+    let plain = Containment::create("contract", &launch).expect("the containment");
+    let tagged = |containment: &Containment| {
+        let mut environment = std::collections::HashMap::new();
+        containment.prepare(&mut environment);
+        environment
+    };
+    let expected = tagged(&plain);
+    assert_eq!(
+        expected.get(TAG_VARIABLE),
+        Some(&tag_value("contract", &launch))
+    );
+    assert_eq!(tagged(&held), expected);
+
+    Containment::note_host(&own_identity());
+    held.place_with_host(&own_identity());
+    assert_eq!(tagged(&held), expected);
+}
+
+/// Until it is placed a held launch lists no members, moves and ends nothing, and is told by its
+/// tag alone. Where the host has no groups, placing it changes none of that.
+#[cfg(unix)]
+#[test]
+fn an_unplaced_held_launch_has_no_group() {
+    let launch = format!("held-unplaced-{}", std::process::id());
+    let held = Containment::for_held_launch("contract", &launch).expect("the containment");
+    let clone = held.clone();
+    assert_eq!(held.members(), None);
+    assert!(!held.releases_members());
+    assert!(held.release(&[own_identity()], None), "nothing to release");
+    assert!(held.end(&[]), "no group is left");
+    held.adopt(&[own_identity()]);
+    assert_eq!(held.members(), None);
+    assert!(!clone.releases_members());
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        held.place_with_host(&own_identity());
+        assert_eq!(held.members(), None);
+        assert!(!clone.releases_members());
+    }
+}
+
+/// On Linux a held launch placed with a host whose cgroup lets the calling process make a group
+/// has a group like any launch's: what it starts is in it however it detached, and its end kills
+/// all of it and removes the group.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_held_launch_placed_with_its_host_ends_what_it_started_like_any_launch() {
+    let launch = format!("held-end-{}", std::process::id());
+    let containment = Containment::for_held_launch("contract", &launch).expect("the containment");
+    containment.place_with_host(&own_identity());
+    if containment.members().is_none() {
+        eprintln!("skipped: no writable cgroup v2 subtree to make a launch's group in");
+        return;
+    }
+    assert!(containment.releases_members());
+    assert_eq!(containment.members(), Some(Vec::new()));
+
+    let dir = ScratchDir::new("proc-held-end");
+    let pid_file = dir.join("leader");
+    let (mut leader, handle) = start_in(&containment, "lead_orphan", &pid_file);
+    let orphan = wait_for_pid(&pid_file);
+    let mut guard = KillOnDrop(vec![leader.id() as i32, orphan]);
+    let members = containment.members().expect("the group is read");
+    assert!(members.contains(&ProcessId(leader.id())), "{members:?}");
+    assert!(members.contains(&ProcessId(orphan as u32)), "{members:?}");
+
+    assert!(containment.end(&[]), "the group is gone");
+    assert_gone_by(orphan, Instant::now() + PATIENCE);
+    wait_for_unreaped_exit(&handle);
+    assert!(!wait_for_exit(&mut leader).success());
     assert_eq!(containment.members(), None);
     guard.0.clear();
 }
@@ -655,4 +887,132 @@ async fn the_parent_watch_calls_back_once_the_process_is_gone() {
         .await
         .expect("the watch noticed within the bound")
         .expect("the callback ran");
+}
+
+/// Starts `role` as [`start_in`] does, but without taking it on afterwards: nothing moves it into
+/// the group once it was started, so what the group holds is only what entered it before the
+/// program ran.
+#[cfg(unix)]
+fn start_entering_only(containment: &Containment, role: &str, pid_file: &Path) -> Child {
+    start(role, pid_file, |command| {
+        Reach::Session.lead(command);
+        containment.prepare(command);
+        containment.enter_before_exec(command);
+    })
+}
+
+/// A process started with the hook registered is in its launch's group by the time the start
+/// returns, with nothing having moved it in afterwards: [`start_entering_only`] does not take it
+/// on, so the group holds it only if the hook put it there.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_process_is_in_its_launch_s_group_from_before_its_program_runs() {
+    let Some((_, containment)) = grouped_launch("contract", "pre-exec-entry") else {
+        return;
+    };
+    assert!(containment.releases_members());
+    let dir = ScratchDir::new("proc-pre-exec");
+    let pid_file = dir.join("child");
+    let mut child = start_entering_only(&containment, "park", &pid_file);
+    let mut guard = KillOnDrop(vec![child.id() as i32]);
+
+    let members = containment.members().expect("the group is read");
+    assert!(members.contains(&ProcessId(child.id())), "{members:?}");
+    assert_ne!(
+        cgroup_of(child.id()),
+        cgroup_of(std::process::id()),
+        "the child is in the group, not in the test's own cgroup"
+    );
+
+    wait_for_pid(&pid_file);
+    assert!(containment.end(&[]), "the group is gone");
+    assert!(!wait_for_exit(&mut child).success());
+    assert_eq!(containment.members(), None);
+    guard.0.clear();
+}
+
+/// What a process forks and detaches at once, into a session of its own and away from its parent
+/// by a double fork, is in the group too, with nothing to move it in afterwards: it inherited the
+/// group from a process that was in it before its program ran.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_descendant_that_detaches_at_once_is_in_the_group_without_a_move_after_the_start() {
+    let Some((_, containment)) = grouped_launch("contract", "pre-exec-orphan") else {
+        return;
+    };
+    let dir = ScratchDir::new("proc-pre-exec-orphan");
+    let pid_file = dir.join("leader");
+    let mut leader = start_entering_only(&containment, "lead_orphan", &pid_file);
+    let orphan = wait_for_pid(&pid_file);
+    let mut guard = KillOnDrop(vec![leader.id() as i32, orphan]);
+    assert_detached_session_leader(orphan, leader.id());
+
+    let own = cgroup_of(std::process::id());
+    let group = cgroup_of(leader.id());
+    assert_ne!(group, own, "the leader is in the group");
+    assert_eq!(cgroup_of(orphan as u32), group);
+    let members = containment.members().expect("the group is read");
+    assert!(members.contains(&ProcessId(leader.id())), "{members:?}");
+    assert!(members.contains(&ProcessId(orphan as u32)), "{members:?}");
+
+    assert!(containment.end(&[]), "the group is gone");
+    assert_gone_by(orphan, Instant::now() + PATIENCE);
+    assert!(!wait_for_exit(&mut leader).success());
+    guard.0.clear();
+}
+
+/// A hook whose entry fails, as it does for a group whose directory is gone, does not fail the
+/// start: the program runs, outside any group.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_start_whose_group_entry_fails_still_runs_the_program() {
+    let Some((_, containment)) = grouped_launch("contract", "pre-exec-gone") else {
+        return;
+    };
+    assert!(containment.end(&[]), "the group is gone");
+    assert_eq!(containment.members(), None);
+    assert!(
+        containment.releases_members(),
+        "the containment still names its group"
+    );
+
+    let dir = ScratchDir::new("proc-pre-exec-gone");
+    let pid_file = dir.join("child");
+    let mut child = start_entering_only(&containment, "park", &pid_file);
+    let mut guard = KillOnDrop(vec![child.id() as i32]);
+    assert_eq!(wait_for_pid(&pid_file), child.id() as i32);
+    assert!(is_running(child.id() as i32));
+
+    child.kill().expect("the child is ended");
+    child.wait().expect("the child is reaped");
+    guard.0.clear();
+}
+
+/// Without a group (the tag alone, a held launch not yet placed, or any launch on a host with no
+/// groups) there is nothing to enter: the hook does nothing, and the program starts and runs
+/// outside any group.
+#[cfg(unix)]
+#[test]
+fn a_start_without_a_group_starts_the_program_without_a_group() {
+    let launch = format!("pre-exec-none-{}", std::process::id());
+    let tag_only = Containment::create("contract", &launch).expect("the containment");
+    let unplaced = Containment::for_held_launch("contract", &launch).expect("the containment");
+    for (name, containment) in [("tag-only", &tag_only), ("unplaced", &unplaced)] {
+        assert!(!containment.releases_members(), "{name}");
+        let dir = ScratchDir::new("proc-pre-exec-none");
+        let pid_file = dir.join("child");
+        let mut child = start_entering_only(containment, "park", &pid_file);
+        let mut guard = KillOnDrop(vec![child.id() as i32]);
+        assert_eq!(wait_for_pid(&pid_file), child.id() as i32, "{name}");
+        assert_eq!(containment.members(), None, "{name}");
+
+        child.kill().expect("the child is ended");
+        child.wait().expect("the child is reaped");
+        guard.0.clear();
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    assert!(!Containment::for_launch("contract", &launch)
+        .expect("the containment")
+        .releases_members());
 }

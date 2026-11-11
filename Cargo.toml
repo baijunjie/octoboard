@@ -26,3 +26,10 @@ rust-version = "1.99"
 # built without it. Panic backtraces of the workspace crates keep their line numbers.
 [profile.dev.package."*"]
 debug = false
+
+# The daemon names its build by the SHA-256 of its own executable when it and each process holder
+# start, and a Linux debug executable, debug information included, is hundreds of megabytes:
+# unoptimised, the hash takes longer than a holder is given to register. Optimised, it is a
+# fraction of a second.
+[profile.dev.package.sha2]
+opt-level = 3

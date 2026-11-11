@@ -337,3 +337,22 @@ mod host {
         }
     }
 }
+
+/// Asserts that the process `pid`, which was started by the process `parent`, has been
+/// reparented, as a double fork leaves it, and leads a session of its own.
+#[cfg(target_os = "linux")]
+pub(crate) fn assert_detached_session_leader(pid: i32, parent: u32) {
+    use crate::platform::proc::ContainerId;
+
+    let info = crate::platform::proc_table::list()
+        .expect("the process table is listed")
+        .into_iter()
+        .find(|info| info.pid == pid)
+        .expect("the process runs");
+    assert_ne!(info.ppid, parent as i32, "the process was reparented");
+    assert_eq!(
+        info.sid,
+        Some(ContainerId(pid as u32)),
+        "it leads its own session"
+    );
+}

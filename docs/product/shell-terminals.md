@@ -6,8 +6,7 @@ under "Open in" opens (see `docs/product/project-terminal.md`), and it is not a 
 
 Octoboard's window shows a project's shell terminals as tabs in the Terminal panel (see
 `docs/product/terminal-panel.md`). They exist in the daemon, and any client of the daemon can start one, type into it,
-rename it and close it; what that means for who can reach the daemon is in "Who can reach the daemon" in
-`docs/product/application-lifecycle.md`.
+rename it and close it; what that means for who can reach the daemon is in `docs/product/who-can-reach-the-daemon.md`.
 
 ## Who owns a shell terminal
 
@@ -24,7 +23,7 @@ Shell terminals are live state: they are held in memory, and only the name the u
 terminal is closed or its project removed. A shell terminal's shell runs in a process holder, not in the daemon (see
 `docs/product/process-holders.md`): an ordinary stop of the daemon ends every shell terminal (see "Closing a shell
 terminal" below), but a daemon that goes down without stopping — a crash, an internal failure, a kill — or makes a
-planned stop (see "Planned restart and planned stop" in `docs/product/application-lifecycle.md`) leaves the shells
+planned stop (see "Planned restart and planned stop" in `docs/product/server-form.md`) leaves the shells
 running, and the next daemon start restores each terminal whose project is still on record, under "What a daemon start
 takes over" in `docs/product/process-holders.md`. A restored terminal keeps its directory, worktree, place in the order
 and the name the user gave it, and its first paint is rebuilt from the output its holder kept (see "The screen of a
@@ -56,14 +55,14 @@ error alert whose remedy follows why it was refused (see "Recovery and unexpecte
 `docs/product/error-alerts.md`). The directory is recorded with its symbolic links resolved. After that the shell goes
 wherever the user takes it; the recorded directory does not follow.
 
-**What runs.** The shell is the user's login shell, `$SHELL` (`/bin/zsh` when that is unset), started as a login shell
-(`-l`). On a Windows daemon host it is the first of PowerShell 7 (`pwsh.exe`), Windows PowerShell (`powershell.exe`)
-and `cmd.exe` found on the `PATH`, `cmd.exe` when none is, started with no arguments. A PowerShell 7 installed from the
-Microsoft Store is started too, and what it runs stays among the shell's own processes, for the busy reading and the
-close below.
+**What runs.** The shell is the user's login shell, `$SHELL` (when that is unset, the shell the system user database
+records for the user, else `/bin/sh`), started as a login shell (`-l`). On a Windows daemon host it is the first of
+PowerShell 7 (`pwsh.exe`), Windows PowerShell (`powershell.exe`) and `cmd.exe` found on the `PATH`, `cmd.exe` when none
+is, started with no arguments. A PowerShell 7 installed from the Microsoft Store is started too, and what it runs stays
+among the shell's own processes, for the busy reading and the close below.
 
 **Its environment** is the environment an agent launch takes: the captured environment of the user's login +
-interactive shell — on a Windows daemon host the environment built from the system's and the user's variables —
+interactive shell — on a Windows daemon host the environment built as Windows builds a new sign-in's —
 reused under the same rules and filtered the same way (see "The launch environment" in
 `docs/product/launching-agents.md`). Unlike an agent launch, **a capture that fails does not refuse the shell**: it
 starts instead in the daemon's own environment, less the variables that mark a process as running inside an agent
@@ -137,12 +136,12 @@ The same ending happens, without anyone being asked, to:
   of a console that is deleted (see "Deleting a console" in `docs/product/consoles.md`). A running shell never holds
   either up;
 - **every shell terminal when the daemon stops**: on a quit, and on a termination signal when the daemon runs on its
-  own (see "Quitting" and "The daemon on its own" in `docs/product/application-lifecycle.md`). A daemon that goes down
-  without stopping, or makes a planned stop, ends none (see "Who owns a shell terminal" above); once a planned stop has
-  begun, starting or closing a shell terminal is refused with `daemon_shutting_down`, and what is typed into a shell
-  terminal once it is handed over is dropped (see "While the terminals are handed over" in
-  `docs/product/application-lifecycle.md`). An ordinary stop asked for during a planned stop ends every shell terminal
-  after all (see "An ordinary stop during a planned stop" in the same document).
+  own (see "Quitting" in `docs/product/application-lifecycle.md` and "The daemon on its own" in
+  `docs/product/server-form.md`). A daemon that goes down without stopping, or makes a planned stop, ends none (see "Who
+  owns a shell terminal" above); once a planned stop has begun, starting or closing a shell terminal is refused with
+  `daemon_shutting_down`, and what is typed into a shell terminal once it is handed over is dropped (see "While the
+  terminals are handed over" in `docs/product/server-form.md`). An ordinary stop asked for during a planned stop ends
+  every shell terminal after all (see "An ordinary stop during a planned stop" in the same document).
 
 If the process the shell terminals run in goes down on an internal failure — their holder, or the daemon where they run
 in it (see "When holders cannot be set up" in `docs/product/process-holders.md`) — each shell is killed with its process

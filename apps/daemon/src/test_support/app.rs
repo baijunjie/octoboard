@@ -14,6 +14,9 @@ use crate::store::Store;
 pub(crate) const TEST_KEY: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
+/// The installation's entry point an [`app_state`] names, another path than its running image.
+pub(crate) const INSTALL_EXE: &str = "/opt/octoboard/bin/octoboardd";
+
 /// An `AppState` over a fresh store in a scratch directory labelled `label`, with no console in
 /// it. The caller keeps the directory alive for as long as the state is used. A console added to
 /// the state needs a workdir of its own rather than this directory, because deleting a console
@@ -28,6 +31,7 @@ pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
         1234,
         TEST_KEY.to_string(),
         "/opt/octoboardd".to_string(),
+        INSTALL_EXE.to_string(),
         dir.join("output"),
         dir.join("consoles"),
         dir.join("handoff"),

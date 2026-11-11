@@ -286,7 +286,7 @@ written to the agent's directories or to the project's repository.
 
 The package is written to `~/.octoboard/handoff/<receiving session id>.md`, readable by its owner alone, since a
 conversation can hold secrets. It stays for as long as the receiving session's record does; when it is removed is in
-"Files Octoboard owns" in `docs/product/application-lifecycle.md`.
+`docs/product/files-octoboard-owns.md`.
 
 ## What the receiving session takes over
 

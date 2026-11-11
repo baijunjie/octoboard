@@ -13,6 +13,13 @@ publish = false
 name = "octoboardd"
 path = "src/main.rs"
 
+# Embeds the UI build (`packages/ui/dist`) in the binary and serves it (`src/server/ui.rs`), the server
+# form's way in for a browser. The desktop form's sidecar is built without it: its window loads the
+# UI the shell bundles. Build it through the workspace package, which builds the UI first:
+# `pnpm --filter @octoboard/daemon... build`.
+[features]
+embedded-ui = []
+
 [build-dependencies]
 serde_json = "1"
 

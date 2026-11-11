@@ -8,6 +8,8 @@
 //! use it.
 
 pub(crate) mod build_files;
+#[cfg(unix)]
+pub(crate) mod descriptors;
 pub(crate) mod fs;
 pub(crate) mod ipc;
 pub(crate) mod names;

@@ -14,16 +14,16 @@ agent.
 | What | Claude Code | Codex | Grok Build |
 |---|---|---|---|
 | The session's id | `--session-id <id>` on a new session; `--resume <id>` on a resume | None on a new session (see "Codex" below); `codex resume <id>` on a resume | `--session-id <id>` on a new session; `--resume <id>` on a resume |
-| Status hooks | In the JSON passed with `--settings`, which Claude Code merges with the settings files rather than replacing them, so the project's own hooks still run | One `-c hooks.<event>=…` override per event, each run asynchronously; hook trust is handled as described in "Codex" below | A `hooks/` directory of Octoboard's own in the per-session Grok home (see "The per-session Grok home" below) |
+| Status hooks | In the settings passed with `--settings`, a JSON file Octoboard writes for the launch in the session's scratch directory, owner-only since the hooks' address carries the key (see `docs/product/who-can-reach-the-daemon.md`); Claude Code merges them with the settings files rather than replacing them, so the project's own hooks still run | One `-c hooks.<event>=…` override per event, each run asynchronously; hook trust is handled as described in "Codex" below | A `hooks/` directory of Octoboard's own in the per-session Grok home (see "The per-session Grok home" below) |
 | Octoboard's MCP server | `--mcp-config` | `-c mcp_servers.octoboard.command=…` and `-c mcp_servers.octoboard.args=[…]` | An `[mcp_servers.octoboard]` table in the per-session copy of `config.toml` |
-| Running Octoboard's tools without asking | An `allow` rule, `mcp__octoboard`, in the `--settings` JSON | `-c mcp_servers.octoboard.default_tools_approval_mode="approve"` | Nothing is passed |
+| Running Octoboard's tools without asking | An `allow` rule, `mcp__octoboard`, in the `--settings` file | `-c mcp_servers.octoboard.default_tools_approval_mode="approve"` | Nothing is passed |
 | The agent's time limit on a call to Octoboard's tools | None is set | `-c mcp_servers.octoboard.tool_timeout_sec=660` | `tool_timeout_sec = 660` in that table |
 | The role description | `--append-system-prompt`, added to Claude Code's own system prompt | `-c developer_instructions=…`, a developer message added beside Codex's own prompt, which stays as it is | `--rules`, appended to Grok's system prompt |
 | The model and reasoning effort | `--model`, `--effort` | `-c model=…`, `-c model_reasoning_effort=…` | `--model`, `--reasoning-effort` |
 | An explicit permission choice (see "Approval modes" in `docs/product/per-agent-settings.md`) | `--permission-mode`: `auto` for **Auto**, `default` for **Manual**, `acceptEdits` for **Accept edits**, `plan` for **Plan**, `bypassPermissions` for **Bypass permissions** | `-c default_permissions=…`, `-c approval_policy=…` and `-c approvals_reviewer=…` select a complete preset (see "Codex" below); a resume with Codex's private app server applies it to the conversation through the server instead (see "Codex's private app server" below) | `--permission-mode`: `default` for **Ask**, `auto` for **Auto**, `bypassPermissions` for **Always-approve** |
 | Claude compatibility while on (see "Claude compatibility" in `docs/product/per-agent-settings.md`) | Not applicable | A section appended to the `developer_instructions` text, and Claude Code's MCP servers as `-c mcp_servers.<name>.…` overrides (see "Claude compatibility for Codex" in `docs/product/compatibility-between-agents.md`) | `GROK_CLAUDE_*_ENABLED` in the environment, and, where Claude Code reads another global config file than `$HOME/.claude.json`, Claude Code's MCP servers in the per-session copy of `config.toml` (see "Claude compatibility for Grok Build" in `docs/product/compatibility-between-agents.md`) |
 | Codex compatibility while on (see "Codex compatibility" in `docs/product/per-agent-settings.md`) | Codex's MCP servers in `--mcp-config`, Codex's skills and custom prompts as a plugin passed with `--plugin-dir`, and a section appended to the `--append-system-prompt` text (see "Codex compatibility for Claude Code" in `docs/product/compatibility-between-agents.md`) | Not applicable | Codex's MCP servers and a `[skills] paths` entry in the per-session copy of `config.toml`, and a section appended to the `--rules` text (see "Codex compatibility for Grok Build" in `docs/product/compatibility-between-agents.md`) |
-| Anything else | The status line, and under **Bypass permissions** the acceptance of Claude Code's warning, in the `--settings` JSON | The overrides listed under "Codex" below | `--no-leader` (see "Grok's leader mode" below) |
+| Anything else | The status line, and under **Bypass permissions** the acceptance of Claude Code's warning, in the `--settings` file | The overrides listed under "Codex" below | `--no-leader` (see "Grok's leader mode" below) |
 
 The 660 seconds are Octoboard's own 10-minute limit on a forwarded call plus a minute (see "The time limit on
 Octoboard's tools" below and the Codex list below for why). A value the session leaves to the agent's default — no
@@ -154,6 +154,14 @@ The launch conditions that are visible:
   signing the account in to or out of a server from Octoboard (see "Signing an account in to and out of an MCP server"
   in the same doc).
 
+The user's `shell_environment_policy` is left as it is. Codex's default excludes are off unless the user sets
+`ignore_default_excludes = false`; where they apply, Codex removes every variable whose name holds `KEY`, `SECRET` or
+`TOKEN` from the commands its model runs; no variable Octoboard gives a project session's git has such a name (see "The
+session's git hooks" in `docs/product/branch-responsible-session.md`), so git and Octoboard's git hooks keep working in
+those commands. A policy that removes more, such as an `include_only` list leaving out `OCTOBOARD_SESSION_ID`, leaves
+the session's git running the user's own hooks with no report and no revert gate; one that leaves out
+`GIT_CONFIG_PARAMETERS` leaves it running without Octoboard's hooks at all.
+
 Automatic messages go into Codex's own queue on a launch with the private app server, leaving the composer untouched
 (see "Messages through Codex's own queue" in `docs/product/message-delivery.md`). On any other launch they reach Codex
 through its terminal, like any other agent's: Octoboard uses no stash of Codex's to set a draft aside, so they take the
@@ -214,7 +222,10 @@ permission as usual (see `docs/product/folder-trust.md`). On a resume:
 server. On a Windows daemon host, a loopback WebSocket port, which any local process can reach, guarded by a random
 capability token: the server is given only the token's SHA-256, and the terminal reads the token from an environment
 variable of its own, `OCTOBOARD_CODEX_REMOTE_TOKEN`. A holder that runs the server makes the token itself and hands it to
-the daemon over its connection to the daemon; a daemon that runs the server makes it.
+the daemon over its connection to the daemon; a daemon that runs the server makes it. The variable is the one secret an
+agent's environment holds: Codex's terminal takes the token only from a variable it is named
+(`--remote-auth-token-env`), never from a file. Only the terminal has it; the server, which runs the agent's commands
+and writes its shell snapshots, does not, and the token opens that session's server alone.
 
 **Requests of the server's.** Approvals and the other requests the server sends a client are answered in the terminal
 alone: Octoboard's own connections to the server, which carry its messages, leave them unanswered. A turn that runs on a
@@ -322,6 +333,14 @@ below). Its `requirements.toml` and `managed_config.toml` are not carried either
 
 On a Windows daemon host, a SQLite database the source home holds is a copy even where the host makes file links, so
 what a session writes into it is not kept.
+
+The per-session home is `grok-home` in the session's scratch directory, `~/.octoboard/run/<session id>/` (see
+`docs/product/files-octoboard-owns.md`). Its copy of `config.toml`, which holds the user's whole Grok configuration with
+Octoboard's MCP entry added, is the user's alone whatever the source file's mode (on Windows through the data
+directory's access control list). The MCP entry's command line names the file the session's key is in and the session's
+MCP token, never a key (see `docs/product/who-can-reach-the-daemon.md`). With a real Grok session this has been checked
+on macOS only; on Windows it has not yet been checked that `icacls` shows only the owner and SYSTEM on the copy and that
+a second, non-administrator user, logged on as itself, cannot open it.
 
 ### On a host without file links
 

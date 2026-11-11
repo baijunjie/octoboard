@@ -1,6 +1,6 @@
 #!/bin/sh
 # Octoboard's git hook dispatcher, written by octoboardd. The project sessions Octoboard starts
-# point core.hooksPath at this directory through GIT_CONFIG_COUNT, and every hook name git can
+# point core.hooksPath at this directory through GIT_CONFIG_PARAMETERS, and every hook name git can
 # look for is a copy of this script. Each copy runs the hook the user's own configuration names,
 # exactly where git itself would have found it. A reference transaction that creates branches also
 # tells Octoboard which ones the session's git has just created, one that touches HEAD, a branch or
@@ -10,10 +10,64 @@
 set -f
 octo_name=${0##*/}
 octo_dir=${0%/*}
+# The data directory this directory is under, `<data>/githooks/<hash>`: where the daemon that wrote
+# it keeps its records, which a helper whose session is gone finds that daemon by. The environment's
+# home is not it for a daemon whose home differs from the one the session's shell snapshot holds.
+octo_data=${octo_dir%/*}
+octo_data=${octo_data%/*}
 
-# Octoboard's own core.hooksPath entry leaves GIT_CONFIG_*, and the user's own entries stay,
-# renumbered: the hook run below, and every git it runs in turn, sees the user's configuration
-# alone.
+# Sets octo_q to $1 single-quoted as octoboardd quotes a word of GIT_CONFIG_PARAMETERS: each ' is
+# closed, escaped and reopened.
+octo_sq() {
+	octo_rest=$1
+	octo_q=
+	while :; do
+		case $octo_rest in
+		*\'*)
+			octo_q=$octo_q${octo_rest%%\'*}"'\\''"
+			octo_rest=${octo_rest#*\'}
+			;;
+		*) break ;;
+		esac
+	done
+	octo_q="'$octo_q$octo_rest'"
+}
+
+# Octoboard's own core.hooksPath entry leaves GIT_CONFIG_PARAMETERS, wherever a `git -c` has put
+# entries around it, and so does any entry for a directory beside this one in GIT_CONFIG_COUNT,
+# which a daemon started from inside an earlier build's session may have passed on; the user's own
+# entries stay, renumbered: the hook run below, and every git it runs in turn, sees the user's
+# configuration alone.
+octo_sq "$octo_dir"
+octo_entry="'@HOOKS_PATH_KEY@'=$octo_q"
+case ${GIT_CONFIG_PARAMETERS-} in
+*"$octo_entry"*)
+	octo_rest=$GIT_CONFIG_PARAMETERS
+	octo_kept=
+	while :; do
+		case $octo_rest in
+		*"$octo_entry"*)
+			octo_kept=$octo_kept${octo_rest%%"$octo_entry"*}
+			octo_rest=${octo_rest#*"$octo_entry"}
+			;;
+		*) break ;;
+		esac
+	done
+	octo_kept=$octo_kept$octo_rest
+	# git reads no whitespace ahead of the first entry.
+	while :; do
+		case $octo_kept in
+		[\ \	]*) octo_kept=${octo_kept#?} ;;
+		*) break ;;
+		esac
+	done
+	if [ -n "$octo_kept" ]; then
+		export GIT_CONFIG_PARAMETERS="$octo_kept"
+	else
+		unset GIT_CONFIG_PARAMETERS
+	fi
+	;;
+esac
 case ${GIT_CONFIG_COUNT-} in
 '' | *[!0-9]*) ;;
 *)
@@ -24,7 +78,7 @@ case ${GIT_CONFIG_COUNT-} in
 		octo_i=$((octo_i + 1))
 		case $octo_k in
 		[Cc][Oo][Rr][Ee].[Hh][Oo][Oo][Kk][Ss][Pp][Aa][Tt][Hh])
-			[ "$octo_v" = "$octo_dir" ] && continue
+			case $octo_v in "${octo_dir%/*}"/?*) continue ;; esac
 			;;
 		esac
 		export "GIT_CONFIG_KEY_$octo_n=$octo_k" "GIT_CONFIG_VALUE_$octo_n=$octo_v"
@@ -190,11 +244,12 @@ esac
 
 octo_nl='
 '
-# Whether this git belongs to a project session, which is what the variables say.
+# Whether this git belongs to a project session, which is what the session variable says. The
+# launch's port, and the key file its environment names, may be missing: the helpers then go to the
+# daemon by its own record.
 octo_session=
-if [ -n "${@SESSION_VARIABLE@-}" ] && [ -n "${@PORT_VARIABLE@-}" ] && [ -n "${@KEY_VARIABLE@-}" ]; then
-	octo_session=1
-fi
+[ -z "${@SESSION_VARIABLE@-}" ] || octo_session=1
+octo_port=${@PORT_VARIABLE@-}
 octo_watch=
 if [ "$octo_name" = reference-transaction ] && [ -n "$octo_session" ]; then
 	case ${1-} in prepared | committed) octo_watch=1 ;; esac
@@ -242,11 +297,11 @@ octo_run_hook() {
 octo_run_gate() {
 	[ -x @EXE@ ] || return 0
 	if [ -n "$octo_spool" ]; then
-		@EXE@ gate-hook --session "$@SESSION_VARIABLE@" --port "$@PORT_VARIABLE@" \
-			--key "$@KEY_VARIABLE@" "$@" <"$octo_spool"
+		@EXE@ gate-hook --session "$@SESSION_VARIABLE@" ${octo_port:+--port "$octo_port"} \
+			${octo_data:+--data-dir "$octo_data"} "$@" <"$octo_spool"
 	else
 		printf '%s' "$octo_input" | @EXE@ gate-hook --session "$@SESSION_VARIABLE@" \
-			--port "$@PORT_VARIABLE@" --key "$@KEY_VARIABLE@" "$@"
+			${octo_port:+--port "$octo_port"} ${octo_data:+--data-dir "$octo_data"} "$@"
 	fi
 	[ $? -ne 3 ] || octo_status=1
 }
@@ -428,8 +483,9 @@ if [ -n "$octo_watch" ]; then
 		octo_touches_header && octo_moved=1
 		if [ -n "$octo_moved" ] || [ -n "$octo_created" ]; then
 			# In the background with every descriptor let go, so git never waits for it.
-			@EXE@ git-ref --session "$@SESSION_VARIABLE@" --port "$@PORT_VARIABLE@" \
-				--key "$@KEY_VARIABLE@" ${octo_moved:+--moved} ${octo_head:+--head "$octo_head"} \
+			@EXE@ git-ref --session "$@SESSION_VARIABLE@" ${octo_port:+--port "$octo_port"} \
+				${octo_data:+--data-dir "$octo_data"} ${octo_moved:+--moved} \
+				${octo_head:+--head "$octo_head"} \
 				-- $octo_created </dev/null >/dev/null 2>&1 &
 		fi
 	fi

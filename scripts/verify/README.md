@@ -43,7 +43,7 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    and heavy ones (UI tests, Rust builds and tests, the website build) last, and a failure stops the run. The website
    build runs before its SEO tests, which read the generated output. `--release` runs the application checks:
    application lint, production UI type check, application UI tests, desktop script tests, rustfmt, clippy, Rust
-   tests and the Windows cross-check (`pnpm check:windows`: both crates, all targets, through `cargo xwin`). Local
+   tests and the Windows cross-check (`pnpm check:windows`: both crates, all targets, through `cargo xwin`, and a link of the daemon's executable once its check passes). Local
    `release:version` runs the complete plan with `--fresh --head <release-commit>` before tagging, then scoped push
    verification can reuse matching passes. The release groups partition those same commands; each also runs the
    identity check. The optional hosted workflow runs the frontend and native groups independently, with separate Linux

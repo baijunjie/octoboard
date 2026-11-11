@@ -97,10 +97,18 @@ pub struct ClientConfig {
     pub relay: Arc<dyn RelayHandler>,
 }
 
-/// A [`Launch`] that runs `exe holder` detached from this process, so that it outlives it
-/// (`platform::proc::start_detached`). `application` is the desktop application's pid, which a
-/// holder is started under where the daemon's own job would end it.
-pub fn launch_detached(application: Option<u32>) -> Launch {
+/// A [`Launch`] that runs `exe holder` apart from this process, so that it outlives it. Where a
+/// systemd user manager runs the daemon it is started as a user unit of its own
+/// (`platform::proc::start_in_user_unit`), which a stop or a planned restart of the daemon's unit
+/// leaves running, falling back to the detached start when that fails; elsewhere, and on that
+/// fallback, it is started detached (`platform::proc::start_detached`). `application` is the
+/// desktop application's pid, which a holder is started under where the daemon's own job would
+/// end it.
+pub fn launch_holder(application: Option<u32>) -> Launch {
+    let service = proc::user_service_unit();
+    if let Some(service) = &service {
+        tracing::info!(%service, "holders run as systemd user units of their own");
+    }
     Box::new(move |exe, holder_id, registry_dir| {
         // Started in the registry's directory: a holder outlives the daemon, and one whose
         // working directory were the daemon's would keep that folder (the installation's, say)
@@ -114,6 +122,21 @@ pub fn launch_detached(application: Option<u32>) -> Launch {
             .arg("--registry-dir")
             .arg(registry_dir)
             .current_dir(registry_dir);
+        if let Some(service) = &service {
+            match proc::start_in_user_unit(
+                &command,
+                &format!("octoboard-holder-{holder_id}"),
+                &format!("{} process holder", crate::APP_NAME),
+                service,
+            ) {
+                Ok(()) => return Ok(()),
+                // It may have started: a second start under the same id would run two holders.
+                Err(err) if err.kind() == std::io::ErrorKind::TimedOut => return Err(err),
+                Err(err) => {
+                    tracing::warn!(%err, "starting the holder as a systemd user unit failed; it is started detached, and stops with the daemon's unit");
+                }
+            }
+        }
         crate::platform::proc::start_detached(command, application)
     })
 }
@@ -145,6 +168,12 @@ pub struct Issued {
 }
 
 impl Issued {
+    /// The process of the holder that issued the key, which starts the launch's processes, when
+    /// its registry file names one that can be read.
+    pub fn holder(&self) -> Option<ProcessIdentity> {
+        self.link.identity()
+    }
+
     /// Starts the program on the holder that issued the key, as the terminal the key is for;
     /// `spec.id` is replaced by that terminal's id. With `spec.companion` the holder refuses the
     /// spawn unless the companion started for the launch runs. **Blocks.**
@@ -539,6 +568,14 @@ impl Holders {
         };
         let mut links = Vec::new();
         let entries = registry::list(&self.shared.registry_dir);
+        // Before any of them is linked to, or found pending: the launches' groups of a holder in a
+        // cgroup of its own are below it.
+        for identity in entries
+            .iter()
+            .filter_map(|entry| ProcessIdentity::parse(&entry.started))
+        {
+            proc::Containment::note_host(&identity);
+        }
         // At once, so that the start waits for the slowest holder alone.
         let taken: Vec<Taken> = std::thread::scope(|scope| {
             let trying: Vec<_> = entries

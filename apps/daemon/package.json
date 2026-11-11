@@ -1,0 +1,12 @@
+{
+  "name": "@octoboard/daemon",
+  "private": true,
+  "description": "octoboardd, the Octoboard daemon: wraps its cargo build so the workspace builds the UI it embeds first (`pnpm --filter @octoboard/daemon... build`).",
+  "type": "module",
+  "scripts": {
+    "build": "cargo build --release --locked -p octoboardd --features embedded-ui"
+  },
+  "dependencies": {
+    "@octoboard/ui": "workspace:*"
+  }
+}

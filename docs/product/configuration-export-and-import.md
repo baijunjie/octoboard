@@ -15,7 +15,7 @@ the window's own machine is only where a file is saved or picked.
 
 How the window exports and imports — where it starts, the export dialog, and the import's review and result — is in
 `docs/product/configuration-export-and-import-dialogs.md`. Exporting and importing are also requests of the daemon,
-which any program on its host can reach (see "Who can reach the daemon" in `docs/product/application-lifecycle.md`).
+which any program on its host can reach (see `docs/product/who-can-reach-the-daemon.md`).
 
 ## The configuration document
 
@@ -175,10 +175,10 @@ is the default account's directory. The added agents, the accounts and their ord
 default accounts' names travel only in the accounts region (see "The accounts" above). Account quota readings are not
 stored at all and are in no document either (see "How a quota is read" in `docs/product/account-quota-readings.md`).
 
-**A setting whose turning on itself changes files outside Octoboard's own directory** (`~/.octoboard`; see "Files
-Octoboard owns" in `docs/product/application-lifecycle.md`) **is in no document**, and the user turns it on again by
-hand on the importing machine. Today that is an account's sharing of the default configuration, which links the
-account's directory to the default account's (see "Turning sharing on" in
+**A setting whose turning on itself changes files outside Octoboard's own directory** (`~/.octoboard`; see
+`docs/product/files-octoboard-owns.md`) **is in no document**, and the user turns it on again by hand on the importing
+machine. Today that is an account's sharing of the default configuration, which links the account's directory to the
+default account's (see "Turning sharing on" in
 `docs/product/sharing-the-default-configuration.md`): an export never writes it, an import never turns it on, and every
 account an import creates starts not sharing. A setting that only has Octoboard act on files outside that directory
 later, as it runs — pulling repositories automatically, deleting archived sessions, switching an account at its usage

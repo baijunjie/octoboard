@@ -10,10 +10,51 @@ use crate::session::wait::{quiet, wait_for, wait_quiet};
 /// How long to let the agent finish drawing and start reading its input before the first key.
 pub(super) const SETTLE: Duration = Duration::from_millis(300);
 
-/// How long the cursor has to take to move after the Down, and the screen to go after the last
-/// key.
-pub(super) const MOVE_TIMEOUT: Duration = Duration::from_secs(2);
-pub(super) const DISMISS_TIMEOUT: Duration = Duration::from_secs(3);
+/// How long the agent may take to answer one of the press's keys: the cursor to move after the
+/// Down, the terminal to go quiet after it, and the screen to go after the Enter. Each wait ends
+/// as soon as what it waits for is seen, so the figure only bounds how long a press that really
+/// failed takes to say so. It is generous because the agent's own pace sets it: on an ARM64
+/// Windows machine running Claude Code 2.1.322, Claude Code drew its next screen 4 to 7 seconds
+/// after the Enter (measured), the screen blank for seconds in between, and a busier machine
+/// takes longer still. Nothing is pressed late because of it: the Enter still goes only on the
+/// cursor seen on the accepting option, the terminal quiet and nothing else written meanwhile.
+#[cfg_attr(test, allow(dead_code))]
+pub(super) const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// [`RESPONSE_TIMEOUT`], except under test. A stand-in answers each key through a PTY and a shell,
+/// so tests wait up to `PATIENCE` (each wait returns as soon as its condition holds), and a test
+/// proving that a wait runs out lowers it with `RESPONSE_OVERRIDE` (or, for the wait after the
+/// Enter alone, `DISMISS_OVERRIDE`). Read on the caller's thread, before the press moves onto a
+/// blocking one.
+pub(super) fn response_timeout() -> Duration {
+    #[cfg(test)]
+    {
+        RESPONSE_OVERRIDE
+            .with(std::cell::Cell::get)
+            .unwrap_or(crate::test_support::PATIENCE)
+    }
+    #[cfg(not(test))]
+    RESPONSE_TIMEOUT
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static RESPONSE_OVERRIDE: std::cell::Cell<Option<Duration>> =
+        const { std::cell::Cell::new(None) };
+    pub(super) static DISMISS_OVERRIDE: std::cell::Cell<Option<Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// How long the screen has to go after the Enter, or a hook to come: [`response_timeout`], except
+/// where a test lowers just this wait with `DISMISS_OVERRIDE`, which only a press started through
+/// [`answer`] reads. A test proving that the screen is not dismissed needs the waits before the
+/// Enter to succeed, which a lowered `RESPONSE_OVERRIDE` would put at risk on a slow host.
+#[cfg(test)]
+fn dismiss_timeout() -> Duration {
+    DISMISS_OVERRIDE
+        .with(std::cell::Cell::get)
+        .unwrap_or_else(response_timeout)
+}
 
 /// How long Grok's press waits for its hook and the carry the hook makes.
 pub(super) const CARRY_WAIT: Duration = Duration::from_secs(12);
@@ -96,20 +137,34 @@ fn gone(live: &LiveSession, screen: &Screen, mark: &Mark) -> bool {
     }
 }
 
+/// [`answer_within`], with the agent given [`response_timeout`] to answer each key, and
+/// [`dismiss_timeout`] to dismiss the screen after the Enter.
+#[cfg(test)]
+pub(super) fn answer(live: &LiveSession) -> Result<()> {
+    answer_with(live, response_timeout(), dismiss_timeout())
+}
+
 /// Sends the keys that accept the session's trust confirmation, checking before each one that the
-/// screen is as it must be. Blocks, for the settle time and while it watches the screen respond.
+/// screen is as it must be, and giving the agent `patience` to answer each key. Blocks, for the
+/// settle time and while it watches the screen respond.
 ///
 /// Like `crate::session::interrupt`, the other place that writes keystrokes of its own into a
 /// session, it takes no text: the bytes are the constants above, so nothing a model or a message
 /// wrote can reach it.
-pub(super) fn answer(live: &LiveSession) -> Result<()> {
+pub(super) fn answer_within(live: &LiveSession, patience: Duration) -> Result<()> {
+    answer_with(live, patience, patience)
+}
+
+/// [`answer_within`], with the screen given `dismissal` rather than `patience` to go after the
+/// Enter.
+fn answer_with(live: &LiveSession, patience: Duration, dismissal: Duration) -> Result<()> {
     if !live.trust.claim_answer() || !still_waiting_after_claim(live) {
         return Err(not_waiting());
     }
     let screen = live.trust.screen;
     let pressed = match screen.press {
-        Press::DownThenEnter => press_down_then_enter(live, screen),
-        Press::Enter => press_enter(live, screen),
+        Press::DownThenEnter => press_down_then_enter(live, screen, patience, dismissal),
+        Press::Enter => press_enter(live, screen, patience, dismissal),
         Press::Yes => press_yes(live),
     };
     match pressed {
@@ -134,7 +189,12 @@ pub(super) fn answer(live: &LiveSession) -> Result<()> {
 }
 
 /// Claude Code's: a Down from "No, exit", then an Enter on "Yes, I trust this folder".
-pub(super) fn press_down_then_enter(live: &LiveSession, screen: &Screen) -> Result<()> {
+pub(super) fn press_down_then_enter(
+    live: &LiveSession,
+    screen: &Screen,
+    patience: Duration,
+    dismissal: Duration,
+) -> Result<()> {
     let agent = live.agent;
     // Read before anything is looked at: a write by anyone else after this point means what was
     // looked at may no longer be true.
@@ -152,7 +212,7 @@ pub(super) fn press_down_then_enter(live: &LiveSession, screen: &Screen) -> Resu
 
     let mark = Mark::now(live);
     write(live, writes, DOWN)?;
-    if !wait_for(MOVE_TIMEOUT, || {
+    if !wait_for(patience, || {
         cursor(live, screen, &since(live, &mark)) == Some(Cursor::Accept)
     }) {
         return Err(answer_failed(
@@ -164,18 +224,23 @@ pub(super) fn press_down_then_enter(live: &LiveSession, screen: &Screen) -> Resu
     }
     // Quiet first, so that what is read next is the screen as it now stands, then a last look at
     // the cursor and at the input, right before the key that cannot be taken back.
-    if !wait_quiet(live, MOVE_TIMEOUT) {
+    if !wait_quiet(live, patience) {
         return Err(not_settled(agent));
     }
     if cursor(live, screen, &since(live, &mark)) != Some(Cursor::Accept) {
         return Err(cursor_moved_away(agent));
     }
-    enter_until_gone(live, screen, writes)
+    enter_until_gone(live, screen, writes, dismissal)
 }
 
 /// Codex's: an Enter on "1. Trust and continue", where the cursor starts, while nothing has been
 /// written into its input since the screen was sighted (one step with the key).
-pub(super) fn press_enter(live: &LiveSession, screen: &Screen) -> Result<()> {
+pub(super) fn press_enter(
+    live: &LiveSession,
+    screen: &Screen,
+    patience: Duration,
+    dismissal: Duration,
+) -> Result<()> {
     let agent = live.agent;
     let writes = live.trust.writes_at_sighting.load(Ordering::Acquire);
     std::thread::sleep(SETTLE);
@@ -188,24 +253,40 @@ pub(super) fn press_enter(live: &LiveSession, screen: &Screen) -> Result<()> {
     if cursor(live, screen, &output) != Some(Cursor::Accept) {
         return Err(cursor_not_at_start(agent));
     }
-    if !wait_quiet(live, MOVE_TIMEOUT) {
+    if !wait_quiet(live, patience) {
         return Err(not_settled(agent));
     }
     if cursor(live, screen, &recent(live)) != Some(Cursor::Accept) {
         return Err(cursor_moved_away(agent));
     }
-    enter_until_gone(live, screen, writes)
+    enter_until_gone(live, screen, writes, dismissal)
 }
 
-/// The Enter, and then the screen seen gone ([`gone`]), and still gone a moment later.
-pub(super) fn enter_until_gone(live: &LiveSession, screen: &Screen, writes: u64) -> Result<()> {
+/// The Enter, and then the agent seen past the screen: its first hook has come, which it runs
+/// only once it is past the screen, or the screen is seen gone ([`gone`]) and still gone a moment
+/// later.
+pub(super) fn enter_until_gone(
+    live: &LiveSession,
+    screen: &Screen,
+    writes: u64,
+    dismissal: Duration,
+) -> Result<()> {
+    let hooked = || live.trust.hook_seen.load(Ordering::Acquire);
+    // A hook seen already shows the agent past the screen before this Enter: it is not an answer
+    // to it, and the Enter would land in whatever the agent shows now.
+    if hooked() {
+        return Err(not_waiting());
+    }
     let mark = Mark::now(live);
     write(live, writes, ENTER)?;
-    if !wait_for(DISMISS_TIMEOUT, || gone(live, screen, &mark)) {
+    if !wait_for(dismissal, || hooked() || gone(live, screen, &mark)) {
         return Err(not_dismissed(live.agent));
     }
+    if hooked() {
+        return Ok(());
+    }
     std::thread::sleep(quiet());
-    if !gone(live, screen, &mark) {
+    if !hooked() && !gone(live, screen, &mark) {
         return Err(answer_failed(
             live.agent,
             trust_reason::SCREEN_REDRAWN,

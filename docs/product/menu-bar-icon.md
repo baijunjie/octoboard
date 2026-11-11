@@ -258,7 +258,7 @@ would have been. On macOS the icon keeps its place among the status items rather
 Hidden, the icon's menu is not there to bring a window closed into the background back: opening Octoboard again, or one
 of its notifications, still does (see "Closing the window" in `docs/product/application-lifecycle.md`). The choice is
 kept by the desktop application in its settings file, together with keeping Octoboard running in the background (see
-"Files Octoboard owns" in that document), and read as it starts: a hidden icon is hidden as the application creates it
+`docs/product/files-octoboard-owns.md`), and read as it starts: a hidden icon is hidden as the application creates it
 at launch, before the window's UI has loaded, so it stays hidden on the screen shown when the daemon failed to start
 too. Turning the switch takes effect at once and is written straight away. A configuration export that includes the
 App behavior section carries it (see "The settings a client holds" in

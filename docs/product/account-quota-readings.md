@@ -176,9 +176,9 @@ fails, when it does not exit after its reply, or when the daemon shuts down.
 
 ## What the daemon's log records of readings
 
-The daemon's log (`~/.octoboard/logs/daemon.log`, see "Files Octoboard owns" in
-`docs/product/application-lifecycle.md`) is told when an account's readings change, not of every reading: an account
-whose readings keep succeeding writes nothing. Kicks and redeems of a usage limit reset are not covered here.
+The daemon's log (`~/.octoboard/logs/daemon.log`, see `docs/product/files-octoboard-owns.md`) is told when an account's
+readings change, not of every reading: an account whose readings keep succeeding writes nothing. Kicks and redeems of a
+usage limit reset are not covered here.
 
 - **An account that goes from signed in to not logged in** is logged as a warning: a reading finds it not logged in
   (see "Quota states" in `docs/product/account-quotas.md`) while the last reading that could tell — one with windows

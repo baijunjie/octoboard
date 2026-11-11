@@ -161,6 +161,21 @@ tool, the refusal of one the session's role does not have, and report delivery, 
 single model turn. What that leaves untested is the stdio child itself — the schemas it announces and the tool name the
 model ends up seeing — so keep one real session for those.
 
+## A job a probe leaves running behind a session must survive both the agent and Octoboard
+
+Applies to a probe of what a job started from a session still does after the command or the session that started it
+has ended — a leftover job's git reports and gate, say. Two things end such a job before it acts, and the probe then
+reads its silence as the behaviour under test:
+
+- Codex (0.166–0.167) kills a plain `nohup … &` job when the command that started it finishes; start it detached in a
+  new session with `setsid`.
+- When the session ends, Octoboard stops every process of its launch that was not kept, its tag
+  (`OCTOBOARD_PROCESS_TAG`) included ("Which processes belong to a launch" in `docs/product/background-processes.md`);
+  keep the job, or start it from outside the launch so it carries no tag.
+
+Have the job wait on a trigger file the probe creates when it is time to act, not on a sleep, so the step happens after
+the session has ended and not before.
+
 ## Do not look for a mouse-aware TUI through Grok's bash mode
 
 Grok's bash mode (`!`) has no controlling TTY (`TERM=dumb`, `/dev/tty` unusable), so a mouse-aware TUI such as `vim`

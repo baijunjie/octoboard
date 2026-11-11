@@ -50,7 +50,7 @@ The body is Markdown in three sections:
 
 - **What happened**: a hidden comment asking what the user was doing and what they expected instead; in the desktop
   application only, a second hidden comment saying that the application keeps its logs in `~/.octoboard/logs/`
-  (`daemon.log`, `desktop.log`, see "Files Octoboard owns" in `docs/product/application-lifecycle.md`), the path
+  (`daemon.log`, `desktop.log`, see `docs/product/files-octoboard-owns.md`), the path
   spelled `%USERPROFILE%\.octoboard\logs\` when the daemon's host writes Windows paths, and that a maintainer may ask about them if more detail is needed — the logs themselves are never attached; then a line saying
   the details below were filled in automatically with personal information removed, and asking the user to check them
   before submitting.

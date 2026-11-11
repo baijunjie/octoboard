@@ -19,7 +19,12 @@
 // `check-windows` cross-checks for `x86_64-pc-windows-msvc` through `cargo xwin`. It first checks the toolchain
 // that needs (`scripts/lib/windows-toolchain.mjs`) and fails naming how to install each missing piece. Both crates
 // gate: the desktop crate is checked first and then the daemon, and the exit code is non-zero when either fails.
-// `pnpm check:windows desktop` or `pnpm check:windows daemon` checks just one crate.
+// Once the daemon checks clean, its executable is also linked (`cargo xwin build --bin octoboardd`), since a
+// compile check never runs the linker and a link failure (a linker argument, an embedded resource, a native
+// library) would otherwise surface only on a Windows machine; the link needs nothing the check does not. The
+// desktop crate is compile-checked only.
+// `pnpm check:windows desktop` or `pnpm check:windows daemon` narrows the run to one crate (the daemon's still
+// linked).
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -56,6 +61,7 @@ if (name === "check-windows") {
     console.error(`check-windows: the Windows cross-check cannot run on this machine:\n${problems.map((problem) => `- ${problem}`).join("\n")}`);
     process.exit(1);
   }
+  const args = only ? rest : extra;
   const checkCrate = (crate) =>
     run([
       "xwin",
@@ -65,11 +71,17 @@ if (name === "check-windows") {
       "--all-targets",
       "-p",
       WINDOWS_CRATES[crate],
-      ...(only ? rest : extra),
+      ...args,
     ], windowsEnv);
+  const checkDaemon = () => {
+    const checked = checkCrate("daemon");
+    if (checked !== 0) return checked;
+    return run(["xwin", "build", "--target", WINDOWS_TARGET, "-p", WINDOWS_CRATES.daemon, "--bin", WINDOWS_CRATES.daemon, ...args], windowsEnv);
+  };
+  if (only === "daemon") process.exit(checkDaemon());
   if (only) process.exit(checkCrate(only));
   const desktop = checkCrate("desktop");
-  const daemon = checkCrate("daemon");
+  const daemon = checkDaemon();
   process.exit(desktop !== 0 ? desktop : daemon);
 }
 const command = COMMANDS[name];

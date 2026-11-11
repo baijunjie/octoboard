@@ -10,14 +10,15 @@ the operating system assigns, which is what the application uses, and generates 
 prints `octoboardd listening on 127.0.0.1:<port> with key <key>` on stdout as its first line, the key being 64
 lower-case hex characters, and writes the port alone to `octoboardd.port` in its data directory
 (`~/.octoboard/octoboardd.port`; a failed write is only logged); the key is not in that file. It lives
-in the daemon's memory and in the files of the sessions the daemon starts (see "Who may connect"). The application
-reads the stdout line.
+in the daemon's memory, in the owner-only key record `~/.octoboard/daemon.key`, and in the files of the sessions the
+daemon starts (see "Who may connect"). The application reads the stdout line.
 
 ## Who may connect
 
 The daemon trusts local processes of its own user and does not trust web pages, which can reach a loopback port and, on
 a WebSocket handshake, are not subject to CORS. Every request on every route, the 404 fallback included, is checked
-before any handler or WebSocket upgrade runs, against two rules that both have to hold. A request that fails the first
+before any handler or WebSocket upgrade runs, against two rules that both have to hold — except that a read of a file
+of the embedded browser UI needs only the first (see "The embedded browser UI" below). A request that fails the first
 gets `403`; one that fails the second gets `401` with a short body.
 
 **The `Host` and `Origin` rules** keep a page on another site, and DNS rebinding, out:
@@ -42,7 +43,31 @@ operating system's random source, and every request, on every route, has to carr
 time, and a missing, wrong or empty one is refused. The `Host` and `Origin` rules are applied first, so a request that
 fails them is told `403` whatever it carries as a key.
 
-The key is handed on only to what the daemon, or the application that started it, starts:
+**The embedded browser UI.** A server build of the daemon carries the UI's build inside its binary and serves it
+same-origin with the routes of this document; the daemon the desktop application starts carries none and serves none.
+Its files are the published application's and hold nothing secret, and the requests a page makes for its scripts,
+stylesheets and fonts carry no key, so a read of one of them is let through without the key, still subject to the
+`Host` and `Origin` rules (`403`):
+
+- `GET /` (or `HEAD /`) gives the page itself, `index.html`; `GET` or `HEAD` of any other path gives the file of the
+  build at exactly that path. No other path is answered with the page.
+- Every other request — every route of this document, any path that names no file of the build, any other method on
+  a file's path — needs the key: `401` without it, and with it `404` for a path no route or file answers.
+  In a build that carries no UI, `/` is such a path.
+- A file is answered with its content type and `X-Content-Type-Options: nosniff`. The files under `assets/`, which the
+  bundler names after a hash of their contents, are sent as cacheable for a year and immutable; every other file,
+  the page included, as `no-cache`, so a browser checks it again on every load.
+
+The page loaded from `http://localhost:<port>/?key=<key>` (the address `octoboardd address` prints, below) finds the
+daemon at its own origin and takes the key from its own address, adding it to every WebSocket it opens.
+
+The key is handed on only to the daemon's own user and to what the daemon, or the application that started it,
+starts:
+
+- The daemon records it, after its process identity, in `~/.octoboard/daemon.key`, created owner-only, and removes it
+  at stop. `octoboardd address`, run as the daemon's user, prints it in the browser address
+  `http://localhost:<port>/?key=<key>`, accepting it only when its identity is the running daemon's, so the owner of a
+  daemon run in the background, or as a service whose standard output is discarded, gets the key there.
 
 - The daemon prints it on its startup line (above). The desktop application reads it there and puts it in the window's
   URL beside the port (`?port=<port>&key=<key>`), from which the UI adds it to the URL of every WebSocket it opens
@@ -50,26 +75,35 @@ The key is handed on only to what the daemon, or the application that started it
   with the new daemon's port and key. A page the daemon is not started by, such as the UI under a dev server, is given
   the key by hand: it is read from the startup line and passed as `?key=` or `VITE_DAEMON_KEY`
   (`packages/ui/README.md`).
-- Every helper the daemon starts for an agent is given it where it is given the port. The `hook`, `git-ref`,
-  `gate-hook`, `status-line` and `mcp` modes of `octoboardd` take a required `--key <key>` beside `--port`, and send it
-  as `?key=` on the route they call. The git hook dispatchers of a project session read it from `OCTOBOARD_DAEMON_KEY`,
-  set beside `OCTOBOARD_DAEMON_PORT`, and pass it on as `--key`. Claude Code's own HTTP hook posts to
-  `http://127.0.0.1:<port>/hook/<session>?key=<key>`.
+- Every helper the daemon starts for an agent is given it beside the port, never as an argument. Each launch writes the
+  key its helpers carry (the key its process holder issued for it, or the daemon's own) to the session's
+  `~/.octoboard/run/<session>/key`, created owner-only. The `hook`, `status-line` and `mcp` modes of `octoboardd` take a
+  required `--key-file <path>` naming that file beside `--port`, and send the key as `?key=` on the route they call. The
+  `git-ref` and `gate-hook` modes take no key argument: they read the key from the file named by
+  `OCTOBOARD_DAEMON_CREDENTIAL_PATH`, the same file, set beside `OCTOBOARD_DAEMON_PORT` in a project session's
+  environment and inherited by the git hook dispatchers; the key itself is never in the environment. Where that launch
+  route is gone (see `POST /git-ref/:session`), those two modes alone go to the daemon through its owner record and key
+  record (above), as `address` does. Claude Code's own HTTP hook posts to
+  `http://127.0.0.1:<port>/hook/<session>?key=<key>`, written in the owner-only settings file Claude Code is given.
 
 The key targets web pages, not local processes, in keeping with the trust model above: a process of the same user could
-already drive the daemon directly. The daemon's own arguments and environment do not hold the key; its children's do. It
-is in the command lines of the agent CLIs (Claude Code's `--settings` and `--mcp-config`, and Codex's `-c` options
-that register the hook and the MCP server), in the `--key` of the `octoboardd` helpers (`hook`, `mcp`, `status-line`,
-`git-ref`, `gate-hook`) and in `OCTOBOARD_DAEMON_KEY` of a project session's environment, so any local process can read
-it, and other local users can read the command lines through `ps`. It is also written to two files of a session, both
-created owner-only: the hook script (mode 0700) and, for Grok Build, the session's own `grok-home/config.toml` (mode
-0600, a copy of the user's configuration with the MCP server appended). They are in the session's scratch directory,
-`~/.octoboard/run/<session>/`, which is created with the daemon's default permissions, so it is the files' own modes
-that keep them private, and they are removed with that directory. On Windows the hook script is `hook.cmd`, and a file
-has no mode: what keeps both private is the access control list of the data directory, made the user's own at start,
-which every file below it inherits. A new client therefore sends the key, and either sends no `Origin` or is served from
-one of the origins above. A client reaching the daemon under any other host name is
-refused until the rule is widened (`host_allowed` in `apps/daemon/src/request_guard.rs`).
+already drive the daemon directly. It is kept from the machine's other users, who reach the same loopback. No key the
+daemon or a holder accepts is in any process's arguments, which every user can list: the daemon's own arguments and
+environment do not hold it, the agent CLIs' command lines (Claude Code's `--settings` and `--mcp-config`, Codex's `-c`
+options, Grok Build's) and the helpers' name only the key file, and the MCP helper's `--token`, which is on its command
+line, is of no use without the key. A process's environment is readable by its own user alone on Linux, macOS and
+Windows, and only a project session's agent has the key there. The files that hold it are created owner-only, from their
+first byte: the key file (mode 0600), Claude Code's `claude-settings.json` (mode 0600, the settings JSON its
+`--settings` names, with the HTTP hook's address) and the key record `daemon.key` (above, mode 0600). The hook script
+(mode 0700) and Grok Build's `grok-home/config.toml` (mode 0600, a copy of the user's configuration with the MCP server
+appended) name the key file only. The session's files are in its scratch directory, `~/.octoboard/run/<session>/`, which
+is created with the daemon's default permissions (0775 under a umask of 0002), so it is the files' own modes that keep
+them private, and they are removed with that directory when the agent exits. On Windows the hook script is `hook.cmd`,
+and a file has no mode: what keeps these private is the access control list of the data directory, made the user's own
+at start, which every file below it inherits. A session taken over from an earlier build keeps its key on its helpers'
+command lines until it ends. A new client therefore sends the key, and either sends no `Origin` or is served from one of
+the origins above. A client reaching the daemon under any other host name is refused until the rule is widened
+(`host_allowed` in `apps/daemon/src/request_guard.rs`).
 
 ## What every client implements
 
@@ -126,8 +160,8 @@ do the same (see "The heartbeat").
 
 ### The key
 
-Every request on every route carries the daemon's key as `?key=`, the WebSocket upgrade included (see "Who may
-connect").
+Every request on every route carries the daemon's key as `?key=`, the WebSocket upgrade included; only a read of a
+file of the embedded browser UI needs none (see "Who may connect").
 
 ### Versions and compatibility
 
@@ -275,7 +309,7 @@ The terminal socket has no heartbeat of its own.
 | `set_session_pinned` | `session`, `pinned` | Pins or unpins a session; broadcasts `session_upserted` |
 | `set_session_colour` | `session`, `colour` | Sets a console session's badge colour to one of the palette (see `Session.colour`); persisted, and broadcasts `session_upserted`. A `colour` outside the palette is refused with `unreadable_request`, and a project session with `internal_error` (the coordinator's `bail!`, with the reason as `detail`). A chosen colour counts as held for the next console session's assignment, like an assigned one |
 | `send_message` | `session`, `text` | Writes a message into a running session. Refused while the session's own agent is waiting for the user: the message would be discarded and its trailing Enter would answer whatever dialog is up. A session that reads `waiting_user` only because a screen its agent raised is recognised on its terminal (the `agent_dialog` hold in "Messages held until a session can take them" in `docs/product/message-delivery.md`) takes the message into its queue and is answered with success; it is written once the screen is gone. A session that reads `dormant` holds its messages in the same way. A session whose writes are held because its last turn stopped on its account's usage limit (the `usage_limit` hold) is written this message all the same, ahead of the messages held for it, and is answered as written (see `docs/product/messages-held-after-a-usage-limit.md`). A session that reads `waiting_user` only because a `request_session` call of its own is waiting takes a message as usual — that request is answered in its dialog, not at the terminal (see "Waiting for the answer" in `docs/product/session-requests.md`). The console session's own `instruct_session` tool holds such a message instead of refusing it — the user can be told to answer the prompt first, the console session cannot. Refused too, with `session_trust_pending`, while the session's agent is showing, or may still show, its folder-trust confirmation, since the trailing Enter would answer it: for Grok Build from launch until its first hook, and for Claude Code until both its first hook has arrived and its terminal has bracketed paste on at that hook or after it, either of which may be after another startup screen; for Codex, which runs none until its first prompt, until Octoboard's press of the confirmation, a hook, the person's answer in the terminal being seen to replace the confirmation, or its first terminal title with none shown; the console session's tool, and every other message Octoboard writes, holds it until then instead. Refused with `field_required` (`field`: `text`) when nothing but whitespace is left of `text` once its control characters and the characters Claude Code treats as invisible are removed (see "Messages held until a session can take them" in `docs/product/message-delivery.md`). Answered once the message is written or queued and, for a Claude Code session at its prompt, once the few-second check that its agent sent it has ended; a message left unsent is not refused, but reported to every client as a `message_not_sent` notice. For a Codex session whose private app server takes messages into Codex's own queue, refused with `message_refused` (`agent`, `detail`: Codex's reason) when Codex refuses the message outright, which is then not sent by any route, and with `message_acceptance_unconfirmed` (`agent`) when Codex may have taken it without confirming it, which is then not sent again |
-| `interrupt_session` | `session` | Stops the turn the session's agent is running, as the user pressing its interrupt key in the terminal would, and replies with `session_interrupted`; no ownership is checked. The process and its conversation stay, and the session goes back to `idle`. The key is the agent's own, written on its own and never joined to a message: one Esc for Claude Code and Codex, Ctrl-U then Ctrl-C for Grok Build (which ignores Esc, and whose Ctrl-C clears text in its composer instead of cancelling the turn). A draft in Grok's composer is cleared first with Ctrl-U, one press at a time until the screen shows the composer empty, and the note says so (Grok may let the user undo it with ctrl+z); a draft that does not clear gets no Ctrl-C. The input box is read off the screen with faint text left out, such as Claude Code's placeholder in a fresh session's empty box. It is written only while the session reads `working` by its hooks and its terminal title shows the turn running, checked right before each key, so a turn that ends meanwhile gets no key. When Claude Code or Grok Build puts the interrupted prompt back in its input box (a key before the model has shown anything), the daemon clears it with Ctrl-U, one press at a time while the screen shows text there, as long as the box was empty before the interrupt key and nothing else has been written meanwhile; text left there is reported in the note. Messages Octoboard has for the session are held from the first key until the reply, so none joins the restored text, and are written afterwards. A cancel the user makes in the terminal is left as the agent leaves it. The reply waits up to five seconds for the turn to end, which counts even when a message the agent had queued starts the next turn at once. A session not in a turn (at its prompt, with or without background work) is answered with `interrupted: false` and nothing is written; so is a session another `interrupt_session` is already interrupting. Refused, with nothing written: `session_not_running` for a session that is archived or interrupted, has no process, or is still being launched or not yet past its startup screens; `session_trust_pending` while its agent shows its folder-trust confirmation; `session_waiting_for_user` while its agent waits on the user (a permission prompt or question, a screen of its own recognised on the terminal, Codex's `Action Required` title) or a `request_session` call of its own holds its hand up; `session_busy` while it is being switched to another account, handed off, having its branches transferred, given another parent or restarted for a change of its account's sharing. An id that names no session is `unknown_session` |
+| `interrupt_session` | `session` | Stops the turn the session's agent is running, as the user pressing its interrupt key in the terminal would, and replies with `session_interrupted`; no ownership is checked. The process and its conversation stay, and the session goes back to `idle`. The key is the agent's own, written on its own and never joined to a message: one Esc for Claude Code and Codex, Ctrl-U then Ctrl-C for Grok Build (which ignores Esc, and whose Ctrl-C clears text in its composer instead of cancelling the turn). A draft in Grok's composer is cleared first with Ctrl-U, one press at a time until the screen shows the composer empty, and the note says so (Grok may let the user undo it with ctrl+z); a draft that does not clear gets no Ctrl-C. In either clearing (this one, and that of a restored prompt below) each Ctrl-U is waited for up to five seconds to show in the box before the next goes in, and a press not seen in that time, or the clearing's own limit running out (fifteen seconds, or one second for each press it plans if that is more), ends the clearing with no further press, the box then counting as cleared only if the screen shows it empty. The input box is read off the screen with faint text left out, such as Claude Code's placeholder in a fresh session's empty box. It is written only while the session reads `working` by its hooks and its terminal title shows the turn running, checked right before each key, so a turn that ends meanwhile gets no key. When Claude Code or Grok Build puts the interrupted prompt back in its input box (a key before the model has shown anything), the daemon watches the box for three seconds after the title shows the turn stopped, or until the turn has ended if that is later (within the five-second wait below; a turn that ends before its title turns waits for the title within it; neither wait goes on once the agent has started a turn of its own), and clears the prompt as soon as it shows, with Ctrl-U, one press at a time while the screen shows text there, as long as the box was empty before the interrupt key and nothing else has been written meanwhile, and no press goes in once the title has left the prompt or a turn of the agent's own has started; text left there is reported in the note. Messages Octoboard has for the session are held from the first key until the reply, so none joins the restored text, and are written afterwards. A cancel the user makes in the terminal is left as the agent leaves it. Once the interrupt key is in, the reply waits up to five seconds for the turn to end, which counts even when a message the agent had queued starts the next turn at once. Clearing a draft before the key, or a restored prompt after it, can make the reply take longer, and a box watched for a restored prompt that stays empty holds the reply until that watch's three seconds have passed. A session not in a turn (at its prompt, with or without background work) is answered with `interrupted: false` and nothing is written; so is a session another `interrupt_session` is already interrupting. Refused, with nothing written: `session_not_running` for a session that is archived or interrupted, has no process, or is still being launched or not yet past its startup screens; `session_trust_pending` while its agent shows its folder-trust confirmation; `session_waiting_for_user` while its agent waits on the user (a permission prompt or question, a screen of its own recognised on the terminal, Codex's `Action Required` title) or a `request_session` call of its own holds its hand up; `session_busy` while it is being switched to another account, handed off, having its branches transferred, given another parent or restarted for a change of its account's sharing. An id that names no session is `unknown_session` |
 | `rename_session` | `session`, `title` | The title is stored trimmed and cannot be blank (`field_required`) |
 | `release_session` | `session` | Makes a project session independent from its parent, whoever it is, and broadcasts `session_upserted`: `bound_to` is cleared and the session is an ordinary independent project coordinator, the user's own. A project coordinator keeps the sessions bound to it, and branches stay with their session. Allowed whether the session is running or not, and refused for a console session, an independent session, and a session, or the parent it is bound to, that is being started, resumed, handed off, switched to another account or having its parent changed. The refusals are `console_session_never_bound`, `session_not_bound`, `session_binding_changed` (the binding moved between the check and the write), `session_changing` and `session_owner_changing`; an id that names no session is `unknown_session`. A running session is told in a message, queued while it cannot take one, that it has no parent and which tools it has; one with no process is told when it next starts, ahead of any instruction of that launch, as the notice every change of parent leaves for a session that was not running (see `release_session` under the MCP tools). The former parent is told in a message, queued while it cannot take one, that the user released the session, so it can no longer instruct, drive or archive it (it can still tell it something with the MCP tool `inform_session`) and should treat any work it handed the session as left with the user; a parent with no process is not told, and a later attempt by it to drive the session is refused as not its own |
 | `list_pages` | `session` | A session's report panel pages, oldest first. Answered with `page_list` on the asking socket. `session` is the session that pushed the pages, a console session or a project session; one that names no session is refused with `unknown_session` |
@@ -640,10 +674,10 @@ one it does not know:
 |---|---|---|
 | `screen_gone` | — | The trust confirmation is no longer on the terminal (for Grok Build: its process has ended) |
 | `cursor_not_at_start` | — | The cursor is not on the option it starts on (Claude Code's "No, exit", Codex's "1. Trust and continue"), or could not be found |
-| `cursor_did_not_move` | — | Claude Code's cursor did not move to "Yes, I trust this folder" after the Down, so Enter was not sent |
-| `terminal_not_settled` | — | The terminal did not settle, so Enter was not sent |
+| `cursor_did_not_move` | — | Claude Code's cursor did not move to "Yes, I trust this folder" within 30 seconds of the Down, so Enter was not sent |
+| `terminal_not_settled` | — | The terminal did not settle within 30 seconds, so Enter was not sent |
 | `cursor_moved_away` | — | The cursor is no longer on the option that trusts the folder, so Enter was not sent |
-| `screen_not_dismissed` | — | The confirmation did not go away after the key was sent (for Grok Build: it ran no hook within about 12 seconds of the key; a hook that comes later still has Grok's entry carried over, and a failure to carry it is then its own `trust_not_carried_over` notice) |
+| `screen_not_dismissed` | — | The confirmation did not go away after the key was sent (for Claude Code and Codex: within 30 seconds of the Enter, the confirmation was not seen gone and the agent sent no hook; for Grok Build: it ran no hook within about 12 seconds of the key; a hook that comes later still has Grok's entry carried over, and a failure to carry it is then its own `trust_not_carried_over` notice) |
 | `screen_redrawn` | — | The confirmation was drawn again after the key was sent |
 | `input_touched` | — | Something else wrote into the terminal meanwhile, so the keys were not sent |
 | `terminal_write_failed` | the system's own message | Writing to the terminal failed |
@@ -2848,15 +2882,16 @@ A shell terminal is a plain shell the daemon runs for a project, beside its agen
 and nothing of Octoboard's injected into it. It is live state: held in memory, never in the store, and ending with
 the daemon.
 
-- **The shell** is the user's login shell (`$SHELL`, `/bin/zsh` when it is unset), started as one (`-l`) on a PTY of
-  its own in `cwd`. On Windows it is PowerShell 7 (`pwsh.exe`), else Windows PowerShell (`powershell.exe`), else
-  `cmd.exe`, the first of them on the `PATH`, started with no arguments on a pseudoconsole of its own; a `pwsh.exe` that
-  is a Store app execution alias is started suspended, put into the terminal's jobs and then let run, so that what it
-  starts stays in them. It starts in the environment an agent launch takes: the snapshot of the user's login shell,
-  under the same rules for reusing one. A snapshot that cannot be taken does not refuse it: the shell then starts in the
-  daemon's own environment, less the variables that mark an agent session (as the snapshot is filtered), and reads the
-  user's profile itself. `TERM` is `xterm-256color` either way. None of the variables Octoboard sets for an agent's
-  session (its id, the daemon's port, the hook, MCP and branch reporting) is set.
+- **The shell** is the user's login shell (`$SHELL`; when it is unset, the shell the system user database records for
+  the user, else `/bin/sh`), started as one (`-l`) on a PTY of its own in `cwd`. On Windows it is PowerShell 7
+  (`pwsh.exe`), else Windows PowerShell (`powershell.exe`), else `cmd.exe`, the first of them on the `PATH`, started
+  with no arguments on a pseudoconsole of its own; a `pwsh.exe` that is a Store app execution alias is started
+  suspended, put into the terminal's jobs and then let run, so that what it starts stays in them. It starts in the
+  environment an agent launch takes: the snapshot of the user's login shell, under the same rules for reusing one. A
+  snapshot that cannot be taken does not refuse it: the shell then starts in the daemon's own environment, less the
+  variables that mark an agent session (as the snapshot is filtered), and reads the user's profile itself. `TERM` is
+  `xterm-256color` either way. None of the variables Octoboard sets for an agent's session (its id, the daemon's port,
+  the hook, MCP and branch reporting) is set.
 - **Where it starts** is checked when it is created: the project's own directory, or with `worktree` the project's
   place in that worktree, which must be one `get_project_source` lists for the project's repository and is checked
   against the repository again (see "Project sources"); with `path`, the folder below that place which the path names,
@@ -3330,8 +3365,9 @@ A branch the daemon can name a responsible session for carries `origin`, a `Bran
 the session working on the branch now (it may be gone), `responsible_title` is the title it had when it became
 responsible, and `responsible_since` is when it did, in milliseconds. The session whose own git reported creating the
 branch is responsible for it until the record is moved to another; nothing else about who created it is kept. A project
-session's agent is started with `core.hooksPath` pointed, through `GIT_CONFIG_COUNT`, at hook dispatchers of the
-daemon's, and when a reference transaction of any git in that agent's process tree commits a branch that did not exist
+session's agent is started with `core.hooksPath` pointed, through `GIT_CONFIG_PARAMETERS` (after the user's own
+entries there; the user's `GIT_CONFIG_COUNT` entries are left as they are), at hook dispatchers of the daemon's, and
+when a reference transaction of any git in that agent's process tree commits a branch that did not exist
 while the transaction was prepared, the `reference-transaction` dispatcher reports it to `POST /git-ref/:session`
 (below) — a forced update of an existing branch is not a creation; every other hook, and that one too, runs the hook the
 user's own configuration names. The `reference-transaction` and `pre-push` dispatchers also run the revert gate, after
@@ -3689,8 +3725,8 @@ steers the agent (an empty `200` is Claude Code's "no decision"): the injected h
 and fast, because every agent surfaces a failing hook to the user. The event is then applied on a queue of the
 session's own, so a session's events take effect in the order they arrived; at most 256 wait per session, and past that the newest event takes the place of the one last in line (the event being applied is never touched).
 
-The caller is `octoboardd hook --session <id> --port <port> --key <key>`, except for a Claude Code of version 2.1.63 or
-later, whose `--settings` carry a `"type": "http"` hook that posts to this route itself
+The caller is `octoboardd hook --session <id> --port <port> --key-file <path>`, except for a Claude Code of version
+2.1.63 or later, whose `--settings` carry a `"type": "http"` hook that posts to this route itself
 (`http://127.0.0.1:<port>/hook/<session>?key=<key>`), so a hook event costs no process. It sends the same JSON body;
 what keeps a web page from reaching the route is the `Host` and `Origin` check and the key above, which the URL carries.
 Claude Code's HTTP hook is synchronous, which is why the answer does not wait for the event to be applied; a daemon that
@@ -3702,31 +3738,62 @@ console cannot be read, and is a known limitation.
 
 ## `POST /git-ref/:session` — a session's git reporting branches it created and refs it moved
 
-Not part of the application's interface. This is how `octoboardd git-ref --session <id> --port <port> --key <key>`,
-which a project session's `reference-transaction` hook dispatcher starts in the background, reports a committed
-transaction's created branches, and, with `--moved`, that it touched `HEAD`, a local branch or a remote-tracking branch:
+Not part of the application's interface. This is how `octoboardd git-ref --session <id> [--port <port>] [--data-dir
+<path>]`, which a project session's `reference-transaction` hook dispatcher starts in the background with the path of
+the key file in `OCTOBOARD_DAEMON_CREDENTIAL_PATH`, reports a committed transaction's created branches, and, with
+`--moved`, that it touched `HEAD`, a local branch or a remote-tracking branch:
 
 ```
 { cwd, git_dir?, head?, refs: [{ name, oid }], moved?, unix_time }
 ```
 
-`cwd` is the directory git ran the hook in and `git_dir` the `GIT_DIR` it set, if any (relative to `cwd` when
-relative), both wire paths; `head` is the branch (`refs/heads/...`, a wire path) the git had checked out while the
-transaction was prepared, absent for a detached `HEAD`; `refs` holds each created reference's full name (a wire path)
-and the object id it was created at, and may be empty; `moved` (absent means `false`) has every project of the
-repository git ran in re-read and published as a `project_git_status`, locally and coalesced per repository
-(`docs/product/project-git-status.md`, "Following changes to the repository's refs"); `unix_time` is when the report
-was made, in seconds. Answers `200` with an empty body, or `400` for a body that does not parse, and records the
-created branches afterwards as "Comparing two branches" describes; the reporter ignores the answer. Beside the responsible session, each recorded branch keeps its target branch, the local
-branch it was created from (read from the first line of its reflog, `branch: Created from <start>`: a local branch, the
-local branch behind a remote-tracking one, or for `HEAD` the reported `head`; a reftable repository has no reflog and
-takes `head` whatever the start point was), and its fork point, the reported commit.
+`cwd` is the directory git ran the hook in and `git_dir` the `GIT_DIR` it set, if any (relative to `cwd` when relative),
+both wire paths; `head` is the branch (`refs/heads/...`, a wire path) the git had checked out while the transaction was
+prepared, absent for a detached `HEAD`; `refs` holds each created reference's full name (a wire path) and the object id
+it was created at, and may be empty; `moved` (absent means `false`) has every project of the repository git ran in
+re-read and published as a `project_git_status`, locally and coalesced per repository
+(`docs/product/project-git-status.md`, "Following changes to the repository's refs"); `unix_time` is when the report was
+made, in seconds. Answers `200` with an empty body, or `400` for a body that does not parse, and records the created
+branches afterwards as "Comparing two branches" describes; the reporter ignores the answer. Beside the responsible
+session, each recorded branch keeps its target branch, the local branch it was created from (read from the first line of
+its reflog, `branch: Created from <start>`: a local branch, the local branch behind a remote-tracking one, or for `HEAD`
+the reported `head`; a reftable repository has no reflog and takes `head` whatever the start point was), and its fork
+point, the reported commit.
+
+The report, like the gate's question below, goes first to the launch's route: the port the dispatcher passes (the
+session's `OCTOBOARD_DAEMON_PORT`: its process holder's, or the daemon's for a terminal the daemon runs itself) with the
+key in the key file. That route is gone once the session has ended — the key file goes with the session's scratch
+directory, the holder revokes the launch's key and exits once it runs nothing — so where there is no port, the key file
+is missing, unreadable or empty, the port answers `401` or `403`, or nothing listens on it, the request goes to the
+daemon's own route of the same path instead: the port the daemon's owner record (`daemon.owner`) names, provided the
+process it names still runs, with the key its key record (`daemon.key`) holds for that process. A holder's `503` (no
+daemon linked within its deadline) or `502` (the daemon lost mid-call), a timeout, or any other answer is not retried
+there, and the key read from the daemon's key record is never sent to the port from the environment. With neither route
+usable nothing is sent. The daemon processes a report or question for any session whose record it has, stopped and
+archived ones included; one for a session deleted since is dropped (`null` from the gate). So a job a session left
+running after it ended still reports what it creates and is still gated. The report's deadline is 3 s on the launch's
+route (long enough for Windows to refuse a connection to a port nothing listens on) and 1.5 s on the daemon's.
+
+That daemon is the one running against the data directory the dispatchers are under (`<data>/githooks/<hash>/`),
+which the dispatcher passes as `--data-dir <path>`; the home directory of the helper's own environment comes from the
+session's shell and may be another daemon's. Without `--data-dir` the helper uses its own data directory.
+
+The dispatchers run the installation's entry point (the path the daemon was launched by), not a holder's copy of the
+build, so a later build's `git-ref` and `gate-hook` may serve the dispatchers an earlier one wrote: the arguments above
+(`--session`, an optional `--port`, an optional `--data-dir`, `--moved`, `--head`, the refs after `--`, the gate's hook
+subcommand) and the variables (`OCTOBOARD_SESSION_ID`, `OCTOBOARD_DAEMON_PORT`,
+`OCTOBOARD_DAEMON_CREDENTIAL_PATH`) stay accepted across versions, and a command line without an argument a later
+build added still parses. Not the other way round: an earlier build installed in place of a later one refuses the
+arguments that build's dispatchers added, so its `git-ref` reports nothing and its `gate-hook` lets git through.
 
 ## `POST /revert-gate/:session` — a session's git asking whether the revert gate applies
 
-Not part of the application's interface. This is how `octoboardd gate-hook --session <id> --port <port> --key <key>
-<hook>`, which a project session's `reference-transaction` and `pre-push` hook dispatchers start in the foreground when
-git moves an existing branch or pushes one, gets the inputs it runs the revert gate with, in its own process:
+Not part of the application's interface. This is how `octoboardd gate-hook --session <id> [--port <port>] [--data-dir
+<path>] <hook>`, which a project session's `reference-transaction` and `pre-push` hook dispatchers start in the
+foreground, with the path of the key file in `OCTOBOARD_DAEMON_CREDENTIAL_PATH`, when git moves an existing branch or
+pushes one, gets the inputs it runs the revert gate with, in its own process, by the launch's route or the daemon's as
+`POST /git-ref/:session` describes. Its deadline is the holder's relay deadline plus 2.5 s on the launch's route, which
+a holder may hold while no daemon is linked, and 2.5 s on the daemon's:
 
 ```
 { cwd, git_dir? }
@@ -3747,9 +3814,9 @@ other status) the call.
 
 ## `POST /context-window/:session` — a Claude Code session reporting its context window
 
-Not part of the application's interface. This is how `octoboardd status-line --session <id> --port <port> --key <key>
-…`, the status line command the Claude Code adapter injects through `--settings`, reports the context window Claude Code
-gave it on stdin:
+Not part of the application's interface. This is how
+`octoboardd status-line --session <id> --port <port> --key-file <path> …`, the status line command the Claude Code
+adapter injects through `--settings`, reports the context window Claude Code gave it on stdin:
 
 ```
 { window }
@@ -3840,39 +3907,42 @@ an error and is acted on again at every start until it can be.
 ## `POST /shutdown` — ending the daemon
 
 The other way to ask for what the `shutdown` request on the control socket asks, for a caller that holds no WebSocket:
-the desktop application sends it to stop its daemon when the user quits, after writing its `quit` note (see above); the
-update restart sends `POST /planned-stop` instead. It takes no body, is behind the guard like every route (the `key`
-query parameter is required), and answers `202` with an empty body at once. The daemon then does what a termination
-signal makes it do: it ends every process it runs, leaves its sessions `interrupted`, removes its port file and exits. A
-caller learns the daemon is gone from its process ending, not from the answer. Where a host has signals, they remain a
-second way to the same end; where it has none, this is the way. During a planned stop it reaches the daemon only on an
-already-open connection, where it escalates the planned stop (see "`POST /planned-stop`"); the listener is closed once
-any stop has begun.
+the desktop application sends it to stop its daemon when the user quits, after writing its `quit` note (see above), and
+`octoboardd stop` sends it on Windows; the update restart sends `POST /planned-stop` instead. It takes no body, is
+behind the guard like every route (the `key` query parameter is required), and answers `202` with an empty body at once.
+The daemon then does what a termination signal makes it do: it ends every process it runs, leaves its sessions
+`interrupted`, removes its port file and exits. A caller learns the daemon is gone from its process ending, not from the
+answer. Where a host has signals, they remain a second way to the same end; where it has none, this is the way. During a
+planned stop it reaches the daemon only on an already-open connection, where it escalates the planned stop (see
+"`POST /planned-stop`"); the listener is closed once any stop has begun.
 
 ## `POST /restart` — a planned restart
 
 Asks for a planned stop (see "`POST /planned-stop`" below) after which the next daemon comes up on the same port, so a
 client reconnects as it would after a dropped connection and finds every session still running, with its screen.
-`octoboardd restart` asks for the same through a signal. It takes no body, is behind the guard like every route, and
-answers `202` with an empty body at once; the caller learns the restart is done from the daemon answering again. The key
-is kept only where the daemon starts the next one itself. A daemon leaves the next start to a service manager only when
-it was started with `--service-managed`, which the maintained systemd unit passes (a unit that passes it must restart
-the daemon on status 75, as `RestartForceExitStatus=75` does), or when `SYSTEMD_EXEC_PID` equals its own pid and
-`INVOCATION_ID` is well formed, which says it is a systemd service's main process; this is decided once, at start, and
-the refusal below and the choice of the next daemon read the same answer. Such a daemon exits with status 75 after its
-planned stop and the service starts the next one, which makes a new key, so a client must read the new key (the
-handshake line) before it reconnects. Any other daemon starts the next one itself in the background, as `octoboardd
-start` would, from the path it was invoked by (made absolute where it was not, the last symlink left unresolved) when
-that names the image it runs, else from the running image, and hands it its own key over standard input.
-`--service-managed` is ignored on Windows, where no service manager restarts the daemon, and does not combine with a
-subcommand. A next daemon that fails to start leaves the sessions to the holders and the next start.
+`octoboardd restart` asks for the same through a signal, and on Windows, which has no signal for it, through this route.
+It takes no body, is behind the guard like every route, and answers `202` with an empty body at once; the caller learns
+the restart is done from the daemon answering again. The key is kept only where the daemon starts the next one itself. A
+daemon leaves the next start to a service manager only when it was started with `--service-managed`, which the
+maintained systemd unit passes (a unit that passes it must restart the daemon on status 75, as
+`RestartForceExitStatus=75` does), or when `SYSTEMD_EXEC_PID` equals its own pid and `INVOCATION_ID` is well formed,
+which says it is a systemd service's main process; this is decided once, at start, and the choice of the next daemon
+reads it. Such a daemon exits with status 75 after its planned stop and the service
+starts the next one, which makes a new key, so a client must read the new key (the handshake line) before it reconnects.
+Any other daemon starts the next one itself in the background, as `octoboardd start` would, from the path it was invoked
+by (made absolute where it was not, the last symlink left unresolved) when that names the image it runs, else from the
+running image, and hands it its own key over standard input. `--service-managed` is ignored on Windows, where no service
+manager restarts the daemon, and does not combine with a subcommand. A next daemon that fails to start leaves the
+sessions to the holders and the next start. Just before it removes its owner record and releases its lock for the next
+daemon, the daemon writes `daemon.handover`, which the next daemon removes once it has recorded itself (see
+`docs/product/files-octoboard-owns.md`), so that the command line waits for that one rather than take the free lock for
+no daemon at all.
 
 It is refused with `409` and a JSON body, `{"reason": "<reason>", "message": "<English prose>"}`, and nothing is stopped:
 
 | `reason` | When |
 |---|---|
 | `follows_application` | the daemon follows the desktop application (it was started with `--parent-pid`), which starts the daemon it talks to itself |
-| `no_successor` | no service manager runs the daemon and the host cannot start one in the background (Windows) |
 
 A stop asked for before it, of either kind, stays the one made.
 
@@ -3939,8 +4009,8 @@ status is 0.
 ## `POST /mcp/:token` — Octoboard's MCP tools
 
 Not part of the application's interface. This is how a session's own MCP server — the `octoboardd mcp --session <id>
---kind <kind> --port <port> --key <key> --token <token>` child process each adapter registers — runs a tool call against
-the daemon; the desktop application never calls it.
+--kind <kind> --port <port> --key-file <path> --token <token>` child process each adapter registers — runs a tool call
+against the daemon; the desktop application never calls it.
 
 The key, as on every route, is the `key` query parameter. The token in the path is what says which session is calling.
 It is issued per launch, dropped when that process goes away, and never sent by the caller as an argument, so a child

@@ -3,7 +3,8 @@
 What the desktop application runs on, how it is distributed and how it is installed, on macOS and on Windows. Both are
 in beta. Once installed, the application updates itself from the project's releases, on the user's request: on macOS in
 place, on Windows by running the new version's installer (see `docs/product/in-app-updates.md`). How the application
-starts, quits and keeps its files is in `docs/product/application-lifecycle.md`.
+starts and quits is in `docs/product/application-lifecycle.md`, and the files it keeps are in
+`docs/product/files-octoboard-owns.md`.
 
 ## Where releases are published
 
@@ -52,5 +53,7 @@ remain for a while after signing begins.
 
 ## The server form
 
-The server form has no requirements or distribution settled: the daemon is a single binary meant to be put on the
-server as it is, and its Linux build is not established yet.
+The daemon, `octoboardd`, builds and runs on Linux. A server build carries the UI inside the binary, so that one file,
+put on the server as it is, is the whole of Octoboard there (see "The UI the daemon serves" in
+`docs/product/server-form.md`). How it is distributed is not settled: no release holds a Linux build, and the
+server's requirements are not stated.

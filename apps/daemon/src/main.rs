@@ -25,12 +25,14 @@ mod hostfs;
 mod instance_lock;
 mod interface_language;
 mod keep_awake;
+mod key_file;
 #[cfg(test)]
 mod layering_tests;
 mod log_file;
 mod loopback;
 mod mcp;
 mod messaging;
+mod owner_record;
 mod path_links;
 mod paths;
 mod platform;
@@ -121,9 +123,10 @@ fn read_key_from_stdin() -> Result<String> {
 }
 
 /// Sends the daemon's log, at `INFO` and above, to stderr and to `daemon.log` (`log_file`). Never
-/// to stdout: that carries the handshake line (port and key) the application reads. The file is
-/// written only once the returned handle is enabled, which the daemon does when it holds the
-/// instance lock.
+/// to stdout: that carries the handshake line (port and key) the application reads. Stderr gets
+/// colour codes only when it is a terminal and `NO_COLOR` is unset or empty, so a service
+/// manager's journal holds plain text, as the file does. The file is written only once the
+/// returned handle is enabled, which the daemon does when it holds the instance lock.
 ///
 /// The application owns the read end of that stderr, so from the moment it is gone every write to
 /// the log fails. Reporting those failures is therefore turned off: the report is an `eprintln!`
@@ -133,15 +136,20 @@ fn read_key_from_stdin() -> Result<String> {
 /// remains of the log then, and the only one a packaged application ever has: launched from the
 /// Finder, it has no stderr to read at all.
 fn init_logging() -> log_file::LogFile {
+    use std::io::IsTerminal as _;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::{fmt, EnvFilter};
 
     let log_file = log_file::LogFile::open();
+    // An explicit `with_ansi` overrides the layer's own `NO_COLOR` handling, so it is applied here.
+    let colour = std::io::stderr().is_terminal()
+        && std::env::var_os("NO_COLOR").is_none_or(|value| value.is_empty());
     tracing_subscriber::registry()
         .with(
             fmt::layer()
                 .with_writer(std::io::stderr)
+                .with_ansi(colour)
                 .log_internal_errors(false),
         )
         .with(
@@ -199,6 +207,7 @@ async fn run_daemon(
         port,
         key.clone(),
         self_exe,
+        launch_exe.to_string_lossy().into_owned(),
         paths::saved_output_dir(),
         paths::consoles_dir(),
         paths::handoff_dir(),
@@ -338,21 +347,29 @@ async fn run_daemon(
     spawn_restart_requests(state.clone(), restart_requests);
 
     // Before the line below, which is what a caller waits for, so that whoever sees the line can
-    // find the daemon through this record.
-    let owner = instance_lock::Owner::current(port, parent_pid.is_some(), takes_restart);
+    // find the daemon through this record. The record says whether a service manager starts the
+    // successor, which makes a key of its own, rather than this daemon, which hands over its key.
+    let owner = owner_record::Owner::current(port, parent_pid.is_some(), takes_restart)
+        .map(|owner| owner.with_service_manager(state.service_managed()));
     match &owner {
         Some(owner) => {
+            if let Err(err) = owner.record_key(&key) {
+                tracing::warn!(%err, "writing the key record failed");
+            }
             if let Err(err) = owner.record() {
                 tracing::warn!(%err, "writing the owner record failed");
             }
         }
         None => tracing::warn!("reading this process's start time failed; no owner record"),
     }
+    // The daemon this one takes over from, if any, is done handing over: whoever looks finds this
+    // one now, through the lock, and its record where it could write one.
+    owner_record::settle_handover();
 
     // Printed before anything else can block: the application waits for this line to know where to
-    // connect and what to present. Besides this line the key is in memory and in what the daemon
-    // starts (their arguments and environment, and the owner-only files of a session's scratch
-    // directory): the port file below stays port-only.
+    // connect and what to present. Besides this line the key is in memory, in the owner-only key
+    // record above, and in what the daemon starts (their arguments and environment, and the
+    // owner-only files of a session's scratch directory): the port file below stays port-only.
     println!("octoboardd listening on 127.0.0.1:{port} with key {key}");
     use std::io::Write;
     std::io::stdout().flush().ok();
@@ -463,6 +480,13 @@ async fn run_daemon(
     };
     remove_port_file(&port_file, port);
     if let Some(owner) = owner {
+        // Ahead of the record going: from then until the next daemon has recorded itself, the
+        // note is what shows a command that one is on its way.
+        if successor {
+            if let Err(err) = owner.note_handover() {
+                tracing::warn!(%err, "writing the handover note failed");
+            }
+        }
         owner.forget();
     }
     if !successor {
@@ -483,6 +507,11 @@ async fn run_daemon(
         tokio::task::spawn_blocking(move || cli::start_successor(port, &key, &launch_exe))
             .await
             .unwrap_or(false);
+    if !started {
+        if let Some(owner) = owner {
+            owner.withdraw_handover();
+        }
+    }
     anyhow::ensure!(
         started,
         "the next daemon did not start; the sessions are kept for the next start"
@@ -599,10 +628,10 @@ async fn stop_all_processes_after_planned(
 }
 
 /// Has the terminals the daemon starts run in a holder of this build, which the daemon starts from
-/// a copy of its own executable (`holder::build`), detached from itself, when the first terminal is
-/// asked for. `application`
-/// is the desktop application's pid, when there is one. Where that cannot be set up the
-/// terminals run in the daemon, as they do in a process that never calls this.
+/// a copy of its own executable (`holder::build`), apart from itself so that they outlive it (as a
+/// unit of its own under a systemd user manager), when the first terminal is asked for.
+/// `application` is the desktop application's pid, when there is one. Where that cannot be set up
+/// the terminals run in the daemon, as they do in a process that never calls this.
 fn install_holders(state: &Arc<AppState>, application: Option<u32>) {
     let installed = platform::proc::running_image()
         .context("finding the daemon's own executable")
@@ -612,7 +641,7 @@ fn install_holders(state: &Arc<AppState>, application: Option<u32>) {
                 exe,
                 builds: Some(Arc::new(holder::build::Builds::new(paths::builds_dir()))),
                 range: holder::compat::Range::current(),
-                launch: holder::client::launch_detached(application),
+                launch: holder::client::launch_holder(application),
                 relay: Arc::new(server::relay::DaemonRelay::new(state.clone())),
             })
         });

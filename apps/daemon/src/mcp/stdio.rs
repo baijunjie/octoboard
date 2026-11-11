@@ -14,12 +14,14 @@
 //!
 //! The token says which session a call is for, and is issued only to the child the daemon
 //! launched, so the MCP surface is not reachable by any local process that happens to guess the
-//! port; the key is what every connection to the daemon has to carry.
+//! port; the key is what every connection to the daemon has to carry, and it is read from the
+//! session's key file, never from arguments.
 //!
 //! **Stdout belongs to the MCP protocol alone.** Nothing else may be written to it, which is why
 //! this mode installs no tracing subscriber and reports its own failures on stderr.
 
 use std::borrow::Cow;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -42,9 +44,12 @@ pub fn run(
     kind: SessionKind,
     worker: bool,
     port: u16,
-    key: String,
+    key_file: &Path,
     token: String,
 ) -> anyhow::Result<()> {
+    // A key file that cannot be read is a key the daemon refuses, which every call then reports
+    // as the daemon does.
+    let key = crate::key_file::read(key_file).unwrap_or_default();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;

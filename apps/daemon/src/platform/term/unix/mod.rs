@@ -1,5 +1,5 @@
 //! The Unix terminal backend: a PTY from `portable-pty`, read and written through its master
-//! descriptor directly.
+//! descriptor directly. The module also starts the process on the PTY itself ([`start`]).
 //!
 //! Why raw reads and writes rather than `portable_pty`'s `Read`/`Write` handles: a macOS PTY
 //! master accepts only about 1022 bytes before returning `EAGAIN` while the child is not draining,
@@ -12,18 +12,25 @@
 //! description and therefore applies to reads as well — hence [`PtyReader::read_chunk`], which
 //! waits for readability with `poll()` instead of blocking in `read()`.
 
+use std::ffi::OsStr;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::RawFd;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
-use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{native_pty_system, Child, MasterPty, PtySize};
 
 use super::{encode, hung_up, Command, Foreground, Input, PartialWrite, Size, Spawned, TermFacts};
 use crate::platform::proc::{ChildHandle, Containment, Polite, ProcessId, Reach};
+use start::{slave_name, spawn_on_slave};
+
+mod start;
+#[cfg(test)]
+mod start_tests;
 
 pub(super) fn host_facts() -> TermFacts {
     TermFacts {
@@ -51,10 +58,10 @@ const WRITE_SLICE: usize = 512;
 /// be written anyway) or it is wedged, and the caller is better off being told.
 const WRITE_DEADLINE: Duration = Duration::from_secs(5);
 
-/// Opens a PTY of `size` and starts `command` on it. `portable-pty` makes the process the leader
-/// of a session of its own (`setsid()`) with the PTY as its controlling terminal, so it is outside
-/// the daemon's process group and its pgid is its own pid. With a `containment`, the process is
-/// adopted into it as it starts.
+/// Opens a PTY of `size` and starts `command` on it: the process leads a session of its own
+/// (`setsid()`) with the PTY as its controlling terminal, so it is outside the daemon's process
+/// group and its pgid is its own pid. With a `containment`, the process enters its group before
+/// its program runs and is adopted into it again as it starts.
 pub fn spawn(command: Command, size: Size, containment: Option<&Containment>) -> Result<Spawned> {
     let pty = native_pty_system()
         .openpty(pty_size(size))
@@ -66,23 +73,8 @@ pub fn spawn(command: Command, size: Size, containment: Option<&Containment>) ->
         .ok_or_else(|| anyhow!("the PTY master has no file descriptor"))?;
     set_nonblocking(fd).context("putting the PTY master into non-blocking mode")?;
     let wake = WakePipe::new().context("opening the reader's wake pipe")?;
-    let child = pty.slave.spawn_command(builder(command))?;
+    let child = spawn_on_slave(&command, fd, containment)?;
     started(child, pty.master, fd, wake, containment)
-}
-
-fn builder(command: Command) -> CommandBuilder {
-    let mut builder = CommandBuilder::new(&command.program);
-    builder.args(&command.args);
-    if !command.inherits_env {
-        builder.env_clear();
-    }
-    for (key, value) in &command.env {
-        builder.env(key, value);
-    }
-    if let Some(cwd) = &command.cwd {
-        builder.cwd(cwd);
-    }
-    builder
 }
 
 fn pty_size(size: Size) -> PtySize {
@@ -165,8 +157,8 @@ impl WakePipe {
         // SAFETY: `pipe` succeeded, so both are open descriptors owned by nothing else.
         let (read, write) = unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) };
         for fd in [read.as_raw_fd(), write.as_raw_fd()] {
-            // Not inherited by what the daemon starts. `portable-pty` closes stray descriptors in
-            // its children anyway; a child started any other way would hold the pipe open.
+            // Not inherited by what the daemon starts. The child of `spawn` closes stray
+            // descriptors anyway; a child started any other way would hold the pipe open.
             // SAFETY: `fd` is open for as long as this call.
             if unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) } < 0 {
                 return Err(io::Error::last_os_error());
@@ -321,27 +313,8 @@ impl Pty {
     /// up.
     pub fn slave_path(&self) -> Option<PathBuf> {
         let master = self.master()?;
-        let mut name = [0 as libc::c_char; 256];
-        #[cfg(target_os = "linux")]
-        // SAFETY: the call writes at most the buffer's size, through a descriptor that holding
-        // `master` keeps open.
-        let named = unsafe { libc::ptsname_r(master.fd, name.as_mut_ptr(), name.len()) } == 0;
-        #[cfg(target_os = "macos")]
-        let named = {
-            // SAFETY: the request fills in a buffer of 128 bytes, which `name` exceeds, through a
-            // descriptor that holding `master` keeps open.
-            let status =
-                unsafe { libc::ioctl(master.fd, libc::TIOCPTYGNAME as _, name.as_mut_ptr()) };
-            status == 0
-        };
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        let named = false;
-        if !named {
-            return None;
-        }
-        // SAFETY: the system wrote a NUL-terminated name into the zeroed buffer.
-        let name = unsafe { std::ffi::CStr::from_ptr(name.as_ptr()) };
-        Some(PathBuf::from(name.to_string_lossy().into_owned()))
+        let name = slave_name(master.fd).ok()?;
+        Some(PathBuf::from(OsStr::from_bytes(name.to_bytes())))
     }
 }
 

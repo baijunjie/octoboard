@@ -17,7 +17,11 @@
 //!   `runtime_settled` and `runtime_advanced`, which pause a real-clock test's clock for the wait, the
 //!   latter moving it on by a given duration, and `next_millisecond`, which waits for the wall-clock
 //!   millisecond to change.
+//! - `cgroups` (Linux): a cgroup of a test's own below the test process's, for the tests of what
+//!   runs in a cgroup other than the daemon's, and the launch group and cgroup reads of the tests of
+//!   what runs in a launch's group; named as `cgroups::ChildCgroup`, not re-exported.
 //! - `fixture` (Windows): the processes a test starts where a Unix test has perl start them.
+//! - [`closed_port`]: a loopback port that refuses connections.
 //! - [`git`]: the environment a test's `git` runs in together with the repositories it builds
 //!   with it, the state a read must leave untouched and the stale stat that makes a read want to
 //!   write.
@@ -31,7 +35,10 @@ use std::time::Duration;
 
 pub(crate) mod app;
 pub(crate) mod background;
+#[cfg(target_os = "linux")]
+pub(crate) mod cgroups;
 pub(crate) mod clock;
+pub(crate) mod closed_port;
 #[cfg(windows)]
 pub(crate) mod fixture;
 pub(crate) mod git;
@@ -45,6 +52,7 @@ pub(crate) mod stand_in;
 pub(crate) use app::*;
 pub(crate) use background::Background;
 pub(crate) use clock::*;
+pub(crate) use closed_port::ClosedPort;
 pub(crate) use git::*;
 pub(crate) use processes::*;
 pub(crate) use scratch::*;

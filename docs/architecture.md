@@ -40,10 +40,11 @@ can do everything the owner can — and from another machine that means whoever 
 user, so that login is to be kept like a password. That is this version's design boundary, not a gap left for later;
 what several users would take is in "Why the daemon is split out".
 
-The server form is **not built yet**. Today the daemon binds to loopback only, on a fixed port when it is given one
-(`--port`) and runs in the background from the command line or as a systemd user service, but it does not serve the UI,
-a daemon run as a service has no way yet to hand its key to its owner, and the application cannot connect to a remote
-daemon. What the form asks of the design is stated below, where each constraint comes up.
+In the server form the daemon binds to loopback only, on a fixed port when it is given one (`--port`), runs in the
+background from the command line or as a systemd user service, and serves the UI itself from a build that embeds it;
+its owner gets the address with its key from `octoboardd address` on the server and opens it through an SSH port
+forward. How the Linux build is distributed is not settled, and the application cannot connect to a remote daemon.
+What the form asks of the design is stated below, where each constraint comes up.
 
 "Server" names where the daemon lives: a machine kept running for its owner to reach from elsewhere, with nobody sitting
 at it. The word *host* is not free for it. A host is any machine that runs sessions — the server is one, and
@@ -127,8 +128,7 @@ API. A page over plain `http` is a secure context only at a loopback address (`l
 address it is not, so a browser reaching a server over bare `http` never tells anyone that an agent is waiting — and
 the whole point of the orchestration is that an agent raises its hand and a person answers. This is one more reason the
 daemon stays on loopback: through an SSH port forward the browser opens `http://localhost:<port>`, a secure context with
-no TLS, and the UI is to be served from that same origin as the daemon's WebSocket endpoints (the daemon does not serve
-it yet).
+no TLS, and the daemon serves the UI from that same origin as its WebSocket endpoints.
 
 ## Why the daemon is split out
 
@@ -164,11 +164,16 @@ terminal. These choices are not visible from any one module:
   holder's port and a key per launch, which stay valid as long as the holder, and the holder relays to whichever
   daemon is linked. Reports wait for a daemon; a call its caller waits on waits up to a deadline that covers an
   ordinary restart. A helper and its holder come from the same build, so the only interface that crosses builds is
-  the holder link. Persisting the daemon's port and key instead would lose what is sent during the restart and leave
-  a port another program could take.
-- **Holders and helpers run from a copy of their build** under the data directory (`builds/<build>`), removed once no
-  holder of that build runs. Helpers start afresh on every call, so without the copy an update replacing the
-  installation would run new helpers against an old holder; on Windows the copy also leaves the installation folder
+  the holder link — except a project session's git hooks (below). Persisting the daemon's port and key instead would
+  lose what is sent during the restart and leave a port another program could take.
+- **A session's git hooks outlive their holder.** A background job a session left running keeps running git after the
+  session's process, its key file and its holder are gone. So the git hook helpers run the installation's own
+  executable rather than the build copy, and where the holder refuses the launch's key or no longer listens they go to
+  the daemon through the owner and key records it keeps in the data directory for `octoboardd address`. Their
+  arguments, variables and the helper routes they call are therefore kept compatible across builds.
+- **Holders and their other helpers run from a copy of their build** under the data directory (`builds/<build>`),
+  removed once no holder of that build runs. Helpers start afresh on every call, so without the copy an update replacing
+  the installation would run new helpers against an old holder; on Windows the copy also leaves the installation folder
   free for the installer.
 - **Adoption is approximate, except after a planned stop.** A daemon that starts adopts what the holders run, rebuilds
   each screen from the raw tail, marks it inexact (`screen_inexact` on the wire) and resizes the program by one row and
@@ -215,13 +220,13 @@ browser, the application's own tunnel for the application — so SSH does the au
 daemon gains no external surface, TLS or device credential of its own. A device is let in by its SSH key and revoked by
 removing that key (a connection already open lasts until it drops); such a key identifies a device of the owner's, never
 a person: the daemon stays one user's, and every client is that user. What the daemon must still provide is a way for
-its owner, logged in as its user, to obtain its address and key, including for a daemon a service manager runs; that
-does not exist yet.
+its owner, logged in as its user, to obtain its address and key, including for a daemon a service manager runs:
+`octoboardd address`.
 
-**Known gap: other users of the same machine share its loopback.** The key is what keeps their processes out, so it must
-reach only the daemon's own Unix user. Today keys the daemon accepts are carried in the command lines of a session's
-agent CLI (its hook and MCP configuration) and of the `octoboardd` helpers it runs, which other users of the machine can
-list, so a server shared with other users is not yet protected from them.
+**Other users of the same machine share its loopback.** The key is what keeps their processes out, so it reaches only
+the daemon's own Unix user: no key the daemon or a holder accepts is in any process's arguments, which every user can
+list. It is kept in process environments, which only their own user can read, and in files created owner-only; the
+details are in `apps/daemon/PROTOCOL.md`'s "Who may connect" section.
 
 **Known boundary: several users on one daemon are outside this design**, and authentication per person would be the
 smallest part of it: every session runs as the daemon's own Unix user, with that user's agent logins, quotas and SSH
@@ -234,7 +239,7 @@ confirmations, settings and sessions would each need an owner and an authorizati
 | Layer | Choice | Why |
 |---|---|---|
 | Daemon | Rust + `tokio` | A single binary that can be deployed straight to a Linux server, which is the whole server form. |
-| PTY | `portable-pty` on Unix; a pseudoconsole (ConPTY) backend of the daemon's own on Windows | `portable-pty` is from the WezTerm project. On Windows it gives no process handle before the process runs and takes no second thread attribute, so the process could not be placed in its job before its first instruction (see "Running on more than one operating system"). |
+| PTY | `portable-pty` to open the PTY on Unix, the process started on it by the daemon itself; a pseudoconsole (ConPTY) backend of the daemon's own on Windows | `portable-pty` is from the WezTerm project. On Unix it runs nothing of the caller's in the child before the program, so a launch's process could not enter its cgroup group before its first instruction; the daemon opens the slave and starts the process itself. On Windows it gives no process handle before the process runs and takes no second thread attribute, so the process could not be placed in its job before its first instruction (see "Running on more than one operating system"). |
 | MCP server | `rmcp` | A stdio child process per session, bridging to the daemon over loopback HTTP; see below. |
 | Desktop application | Tauri 2 | The daemon ships as a sidecar; native macOS and Windows APIs are callable from the Rust side. |
 | Frontend | React + HeroUI + Tailwind CSS + TypeScript, state in a Zustand store | One component library for the whole UI; a vanilla Zustand store can be read and subscribed to outside React. |
@@ -290,7 +295,7 @@ it that way, with the reasons that are not visible in the code.
   the daemon run under emulation. Git for Windows is a requirement, since both Claude Code and Codex need it for their
   own shell tooling and Octoboard's git hooks run under its `sh`.
 - **Windows is checked from a Mac and on a Windows runner.** `pnpm check:windows` cross-checks both crates through
-  `cargo xwin` against the MSVC target, and the `windows-check` job of `quality.yml` lints and tests them natively on
+  `cargo xwin` against the MSVC target and links the daemon's executable, and the `windows-check` job of `quality.yml` lints and tests them natively on
   `windows-latest`; a `windows-bundle` job builds the unsigned installer as the release builds it. Spikes and debugging
   run in a Windows 11 virtual machine, and a native x64 machine is what a release is spot-checked on.
 

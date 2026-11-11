@@ -257,7 +257,55 @@ fn ending_a_server_still_ends_its_descendant() {
     server.end(Duration::ZERO);
     assert_ended(server_id);
     assert_ended(descendant);
+    assert_group_gone(server_id.pid);
 }
+
+/// A server whose processes were killed from outside its owner, as the kill of a launch's cgroup
+/// group kills them, still has its owner-death watcher, which no such kill reaches, ended once the
+/// owner ends it: nothing of its process group is left.
+#[cfg(unix)]
+#[test]
+fn ending_a_server_killed_from_outside_ends_its_owner_death_watcher() {
+    let directory = ScratchDir::new("server-owner-outside-kill");
+    let mut server = ServerChild::start(
+        command("server", &directory),
+        true,
+        None,
+        "outside kill fixture",
+    )
+    .expect("the server starts");
+    server
+        .wait_ready(Readiness::PortAfter(READY), PATIENCE)
+        .expect("the server is ready");
+    let server_id = wait_identity(&directory, "server");
+    let descendant = wait_identity(&directory, "descendant");
+    let _cleanup = IdentityCleanup(vec![server_id, descendant]);
+    for identity in [&server_id, &descendant] {
+        let _ = signal_identified(identity, Signal::Kill);
+    }
+    assert_ended(descendant);
+    // The watcher is still there, so that what follows tests its end and not an absence.
+    assert_eq!(
+        crate::platform::proc::group_has_members(server_id.pid),
+        Some(true),
+        "the owner-death watcher did not outlive the outside kill"
+    );
+    server.end(Duration::ZERO);
+    assert_group_gone(server_id.pid);
+}
+
+#[cfg(unix)]
+fn assert_group_gone(leader: ProcessId) {
+    assert!(
+        crate::session::wait::wait_for(PATIENCE, || {
+            crate::platform::proc::group_has_members(leader) == Some(false)
+        }),
+        "a process of the server's group, its owner-death watcher, outlived the server's end"
+    );
+}
+
+#[cfg(windows)]
+fn assert_group_gone(_leader: ProcessId) {}
 
 /// Starts an older holder's companion in an existing launch job. Killing this owner deliberately
 /// leaves its child alive, so startup must discover it from the held launch record alone.

@@ -137,6 +137,15 @@ late. Wake on a short period instead (an hour), compare the wall-clock time agai
 a wall clock that went backwards past that point as due. Run the work once at start too, which covers the time the
 daemon was not running without keeping the last run across restarts.
 
+## A deadline that waits for a loopback refusal outlasts Windows's slow one
+
+Applies to daemon code, a session helper included, that connects to a loopback port and falls back to another route
+when the connection is refused. On Windows a connection to a closed `127.0.0.1` port is refused only after about 2.0 to
+2.5 seconds, and past 3 seconds on a loaded host, where macOS and Linux refuse at once. A deadline shorter than that
+times out first, so the fallback never runs and whatever the call carried is dropped. Give such a connect a deadline
+well past that: git-ref's launch route, which nothing waits on, allows 6 seconds
+(`apps/daemon/src/session_git_hooks/ref_mode.rs`).
+
 ## Cap how many blocking threads a per-entity pass starts at once
 
 Applies to daemon work that runs one blocking task per project, per directory or per session — a sweep over a console's
@@ -255,42 +264,3 @@ than production code. A clean run without `--all-targets` is therefore no eviden
 warning in them surfaces much later, whenever something else makes that target rebuild. Do not read that delay as
 cargo withholding cached warnings: warnings are replayed for an unchanged target, so a second run does repeat them,
 and neither `cargo clean` nor touching a file is the fix.
-
-## Run the tests of Linux-only code, and of how a PTY ends, in a Linux container
-
-Applies when you are developing on macOS (the daemon is meant to run on a Linux host too) and change either kind of
-daemon code below, since a clean run on macOS says nothing about it:
-
-- Code under `#[cfg(target_os = "linux")]`. `cargo check`, `cargo clippy` and the test suite on macOS skip it
-  entirely, and `--target x86_64-unknown-linux-gnu` from macOS fails in rusqlite's `bundled` build script without a
-  Linux C cross-compiler.
-- How a terminal's PTY comes to an end — the reader thread, closing the master, hanging the terminal up
-  (`apps/daemon/src/terminal/pty.rs`). On macOS a session leader's exit revokes its controlling terminal, so the reader
-  ends with the shell or agent even while a background job it left behind still holds the PTY's other side; Linux
-  revokes nothing, and the reader, the master and the buffers live on until that job goes. A test of a terminal
-  outliving its process therefore cannot fail on macOS.
-
-So run `cargo test -p octoboardd`, and `cargo clippy --all-targets` for the Linux-only code, inside a Linux container
-(Docker). Start the container with `docker run --init`: without an init that reaps, orphans reparented to PID 1 (here
-cargo) stay zombies, and every test that waits for a process to be gone (`test_support::assert_gone_by`, which waits for
-`ESRCH`) fails, on `main` as on the change. Give cargo there a target directory of its own (a Docker volume), not the
-worktree's `target/` that the host's builds use, and set `CARGO_PROFILE_DEV_DEBUG=0`: building the daemon's test binary
-with debug info takes several GiB of memory, enough for a Docker VM's memory limit to kill it, and the tests behave the
-same without it.
-
-To exercise a fallback for a refused system call (the browse reads' `openat2` refused as `ENOSYS` or `EPERM`), run
-the container with a seccomp profile that returns that errno for the call.
-
-A plain container's `/sys/fs/cgroup` is read-only, so it exercises only the fallback of the launch cgroup groups
-(`apps/daemon/src/platform/proc/cgroup.rs`): the tests of the groups themselves return early and pass, their "skipped" line hidden
-with the rest of a passing test's output. When a change
-can affect those groups — the cgroup code, the Unix `Containment`, the process ledger — run the suite a second time in a
-container with a writable cgroup v2 hierarchy: `--privileged --cgroupns=private`, with `/sys/fs/cgroup` remounted
-read-write inside it if it comes up read-only. The `Delegate=yes` path of a systemd unit needs a container with systemd
-as PID 1 and a user manager instead.
-
-Without a container runtime, Linux-only code gets a compile check only: copy the Linux-only functions into a scratch
-crate outside the repository that depends only on what they use (typically `libc`), and run
-`cargo check --target x86_64-unknown-linux-gnu` there after `rustup target add x86_64-unknown-linux-gnu`; say when
-reporting that it proves it compiles, not how it behaves. How a PTY ends has no such fallback: report it as
-unverified on Linux.

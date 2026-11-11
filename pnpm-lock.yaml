@@ -43,6 +43,12 @@ importers:
         specifier: 8.71.2
         version: 8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@5.9.3)
 
+  apps/daemon:
+    dependencies:
+      '@octoboard/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+
   apps/desktop:
     devDependencies:
       '@tauri-apps/cli':

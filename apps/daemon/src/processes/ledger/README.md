@@ -114,15 +114,19 @@ signals that follow what started meanwhile, and `table.rs` the table as the ledg
 
 ## Known limits
 
-- On Linux a launch's process is moved into the launch's cgroup v2 group just after it starts, with what it has
-  started by then, since the PTY backend runs nothing in the child before its program: a process it forked and that
-  left it before the move is outside the group, and found by the other rules alone. Without a writable cgroup v2
+- On Linux a launch's process enters the launch's cgroup v2 group before its program runs (a hook in the child,
+  `Containment::enter_before_exec`), so nothing it forks starts outside the group. Only where that entry fails is the
+  process moved in just after it starts (`ChildHandle::started`), with what it has started by then: a process it forked
+  and that left it before that move is outside the group, and found by the other rules alone. Without a writable cgroup v2
   subtree (no `Delegate=yes`, a read-only hierarchy), launches have no group, which is logged once, and are followed
-  as on macOS. A launch a holder starts has the group the daemon made below its own cgroup, which the holder joins
-  (`Containment::join_launch`) and finds only below its own cgroup: one started by the daemon is in the daemon's, but a
-  holder a later daemon adopted from another cgroup (an application started again in a scope of its own) does not
-  find the new daemon's groups, and its launches are followed by their tag alone; likewise
-  `containment_adopted` finds an adopted launch's group only when the daemon runs in the cgroup the earlier one did. A group is never ended while a process to be spared cannot be moved out of it; it is then left to the
+  as on macOS. A launch a holder starts has its group made below the cgroup of the holder that issues the launch's key
+  (`Containment::for_held_launch`, settled by `Containment::place_with_host` once that holder is known), which the holder
+  joins (`Containment::join_launch`): for a holder detached from the daemon that is the daemon's cgroup, for a holder run
+  as a systemd user unit its own delegated cgroup, which outlives the daemon. The daemon notes each holder's cgroup
+  (`Containment::note_host`) when it lists the holders at start and whenever it links to one, and `reopen` and
+  `leftovers` (hence `containment_adopted` and the reconcile) look below its own cgroup and the noted ones. A holder that
+  dies while no daemon runs is not noted by the next one, so the groups left below its cgroup are not found: its crash
+  table ends its programs, and the ledger file and the launches' tags still follow any process that escaped. A group is never ended while a process to be spared cannot be moved out of it; it is then left to the
   ledger's own stops, and removed once empty.
 - The looks at a working directory or a project directory run as a pass bounded by a deadline (`looks.rs`), and one that
   outruns it is skipped while it is stuck. Only a directory whose kernel-reported text may lie under a project root is

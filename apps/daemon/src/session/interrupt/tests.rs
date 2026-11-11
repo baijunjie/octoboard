@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -661,25 +662,58 @@ async fn a_draft_in_grok_s_composer_is_cleared_before_the_ctrl_c() {
     );
 }
 
+/// [`GROK_ONE_CTRL_U`] after the next press, which removes the empty line the first left: the
+/// composer a row shorter.
+fn grok_line_break_removed() -> String {
+    GROK_ONE_CTRL_U
+        .lines()
+        .filter(|row| {
+            !(row.contains('\u{2502}')
+                && row
+                    .trim_matches(|c: char| c == ' ' || c == '\u{2502}')
+                    .is_empty())
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// A draft of several lines takes a press a line and one a line break; the Ctrl-C waits until the
 /// screen shows the composer empty, or it would only clear the rest of the draft.
 #[tokio::test]
 async fn a_draft_of_several_lines_is_cleared_press_by_press() {
     let fixture = working("grok-draft-lines", AgentId::GROK);
     draw(&fixture.live, GROK_RESTORED_LINES);
+    let shorter = grok_line_break_removed();
+    assert_ne!(
+        input_box(AgentId::GROK, &shorter),
+        None,
+        "the composer is still read"
+    );
     let live = fixture.live();
-    let (first, second) = (live.clone(), live.clone());
+    let (first, second, third, titled) = (live.clone(), live.clone(), live.clone(), live);
+    let back = back_at_prompt(&fixture.state);
     let agent = respond(
         &fixture,
         vec![
             (CTRL_U, Box::new(move || draw(&first, GROK_ONE_CTRL_U))),
-            (CTRL_U, Box::new(|| {})),
-            (CTRL_U, Box::new(move || draw(&second, GROK_WORKING))),
-            (CTRL_C, back_at_prompt(&fixture.state)),
+            (CTRL_U, Box::new(move || draw(&second, &shorter))),
+            (CTRL_U, Box::new(move || draw(&third, GROK_WORKING))),
+            (
+                CTRL_C,
+                Box::new(move || {
+                    titled.on_output(GROK_AT_PROMPT_TITLE);
+                    back();
+                }),
+            ),
         ],
     );
 
-    let result = interrupt_session(&fixture.state, "s").await.unwrap();
+    // Nothing is restored, so the watch of the empty box only has to run out; a short one shows
+    // that.
+    RESTORE_OVERRIDE.with(|restore| restore.set(Some(Duration::from_millis(200))));
+    let result = interrupt_session(&fixture.state, "s").await;
+    RESTORE_OVERRIDE.with(|restore| restore.set(None));
+    let result = result.unwrap();
     agent.join().unwrap();
 
     assert!(result.interrupted, "{result:?}");
@@ -696,7 +730,8 @@ async fn a_draft_of_several_lines_is_cleared_press_by_press() {
     );
 }
 
-/// A restored prompt the presses do not clear is said to be still there.
+/// A restored prompt a press does not change is said to be still there, and is not pressed again:
+/// a further press would be one sent blind.
 #[tokio::test]
 async fn a_restored_prompt_that_will_not_clear_is_reported() {
     let fixture = working("grok-left", AgentId::GROK);
@@ -713,13 +748,15 @@ async fn a_restored_prompt_that_will_not_clear_is_reported() {
                     draw(&live, GROK_RESTORED);
                 }),
             ),
-            (CTRL_U, Box::new(|| {})),
-            (CTRL_U, Box::new(|| {})),
             (CTRL_U, back_at_prompt(&fixture.state)),
         ],
     );
 
-    let result = interrupt_session(&fixture.state, "s").await.unwrap();
+    // Nothing draws the press, so its window only has to run out; a short one shows that.
+    PRESS_OVERRIDE.with(|shown| shown.set(Some(Duration::from_millis(200))));
+    let result = interrupt_session(&fixture.state, "s").await;
+    PRESS_OVERRIDE.with(|shown| shown.set(None));
+    let result = result.unwrap();
     agent.join().unwrap();
 
     assert!(result.interrupted, "{result:?}");
@@ -733,7 +770,542 @@ async fn a_restored_prompt_that_will_not_clear_is_reported() {
     );
     assert_eq!(
         fixture.keys_after_marker(),
-        [CTRL_U, CTRL_C, CTRL_U, CTRL_U, CTRL_U].concat()
+        [CTRL_U, CTRL_C, CTRL_U].concat()
+    );
+}
+
+/// A draft whose Ctrl-U is never drawn ends the clearing after that one press, which is not
+/// repeated blind; nothing visibly changed, so none of the draft is said to be cleared, and the
+/// Ctrl-C is held back.
+#[tokio::test]
+async fn a_draft_whose_ctrl_u_is_never_drawn_is_left_and_the_ctrl_c_held() {
+    let fixture = working("grok-draft-unseen", AgentId::GROK);
+    draw(&fixture.live, GROK_DRAFT);
+
+    // Nothing draws the press, so its window only has to run out; a short one shows that.
+    PRESS_OVERRIDE.with(|shown| shown.set(Some(Duration::from_millis(200))));
+    let result = interrupt_session(&fixture.state, "s").await;
+    PRESS_OVERRIDE.with(|shown| shown.set(None));
+    let result = result.unwrap();
+
+    assert!(!result.interrupted, "{result:?}");
+    assert!(
+        result.note.contains("the draft would not clear")
+            && result.note.contains("did not show changing the draft")
+            && !result.note.contains("cleared part of the draft"),
+        "{}",
+        result.note
+    );
+    assert_eq!(fixture.keys_after_marker(), CTRL_U);
+}
+
+/// The agent draws each press of a draft's clearing when it gets to it, which on a slow host can
+/// be well after the press: the clearing waits to see it before pressing again, so the composer is
+/// emptied with the presses it takes and the Ctrl-C follows.
+#[tokio::test]
+async fn a_ctrl_u_slow_to_show_is_waited_for_not_pressed_again() {
+    let fixture = working("grok-draft-slow", AgentId::GROK);
+    draw(&fixture.live, GROK_DRAFT);
+    let live = fixture.live();
+    let titled = live.clone();
+    let back = back_at_prompt(&fixture.state);
+    let agent = respond(
+        &fixture,
+        vec![
+            (
+                CTRL_U,
+                Box::new(move || {
+                    std::thread::sleep(Duration::from_secs(1));
+                    // The spinner turns on meanwhile, as Grok's does through a turn, so the title
+                    // still shows the turn running for the Ctrl-C.
+                    live.on_output(running_title(AgentId::GROK));
+                    draw(&live, GROK_WORKING);
+                }),
+            ),
+            (
+                CTRL_C,
+                Box::new(move || {
+                    titled.on_output(GROK_AT_PROMPT_TITLE);
+                    back();
+                }),
+            ),
+        ],
+    );
+
+    // Nothing is restored, so the watch of the empty box only has to run out; a short one shows
+    // that.
+    RESTORE_OVERRIDE.with(|restore| restore.set(Some(Duration::from_millis(200))));
+    let result = interrupt_session(&fixture.state, "s").await;
+    RESTORE_OVERRIDE.with(|restore| restore.set(None));
+    let result = result.unwrap();
+    agent.join().unwrap();
+
+    assert!(result.interrupted, "{result:?}");
+    assert!(
+        result
+            .note
+            .contains("composer held a draft, which was cleared first"),
+        "{}",
+        result.note
+    );
+    assert_eq!(fixture.keys_after_marker(), [CTRL_U, CTRL_C].concat());
+}
+
+/// Claude Code's restored prompt is cleared press by press on a host that draws each press a second
+/// after it: no press goes in before the one before it has shown, and the box is not reported as
+/// left holding text.
+#[tokio::test]
+async fn a_restored_prompt_drawn_slowly_is_cleared_without_extra_presses() {
+    let fixture = working("claude-restored-slow", AgentId::CLAUDE);
+    draw(&fixture.live, CLEARED);
+    let live = fixture.live();
+    let (first, second) = (live.clone(), live.clone());
+    let back = back_at_prompt(&fixture.state);
+    let agent = respond(
+        &fixture,
+        vec![
+            (
+                ESC,
+                Box::new(move || {
+                    live.on_output(CLAUDE_AT_PROMPT_TITLE);
+                    draw(&live, RESTORED_LINES);
+                }),
+            ),
+            (
+                CTRL_U,
+                Box::new(move || {
+                    std::thread::sleep(Duration::from_secs(1));
+                    draw(&first, ONE_CTRL_U);
+                }),
+            ),
+            (
+                CTRL_U,
+                Box::new(move || {
+                    std::thread::sleep(Duration::from_secs(1));
+                    draw(&second, CLEARED);
+                    back();
+                }),
+            ),
+        ],
+    );
+
+    let result = interrupt_session(&fixture.state, "s").await.unwrap();
+    agent.join().unwrap();
+
+    assert!(result.interrupted, "{result:?}");
+    assert!(!result.note.contains("input box"), "{}", result.note);
+    assert_eq!(fixture.keys_after_marker(), [ESC, CTRL_U, CTRL_U].concat());
+}
+
+/// An agent that turns its title to the prompt, falls silent for longer than the screen takes to
+/// count as quiet, ends the turn and only then draws the prompt it puts back: the box, still empty
+/// when the screen first goes quiet, is watched until the prompt shows and cleared, and a message
+/// sent meanwhile waits until the clearing is over rather than joining the prompt.
+#[tokio::test]
+async fn a_prompt_restored_well_after_the_title_turns_is_still_cleared() {
+    let fixture = working("claude-restored-late", AgentId::CLAUDE);
+    draw(&fixture.live, CLEARED);
+    let live = fixture.live();
+    let cleared = live.clone();
+    let state = fixture.state.clone();
+    let (sent, delivery) = std::sync::mpsc::channel();
+    let agent = respond(
+        &fixture,
+        vec![
+            (
+                ESC,
+                Box::new(move || {
+                    live.on_output(CLAUDE_AT_PROMPT_TITLE);
+                    // Far longer than the quiet window on any platform, and than the read that
+                    // follows it.
+                    std::thread::sleep(Duration::from_secs(1));
+                    state.apply_hook_status("s", SessionStatus::Idle).unwrap();
+                    let written =
+                        delivery::write_message(&state, "s", "sent meanwhile", WhenBlocked::Queue);
+                    sent.send(written.unwrap()).unwrap();
+                    draw(&live, RESTORED);
+                }),
+            ),
+            (CTRL_U, Box::new(move || draw(&cleared, CLEARED))),
+        ],
+    );
+
+    // The prompt is drawn a second after the title turns: the watch is given all the time there is,
+    // however slow the suite runs the stand-in.
+    RESTORE_OVERRIDE.with(|restore| restore.set(Some(PATIENCE)));
+    let result = interrupt_session(&fixture.state, "s").await;
+    RESTORE_OVERRIDE.with(|restore| restore.set(None));
+    let result = result.unwrap();
+    agent.join().unwrap();
+
+    assert!(result.interrupted, "{result:?}");
+    assert!(!result.note.contains("input box"), "{}", result.note);
+    assert_eq!(delivery.recv().unwrap(), Delivery::Queued);
+    let deadline = Instant::now() + PATIENCE;
+    while !String::from_utf8_lossy(&fixture.keys()).contains("sent meanwhile") {
+        assert!(Instant::now() < deadline, "the message never went in");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let keys = fixture.keys();
+    let keys_first = [ESC, CTRL_U].concat();
+    assert!(keys.starts_with(&keys_first), "{keys:?}");
+    assert!(String::from_utf8_lossy(&keys[keys_first.len()..]).contains("sent meanwhile"));
+}
+
+/// A turn whose end is seen before its title turns, as Grok's hook can arrive within a fifth of a
+/// second of the key: the box, empty before the key, is still watched once the title turns, and
+/// the prompt drawn after it is cleared.
+#[tokio::test]
+async fn a_prompt_restored_after_the_turn_ends_before_the_title_turns_is_cleared() {
+    let fixture = working("claude-ended-before-title", AgentId::CLAUDE);
+    draw(&fixture.live, CLEARED);
+    let live = fixture.live();
+    let cleared = live.clone();
+    let back = back_at_prompt(&fixture.state);
+    let agent = respond(
+        &fixture,
+        vec![
+            (
+                ESC,
+                Box::new(move || {
+                    back();
+                    // Many polls of the wait, so it has seen the turn over with the title unmoved.
+                    std::thread::sleep(Duration::from_millis(300));
+                    live.on_output(CLAUDE_AT_PROMPT_TITLE);
+                    draw(&live, RESTORED);
+                }),
+            ),
+            (CTRL_U, Box::new(move || draw(&cleared, CLEARED))),
+        ],
+    );
+
+    // The prompt is drawn right after the title turns, but the watch for it is given all the time
+    // there is, however slow the suite runs the stand-in.
+    RESTORE_OVERRIDE.with(|restore| restore.set(Some(PATIENCE)));
+    let result = interrupt_session(&fixture.state, "s").await;
+    RESTORE_OVERRIDE.with(|restore| restore.set(None));
+    let result = result.unwrap();
+    agent.join().unwrap();
+
+    assert!(result.interrupted, "{result:?}");
+    assert!(!result.note.contains("input box"), "{}", result.note);
+    assert_eq!(fixture.keys_after_marker(), [ESC, CTRL_U].concat());
+}
+
+/// A box that cannot be found on the screen after the cancel is not an empty one: it may hold the
+/// prompt the agent put back, so the watch ends reporting it rather than reporting nothing.
+#[tokio::test]
+async fn an_input_box_that_cannot_be_found_after_the_cancel_is_reported() {
+    let fixture = working("claude-box-unreadable", AgentId::CLAUDE);
+    draw(&fixture.live, CLEARED);
+    let live = fixture.live();
+    let back = back_at_prompt(&fixture.state);
+    let agent = respond(
+        &fixture,
+        vec![(
+            ESC,
+            Box::new(move || {
+                draw(&live, "nothing here is an input box");
+                live.on_output(CLAUDE_AT_PROMPT_TITLE);
+                back();
+            }),
+        )],
+    );
+
+    // Nothing ever shows a box, so the watch only has to run out; a short one shows that.
+    RESTORE_OVERRIDE.with(|restore| restore.set(Some(Duration::from_millis(300))));
+    let result = interrupt_session(&fixture.state, "s").await;
+    RESTORE_OVERRIDE.with(|restore| restore.set(None));
+    let result = result.unwrap();
+    agent.join().unwrap();
+
+    assert!(result.interrupted, "{result:?}");
+    assert!(
+        result
+            .note
+            .contains("Claude Code's input box still holds text")
+            && result.note.contains("could not be cleared"),
+        "{}",
+        result.note
+    );
+    assert_eq!(fixture.keys_after_marker(), ESC);
+}
+
+/// Grok's own queued message starts a turn right after the cancel, and its spinner keeps running,
+/// so the title never goes back to the prompt: the box, empty before the key, is neither waited for
+/// nor watched, and nothing is cleared in the agent's next turn.
+#[tokio::test]
+async fn a_turn_the_agent_starts_after_the_cancel_ends_the_wait_for_its_title() {
+    let fixture = working("grok-next-turn", AgentId::GROK);
+    fixture.state.turn_started("s", None);
+    draw(&fixture.live, GROK_WORKING);
+    let live = fixture.live();
+    let state = fixture.state.clone();
+    let agent = respond(
+        &fixture,
+        vec![
+            (CTRL_U, Box::new(|| {})),
+            (
+                CTRL_C,
+                Box::new(move || {
+                    // `StopCancelled`, then the queued message's turn, its spinner still turning.
+                    state.abandon_turn("s");
+                    state.turn_started("s", Some("the queued message"));
+                    live.on_output(running_title(AgentId::GROK));
+                    draw(&live, GROK_WORKING);
+                }),
+            ),
+        ],
+    );
+
+    // Far longer than the call is let take, so a wait for the title shows as a long one.
+    SETTLE_OVERRIDE.with(|settle| settle.set(Some(PATIENCE * 4)));
+    let began = Instant::now();
+    let result = interrupt_session(&fixture.state, "s").await;
+    let waited = began.elapsed();
+    SETTLE_OVERRIDE.with(|settle| settle.set(None));
+    let result = result.unwrap();
+    agent.join().unwrap();
+
+    assert!(waited < PATIENCE, "{waited:?}");
+    assert_eq!(result.status, SessionStatus::Working);
+    // Its composer was empty, so nothing is reported either.
+    assert!(!result.note.contains("input box"), "{}", result.note);
+    assert_eq!(fixture.keys_after_marker(), [CTRL_U, CTRL_C].concat());
+}
+
+/// A prompt restored while the title is back at the prompt, and a turn of the agent's own starting
+/// before the first Ctrl-U: nothing is pressed into that turn, and the box is reported as left.
+#[tokio::test]
+async fn a_restored_prompt_is_not_cleared_once_a_new_turn_has_started() {
+    let fixture = working("claude-new-turn-before-clearing", AgentId::CLAUDE);
+    fixture.state.turn_started("s", None);
+    let live = fixture.live();
+    let before = BeforeKey {
+        stops: live.title_activity().stops(),
+        ends: fixture.state.turn_ends("s"),
+        prompts: live.prompts_sent(),
+    };
+    live.on_output(CLAUDE_AT_PROMPT_TITLE);
+    draw(&live, RESTORED);
+    // The agent's next turn has begun by the time the box is read, before the first press.
+    live.on_output(running_title(AgentId::CLAUDE));
+    let mut writes = live.input_writes();
+
+    let restoring = clear_restored_prompt(
+        &fixture.state,
+        &live,
+        &mut writes,
+        Duration::from_millis(200),
+        Duration::from_millis(200),
+        before,
+    );
+
+    assert!(
+        matches!(restoring, Restoring::Done(Restored::Left)),
+        "the box is reported as left"
+    );
+    assert_eq!(fixture.keys_after_marker(), b"");
+}
+
+/// The same with the title still at the prompt: the agent's next turn is told by its hooks alone,
+/// the status being `Working` again after the end of the cancelled one.
+#[tokio::test]
+async fn a_restored_prompt_is_not_cleared_once_the_hooks_report_a_new_turn() {
+    let fixture = working("claude-new-turn-by-hooks", AgentId::CLAUDE);
+    fixture.state.turn_started("s", None);
+    let live = fixture.live();
+    let before = BeforeKey {
+        stops: live.title_activity().stops(),
+        ends: fixture.state.turn_ends("s"),
+        prompts: live.prompts_sent(),
+    };
+    live.on_output(CLAUDE_AT_PROMPT_TITLE);
+    draw(&live, RESTORED);
+    fixture.state.abandon_turn("s");
+    fixture.state.turn_started("s", Some("the next prompt"));
+    let mut writes = live.input_writes();
+
+    let restoring = clear_restored_prompt(
+        &fixture.state,
+        &live,
+        &mut writes,
+        Duration::from_millis(200),
+        Duration::from_millis(200),
+        before,
+    );
+
+    assert!(
+        matches!(restoring, Restoring::Done(Restored::Left)),
+        "the press is refused, so the box is reported as left"
+    );
+    assert_eq!(fixture.keys_after_marker(), b"");
+}
+
+/// Interrupts a Claude Code session whose queued message is taken as the Esc lands: the box shows
+/// `before` when the key goes in, and the stand-in draws `after` as its screen without the title
+/// turning, reports the message's prompt as the hook does (it opens no new turn, as the cancelled
+/// one is still open, and sets `Working` at once, so no end is counted and the status stays), and
+/// only then turns the title to the prompt, which is what shows the Esc has landed. Gives the
+/// answer and the fixture.
+async fn interrupt_claude_with_a_prompt_after_the_esc(
+    name: &str,
+    before: &'static str,
+    after: &'static str,
+) -> (Interrupted, Fixture) {
+    let fixture = working(name, AgentId::CLAUDE);
+    fixture.state.turn_started("s", None);
+    draw(&fixture.live, before);
+    let live = fixture.live();
+    let state = fixture.state.clone();
+    let agent = respond(
+        &fixture,
+        vec![(
+            ESC,
+            Box::new(move || {
+                draw(&live, after);
+                // `UserPromptSubmit`, as the hook applies it: no `Idle` comes of it.
+                state.end_record_watch("s");
+                state.turn_started("s", Some("the queued message"));
+                state
+                    .apply_hook_status("s", SessionStatus::Working)
+                    .unwrap();
+                live.note_prompt_sent(Some("the queued message"));
+                live.on_output(CLAUDE_AT_PROMPT_TITLE);
+            }),
+        )],
+    );
+
+    let began = Instant::now();
+    let result = interrupt_session(&fixture.state, "s").await.unwrap();
+    let waited = began.elapsed();
+    agent.join().unwrap();
+
+    assert!(waited < PATIENCE, "{waited:?}");
+    assert!(result.interrupted, "{result:?}");
+    assert_eq!(result.status, SessionStatus::Working);
+    assert_eq!(fixture.keys_after_marker(), ESC);
+    (result, fixture)
+}
+
+/// A prompt from the input box (a message queued by the user, or one Octoboard wrote before the
+/// pause) reported after the Esc ends the wait once the title has shown the cancel. The text in
+/// the box is not cleared, and is reported, as it cannot be told from the cancelled prompt; the
+/// title turns only after the prompt, so no Ctrl-U can be pressed before it.
+#[tokio::test]
+async fn a_prompt_reported_after_the_esc_ends_the_turn_and_keeps_the_box_from_being_cleared() {
+    let (result, _fixture) =
+        interrupt_claude_with_a_prompt_after_the_esc("claude-prompt-after-esc", CLEARED, RESTORED)
+            .await;
+
+    assert!(
+        result
+            .note
+            .contains("Claude Code's input box still holds text")
+            && result.note.contains("could not be cleared"),
+        "{}",
+        result.note
+    );
+}
+
+/// The same with the box empty once the next turn has started: nothing is left to report.
+#[tokio::test]
+async fn an_empty_box_after_the_next_turn_has_started_is_not_reported() {
+    let (result, _fixture) =
+        interrupt_claude_with_a_prompt_after_the_esc("claude-prompt-empty-box", CLEARED, CLEARED)
+            .await;
+
+    assert!(!result.note.contains("input box"), "{}", result.note);
+}
+
+/// A box that held text before the key is reported once a prompt follows the Esc, whatever the
+/// screen shows after it, since the text may be the user's own.
+#[tokio::test]
+async fn a_box_that_held_text_before_the_key_is_reported_once_a_prompt_follows_the_esc() {
+    let (result, _fixture) =
+        interrupt_claude_with_a_prompt_after_the_esc("claude-text-before-esc", RESTORED, RESTORED)
+            .await;
+
+    assert!(
+        result
+            .note
+            .contains("Claude Code's input box still holds text")
+            && result.note.contains("could not be cleared"),
+        "{}",
+        result.note
+    );
+}
+
+/// A box that cannot be found once the next turn has started may hold the prompt, so it is reported.
+#[tokio::test]
+async fn a_box_that_cannot_be_found_after_the_next_turn_has_started_is_reported() {
+    let (result, _fixture) = interrupt_claude_with_a_prompt_after_the_esc(
+        "claude-prompt-no-box",
+        CLEARED,
+        "nothing here is an input box",
+    )
+    .await;
+
+    assert!(
+        result
+            .note
+            .contains("Claude Code's input box still holds text")
+            && result.note.contains("could not be cleared"),
+        "{}",
+        result.note
+    );
+}
+
+/// A prompt reported after the key counts as the turn's end only for Claude Code. Grok Build's hook
+/// for a message queued mid-turn is not measured to fire only once the turn is over, and its cancel
+/// is told by `StopCancelled`, or by its title when no hook fires. So with the title stopped and a
+/// prompt reported but no `StopCancelled`, the session is still working when the window runs out.
+/// The stand-in's step must have landed inside the window, or the test proves nothing.
+#[tokio::test]
+async fn a_prompt_after_the_key_does_not_by_itself_end_the_wait_for_grok() {
+    let fixture = working("grok-prompt-no-cancel", AgentId::GROK);
+    fixture.state.turn_started("s", None);
+    draw(&fixture.live, GROK_WORKING);
+    let live = fixture.live();
+    let stepped = Arc::new(AtomicBool::new(false));
+    let before_prompts = live.prompts_sent();
+    let before_stops = live.title_activity().stops();
+    let agent = respond(
+        &fixture,
+        vec![
+            (CTRL_U, Box::new(|| {})),
+            (CTRL_C, {
+                let live = live.clone();
+                let stepped = stepped.clone();
+                Box::new(move || {
+                    live.on_output(GROK_AT_PROMPT_TITLE);
+                    live.note_prompt_sent(Some("the queued message"));
+                    stepped.store(true, Ordering::SeqCst);
+                })
+            }),
+        ],
+    );
+
+    // No cancel hook ever comes, so the window only has to run out; a short one shows that, but
+    // one that a loaded machine still lands the step inside.
+    SETTLE_OVERRIDE.with(|settle| settle.set(Some(Duration::from_millis(1500))));
+    let result = interrupt_session(&fixture.state, "s").await;
+    SETTLE_OVERRIDE.with(|settle| settle.set(None));
+    let result = result.unwrap();
+    let landed = stepped.load(Ordering::SeqCst);
+    agent.join().unwrap();
+
+    assert!(landed, "the stand-in's step came after the window ran out");
+    assert_ne!(live.prompts_sent(), before_prompts);
+    assert_ne!(live.title_activity().stops(), before_stops);
+    assert!(!result.interrupted, "{result:?}");
+    assert_eq!(result.status, SessionStatus::Working);
+    assert!(
+        result
+            .note
+            .contains("The interrupt key was sent, but the session still reads as working"),
+        "{}",
+        result.note
     );
 }
 

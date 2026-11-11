@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<!-- Embedded in octoboardd.exe by build.rs: paths past MAX_PATH reach the file system as they are. -->
+<!-- Embedded in octoboardd.exe by build.rs as its whole manifest: paths past MAX_PATH reach the file system as they
+     are, and declaring an execution level marks the daemon UAC-aware, so it runs at the level of whatever started it,
+     never asks for elevation, and is spared the heuristics Windows applies to a program that declares none. -->
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings xmlns:ws2="http://schemas.microsoft.com/SMI/2016/WindowsSettings">
       <ws2:longPathAware>true</ws2:longPathAware>

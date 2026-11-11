@@ -1103,12 +1103,15 @@ async fn a_handover_marks_each_followed_terminal_after_its_output_and_keeps_its_
     assert_eq!(first.ages.first().map(|age| age.offset), Some(0));
     assert_eq!((second.token.as_str(), second.truncated), ("tok", false));
     let mut tails = HashMap::new();
+    // What the terminals print once their tails were taken comes as this link's output, which
+    // may arrive between the two tails.
+    let mut followed = Vec::new();
     while tails.len() < 2 {
         match next.next().await {
             Some(Frame::Bulk(BulkKind::Tail, id, tail)) => {
                 tails.insert(id, tail);
             }
-            Some(_) => {}
+            Some(frame) => followed.push(frame),
             None => panic!("the link closed before the tails"),
         }
     }
@@ -1120,12 +1123,18 @@ async fn a_handover_marks_each_followed_terminal_after_its_output_and_keeps_its_
             String::from_utf8_lossy(since_mark).into_owned(),
         )
     };
-    let (history, since_mark) = split("t1", first.since);
+    let (history, mut since_mark) = split("t1", first.since);
     assert!(
         history.contains("helper-ready") && history.contains("got:\"before\""),
         "{history:?}"
     );
-    assert!(since_mark.contains("got:\"after\""), "{since_mark:?}");
+    // The echo of what was written after the handover may come at any time, the machine being
+    // loaded: before the tail was taken for this link, or after it as this link's output.
+    since_mark.push_str(&output_of(&followed, "t1"));
+    while !since_mark.contains("got:\"after\"") {
+        let frames = next.until(|_| true).await;
+        since_mark.push_str(&output_of(&frames, "t1"));
+    }
     assert!(
         !since_mark.contains("helper-ready") && !since_mark.contains("got:\"before\""),
         "{since_mark:?}"

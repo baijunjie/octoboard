@@ -15,7 +15,7 @@
 #
 # The daemon runs as that user, so its sessions use that user's ~/.octoboard, agent accounts and
 # keys. It listens on 127.0.0.1 only; reach it with an SSH port forward
-# (ssh -L 7531:127.0.0.1:7531 server).
+# (ssh -L 7531:127.0.0.1:7531 server) at the address `octoboardd address` prints.
 
 [Unit]
 Description=Octoboard daemon
@@ -28,23 +28,26 @@ ExecStart=%h/.local/bin/octoboardd --port 7531 --service-managed
 Restart=on-failure
 # A planned restart (`octoboardd restart`, or POST /restart) hands every session over to the
 # holders and exits with 75, so that the next daemon runs in this unit: restart on that status
-# even though it is not a failure. Until the holders run as user units of their own, systemd stops
-# them with the daemon's cgroup, so the sessions do not survive a restart under this unit yet.
+# even though it is not a failure, and do not record it as one. The holders run as user units of
+# their own (octoboard-holder-*.service), which outlive this one, so the sessions survive.
 RestartForceExitStatus=75
+SuccessExitStatus=75
 # The handshake line the daemon prints carries its per-launch key, and journald would keep it
-# readable to anyone who can read the journal.
-# TODO: with stdout discarded, a daemon run by this unit has no way yet to hand its key to its
-# owner; this waits for key delivery for service-run daemons.
+# readable to anyone who can read the journal. Get the address with its key from
+# `octoboardd address` instead, run as the daemon's user; it also gives the key of the daemon a
+# planned restart starts.
 StandardOutput=null
 # Stderr carries only the log, never the key, so it goes to the journal.
 StandardError=journal
 # SIGTERM goes to the daemon alone, so that it ends its sessions cleanly; systemd kills whatever
-# remains in the unit afterwards.
+# remains in the unit afterwards. The holders are not in it: the daemon starts each as a user unit
+# of its own, ordered to stop after this one, so that at a shutdown the daemon still reaches them.
 KillMode=mixed
 # Stopping every session takes time.
 TimeoutStopSec=90
-# A writable cgroup v2 subtree for the daemon, which it makes the per-launch groups of agent
-# processes in.
+# A writable cgroup v2 subtree for the daemon. The per-launch groups of agent processes are made
+# in the cgroup of the holder unit that runs them; this one is for a daemon whose holders could
+# not be started as units, which run in this unit and stop with it.
 Delegate=yes
 
 [Install]

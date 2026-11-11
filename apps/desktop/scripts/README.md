@@ -280,8 +280,8 @@ The command:
 4. Runs `pnpm verify --release --fresh --head <release-commit>` locally on the version commit, regardless of the
    changed files or previous passes. This checks identity, application lint, production UI types, application UI
    tests, desktop script tests, Rust formatting, clippy, both Rust crates' tests and the Windows cross-check of both
-   crates (`pnpm check:windows`, whichever platforms the version selects), so a change that breaks the Windows build
-   cannot be tagged. That check needs cargo-xwin, the `x86_64-pc-windows-msvc` Rust target, LLVM's clang
+   crates and a link of the daemon's executable (`pnpm check:windows`, whichever platforms the version selects), so a
+   change that breaks the Windows build cannot be tagged. That check needs cargo-xwin, the `x86_64-pc-windows-msvc` Rust target, LLVM's clang
    (Homebrew's is put first on the PATH by itself) and the MSVC CRT and Windows SDK, downloaded once with
    `XWIN_ACCEPT_LICENSE=1 pnpm check:windows`, which accepts their license. Website and gallery-only checks are
    excluded. It then runs `pnpm verify --base <fetched-remote-main> --head <release-commit>` for every unpushed main

@@ -1,9 +1,11 @@
 //! A build's identity, and the copy of it the holders run from.
 //!
-//! A holder, the helpers of its launches (hook, MCP bridge, status line, git hooks) and the
-//! console host it starts run from `~/.octoboard/builds/<build id>/`, not from the installation:
-//! on Windows a file in use cannot be replaced, so an installer that finds the holder running
-//! from its own folder stops on it, while one beside a copy replaces every file it ships.
+//! A holder, the helpers of its launches (hook, MCP bridge, status line) and the console host it
+//! starts run from `~/.octoboard/builds/<build id>/`, not from the installation: on Windows a file
+//! in use cannot be replaced, so an installer that finds the holder running from its own folder
+//! stops on it, while one beside a copy replaces every file it ships. A project session's git hooks
+//! are the exception: a job the session leaves running outlives the copy, which goes once no holder
+//! runs from it, so they run the installation's own executable (`crate::session_git_hooks`).
 
 use std::ffi::OsString;
 use std::io::{self, Read};

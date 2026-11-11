@@ -156,9 +156,13 @@ pub struct LaunchSpec<'a> {
     /// Where the helpers connect, for the MCP server this launch registers: the daemon's port, or
     /// the holder's for a program a holder runs.
     pub daemon_port: u16,
-    /// The key that port requires of every connection, for every client this launch starts or
-    /// configures: the MCP server, the hooks and the status line.
+    /// The key that port requires of every connection, for the one client that cannot read it
+    /// from [`Self::key_file`]: Claude Code's own HTTP hook, whose URL carries it.
     pub daemon_key: &'a str,
+    /// The owner-only file holding that key, in the scratch directory, which every helper this
+    /// launch starts or configures — the MCP server, the hooks and the status line — is given in
+    /// place of the key, so that it is in no process's arguments.
+    pub key_file: &'a Path,
     /// The token that session's MCP server authenticates to the daemon with.
     pub mcp_token: &'a str,
 }
@@ -208,7 +212,7 @@ const _: () = assert!(MCP_TOOL_TIMEOUT_SECS > crate::session_tools::CALL_TIMEOUT
 /// The command and arguments every adapter registers as this session's MCP server. The session's
 /// identity travels in argv: Claude Code and Grok do export a session id to an MCP child, but
 /// Codex exports nothing and Grok's `{{session_id}}` templating does not work, so argv is the one
-/// route all three agree on.
+/// route all three agree on. The key is not part of it: the child is given the file that holds it.
 pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
     let mut args = vec![
         "mcp".to_string(),
@@ -218,8 +222,8 @@ pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
         spec.kind.name().to_string(),
         "--port".to_string(),
         spec.daemon_port.to_string(),
-        "--key".to_string(),
-        spec.daemon_key.to_string(),
+        "--key-file".to_string(),
+        spec.key_file.to_string_lossy().into_owned(),
         "--token".to_string(),
         spec.mcp_token.to_string(),
     ];
@@ -264,9 +268,9 @@ pub struct LaunchPlan {
     /// with the launch; the terminal is then started with the arguments it gives.
     pub private_server: Option<Box<dyn crate::session::term::PrivateServer>>,
     /// Environment entries layered on top of the shell snapshot. The launch sets `TERM` after
-    /// these, and in a project session `GIT_CONFIG_*`, `OCTOBOARD_SESSION_ID`,
-    /// `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_KEY` too, so an adapter can neither see nor
-    /// override their final values.
+    /// these, and in a project session `GIT_CONFIG_PARAMETERS`, `OCTOBOARD_SESSION_ID`,
+    /// `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_CREDENTIAL_PATH` too, so an adapter can
+    /// neither see nor override their final values.
     pub env: Vec<(String, String)>,
     /// Codex's user configuration or account override can resolve permissions automatically, so
     /// a permission hook alone does not establish a user interaction. Visible action prompts are
@@ -369,10 +373,10 @@ pub trait CompatibilitySource: Send + Sync {
 /// …` (`Capabilities::status_line`). Core only dispatches the command to it.
 pub trait StatusLine: Send + Sync {
     /// Runs one update: reads what the provider wrote on stdin, reports the session's context
-    /// window to the daemon at `port` with `key`, runs the user's own status line in its place and
-    /// returns the exit status to leave with. `args` are the provider's own arguments after the
-    /// fixed ones.
-    fn run(&self, session: &str, port: u16, key: &str, args: &[String]) -> i32;
+    /// window to the daemon at `port` with the key in `key_file`, runs the user's own status line
+    /// in its place and returns the exit status to leave with. `args` are the provider's own
+    /// arguments after the fixed ones.
+    fn run(&self, session: &str, port: u16, key_file: &Path, args: &[String]) -> i32;
 }
 
 /// How one provider behaves: launching it and reading what it shows and writes, beside the static
@@ -733,6 +737,7 @@ pub mod tests {
         pub cwd: PathBuf,
         pub scratch: crate::test_support::ScratchDir,
         pub hook_script: PathBuf,
+        pub key_file: PathBuf,
         pub shell_env: HashMap<String, String>,
         pub config_dir: Option<PathBuf>,
         pub settings: crate::providers::ProviderSettings,
@@ -764,6 +769,7 @@ pub mod tests {
                 task: None,
                 scratch: &self.scratch,
                 hook_script: &self.hook_script,
+                key_file: &self.key_file,
                 shell_env: &self.shell_env,
                 config_dir: self.config_dir.as_deref(),
                 settings: &self.settings,
@@ -810,11 +816,10 @@ pub mod tests {
 
     pub fn spec_fixture() -> SpecFixture {
         let root = crate::test_support::ScratchDir::new("adapter-test");
-        let scratch = root.join("scratch");
         let cwd = root.join("project");
-        std::fs::create_dir_all(&scratch).expect("scratch directory");
         std::fs::create_dir_all(&cwd).expect("project directory");
-        let hook_script = scratch.join("hook");
+        let hook_script = root.join("hook");
+        let key_file = root.join("key");
         std::fs::write(&hook_script, "#!/bin/sh\nexit 0\n").expect("hook script");
 
         SpecFixture {
@@ -828,6 +833,7 @@ pub mod tests {
             cwd,
             scratch: root,
             hook_script,
+            key_file,
             shell_env: HashMap::new(),
             config_dir: None,
             settings: Default::default(),
@@ -963,15 +969,48 @@ pub mod tests {
         let mut fixture = spec_fixture();
         let (_, owned) = super::mcp_server_command(&fixture.spec());
         assert!(owned.contains(&"--worker".to_string()));
-        // The child authenticates to the daemon with the key.
-        let key = owned.iter().position(|arg| arg == "--key").expect("--key");
-        assert_eq!(owned[key + 1], "feedface");
+        // The child reads the key it authenticates to the daemon with from a file, and is never
+        // given the key itself.
+        let at = owned
+            .iter()
+            .position(|arg| arg == "--key-file")
+            .expect("--key-file");
+        assert_eq!(Path::new(&owned[at + 1]), fixture.key_file);
+        assert!(!owned
+            .iter()
+            .any(|arg| arg == "--key" || arg.contains("feedface")));
         fixture.owner = Some(Owner::ConsoleOfCoordinator);
         let (_, coordinator) = super::mcp_server_command(&fixture.spec());
         assert!(!coordinator.contains(&"--worker".to_string()));
         fixture.owner = None;
         let (_, independent) = super::mcp_server_command(&fixture.spec());
         assert!(!independent.contains(&"--worker".to_string()));
+    }
+
+    /// Arguments can be listed by every user of the machine, so no provider's plan holds the key,
+    /// whatever the helpers it configures are given in its place.
+    #[test]
+    fn no_providers_arguments_hold_the_key() {
+        for agent in crate::protocol::AgentId::ALL {
+            let mut fixture = spec_fixture();
+            fixture.agent_version = Some((2, 1, 306));
+            let home = fixture.scratch.join("home");
+            std::fs::create_dir_all(&home).expect("home");
+            for variable in ["HOME", "CODEX_HOME"] {
+                fixture
+                    .shell_env
+                    .insert(variable.to_string(), home.to_string_lossy().into_owned());
+            }
+            let plan = super::provider(agent)
+                .plan(&fixture.spec())
+                .expect("a plan");
+            for arg in &plan.args {
+                assert!(
+                    arg != "--key" && !arg.contains("feedface"),
+                    "{agent:?}: {arg}"
+                );
+            }
+        }
     }
 
     #[test]

@@ -169,15 +169,12 @@ impl AppState {
         live.sessions.insert(session.id.clone(), session.clone());
         drop(live);
         // A launch that was past its claim when the daemon began to shut down: the stop of the
-        // sessions has listed the running ones already, so this one is ended here. The exit
-        // watcher records it interrupted, as for the rest. A planned stop ends nothing: the
-        // session's terminal is left running in its holder for the next daemon.
+        // sessions has listed the running ones already, so this one is ended here, as the stop
+        // ends the rest and waited for by it. The exit watcher records it interrupted, as for the
+        // rest. A planned stop ends nothing: the session's terminal is left running in its holder
+        // for the next daemon.
         if self.shutting_down.load(Ordering::Acquire) && !self.is_handing_over() {
-            let (late, ledger) = (session.clone(), Arc::clone(&self.process_ledger));
-            std::thread::spawn(move || {
-                ledger.scan_before_ending();
-                late.end();
-            });
+            self.end_late(session.clone());
         }
         session.observe_titles(self);
         if let Some(transport) = &session.transport {

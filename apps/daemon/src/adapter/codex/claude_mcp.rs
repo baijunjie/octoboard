@@ -37,8 +37,9 @@ use super::toml_string;
 /// Prefix of the variables set on the Codex process to carry header values.
 const HEADER_ENV_PREFIX: &str = "OCTOBOARD_CLAUDE_MCP_";
 
-/// Ends the name of each such variable so that Codex's default filter, which drops the variables
-/// whose names hold `TOKEN`, keeps them out of the commands the model runs.
+/// Ends the name of each such variable so that Codex's default excludes, which drop the variables
+/// whose names hold `TOKEN` where a user has turned them on (`ignore_default_excludes = false` in
+/// the shell environment policy), keep them out of the commands the model runs.
 const HEADER_ENV_SUFFIX: &str = "_TOKEN";
 
 /// What a Codex launch adds for Claude Code's servers.

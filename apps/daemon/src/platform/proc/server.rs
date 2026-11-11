@@ -78,6 +78,13 @@ impl ServerChild {
             plain.stdin(Stdio::null()).stdout(output()).stderr(output());
             Reach::Session.lead(&mut plain);
             let parent = parent::Guard::prepare(&mut plain)?;
+            // Registered after the owner watcher's hook, which forks the watcher: the watcher is
+            // made before the process enters the group, so it stays outside it, and a group's
+            // end that spares the server does not take the watcher, and the server's protection
+            // against its owner's death, with it.
+            if let Some(containment) = containment {
+                containment.enter_before_exec(&mut plain);
+            }
             let mut child = plain.spawn()?;
             let handle =
                 match ChildHandle::started(ProcessId(child.id()), Reach::Session, containment) {
@@ -289,6 +296,12 @@ mod tests {
     #[cfg(unix)]
     mod process {
         use super::super::*;
+        #[cfg(target_os = "linux")]
+        use crate::platform::proc::ContainerId;
+        #[cfg(target_os = "linux")]
+        use crate::platform::proc_table;
+        #[cfg(target_os = "linux")]
+        use crate::test_support::cgroups::{cgroup_of, grouped_launch};
         use crate::test_support::{
             assert_stops_running, is_running, wait_for_pid, within, ScratchDir, PATIENCE,
         };
@@ -436,6 +449,78 @@ mod tests {
             let leftover = wait_for_pid(&file);
             server.end(Duration::from_secs(2));
             assert_stops_running(leftover);
+        }
+
+        /// A server started in a launch's group, and what it forks and leaves behind at once, end
+        /// up in the group, through the start a server really goes through.
+        #[cfg(target_os = "linux")]
+        #[test]
+        fn a_server_and_what_it_forks_at_once_end_up_in_its_launch_s_group() {
+            let Some((launch, containment)) = grouped_launch("server-test", "server-group") else {
+                return;
+            };
+            let dir = ScratchDir::new("server-child-group");
+            let forked = dir.join("forked");
+            let script = format!(
+                "(sleep 60 & echo $! > '{forked}.tmp'; mv '{forked}.tmp' '{forked}'); exec sleep 60",
+                forked = forked.display()
+            );
+            let mut server =
+                ServerChild::start(sh(&script), false, Some(&containment), "test server")
+                    .expect("the server starts");
+            let pid = server.pid();
+            let leftover = wait_for_pid(&forked);
+
+            let members = containment.members().expect("the group is read");
+            assert!(members.contains(&pid), "{members:?}");
+            assert!(members.contains(&ProcessId(leftover as u32)), "{members:?}");
+            let group = format!("octoboard-server-test-{launch}");
+            let own = cgroup_of(pid.0);
+            assert!(
+                own.trim_end().ends_with(&group),
+                "{own:?} is not in {group}"
+            );
+            assert_eq!(cgroup_of(leftover as u32), own);
+
+            server.end(Duration::from_secs(2));
+            assert_stops_running(leftover);
+            assert!(containment.end(&[]), "the group is gone");
+        }
+
+        /// The owner watcher of a server in a launch's group is outside the group: the group's
+        /// end does not take it, so a server spared by it keeps its protection against its
+        /// owner's death.
+        #[cfg(target_os = "linux")]
+        #[test]
+        fn the_owner_watcher_of_a_server_in_a_group_is_outside_the_group() {
+            let Some((_, containment)) = grouped_launch("server-test", "server-watcher") else {
+                return;
+            };
+            let mut server = ServerChild::start(
+                sh("exec sleep 60"),
+                false,
+                Some(&containment),
+                "test server",
+            )
+            .expect("the server starts");
+            let pid = server.pid();
+
+            let members = containment.members().expect("the group is read");
+            assert!(members.contains(&pid), "{members:?}");
+            let outside: Vec<i32> = proc_table::list()
+                .expect("the process table is listed")
+                .into_iter()
+                .filter(|info| info.sid == Some(ContainerId(pid.0)))
+                .map(|info| info.pid)
+                .filter(|other| !members.contains(&ProcessId(*other as u32)))
+                .collect();
+            assert!(
+                !outside.is_empty(),
+                "nothing of the server's session is outside its group, so the watcher is in it"
+            );
+
+            server.end(Duration::from_secs(2));
+            assert!(containment.end(&[]), "the group is gone");
         }
     }
 }

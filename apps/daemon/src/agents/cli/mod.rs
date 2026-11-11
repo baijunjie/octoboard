@@ -28,7 +28,9 @@ mod update;
 
 pub(crate) use update::update_requested;
 #[cfg(test)]
-use update::{error_line, prepare, run_update_tool, start_update, Refresh, UPDATE_TIMEOUT};
+use update::{error_line, prepare};
+#[cfg(all(test, unix))]
+use update::{run_update_tool, start_update, Refresh, UPDATE_TIMEOUT};
 
 use std::collections::HashMap;
 use std::process::Output;

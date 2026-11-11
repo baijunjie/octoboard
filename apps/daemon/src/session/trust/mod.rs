@@ -91,9 +91,9 @@
 //! no client connected, or after "Not now", nothing is sent and the screen waits for the person to
 //! answer it in the terminal.
 //!
-//! **Sending keys is the dangerous part**, so [`answer`] is the only place that does it, takes no
-//! text, and checks before each key that the screen was sighted and has not been answered, and
-//! that nobody else has written into the session's input since it looked
+//! **Sending keys is the dangerous part**, so [`answer_within`] is the only place that does it,
+//! takes no text, and checks before each key that the screen was sighted and has not been
+//! answered, and that nobody else has written into the session's input since it looked
 //! ([`LiveSession::input_writes`]): the user pressing a key in the terminal, or a queued message,
 //! would change what the key lands on. The rest depends on the agent:
 //!
@@ -110,6 +110,11 @@
 //!   still there (a decline exits it), and nothing has been written into its input since the
 //!   screen was sighted — and the press counts once Grok has recorded the trust, or, when no hook
 //!   comes to carry the record, once the rendered screen is seen to have gone.
+//!
+//! After the Enter, Claude Code's and Codex's press counts once the agent is seen past the screen:
+//! its first hook has come, or the screen is gone and still gone a moment later. The agent is given
+//! long enough to answer each key ([`RESPONSE_TIMEOUT`]) for a slow machine, where it can take
+//! seconds to redraw; each wait ends as soon as what it waits for is seen.
 //!
 //! Whatever cannot be confirmed ends the attempt with the keys not sent, and the screen waits for
 //! the person to answer it. Each session is answered at most once, so a failed attempt is not
@@ -676,14 +681,15 @@ async fn answer_and_report(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     }
 }
 
-/// [`answer`], which blocks, on a blocking thread; once it has pressed the screen of an agent that
-/// runs no hook at start (Codex), the messages held for the session are let through. The other two
-/// agents' are let through by their first hook ([`on_hook`]).
+/// [`answer_within`], which blocks, on a blocking thread; once it has pressed the screen of an
+/// agent that runs no hook at start (Codex), the messages held for the session are let through.
+/// The other two agents' are let through by their first hook ([`on_hook`]).
 async fn answer_off_the_runtime(state: &Arc<AppState>, live: Arc<LiveSession>) -> Result<()> {
     let id = live.id.clone();
     let hook_at_start = live.trust.screen.hook_at_start();
     let answering = live.clone();
-    let outcome = tokio::task::spawn_blocking(move || answer(&answering))
+    let patience = response_timeout();
+    let outcome = tokio::task::spawn_blocking(move || answer_within(&answering, patience))
         .await
         .map_err(anyhow::Error::from)
         .and_then(|outcome| outcome);

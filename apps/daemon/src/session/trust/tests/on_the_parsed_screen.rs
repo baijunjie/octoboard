@@ -545,6 +545,7 @@ fn claude_on_the_parsed_screen_is_not_pressed_with_the_cursor_moved() {
 /// The Down goes in and the parsed screen never shows the cursor move, so the Enter is withheld.
 #[test]
 fn claude_on_the_parsed_screen_withholds_the_enter_when_the_cursor_does_not_move() {
+    let _patience = ShortPatience::hold();
     let dir = scratch("screen-no-move");
     let received = dir.join("received");
     let r = quoted(&received);
@@ -566,7 +567,40 @@ fn claude_on_the_parsed_screen_withholds_the_enter_when_the_cursor_does_not_move
         coded.params["reason_code"],
         trust_reason::CURSOR_DID_NOT_MOVE
     );
-    assert_eq!(sent(&received), DOWN);
+    // The Down may still be on its way through the PTY when the short wait runs out.
+    assert!(wait_for(PATIENCE, || sent(&received) == DOWN));
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(sent(&received), DOWN, "no Enter was sent");
+}
+
+/// After the Enter, Claude Code on a slow machine blanks the screen and draws its next one seconds
+/// later (measured on an ARM64 Windows machine: 4 to 7 seconds). The blank screen is neither the
+/// screen gone nor the press failed: the answer waits, and counts once the next screen is up.
+#[test]
+fn claude_on_the_parsed_screen_slow_to_draw_its_next_screen_is_answered() {
+    let dir = scratch("screen-slow-dismiss");
+    let received = dir.join("received");
+    let r = quoted(&received);
+    let script = [
+        load_captures(),
+        show("SCREEN"),
+        take(3, &r),
+        show("AFTER_DOWN"),
+        take(1, &r),
+        "printf '\\033[2J\\033[H'".to_string(),
+        slow(&r),
+        show("DISMISSED"),
+        take(1, &r),
+        "sleep 30".to_string(),
+    ]
+    .join("; ");
+    let live = screen_stand_in("s", AgentId::CLAUDE, &script);
+    let mut sightings = live.trust.take_sightings().expect("receiver");
+    assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
+
+    answer(&live).expect("answered");
+
+    assert_eq!(sent(&received), answer_keys());
 }
 
 /// Codex's screen read off the parsed screen is pressed with an Enter alone, and the press counts

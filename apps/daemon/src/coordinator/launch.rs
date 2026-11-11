@@ -591,6 +591,7 @@ pub(super) async fn start_process(
         daemon_port: state.port,
         daemon_key: state.key.clone(),
         self_exe: state.self_exe.clone(),
+        install_exe: state.install_exe.clone(),
         // Issued per launch: the previous process is gone, and a token outliving it would let a
         // stale child act on this session.
         mcp_token: state.issue_mcp_token(&session.id),

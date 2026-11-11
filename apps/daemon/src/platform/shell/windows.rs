@@ -12,6 +12,23 @@ use crate::platform::registry::{read_values, Hive, Value};
 const MACHINE_ENVIRONMENT: &str = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
 /// The registry key that holds the user's.
 const USER_ENVIRONMENT: &str = "Environment";
+/// The registry key that holds the variables Windows sets for the user at logon: `USERNAME`,
+/// `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `HOMEDRIVE` and `HOMEPATH` among them. Its subkey for
+/// the logon session (`SESSIONNAME`, `CLIENTNAME`) is not read: the machine holds none of those,
+/// so the values this process inherited stand.
+const LOGON_ENVIRONMENT: &str = "Volatile Environment";
+
+/// The registry keys [`snapshot`] lays over the inherited environment, in the order Windows applies
+/// them when it builds a logon's environment (`CreateEnvironmentBlock`): the machine's variables,
+/// then the user's own, then the logon's, which win, so a user's own `USERNAME` or `APPDATA` does
+/// not take. A user's value that names `%USERNAME%` therefore expands to the machine's, as it does
+/// in a real logon. The machine's variables include `USERNAME=SYSTEM`, which the logon's replace;
+/// without them every program started here would see `SYSTEM` for the user's name.
+const ENVIRONMENT_LAYERS: [(Hive, &str); 3] = [
+    (Hive::LocalMachine, MACHINE_ENVIRONMENT),
+    (Hive::CurrentUser, USER_ENVIRONMENT),
+    (Hive::CurrentUser, LOGON_ENVIRONMENT),
+];
 
 /// What `PATHEXT` is when the environment names none.
 const DEFAULT_PATHEXT: &str = ".COM;.EXE;.BAT;.CMD";
@@ -67,30 +84,24 @@ pub const FIRST_HOOK_SLOWDOWN: u32 = 3;
 
 /// The environment a program started from the desktop has: what this process inherited from the
 /// user's session, with the variables the registry holds laid over it as Windows builds a new
-/// session's. There is no shell to run, so nothing waits on `deadline`.
+/// session's ([`ENVIRONMENT_LAYERS`]). There is no shell to run, so nothing waits on `deadline`.
 pub fn snapshot(_deadline: Duration) -> anyhow::Result<Environment> {
     let inherited = std::env::vars()
         .filter(|(name, _)| !name.is_empty() && !name.starts_with('='))
         .collect();
-    Ok(merged_environment(
-        inherited,
-        &read_values(Hive::LocalMachine, MACHINE_ENVIRONMENT),
-        &read_values(Hive::CurrentUser, USER_ENVIRONMENT),
-    ))
+    let layers = ENVIRONMENT_LAYERS.map(|(hive, key)| read_values(hive, key));
+    let layers = layers.each_ref().map(Vec::as_slice);
+    Ok(merged_environment(inherited, &layers))
 }
 
-/// `base` with the machine's variables laid over it, then the user's, which override them; `PATH`
-/// is the machine's and the user's joined, in that order. A `REG_EXPAND_SZ` value has the variables
-/// it names between percent signs replaced by their values as of when it is applied, so a user's
-/// value can name a machine's; a name nothing defines stays as written.
-fn merged_environment(
-    base: Environment,
-    machine: &[(String, Value)],
-    user: &[(String, Value)],
-) -> Environment {
+/// `base` with each of `layers` laid over it in turn, a later one overriding an earlier one; `PATH`
+/// is theirs joined, in that order. A `REG_EXPAND_SZ` value has the variables it names between
+/// percent signs replaced by their values as of when it is applied, so a value can name one an
+/// earlier layer set; a name nothing defines stays as written.
+fn merged_environment(base: Environment, layers: &[&[(String, Value)]]) -> Environment {
     let mut env = base;
     let mut paths = Vec::new();
-    for (name, value) in machine.iter().chain(user) {
+    for (name, value) in layers.iter().flat_map(|layer| layer.iter()) {
         let text = if value.expandable {
             expand(&value.text, &env)
         } else {
@@ -482,43 +493,150 @@ mod tests {
         (name.to_owned(), value(text, expandable))
     }
 
+    /// How many entries of `env` are named `name`, whatever the case.
+    fn entries_named(env: &Environment, name: &str) -> usize {
+        env.keys()
+            .filter(|key| key.eq_ignore_ascii_case(name))
+            .count()
+    }
+
+    /// Stand-in registry data for each key of [`ENVIRONMENT_LAYERS`], so a test lays them out in
+    /// the order production reads them and a reordered or dropped layer changes the outcome.
+    fn stand_in_values(key: &str) -> Vec<(String, Value)> {
+        match key {
+            MACHINE_ENVIRONMENT => vec![
+                pair("USERNAME", "SYSTEM", false),
+                pair("TEMP", r"C:\Windows\TEMP", false),
+            ],
+            USER_ENVIRONMENT => vec![
+                pair("Who", "%USERNAME%", true),
+                pair("TEMP", r"C:\Users\me\own-temp", false),
+            ],
+            LOGON_ENVIRONMENT => vec![
+                pair("USERNAME", "me", false),
+                pair("TEMP", r"C:\Users\me\logon-temp", false),
+            ],
+            other => panic!("no stand-in values for {other}"),
+        }
+    }
+
     #[test]
-    fn the_registry_is_merged_by_windows_rules() {
+    fn the_environment_layers_are_the_machine_then_the_user_then_the_logon() {
+        assert_eq!(
+            ENVIRONMENT_LAYERS,
+            [
+                (
+                    Hive::LocalMachine,
+                    r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+                ),
+                (Hive::CurrentUser, "Environment"),
+                (Hive::CurrentUser, "Volatile Environment"),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_layers_in_production_order_give_the_logon_the_last_word() {
+        let base = Environment::from([("USERNAME".to_owned(), "inherited".to_owned())]);
+        let layers = ENVIRONMENT_LAYERS.map(|(_, key)| stand_in_values(key));
+        let layers = layers.each_ref().map(Vec::as_slice);
+        let env = merged_environment(base, &layers);
+
+        // The machine's `SYSTEM` is replaced by the logon's name.
+        assert_eq!(env.get("USERNAME").map(String::as_str), Some("me"));
+        // A logon value beats the user's own for the same name.
+        assert_eq!(
+            env.get("TEMP").map(String::as_str),
+            Some(r"C:\Users\me\logon-temp")
+        );
+        // A user's value is expanded before the logon layer applies, so it sees the machine's.
+        assert_eq!(env.get("Who").map(String::as_str), Some("SYSTEM"));
+    }
+
+    #[test]
+    fn a_later_layer_wins_whatever_the_case_and_the_first_spelling_stays() {
+        let base = Environment::from([("Name".to_owned(), "base".to_owned())]);
+        let first = [pair("NAME", "first", false), pair("Only", "first", false)];
+        let second = [pair("name", "second", false), pair("ONLY", "second", false)];
+        let third = [pair("NaMe", "third", false)];
+
+        let env = merged_environment(base, &[&first, &second, &third]);
+        assert_eq!(env.get("Name").map(String::as_str), Some("third"));
+        assert_eq!(env.get("Only").map(String::as_str), Some("second"));
+        assert_eq!(entries_named(&env, "name"), 1, "{env:?}");
+        assert_eq!(entries_named(&env, "only"), 1, "{env:?}");
+    }
+
+    #[test]
+    fn an_expandable_value_expands_against_the_variables_set_when_it_is_applied() {
         let base = Environment::from([
-            ("Path".to_owned(), r"C:\stale".to_owned()),
             ("SystemRoot".to_owned(), r"C:\Windows".to_owned()),
-            ("KEPT".to_owned(), "inherited".to_owned()),
+            ("USERNAME".to_owned(), "inherited".to_owned()),
         ]);
-        let machine = [
-            pair("Path", r"%SystemRoot%\system32;C:\machine;", true),
-            pair("Shared", "machine", false),
-            pair("MACHINE_ONLY", "m", false),
-        ];
-        let user = [
-            pair("PATH", r"C:\Users\me\bin", true),
-            pair("shared", "user", false),
-            pair("Mixed", r"%MACHINE_ONLY%-%systemroot%-%UNDEFINED%", true),
+        let first = [
+            pair("USERNAME", "first", false),
+            pair("Early", r"%USERNAME%|%systemroot%", true),
+            pair("Undefined", r"%NOT_DEFINED_ANYWHERE%\x", true),
             pair("Literal", "%SystemRoot%", false),
         ];
-        let env = merged_environment(base, &machine, &user);
+        let second = [
+            pair("USERNAME", "second", false),
+            pair("Late", "%username%", true),
+        ];
+
+        let env = merged_environment(base, &[&first, &second]);
+        // The inherited variables are visible to the first layer, whatever the case of the name.
+        assert_eq!(
+            env.get("Early").map(String::as_str),
+            Some(r"first|C:\Windows")
+        );
+        // A name nothing defines stays as written.
+        assert_eq!(
+            env.get("Undefined").map(String::as_str),
+            Some(r"%NOT_DEFINED_ANYWHERE%\x")
+        );
+        // A value that is not expandable is taken as it is.
+        assert_eq!(env.get("Literal").map(String::as_str), Some("%SystemRoot%"));
+        // A later layer's value sees the earlier layers' changes; `Early` above did not see this
+        // one's.
+        assert_eq!(env.get("Late").map(String::as_str), Some("second"));
+    }
+
+    #[test]
+    fn path_is_every_layers_path_joined_in_layer_order() {
+        let base = Environment::from([
+            ("Path".to_owned(), r"C:\inherited".to_owned()),
+            ("SystemRoot".to_owned(), r"C:\Windows".to_owned()),
+        ]);
+        let machine = [pair("PATH", r"%SystemRoot%\system32;C:\machine;", true)];
+        let empty: [(String, Value); 0] = [];
+        let blank = [pair("Path", ";", false)];
+        let user = [pair("path", r"C:\Users\me\bin;;", false)];
+
+        let env = merged_environment(base, &[&machine, &empty, &blank, &user]);
+        // The inherited PATH is replaced, its spelling kept, and the empty parts are gone.
         assert_eq!(
             env.get("Path").map(String::as_str),
             Some(r"C:\Windows\system32;C:\machine;C:\Users\me\bin")
         );
-        assert_eq!(
-            env.keys()
-                .filter(|key| key.eq_ignore_ascii_case("path"))
-                .count(),
-            1
-        );
-        assert_eq!(env.get("Shared").map(String::as_str), Some("user"));
-        assert_eq!(
-            env.get("Mixed").map(String::as_str),
-            Some(r"m-C:\Windows-%UNDEFINED%")
-        );
-        assert_eq!(env.get("Literal").map(String::as_str), Some("%SystemRoot%"));
+        assert_eq!(entries_named(&env, "path"), 1, "{env:?}");
+    }
+
+    #[test]
+    fn what_no_layer_sets_stays_as_inherited() {
+        let base = Environment::from([
+            ("Path".to_owned(), r"C:\inherited".to_owned()),
+            ("KEPT".to_owned(), "inherited".to_owned()),
+        ]);
+        let other = [pair("Other", "o", false)];
+        let empty: [(String, Value); 0] = [];
+
+        let env = merged_environment(base.clone(), &[&other, &empty]);
+        assert_eq!(env.get("Path").map(String::as_str), Some(r"C:\inherited"));
         assert_eq!(env.get("KEPT").map(String::as_str), Some("inherited"));
-        assert_eq!(env.get("MACHINE_ONLY").map(String::as_str), Some("m"));
+        assert_eq!(env.get("Other").map(String::as_str), Some("o"));
+
+        assert_eq!(merged_environment(base.clone(), &[]), base);
     }
 
     #[test]
@@ -531,6 +649,23 @@ mod tests {
         );
         assert!(get(&env, "PATHEXT").is_some_and(|ext| ext.to_ascii_uppercase().contains(".CMD")));
         assert!(env.keys().all(|name| !name.starts_with('=')));
+    }
+
+    #[test]
+    fn the_snapshot_takes_the_user_name_from_the_logon_not_the_machine() {
+        // The logon key exists in a real user's logon; where this runner has none, or one without a
+        // `USERNAME` (or a stored text that names variables, which expands), there is nothing to
+        // compare against. The logon layer is applied last, so its value stands whatever the
+        // machine's and the user's own `Environment` hold.
+        let Some(logon) = read_values(Hive::CurrentUser, LOGON_ENVIRONMENT)
+            .into_iter()
+            .find(|(name, value)| name.eq_ignore_ascii_case("USERNAME") && !value.expandable)
+            .map(|(_, value)| value)
+        else {
+            return;
+        };
+        let env = snapshot(Duration::from_secs(1)).unwrap();
+        assert_eq!(get(&env, "USERNAME"), Some(&logon.text));
     }
 
     #[test]

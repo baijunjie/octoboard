@@ -303,8 +303,11 @@ async fn a_rejected_first_work_prompt_is_announced_to_the_user() {
 /// Native queues receive one bootstrap after the original is archived and the place has moved.
 #[tokio::test]
 async fn the_first_native_submission_has_the_completed_handoff_context() {
+    // The state is held weakly: the receiving session's transport is this, the state keeps the
+    // session, and a strong hold would keep the state, its process ledger and the launch's cgroup
+    // v2 group alive past the test.
     struct Capture {
-        state: Arc<AppState>,
+        state: std::sync::Weak<AppState>,
         repo: String,
         messages: Mutex<Vec<String>>,
     }
@@ -314,25 +317,25 @@ async fn the_first_native_submission_has_the_completed_handoff_context() {
             text: &str,
             _: &str,
         ) -> std::result::Result<term::Sent, crate::platform::term::PartialWrite> {
+            let state = self
+                .state
+                .upgrade()
+                .expect("the state outlives its sessions");
             assert_eq!(
-                self.state.session_record("original").unwrap().status,
+                state.session_record("original").unwrap().status,
                 SessionStatus::Archived
             );
-            let origins = self.state.store.branch_origins(&self.repo).unwrap();
+            let origins = state.store.branch_origins(&self.repo).unwrap();
             let receiving = &origins
                 .iter()
                 .find(|origin| origin.branch == "one")
                 .unwrap()
                 .responsible_session;
-            let stored = self.state.session_record(receiving).unwrap();
+            let stored = state.session_record(receiving).unwrap();
             assert_eq!(stored.bound_to.as_deref(), Some("hub"));
             assert_eq!(stored.role, Role::Coordinator);
             assert_eq!(
-                self.state
-                    .session_record("worker")
-                    .unwrap()
-                    .bound_to
-                    .as_deref(),
+                state.session_record("worker").unwrap().bound_to.as_deref(),
                 Some(receiving.as_str())
             );
             self.messages.lock().unwrap().push(text.to_string());
@@ -356,7 +359,7 @@ async fn the_first_native_submission_has_the_completed_handoff_context() {
         Some("main"),
     );
     let capture = Arc::new(Capture {
-        state: fixture.state.clone(),
+        state: Arc::downgrade(&fixture.state),
         repo: repo_key(&repository_of(&fixture.repo).unwrap()),
         messages: Default::default(),
     });

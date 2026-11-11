@@ -173,6 +173,8 @@ Two traps around this, both measured:
 - `PermissionDenied` **exists** in the executable's strings (alongside `emitPermissionDenied`,
   `executePermissionDeniedHooks`, and user-facing text about the hook permitting a retry) and **never fires** — not on a
   declined prompt, and not when a `PreToolUse` hook itself returns a `deny` decision.
+- `--settings` takes a path to a settings file as well as inline JSON; hooks registered in such a file fire as from
+  inline JSON (measured on Claude Code 2.1.322).
 - `--settings` **does not validate hook names at all**: registering `PermissionDenied`, or a wholly invented name,
   starts without a word of complaint, while the same file's *permission rules* are checked loudly. So a hook name being
   accepted is no evidence the event exists, let alone that it fires.
@@ -397,8 +399,8 @@ a best-available alias it excludes is refused by Claude Code.
   hook fires while it is up. Accepting writes only `skipDangerousModePermissionPrompt: true` to
   `$CLAUDE_CONFIG_DIR/settings.json`. The same key in `.claude.json` does not suppress it.
   `--settings '{"skipDangerousModePermissionPrompt":true}'` suppresses it and writes nothing, which is what Octoboard
-  passes (merged into its hook `--settings` JSON); background and `claude agents` sessions do not honour a flag-only
-  consent, which is irrelevant for a PTY launch.
+  passes (merged into the settings file it names with `--settings`); background and `claude agents` sessions do not
+  honour a flag-only consent, which is irrelevant for a PTY launch.
 - **Each mode as launched** (2.1.303, fresh config dir logged in through the Keychain, a conversation with one turn,
   then stopped and resumed): no flag started in `⏵⏵ auto mode on`, `--permission-mode auto` in `⏵⏵ auto mode on`,
   `--permission-mode default` in `⏸ manual mode on`, and `--permission-mode bypassPermissions` plus the `--settings`
@@ -748,6 +750,18 @@ holding its value) and `bearer_token_env_var`; all four were accepted by 0.163.0
 `codex mcp list`. `env_vars` cannot rename a variable: the server receives it under the name Codex holds it by. What a
 server does with them at run time, and whether commands Codex runs for its model see the same variables, was not
 measured.
+
+**Codex copies its whole environment into files** (0.166.0 and 0.167, macOS and Linux). Every exported variable of the
+process lands in the shell snapshots under `$CODEX_HOME/shell_snapshots/` (mode 0644 under the usual umask) and in
+`logs_2.sqlite`, so nothing secret can be handed to Codex in a variable. The commands its model runs get that
+environment through `shell_environment_policy`, whose default excludes (names matching `*KEY*`, `*SECRET*`, `*TOKEN*`)
+are off unless `ignore_default_excludes = false` is set, in the user's or the project's `.codex/config.toml`; with them
+on, a variable so named is dropped on its own, `GIT_CONFIG_KEY_<n>` included while its `GIT_CONFIG_COUNT` stays, which
+fails every git ("missing config key").
+
+**A job a command starts in the background ends with the command** (0.167, macOS). A plain `nohup … &` from a command
+the model runs is gone once that command finishes; a job meant to outlive it has to be started in a session of its own
+(`setsid`).
 
 ## Grok Build
 
@@ -1236,6 +1250,10 @@ hosts" in `docs/architecture.md`):
 - **Settling.** After a keystroke Claude Code's output is one burst of 15 to 46 ms; its start after the trust screen has
   gaps up to 237 ms, Codex's up to 308 ms, and a pasted draft is drawn 100 to 150 ms after the paste, so an idle window
   of 100 ms declares Codex's screen settled before the draft is drawn.
+- **Past the trust screen.** Claude Code 2.1.322 on the inbox host (Windows 11 on ARM64, the daemon an x64 build under
+  emulation) clears its screen once the Enter on "Yes" is taken, then draws its next screen 4.1 to 6.8 s later, with
+  silent gaps of up to 2.4 s in between; the trust is already recorded in `.claude.json` while the screen is blank. The
+  cursor reached "Yes" 146 to 288 ms after the Down.
 
 ### Where the agents live on Windows
 

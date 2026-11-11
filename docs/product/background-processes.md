@@ -38,17 +38,25 @@ started it exits within one process-table scan, about **2 seconds**: such a proc
 the launch. A limit that concerns kept processes is described with keeping, in "Automatic stopping and its boundaries"
 below.
 
-**On a Linux daemon host whose cgroup lets the daemon make groups below it**, each agent launch is also held in a
-cgroup v2 group of its own. That is the case where the daemon's cgroup subtree is writable to it — under the example
-systemd unit's `Delegate=yes` (see "Running as a systemd user service" in `docs/product/application-lifecycle.md`), or
-in a container's writable hierarchy — and normally not for a daemon started from a login session (by
-`octoboardd start`, say), whose cgroup systemd does not let the user write. The agent's process is moved into the group
-just after it starts, with what it has started by then, and everything a process in the group starts is born in it,
-wherever it goes after that: a process in the launch's group is the launch's however it detached and whatever its
+**On a Linux daemon host where the daemon may make groups below the cgroup a launch is started from**, each agent
+launch is also held in a cgroup v2 group of its own. The group is made below the cgroup of the process holder that runs
+the launch, once that holder is known (see `docs/product/process-holders.md`), or below the daemon's own cgroup where
+holders cannot be set up and the daemon runs its terminals itself. A holder in a session of its own stays in the
+daemon's cgroup; a holder run as a systemd user unit of its own has that unit's cgroup, which it delegates (see "How a
+holder is detached" in `docs/product/process-holders.md`). So the groups can be made under a systemd user manager, under
+the example systemd unit's `Delegate=yes` (see "Running as a systemd user service" in
+`docs/product/server-form.md`), or in a container's writable hierarchy, and normally not for a daemon
+started from a login session (by `octoboardd start`, say), whose cgroup systemd does not let the user write. The
+agent's process enters the group before its program runs, and so does a private server run for the launch (see
+"Codex's private app server" in `docs/product/per-agent-launch-specifics.md`). Everything a process in the group starts
+is born in it, wherever it goes after that, a process forked and detached into a session of its own in the agent's
+first milliseconds included: a process in the launch's group is the launch's however it detached and whatever its
 environment says. Where no group can be made (no cgroup v2 hierarchy, a read-only one, a cgroup owned by someone else),
-the launch has none, which the daemon's log says once, and the rules above apply alone. A process the agent forked and
-that left it in the instant before the move is outside the group and is the launch's only by those rules. Shell
-terminals get no group; nor does anything the daemon starts other than an agent launch. How the group ends with the
+the launch has none, which the daemon's log says once, and the rules above apply alone. Where a process cannot enter
+the group as it starts (the group's directory is gone, say), it is moved in just after it starts, with what it has
+started by then; only then can a process it forked and that left it in the instant before that move be outside the
+group, the launch's only by those rules. Shell terminals get no group; nor does anything the daemon starts other than
+an agent launch. How the group ends with the
 launch is in "Automatic stopping and its boundaries" below.
 
 **On a Windows daemon host** no process's environment is read, so the launch's tag attributes nothing there, and a
@@ -119,10 +127,13 @@ process is moved out of the group already when it is kept or moved, so what it s
 processes carried over stay in their group, which passes to the receiving launch with them. The kill is skipped, and
 the group left to the ordinary cleanup until it is empty and removed, when a process to be spared cannot be moved out
 of it, or when the process table could not be read during the rounds of signals; a group whose processes have not all
-gone **1 second** after the kill is left in place. Groups an earlier run of the same data directory's daemon left,
-which a daemon in the same cgroup finds again at start, are treated as that run's leftovers: what is in them is stopped
-as the cleanup after a daemon restart (below) stops what a previous run left, kept processes excepted, and an empty one
-is removed.
+gone **1 second** after the kill is left in place. Groups an earlier run of the same data directory's daemon left are
+treated as that run's leftovers: what is in them is stopped as the cleanup after a daemon restart (below) stops what a
+previous run left, kept processes excepted, and an empty one is removed. A daemon finds them again below its own cgroup
+and below the cgroups of the holders it finds running as it starts or links to later. Those left below the cgroup of a
+holder that ended while no daemon ran are not found: a holder exits on its own only with no terminal left, and its crash
+ends its programs (see "What a holder runs and when it ends" in `docs/product/process-holders.md`), and a process that
+escaped that is still the launch's by the other rules in "Which processes belong to a launch" above.
 
 **On a Windows daemon host** there are no signals. A process that runs on a terminal the daemon started (a pseudo
 console, as an agent's own process does) is asked to end through that terminal. Where its agent declares quit keys,

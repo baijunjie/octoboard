@@ -17,9 +17,7 @@
 //! platform starts itself, on a pseudoconsole, gets its jobs in its creation attributes from a
 //! [`Placement`].
 
-use std::ffi::OsStr;
 use std::io;
-use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use std::os::windows::process::CommandExt;
 use std::process::Command;
@@ -40,15 +38,16 @@ use windows_sys::Win32::System::JobObjects::{
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
 use windows_sys::Win32::System::Threading::{
-    CreateProcessW, DeleteProcThreadAttributeList, GetCurrentProcess,
-    InitializeProcThreadAttributeList, OpenThread, QueryFullProcessImageNameW, ResumeThread,
-    TerminateProcess, UpdateProcThreadAttribute, WaitForSingleObject, CREATE_BREAKAWAY_FROM_JOB,
-    CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, CREATE_SUSPENDED, DETACHED_PROCESS,
-    EXTENDED_STARTUPINFO_PRESENT, INFINITE, LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_ALL_ACCESS,
-    PROCESS_CREATE_PROCESS, PROCESS_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION,
-    PROCESS_SYNCHRONIZE, PROCESS_TERMINATE, PROC_THREAD_ATTRIBUTE_PARENT_PROCESS, STARTUPINFOEXW,
-    STARTUPINFOW, THREAD_SUSPEND_RESUME,
+    GetCurrentProcess, OpenThread, QueryFullProcessImageNameW, ResumeThread, TerminateProcess,
+    WaitForSingleObject, CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW, CREATE_SUSPENDED, INFINITE,
+    PROCESS_ALL_ACCESS, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
+    THREAD_SUSPEND_RESUME,
 };
+
+mod create;
+
+pub(super) use create::{create_with_std_handles, inherited, output, Attributes};
+pub(crate) use create::{spawn_in_background, start_detached, BackgroundChild};
 
 use super::{tag_value, TAG_VARIABLE};
 use super::{Polite, ProcessId, ProcessIdentity, Reach, Sent, SetEnv, Signal, Swept, Unreaped};
@@ -260,6 +259,19 @@ impl Containment {
     pub fn for_launch(instance: &str, launch: &str) -> io::Result<Self> {
         Self::create(instance, launch)
     }
+
+    /// The containment of the agent launch `launch` of the daemon instance `instance` that a
+    /// holder is to start: on Windows the same as [`Self::create`], the holder opening the job by
+    /// its name.
+    pub fn for_held_launch(instance: &str, launch: &str) -> io::Result<Self> {
+        Self::create(instance, launch)
+    }
+
+    /// Nothing to settle on Windows: the job was made with the containment.
+    pub fn place_with_host(&self, _host: &ProcessIdentity) {}
+
+    /// Nothing to note on Windows, where a job is found by its name alone.
+    pub fn note_host(_host: &ProcessIdentity) {}
 
     /// The launches whose containments are still there from an earlier run, where the host can
     /// list them: none here, since a job is found only by its name ([`Self::reopen`]).
@@ -651,226 +663,19 @@ pub(crate) fn detach(command: &mut Command) {
     command.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
 }
 
-/// Starts `command` as a process that outlives the daemon, with no console, no inherited handles
-/// and a process group of its own, and outside the jobs the daemon is in, which a kill-on-close job
-/// would end it with. It runs in the command's working directory, and in the daemon's environment:
-/// a command that sets its own is refused.
-///
-/// It asks to break away from the daemon's jobs first. A job that does not allow it refuses with
-/// access denied; the process is then created as a child of the process `application` names (the
-/// desktop application, which is outside the job), taking that process's job membership instead.
-/// When there is no application, or it cannot be opened for that (it is gone, access is denied),
-/// or creating a child of it fails, the process is started without breakaway and ends with the
-/// job.
-pub(crate) fn start_detached(command: Command, application: Option<u32>) -> io::Result<()> {
-    if command.get_envs().next().is_some() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "a detached process starts in the daemon's environment",
-        ));
-    }
-    let program = command.get_program();
-    let mut line = Vec::new();
-    push_quoted(&mut line, program)?;
-    for arg in command.get_args() {
-        line.push(u16::from(b' '));
-        push_quoted(&mut line, arg)?;
-    }
-    line.push(0);
-    let directory: Option<Vec<u16>> = command.get_current_dir().map(|directory| {
-        directory
-            .as_os_str()
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect()
-    });
-    let directory = directory.as_deref();
-
-    match create_detached(&mut line, directory, Detached::Breakaway) {
-        Err(err) if err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) => {}
-        started => return started,
-    }
-    let parent = match application {
-        Some(pid) if pid != 0 => match Process::open(pid, PROCESS_CREATE_PROCESS) {
-            Some(parent) => Some(parent),
-            None => {
-                let err = last_error();
-                tracing::warn!(application = pid, %err, "the application cannot be opened to start a process under it");
-                None
-            }
-        },
-        _ => None,
-    };
-    if let Some(parent) = &parent {
-        match create_detached(&mut line, directory, Detached::ChildOf(parent)) {
-            Ok(()) => return Ok(()),
-            Err(err) => {
-                tracing::warn!(application = ?application, %err, "a process cannot be created under the application");
-            }
-        }
-    }
-    tracing::warn!(
-        "the daemon's job does not let a process break away and none can be started under the application: the holder's terminals end with the job"
-    );
-    create_detached(&mut line, directory, Detached::InJob)
+/// No systemd user manager runs a daemon on Windows.
+pub(crate) fn user_service_unit() -> Option<String> {
+    None
 }
 
-/// Where [`create_detached`] puts the process, relative to the creator's jobs.
-#[derive(Clone, Copy)]
-enum Detached<'a> {
-    /// Out of them, by breakaway.
-    Breakaway,
-    /// In them: nothing is asked.
-    InJob,
-    /// As a child of the process this is a handle on, in the jobs it is in.
-    ChildOf(&'a Process),
-}
-
-/// Appends `arg` to the command line `line` as `CommandLineToArgvW` reads it back.
-fn push_quoted(line: &mut Vec<u16>, arg: &OsStr) -> io::Result<()> {
-    let units: Vec<u16> = arg.encode_wide().collect();
-    if units.contains(&0) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "an argument holds a NUL",
-        ));
-    }
-    let plain = !units.is_empty()
-        && !units.iter().any(|&unit| {
-            unit == u16::from(b' ') || unit == u16::from(b'\t') || unit == u16::from(b'"')
-        });
-    if plain {
-        line.extend(units);
-        return Ok(());
-    }
-    line.push(u16::from(b'"'));
-    let mut backslashes = 0;
-    for unit in units {
-        if unit == u16::from(b'\\') {
-            backslashes += 1;
-        } else {
-            if unit == u16::from(b'"') {
-                // The backslashes before a quote are doubled, and the quote itself escaped.
-                line.extend(std::iter::repeat_n(u16::from(b'\\'), backslashes + 1));
-            }
-            backslashes = 0;
-        }
-        line.push(unit);
-    }
-    // Doubled again before the closing quote, which they would otherwise escape.
-    line.extend(std::iter::repeat_n(u16::from(b'\\'), backslashes));
-    line.push(u16::from(b'"'));
-    Ok(())
-}
-
-/// Creates the process `line` (NUL-terminated) names, as [`start_detached`] describes, in
-/// `directory` (NUL-terminated) when there is one, placed as `placement` says, and lets go of its
-/// handles.
-fn create_detached(
-    line: &mut [u16],
-    directory: Option<&[u16]>,
-    placement: Detached<'_>,
+/// Never called on Windows, where [`user_service_unit`] names no service.
+pub(crate) fn start_in_user_unit(
+    _command: &Command,
+    _unit: &str,
+    _description: &str,
+    _daemon: &str,
 ) -> io::Result<()> {
-    let mut flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
-    let mut startup = STARTUPINFOEXW::default();
-    startup.StartupInfo.cb = size_of::<STARTUPINFOW>() as u32;
-    if matches!(placement, Detached::Breakaway) {
-        flags |= CREATE_BREAKAWAY_FROM_JOB;
-    }
-
-    // Declared before the list, which keeps a pointer to it: it must outlive the list.
-    let parent_handle: HANDLE;
-    let mut list_buffer = Vec::<u64>::new();
-    let mut list: Option<AttributeList> = None;
-    let parent = match placement {
-        Detached::ChildOf(parent) => Some(parent),
-        _ => None,
-    };
-    if let Some(parent) = parent {
-        let mut list_size = 0usize;
-        // SAFETY: a null list asks for the size a list of one attribute needs.
-        unsafe { InitializeProcThreadAttributeList(std::ptr::null_mut(), 1, 0, &mut list_size) };
-        list_buffer.resize(list_size.div_ceil(8), 0);
-        let raw = list_buffer.as_mut_ptr() as LPPROC_THREAD_ATTRIBUTE_LIST;
-        // SAFETY: `list_buffer` is writable for the size the call asked for.
-        if unsafe { InitializeProcThreadAttributeList(raw, 1, 0, &mut list_size) } == 0 {
-            return Err(last_error());
-        }
-        let attributes = list.insert(AttributeList(raw));
-        parent_handle = parent.raw();
-        // SAFETY: the list keeps the pointer it is given, not the handle behind it, and
-        // `parent_handle` is declared before the list, so it lives until the list is deleted,
-        // after the process is created; the list is initialised.
-        if unsafe {
-            UpdateProcThreadAttribute(
-                attributes.0,
-                0,
-                PROC_THREAD_ATTRIBUTE_PARENT_PROCESS as usize,
-                std::ptr::from_ref(&parent_handle).cast(),
-                size_of::<HANDLE>(),
-                std::ptr::null_mut(),
-                std::ptr::null(),
-            )
-        } == 0
-        {
-            return Err(last_error());
-        }
-        startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
-        startup.lpAttributeList = attributes.0;
-        flags |= EXTENDED_STARTUPINFO_PRESENT;
-    }
-
-    let mut information = PROCESS_INFORMATION::default();
-    // SAFETY: `line` is NUL-terminated and writable, as the call requires, and `directory` is
-    // NUL-terminated when there is one; no handle is inherited, and the environment is the
-    // daemon's own.
-    let created = unsafe {
-        CreateProcessW(
-            std::ptr::null(),
-            line.as_mut_ptr(),
-            std::ptr::null(),
-            std::ptr::null(),
-            0,
-            flags,
-            std::ptr::null(),
-            directory.map_or(std::ptr::null(), <[u16]>::as_ptr),
-            &startup.StartupInfo,
-            &mut information,
-        )
-    };
-    drop(list);
-    if created == 0 {
-        return Err(last_error());
-    }
-    // SAFETY: valid handles the call returned, closed here: nothing waits on the process.
-    unsafe {
-        drop(OwnedHandle::from_raw_handle(information.hProcess));
-        drop(OwnedHandle::from_raw_handle(information.hThread));
-    }
-    Ok(())
-}
-
-/// An initialised process attribute list, deleted when dropped.
-struct AttributeList(LPPROC_THREAD_ATTRIBUTE_LIST);
-
-impl Drop for AttributeList {
-    fn drop(&mut self) {
-        // SAFETY: an initialised list, deleted once.
-        unsafe { DeleteProcThreadAttributeList(self.0) };
-    }
-}
-
-/// Starting the daemon in the background from the command line has no Windows implementation.
-pub(crate) fn run_in_background(_command: &mut Command) -> io::Result<()> {
-    Err(io::Error::new(
-        io::ErrorKind::Unsupported,
-        "running in the background is not supported on Windows",
-    ))
-}
-
-/// Whether [`run_in_background`] can start a daemon here: never on Windows.
-pub(crate) fn runs_in_background() -> bool {
-    false
+    Err(io::ErrorKind::Unsupported.into())
 }
 
 /// Whether a service manager restarts this daemon on the status a planned restart ends it with:
@@ -879,8 +684,9 @@ pub(crate) fn restarted_by_service_manager(_asked: bool) -> bool {
     false
 }
 
-/// A planned-restart request has no Windows delivery: a process without a console takes no
-/// request from another one but to be ended.
+/// A planned-restart request has no signal to go by on Windows: a process without a console takes
+/// no request from another one but to be ended. The command line asks over loopback instead
+/// (`POST /restart`).
 pub(crate) fn request_restart(_id: &ProcessIdentity) -> Sent {
     Sent::Failed(io::Error::new(
         io::ErrorKind::Unsupported,
@@ -1089,8 +895,8 @@ pub(crate) fn holder_ends_at_ordinary_parting() -> bool {
     true
 }
 
-/// The planned-restart requests the host delivers to the daemon: none on Windows (see
-/// [`request_restart`]).
+/// The planned-restart requests the host delivers to the daemon: none on Windows, where the request
+/// arrives over loopback as `POST /restart` (see [`request_restart`]).
 pub(crate) struct RestartRequests;
 
 impl RestartRequests {
@@ -1106,7 +912,7 @@ impl RestartRequests {
     }
 }
 
-/// What the daemon waits on for a planned-restart request, which never comes on Windows.
+/// What the daemon waits on for a planned-restart request, which never comes by signal on Windows.
 pub(crate) fn restart_requested() -> RestartRequests {
     RestartRequests
 }

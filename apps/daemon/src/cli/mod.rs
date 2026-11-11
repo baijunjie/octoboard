@@ -1,16 +1,23 @@
-//! The command line: the daemon itself when no mode is named; `start`, `stop`, `restart` and
-//! `status`, which a user runs to keep the daemon in the background; the modes other processes
+//! The command line: the daemon itself when no mode is named; `start`, `stop`, `restart`, `status`
+//! and `address`, which a user runs to keep the daemon in the background; the modes other processes
 //! start it in — an agent's hook, a session's git hooks, a provider's status line and the MCP
 //! server — each of which runs in a process of its own and calls the running daemon; and the
 //! holder, which the running daemon calls instead.
 
 mod background;
+#[cfg(all(test, unix))]
+mod background_tests;
 mod holder;
 pub(crate) mod hook;
 mod installation;
+#[cfg(test)]
+mod key_source_tests;
+mod succession;
 
 pub(crate) use background::start_successor;
 pub(crate) use installation::launch_path;
+
+use std::path::Path;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -68,6 +75,10 @@ pub(crate) enum Command {
     /// Say whether a daemon runs against this data directory, and where it listens; exits 3 when
     /// none does.
     Status,
+    /// Print the address to open the running daemon at in a browser, its key included:
+    /// `http://localhost:<port>/?key=<key>`, for an SSH port forward of that port. Exits 3 when
+    /// none runs.
+    Address,
     /// Forward one agent hook payload to the daemon. This is what the per-session hook script
     /// execs; it is not meant to be run by hand.
     Hook {
@@ -75,9 +86,9 @@ pub(crate) enum Command {
         session: String,
         #[arg(long)]
         port: u16,
-        /// The key the daemon requires of every connection.
+        /// The owner-only file holding the key the daemon requires of every connection.
         #[arg(long)]
-        key: String,
+        key_file: std::path::PathBuf,
     },
     /// Report the branches a session's git has just created, and whether it moved the refs a
     /// project's branch header reads. This is what the session's `reference-transaction` hook
@@ -85,11 +96,13 @@ pub(crate) enum Command {
     GitRef {
         #[arg(long)]
         session: String,
+        /// The launch's port; absent, the report goes to the daemon its owner record names.
         #[arg(long)]
-        port: u16,
-        /// The key the daemon requires of every connection.
+        port: Option<u16>,
+        /// The data directory the dispatcher lives in, where that daemon's records are; absent (a
+        /// dispatcher of an earlier build), this process's own.
         #[arg(long)]
-        key: String,
+        data_dir: Option<std::path::PathBuf>,
         /// The branch (`refs/heads/...`) the git that made them had checked out.
         #[arg(long)]
         head: Option<std::ffi::OsString>,
@@ -107,11 +120,13 @@ pub(crate) enum Command {
     GateHook {
         #[arg(long)]
         session: String,
+        /// The launch's port; absent, the daemon its owner record names is asked.
         #[arg(long)]
-        port: u16,
-        /// The key the daemon requires of every connection.
+        port: Option<u16>,
+        /// The data directory the dispatcher lives in, where that daemon's records are; absent (a
+        /// dispatcher of an earlier build), this process's own.
         #[arg(long)]
-        key: String,
+        data_dir: Option<std::path::PathBuf>,
         #[command(subcommand)]
         hook: revert_gate::Hook,
     },
@@ -126,9 +141,9 @@ pub(crate) enum Command {
         session: String,
         #[arg(long)]
         port: u16,
-        /// The key the daemon requires of every connection.
+        /// The owner-only file holding the key the daemon requires of every connection.
         #[arg(long)]
-        key: String,
+        key_file: std::path::PathBuf,
         /// The provider's own arguments, which come last.
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
@@ -156,9 +171,9 @@ pub(crate) enum Command {
         worker: bool,
         #[arg(long)]
         port: u16,
-        /// The key the daemon requires of every connection.
+        /// The owner-only file holding the key the daemon requires of every connection.
         #[arg(long)]
-        key: String,
+        key_file: std::path::PathBuf,
         #[arg(long)]
         token: String,
     },
@@ -188,44 +203,59 @@ pub(crate) fn run(command: Command) -> Result<()> {
         Command::Stop => std::process::exit(background::stop()?),
         Command::Restart => std::process::exit(background::restart()?),
         Command::Status => std::process::exit(background::status()?),
+        Command::Address => std::process::exit(background::print_address()?),
         // The hook path must stay silent and must not pay for a runtime: it is on the agent's
         // turn critical path, several times per turn.
-        Command::Hook { session, port, key } => {
-            hook::run(&session, port, &key);
+        Command::Hook {
+            session,
+            port,
+            key_file,
+        } => {
+            hook::run(&session, port, &key_file);
             Ok(())
         }
         Command::GitRef {
             session,
             port,
-            key,
+            data_dir,
             head,
             moved,
             refs,
         } => {
-            session_git_hooks::ref_mode::run(&session, port, &key, head.as_deref(), moved, &refs);
+            session_git_hooks::ref_mode::run(
+                &session,
+                port,
+                &data_dir.unwrap_or_else(crate::paths::data_dir),
+                head.as_deref(),
+                moved,
+                &refs,
+            );
             Ok(())
         }
         // Both run synchronously inside the user's git, which waits for their exit status.
         Command::GateHook {
             session,
             port,
-            key,
+            data_dir,
             hook,
         } => std::process::exit(session_git_hooks::gate_mode::run(
-            &session, port, &key, &hook,
+            &session,
+            port,
+            &data_dir.unwrap_or_else(crate::paths::data_dir),
+            &hook,
         )),
         // On the path of every status line update, and its stdout is the user's status line's.
         Command::StatusLine {
             provider,
             session,
             port,
-            key,
+            key_file,
             args,
         } => std::process::exit(run_status_line(
             provider.as_deref(),
             &session,
             port,
-            &key,
+            &key_file,
             &args,
         )),
         // Logs to a file of its own: it has no one to read its stdout and stderr.
@@ -239,9 +269,9 @@ pub(crate) fn run(command: Command) -> Result<()> {
             kind,
             worker,
             port,
-            key,
+            key_file,
             token,
-        } => mcp::stdio::run(session, kind.into(), worker, port, key, token),
+        } => mcp::stdio::run(session, kind.into(), worker, port, &key_file, token),
     }
 }
 
@@ -251,7 +281,7 @@ fn run_status_line(
     provider: Option<&str>,
     session: &str,
     port: u16,
-    key: &str,
+    key_file: &Path,
     args: &[String],
 ) -> i32 {
     let agent = match provider {
@@ -261,7 +291,7 @@ fn run_status_line(
             .find(|agent| agent.descriptor().capabilities.status_line),
     };
     match agent.and_then(|agent| adapter::provider(agent).status_line()) {
-        Some(status_line) => status_line.run(session, port, key, args),
+        Some(status_line) => status_line.run(session, port, key_file, args),
         None => {
             let _ = std::io::copy(&mut std::io::stdin(), &mut std::io::sink());
             0
@@ -338,19 +368,162 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn address_takes_no_option_and_no_daemon_option() {
+        assert!(matches!(
+            parse(&["address"]).unwrap().command,
+            Some(Command::Address)
+        ));
+        assert!(parse(&["address", "--port", "7531"]).is_err());
+        assert!(parse(&["--port", "7531", "address"]).is_err());
+    }
+
+    /// The helpers take the key's file, never the key: a key in arguments is listed by `ps` for
+    /// every user of the machine.
+    #[test]
+    fn the_helpers_take_a_key_file_and_refuse_a_key() {
+        let hook = parse(&["hook", "--session", "s", "--port", "1", "--key-file", "/k"]).unwrap();
+        assert!(matches!(
+            hook.command,
+            Some(Command::Hook { key_file, .. }) if key_file == Path::new("/k")
+        ));
+        let mcp = parse(&[
+            "mcp",
+            "--session",
+            "s",
+            "--kind",
+            "project",
+            "--port",
+            "1",
+            "--key-file",
+            "/k",
+            "--token",
+            "t",
+        ])
+        .unwrap();
+        assert!(matches!(
+            mcp.command,
+            Some(Command::Mcp { key_file, .. }) if key_file == Path::new("/k")
+        ));
+        assert!(parse(&["hook", "--session", "s", "--port", "1"]).is_err());
+        assert!(parse(&["hook", "--session", "s", "--port", "1", "--key", "k"]).is_err());
+        assert!(parse(&["status-line", "--session", "s", "--port", "1", "--key", "k"]).is_err());
+        // The git hook helpers take the key from a file the environment names, and no argument.
+        assert!(parse(&["git-ref", "--session", "s", "--port", "1", "--key", "k"]).is_err());
+        assert!(parse(&[
+            "gate-hook",
+            "--session",
+            "s",
+            "--port",
+            "1",
+            "--key",
+            "k",
+            "pre-push"
+        ])
+        .is_err());
+        assert!(parse(&["git-ref", "--session", "s", "--port", "1"]).is_ok());
+        // With no port, the git hook helpers go to the daemon's own route.
+        assert!(matches!(
+            parse(&["git-ref", "--session", "s"]).unwrap().command,
+            Some(Command::GitRef { port: None, .. })
+        ));
+        assert!(matches!(
+            parse(&["gate-hook", "--session", "s", "pre-push"])
+                .unwrap()
+                .command,
+            Some(Command::GateHook { port: None, .. })
+        ));
+    }
+
+    /// The command lines the git hook dispatchers of the earlier builds start, which always carry a
+    /// port and no data directory, still parse: a session launched by one keeps its dispatchers.
+    #[test]
+    fn the_git_hook_helpers_take_the_command_lines_earlier_dispatchers_start() {
+        let Some(Command::GitRef {
+            session,
+            port,
+            data_dir,
+            head,
+            moved,
+            refs,
+        }) = parse(&[
+            "git-ref",
+            "--session",
+            "s",
+            "--port",
+            "7531",
+            "--head",
+            "refs/heads/main",
+            "--moved",
+            "--",
+            "refs/heads/a",
+            "abc",
+        ])
+        .unwrap()
+        .command
+        else {
+            panic!("not git-ref");
+        };
+        assert_eq!((session.as_str(), port, moved), ("s", Some(7531), true));
+        assert_eq!(data_dir, None);
+        assert_eq!(
+            head.as_deref(),
+            Some(std::ffi::OsStr::new("refs/heads/main"))
+        );
+        assert_eq!(refs, ["refs/heads/a", "abc"]);
+        for hook in [&["reference-transaction", "prepared"][..], &["pre-push"]] {
+            let mut args = vec!["gate-hook", "--session", "s", "--port", "7531"];
+            args.extend(hook);
+            assert!(
+                matches!(
+                    parse(&args).unwrap().command,
+                    Some(Command::GateHook {
+                        port: Some(7531),
+                        data_dir: None,
+                        ..
+                    })
+                ),
+                "{hook:?}"
+            );
+        }
+    }
+
+    /// The data directory the dispatcher is under is an option of both git hook helpers, and goes
+    /// before the gate's hook name and the references the report lists.
+    #[test]
+    fn the_git_hook_helpers_take_the_data_directory_of_their_dispatcher() {
+        assert!(matches!(
+            parse(&["git-ref", "--session", "s", "--data-dir", "/d", "--moved", "--", "r", "o"])
+                .unwrap()
+                .command,
+            Some(Command::GitRef { port: None, data_dir: Some(dir), moved: true, .. })
+                if dir == Path::new("/d")
+        ));
+        assert!(matches!(
+            parse(&["gate-hook", "--session", "s", "--port", "1", "--data-dir", "/d", "pre-push"])
+                .unwrap()
+                .command,
+            Some(Command::GateHook { port: Some(1), data_dir: Some(dir), .. })
+                if dir == Path::new("/d")
+        ));
+    }
+
     fn status_line(args: &str) -> (Option<String>, Vec<String>) {
         let cli = Cli::try_parse_from(["octoboardd"].into_iter().chain(args.split(' '))).unwrap();
         let Some(Command::StatusLine {
             provider,
             session,
             port,
-            key,
+            key_file,
             args,
         }) = cli.command
         else {
             panic!("not the status-line command");
         };
-        assert_eq!((session.as_str(), port, key.as_str()), ("s", 1, "k"));
+        assert_eq!(
+            (session.as_str(), port, key_file),
+            ("s", 1, Path::new("/k").to_path_buf())
+        );
         (provider, args)
     }
 
@@ -380,12 +553,12 @@ mod tests {
             .map(str::to_owned)
             .to_vec();
         assert_eq!(
-            status_line("status-line --session s --port 1 --key k --cwd /p --config-dir /c"),
+            status_line("status-line --session s --port 1 --key-file /k --cwd /p --config-dir /c"),
             (None, own.clone())
         );
         assert_eq!(
             status_line(
-                "status-line --provider claude --session s --port 1 --key k --cwd /p --config-dir /c"
+                "status-line --provider claude --session s --port 1 --key-file /k --cwd /p --config-dir /c"
             ),
             (Some("claude".to_owned()), own)
         );

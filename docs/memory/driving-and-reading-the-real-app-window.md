@@ -105,6 +105,15 @@ shell's own event path, which carries no daemon traffic anyway (`docs/structure/
 "Desktop shell structure (`apps/desktop/`)"). That is enough to confirm what a dialog does. It is not the app's WebKit,
 so it settles behaviour and never rendering.
 
+Playwright's Chromium headless shell has no notification service: `Notification.permission` stays `denied` even after
+`context.grantPermissions(["notifications"])` (while `navigator.permissions.query` reports `granted`), so the browser UI
+never raises a notification there and its absence says nothing about the UI. To check one, install a recording
+stand-in for `window.Notification` whose `permission` is `granted` with `context.addInitScript` before the page loads,
+and read what the UI constructed. Clipboard grants do take effect in the headless shell. In a real browser on macOS,
+prove that a notification was delivered, when nobody watched the screen, from the notification center's database at
+`~/Library/Group Containers/group.com.apple.usernoted/db2/db`: each record holds the app id, title, subtitle and body,
+with a timestamp.
+
 So where a check has to run in the real app, keep the GUI out of the setup: create the consoles, projects and sessions a
 verification needs by sending the daemon's own protocol requests, and drive only the behaviour under test through the
 window. A session's status can be set up the same way, without an agent prompt or a model turn: POST

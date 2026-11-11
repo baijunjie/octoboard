@@ -255,7 +255,7 @@ program's next copy replaces it.
   typed into it, and telling the user to check the terminal's input line before continuing; `detail` is under Error
   details. The alert is a known failure with no remedy beyond its own text, not an unexpected one. Typing refused whole
   because a planned stop has handed the terminal over is told with `daemon_shutting_down` instead (see "While the
-  terminals are handed over" in `docs/product/application-lifecycle.md`).
+  terminals are handed over" in `docs/product/server-form.md`).
 
 ## While the session's process cannot be reached
 
@@ -371,8 +371,8 @@ terminal's area alone, as it is told the covers in "Reconnecting" above.
   ended before Octoboard kept output, or that was lost with a daemon killed outright and not taken over from a process
   holder (see "What a daemon start takes over" in `docs/product/process-holders.md`), shows a blank terminal, even if
   an earlier process left some; one whose screen a planned stop saved before its holder was lost shows that screen
-  instead (see "The screen of a terminal handed over" in `docs/product/process-holders.md`). Deleting the session's record deletes its saved preview too (see "Files Octoboard owns" in
-  `docs/product/application-lifecycle.md`).
+  instead (see "The screen of a terminal handed over" in `docs/product/process-holders.md`). Deleting the session's
+  record deletes its saved preview too (see `docs/product/files-octoboard-owns.md`).
 
 ## Links in the output
 

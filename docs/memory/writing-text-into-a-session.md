@@ -40,6 +40,12 @@ interrupt a turn" in `docs/agent-cli-reference.md`). So:
   any further press (a run of Ctrl-U presses goes one at a time, each seen on the screen). To learn that a turn ended,
   compare `AppState::turn_ends` with a reading taken before the key, not the status: a message the agent had queued
   takes it back to `Working` within milliseconds of a cancel, so polling for `Idle` misses it.
+- Bound the wait for the agent's answer to a key by the agent's pace measured on the slowest host it runs on, not on a
+  Mac: on Windows on ARM64, with the x64 daemon under emulation, Claude Code blanks its screen for seconds after the
+  trust screen's Enter (the figures are under "What they draw and read on a pseudoconsole" in
+  `docs/agent-cli-reference.md`), so a 2 or 3 second window reported presses that had taken as failed. Measure there
+  before choosing a bound, and end each wait as soon as what it waits for is seen, so a generous bound only slows the
+  report of a real failure.
 - Where the step reads or clears the agent's input box, hold `AppState::pause_outbox` for the session from before
   the first key until it is done, so a queued message does not land in or join text left in the box, and read the box
   from `screen_text_undimmed`: Claude Code draws the hints of an empty box faint (a fresh session's `❯ Try "…"`,

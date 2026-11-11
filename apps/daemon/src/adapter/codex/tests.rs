@@ -34,6 +34,10 @@ fn a_supported_release_runs_a_private_server_with_the_launchs_overrides() {
     assert_eq!(&private.tui_args[..2], ["--cd", spec.cwd.to_str().unwrap()]);
     assert_eq!(private.tui_args[2..], plan.args[..plan.args.len() - 1]);
     assert_eq!(private.task.as_deref(), Some("first task"));
+    // The key reaches no argument of the terminal or of the server beside it.
+    for arg in private.args.iter().chain(&private.tui_args) {
+        assert!(!arg.contains("feedface"), "{arg}");
+    }
     assert_eq!(
         private.hook_command,
         crate::platform::shell::script_command(
@@ -181,6 +185,31 @@ fn overrides(args: &[String]) -> Vec<String> {
         .filter(|pair| pair[0] == "-c")
         .map(|pair| pair[1].clone())
         .collect()
+}
+
+/// Arguments can be listed by every user of the machine: the MCP server Codex is told to run
+/// names the file holding the key, whatever the server is registered through.
+#[test]
+fn the_mcp_server_is_registered_with_the_key_file_and_never_the_key() {
+    let mut fixture = spec_fixture();
+    fixture.agent_version = Some((0, 166, 0));
+    let plan = CodexProvider.plan(&fixture.spec()).expect("plan");
+    let private = private_plan(&plan);
+    for args in [&plan.args, &private.args, &private.tui_args] {
+        let registered = overrides(args)
+            .into_iter()
+            .find(|line| line.starts_with("mcp_servers.octoboard.args="))
+            .expect("the MCP server's arguments");
+        assert!(
+            registered.contains(&toml_string("--key-file")),
+            "{registered}"
+        );
+        assert!(
+            registered.contains(&toml_string(&fixture.key_file.to_string_lossy())),
+            "{registered}"
+        );
+        assert!(!registered.contains(&toml_string("--key")), "{registered}");
+    }
 }
 
 /// With no model or effort set, neither override is passed, so Codex keeps its own choice.

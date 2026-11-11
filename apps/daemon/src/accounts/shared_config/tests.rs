@@ -2509,9 +2509,16 @@ async fn the_account_stays_locked_until_its_sessions_are_resumed() {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let launches = Launches::default();
     {
-        let (state, seen, launches) = (fixture.state.clone(), seen.clone(), launches.clone());
+        // Held weakly: the state keeps the relaunch, and a strong hold would keep the state, its
+        // process ledger and the launches' cgroup v2 groups alive past the test.
+        let (state, seen, launches) = (
+            Arc::downgrade(&fixture.state),
+            seen.clone(),
+            launches.clone(),
+        );
         *fixture.state.account_sharing.relaunch.lock().unwrap() = Some(Arc::new(
             move |request: crate::session::term::LaunchRequest| {
+                let state = state.upgrade().expect("the state outlives its relaunch");
                 let locked = state.sharing_locked("claude-a").is_some();
                 let other = state
                     .begin_launch("other")
@@ -3236,11 +3243,14 @@ async fn a_session_archived_while_the_change_runs_stops_what_its_process_started
     let (_second, child) =
         idle_session_that_started_a_server(&fixture, fixture.session("second", AgentId::CLAUDE));
     let _guard = test_support::KillOnDrop(vec![child]);
-    // The user archives the second while the first is being resumed.
-    let state = fixture.state.clone();
+    // The user archives the second while the first is being resumed. The state is held weakly:
+    // it keeps the relaunch, and a strong hold would keep the state, its process ledger and the
+    // launches' cgroup v2 groups alive past the test.
+    let state = Arc::downgrade(&fixture.state);
     let started = Arc::new(Mutex::new(Vec::new()));
     let launches = Arc::new(Mutex::new(Vec::new()));
     *fixture.state.account_sharing.relaunch.lock().unwrap() = Some(Arc::new(move |request| {
+        let state = state.upgrade().expect("the state outlives its relaunch");
         let mut second = state.store.get_session("second").unwrap().unwrap();
         second.status = SessionStatus::Archived;
         state.store.update_session(&second).unwrap();

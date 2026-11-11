@@ -218,8 +218,8 @@ fn copy_carried(from: &Path, to: &Path) {
 /// Appends Octoboard's MCP server to the farm's own `config.toml`. Appended rather than written
 /// fresh, because this copy carries the user's whole Grok configuration and replacing it would be
 /// the "do not override the user's configuration" failure in another form. The append step reads
-/// only the copy's last byte. The server's command line carries the daemon's key, so a file
-/// created here is owner-only.
+/// only the copy's last byte. A file created here is owner-only, since it holds the user's whole
+/// Grok configuration.
 fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
     use std::io::{Read, Seek, SeekFrom, Write};
 

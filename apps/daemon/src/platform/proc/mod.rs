@@ -58,6 +58,15 @@ mod cgroup_stub;
 #[cfg(all(unix, not(target_os = "linux")))]
 use cgroup_stub as cgroup;
 
+#[cfg(target_os = "linux")]
+mod systemd;
+
+#[cfg(all(unix, not(target_os = "linux")))]
+mod systemd_stub;
+
+#[cfg(all(unix, not(target_os = "linux")))]
+use systemd_stub as systemd;
+
 #[cfg(unix)]
 mod unix;
 

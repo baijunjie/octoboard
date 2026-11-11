@@ -228,11 +228,11 @@ work: `id`, and `type` and `description` where Claude Code gives them.
 - A subagent stop that would leave nothing running takes effect only after about **2 seconds**, so one subagent handing
   over to the next does not make the session flash to another status at its prompt in between; a turn end, a subagent
   starting, or another subagent stop within that time decides the list instead.
-- The list survives Octoboard's own restart, planned or after a crash, while the session's process keeps running in its
-  process holder: it is written to disk whenever it changes (see `~/.octoboard/background-tasks.json` under "Files
-  Octoboard owns" in `docs/product/application-lifecycle.md`), and a session Octoboard takes over again after the restart
-  gets it back when the process taken over is the one that left that work, so it keeps reading as *working in
-  background* until Claude Code reports again. What Claude Code reported while Octoboard was down is applied on top of
+- The list survives Octoboard's own restart, planned or after a crash, while the session's process keeps running in
+  its process holder: it is written to disk whenever it changes (see `~/.octoboard/background-tasks.json` under
+  `docs/product/files-octoboard-owns.md`), and a session Octoboard takes over again after the restart gets it back when
+  the process taken over is the one that left that work, so it keeps reading as *working in background* until Claude
+  Code reports again. What Claude Code reported while Octoboard was down is applied on top of
   it. A subagent stop still waiting out the 2 seconds above when Octoboard went down counts as having emptied the list.
 - When the process taken over is another one than the process that left the saved list, the saved list is dropped,
   together with the subagent starts, stops and finished-work notices reported on top of it, which say nothing of what

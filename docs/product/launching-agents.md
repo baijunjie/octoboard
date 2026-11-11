@@ -341,11 +341,17 @@ the very next launch: in steady use by the one after it, and in any case once th
 When there is no usable capture the launch waits for a fresh one, as below.
 
 **On a Windows daemon host there is no login shell to capture.** The environment is instead built as Windows builds a
-new sign-in's: the daemon's own environment, with the system's environment variables and then the user's, as the
-system stores them, laid over it, and `PATH` the system's followed by the user's. Building it starts nothing and cannot
-time out or fail, so the refusals and the clean-up below do not arise there; a variable the user changes in the
-system's settings is picked up under the same reuse rules. An agent's binary is looked up on that `PATH` with the
-extensions `PATHEXT` lists.
+new sign-in's: the daemon's own environment, with three sets of variables, as the system stores them, laid over it in
+the order Windows applies them — the machine's environment variables, then the user's own, then the ones Windows sets
+for the user at sign-in (the user name, the profile, application-data and home directories, the domain and the logon
+server among them). A later set wins over an earlier one for the same name, so the sign-in values stand even where the
+user has set a variable of the same name, and the user name a program sees is the signed-in user's, not the `SYSTEM`
+the machine's variables hold. `PATH` is the machine's followed by the user's. A value stored as expandable has each
+variable it names between percent signs replaced by that variable's value as it stands when the value's own set is
+applied, so `%USERNAME%` in one of the user's own variables gives the machine's value, as in a real sign-in. Building
+it starts nothing and cannot time out or fail, so the refusals and the clean-up below do not arise there; a variable
+the user changes in the system's settings is picked up under the same reuse rules. An agent's binary is looked up on
+that `PATH` with the extensions `PATHEXT` lists.
 
 A new session is listed before any of that has happened: it is recorded and shown as *starting* immediately, and the
 launch — the environment capture, the injected files and the agent process — carries on behind it, so a slow capture
@@ -416,13 +422,16 @@ Besides the terminal type, the variables set over the snapshot are:
 - for a Claude Code session whose account's directory shares the default configuration, `CLAUDE_CODE_REMOTE_MEMORY_DIR`
   (when exactly, an account whose last change of sharing is incomplete included, is in "Claude Code's auto memory" in
   `docs/product/sharing-the-default-configuration.md`).
-- for a project session, a `core.hooksPath` entry through `GIT_CONFIG_COUNT`, together with `OCTOBOARD_SESSION_ID`,
-  `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_KEY` — the port of the process holder that runs the session and the key
-  it issued for the launch (see "Session helpers and the holder" in `docs/product/process-holders.md`), or the daemon's
-  own where the terminals run in the daemon itself — which point every git in the agent's process tree at Octoboard's hook dispatchers; those
-  still run the user's own git hooks, report the branches that git creates (see "The session's git hooks" and
-  "What attribution needs" in `docs/product/branch-responsible-session.md`), and run the revert gate (see
-  `docs/product/revert-gate.md`). A console session gets none of them.
+- for a project session, a `core.hooksPath` entry through `GIT_CONFIG_PARAMETERS`, after the entries the user's shell
+  exports there, together with `OCTOBOARD_SESSION_ID`, `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_CREDENTIAL_PATH` —
+  the port of the process holder that runs the session and the path of the owner-only file holding the key it issued for
+  the launch (see "Session helpers and the holder" in `docs/product/process-holders.md`), or the daemon's own port and
+  key where the terminals run in the daemon itself — which point every git in the agent's process tree at Octoboard's
+  hook dispatchers; those still run the user's own git hooks, report the branches that git creates (see "The session's
+  git hooks" and "What attribution needs" in `docs/product/branch-responsible-session.md`), and run the revert gate (see
+  `docs/product/revert-gate.md`). The key itself is never in the environment, which an agent may write into files of its
+  own, and no name among them holds `KEY`, `SECRET` or `TOKEN`, which an agent's filter of secrets strips. A console
+  session gets none of them.
 
 The agent binary is resolved from that same snapshot's `PATH`, which is that login + interactive shell's `PATH`, not the
 one a terminal happens to have. So when the shell lists an old install of an agent before a newer one, the old one is

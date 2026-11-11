@@ -33,7 +33,8 @@ impl From<Spawned> for Started {
 }
 
 /// What the helpers of a launch (the hook script, the MCP server, the status line, the git hooks)
-/// are given to call: where, with which key, and the executable they run.
+/// are given to call: where, with which key, and the executable they run (all but the git hooks,
+/// which run the installation's own; see `crate::session_git_hooks`).
 ///
 /// A launch in a holder is given the holder's port, a key the holder issued for this launch and
 /// the executable the holder runs from, and the program has to be started through the same
@@ -49,8 +50,15 @@ pub struct Helpers {
 impl Helpers {
     /// The credentials for a launch of the session `session_id` with the MCP token `mcp_token`:
     /// the holder's, which binds the key to the token, when the daemon runs its terminals in one,
-    /// and `local` otherwise. **Blocks**, as [`start`] does.
-    pub fn issue(session_id: &str, mcp_token: &str, local: LocalHelpers<'_>) -> Result<Self> {
+    /// and `local` otherwise. The launch's `containment` is settled with the holder that issued
+    /// them, which is the one to start the launch's processes
+    /// ([`Containment::place_with_host`]). **Blocks**, as [`start`] does.
+    pub fn issue(
+        session_id: &str,
+        mcp_token: &str,
+        containment: &Containment,
+        local: LocalHelpers<'_>,
+    ) -> Result<Self> {
         let Some(holders) = client::current() else {
             return Ok(Self {
                 port: local.port,
@@ -62,6 +70,9 @@ impl Helpers {
         let issued = holders
             .issue_launch(session_id, Some(mcp_token))
             .context("getting the launch's credentials from the holder")?;
+        if let Some(holder) = issued.holder() {
+            containment.place_with_host(&holder);
+        }
         Ok(Self {
             port: issued.port,
             key: issued.key.clone(),
@@ -430,5 +441,30 @@ mod tests {
         let old = helpers(Some(issued));
         assert!(old.server_host(&containment, "test", "launch").is_none());
         drop((old, holders));
+    }
+
+    /// Where the terminals run in this process the launch's credentials are the daemon's own, and
+    /// there is no holder to place the launch's group with: its containment stays unplaced, so the
+    /// launch is told by its tag alone.
+    #[test]
+    fn without_holders_the_credentials_are_the_daemons_and_the_launch_is_left_unplaced() {
+        let containment = Containment::for_held_launch("test", "backend-issue").unwrap();
+        let helpers = Helpers::issue(
+            "s1",
+            "token",
+            &containment,
+            LocalHelpers {
+                port: 4242,
+                key: "daemon-key",
+                exe: "/daemon/octoboardd",
+            },
+        )
+        .expect("local credentials");
+        assert_eq!(helpers.port, 4242);
+        assert_eq!(helpers.key, "daemon-key");
+        assert_eq!(helpers.exe, "/daemon/octoboardd");
+        assert!(helpers.issued.is_none());
+        assert_eq!(containment.members(), None);
+        assert!(!containment.releases_members());
     }
 }

@@ -232,13 +232,22 @@ Where to start, by question:
 - [Report page components](product/report-page-components.md) — what a report page is built from: the component
   catalogue, the daemon's checks on a pushed page, form checks, tables and charts.
 
-### Desktop app and website
+### Desktop app, daemon and website
 
 - [Installing the desktop app](product/installing-the-desktop-app.md) — what the macOS and Windows apps run on, where
   releases are published, and installing (WebView2, the agents' CLIs, Developer Mode, SmartScreen on the unsigned
   Windows installer).
-- [Application lifecycle](product/application-lifecycle.md) — startup, daemon connection and its key, restarting a
-  daemon that dies, closing, quitting, crashes, logs and owned files.
+- [Application lifecycle](product/application-lifecycle.md) — the desktop form from startup to quit: starting the
+  daemon and restarting one that dies, losing the daemon connection, a daemon of another version, closing, quitting
+  and restarting, crashes and forced termination.
+- [The server form](product/server-form.md) — the daemon alone on a Linux server, reached from a browser over SSH: how
+  it starts and stops, the UI a server build serves, `--port`, the `octoboardd start/stop/restart/status/address`
+  command line (on Windows too), planned restart and planned stop, and the example systemd user unit.
+- [Who can reach the daemon](product/who-can-reach-the-daemon.md) — the daemon's access model in both forms: loopback
+  only, the launch key and where helpers keep it, SSH as the only remote path, other users of the machine, and the
+  origin and key checks.
+- [Files Octoboard owns](product/files-octoboard-owns.md) — every file Octoboard writes under `~/.octoboard` and the
+  desktop app's own state files, and the database's schema version check.
 - [Process holders](product/process-holders.md) — the processes that run sessions and shell terminals so they outlive
   a daemon that goes down without stopping: what a daemon start takes over, the inexact screen, helpers through the
   holder, holder builds and their copies.
@@ -318,7 +327,7 @@ Where to start, by question:
   paths as untrusted, destructive acts, reading project and git-directory files safely, and telling directories apart
   by device and inode.
 - [Isolating agent CLI probes](memory/isolating-agent-cli-probes.md) — keeping a probe of an agent CLI or a live session
-  off the user's configuration, accounts and data.
+  off the user's configuration, accounts and data, and what a scratch daemon on Windows does not keep apart.
 - [Keeping the UI responsive in WebKit](memory/keeping-the-ui-responsive-in-webkit.md) — avoiding document-wide style
   cost, writing cheap CSS rules, and measuring latency in the system WKWebView.
 - [Line wrapping](memory/line-wrapping.md) — the widths committed text is wrapped at, and why an edit re-wraps the whole
@@ -342,8 +351,9 @@ Where to start, by question:
   catalog and laying out by reading direction.
 - [Verifying behaviour in the desktop app](memory/verifying-the-desktop-ui.md) — how narrow to keep a verification, and
   gallery, fixture and capture pitfalls.
-- [Verifying changes for Windows](memory/verifying-changes-for-windows.md) — cross-checking Rust changes for Windows
-  from a Mac, and confirming Windows behaviour as a standard user on that user's own desktop.
+- [Verifying changes for Windows](memory/verifying-changes-for-windows.md) — cross-checking, cross-linking and
+  running the tests of Rust changes for Windows from a Mac, confirming Windows behaviour as a standard user on that
+  user's own desktop, and measuring what Windows itself does through its own API.
 - [What goes on the window material](memory/what-goes-on-the-window-material.md) — which chrome may sit on the
   translucent window material.
 - [Writing automated tests](memory/writing-automated-tests.md) — keeping tests lean, checking a test by breaking its
@@ -356,6 +366,9 @@ Where to start, by question:
 - [Writing daemon code](memory/writing-daemon-code.md) — which session state is stored and which lives in memory, where
   live state lives, store writes, raising versions only between releases, timing, threads, process cleanup, linting,
   and provider interface defaults that claim nothing.
+- [Verifying the daemon on Linux](memory/verifying-the-daemon-on-linux.md) — running the daemon's tests in a Linux
+  container, verifying under systemd and a real SSH login in a container with systemd as PID 1, and proving with a
+  second user's scan that no key reaches another user.
 - [Writing desktop shell code](memory/writing-desktop-shell-code.md) — main-thread queuing, native hooks into Tauri
   internals and native menu width.
 - [Writing screen-reader announcements and focus moves](memory/writing-screen-reader-announcements-and-focus-moves.md) —

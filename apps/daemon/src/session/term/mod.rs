@@ -78,6 +78,9 @@ pub struct LaunchRequest {
     pub daemon_key: String,
     /// The daemon's own executable, which the launch's helpers run; see `daemon_port`.
     pub self_exe: String,
+    /// The installation's entry point, which a project session's git hook dispatchers start
+    /// whoever runs the program; see `AppState::install_exe`.
+    pub install_exe: String,
     pub mcp_token: String,
     /// What every process of this launch carries, whatever the agent and the session's kind; see
     /// `crate::processes::ledger`.
@@ -110,6 +113,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         daemon_port,
         daemon_key,
         self_exe,
+        install_exe,
         mcp_token,
         process_tag,
     } = request;
@@ -150,21 +154,20 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     let helpers = Helpers::issue(
         session_id,
         &mcp_token,
+        process_tag.containment(),
         LocalHelpers {
             port: daemon_port,
             key: &daemon_key,
             exe: &self_exe,
         },
     )?;
+    // The helpers are given this file rather than the key: arguments can be listed by every user
+    // of the machine, and the file is the owner's alone from its first byte.
+    let key_file =
+        crate::key_file::write(&scratch, &helpers.key).context("writing the session's key file")?;
     let hook_script = if capabilities.hook_script {
-        adapter::write_hook_script(
-            &scratch,
-            &helpers.exe,
-            session_id,
-            helpers.port,
-            &helpers.key,
-        )
-        .context("writing the session's hook script")?
+        adapter::write_hook_script(&scratch, &helpers.exe, session_id, helpers.port, &key_file)
+            .context("writing the session's hook script")?
     } else {
         adapter::hook_script_path(&scratch)
     };
@@ -187,6 +190,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         task: task.as_deref(),
         scratch: &scratch,
         hook_script: &hook_script,
+        key_file: &key_file,
         shell_env: &shell_env,
         config_dir: config_dir.as_deref(),
         settings: &settings,
@@ -220,10 +224,10 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     if kind == SessionKind::Project {
         environment.extend(session_git_hooks::session_env(
             &shell_env,
-            &helpers.exe,
+            &install_exe,
             session_id,
             helpers.port,
-            &helpers.key,
+            &key_file,
         ));
     }
     process_tag.containment().prepare(&mut environment);

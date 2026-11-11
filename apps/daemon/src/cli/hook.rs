@@ -9,6 +9,7 @@
 //! Grok that emits JSON can deny a tool call, and on Claude Code stdout can steer the turn.
 
 use std::io::Read;
+use std::path::Path;
 use std::time::Duration;
 
 /// Hard deadline for the whole round trip. Comfortably inside the hook timeouts the adapters set,
@@ -16,12 +17,19 @@ use std::time::Duration;
 /// full timeout.
 const TIMEOUT: Duration = Duration::from_millis(1500);
 
-/// Runs the hook and returns. Never fails: the caller exits 0 regardless.
-pub fn run(session: &str, port: u16, key: &str) {
+/// Runs the hook and returns. Never fails: the caller exits 0 regardless. A key file that cannot
+/// be read is a daemon that refuses the post: nothing is sent.
+pub fn run(session: &str, port: u16, key_file: &Path) {
+    // The key first: the file goes with the session's scratch directory when the agent exits, and
+    // a hook the agent does not wait for can start just before that.
+    let key = crate::key_file::read(key_file);
     let mut payload = Vec::new();
     if std::io::stdin().read_to_end(&mut payload).is_err() {
         return;
     }
+    let Some(key) = key else {
+        return;
+    };
     // The response is discarded: the daemon never steers the agent through it.
-    let _ = crate::loopback::post(port, key, &format!("/hook/{session}"), &payload, TIMEOUT);
+    let _ = crate::loopback::post(port, &key, &format!("/hook/{session}"), &payload, TIMEOUT);
 }

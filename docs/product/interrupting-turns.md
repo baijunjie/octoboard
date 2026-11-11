@@ -46,7 +46,7 @@ What happens depends on where the session stands when the call is made:
 | Archived or *interrupted*, with no process, still being launched, or not yet past its startup screens | Refused with `session_not_running`. |
 | Being switched to another account, handed off, having its branches transferred, given another owner, or restarted for a change of its account's sharing | Refused with `session_busy`. |
 | An id that names no session | Refused with `unknown_session` (through the tool, in prose). |
-| Any, once the daemon has begun a planned stop | Refused with `daemon_shutting_down` (see "While the terminals are handed over" in `docs/product/application-lifecycle.md`). |
+| Any, once the daemon has begun a planned stop | Refused with `daemon_shutting_down` (see "While the terminals are handed over" in `docs/product/server-form.md`). |
 
 A key is written only while **both** of these hold, checked right before each key: the session reads *working* by its
 hooks, and its terminal title shows a turn running — a running indicator the agent has sent within the last few
@@ -67,23 +67,38 @@ Each key is a write of its own, never joined to a message, and an interrupt neve
 | Grok Build | Ctrl-U, then Ctrl-C. Grok ignores Esc, and with text in its composer its Ctrl-C clears the text instead of cancelling the turn, so the composer is emptied first. |
 
 **A draft in Grok Build's composer is cleared before the Ctrl-C.** Octoboard reads the composer off the screen and,
-while it holds text, presses Ctrl-U one at a time, each press seen on the screen, until it shows empty; an empty
-composer, or one that cannot be read, gets a single Ctrl-U. The note says a draft was cleared, and that Grok may let
-the user undo the clearing with ctrl+z. When the draft does not clear, or its text cannot be read back to clear it, no
-Ctrl-C is sent, and the note says which keys went in.
+while it holds text, presses Ctrl-U one at a time until it shows empty, each press waited for up to **five seconds** to
+show in the composer before the next goes in, and the whole clearing for up to **fifteen seconds**, or **a second for
+each press** it plans if that is more; a press not seen in that time, or the time running out, ends the clearing, and no
+further press is sent. An empty composer, or one that cannot be read, gets a single Ctrl-U. The note says a draft was
+cleared, and that Grok may let the user undo the clearing with ctrl+z. When the draft does not clear, or its text cannot
+be read back to clear it, no Ctrl-C is sent, and the note says which keys went in.
+
+**Measured with real agents on macOS only.** On a Windows daemon host, where the agents run under ConPTY, it has not
+yet been measured with real agents: an interrupt before and after the model has shown output (the input box cleared,
+the next message arriving on its own), the time from the cancel to the restored prompt, whether a session sent Esc goes idle
+within the five seconds the answer waits for the turn to end (see "After the keys" below), the clearing of a Grok Build
+draft, and whether Codex reports leaving `working` through OSC 7501 when Esc cancels its turn.
 
 ## The input box afterwards
 
-**Claude Code and Grok Build put the interrupted prompt back in their input box** when the key lands before the
-model has shown anything; a message written after that would be sent together with it. So once the title shows the
-turn has stopped, Octoboard clears that text with Ctrl-U, one press at a time while the screen shows text in the box,
-and confirms on the screen that the box is empty. It does so only when the box was empty before the interrupt key and
-nothing else has been written into the terminal meanwhile.
+**Claude Code and Grok Build put the interrupted prompt back in their input box** when the key lands before the model
+has shown anything; a message written after that would be sent together with it. So once the title shows the turn has
+stopped, Octoboard watches the input box for **three seconds** for that text, or until the turn has ended if that is
+later (within the wait below), since the agent may draw it well after its title, and clears it as soon as it shows, with
+Ctrl-U, one press at a time while the screen shows text in the box, and confirms on the screen that the box is empty.
+Each press is waited for up to **five seconds** to show in the box, as for a Grok Build draft above, and the whole
+clearing is limited as above; a press not seen in that time, or the time running out, ends the clearing, and text still
+in the box then is reported as left. It does so only when the box was empty before the interrupt key and nothing else
+has been written into the terminal meanwhile; each press is also held back if the title has stopped showing the prompt
+or the agent has started a turn of its own. Once the agent has, the watch ends at once and the box is never pressed: it
+is read once, and text in it is reported as left, since it cannot be told from the interrupted prompt.
 
 - **Text that was already in Claude Code's input box before the Esc** — typed by the user, or a message left unsent
   (see "A message written but not sent" in `docs/product/message-delivery.md`) — is never touched.
-- **Text left in the box afterwards** — a restored prompt that could not be cleared, or text that was there before —
-  is reported in the note, which asks for the user to clear the input box before anything more is sent.
+- **Text left in the box afterwards** — a restored prompt that could not be cleared, text that was there before, or a
+  box that could not be found on the screen when last looked at — is reported in the note, which asks for the user to
+  clear the input box before anything more is sent.
 - The input box is read with faint text left out, so the placeholder Claude Code shows in a fresh session's empty box,
   and its "Press up to edit queued messages" hint while a message waits for the turn to end, do not count as text.
 - Codex leaves its composer empty after an Esc, and nothing is cleared there.
@@ -93,9 +108,22 @@ A cancel the user makes in the terminal is left as the agent leaves it; only an 
 
 ## After the keys
 
-The answer waits up to **five seconds** for the turn to end. A turn that ended counts even when a message the agent
-had queued starts the next one at once. A session that still reads *working* after the wait is answered with
-`interrupted: false` and a note saying so, to be checked with `get_session` before it is sent anything.
+Once the interrupt key is in, the answer waits up to **five seconds** for the turn to end. Clearing a draft before the
+key, and a restored prompt after it, can make the answer take longer. An input box watched for a restored prompt that
+stays empty, as after a cancel once the model has shown output, holds the answer until the three seconds of that watch
+have passed, if the turn ends sooner. A turn that ends before its title has turned to the prompt keeps the watch waiting
+for the title, within the same wait, and then watches as usual. A turn that ended counts even when a message the agent
+had queued starts the next one at once. Both waits, the one for the title and the watch on the box, end once the agent
+starts a turn of its own, which is told by the status reading *working* again after the end, or by a prompt its hooks
+report sent after the key, which comes from its input box (a message queued by the user, or one Octoboard wrote before
+the pause); the box of that turn is never pressed, and text in it is reported as left, once it has settled, or after a
+second. For Claude Code such a prompt also counts as the turn's end, but only once its title has shown the cancel, since
+its hook fires for a message queued mid-turn too, though the session then reads *working* throughout. Codex's prompt
+hook fires when a message is steered, before the cancel, and for Grok Build it is not measured when its hook fires for a
+message queued mid-turn; their cancels are told by `Interrupt` and `StopCancelled`, or, for Grok Build, by its title
+when no hook fires, and the title gate is measured only for Claude Code. A session that still reads *working* after the
+wait is answered with `interrupted: false` and a note saying so, to be checked with `get_session` before it is sent
+anything.
 
 The session leaves *working* the way it does when the user presses the key: on Codex's own `Interrupt` hook event, on
 Grok Build's `StopCancelled`, or, for the cancels that fire no hook event, from Claude Code's transcript and terminal

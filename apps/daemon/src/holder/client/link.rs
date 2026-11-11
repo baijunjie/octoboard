@@ -336,6 +336,11 @@ impl Link {
     ) -> Result<Arc<Self>> {
         let (wire_out, wire_in, welcome) =
             Self::handshake(entry, &run_id, deadline, Vec::new()).await?;
+        // Where the holder runs in a cgroup of its own (a systemd user unit), its launches' groups
+        // are made, and found again, below it.
+        if let Some(identity) = ProcessIdentity::parse(&entry.started) {
+            crate::platform::proc::Containment::note_host(&identity);
+        }
         tracing::info!(
             holder = %welcome.holder_id,
             instance = %welcome.instance_id,

@@ -1,8 +1,8 @@
 //! The keys the helpers of a launch call the holder with. The holder issues one per launch before
-//! the program starts (its command line and environment name it), binds it to the terminal, the
-//! session and the launch's MCP token, and forgets it when the terminal is released or its start
-//! fails. A key outlives the daemon with its launch, so the daemon that adopts the launch finds it
-//! still bound.
+//! the program starts (the key file the helpers are given, and for a project session the
+//! program's environment, name it), binds it to the terminal, the session and the launch's MCP
+//! token, and forgets it when the terminal is released or its start fails. A key outlives the
+//! daemon with its launch, so the daemon that adopts the launch finds it still bound.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard};

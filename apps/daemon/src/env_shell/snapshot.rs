@@ -76,7 +76,11 @@ pub const INHERITED_SESSION_VARS: &[&str] = &[
     "GROK_HOOK_NAME",
     "GROK_SESSION_ID",
     "GROK_WORKSPACE_ROOT",
+    "OCTOBOARD_DAEMON_CREDENTIAL_PATH",
+    // Earlier builds put the key itself, and then its file as `OCTOBOARD_DAEMON_KEY_FILE`, in a
+    // session's environment; a daemon started from inside such a session must not pass them on.
     "OCTOBOARD_DAEMON_KEY",
+    "OCTOBOARD_DAEMON_KEY_FILE",
     "OCTOBOARD_DAEMON_PORT",
     "OCTOBOARD_PROCESS_TAG",
     "OCTOBOARD_SESSION_ID",
@@ -162,6 +166,39 @@ mod tests {
         assert_eq!(env.get("FOO"), Some(&"bar".to_string()));
         assert!(!env.contains_key("TERM"));
         assert!(!env.contains_key("CLAUDE_PID"));
+    }
+
+    /// A session started from inside another session must not inherit the daemon's address, the
+    /// path of the first session's key file or, from an earlier build, the key itself.
+    #[test]
+    fn the_daemon_address_and_key_file_variables_of_a_session_are_stripped() {
+        let raw = HashMap::from([
+            ("FOO".to_string(), "bar".to_string()),
+            ("HOME".to_string(), "/Users/snapshot".to_string()),
+            (
+                "OCTOBOARD_DAEMON_CREDENTIAL_PATH".to_string(),
+                "/run/s/key".to_string(),
+            ),
+            (
+                "OCTOBOARD_DAEMON_KEY_FILE".to_string(),
+                "/run/s/key".to_string(),
+            ),
+            ("OCTOBOARD_DAEMON_KEY".to_string(), "k".to_string()),
+            ("OCTOBOARD_DAEMON_PORT".to_string(), "7".to_string()),
+            ("OCTOBOARD_SESSION_ID".to_string(), "s".to_string()),
+        ]);
+        let env = settled(Ok(raw)).expect("settled");
+        assert_eq!(env.get("FOO"), Some(&"bar".to_string()));
+        for name in [
+            "OCTOBOARD_DAEMON_CREDENTIAL_PATH",
+            "OCTOBOARD_DAEMON_KEY",
+            "OCTOBOARD_DAEMON_KEY_FILE",
+            "OCTOBOARD_DAEMON_PORT",
+            "OCTOBOARD_SESSION_ID",
+        ] {
+            assert!(!env.contains_key(name), "{name}");
+            assert!(is_filtered(name), "{name}");
+        }
     }
 
     /// A timeout reaches the caller as the coded error the user is told about.

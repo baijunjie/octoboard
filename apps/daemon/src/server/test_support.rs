@@ -4,7 +4,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 
-use super::router;
+use super::{router_serving, ui};
 use crate::test_support::{app_state, PATIENCE, TEST_KEY};
 
 /// Serves the real router on an ephemeral loopback port and returns the port.
@@ -14,6 +14,15 @@ pub(super) async fn serve(name: &str) -> u16 {
 
 /// `serve`, also handing back the directory the daemon keeps saved session output in.
 pub(super) async fn serve_with_output_dir(name: &str) -> (u16, std::path::PathBuf) {
+    serve_files(name, ui::EMBEDDED).await
+}
+
+/// `serve` with `files` as the browser UI the router serves in place of the build's own.
+pub(super) async fn serve_ui(name: &str, files: ui::Files) -> u16 {
+    serve_files(name, files).await.0
+}
+
+async fn serve_files(name: &str, files: ui::Files) -> (u16, std::path::PathBuf) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("a loopback port");
@@ -22,7 +31,7 @@ pub(super) async fn serve_with_output_dir(name: &str) -> (u16, std::path::PathBu
     let output_dir = dir.join("output");
     tokio::spawn(async move {
         let _dir = dir;
-        axum::serve(listener, router(state)).await
+        axum::serve(listener, router_serving(state, files)).await
     });
     (port, output_dir)
 }
@@ -127,6 +136,30 @@ pub(super) fn status_of(port: u16, request_line: &str, headers: &[&str]) -> u16 
 /// Sends one request as [`status_of`] does and returns the response's status code and body, read
 /// to the end of a response that closes its connection or states its length.
 pub(super) fn response_of(port: u16, request_line: &str, headers: &[&str]) -> (u16, String) {
+    let response = full_response_of(port, request_line, headers);
+    (response.status, response.body)
+}
+
+/// A response read whole: its status code, its headers as `(lower-case name, value)` in the order
+/// sent, and its body.
+pub(super) struct FullResponse {
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: String,
+}
+
+impl FullResponse {
+    /// The value of the header `name` (lower case), if the response has one.
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(header, _)| header == name)
+            .map(|(_, value)| value.as_str())
+    }
+}
+
+/// Sends one request as [`response_of`] does and returns the whole response, headers included.
+pub(super) fn full_response_of(port: u16, request_line: &str, headers: &[&str]) -> FullResponse {
     use std::io::Read;
 
     let mut stream = send_request(port, request_line, headers, true);
@@ -135,5 +168,17 @@ pub(super) fn response_of(port: u16, request_line: &str, headers: &[&str]) -> (u
     let (head, body) = response
         .split_once("\r\n\r\n")
         .expect("a response with a head");
-    (status_in(head), body.to_string())
+    let mut lines = head.split("\r\n");
+    let status = status_in(lines.next().expect("a status line"));
+    let headers = lines
+        .map(|line| {
+            let (name, value) = line.split_once(':').expect("a header line");
+            (name.to_ascii_lowercase(), value.trim().to_string())
+        })
+        .collect();
+    FullResponse {
+        status,
+        headers,
+        body: body.to_string(),
+    }
 }

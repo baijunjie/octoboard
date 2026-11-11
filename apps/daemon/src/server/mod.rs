@@ -8,6 +8,7 @@
 //! - [`callbacks`]: the HTTP routes the agents' hooks and the daemon's own helpers post to, and
 //!   the requests to stop: to shut down, to make a planned restart, and to make a planned stop.
 //! - [`relay`]: the same helper routes, for the requests a holder relays from its helpers.
+//! - [`ui`]: the browser UI embedded in a server-form build, the fallback for every other path.
 
 pub(crate) mod access;
 mod callbacks;
@@ -16,6 +17,7 @@ pub(crate) mod relay;
 mod terminal;
 #[cfg(test)]
 mod test_support;
+pub(crate) mod ui;
 
 use std::sync::Arc;
 
@@ -25,13 +27,23 @@ use axum::Router;
 use crate::state::AppState;
 
 pub fn router(state: Arc<AppState>) -> Router {
+    router_serving(state, ui::EMBEDDED)
+}
+
+/// The router, serving `files` as the browser UI.
+fn router_serving(state: Arc<AppState>, files: ui::Files) -> Router {
     // The guard wraps the finished router, fallback included, so a route added to `routes` later
     // cannot end up outside it. A refused request never reaches a handler or a WebSocket upgrade.
-    let key: Arc<str> = state.key.as_str().into();
-    routes(state).layer(axum::middleware::from_fn_with_state(
-        key,
-        crate::server::access::guard,
-    ))
+    let access = access::Access {
+        key: state.key.as_str().into(),
+        ui: files,
+    };
+    routes(state)
+        .fallback(move |request| ui::serve(files, request))
+        .layer(axum::middleware::from_fn_with_state(
+            access,
+            crate::server::access::guard,
+        ))
 }
 
 fn routes(state: Arc<AppState>) -> Router {
@@ -57,7 +69,7 @@ fn routes(state: Arc<AppState>) -> Router {
 
 #[cfg(test)]
 mod tests {
-    use super::test_support::{keyed, response_of, serve, status_of};
+    use super::test_support::{full_response_of, keyed, response_of, serve, serve_ui, status_of};
     use super::*;
     use crate::test_support::{app_state, PATIENCE, TEST_KEY};
 
@@ -245,13 +257,10 @@ mod tests {
         );
     }
 
-    /// Where a planned restart is possible, the request answers `202` and asks for one.
+    /// The request answers `202` and asks for a planned restart.
     #[tokio::test]
     async fn the_restart_request_asks_for_a_planned_restart() {
         let (state, _dir) = app_state("server-restart");
-        if state.planned_restart_refusal().is_some() {
-            return;
-        }
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let served = state.clone();
@@ -307,6 +316,104 @@ mod tests {
             assert_eq!(hostile, 403);
             assert_eq!(status_of(port, "GET /nope", &[&host]), 401);
             assert_eq!(status_of(port, &nope, &[&host]), 404);
+        })
+        .await
+        .expect("the checks ran");
+    }
+
+    const UI_FILES: ui::Files = &[("index.html", b"<html>"), ("assets/app-1a.js", b"script")];
+
+    /// The embedded UI's files are served without the key, which a page's asset requests do not
+    /// carry, and are found by their path alone; every other path still needs the key.
+    #[tokio::test]
+    async fn an_embedded_file_needs_no_key_and_is_found_by_its_path_alone() {
+        let port = serve_ui("ui-path", UI_FILES).await;
+        let host = format!("Host: localhost:{port}");
+        tokio::task::spawn_blocking(move || {
+            assert_eq!(
+                response_of(port, "GET /", &[&host]),
+                (200, "<html>".to_string())
+            );
+            let same_origin = format!("Origin: http://localhost:{port}");
+            assert_eq!(
+                response_of(port, "GET /assets/app-1a.js", &[&host, &same_origin]),
+                (200, "script".to_string())
+            );
+            // The query string is not part of the name.
+            assert_eq!(status_of(port, "GET /index.html?x=1", &[&host]), 200);
+            // Not a file of the build, nothing normalised into one, and the daemon's own routes:
+            // the key is asked for as before.
+            for request in ["GET /assets/../index.html", "GET /nope", "GET /ws/control"] {
+                assert_eq!(status_of(port, request, &[&host]), 401, "{request}");
+            }
+            assert_eq!(status_of(port, &keyed("GET /nope"), &[&host]), 404);
+        })
+        .await
+        .expect("the checks ran");
+    }
+
+    /// Only a read of a file goes without the key: a write to the same path is asked for it, and
+    /// finds nothing there once it has it.
+    #[tokio::test]
+    async fn a_write_to_an_embedded_path_needs_the_key() {
+        let port = serve_ui("ui-write", UI_FILES).await;
+        let host = format!("Host: localhost:{port}");
+        tokio::task::spawn_blocking(move || {
+            assert_eq!(status_of(port, "POST /", &[&host]), 401);
+            assert_eq!(status_of(port, &keyed("POST /"), &[&host]), 404);
+        })
+        .await
+        .expect("the checks ran");
+    }
+
+    /// A `HEAD` is answered with the headers of the `GET`, the length of the body included, and no
+    /// body.
+    #[tokio::test]
+    async fn head_of_an_embedded_file_has_the_headers_of_get_and_no_body() {
+        let port = serve_ui("ui-head", UI_FILES).await;
+        let host = format!("Host: localhost:{port}");
+        tokio::task::spawn_blocking(move || {
+            let path = "/assets/app-1a.js";
+            let get = full_response_of(port, &format!("GET {path}"), &[&host]);
+            let head = full_response_of(port, &format!("HEAD {path}"), &[&host]);
+            assert_eq!(get.header("content-length"), Some("6"));
+            assert_eq!(get.body, "script");
+            assert_eq!(head.status, get.status);
+            assert_eq!(head.body, "");
+            for name in ["content-length", "content-type"] {
+                assert!(get.header(name).is_some(), "{name}");
+                assert_eq!(head.header(name), get.header(name), "{name}");
+            }
+        })
+        .await
+        .expect("the checks ran");
+    }
+
+    /// A refused `Host` or `Origin` is answered 403 for a file as for anything else.
+    #[tokio::test]
+    async fn an_embedded_file_is_refused_to_a_hostile_host_or_origin() {
+        let port = serve_ui("ui-refused", UI_FILES).await;
+        let host = format!("Host: localhost:{port}");
+        tokio::task::spawn_blocking(move || {
+            assert_eq!(status_of(port, "GET /", &["Host: evil.example"]), 403);
+            assert_eq!(
+                status_of(port, "GET /", &[&host, "Origin: https://evil.example"]),
+                403
+            );
+        })
+        .await
+        .expect("the checks ran");
+    }
+
+    /// A build without the `embedded-ui` feature embeds nothing, and then answers exactly as a
+    /// daemon without a UI does: every path needs the key, and none has a file behind it.
+    #[tokio::test]
+    async fn a_build_with_no_embedded_ui_needs_the_key_for_every_path() {
+        let port = serve("ui-none").await;
+        let host = format!("Host: localhost:{port}");
+        tokio::task::spawn_blocking(move || {
+            assert_eq!(status_of(port, "GET /", &[&host]), 401);
+            assert_eq!(status_of(port, &keyed("GET /"), &[&host]), 404);
         })
         .await
         .expect("the checks ran");

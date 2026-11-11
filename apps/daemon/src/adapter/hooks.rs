@@ -28,52 +28,51 @@ pub fn hook_url(session_id: &str, daemon_port: u16, daemon_key: &str) -> String 
 /// own shell is not started on top of it. The shell is replaced by the daemon rather than left
 /// waiting for it, and stderr is dropped at the command level as well as inside the binary: a
 /// single stderr line is enough to render an error cell in every registered provider.
-pub fn hook_command(
-    self_exe: &str,
-    session_id: &str,
-    daemon_port: u16,
-    daemon_key: &str,
-) -> String {
+pub fn hook_command(self_exe: &str, session_id: &str, daemon_port: u16, key_file: &Path) -> String {
     let port = daemon_port.to_string();
+    let key_file = key_file.to_string_lossy();
     shell::command_line(
         Path::new(self_exe),
-        &hook_args(session_id, &port, daemon_key),
+        &hook_args(session_id, &port, &key_file),
         Stderr::Discard,
     )
 }
 
-/// The arguments of the daemon's `hook` mode, which every hook command and script runs.
-fn hook_args<'a>(session_id: &'a str, port: &'a str, key: &'a str) -> [Arg<'a>; 7] {
+/// The arguments of the daemon's `hook` mode, which every hook command and script runs. The key is
+/// named by the file that holds it, never given: arguments can be listed by every user of the
+/// machine.
+fn hook_args<'a>(session_id: &'a str, port: &'a str, key_file: &'a str) -> [Arg<'a>; 7] {
     [
         Arg::Word("hook"),
         Arg::Word("--session"),
         Arg::Value(session_id),
         Arg::Word("--port"),
         Arg::Word(port),
-        Arg::Word("--key"),
-        Arg::Value(key),
+        Arg::Word("--key-file"),
+        Arg::Value(key_file),
     ]
 }
 
 /// Writes the per-session hook script and returns its path. One script per session rather than a
-/// shared one, because it carries the session's identity and the daemon's port and key; it is
-/// removed with the session's scratch directory.
+/// shared one, because it carries the session's identity, the daemon's port and `key_file`, the
+/// file holding its key; it is removed with the session's scratch directory.
 ///
 /// The script execs the daemon binary in `hook` mode, which reads the payload, derives the event
 /// from it, posts it to the daemon under a hard deadline, and exits 0 whatever happens. It is
-/// readable by its owner alone from the first byte, since it carries the key.
+/// readable by its owner alone from the first byte, as the key file it names is.
 pub fn write_hook_script(
     scratch: &Path,
     self_exe: &str,
     session_id: &str,
     daemon_port: u16,
-    daemon_key: &str,
+    key_file: &Path,
 ) -> Result<PathBuf> {
     let port = daemon_port.to_string();
+    let key_file = key_file.to_string_lossy();
     Ok(shell::write_runnable(
         &hook_script_path(scratch),
         Path::new(self_exe),
-        &hook_args(session_id, &port, daemon_key),
+        &hook_args(session_id, &port, &key_file),
         Stderr::Discard,
     )?)
 }

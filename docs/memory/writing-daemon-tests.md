@@ -161,6 +161,16 @@ a test that needs a holder uses `holder::client::test_holders` with its own regi
 `#[cfg(test)]` setter that redirects a global path instead: every test that forgets it, or runs before it is set,
 reaches the live directory.
 
+## A hook or transport a test installs into the state holds the state weakly
+
+Applies to daemon tests that install into `AppState` something that calls back into that state: a relaunch hook
+(`account_sharing.relaunch`), a session's transport, any closure or struct the state keeps. Capturing
+`fixture.state.clone()` there makes a cycle, so the state outlives the test: its process ledger never ends the test's
+launches, and on a Linux host with a writable cgroup v2 subtree each launch's group (`octoboard-<instance>-<launch>`)
+is left behind after the test binary exits. Nothing shows on macOS or in a plain container. Capture
+`Arc::downgrade(&fixture.state)` and `upgrade()` it inside the callback
+(`the_account_stays_locked_until_its_sessions_are_resumed` in `apps/daemon/src/accounts/shared_config/tests.rs`).
+
 ## Test a daemon budget by lowering it, never by asserting its value
 
 Applies to daemon tests of a limit in `apps/daemon/src/browse/budget.rs` whose real figure no small fixture reaches. A
@@ -174,8 +184,9 @@ while anything moved onto another thread (`spawn_blocking`, a request through th
 ## A test that needs a permission to refuse something returns early when it is not refused
 
 Applies to daemon tests that make a file or directory unwritable or unreadable (`set_permissions` to `0o555`, `0o000`)
-and expect the operation under test to fail. The suite's Linux container runs happen as root, the default user of the
-`rust` images, and root ignores permission modes, so such a test fails there, while on macOS nothing shows it. Before
+and expect the operation under test to fail. A Linux container runs the suite as root unless told otherwise (the
+default user of the `rust` images), and root ignores permission modes, so such a test fails there, while on macOS
+nothing shows it. Before
 asserting the refusal, return when it cannot happen: check `libc::geteuid() == 0` (`apps/daemon/src/path_links/tests.rs`)
 or try the write and return if it succeeds (`apps/daemon/src/accounts/relocate/tests.rs`). A test that fails only when
 run as root is missing this early return; it is not a regression in the change being verified.
@@ -198,3 +209,11 @@ runtime and panics on a multi-thread one.
 - `tasks_idle` and `runtime_settled` show that the code under test reached its wait only when everything before that
   wait is CPU work or `spawn_blocking`. With real I/O in between they return before the code got there, and an
   absence asserted after them passes whatever the code does: wait for an event instead.
+
+## A test that needs a port nothing listens on takes `test_support::ClosedPort`
+
+Applies to daemon tests that connect to a loopback port expecting the connection to be refused. Never bind port 0 and
+drop the listener to get one: the system hands that port to the next test in parallel that binds port 0, and the
+connection reaches that test's server instead of being refused. Holding the port in a bound socket that never listens
+does not work either: on macOS the connection times out rather than being refused. `ClosedPort::new()` picks a port
+below the ephemeral range, which no other test is given.

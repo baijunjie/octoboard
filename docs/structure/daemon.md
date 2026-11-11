@@ -22,8 +22,9 @@ a planned stop saved (`state::restart_screens`, kept until each is consumed), th
 (`messaging::restart_outbox`, deleted as read) and the background work each session's agent had left running
 (`state::background_store`, loaded before the adoption and pruned after it to the sessions adopted or claimed), adopts what the holders kept running (`coordinator::adopt`),
 keeps claimed what a holder it cannot link to yet runs (`coordinator::unlinked`), marks the other sessions interrupted,
-clears the run directory but for the adopted and claimed sessions' scratch directories, writes the owner record beside
-the lock (`instance_lock::Owner`, the pid identity, the port and whether it follows an application), prints the
+clears the run directory but for the adopted and claimed sessions' scratch directories, writes the owner-only key record
+(`daemon.key`) and then the owner record beside the lock (`owner_record::Owner`, the pid identity, the port, whether it
+follows an application and whether a service manager starts its successor; the key stays out of it), prints the
 handshake line (port and key) and runs the server until a stop is asked for (`state::StopKind`). An ordinary stop ends
 every session: the `shutdown` control request, `POST /shutdown` (`src/server/callbacks.rs`), a termination signal or
 the application's pid going away after the application wrote a `quit` line to the daemon's stdin
@@ -42,14 +43,24 @@ restart, `POST /restart` or the host's restart request (`SIGUSR1`, which `restar
 on the same port: started by `main` (`cli::start_successor`, from the installation entry point `cli::launch_path` in
 `src/cli/installation.rs`, its final symlink left unresolved), with the same key, which is kept only in that case, or,
 under a systemd service (the environment shows the daemon to be the unit's main process, or `--service-managed` says
-so), by the unit on the daemon's exit status 75, when the successor makes a new key. A user runs the modes `start --port`, `stop`, `restart` and `status` to keep a daemon in
-the background (`src/cli/background.rs`; `start` runs the daemon as a background process of its own, `stop`, `restart`
-and `status` find it through `instance_lock`). The CLI modes other processes start are `hook`, `git-ref`,
+so), by the unit on the daemon's exit status 75, when the successor makes a new key. A user runs the modes `start --port`, `stop`, `restart`, `status` and `address` to keep a daemon in
+the background and to find it (`src/cli/background.rs`; `start` runs the daemon as a background process of its own, `stop`, `restart`,
+`status` and `address` find it through `instance_lock::is_running` and the owner record, `owner_record::Owner`, waiting
+through a planned restart caught half-way with the handover note the restarting daemon leaves (`Owner::note_handover`);
+`stop` and `restart` tell the daemon that takes over by the key it was handed or, where the owner record says a service
+manager starts the successor, by that daemon's own record saying the same; `address` prints the browser address with the key, which it reads
+from the key record only the daemon's own user can open; where the host has no signal to stop or restart a daemon by (Windows), `stop` and `restart` ask it over loopback instead, with the key the key record (`daemon.key`) holds). The CLI modes other processes start are `hook`, `git-ref`,
 `gate-hook`, `status-line`, `mcp` and `holder`: their dispatch, with the user's modes, is `src/cli/mod.rs`, and their
 code is `src/cli/hook.rs` (`hook`), a provider's `StatusLine`
 (`status-line`; `src/cli/mod.rs` only finds the provider's and hands over, Claude Code's is
 `src/adapter/claude/status_line.rs`), `src/session_git_hooks/` (`git-ref`, `gate-hook`) and `src/mcp/stdio.rs` (`mcp`); `holder` is `src/cli/holder.rs`, which runs `holder::server::run`. The routes are in `src/server/`. Each mode takes the running
-daemon's port and the launch key (`--port`, `--key`):
+daemon's port (`--port`) and the launch key, which is in no process's arguments, since every user of the machine can list
+those: `hook`, `status-line` and `mcp` are given the owner-only file that holds it (`--key-file`, written by
+`src/key_file.rs` into the session's scratch directory), and `git-ref` and `gate-hook` read it from the
+file that the `OCTOBOARD_DAEMON_CREDENTIAL_PATH` variable of the project session's agent environment names. Those two
+alone take `--port` as optional and, where the launch's route is gone (no port, no usable key file, a refused key,
+nothing listening), call the daemon its owner record names with its recorded key (`src/session_git_hooks/route.rs`,
+over `owner_record::Owner::recorded_in`, with the data directory passed in from `src/cli/mod.rs`):
 
 - `hook` — posts an agent's hook payload from stdin to `POST /hook/:session`.
 - `git-ref` — posts created branches and moved refs a session's `reference-transaction` hook saw.
@@ -61,7 +72,8 @@ daemon's port and the launch key (`--port`, `--key`):
   `POST /mcp/:token`.
 - `holder` — a process the daemon starts (`--holder-id`, `--registry-dir`), which runs the daemon's terminals; see
   [`src/holder/`](../../apps/daemon/src/holder/README.md). Unlike the others it is called by the daemon, not the other way round, and it
-  is started detached (`platform::proc::start_detached`), so that it outlives the daemon.
+  is started detached (`platform::proc::start_detached`), or under a systemd user manager as a user unit of its own
+  (`platform::proc::start_in_user_unit`), so that it outlives the daemon.
 
 ## Directory map
 
@@ -71,18 +83,37 @@ runtime, and, in `blocking_pass/stalled.rs`, `StalledPasses`, the blocking work 
 thread is still running), `git_workflow.rs` (the one place the application-wide git workflow values and a project's
 overrides are combined: `effective`; the settings types are in `protocol/`), `host_tools.rs` (`HostTools`, the seam
 tests substitute stand-ins behind, `git` among them: the one place a project's git gets the user's `git`, handed out by
-pace with `Tools::git_for`, which `isolated_git` and `isolated_git_per_request` give browse reads), `instance_lock.rs` (one daemon per data directory, whether one runs, and the owner record beside the lock), `interface_language.rs` (the
-languages the interface is offered in, mirroring the UI's `i18n/languages.ts`), `log_file.rs` (the rotated
-`daemon.log`, and a holder's own `holder-<id>.log`), `loopback.rs` (the std-only HTTP client to a loopback address, the daemon's or a holder's, that the CLI modes, the git
+pace with `Tools::git_for`, which `isolated_git` and `isolated_git_per_request` give browse reads), `instance_lock.rs`
+(one daemon per data directory, and whether one runs), `interface_language.rs` (the languages the interface is offered
+in, mirroring the UI's `i18n/languages.ts`), `key_file.rs` (a session's owner-only key file in its scratch directory:
+its path, `write` and `read`), `log_file.rs` (the rotated `daemon.log`, and a holder's own `holder-<id>.log`),
+`loopback.rs` (the std-only HTTP client to a loopback address, the daemon's or a holder's, that the CLI modes, the git
 hook modes and the MCP stdio bridge call with; it names the statuses a holder answers a waiting helper with when it has
-no daemon or lost it), `request_guard.rs` (the Origin/Host rules, the key compare and the key generator that the daemon's guard and
-the holders' helper routes and secret share), `paths.rs` (where Octoboard keeps its files under the
-data directory), `text.rs` (`trimmed_or_none`, free text as stored, and `without_paste_wrapper`, a prompt with the wrapper an agent puts around a paste taken off), `time.rs` (the clock, `now_millis`, `now_micros` and `now_secs`,
-and the RFC 3339, compact and readable timestamps) and `wire_path.rs` (`RelPath`, the canonical wire form of a path or
-branch name, made and validated through `platform::names`, with no OS token of its own; whether this host can name it is
-asked only where it meets the disk, by `RelPath::host_path`, which gives `None` for a path it cannot). `build.rs` embeds `octoboardd.exe.manifest` (the long-path-aware declaration) in the Windows MSVC binary through the linker arguments `/MANIFEST:EMBED` and `/MANIFESTINPUT:<file>`, which `link.exe` and `lld-link` both take, so the manifest is expected in `octoboardd.exe` whichever of them links it. Test-only files (`tests.rs`, `*_tests.rs`, `test_support/` and `store/test_support.rs`, and the
-`layering_tests/` directory) sit beside the code they test, and `apps/daemon/testdata/` holds the captured agent screens
-and records tests replay. `apps/daemon/dist/` holds hand-written distribution files, not build output (`dist/systemd/octoboardd.service`, an example systemd user unit for running the daemon in the background on Linux).
+no daemon or lost it), `owner_record.rs` (the owner record beside the lock, which finds the running daemon and says
+whether it follows an application and whether a service manager starts its successor, and the owner-only key record,
+`daemon.key`, which four things read: `address`; `stop` and `restart` on every host, to recognise a successor by its key
+where the daemon starts it itself; `stop` and `restart` on Windows, which ask over loopback; and the git hook modes'
+fallback; the `_in` reads take the data directory from their caller), `request_guard.rs` (the
+Origin/Host rules, the key compare and the key generator that the daemon's guard and the holders' helper routes and
+secret share), `paths.rs` (where Octoboard keeps its files under the data directory), `text.rs` (`trimmed_or_none`, free
+text as stored, and `without_paste_wrapper`, a prompt with the wrapper an agent puts around a paste taken off),
+`time.rs` (the clock, `now_millis`, `now_micros` and `now_secs`, and the RFC 3339, compact and readable timestamps) and
+`wire_path.rs` (`RelPath`, the canonical wire form of a path or branch name, made and validated through
+`platform::names`, with no OS token of its own; whether this host can name it is asked only where it meets the disk, by
+`RelPath::host_path`, which gives `None` for a path it cannot). `build.rs` links `octoboardd.exe.manifest` (the
+long-path-aware and `asInvoker` declaration, the binary's whole manifest) into the Windows MSVC binary as its manifest
+resource: it writes the file into a compiled resource file (`$OUT_DIR/octoboardd-manifest.res`) and passes that to the
+linker as an input with `/MANIFEST:NO`, which `link.exe` and `lld-link` both take without `mt.exe`, libxml2 or a
+resource compiler, so `cargo xwin` can cross-link the exe. With the cargo feature `embedded-ui`, `build.rs` also writes
+the file table of the UI build in `packages/ui/dist` (`$OUT_DIR/embedded_ui.rs`, `include_bytes!` of every file) that
+`src/server/ui.rs` serves; without the feature the table is empty, as in the desktop sidecar, and it refuses to build
+with the feature when there is no UI build or when `VITE_DAEMON_KEY` or `VITE_DAEMON_PORT` is set.
+`apps/daemon/package.json` makes the daemon the pnpm package `@octoboard/daemon`, only to run that cargo build after the
+UI's (`build` script, a dependency on `@octoboard/ui`); it has no test script. Test-only files (`tests.rs`,
+`*_tests.rs`, `test_support/` and `store/test_support.rs`, and the `layering_tests/` directory) sit beside the code they
+test, and `apps/daemon/testdata/` holds the captured agent screens and records tests replay. `apps/daemon/dist/` holds
+hand-written distribution files, not build output (`dist/systemd/octoboardd.service`, an example systemd user unit for
+running the daemon in the background on Linux).
 
 ### Wire and server
 
@@ -90,7 +121,9 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   per-connection `Registration` settles the attach's precedence at its deadline in a task of its own and lets the client
   go however the connection ends; for a held terminal, a call that may resize it runs on a blocking thread),
   `callbacks.rs` the hook, git-ref, revert-gate, context-window and MCP routes, `access.rs` the Host/Origin/key guard
-  (the rules are `request_guard.rs`'s; the key is the daemon's), `relay.rs` the handler of the helper requests a holder
+  (the rules are `request_guard.rs`'s; the key is the daemon's; it lets a GET or HEAD that names an embedded UI file
+  through without the key), `ui.rs` the embedded browser UI, served as the router's fallback on the same origin as the
+  protocol routes (empty, so serving nothing, without the `embedded-ui` feature), `relay.rs` the handler of the helper requests a holder
   relays (it runs the same `callbacks::handle` the HTTP routes run, once `AppState::end_adoption` says the adopted
   sessions exist: reports that arrive before are held in order, questions wait up to 20 s).
 - `src/protocol/` — Rust types of the wire protocol, one file per concern, re-exported as `crate::protocol`; `codes.rs`
@@ -113,7 +146,7 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   the `pattern` of a text field compiled with `regress`), `chart.rs` the chart kind's allow-listed ECharts subset, and
   `submission.rs` what a submission may carry; `PageContent::parse` and `PageContent::check_submission` in `mod.rs` are
   the entry points.
-- `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode and `background.rs` the user's `start`, `stop`, `restart` and `status`, and the start of a planned restart's successor, and `installation.rs` the path the daemon launches a successor, or `start` its daemon, from.
+- `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode and `background.rs` the user's `start`, `stop`, `restart`, `status` and `address`, and the start of a planned restart's successor, `succession.rs` how those commands find the daemon through a planned restart caught half-way and tell the daemon that took over from it, and `installation.rs` the path the daemon launches a successor, or `start` its daemon, from.
 
 ### Coordinator role
 
@@ -357,7 +390,7 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   and the pipe readers are `platform::proc`'s).
 - `src/platform/` — the only place OS-specific code lives, with no use of anything else in the crate, so any module may
   use it. `build_files.rs` the files a copy of a build holds beside the executable on this host (on Windows `conpty.dll`
-  and the `OpenConsole.exe` of `x64/` and `arm64/`, none elsewhere) and `remove_installer_set_aside`, which `run_daemon` calls at start and which on Windows removes the `<file>.old-<n>` files the desktop installer's hooks moved aside of the executable and its companions (the suffix is shared with `apps/desktop/src-tauri/windows/installer-hooks.nsh`, which a test of the module reads); `sleep/` holding the host awake (`Hold`,
+  and the `OpenConsole.exe` of `x64/` and `arm64/`, none elsewhere) and `remove_installer_set_aside`, which `run_daemon` calls at start and which on Windows removes the `<file>.old-<n>` files the desktop installer's hooks moved aside of the executable and its companions (the suffix is shared with `apps/desktop/src-tauri/windows/installer-hooks.nsh`, which a test of the module reads); `descriptors.rs` (Unix) the bound of descriptor numbers a forked child closes or marks (`bound`, and `open_bound`, taken from the listing of open descriptors), the close of every descriptor from one up that the child may run (`close_from`, shared by `proc/server/parent.rs` and the PTY start in `term/unix/start.rs`) and the marking of them close-on-exec instead (`mark_close_on_exec_from`, which `spawn_in_background` on Unix uses); `sleep/` holding the host awake (`Hold`,
   `available`; macOS IOKit assertions, a Windows power request, Linux's logind inhibitor lock and the session bus's
   screen saver inhibition over `zbus`), whose answer is `HostFacts::keep_awake`; `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and
   children, a descriptor's path, sockets, working directory), one reader per OS, shared by the ledger's `table.rs`,
@@ -369,7 +402,8 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   file apart (with its stat from one handle and the version tag built on it), opening a path without a link in it (the browse
   boundary) or without waiting, the directory reader a listing walks, the permissions of what the daemon writes (private,
   kept, owner-only, executable, read-only, private to the user), volume roots, the home directory, aliases to files and
-  directories, the exclusive lock `try_lock_file` that `instance_lock.rs` and the Grok trust store take, the host's
+  directories, the exclusive lock `try_lock_file` that `instance_lock.rs` and the Grok trust store take and the shared
+  one `try_lock_file_shared` that `instance_lock::is_running` looks with, the host's
   scratch directories (`temp_roots`), what git runs as a hook (`is_hook_script`) and setting a directory's modification time
   (`set_dir_modified`) (contract tests in `fs/contract_tests.rs` hold every host to the same behaviour); `names/` how the host spells names (a name as bytes and back, the components a client may send, git bytes as a
   path, the lexical comparison key of a path, the path style, the canonical path, which on Windows is the long, plain form (`std::fs::canonicalize`), so a `%TEMP%` written as an 8.3 short path, as on the CI runner, compares equal to its long form; the Windows rules that need no OS call
@@ -381,13 +415,13 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   script shim); `proc/` what the host does to the
   processes the daemon starts (leading a session or a process group, the child handle that tells how an unreaped child stands, asks
   it to end politely or kills it, sweeps what it left behind and reaps it, the containment that tells one launch's processes from any
-  other's and lists their members where the host can (on Windows a named job per launch, which each child holds a duplicated handle on so the next daemon finds it by name again; on Linux, for an agent launch (`Containment::for_launch`), a cgroup v2 group `cgroup.rs` makes below the cgroup of the process that starts the launch where that cgroup lets it, which the launch's end kills and removes after moving out what it is told to spare, and without which the launch is told by its tag alone; a holder starting a launch's program joins the daemon's group, `Containment::join_launch`), a polite request to end or a kill sent to a process or a group, the process
-  identity and its wire form, the bounded pipe reader, the host's request to end the daemon (`shutdown_requested`), its planned-restart request (`restart_requested`, which `request_restart` sends: `SIGUSR1` on Unix, none on Windows), whether a systemd service runs the daemon as its main process (`restarted_by_service_manager`), the watch on the application that started it (`watch_parent`), `run_in_background` (with `runs_in_background`, whether the host can), what `start` asks of the host to keep the daemon running after its login (a session of its own on Unix; refused on Windows), starting a process that outlives the daemon (`start_detached`: a session of its own on Unix; on Windows no console or inherited handle and outside the daemon's jobs, by breakaway or else as a child of the desktop application's process, or with a warning in the job when there is none to name or a child of it cannot be created), `server.rs`, a server started as a plain child with no terminal (`ServerChild`: a session of its own, in a launch's containment and the crash table,
+  other's and lists their members where the host can (on Windows a named job per launch, which each child holds a duplicated handle on so the next daemon finds it by name again; on Linux, for an agent launch (`Containment::for_launch`), a cgroup v2 group `cgroup.rs` makes below the cgroup of the process that starts the launch where that cgroup lets it, which the launch's process enters before its program runs (`Containment::enter_before_exec`, a hook in the child; the move just after the start, `ChildHandle::started`, is the fallback where the hook could not), and which the launch's end kills and removes after moving out what it is told to spare, and without which the launch is told by its tag alone; a held launch (`Containment::for_held_launch`) has its group made below the cgroup of the holder that starts its program, `Containment::place_with_host`, which joins it with `Containment::join_launch`, and `Containment::note_host` has the daemon look there for groups of an earlier run), a polite request to end or a kill sent to a process or a group, the process
+  identity and its wire form, the bounded pipe reader, the host's request to end the daemon (`shutdown_requested`), its planned-restart request (`restart_requested`, which `request_restart` sends: `SIGUSR1` on Unix; on Windows there is no signal, `request_restart` fails as unsupported and the command line's `restart` asks over loopback instead), whether a systemd service runs the daemon as its main process (`restarted_by_service_manager`), `systemd.rs` (with `systemd_stub.rs` on other Unix hosts) which systemd user service the daemon is the main process of (`user_service_unit`) and starting a process as a transient user unit of its own (`start_in_user_unit`), the watch on the application that started it (`watch_parent`), `spawn_in_background` (starting the daemon the command line runs in the background with its stdout and stderr, and stdin when asked, as pipes to the caller, returning its child and whether the daemon stays in its starter's job), what `start` asks of the host to keep the daemon running after its login (a session of its own on Unix, where every descriptor above the standard three is marked close-on-exec before the daemon's program runs, so that it inherits only its three standard descriptors; on Windows the process is created with an explicit list of inherited handles, so the daemon inherits only its three standard handles, with a hidden console and process group of its own and a breakaway from the starter's job, which where the job refuses it is created again inside the job, and a child type of its own), `start_detached` (starting a process that outlives the daemon, with no stdio on Unix, in a session of its own), `windows/create.rs`, the Windows layer that creates a process with an explicit attribute list: the attribute list and the inheritable handle copy, the creation with three standard handles and the output pipe that the background start and the server start share, and the Windows `start_detached`, which uses only the attribute list, for its parent process (no console or inherited handle and outside the daemon's jobs, by breakaway or else as a child of the desktop application's process, or with a warning in the job when there is none to name or a child of it cannot be created), `server.rs`, a server started as a plain child with no terminal (`ServerChild`: a session of its own, in a launch's containment and the crash table,
   waited on until its endpoint exists or it reports a port, ended with a polite request, a grace and a kill; what the holder's companions and the daemon's local servers both run as);
   `server/parent.rs` the Unix owner-death watcher,
   `server/windows.rs` the atomic job placement and standard-handle inheritance for a server, and `crash/`, the table that kills every process the daemon runs on a PTY
   when it goes down on an internal failure; contract tests in `proc/contract_tests.rs`); `term/` the terminal backend
-  (starting a process on a PTY from a plain command description (`Command`, which `plain` turns into a process command for a child with no terminal), with its child handle; the `Pty` that is read, written,
+  (starting a process on a PTY from a plain command description (`Command`, which `plain` turns into a process command for a child with no terminal), with its child handle (on Unix `term/unix/start.rs` starts the process itself, `portable-pty` only opening the PTY, so the child can enter its launch's group before its program runs; `term/unix/mod.rs` is the I/O backend); the `Pty` that is read, written,
   resized and hung up, and tells whose job its foreground is and its slave path; the daemon's own `Input` values, encoded
   as the host's terminal takes them (`vt.rs`); `TermFacts`, how the backend behaves where business code must know, such
   as its settle window; contract tests in `term/contract_tests.rs`; `term/windows.rs`'s `process_parameters` is the
@@ -490,7 +524,7 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   remote resume needs of the server, the trust of the generated hooks and the `thread/resume` that applies the
   permission preset), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`); Codex, Claude
   Code and Grok also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server, Claude Code's over
-  `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`, servers only), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script, and `account_cli.rs` the account
+  `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`, servers only), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script (the command and script name the session's key file, not the key), and `account_cli.rs` the account
   directories, commands and short queries (running an agent CLI as an account), and `files.rs` the bounded reads of the
   files an adapter reads, with `project_dirs` (the directories whose project configuration is layered) (`codex/claude_mcp.rs`
   only translates a compatibility source's MCP servers into Codex's launch overrides). The instruction file, tool-name prefix, ask-question tool and detection markers are read from the
@@ -555,7 +589,7 @@ same scan.
 | foundation | `blocking_pass`, `interface_language`, `loopback`, `platform`, `request_guard`, `text`, `time`, `wire_path` |
 | providers | `providers` |
 | wire | `protocol` |
-| host | `env_shell`, `git`, `holder`, `host_open`, `hostfs`, `instance_lock`, `log_file`, `paths`, `processes` |
+| host | `env_shell`, `git`, `holder`, `host_open`, `hostfs`, `instance_lock`, `key_file`, `log_file`, `owner_record`, `paths`, `processes` |
 | storage | `git_workflow`, `store` |
 | state | `state` |
 | workspace | `branch_cleanup`, `branch_origin`, `browse`, `host_tools`, `path_links`, `project_git`, `removal_safety`, `revert_gate`, `terminal` |
@@ -690,6 +724,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Run a provider's private server for a launch (in the daemon, or in the holder that outlives it) | `ServerHost` (`src/terminal/server_host.rs`), given by `terminal::backend::Helpers::server_host` to `PrivateServer::start`; the holder side is its companions ([README](../../apps/daemon/src/holder/README.md)); a provider links to the server a holder kept through `AgentProvider::rebuild_launch` |
 | Start a terminal and its program for the daemon (it lives in a holder, or in this process where none is installed) | `terminal::backend::start` with `Helpers::issue` for the launch's helper credentials (`src/terminal/backend.rs`); the lifecycle around it is `terminal::pty::PtyCore`. `platform::term::spawn` is what the local backend and the holder itself call |
 | Write the daemon's own paste or key into a terminal | `platform::term` (`Pty::write_input` with `Input`), which a held terminal answers over the link (`holder::client::HeldTerminal`) |
+| Give a helper process the launch key | never in its arguments: a file for the `octoboardd` helpers that take `--key-file` (`src/key_file.rs`: `write` makes it owner-only, `read` reads it), the same file for the git hook helpers, whose path the `OCTOBOARD_DAEMON_CREDENTIAL_PATH` variable carries (`src/session_git_hooks/`; no variable the git hooks need has `KEY`, `SECRET` or `TOKEN` in its name, which an agent's filter strips where its default excludes are on); the key itself is never in an environment, which agents write into files; Claude Code's own HTTP hook URL carries it inside the owner-only settings file (`src/adapter/claude/`) |
 | Check a request's Origin and Host, compare a key, make a key | `src/request_guard.rs` (`headers_allowed`, `key_matches`, `same_secret`, `generate_key`); the daemon's guard is `src/server/access.rs`, and a holder's helper routes use it too |
 | Run an agent's CLI as an account for a short query | `src/adapter/account_cli.rs`: `query` (admits the run, held to `Bounds::agent_query`), `AdmittedCommand::run`, and `run_query` only where the account's directory is already held (a sign-in); `failure_detail` words a failure |
 | An account's directory | `adapter::account_dir` (the pinned directory, else the agent's default; `src/adapter/account_cli.rs`) |
@@ -730,7 +765,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Read the system's process table | `src/platform/proc_table/` (`ledger/table.rs` and `terminal/shell/busy.rs` read through it) |
 | Resolve a project path for a host action, or judge what a terminal link may reach | `browse::scope::resolve_project_path` / `resolve_project_directory`; `path_links::resolve::reach`, which holds the refusal rules |
 | Check a directory exists and can be looked at | `hostfs::require_directory` (absence only from NotFound; any other failure is `directory_unreadable`) |
-| Call the running daemon from another process (CLI modes, git hook modes, the MCP stdio bridge) | `src/loopback.rs` (`post`, `connect`, `exchange`; a non-2xx answer is an error whose status `error_status` gives) |
+| Call the running daemon from another process (CLI modes, git hook modes, the MCP stdio bridge) | `src/loopback.rs` (`post`, `connect`, `exchange`; a non-2xx answer is an error whose status `error_status` and body `error_body` give) |
 | Store free text trimmed, blank as unset | `text::trimmed_or_none` |
 | Read the clock; format a timestamp | `src/time.rs` (`now_millis`, `now_micros`, `now_secs`, the RFC 3339, compact and readable stamps) |
 | Send the settings, a console or a project to clients | `AppState::publish_settings` (or `broadcast_settings`), `publish_console`, `publish_project` (`src/state/field_versions.rs`): the only route, as they stamp the field versions; `AppState::broadcast` of those events fails a debug assertion |

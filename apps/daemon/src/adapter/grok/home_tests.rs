@@ -107,6 +107,36 @@ fn the_mcp_server_is_appended_to_the_farms_config_without_losing_the_users_own()
     assert!(config.contains(&fixture.mcp_token));
 }
 
+/// The farm's files are Grok's to read and nobody's to list: the MCP server is registered with the
+/// file holding the key, and the hook file names the hook script, neither holding the key.
+#[test]
+fn the_farm_names_the_key_file_and_holds_no_key() {
+    let mut fixture = spec_fixture();
+    with_default_home(&mut fixture);
+    let plan = plan_isolated(&fixture.spec()).expect("plan");
+    let farm = PathBuf::from(&plan.env[0].1);
+    let config: toml::Table = std::fs::read_to_string(farm.join("config.toml"))
+        .expect("the copy")
+        .parse()
+        .expect("TOML");
+    let args: Vec<&str> = config["mcp_servers"][session_tools::catalogue::SERVER_KEY]["args"]
+        .as_array()
+        .expect("the server's arguments")
+        .iter()
+        .map(|arg| arg.as_str().expect("a string"))
+        .collect();
+    let at = args
+        .iter()
+        .position(|arg| *arg == "--key-file")
+        .expect("--key-file");
+    assert_eq!(Path::new(args[at + 1]), fixture.key_file);
+    assert!(!args.contains(&"--key"), "{args:?}");
+    for file in ["config.toml", "hooks/octoboard.json"] {
+        let content = std::fs::read_to_string(farm.join(file)).expect("the file");
+        assert!(!content.contains("feedface"), "{file}: {content}");
+    }
+}
+
 /// Grok cancels a tool call it gives up on, and a cancellation withdraws a waiting request for
 /// a console session, so its limit is set above Octoboard's forwarding limit, for this server
 /// only. The ordering itself is asserted where the value is defined.

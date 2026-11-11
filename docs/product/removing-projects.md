@@ -72,7 +72,7 @@ running will still be stopped, announced as it appears, and no count (see "Failu
 - A session or shell terminal started in the project while the folder is being moved is ended as well, and goes with
   the project.
 - **Once a planned stop has begun, a removal is refused** with `daemon_shutting_down`, with nothing changed (see "While
-  the terminals are handed over" in `docs/product/application-lifecycle.md`). A removal already under way is waited
+  the terminals are handed over" in `docs/product/server-form.md`). A removal already under way is waited
   for, up to 5 seconds; one still running when that wait runs out takes no further step that would end a session, a
   shell terminal or a process, or move the folder: it fails with `daemon_shutting_down`, the folder left where it is,
   and what it had already ended stays ended. One that had already moved the folder by then removes the project all the

@@ -70,6 +70,7 @@ impl AppState {
         for handle in handles {
             let _ = handle.await;
         }
+        self.await_late_ends().await;
         self.end_held_launches().await;
     }
 
@@ -138,6 +139,10 @@ impl AppState {
         for ended in ending {
             let _ = ended.await;
         }
+        // An ordinary stop that cut the planned stop short before the handover began has the
+        // launches registered after its listing ended late, as `stop_all_sessions` has: their
+        // ends are waited for here too.
+        self.await_late_ends().await;
         self.end_held_launches().await;
     }
 
@@ -159,17 +164,63 @@ impl AppState {
         let _ = tokio::task::spawn_blocking(move || ledger.scan_before_ending()).await;
     }
 
-    /// Ends the session `live` as a stop ends it, on a blocking thread: `terminate` waits out the
-    /// graceful period. The output is saved here rather than left to the exit watcher, which the
-    /// daemon may not outlive.
+    /// Ends the session `live` as a stop ends it ([`Self::end_as_stopped`]), on a blocking thread.
     fn spawn_end(self: &Arc<Self>, live: Arc<LiveSession>) -> tokio::task::JoinHandle<()> {
         let state = self.clone();
-        tokio::task::spawn_blocking(move || {
-            live.terminate();
-            state.save_output(&live);
-            // The exit watcher would too, but the daemon may not outlive it.
-            state.process_ledger.end_launch(&live.launch_id);
-        })
+        tokio::task::spawn_blocking(move || state.end_as_stopped(&live))
+    }
+
+    /// Ends the session `live` as a stop ends it. **Blocks**: `terminate` waits out the graceful
+    /// period. The output is saved here rather than left to the exit watcher, which the daemon may
+    /// not outlive. The terminal is hung up after that: a held terminal is released in its holder
+    /// only once it is hung up and its program reaped, and the stop parts from the holders next,
+    /// so a release left to the session being dropped would never reach the holder, which would
+    /// keep the terminal and not exit.
+    fn end_as_stopped(&self, live: &LiveSession) {
+        live.terminate();
+        self.save_output(live);
+        live.hang_up();
+        // The exit watcher would too, but the daemon may not outlive it.
+        self.process_ledger.end_launch(&live.launch_id);
+    }
+
+    /// Ends `live`, a launch registered once the stop of the sessions had listed them, as the stop
+    /// ends the rest ([`Self::end_as_stopped`]), on a thread of its own that the stop waits for
+    /// ([`Self::await_late_ends`]). What the agent started a moment ago is attributed first, as
+    /// the stop attributes it before ending anything.
+    pub(super) fn end_late(self: &Arc<Self>, live: Arc<LiveSession>) {
+        let state = self.clone();
+        let ending = std::thread::spawn(move || {
+            state.process_ledger.scan_before_ending();
+            // Ended on purpose, so that its exit watcher tells no owner it ended by itself: the
+            // stop did not mark it interrupted, having never listed it. What follows the end
+            // then finds the process gone.
+            live.end();
+            state.end_as_stopped(&live);
+        });
+        self.late_ends
+            .lock()
+            .expect("late ends lock poisoned")
+            .push(ending);
+    }
+
+    /// Waits for the ends of the launches registered late ([`Self::end_late`]), including those
+    /// registered while it waits. A launch registered after it returns is ended all the same, but
+    /// not waited for.
+    pub(crate) async fn await_late_ends(&self) {
+        loop {
+            let ending =
+                std::mem::take(&mut *self.late_ends.lock().expect("late ends lock poisoned"));
+            if ending.is_empty() {
+                return;
+            }
+            let _ = tokio::task::spawn_blocking(move || {
+                for end in ending {
+                    let _ = end.join();
+                }
+            })
+            .await;
+        }
     }
 
     /// Ends what an account switch under way held for its relaunch, which will not come.
@@ -263,8 +314,12 @@ impl AppState {
 mod tests {
     use crate::protocol::{error_code, AgentId, CodedError, Event, SessionStatus};
     use crate::session::spawn_reader_thread;
+    #[cfg(unix)]
+    use crate::session::LiveSession;
     use crate::state::test_support::insert_record;
     use crate::test_support::{app_state, fake_live_session, PATIENCE};
+    #[cfg(unix)]
+    use std::sync::Arc;
     use std::time::{Duration, Instant};
 
     #[tokio::test]
@@ -416,5 +471,144 @@ mod tests {
             late_check.was_ended_on_purpose(),
             "by `end`, so its owner is not told"
         );
+    }
+
+    /// A stand-in whose program ignores `SIGTERM`, so that ending it takes the whole of the polite
+    /// stop's grace before the kill: nothing that did not wait for the end can see it over. It has
+    /// printed its screen, and said so only once the signal is ignored.
+    #[cfg(unix)]
+    fn stubborn_stand_in(id: &str) -> crate::test_support::StandIn {
+        let live = fake_live_session(
+            id,
+            AgentId::CLAUDE,
+            80,
+            24,
+            "trap '' TERM; printf 'late screen\\r\\n'; echo ready; while :; do sleep 1; done",
+        );
+        spawn_reader_thread(live.clone(), 8 * 1024);
+        let ready = crate::test_support::output_containing(&live, "ready");
+        assert!(ready.contains("ready"), "{ready:?}");
+        live
+    }
+
+    /// Registers `live` as a launch that was past its claim when the stop of the sessions listed
+    /// them: the daemon is shutting down, and the stop never listed it, so that only the late end
+    /// can end it, and the stop has nothing else to wait for.
+    #[cfg(unix)]
+    fn register_unlisted_late(state: &Arc<crate::state::AppState>, live: &Arc<LiveSession>) {
+        state
+            .shutting_down
+            .store(true, std::sync::atomic::Ordering::Release);
+        state.register_live(live.clone());
+        state
+            .live
+            .write()
+            .expect("live sessions lock poisoned")
+            .sessions
+            .remove(&live.id);
+    }
+
+    /// What a launch registered late must have been left with once the stop that waited for it
+    /// returns: its program ended on purpose, its screen saved, its terminal hung up, and no end
+    /// still to be waited for.
+    #[cfg(unix)]
+    fn assert_ended_as_the_stop_ends_the_rest(
+        state: &Arc<crate::state::AppState>,
+        live: &LiveSession,
+    ) {
+        assert!(
+            live.poll_exit(),
+            "the stop went on before the late launch was ended"
+        );
+        assert!(live.was_ended_on_purpose(), "its owner would be told");
+        assert!(live.is_hung_up(), "its terminal was not hung up");
+        let saved = state.saved_output(&live.id).expect("the output was kept");
+        assert!(
+            String::from_utf8_lossy(&saved).contains("late screen"),
+            "{saved:?}"
+        );
+        // The ends are taken only by the wait, so one left is one it did not take. This is what
+        // fails when the wait is gone from a stop that has nothing else to wait for, whatever the
+        // machine's speed.
+        assert!(
+            state.late_ends.lock().unwrap().is_empty(),
+            "the stop left a late end unwaited for"
+        );
+    }
+
+    /// The ordinary stop waits for the end of a launch registered after it listed the sessions,
+    /// before it goes on to part from the holders.
+    #[cfg(unix)]
+    #[tokio::test(flavor = "multi_thread")]
+    async fn stopping_every_session_waits_for_a_launch_registered_after_its_listing() {
+        let (state, dir) = app_state("state-stop-waits-for-late-launch");
+        insert_record(&state, &dir, "late", SessionStatus::Working);
+        let late = stubborn_stand_in("late");
+        register_unlisted_late(&state, &late);
+
+        state.stop_all_sessions().await;
+
+        assert_ended_as_the_stop_ends_the_rest(&state, &late);
+    }
+
+    /// The ordinary stop that escalates a planned one waits for such an end too, when the
+    /// escalation came before the handover began and the stop is no handover.
+    #[cfg(unix)]
+    #[tokio::test(flavor = "multi_thread")]
+    async fn an_escalated_stop_waits_for_a_launch_registered_after_its_listing() {
+        let (state, dir) = app_state("state-escalated-stop-waits-for-late-launch");
+        insert_record(&state, &dir, "late", SessionStatus::Working);
+        let late = stubborn_stand_in("late");
+        register_unlisted_late(&state, &late);
+
+        state
+            .stop_all_sessions_after_handover(&std::collections::HashSet::new(), || {})
+            .await;
+
+        assert_ended_as_the_stop_ends_the_rest(&state, &late);
+    }
+
+    /// What the agent of a launch registered late had started is stopped with it, as a stop ends
+    /// the launches of the sessions it lists: the launch is ended in the process ledger.
+    #[cfg(unix)]
+    #[tokio::test(flavor = "multi_thread")]
+    async fn what_a_launch_registered_after_the_stop_listed_the_sessions_started_is_stopped_with_it(
+    ) {
+        use crate::test_support::{wait_for_pid, Background, KillOnDrop};
+        let (state, dir) = app_state("state-late-launch-ledger");
+        insert_record(&state, &dir, "late", SessionStatus::Working);
+        let pid_file = dir.join("late-child");
+        let late =
+            crate::test_support::stand_in_starting("late", vec![Background::sleeper(&pid_file)]);
+        let child = wait_for_pid(&pid_file);
+        let _guard = KillOnDrop(vec![child]);
+
+        state.stop_all_sessions().await;
+        state.register_live(late.clone());
+        state.await_late_ends().await;
+
+        assert!(
+            crate::test_support::stops_running(&state, child).await,
+            "what the late launch's agent started was left running"
+        );
+    }
+
+    /// A planned stop ends nothing: a launch registered once it has begun is left running in its
+    /// holder for the next daemon, and no end is started for the stop to wait for.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_launch_registered_after_a_planned_stop_began_is_left_running() {
+        let (state, _dir) = app_state("state-planned-stop-ends-no-late-launch");
+        state.settle_for_planned_stop().await;
+        let late = crate::test_support::idle_stand_in("late");
+
+        state.register_live(late.clone());
+
+        assert!(
+            state.late_ends.lock().unwrap().is_empty(),
+            "an end was started"
+        );
+        assert!(!late.poll_exit(), "the process was ended");
+        assert!(!late.was_ended_on_purpose());
     }
 }

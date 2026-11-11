@@ -1,7 +1,8 @@
 //! File system facts and primitives that differ by host: what tells a file apart, how a file is
 //! opened without a link in its path or without waiting, who may read what the daemon writes,
 //! where home and scratch space are, how an alias to a file or directory is made, and the
-//! exclusive file lock that keeps one daemon to a data directory and guards other programs' files.
+//! exclusive file lock that keeps one daemon to a data directory and guards other programs' files,
+//! with the shared lock that looks whether it is held.
 //!
 //! Policy stays with the callers: what a browse scope is, which paths are reachable, what a
 //! listing reports. This module only answers what the host does when asked.
@@ -188,7 +189,7 @@ pub enum AliasKind {
     HardLink,
 }
 
-/// Why [`try_lock_file`] did not give the lock.
+/// Why [`try_lock_file`] or [`try_lock_file_shared`] did not give the lock.
 #[derive(Debug)]
 pub enum Busy {
     /// Another holder has it.
@@ -205,6 +206,17 @@ pub enum Busy {
 /// closed or the process exits, so a crashed holder leaves no stale lock behind. The file is not
 /// truncated, since another program may keep the lock file for its own use too.
 pub fn try_lock_file(path: &Path) -> Result<File, Busy> {
+    lock_file(path, true)
+}
+
+/// [`try_lock_file`] with a shared lock: refused while an exclusive lock is held, and taken
+/// alongside other shared ones. What looks whether a lock is held takes this, so that two who look
+/// at once do not each find the other holding it.
+pub fn try_lock_file_shared(path: &Path) -> Result<File, Busy> {
+    lock_file(path, false)
+}
+
+fn lock_file(path: &Path, exclusive: bool) -> Result<File, Busy> {
     // Read access too: Windows locks only through a handle that may read or write the file's
     // data, and appending alone is neither.
     let file = OpenOptions::new()
@@ -213,7 +225,12 @@ pub fn try_lock_file(path: &Path) -> Result<File, Busy> {
         .append(true)
         .open(path)
         .map_err(Busy::Open)?;
-    match file.try_lock() {
+    let locked = if exclusive {
+        file.try_lock()
+    } else {
+        file.try_lock_shared()
+    };
+    match locked {
         Ok(()) => Ok(file),
         Err(TryLockError::WouldBlock) => Err(Busy::Held),
         Err(TryLockError::Error(err)) => Err(Busy::Lock(err)),

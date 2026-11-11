@@ -8,6 +8,8 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 
+use crate::platform::descriptors;
+
 /// The only write end of the watcher's pipe. Closing it also covers an orderly owner exit.
 pub(super) struct Guard {
     _write: OwnedFd,
@@ -19,7 +21,7 @@ impl Guard {
     pub(super) fn prepare(command: &mut Command) -> io::Result<Self> {
         let (read, write) = pipe()?;
         let write_fd = write.as_raw_fd();
-        let close_until = descriptor_bound()?;
+        let close_until = descriptors::bound()?;
         // SAFETY: the hooks run in order, so the child already leads its group. The child and
         // its watcher only call plain libc functions before exec or _exit; no Rust locks or
         // destructors are used on the watcher path.
@@ -93,32 +95,6 @@ fn pipe() -> io::Result<(OwnedFd, OwnedFd)> {
     Ok((duplicate(&ends[0])?, duplicate(&ends[1])?))
 }
 
-/// The current allocation limit covers concurrently opened descriptors; the snapshot also
-/// covers descriptors that were already open when that limit was lowered.
-fn descriptor_bound() -> io::Result<RawFd> {
-    // SAFETY: sysconf only reads the process's descriptor allocation limit.
-    let limit = unsafe { libc::sysconf(libc::_SC_OPEN_MAX) };
-    let mut bound = RawFd::try_from(limit)
-        .ok()
-        .filter(|limit| *limit > 0)
-        .ok_or_else(|| io::Error::other("the descriptor limit is not known"))?;
-    #[cfg(target_os = "linux")]
-    let descriptors = "/proc/self/fd";
-    #[cfg(not(target_os = "linux"))]
-    let descriptors = "/dev/fd";
-    for entry in std::fs::read_dir(descriptors)? {
-        let entry = entry?;
-        if let Some(fd) = entry
-            .file_name()
-            .to_str()
-            .and_then(|name| name.parse::<RawFd>().ok())
-        {
-            bound = bound.max(fd.saturating_add(1));
-        }
-    }
-    Ok(bound)
-}
-
 /// Never returns to Rust after the fork. Its membership reserves the group id until the kill,
 /// even when the server already exited and the owner has not observed that exit yet.
 unsafe fn watch(read: RawFd, close_until: RawFd) -> ! {
@@ -129,7 +105,7 @@ unsafe fn watch(read: RawFd, close_until: RawFd) -> ! {
             libc::kill(-libc::getpgrp(), libc::SIGKILL);
             libc::_exit(1);
         }
-        close_descriptors(close_until);
+        descriptors::close_from(1, close_until);
         let mut byte = 0u8;
         loop {
             let count = libc::read(libc::STDIN_FILENO, (&mut byte as *mut u8).cast(), 1);
@@ -139,19 +115,5 @@ unsafe fn watch(read: RawFd, close_until: RawFd) -> ! {
         }
         libc::kill(-libc::getpgrp(), libc::SIGKILL);
         libc::_exit(0);
-    }
-}
-
-unsafe fn close_descriptors(close_until: RawFd) {
-    // SAFETY: this is the forked watcher, which owns its descriptor table. Linux can close the
-    // complete range with one syscall; older kernels and macOS use the precomputed bound.
-    unsafe {
-        #[cfg(target_os = "linux")]
-        if libc::syscall(libc::SYS_close_range, 1u32, u32::MAX, 0u32) == 0 {
-            return;
-        }
-        for fd in 1..close_until {
-            libc::close(fd);
-        }
     }
 }

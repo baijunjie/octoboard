@@ -12,16 +12,30 @@ mod snapshot;
 
 pub use snapshot::snapshot;
 
-/// The user's login shell: `$SHELL`, else `zsh`, which is what macOS gives a new account.
+/// The user's login shell: `$SHELL`, else the one the system user database records for the user,
+/// else `/bin/sh`, which every Unix has. A daemon started without `$SHELL` in its environment
+/// (by `docker exec`, say) still launches agents in the user's own shell.
 pub fn login_shell() -> ShellCommand {
     ShellCommand {
-        program: PathBuf::from(
-            std::env::var_os("SHELL")
-                .filter(|shell| !shell.is_empty())
-                .unwrap_or_else(|| OsStr::new("/bin/zsh").to_owned()),
+        program: choose_login_shell(
+            std::env::var_os("SHELL"),
+            crate::platform::fs::account_shell,
         ),
         args: vec!["-l".into()],
     }
+}
+
+/// The login shell's program from `$SHELL` as `variable` holds it, else what `account` reads from
+/// the user database, else `/bin/sh`; an empty value of either counts as none.
+fn choose_login_shell(
+    variable: Option<std::ffi::OsString>,
+    account: impl FnOnce() -> Option<PathBuf>,
+) -> PathBuf {
+    variable
+        .filter(|shell| !shell.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| account().filter(|shell| !shell.as_os_str().is_empty()))
+        .unwrap_or_else(|| PathBuf::from("/bin/sh"))
 }
 
 /// Resolves a bare binary name to an absolute path by searching `env`'s `PATH`, mirroring what the
@@ -146,6 +160,55 @@ mod tests {
 
     use super::*;
     use crate::test_support::ScratchDir;
+
+    fn shell(path: &str) -> Option<PathBuf> {
+        Some(PathBuf::from(path))
+    }
+
+    #[test]
+    fn the_shell_variable_wins_and_the_user_database_is_not_read() {
+        let program = choose_login_shell(Some("/opt/custom/shell".into()), || {
+            panic!("the user database is read though `$SHELL` is set")
+        });
+        assert_eq!(program, Path::new("/opt/custom/shell"));
+    }
+
+    #[test]
+    fn an_empty_shell_variable_counts_as_unset() {
+        assert_eq!(
+            choose_login_shell(Some("".into()), || shell("/usr/bin/fish")),
+            Path::new("/usr/bin/fish")
+        );
+    }
+
+    #[test]
+    fn an_unset_shell_variable_takes_the_user_databases_shell() {
+        assert_eq!(
+            choose_login_shell(None, || shell("/usr/bin/fish")),
+            Path::new("/usr/bin/fish")
+        );
+    }
+
+    #[test]
+    fn without_a_variable_or_a_recorded_shell_the_login_shell_is_bin_sh() {
+        for account in [None, shell("")] {
+            assert_eq!(
+                choose_login_shell(None, || account.clone()),
+                Path::new("/bin/sh"),
+                "{account:?}"
+            );
+            assert_eq!(
+                choose_login_shell(Some("".into()), || account.clone()),
+                Path::new("/bin/sh"),
+                "{account:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_login_shell_is_started_as_one() {
+        assert_eq!(login_shell().args, ["-l"]);
+    }
 
     #[test]
     fn a_relative_path_entry_is_skipped() {

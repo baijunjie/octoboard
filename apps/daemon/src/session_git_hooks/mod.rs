@@ -5,9 +5,15 @@
 //! The variables go on the agent's process alone, so they reach whatever that process starts —
 //! the agent's shell, a script, a background job — and nothing else: no repository, no
 //! configuration file and no other program is touched, and the daemon's own `git` drops every
-//! `GIT_CONFIG_*` it could inherit (`crate::git::env::user_configuration_only`). They take the next
-//! free slot of the user's own `GIT_CONFIG_COUNT`, so an entry the user exported keeps its place
-//! and its effect.
+//! `GIT_CONFIG_*` it could inherit (`crate::git::env::user_configuration_only`). `core.hooksPath`
+//! goes in `GIT_CONFIG_PARAMETERS`, after whatever the user's own shell exports there, the way
+//! `git -c` adds an entry: it takes precedence over the user's `GIT_CONFIG_COUNT` entries, which
+//! are left as they are, and a `git -c core.hooksPath=…` of the user's takes precedence over it.
+//! Not `GIT_CONFIG_COUNT`: an agent that strips the variables whose names hold `KEY` from the
+//! commands it runs (Codex's shell environment policy, where its default excludes are turned on
+//! with `ignore_default_excludes = false`) would take `GIT_CONFIG_KEY_<n>` and leave the count,
+//! which fails every git that reads configuration. No variable this module sets has `KEY`,
+//! `SECRET` or `TOKEN` in its name.
 //!
 //! The directory holds one copy of `dispatcher.sh` per hook name. With `core.hooksPath` pointed
 //! at it, git looks for every hook there and nowhere else, so a hook name missing from it is a
@@ -21,20 +27,28 @@
 //! branches (`pre-push`) are run past the revert gate by starting `octoboardd gate-hook` in the
 //! foreground; only a status of 3 from it refuses the update.
 //!
-//! It is shared by every session and outlives them, so a background job a session leaves running
-//! still finds it: it lives under the data directory, named by a hash of its content, written once
-//! and left read-only. A tool that installs hooks wherever `git rev-parse --git-path hooks` points
-//! is refused there rather than writing into every session's hooks. Beside it, a writable state
-//! directory carries what a `reference-transaction` dispatcher learns while a transaction is
-//! prepared over to the same git's committed call, and spools a long list of updates or refs.
+//! It is shared by every session and outlives them: it lives under the data directory, named by a
+//! hash of its content, written once and left read-only. A background job a session leaves running
+//! after it ended still finds it, and still reports and is gated: the two modes go to the daemon
+//! through the owner record it keeps when the launch's own route has gone with the session's
+//! process ([`route`]), found in the data directory the dispatchers are under. The executable the
+//! dispatchers start is the installation's own entry point, which an update replaces in place, not
+//! the copy of the build a holder runs from, which is removed once no holder runs from it; so a
+//! newer build's modes may serve the dispatchers an older one wrote, and their arguments and
+//! variables stay accepted across versions. A tool that installs hooks wherever
+//! `git rev-parse --git-path hooks` points is refused there rather than writing into every
+//! session's hooks. Beside it, a writable state directory carries what a `reference-transaction`
+//! dispatcher learns while a transaction is prepared over to the same git's committed call, and
+//! spools a long list of updates or refs.
 //!
 //! The script is written for one git build: the system-wide configuration files it scans for a
 //! `core.hooksPath` are that build's, and a hook run by another build, which git tells apart by the
 //! `GIT_EXEC_PATH` it exports, has git asked where the user's hook is instead.
 //!
 //! Nothing is injected — and nothing is attributed — when the user's `git` is older than
-//! [`MIN_GIT`], when `GIT_CONFIG_COUNT` is already unusable, or when the directory cannot be
-//! written: a session without the variables works exactly as it would without Octoboard.
+//! [`MIN_GIT`], when the user's `GIT_CONFIG_PARAMETERS` is one git rejects, or when the
+//! directory cannot be written: a session without the variables works exactly as it would without
+//! Octoboard.
 //!
 //! The dispatchers start two modes of this executable ([`ref_mode`], `octoboardd git-ref`, and
 //! [`gate_mode`], `octoboardd gate-hook`), and the second asks the daemon what the revert gate is
@@ -45,6 +59,7 @@ pub(crate) mod fixture;
 pub mod gate_inputs;
 pub mod gate_mode;
 pub mod ref_mode;
+pub(crate) mod route;
 #[cfg(test)]
 mod tests;
 
@@ -66,16 +81,29 @@ use crate::platform::names;
 use crate::platform::shell::{self, posix_quote};
 use crate::processes::subprocess;
 
-/// The oldest git the variables are given to: `GIT_CONFIG_COUNT` needs 2.31 and the
-/// `reference-transaction` hook 2.28, and 2.36 is the floor the rest of the daemon holds git to.
+/// The oldest git the variables are given to: the `'key'='value'` form of a
+/// `GIT_CONFIG_PARAMETERS` entry needs 2.31 (the variable itself, with `'key=value'` entries, is as
+/// old as 1.7) and the `reference-transaction` hook 2.28, and 2.36 is the floor the rest of the
+/// daemon holds git to.
 const MIN_GIT: (u32, u32) = (2, 36);
+
+/// The variable `core.hooksPath` goes in, as `git -c` passes its entries to the commands and hooks
+/// a git starts.
+const PARAMETERS_VARIABLE: &str = "GIT_CONFIG_PARAMETERS";
+
+/// The key of the entry that points git at the dispatchers, as git itself writes it.
+const HOOKS_PATH_KEY: &str = "core.hookspath";
 
 /// The variable naming the session whose git reports a creation.
 const SESSION_VARIABLE: &str = "OCTOBOARD_SESSION_ID";
 /// The variable naming the port the report goes to.
 const PORT_VARIABLE: &str = "OCTOBOARD_DAEMON_PORT";
-/// The variable carrying the daemon's key, which the report has to present.
-const KEY_VARIABLE: &str = "OCTOBOARD_DAEMON_KEY";
+/// The variable naming the launch's key file, whose key a request by the launch's route presents.
+/// The two modes the dispatchers start read the path from the environment they inherit through
+/// git from the agent; the key itself is in neither their arguments, which every user of the
+/// machine can list, nor the environment, which an agent writes into files of its own. Its name
+/// holds no `KEY`, which an agent's filter would strip.
+const CREDENTIAL_PATH_VARIABLE: &str = "OCTOBOARD_DAEMON_CREDENTIAL_PATH";
 
 /// The directory beside the dispatchers, under the same root, where a `reference-transaction`
 /// dispatcher leaves what it learned while a transaction was prepared for the same git's committed
@@ -146,22 +174,24 @@ type ReadyByLaunch = HashMap<(PathBuf, String, String), Ready>;
 static READY: Mutex<Option<ReadyByLaunch>> = Mutex::new(None);
 
 /// The variables a project session's agent is started with so that its git reports the branches
-/// it creates: the next `GIT_CONFIG_COUNT` slot set to `core.hooksPath` = the dispatchers, and
-/// what a report needs. Empty when the session cannot be given them (see the module header).
+/// it creates: `GIT_CONFIG_PARAMETERS` with `core.hooksPath` = the dispatchers after the user's own
+/// entries, and what a report needs, which includes `key_file`, the launch's key file. `exe` is the
+/// executable the dispatchers start: the installation's entry point (see the module header). Empty
+/// when the session cannot be given them (see the module header).
 pub fn session_env(
     shell_env: &HashMap<String, String>,
-    self_exe: &str,
+    exe: &str,
     session_id: &str,
     port: u16,
-    daemon_key: &str,
+    key_file: &Path,
 ) -> Vec<(String, String)> {
     session_env_under(
         &paths::data_dir().join("githooks"),
         shell_env,
-        self_exe,
+        exe,
         session_id,
         port,
-        daemon_key,
+        key_file,
     )
 }
 
@@ -170,80 +200,182 @@ pub fn session_env(
 pub(crate) fn session_env_under(
     root: &Path,
     shell_env: &HashMap<String, String>,
-    self_exe: &str,
+    exe: &str,
     session_id: &str,
     port: u16,
-    daemon_key: &str,
+    key_file: &Path,
 ) -> Vec<(String, String)> {
-    let Some(user) = user_entries(shell_env, root) else {
+    let Some(user) = user_parameters(shell_env, root) else {
         return Vec::new();
     };
-    let dir = match ready_dir(root, shell_env, self_exe) {
+    let dir = match ready_dir(root, shell_env, exe) {
         Ok(dir) => dir,
         Err(err) => {
             tracing::debug!(%err, "branch origins: no hook dispatchers for this session");
             return Vec::new();
         }
     };
-    let mut env: Vec<(String, String)> = user
-        .iter()
-        .enumerate()
-        .flat_map(|(slot, (key, value))| {
-            [
-                (format!("GIT_CONFIG_KEY_{slot}"), key.clone()),
-                (format!("GIT_CONFIG_VALUE_{slot}"), value.clone()),
-            ]
+    injected(&user, &dir, session_id, port, key_file)
+}
+
+/// One entry of a `GIT_CONFIG_PARAMETERS` value: its text as it stands, and the key and value it
+/// sets (no value for an implicit `true`).
+#[derive(Debug, PartialEq, Eq)]
+struct Parameter<'a> {
+    text: &'a str,
+    key: String,
+    value: Option<String>,
+}
+
+/// The user's own `GIT_CONFIG_PARAMETERS` entries, as text to put ours after: empty when there are
+/// none. An entry pointing `core.hooksPath` under `root` is not the user's: it is what a daemon
+/// started from inside another session inherited, and kept, its sessions would run both daemons'
+/// dispatchers and report to both. `None` for a value git cannot read, which already fails every
+/// git the user runs.
+fn user_parameters(shell_env: &HashMap<String, String>, root: &Path) -> Option<String> {
+    let value = shell_env
+        .get(PARAMETERS_VARIABLE)
+        .map(String::as_str)
+        .unwrap_or("");
+    let kept: Vec<&str> = parse_parameters(value)?
+        .into_iter()
+        .filter(|entry| {
+            !(entry.key.eq_ignore_ascii_case(HOOKS_PATH_KEY)
+                && entry
+                    .value
+                    .as_deref()
+                    .is_some_and(|path| Path::new(path).starts_with(root)))
         })
+        .map(|entry| entry.text)
         .collect();
-    env.extend(injected(user.len(), &dir, session_id, port, daemon_key));
-    env
+    Some(kept.join(" "))
 }
 
-/// The user's own `GIT_CONFIG_*` entries, in order, which keep their effect ahead of the
-/// injected one. An entry pointing `core.hooksPath` under `root` is not the user's: it is what a
-/// daemon started from inside another session inherited, and kept, its sessions would run both
-/// daemons' dispatchers and report to both. `None` for a `GIT_CONFIG_COUNT` that is not a count,
-/// which already fails every git the user runs.
-fn user_entries(shell_env: &HashMap<String, String>, root: &Path) -> Option<Vec<(String, String)>> {
-    let count = match shell_env.get("GIT_CONFIG_COUNT") {
-        None => 0,
-        Some(count) if count.is_empty() => 0,
-        Some(count) => count.parse::<usize>().ok()?,
-    };
-    let entry = |name: &str, slot: usize| {
-        shell_env
-            .get(&format!("GIT_CONFIG_{name}_{slot}"))
-            .cloned()
-            .unwrap_or_default()
-    };
-    Some(
-        (0..count)
-            .map(|slot| (entry("KEY", slot), entry("VALUE", slot)))
-            .filter(|(key, value)| {
-                !(key.eq_ignore_ascii_case("core.hooksPath") && Path::new(value).starts_with(root))
-            })
-            .collect(),
-    )
+/// The entries of a `GIT_CONFIG_PARAMETERS` value, read as git reads it (`parse_config_env_list`
+/// in its `config.c`): each a single-quoted key and value, `'key'='value'`, or the older
+/// `'key=value'`, separated by whitespace, and a key that names a section and a variable. `None`
+/// where git reports the value bogus, leading whitespace included.
+fn parse_parameters(value: &str) -> Option<Vec<Parameter<'_>>> {
+    let mut entries = Vec::new();
+    let mut rest = value;
+    while !rest.is_empty() {
+        let start = rest;
+        let (key, after) = sq_dequote_step(rest)?;
+        let (key, value, after) = match after.strip_prefix('=') {
+            // The newer form: a value of its own, or none for an implicit `true`.
+            Some(after) if after.starts_with('\'') => {
+                let (value, after) = sq_dequote_step(after)?;
+                if after.starts_with(|c: char| !c.is_ascii_whitespace()) {
+                    return None;
+                }
+                (key, Some(value), after)
+            }
+            Some(after)
+                if after.is_empty() || after.starts_with(|c: char| c.is_ascii_whitespace()) =>
+            {
+                (key, None, after)
+            }
+            Some(_) => return None,
+            None if after.is_empty() || after.starts_with(|c: char| c.is_ascii_whitespace()) => {
+                // The older form, split at its first `=`.
+                match key.split_once('=') {
+                    Some((key, value)) => (key.to_string(), Some(value.to_string()), after),
+                    None => (key, None, after),
+                }
+            }
+            None => return None,
+        };
+        if !valid_key(&key) {
+            return None;
+        }
+        entries.push(Parameter {
+            text: &start[..start.len() - after.len()],
+            key,
+            value,
+        });
+        rest = after.trim_start_matches(|c: char| c.is_ascii_whitespace());
+    }
+    Some(entries)
 }
 
-/// The variables for slot `slot` pointing at `dir`.
+/// Whether git takes `key` as a configuration key (`git_config_parse_key`): a section and a
+/// variable name of letters, digits and `-`, the variable starting with a letter, with a
+/// subsection of anything but a newline between them where there is one.
+fn valid_key(key: &str) -> bool {
+    let (Some(first), Some(last)) = (key.find('.'), key.rfind('.')) else {
+        return false;
+    };
+    let (section, variable) = (&key[..first], &key[last + 1..]);
+    let name = |word: &str| {
+        !word.is_empty()
+            && word
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    };
+    name(section)
+        && name(variable)
+        && variable.starts_with(|c: char| c.is_ascii_alphabetic())
+        && (first == last || !key[first..last].contains('\n'))
+}
+
+/// The single-quoted word at the start of `text`, unquoted, and what follows it: git's
+/// `sq_dequote_step`, which takes `'\''` and `'\!'` between quoted parts as the character itself.
+fn sq_dequote_step(text: &str) -> Option<(String, &str)> {
+    let mut rest = text.strip_prefix('\'')?;
+    let mut word = String::new();
+    loop {
+        let close = rest.find('\'')?;
+        word.push_str(&rest[..close]);
+        rest = &rest[close + 1..];
+        let mut escaped = rest.chars();
+        match (escaped.next(), escaped.next(), escaped.next()) {
+            (Some('\\'), Some(c @ ('\'' | '!')), Some('\'')) => {
+                word.push(c);
+                rest = &rest[3..];
+            }
+            _ => return Some((word, rest)),
+        }
+    }
+}
+
+/// `value` single-quoted as git reads a `GIT_CONFIG_PARAMETERS` word: each `'` closed, escaped and
+/// reopened. The dispatcher builds the same text to take the entry out again (see the script), so
+/// the two quote alike.
+fn sq_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+/// The key in the key file the session's environment names, for the helpers the dispatchers start;
+/// `None` when there is no such variable, or its file is missing, unreadable or empty, which sends
+/// those helpers to the daemon's own route.
+pub(crate) fn key_from_environment() -> Option<String> {
+    let path = std::env::var_os(CREDENTIAL_PATH_VARIABLE).filter(|path| !path.is_empty())?;
+    crate::key_file::read(Path::new(&path))
+}
+
+/// The variables pointing at `dir` after the user's own `GIT_CONFIG_PARAMETERS` entries, `user`.
 fn injected(
-    slot: usize,
+    user: &str,
     dir: &Path,
     session_id: &str,
     port: u16,
-    key: &str,
+    key_file: &Path,
 ) -> Vec<(String, String)> {
+    let ours = format!("'{HOOKS_PATH_KEY}'={}", sq_quote(&shell::posix_path(dir)));
+    let parameters = if user.is_empty() {
+        ours
+    } else {
+        format!("{user} {ours}")
+    };
     vec![
-        ("GIT_CONFIG_COUNT".to_string(), (slot + 1).to_string()),
-        (
-            format!("GIT_CONFIG_KEY_{slot}"),
-            "core.hooksPath".to_string(),
-        ),
-        (format!("GIT_CONFIG_VALUE_{slot}"), shell::posix_path(dir)),
+        (PARAMETERS_VARIABLE.to_string(), parameters),
         (SESSION_VARIABLE.to_string(), session_id.to_string()),
         (PORT_VARIABLE.to_string(), port.to_string()),
-        (KEY_VARIABLE.to_string(), key.to_string()),
+        // The path as the helper, a native program, opens it; not the POSIX form of the hooks path.
+        (
+            CREDENTIAL_PATH_VARIABLE.to_string(),
+            key_file.to_string_lossy().into_owned(),
+        ),
     ]
 }
 
@@ -368,7 +500,7 @@ fn render(values: &Rendering<'_>) -> String {
         .replace("@STATE@", &posix_quote(&shell::posix_path(values.state)))
         .replace("@SESSION_VARIABLE@", SESSION_VARIABLE)
         .replace("@PORT_VARIABLE@", PORT_VARIABLE)
-        .replace("@KEY_VARIABLE@", KEY_VARIABLE)
+        .replace("@HOOKS_PATH_KEY@", HOOKS_PATH_KEY)
 }
 
 /// A `git` run to learn about the installed git, in the user's environment less anything that

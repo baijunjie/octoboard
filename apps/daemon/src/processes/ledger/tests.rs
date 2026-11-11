@@ -2847,8 +2847,10 @@ fn ending_a_launch_removes_its_group_and_spares_what_was_kept() {
     let ledger = &state.process_ledger;
     let pending = ledger.begin_launch("s1").expect("the launch is reserved");
     let containment = pending.tag().containment().clone();
-    // The commands start only once the stand-in has been moved into the group, as an agent's
-    // first command comes long after its start: what leaves its parent before the move is outside.
+    // The commands start only once the test lets them, as an agent's first command comes long
+    // after its start. The stand-in enters the group before its program runs, and the move after
+    // the start is the fallback for one whose entry failed, so what the commands start is in the
+    // group either way.
     let go = dir.join("go");
     let script: String = std::iter::once(format!(
         "until [ -e '{}' ]; do sleep 0.02; done\n",

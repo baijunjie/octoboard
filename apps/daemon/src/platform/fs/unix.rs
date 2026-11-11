@@ -465,14 +465,28 @@ pub fn env_home() -> Option<OsString> {
 /// The home directory the system user database records for the effective user, as it is written
 /// there.
 pub fn account_home() -> Option<PathBuf> {
+    account_field(|entry| entry.pw_dir).map(PathBuf::from)
+}
+
+/// The login shell the system user database records for the effective user, as it is written
+/// there, or `None` where it records none.
+pub fn account_shell() -> Option<PathBuf> {
+    account_field(|entry| entry.pw_shell)
+        .filter(|shell| !shell.is_empty())
+        .map(PathBuf::from)
+}
+
+/// The string field `field` picks from the system user database's entry for the effective user,
+/// or `None` where there is no entry or the field is null.
+fn account_field(field: fn(&libc::passwd) -> *mut libc::c_char) -> Option<OsString> {
     let mut buffer = vec![0 as libc::c_char; 4096];
     loop {
-        // SAFETY: an all-zero `passwd` is a valid value, being only pointers and integers.
-        // `entry`, `found` and `buffer` outlive the call, which is told `buffer.len()` as the size
-        // it may write into. `pw_dir` is read only once the call succeeded and found an entry,
+        // SAFETY: an all-zero `passwd` is a valid value, being only pointers and integers. `entry`,
+        // `found` and `buffer` outlive the call, which is told `buffer.len()` as the size it may
+        // write into. The field is dereferenced only once the call succeeded and found an entry,
         // when it is null or a NUL-terminated string inside `buffer`, and it is copied out before
         // `buffer` is grown or dropped.
-        let (status, dir) = unsafe {
+        let (status, value) = unsafe {
             let mut entry: libc::passwd = std::mem::zeroed();
             let mut found: *mut libc::passwd = std::ptr::null_mut();
             let status = libc::getpwuid_r(
@@ -482,15 +496,16 @@ pub fn account_home() -> Option<PathBuf> {
                 buffer.len(),
                 &mut found,
             );
-            let dir = (status == 0 && !found.is_null() && !entry.pw_dir.is_null())
-                .then(|| PathBuf::from(OsStr::from_bytes(CStr::from_ptr(entry.pw_dir).to_bytes())));
-            (status, dir)
+            let value = field(&entry);
+            let value = (status == 0 && !found.is_null() && !value.is_null())
+                .then(|| OsStr::from_bytes(CStr::from_ptr(value).to_bytes()).to_owned());
+            (status, value)
         };
         if status == libc::ERANGE && buffer.len() < 1 << 20 {
             buffer.resize(buffer.len() * 2, 0);
             continue;
         }
-        return dir;
+        return value;
     }
 }
 
@@ -500,5 +515,40 @@ mod tests {
     #[test]
     fn the_user_database_records_an_absolute_home() {
         assert!(super::account_home().is_some_and(|home| home.is_absolute()));
+    }
+
+    /// The string a field of the user database's entry for the effective user holds, read through
+    /// `getpwuid`, which is not the call the code under test makes, or `None` where there is no
+    /// entry or the field is null.
+    fn recorded(field: fn(&libc::passwd) -> *mut libc::c_char) -> Option<std::ffi::OsString> {
+        use std::os::unix::ffi::OsStrExt;
+        // SAFETY: the entry `getpwuid` returns is read at once, and its fields are null or
+        // NUL-terminated strings. Nothing else in the crate calls `getpwuid`, and its one caller
+        // is a single test, so no other call can replace the entry while it is read.
+        unsafe {
+            let entry = libc::getpwuid(libc::geteuid());
+            if entry.is_null() || field(&*entry).is_null() {
+                return None;
+            }
+            Some(
+                std::ffi::OsStr::from_bytes(std::ffi::CStr::from_ptr(field(&*entry)).to_bytes())
+                    .to_owned(),
+            )
+        }
+    }
+
+    /// The home and the shell are what the database records, as they are written there, the shell
+    /// none where it records none or an empty field. One test, so that `recorded` is never called
+    /// from two threads at once.
+    #[test]
+    fn the_account_home_and_shell_are_what_the_user_database_records() {
+        assert_eq!(
+            super::account_home().map(std::path::PathBuf::into_os_string),
+            recorded(|entry| entry.pw_dir)
+        );
+        assert_eq!(
+            super::account_shell().map(std::path::PathBuf::into_os_string),
+            recorded(|entry| entry.pw_shell).filter(|shell| !shell.is_empty())
+        );
     }
 }

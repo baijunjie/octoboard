@@ -5,6 +5,10 @@
 //! repository, and the branch git had checked out, which a branch created from `HEAD` took as its
 //! target.
 //!
+//! The report goes by the launch's route, or by the daemon's where that one is gone
+//! ([`super::route`]), so a job a session left running after it ended still reports what it
+//! creates.
+//!
 //! git has already moved on by the time this runs and never sees its outcome, so it exits 0
 //! whatever happens and writes nothing anywhere.
 
@@ -12,21 +16,32 @@ use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::time::Duration;
 
+use super::route::{Deadlines, Routes};
+
 use crate::branch_origin::{CreatedRef, RefReport};
 use crate::platform::names;
 use crate::time::now_millis;
 use crate::wire_path;
 
-/// Hard deadline for the round trip, the same as the agent hook forwarder's.
-const TIMEOUT: Duration = Duration::from_millis(1500);
+/// Hard deadlines for the round trip. Nobody waits on it, so the launch's route is given long
+/// enough for Windows to report a loopback port nothing listens on as refused, which is what sends
+/// the report on to the daemon's route: measured at 2.0 to 2.5 s, and past 3 s on a loaded host,
+/// where a timeout would drop the report instead. The daemon's own route keeps the agent hook
+/// forwarder's deadline.
+const DEADLINES: Deadlines = Deadlines {
+    launch: Duration::from_millis(6000),
+    daemon: Duration::from_millis(1500),
+};
 
-/// Posts the report and returns. `head` is the branch the transaction's git had checked out while
-/// it was prepared; `moved` says the transaction touched the refs a branch header reads; `refs`
-/// alternates a reference name and the object id it was created at, as the dispatcher passes them.
+/// Posts the report and returns. `port` is the launch's, when the session's environment names one;
+/// `data` is the data directory of the daemon the report goes to when the launch's route is gone.
+/// `head` is the branch the transaction's git had checked out while it was prepared; `moved` says
+/// the transaction touched the refs a branch header reads; `refs` alternates a reference name and
+/// the object id it was created at, as the dispatcher passes them.
 pub fn run(
     session: &str,
-    port: u16,
-    key: &str,
+    port: Option<u16>,
+    data: &Path,
     head: Option<&OsStr>,
     moved: bool,
     refs: &[OsString],
@@ -49,7 +64,8 @@ pub fn run(
     let Ok(body) = serde_json::to_vec(&report) else {
         return;
     };
-    let _ = crate::loopback::post(port, key, &format!("/git-ref/{session}"), &body, TIMEOUT);
+    let _ =
+        Routes::from_environment(port, data).post(&format!("/git-ref/{session}"), &body, DEADLINES);
 }
 
 /// The report of `refs` made in `cwd` with `git_dir` set and `head` checked out, at `unix_time`.
@@ -76,5 +92,17 @@ pub fn report_of(
             .collect(),
         moved,
         unix_time,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    /// The launch's route outlasts a loaded Windows host's refusal of a closed loopback port
+    /// (measured past 3 s), so the report goes on to the daemon's route rather than timing out.
+    #[test]
+    fn the_launch_route_waits_out_a_slow_refusal() {
+        assert!(super::DEADLINES.launch >= Duration::from_secs(6));
     }
 }

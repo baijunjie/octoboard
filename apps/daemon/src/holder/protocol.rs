@@ -248,7 +248,8 @@ pub enum ToHolder {
     Drain,
     /// Issues the key the helpers of the launch of the terminal `id` (and of the session
     /// `session`) call the holder with, answered by [`FromHolder::LaunchIssued`]. It goes ahead of
-    /// the spawn, because the program's command line and environment name the key.
+    /// the spawn, because the key file the helpers are given, and for a project session the
+    /// program's environment, name the key.
     IssueLaunch {
         id: String,
         req: u64,

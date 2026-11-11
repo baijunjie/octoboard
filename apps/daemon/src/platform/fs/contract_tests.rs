@@ -299,6 +299,33 @@ fn the_lock_is_refused_while_held_and_free_once_released() {
     assert!(free, "the lock was not free once released");
 }
 
+/// Shared locks are taken alongside each other, and neither kind while the other is held: a look
+/// holding a shared lock refuses the exclusive one for its moment, and an exclusive holder refuses
+/// every look.
+#[test]
+fn shared_locks_go_together_and_exclude_the_exclusive_one() {
+    let dir = ScratchDir::new("fs-lock-shared");
+    let path = dir.join("daemon.lock");
+    let first = try_lock_file_shared(&path).expect("a first shared lock");
+    let second = try_lock_file_shared(&path).expect("a second shared lock beside the first");
+    assert!(matches!(try_lock_file(&path), Err(Busy::Held)));
+    drop((first, second));
+    // A process another test is starting may hold a descriptor between its fork and its exec, as
+    // in the test above.
+    let mut exclusive = None;
+    crate::session::wait::wait_for(crate::test_support::PATIENCE, || {
+        exclusive = try_lock_file(&path).ok();
+        exclusive.is_some()
+    });
+    let exclusive = exclusive.expect("the exclusive lock once the shared ones are gone");
+    assert!(matches!(try_lock_file_shared(&path), Err(Busy::Held)));
+    drop(exclusive);
+    let shared = crate::session::wait::wait_for(crate::test_support::PATIENCE, || {
+        try_lock_file_shared(&path).is_ok()
+    });
+    assert!(shared, "no shared lock once the exclusive one is gone");
+}
+
 /// Not a test of its own: the process the lock test starts takes the lock and holds it until its
 /// standard input closes.
 #[test]

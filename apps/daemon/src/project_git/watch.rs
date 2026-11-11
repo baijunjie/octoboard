@@ -26,7 +26,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::git::layout::is_git_repo;
 use crate::project_git::debounced::{Debounced, Timing};
@@ -235,18 +235,35 @@ impl Inner {
     }
 }
 
+/// Whether an event of `kind` can mean the repository changed. An access changes nothing, and
+/// Linux's inotify reports every file opened, git's own reads included: the `git status` a change
+/// starts would otherwise report itself and start the next one, for ever. A close after writing
+/// goes too: the write itself already arrived as a modification or a rename, so the close adds
+/// nothing.
+fn changes_something(kind: &notify::EventKind) -> bool {
+    !matches!(kind, notify::EventKind::Access(_))
+}
+
+/// The watcher's callback: sends the paths of every event that can be a change to `sender`, and
+/// logs an error the platform reports.
+fn forward(
+    sender: UnboundedSender<Vec<PathBuf>>,
+) -> impl Fn(notify::Result<notify::Event>) + Send + 'static {
+    move |result| match result {
+        Ok(event) if changes_something(&event.kind) => {
+            sender.send(event.paths).ok();
+        }
+        Ok(_) => {}
+        Err(err) => tracing::warn!(%err, "the repository watch reported an error"),
+    }
+}
+
 /// Arms the watcher and starts watching every project the store holds. Run once at daemon start,
 /// inside the runtime. The projects are added off the runtime, since resolving a project on a
 /// stalled volume can block.
 pub fn start(state: &Arc<AppState>) {
     let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-    let watcher =
-        notify::recommended_watcher(move |result: notify::Result<notify::Event>| match result {
-            Ok(event) => {
-                sender.send(event.paths).ok();
-            }
-            Err(err) => tracing::warn!(%err, "the repository watch reported an error"),
-        });
+    let watcher = notify::recommended_watcher(forward(sender));
     let watcher = match watcher {
         Ok(watcher) => watcher,
         Err(err) => {
@@ -352,6 +369,134 @@ mod tests {
         let commit = std::fs::read(heads.join("main")).expect("main is a loose ref");
         std::fs::write(heads.join("main.lock"), commit).unwrap();
         std::fs::rename(heads.join("main.lock"), heads.join("main")).unwrap();
+    }
+
+    #[test]
+    fn an_access_is_not_a_change() {
+        use notify::event::{AccessKind, AccessMode};
+        for kind in [
+            AccessKind::Any,
+            AccessKind::Read,
+            AccessKind::Open(AccessMode::Any),
+            AccessKind::Open(AccessMode::Read),
+            AccessKind::Open(AccessMode::Write),
+            AccessKind::Open(AccessMode::Execute),
+            AccessKind::Open(AccessMode::Other),
+            AccessKind::Close(AccessMode::Any),
+            AccessKind::Close(AccessMode::Read),
+            AccessKind::Close(AccessMode::Write),
+            AccessKind::Close(AccessMode::Execute),
+            AccessKind::Close(AccessMode::Other),
+            AccessKind::Other,
+        ] {
+            assert!(
+                !changes_something(&notify::EventKind::Access(kind)),
+                "{kind:?} changes nothing"
+            );
+        }
+    }
+
+    #[test]
+    fn every_other_kind_of_event_can_be_a_change() {
+        use notify::event::{
+            CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind, RenameMode,
+        };
+        use notify::EventKind;
+        for kind in [
+            EventKind::Any,
+            EventKind::Other,
+            EventKind::Create(CreateKind::Any),
+            EventKind::Create(CreateKind::File),
+            EventKind::Create(CreateKind::Folder),
+            EventKind::Create(CreateKind::Other),
+            EventKind::Modify(ModifyKind::Any),
+            EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+            EventKind::Modify(ModifyKind::Data(DataChange::Size)),
+            EventKind::Modify(ModifyKind::Data(DataChange::Content)),
+            EventKind::Modify(ModifyKind::Data(DataChange::Other)),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any)),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::AccessTime)),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::WriteTime)),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Permissions)),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Ownership)),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Extended)),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::Other)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::Any)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::From)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+            EventKind::Modify(ModifyKind::Other),
+            EventKind::Remove(RemoveKind::Any),
+            EventKind::Remove(RemoveKind::File),
+            EventKind::Remove(RemoveKind::Folder),
+            EventKind::Remove(RemoveKind::Other),
+        ] {
+            assert!(changes_something(&kind), "{kind:?} can be a change");
+        }
+    }
+
+    /// What the platform reports for files that are only read must not count as a change, or a
+    /// re-read's own reads would start the next one. Inotify, which reports opens, is the platform
+    /// where that happens. The reads are followed by a write: events arrive in the order they
+    /// happened, so the write's paths must be the first the watch's callback forwards, and the
+    /// wait is on that write, not on a window of quiet. A second, raw watcher shows the reads did
+    /// reach the platform's watch as accesses of those very files.
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn reading_a_repository_forwards_no_change() {
+        let repo = repo_with("git-watch-reads", &[(b"a", b"a")]);
+        let git_dir = repo.join(".git");
+        let head = git_dir.join("HEAD");
+        let main = git_dir.join("refs/heads/main");
+        let marker = git_dir.join("refs/heads/read-marker");
+
+        let (sender, mut forwarded) = tokio::sync::mpsc::unbounded_channel();
+        let mut watcher = notify::recommended_watcher(forward(sender)).expect("a watcher");
+        watcher
+            .watch(&git_dir, RecursiveMode::Recursive)
+            .expect("the git directory is watched");
+        let (raw_sender, raw) = std::sync::mpsc::channel();
+        let mut raw_watcher =
+            notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
+                raw_sender
+                    .send(result.expect("the watch reports no error"))
+                    .ok();
+            })
+            .expect("a raw watcher");
+        raw_watcher
+            .watch(&git_dir, RecursiveMode::Recursive)
+            .expect("the git directory is watched");
+
+        std::fs::read(&head).unwrap();
+        std::fs::read(&main).unwrap();
+        std::fs::write(&marker, b"0").unwrap();
+
+        let first = tokio::time::timeout(FILE_EVENT_PATIENCE, forwarded.recv())
+            .await
+            .expect("the write after the reads is reported")
+            .expect("the watch is alive");
+        assert!(
+            first.contains(&marker),
+            "{first:?} was caused by reading, not by a change"
+        );
+
+        let (mut head_read, mut main_read) = (false, false);
+        loop {
+            let event = raw
+                .recv_timeout(FILE_EVENT_PATIENCE)
+                .expect("the raw watch reports the write too");
+            if matches!(event.kind, notify::EventKind::Access(_)) {
+                head_read |= event.paths.contains(&head);
+                main_read |= event.paths.contains(&main);
+            }
+            if event.paths.contains(&marker) {
+                break;
+            }
+        }
+        assert!(
+            head_read && main_read,
+            "inotify reports the reads as accesses"
+        );
     }
 
     #[test]

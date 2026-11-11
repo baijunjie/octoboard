@@ -206,8 +206,14 @@ branch's responsible session — the branch's **attribution**.
   sessions and project sessions" in `docs/product/sessions.md`), is given nothing, and a console session is never
   named.
 - **A session that has ended still counts.** A branch created by a background job the session left running, after the
-  session's agent stopped or the session was archived, still names the session. A report for a session that has been
-  deleted is dropped.
+  session's agent stopped or the session was archived, still names the session: once the way the session's own launch
+  reported has gone with it, the job's git reports to the running daemon by the record the daemon keeps of itself (see
+  "The session's git hooks" below). A report for a session that has been deleted is dropped, and so is one made while
+  neither the session's holder nor any daemon is running. A job left running by a session launched by an earlier version
+  of Octoboard may report nothing once the copy of the build its hooks run is removed. Only a job still running counts:
+  one the session's launch started that the user did not keep is stopped when the session ends (see "Automatic stopping
+  and its boundaries" in `docs/product/background-processes.md`), and with it whatever it would have reported or the
+  revert gate would have checked; to have it carry on, keep it.
 - **Only in the session's own project's repository.** A report counts only for a branch created in the repository the
   session's project is in — its main working copy or any linked worktree of it. A branch the session's git creates in
   any other repository, a clone of the project's included, is ignored.
@@ -230,8 +236,8 @@ can be one of the other project's.
   for the session, and no branch it makes gets a responsible session.
 - The daemon's own executable found, and Octoboard's data directory writable for the dispatchers (see "The session's
   git hooks" below).
-- A `GIT_CONFIG_COUNT` exported by the user's shell that is a number, if there is one at all; one that is not already
-  fails every git the user runs, and the session is given nothing.
+- A `GIT_CONFIG_PARAMETERS` exported by the user's shell that git can read, if there is one at all; one that git
+  cannot already fails every git the user runs, and the session is given nothing.
 
 Where any of these is missing the session runs as it would without attribution, and without the revert gate, and
 nothing says so. Each git and daemon executable is checked at the first launch that uses it; a check that failed is
@@ -239,12 +245,34 @@ tried again by a launch at least ten minutes later.
 
 ## The session's git hooks
 
-The agent's environment gets `core.hooksPath` through git's own `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_<n>` and
-`GIT_CONFIG_VALUE_<n>` variables, in the next free slot after the entries the user's shell exports (which keep their
-order and their effect), together with `OCTOBOARD_SESSION_ID`, `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_KEY`,
-which say where a report goes and whom the revert gate asks, and carry the key the daemon requires (see "Who can reach
-the daemon" in `docs/product/application-lifecycle.md`). Nothing is written to a configuration file or a repository, and nothing reaches a
-process outside the agent's tree.
+The agent's environment gets `core.hooksPath` through git's own `GIT_CONFIG_PARAMETERS`, the variable `git -c` passes
+its options in, after the entries the user's shell exports there (which keep their order and their effect). It takes
+precedence over a `core.hooksPath` the user exports through `GIT_CONFIG_COUNT`, whose entries are left as they are, and
+a `git -c core.hooksPath=…` the user or the agent runs takes precedence over it. Beside it come `OCTOBOARD_SESSION_ID`,
+`OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_CREDENTIAL_PATH`, which say whom a report is for, where it goes and whom
+the revert gate asks, and name the owner-only file holding the key the daemon requires, which the key itself never
+leaves (see `docs/product/who-can-reach-the-daemon.md`). None of these names holds `KEY`, `SECRET` or `TOKEN`: an agent
+that strips variables named so from the commands it runs — Codex does so only where the user has set
+`ignore_default_excludes = false` in its shell environment policy — leaves them all, and git keeps working (a
+`GIT_CONFIG_COUNT` whose `GIT_CONFIG_KEY_<n>` were stripped would fail every git that reads configuration). Nothing is
+written to a configuration file or a repository, and nothing reaches a process outside the agent's tree.
+
+- **Where a report goes.** A report, and the revert gate's question, go first to the port in the environment — the
+  process holder that runs the session, or the daemon for a terminal it runs itself — with the key in that file. Once
+  the session has ended the file is gone, and the holder stops taking the session's key and then exits; so where the
+  environment names no port or no readable key file, or the port refuses the key or has nothing listening, they go to
+  the daemon that runs against the data directory the dispatchers live in (not the home directory of the git's own
+  environment, which a daemon with another home never shared), found through the record it keeps of itself for
+  `octoboardd address` (its owner record and its key record), and only while the process that record names is still
+  running. A holder answering that no daemon is there, or that it lost the daemon mid-call, or no answer in time, means
+  the daemon is not there, and nothing more is tried. With neither way open the report is dropped and the gate lets the
+  git through, as when the daemon is not running.
+- **What the dispatchers run.** They run the daemon executable at the path the installed application or server keeps
+  it at — what an update replaces in place — not the copy of the build process holders run from (see "The copy of the
+  build holders run from" in `docs/product/process-holders.md`), which is removed once no holder runs from it. So a job
+  left running keeps reaching a working executable across holders exiting and across updates, and is served by whatever
+  version is installed by then. Moving or removing the installation leaves such a job's git reporting nothing and
+  ungated.
 
 - **The dispatchers** live in `~/.octoboard/githooks/<content hash>/`, shared by every session, written once and left
   read-only. It holds a copy of the dispatcher under every hook name git documents: a built-in list, together with
@@ -254,8 +282,10 @@ process outside the agent's tree.
 - **The user's own hooks still run.** Each dispatcher runs the hook the user's configuration names, exactly where git
   would have found it without Octoboard — the `core.hooksPath` of any configuration file, include, `-c` option or
   exported entry, or else the repository's own hooks directory — with the same arguments, input and environment. Only
-  Octoboard's own `core.hooksPath` entry is taken out, so the hook, and every git it runs, sees the user's
-  configuration alone. The hook's outcome is git's: one that aborts a commit or a transaction still aborts it.
+  Octoboard's own `core.hooksPath` entry is taken out (and, of the `GIT_CONFIG_COUNT` entries, one pointing at another
+  directory of dispatchers beside it, which a daemon started from inside an earlier session may have passed on), so the
+  hook, and every git it runs, sees the user's configuration alone. The hook's outcome is git's: one that aborts a
+  commit or a transaction still aborts it.
 - **The revert gate runs after the user's hook.** Once the user's `reference-transaction` hook has passed a
   transaction that moves an existing branch, or the user's `pre-push` hook has passed a push of branches, the
   dispatcher runs the revert gate, which can still refuse it (see `docs/product/revert-gate.md`).

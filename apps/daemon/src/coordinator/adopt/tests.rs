@@ -610,6 +610,100 @@ async fn a_holder_out_of_the_range_is_not_adopted_and_its_session_is_interrupted
     );
 }
 
+/// The daemon's ordinary stop releases each session's terminal in its holder before it parts from
+/// it, so the holder, left with nothing to serve, exits: it never outlives the stop holding a
+/// terminal whose program the stop ended. The session's output is saved before the terminal is
+/// hung up.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ordinary_stop_releases_a_held_sessions_terminal_and_its_holder_exits() {
+    use crate::test_support::within;
+    let (state, dir) = console_with_project_and_accounts("adopt-ordinary-stop-releases");
+    record(&state, "s1", SessionStatus::Working);
+    let run_dir = dir.join("run");
+    let scratch = run_dir.join("s1");
+    std::fs::create_dir_all(&scratch).unwrap();
+    let pid = left_running_script(
+        &dir,
+        "t1",
+        session_meta("s1", &scratch),
+        "printf 'screen before the stop\\r\\n'; echo ready; while :; do sleep 0.05; done",
+        Size { rows: 24, cols: 80 },
+    );
+    let _guard = KillOnDrop(vec![pid]);
+    let holder = only_holder(&dir);
+    let (next, found) = found_when(&dir, |found| tail_has(found, "ready")).await;
+    let adopted = adopt_in_blocking(&state, found, run_dir).await;
+    assert_eq!(adopted.sessions, ["s1"]);
+
+    // An ordinary stop: every session is ended, then the holders are parted from.
+    state.stop_all_sessions().await;
+    tokio::task::spawn_blocking(move || next.shutdown())
+        .await
+        .unwrap();
+
+    wait_until_running(&[pid], 0);
+    let registry_dir = dir.join("holders");
+    assert!(
+        within(PATIENCE, move || {
+            crate::holder::registry::read(&registry_dir, &holder).is_none()
+        })
+        .await,
+        "the holder kept the terminal after the stop"
+    );
+    let preview = preview_of(&state, "s1").expect("the output is saved");
+    assert!(preview.contains("screen before the stop"), "{preview:?}");
+}
+
+/// A launch registered once the ordinary stop has listed the sessions to end is ended as the stop
+/// ends the rest: its output is saved and its terminal released in its holder, so that the holder,
+/// parted from next, exits, and the stop waits for that end before it parts from the holders.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_launch_registered_after_the_stop_listed_the_sessions_is_released_and_waited_for() {
+    use crate::test_support::within;
+    let (state, dir) = console_with_project_and_accounts("adopt-late-launch-released");
+    record(&state, "s1", SessionStatus::Working);
+    let run_dir = dir.join("run");
+    let scratch = run_dir.join("s1");
+    std::fs::create_dir_all(&scratch).unwrap();
+    let pid = left_running_script(
+        &dir,
+        "t1",
+        session_meta("s1", &scratch),
+        "printf 'screen before the stop\\r\\n'; echo ready; while :; do sleep 0.05; done",
+        Size { rows: 24, cols: 80 },
+    );
+    let _guard = KillOnDrop(vec![pid]);
+    let holder = only_holder(&dir);
+    let (next, found) = found_when(&dir, |found| tail_has(found, "ready")).await;
+
+    // The stop has listed the sessions, none yet, when the launch is registered.
+    state.stop_all_sessions().await;
+    let adopted = adopt_in_blocking(&state, found, run_dir).await;
+    assert_eq!(adopted.sessions, ["s1"]);
+    // The rest of the stop: the late end is waited for, then the holders are parted from.
+    state.await_late_ends().await;
+    assert!(
+        !is_running(pid),
+        "the stop went on before the late launch was ended"
+    );
+    tokio::task::spawn_blocking(move || next.shutdown())
+        .await
+        .unwrap();
+
+    let registry_dir = dir.join("holders");
+    assert!(
+        within(PATIENCE, move || {
+            crate::holder::registry::read(&registry_dir, &holder).is_none()
+        })
+        .await,
+        "the holder kept the late launch's terminal after the stop"
+    );
+    let preview = preview_of(&state, "s1").expect("the output is saved");
+    assert!(preview.contains("screen before the stop"), "{preview:?}");
+}
+
 /// The id of the one holder the registry of `dir` lists.
 fn only_holder(dir: &ScratchDir) -> String {
     let listed = crate::holder::registry::list(&dir.join("holders"));

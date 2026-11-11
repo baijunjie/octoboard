@@ -2,6 +2,7 @@
 //! [`Group`] or [`Subtree`] can be made. The same surface as `cgroup.rs`, so that `unix.rs` is the
 //! same on every Unix host.
 
+use std::ffi::{CStr, CString};
 use std::io;
 
 use super::{ProcessId, ProcessIdentity};
@@ -13,6 +14,20 @@ pub(super) enum Subtree {}
 impl Subtree {
     pub(super) fn below_own() -> Option<Self> {
         None
+    }
+
+    pub(super) fn of_process(_host: &ProcessIdentity) -> Option<Self> {
+        None
+    }
+
+    pub(super) fn note(_host: &ProcessIdentity) {}
+
+    pub(super) fn remember(&self) {
+        match *self {}
+    }
+
+    pub(super) fn all() -> Vec<Self> {
+        Vec::new()
     }
 }
 
@@ -43,6 +58,12 @@ impl Group {
     pub(super) fn adopt_child(&self, _pid: ProcessId) -> io::Result<()> {
         match *self {}
     }
+
+    pub(super) fn procs_path(&self) -> Option<CString> {
+        match *self {}
+    }
+
+    pub(super) fn enter_from_child(_procs: &CStr) {}
 
     pub(super) fn adopt_running(&self, _ids: &[ProcessIdentity]) {
         match *self {}

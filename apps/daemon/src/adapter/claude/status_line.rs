@@ -28,7 +28,7 @@ const TIMEOUT: Duration = Duration::from_millis(500);
 pub struct ClaudeStatusLine;
 
 impl StatusLine for ClaudeStatusLine {
-    fn run(&self, session: &str, port: u16, key: &str, args: &[String]) -> i32 {
+    fn run(&self, session: &str, port: u16, key_file: &Path, args: &[String]) -> i32 {
         let value = |name: &str| {
             let at = args.iter().position(|arg| arg == name)?;
             args.get(at + 1).map(PathBuf::from)
@@ -36,17 +36,20 @@ impl StatusLine for ClaudeStatusLine {
         // Without the directories there is no user status line to find; the window is still
         // reported.
         let dirs = value("--cwd").zip(value("--config-dir"));
-        run(session, port, key, dirs.as_ref())
+        run(session, port, key_file, dirs.as_ref())
     }
 }
 
 /// Runs the status line, with the `(cwd, config_dir)` its user's own is looked for in, and
 /// returns the exit status to leave with.
-fn run(session: &str, port: u16, key: &str, dirs: Option<&(PathBuf, PathBuf)>) -> i32 {
+/// A key file that cannot be read is a daemon that refuses the post: nothing is reported.
+fn run(session: &str, port: u16, key_file: &Path, dirs: Option<&(PathBuf, PathBuf)>) -> i32 {
     let mut input = Vec::new();
     // Claude Code writes the whole input and closes the pipe; what could be read is passed on.
     let _ = std::io::stdin().read_to_end(&mut input);
-    let report = window_of(&input).map(|window| report(port, key, session, window));
+    let report = window_of(&input)
+        .zip(crate::key_file::read(key_file))
+        .map(|(window, key)| report(port, key, session, window));
     let status = match dirs.and_then(|(cwd, config_dir)| user_command(config_dir, cwd)) {
         Some(command) => pass_through(&command, &input, Stdio::inherit()),
         None => 0,
@@ -58,8 +61,7 @@ fn run(session: &str, port: u16, key: &str, dirs: Option<&(PathBuf, PathBuf)>) -
 }
 
 /// Posts `window` for `session` on a thread of its own, whose answer is of no interest.
-fn report(port: u16, key: &str, session: &str, window: u64) -> std::thread::JoinHandle<()> {
-    let key = key.to_owned();
+fn report(port: u16, key: String, session: &str, window: u64) -> std::thread::JoinHandle<()> {
     let path = format!("/context-window/{session}");
     let body = serde_json::json!({ "window": window }).to_string();
     std::thread::spawn(move || {
@@ -230,7 +232,9 @@ mod tests {
             stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").unwrap();
             String::from_utf8(request).unwrap()
         });
-        report(port, "k", "session-1", 200_000).join().unwrap();
+        report(port, "k".to_owned(), "session-1", 200_000)
+            .join()
+            .unwrap();
         assert!(server
             .join()
             .unwrap()
@@ -240,7 +244,9 @@ mod tests {
         let port = gone.local_addr().unwrap().port();
         drop(gone);
         let started = std::time::Instant::now();
-        report(port, "k", "session-1", 200_000).join().unwrap();
+        report(port, "k".to_owned(), "session-1", 200_000)
+            .join()
+            .unwrap();
         // Bounded by the timeout, which a refused connection on Windows takes up in full.
         assert!(started.elapsed() < TIMEOUT * 4);
     }

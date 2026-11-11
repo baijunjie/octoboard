@@ -418,7 +418,7 @@ fn application_id(conn: &Connection) -> Result<i64> {
 /// - with no `application_id` (0), a database written by a build from before the first release:
 ///   moved aside, so `open` starts a fresh one. The old file is renamed rather than deleted, so a
 ///   user who needs what was in it still has it on disk; see "The database's schema version" in
-///   `docs/product/application-lifecycle.md`;
+///   `docs/product/files-octoboard-owns.md`;
 /// - with an `application_id` that is not [`APPLICATION_ID`]: refused and left in place, since it
 ///   is not an Octoboard database and must not be moved, migrated or written to. This is judged
 ///   before the version, so a foreign file is never taken for a newer Octoboard one;

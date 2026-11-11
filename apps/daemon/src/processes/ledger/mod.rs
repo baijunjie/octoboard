@@ -26,11 +26,12 @@
 //! process (see [`crate::holder`]) or a direct child of the daemon or of a holder.
 //!
 //! Where the host keeps a launch's processes in a container the ledger can end as a whole (on
-//! Linux, a cgroup v2 group, when the daemon's cgroup lets it make one), a launch's containment
-//! lists its members, which a scan attributes to it, and the end of the launch kills what is still
-//! in it once the rounds of signals are through, and removes it: nothing a launch started escapes
-//! it, however it detached. Kept processes, and those moved to another launch, are moved out of
-//! it when kept or moved, and again just before it is ended.
+//! Linux, a cgroup v2 group, when the cgroup it is made in lets the daemon make one: below the
+//! daemon's own, or, for a launch the holders run, below that of the holder that runs it, once
+//! known), a launch's containment lists its members, which a scan attributes to it, and the end of
+//! the launch kills what is still in it once the rounds of signals are through, and removes it:
+//! nothing a launch started escapes it, however it detached. Kept processes, and those moved to
+//! another launch, are moved out of it when kept or moved, and again just before it is ended.
 //!
 //! A launch's processes can change hands instead ([`attribute::Book::transfer`]): all of them when
 //! its agent ends after a handoff, an account switch, a model change or a change of an account's
@@ -427,7 +428,13 @@ impl ProcessLedger {
         // Made under the lock, so that the reconcile, which takes in what an earlier run left
         // under the lock too, never finds this containment before the book has the launch.
         let mut book = self.book();
-        let containment = Arc::new(Containment::for_launch(&self.instance, &launch)?);
+        // A launch the holders run gets its group below the cgroup of the holder that runs it,
+        // once that is known (`terminal::backend::Helpers::issue`).
+        let containment = Arc::new(if crate::holder::client::current().is_some() {
+            Containment::for_held_launch(&self.instance, &launch)?
+        } else {
+            Containment::for_launch(&self.instance, &launch)?
+        });
         book.launches.insert(
             launch.clone(),
             Launch {
