@@ -75,7 +75,12 @@ changed directory), and is held for it while the session has no process between 
 are the receiving launch's: they are listed under the receiving session and stopped when its process ends, under the
 rules above, and a helper found later carrying the earlier launch's identity is the receiving launch's too. Kept
 processes stay kept. Only what is still running once the agent has exited can be carried: what the agent itself ends as
-it shuts down is gone, and a restarted session is told so (see "Processes a restart ended" below).
+it shuts down is gone, and a restarted session is told so (see "Processes a restart ended" below). Claude Code, for one,
+ends the background shells it started (its Bash tool's `run_in_background`) as it exits (measured on Claude Code
+2.1.322), so a dev server or preview started that way does not survive a handoff or a restart, while one the agent
+started detached (`nohup … &`, say) is carried over. The background terminals of a Codex launch with its private app
+server are not carried either: they belong to that server, which is ended once the agent's terminal has exited (see
+"Codex's private app server" in `docs/product/per-agent-launch-specifics.md`), and they end with it.
 
 What nothing receives is stopped as usual:
 
@@ -245,11 +250,12 @@ This never applies on macOS or Linux, where what sits in the agent's own termina
 
 ## Processes a restart ended
 
-Carrying processes over does not keep alive what an agent ends itself while it exits: Codex, for one, closes its
-background terminals as it shuts down, so a command it left running in one (a dev server, say) does not survive the
-restart. So an account switch (the user's, an owner's or Octoboard's automatic one, a resume on the session's own
-account after its quota recovered included), a change of a session's model or reasoning effort, and a change of its
-account's sharing tell the relaunched session which of the processes it had started the restart ended.
+Carrying processes over does not keep alive everything a session had running: what ends as the agent's process goes
+down, such as Claude Code's background shells or the background terminals of a Codex launch with its private app
+server, is gone, so a command left running in one (a dev server, say) does not survive the restart (see "Automatic
+stopping and its boundaries" above). So an account switch (the user's, an owner's or Octoboard's automatic one, a resume on the
+session's own account after its quota recovered included), a change of a session's model or reasoning effort, and a
+change of its account's sharing tell the relaunched session which of the processes it had started the restart ended.
 
 - **What counts as ended.** Just before ending the session's process, Octoboard lists the process trees the session
   has running, as its Processes panel lists them. Once the process is recorded down, each of those trees no longer
