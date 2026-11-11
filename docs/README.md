@@ -52,6 +52,8 @@ Where to start, by question:
 - [Interrupting a session's turn](product/interrupting-turns.md) — how a parent stops a child session's running turn.
 - [Message delivery](product/message-delivery.md) — how messages are written into a running session and held when it
   cannot take them.
+- [Messages held after a usage limit](product/messages-held-after-a-usage-limit.md) — how Octoboard's messages are
+  held once a session's turn stopped on its account's usage limit, the user's own messages, and what releases the hold.
 
 ### Orchestration and agent tools
 

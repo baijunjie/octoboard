@@ -217,6 +217,14 @@ fn write_hold_explanation(hold: WriteHold) -> &'static str {
              configuration, and is resumed on its conversation afterwards. Messages for it are \
              queued and written into the resumed process."
         }
+        WriteHold::UsageLimit => {
+            "Its last turn stopped because its account reached its usage limit, so anything \
+             written into it would start another turn that fails the same way. Messages for it are \
+             queued until a fresh reading of its account's quota shows it has recovered, a turn \
+             the user starts in it ends without failing, or it is restarted, switched to another \
+             account or handed off; they are then written in the order they were sent. Do not \
+             send them again."
+        }
         WriteHold::SubmissionUncertain => {
             "Its agent's own message queue did not confirm taking a message. That message may \
              already be queued or running and will not be sent again, so do not send it again \

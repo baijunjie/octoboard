@@ -24,6 +24,10 @@
 //! (`super::restart_outbox`); from then on the outbox takes no message
 //! ([`Outbox::push_unless_sealed`]).
 //!
+//! While a session's writes are held for its account's usage limit
+//! ([`PromptSignal::usage_limit_held`]), only the messages pushed past that hold
+//! ([`Outbox::push_past_usage_limit`]) are written, in their order, and the rest keep their places.
+//!
 //! For the delivery contract see docs/product/message-delivery.md's
 //! "Messages held until a session can take them" section, and for a fragment written while the
 //! draft was stashed its "A message only partly written while the draft is stashed" section.
@@ -48,6 +52,10 @@ pub enum Drain {
     Clear,
     /// Something is still queued, and a later drain will take it.
     Pending,
+    /// What is still queued is held for the account's usage limit
+    /// ([`PromptSignal::usage_limit_held`]), and nothing past that hold is left: every message
+    /// taken off the queue before this drain ended has been written, as for [`Self::Clear`].
+    HeldForUsageLimit,
     /// A message was written in part, so it is gone and the queue behind it with it.
     Lost,
     /// The message with this ticket was written in part while the session's draft was stashed
@@ -71,6 +79,29 @@ pub enum Drain {
 
 /// What [`Outbox::push`] hands back for a message, for telling it apart in a drain's outcome.
 pub type Ticket = u64;
+
+/// What a session's queue is held for ([`Outbox::hold`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HoldKind {
+    /// The session is being handed off, and what is queued goes to its successor.
+    Handoff,
+    /// The session is being restarted for a change of its account's sharing.
+    Sharing,
+    /// The session's process is being restarted by a switch of its account or a change of its
+    /// model or effort, and what is queued goes to the relaunched process.
+    Restart,
+    /// [`Self::Restart`] once the relaunch has started a process: what is queued is written into
+    /// it as into any session, and is kept, not forgotten, if that process ends, for whatever
+    /// brings the session back up next.
+    Relaunched,
+}
+
+impl HoldKind {
+    /// Whether a hold of this kind keeps the queue from being written.
+    fn blocks_writes(self) -> bool {
+        self != Self::Relaunched
+    }
+}
 
 /// The first message's place, reserved before its session is published and while its queue is paused.
 pub(crate) struct FirstTicket {
@@ -130,6 +161,11 @@ pub trait PromptSignal {
     fn input_held(&self) -> bool {
         false
     }
+    /// Whether Octoboard's writes are held because a turn stopped on the account's usage limit,
+    /// which only messages pushed past it go through ([`Outbox::push_past_usage_limit`]).
+    fn usage_limit_held(&self) -> bool {
+        false
+    }
     /// Whether no write may start any more: a planned stop is handing the terminals over, and
     /// what is still queued goes to the next daemon. Read before each message.
     fn writes_stopped(&self) -> bool {
@@ -164,10 +200,16 @@ pub struct Outbox {
     next_ticket: AtomicU64,
     /// The sessions a drainer currently owns.
     draining: Mutex<HashSet<String>>,
-    /// The sessions whose queue is held: messages are still accepted but none is written, because
-    /// the session is being handed off and what is queued for it goes to its successor, or
-    /// restarted for a change of its account's sharing (the value is `true`).
-    held: Mutex<HashMap<String, bool>>,
+    /// The sessions whose queue is held, and what for: messages are still accepted but none is
+    /// written.
+    held: Mutex<HashMap<String, HoldKind>>,
+    /// The messages a hold for the account's usage limit does not hold, by ticket: the user's own,
+    /// sent from a client.
+    past_usage_limit: Mutex<HashSet<Ticket>>,
+    /// The instruction a relaunch after a restart put at the front of the session's held queue
+    /// ([`Outbox::push_relaunch_instruction`]), by session: withdrawn if the relaunch fails, as a
+    /// restore of the session after that gives none.
+    relaunch_instructions: Mutex<HashMap<String, Ticket>>,
     /// The sessions whose queue is paused for a moment (`AppState::pause_outbox`), each with how
     /// many pauses are held on it: like a hold, nothing is written, but it is no handoff and has no
     /// successor.
@@ -287,15 +329,86 @@ impl Outbox {
         Some(ticket)
     }
 
-    /// [`Self::push`], unless the queues have been sealed for the next daemon ([`Self::seal`]):
-    /// then `None`, and nothing is queued. Judged under the queues' lock, so a message either is
-    /// among those sealed or is refused.
-    pub fn push_unless_sealed(&self, id: &str, text: &str) -> Option<Ticket> {
+    /// [`Self::push_unless_sealed`] for a message a hold for the account's usage limit does not
+    /// hold: written as soon as nothing else holds the session, ahead of the messages that hold
+    /// keeps back, which stay in their order behind it.
+    pub fn push_past_usage_limit(&self, id: &str, text: &str) -> Option<Ticket> {
+        self.push_unsealed(id, text, true)
+    }
+
+    /// The instruction a relaunch gives a session whose queue a restart holds
+    /// ([`HoldKind::Restart`]): put at the front, ahead of what the restart carries over, and noted
+    /// so that [`Self::withdraw_relaunch_instruction`] can take it back. `None`, with nothing
+    /// queued, once the queues have been sealed for the next daemon ([`Self::seal`]).
+    pub fn push_relaunch_instruction(&self, id: &str, text: &str) -> Option<Ticket> {
         let mut queues = self.queues.lock().expect("outbox lock poisoned");
         if self.sealed.load(Ordering::Acquire) {
             return None;
         }
         let ticket = self.next_ticket.fetch_add(1, Ordering::Relaxed);
+        queues
+            .entry(id.to_string())
+            .or_default()
+            .push_front((ticket, text.to_string(), None));
+        self.relaunch_instructions
+            .lock()
+            .expect("outbox relaunch lock poisoned")
+            .insert(id.to_string(), ticket);
+        Some(ticket)
+    }
+
+    /// Takes back the instruction a failed relaunch put on the session's queue
+    /// ([`Self::push_relaunch_instruction`]), if it is still queued.
+    pub fn withdraw_relaunch_instruction(&self, id: &str) {
+        let Some(ticket) = self
+            .relaunch_instructions
+            .lock()
+            .expect("outbox relaunch lock poisoned")
+            .remove(id)
+        else {
+            return;
+        };
+        let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        if let Some(queue) = queues.get_mut(id) {
+            queue.retain(|(queued, _, _)| *queued != ticket);
+            if queue.is_empty() {
+                queues.remove(id);
+            }
+        }
+        drop(queues);
+        self.unkeep(std::iter::once(ticket));
+    }
+
+    /// Whether the message `ticket` is still queued for the session `id`, not taken by a drain.
+    pub fn is_queued(&self, id: &str, ticket: Ticket) -> bool {
+        self.queues
+            .lock()
+            .expect("outbox lock poisoned")
+            .get(id)
+            .is_some_and(|queue| queue.iter().any(|(queued, _, _)| *queued == ticket))
+    }
+
+    /// [`Self::push`], unless the queues have been sealed for the next daemon ([`Self::seal`]):
+    /// then `None`, and nothing is queued. Judged under the queues' lock, so a message either is
+    /// among those sealed or is refused.
+    pub fn push_unless_sealed(&self, id: &str, text: &str) -> Option<Ticket> {
+        self.push_unsealed(id, text, false)
+    }
+
+    /// [`Self::push_unless_sealed`], marking the message as going past a hold for the account's
+    /// usage limit when `past_usage_limit`.
+    fn push_unsealed(&self, id: &str, text: &str, past_usage_limit: bool) -> Option<Ticket> {
+        let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        if self.sealed.load(Ordering::Acquire) {
+            return None;
+        }
+        let ticket = self.next_ticket.fetch_add(1, Ordering::Relaxed);
+        if past_usage_limit {
+            self.past_usage_limit
+                .lock()
+                .expect("outbox usage limit lock poisoned")
+                .insert(ticket);
+        }
         queues
             .entry(id.to_string())
             .or_default()
@@ -537,7 +650,7 @@ impl Outbox {
 
     /// The message with this ticket is in its session, so its row, if it has one, may go.
     fn mark_written(&self, ticket: Ticket) {
-        self.forget_grace(std::iter::once(ticket));
+        self.forget_ticket_marks(std::iter::once(ticket));
         let mut kept = self.kept.lock().expect("outbox kept lock poisoned");
         if let Some(row) = kept.queued.remove(&ticket) {
             kept.tickets.remove(&row);
@@ -547,7 +660,7 @@ impl Outbox {
 
     /// The messages with these tickets will not be written by this queue, so their rows stay.
     fn unkeep(&self, tickets: impl Iterator<Item = Ticket> + Clone) {
-        self.forget_grace(tickets.clone());
+        self.forget_ticket_marks(tickets.clone());
         let mut kept = self.kept.lock().expect("outbox kept lock poisoned");
         for ticket in tickets {
             if let Some(row) = kept.queued.remove(&ticket) {
@@ -556,15 +669,20 @@ impl Outbox {
         }
     }
 
-    /// Forgets whether a hold of the server started these messages' grace again, as they leave the
-    /// queue.
-    fn forget_grace(&self, tickets: impl Iterator<Item = Ticket>) {
+    /// Forgets what is noted of these messages beside the queue as they leave it: whether a hold of
+    /// the server started their grace again, and whether they go past a hold for the usage limit.
+    fn forget_ticket_marks(&self, tickets: impl Iterator<Item = Ticket>) {
         let mut restarted = self
             .grace_restarted
             .lock()
             .expect("outbox grace lock poisoned");
+        let mut past = self
+            .past_usage_limit
+            .lock()
+            .expect("outbox usage limit lock poisoned");
         for ticket in tickets {
             restarted.remove(&ticket);
+            past.remove(&ticket);
         }
     }
 
@@ -602,7 +720,7 @@ impl Outbox {
         // The claim is released before the queue is re-read, so there is no ordering in which the
         // producer both fails to claim and lets this loop exit.
         loop {
-            if self.is_held(id) || self.is_paused(id) {
+            if self.blocks_writes(id) || self.is_paused(id) {
                 return Drain::Pending;
             }
             let Some(claim) = self.claim(id) else {
@@ -626,7 +744,7 @@ impl Outbox {
     ) -> Drain {
         loop {
             // Re-read for every message: a hold taken while this pass runs stops it at the next one.
-            if self.is_held(id) || self.is_paused(id) {
+            if self.blocks_writes(id) || self.is_paused(id) {
                 return Drain::Pending;
             }
             if prompts.unsent_waiting()
@@ -651,7 +769,17 @@ impl Outbox {
             if seen.current.is_some() {
                 return Drain::Pending;
             }
-            let Some((ticket, text, protection_started)) = self.pop(id) else {
+            let next = if prompts.usage_limit_held() {
+                match self.pop_past_usage_limit(id) {
+                    Some(next) => Some(next),
+                    // What is left is held, not drained.
+                    None if self.len(id) > 0 => return Drain::HeldForUsageLimit,
+                    None => None,
+                }
+            } else {
+                self.pop(id)
+            };
+            let Some((ticket, text, protection_started)) = next else {
                 return Drain::Clear;
             };
             let protection_started = protection_started.unwrap_or_else(Instant::now);
@@ -858,11 +986,11 @@ impl Outbox {
     }
 
     /// Stops writing this session's queue until [`Self::release_hold`]. Pushing still works.
-    pub fn hold(&self, id: &str, for_sharing: bool) {
+    pub fn hold(&self, id: &str, kind: HoldKind) {
         self.held
             .lock()
             .expect("outbox hold lock poisoned")
-            .insert(id.to_string(), for_sharing);
+            .insert(id.to_string(), kind);
     }
 
     /// Stops writing this session's queue until every pause taken has been ended with
@@ -899,8 +1027,19 @@ impl Outbox {
             .lock()
             .expect("outbox hold lock poisoned")
             .remove(id);
+        self.relaunch_instructions
+            .lock()
+            .expect("outbox relaunch lock poisoned")
+            .remove(id);
     }
 
+    /// Whether this session's queue is held from being written ([`HoldKind::blocks_writes`]).
+    pub fn blocks_writes(&self, id: &str) -> bool {
+        self.held_for(id).is_some_and(HoldKind::blocks_writes)
+    }
+
+    /// Whether this session's queue is held for anything, which keeps it when the session's
+    /// process ends.
     pub fn is_held(&self, id: &str) -> bool {
         self.held
             .lock()
@@ -908,14 +1047,13 @@ impl Outbox {
             .contains_key(id)
     }
 
-    /// Whether the hold on this session's queue is for a change of its account's sharing.
-    pub fn is_held_for_sharing(&self, id: &str) -> bool {
+    /// What the hold on this session's queue is for, if it is held.
+    pub fn held_for(&self, id: &str) -> Option<HoldKind> {
         self.held
             .lock()
             .expect("outbox hold lock poisoned")
             .get(id)
             .copied()
-            .unwrap_or(false)
     }
 
     /// Removes and returns what is queued for this session, oldest first, each with the row it is
@@ -958,6 +1096,26 @@ impl Outbox {
         let mut queues = self.queues.lock().expect("outbox lock poisoned");
         let queue = queues.get_mut(id)?;
         let next = queue.pop_front();
+        if queue.is_empty() {
+            queues.remove(id);
+        }
+        next
+    }
+
+    /// Takes the oldest message of the session's queue that a hold for the usage limit does not
+    /// hold, leaving the others where they are.
+    fn pop_past_usage_limit(&self, id: &str) -> Option<(Ticket, String, Option<Instant>)> {
+        let mut queues = self.queues.lock().expect("outbox lock poisoned");
+        let queue = queues.get_mut(id)?;
+        let past = self
+            .past_usage_limit
+            .lock()
+            .expect("outbox usage limit lock poisoned");
+        let index = queue
+            .iter()
+            .position(|(ticket, _, _)| past.contains(ticket))?;
+        drop(past);
+        let next = queue.remove(index);
         if queue.is_empty() {
             queues.remove(id);
         }
@@ -1116,6 +1274,75 @@ mod tests {
             assert!(outbox.refusals_to_announce("other").is_empty());
             assert_eq!(outbox.take_refusal(7).is_some(), draining);
         }
+    }
+
+    /// [`MidTurn`] for a session whose writes are held for its account's usage limit, or not.
+    struct UsageLimited(Cell<bool>);
+
+    impl PromptSignal for UsageLimited {
+        fn sent(&self) -> u64 {
+            0
+        }
+        fn expects_send(&self) -> bool {
+            false
+        }
+        fn wait_past(&self, _before: u64) -> bool {
+            unreachable!("nothing is waited on mid-turn")
+        }
+        fn mark_unsent(&self, _before: u64) {
+            unreachable!("nothing is checked mid-turn")
+        }
+        fn mark_not_submitted(&self, _before: u64) {
+            unreachable!("nothing is checked mid-turn")
+        }
+        fn unsent_waiting(&self) -> bool {
+            false
+        }
+        fn sighting(&self) -> Sighting {
+            Sighting::default()
+        }
+        fn watch_screen(&self, _on: bool) {
+            unreachable!("nothing is checked mid-turn")
+        }
+        fn trust_holds_writes(&self) -> bool {
+            false
+        }
+        fn usage_limit_held(&self) -> bool {
+            self.0.get()
+        }
+    }
+
+    /// While a usage limit holds the session's writes, only the user's messages go, in their
+    /// order, past the ones held; once it lets go the held ones follow in theirs.
+    #[test]
+    fn a_usage_limit_hold_lets_only_the_user_s_messages_past() {
+        let outbox = Outbox::default();
+        let held = UsageLimited(Cell::new(true));
+        outbox.push("s", "first");
+        outbox.push_past_usage_limit("s", "mine");
+        outbox.push("s", "second");
+        outbox.push_past_usage_limit("s", "mine too");
+        let mut written = Vec::new();
+        let mut write = |_, text: &str, _| {
+            written.push(text.to_string());
+            Ok(Route::Terminal)
+        };
+        assert_eq!(
+            outbox.drain_with("s", &mut write, &held),
+            Drain::HeldForUsageLimit
+        );
+        assert_eq!(outbox.len("s"), 2);
+        assert!(outbox.past_usage_limit.lock().unwrap().is_empty());
+        assert_eq!(
+            outbox.drain_with("s", &mut write, &held),
+            Drain::HeldForUsageLimit
+        );
+        held.0.set(false);
+        assert_eq!(outbox.drain_with("s", &mut write, &held), Drain::Clear);
+        // Nothing held and nothing of the user's: an empty queue is clear, as ever.
+        held.0.set(true);
+        assert_eq!(outbox.drain_with("s", &mut write, &held), Drain::Clear);
+        assert_eq!(written, ["mine", "mine too", "first", "second"]);
     }
 
     /// What a hold of the server noted of a message's grace goes once the message leaves the

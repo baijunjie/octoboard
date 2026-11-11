@@ -126,7 +126,8 @@ pub(crate) async fn relaunch_session_with(
     };
     // The information is queued in the order it arrived. For a Claude Code resume the instruction
     // goes as the launch prompt, so the information is written after it; for the other agents it
-    // is queued behind the information. Each row stays in the store until its message has been
+    // is queued behind the information, except under a restart's hold, where it is put ahead of
+    // the information and of what the restart carried over. Each row stays in the store until its message has been
     // written into the session (`AppState::flush_outbox`): a launch that fails, a process that
     // ends or a daemon that exits before then discards the queue and leaves the row for the next
     // resume.
@@ -134,9 +135,10 @@ pub(crate) async fn relaunch_session_with(
         state.queue_kept_message(&session.id, text, *row);
     }
     // Queued with every refusal above already past, so a call that never launched leaves nothing
-    // behind for a later launch to deliver.
+    // behind for a later launch to deliver. After a restart it goes ahead of what the restart
+    // carried over.
     if let Some(instruction) = queued {
-        state.queue_message(&session.id, instruction);
+        state.queue_relaunch_instruction(&session.id, instruction);
     }
 
     match start_process(
@@ -191,6 +193,11 @@ pub(crate) async fn relaunch_session_with(
                 }
             }
             state.publish_session(&recorded);
+            // A hook of the relaunched agent may have tried the queue while the restart still
+            // blocked it, and would not try again until its next event.
+            if state.relaunched_after_restart(&session.id) {
+                state.retry_pending_outbox(&session.id);
+            }
             Ok(())
         }
         Err(err) => {
@@ -212,8 +219,11 @@ pub(crate) async fn relaunch_session_with(
             }
             state.revoke_mcp_tokens(&session.id);
             // Nothing will ever release what was queued for this relaunch, and leaving it would
-            // deliver a stale instruction to whatever launch comes next.
-            state.discard_outbox(&session.id);
+            // deliver a stale instruction to whatever launch comes next. What a restart carried
+            // over is its hold's to keep for a restore, all but this relaunch's instruction.
+            if !state.relaunch_failed_after_restart(&session.id) {
+                state.discard_outbox(&session.id);
+            }
             Err(err)
         }
     }

@@ -9,6 +9,7 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
 
+use crate::messaging::outbox::HoldKind;
 use crate::protocol::{error_code, CodedError, Event, TermControl, TermEvent};
 use crate::session::LiveSession;
 use crate::state::AppState;
@@ -455,11 +456,15 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String, hi
             // While the session's messages are held (`OutboxHold`: a handoff, an agent's transfer
             // of a session it owns, a sharing change), what is typed waits here too: a turn it
             // started now would run against work that is being moved. Released, it goes in as
-            // usual; never written, it is reported as lost when the socket ends.
+            // usual; never written, it is reported as lost when the socket ends. A restart's hold
+            // keeps nothing of the person's: their typing goes to the process as it stands.
             if user_ready
                 && !deferred.frames.is_empty()
                 && matches!(terminal, Terminal::Session(_))
-                && state.outbox.is_held(&id)
+                && matches!(
+                    state.outbox.held_for(&id),
+                    Some(HoldKind::Handoff | HoldKind::Sharing)
+                )
             {
                 user_ready = false;
             }
@@ -1462,6 +1467,53 @@ mod tests {
         })
         .await
         .expect("the typing goes in once the hold ends");
+        socket.close(None).await.unwrap();
+        server.abort();
+        let _ = server.await;
+        drop((live, dir));
+    }
+
+    /// A restart's hold on the session's messages keeps nothing of what the person types: it goes
+    /// to the process as it stands.
+    #[tokio::test]
+    async fn typing_is_not_held_by_a_restart_s_hold_on_the_sessions_messages() {
+        use tokio_tungstenite::tungstenite::Message as Frame;
+
+        let (state, dir) = app_state("server-input-restart");
+        let live = raw_echo("restarting");
+        crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+        state.register_live(live.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let served = state.clone();
+        let server = tokio::spawn(async move { axum::serve(listener, router(served)).await });
+        let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/ws/term/restarting?key={TEST_KEY}"
+        ))
+        .await
+        .unwrap();
+        let mut output = Vec::new();
+        while !output.windows(5).any(|text| text == b"READY") {
+            if let Some(Ok(Frame::Binary(data))) =
+                tokio::time::timeout(PATIENCE, socket.next()).await.unwrap()
+            {
+                output.extend_from_slice(&data);
+            }
+        }
+        output.clear();
+
+        let hold = state.hold_outbox_for_restart("restarting");
+        socket.send(Frame::Binary(b"typed".to_vec())).await.unwrap();
+        tokio::time::timeout(PATIENCE, async {
+            while !output.windows(5).any(|text| text == b"typed") {
+                if let Some(Ok(Frame::Binary(data))) = socket.next().await {
+                    output.extend_from_slice(&data);
+                }
+            }
+        })
+        .await
+        .expect("the typing goes in while the hold lasts");
+        drop(hold);
         socket.close(None).await.unwrap();
         server.abort();
         let _ = server.await;

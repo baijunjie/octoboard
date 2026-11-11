@@ -144,9 +144,9 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   is, `change.rs` the account switch and handoff variant, `carry_out.rs` what an approval does, `outcome.rs` the wording
   of the outcome.
 - `src/messaging/` — every message Octoboard writes into sessions: `delivery.rs` (gates, queueing, what became of each
-  message), `outbox.rs` (the per-session ordered queue, sealed at a planned stop's handover, which also keeps the tickets a refusal failed; a daemon's tickets start from the clock, `Outbox::seeded_from_clock`, because an agent's own queue keeps a message's id across runs), `write_queue.rs`
+  message), `outbox.rs` (the per-session ordered queue, sealed at a planned stop's handover, which also keeps the tickets a refusal failed, and whose holds include the one a restart puts on the queue so it is carried into the relaunched process; a daemon's tickets start from the clock, `Outbox::seeded_from_clock`, because an agent's own queue keeps a message's id across runs), `write_queue.rs`
   (`AppState`'s queuing, flushing and holds over it, and the notice of a refused message), `restart_outbox.rs` (the messages still queued at the handover,
-  saved for the next daemon and requeued by it), `reporting.rs`, `capacity_retry.rs` (the retries of a Codex turn that stopped at its model's capacity; its
+  saved for the next daemon and requeued by it), `reporting.rs`, `usage_limit.rs` (arming the hold on Octoboard's own writes once a turn stopped on the account's usage limit, and releasing it; the hold's state is `session/usage_limit.rs`'s), `capacity_retry.rs` (the retries of a Codex turn that stopped at its model's capacity; its
   waits live in `AppState::capacity_retries`), `sharing.rs`, `naming.rs` (how a message names a session, a place, a
   quoted body),
   `owner_notices.rs` (every notice to an owner), `texts.rs` (fixed texts in Octoboard's own name).
@@ -332,7 +332,7 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   at its composer rather than its title, and Claude Code's readiness, otherwise its bracketed paste after the first
   hook, also comes with its input box drawn after `SessionStart`, `on_session_start`), `interrupt/`, `title_activity.rs` (what
   a terminal title says about a turn), `title_interrupt.rs` (a cancel that left no other trace, read off the title),
-  `wait.rs` (polling a condition, `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`),
+  `usage_limit.rs` (where the process stands with the hold on Octoboard's writes after a usage-limit stop: judging, held or free; per process, so a new process starts free), `wait.rs` (polling a condition, `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`),
   `program_status.rs` (the session's status, turns and pause taken from the root status record the program reports
   through OSC 7501, only for an agent whose provider has no status integration).
   `screen.rs` is the `ScreenReader` trait, how one provider's terminal screens, input box and title read, which
@@ -433,7 +433,8 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   hook's hint, the account directories walked, `record_paths` for every record of a session), `removal.rs` says which
   paths a deletion removes, `resumability.rs` judges whether a conversation can be resumed, `carried.rs` the record a
   switch of accounts carries and what travels with it, `switch_continue.rs` whether a relaunched session is sent a
-  prompt to carry on (its text is `messaging/texts.rs`); then the one collector that persists what the records show,
+  prompt to carry on (its text is `messaging/texts.rs`), whether its last turn stopped on the usage limit, and
+  `wait_for_usage_limit`, the wait for the record to say so, used by the automatic account switch and by `messaging/usage_limit.rs`; then the one collector that persists what the records show,
   conversation and history reading, and `watch/` (the poll mechanism every record watch runs on, and `back_at_prompt`,
   putting a session back at its prompt after a watch finding); every pass over a
   record goes through `line_file.rs`.

@@ -273,7 +273,10 @@ over (see "The status order" in `docs/product/order-of-projects-and-sessions.md`
 left running in the background are carried over to the restarted session rather than stopped, as in an account switch, and kept as project processes
 when the restart fails after it ended the process (see "Automatic stopping and its boundaries" in
 `docs/product/background-processes.md`); those the restart ended anyway are named to the session (see "Processes a
-restart ended" in `docs/product/background-processes.md`). An interrupted session is not started: the choices are recorded for its next
+restart ended" in `docs/product/background-processes.md`). What is queued for the session is written into the
+restarted process, behind its prompt to continue when it is sent one, and dropped when the restart fails after ending
+the process (see "What is queued crosses an account switch or a model change" in `docs/product/message-delivery.md`).
+An interrupted session is not started: the choices are recorded for its next
 resume. The changed values become the session's own choices, persisting as described at the top of this document. The
 user can change a session waiting for the user too; the dialog explains that restarting ends the prompt it was showing.
 For a dormant session it explains instead that the session is showing its background agents and restarting closes that

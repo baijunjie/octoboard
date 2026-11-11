@@ -21,7 +21,9 @@ and Grok Build's `StopFailure` hook event, or a Codex turn its rollout shows as 
 conversation record, and switches only when the record says the turn stopped on the plan's usage limit, by the same
 rules that decide whether a switch continues a turn (see "Continuing after a switch" in
 `docs/product/switching-session-accounts.md`). A failed turn that did not stop on the limit, an overload or a network
-error say, switches nothing and never shows the session as switching.
+error say, switches nothing and never shows the session as switching. The same reading decides, whether or not this
+setting is on, whether Octoboard holds back what it writes into the session (see
+`docs/product/messages-held-after-a-usage-limit.md`).
 
 - **The record is read again for up to 4 seconds** when it does not say so yet, since an agent can report the failed
   turn before it writes why. That wait comes before the switch takes hold of the session; the record is read once more
@@ -40,8 +42,10 @@ switch keeps its hold after the relaunch — is not dropped: it waits up to **15
 judged then. It is dropped if the session was moved to another account during that wait, and the session is left
 alone if it is still held when the wait is over. A session waiting for the user, by whatever route — a
 permission prompt, a question, a trust confirmation, a dialog of its agent, a request of its own — is left alone, since
-switching it would end what it waits at. The one exception is the dialog Grok Build shows when its turn stops on the
-usage limit: ending that dialog is the point of the switch, so it does not count as waiting for the user here. A
+switching it would end what it waits at. The one exception is the agent's usage-limit screen, Grok Build's
+(`grok_usage_limit`) or Codex's (`codex_usage_limit`; see the screens in "Messages held until a session can take
+them" in `docs/product/message-delivery.md`): ending that screen is the point of the switch, so it does not count as
+waiting for the user here. A
 *dormant* session is left alone in the same way, since switching it would close the view of its background agents the
 user is in (see "Dormant" in `docs/product/session-statuses.md`). A session switched or moved to another account meanwhile is left alone. A locked session is switched like any other:
 the lock keeps a session from being archived or deleted (see "Locking a session" in `docs/product/sessions.md`), and a
@@ -104,7 +108,9 @@ in "When quotas are read" in `docs/product/account-quota-readings.md`; waiting a
   Moving to a different account has the success notices in "When the switch succeeds" below.
 - **The wait belongs to this failed turn and its running process.** New input or a queued message, a new turn, a
   manual resume, restart, account switch, model or effort change, an interruption, archiving, deleting, or the process
-  exiting invalidates it. Changing the session's account configuration also invalidates it. A session waiting for
+  exiting invalidates it. A message queued while Octoboard holds back what it writes into the session after the usage
+  limit (see `docs/product/messages-held-after-a-usage-limit.md`) does not, since it starts no turn; a restart the wait
+  leads to carries it over. Changing the session's account configuration also invalidates it. A session waiting for
   the user is left alone, including when that wait appears while a restart is being prepared.
   A later failed turn replaces an earlier wait; overlapping work on that earlier wait cannot restore it over the
   newer one.
@@ -145,8 +151,10 @@ the notice (see "Processes a restart ended" in `docs/product/background-processe
   switch leaves the session as it was. Nobody is told; it is only written to the daemon's log.
 - **After the process was ended** — a change of the target's sharing began meanwhile, the conversation could not be
   copied, the relaunch was refused or its process did not come up — Octoboard brings the session back up on the
-  account it had, without a prompt, and tells nobody. When another operation holds the session at that moment (a
-  transfer of its branches, a change of its owner), it waits up to **15 seconds** for it to finish before giving up.
+  account it had, without a prompt, and tells nobody; what was queued for the session is written into the restored
+  process (see "What is queued crosses an account switch or a model change" in `docs/product/message-delivery.md`).
+  When another operation holds the session at that moment (a transfer of its branches, a change of its owner), it
+  waits up to **15 seconds** for it to finish before giving up.
   The restore brings the session back only while it is on the account it had or on the one the failed switch was
   moving it to; one somebody else moved to a third account meanwhile is left as they left it, neither moved back nor
   relaunched, and nobody is told.

@@ -218,7 +218,7 @@ pub(crate) struct SwitchOnlyIf<'a> {
     /// The session's last turn must have stopped on the plan's usage limit, as its conversation
     /// record says (`switch_continue::stopped_on_usage_limit`), read once more under the claim
     /// before the process is ended. A caller that may need to wait for the record to say so does
-    /// it ahead of the claim ([`wait_for_usage_limit`]). Also marks the switch as one made for the
+    /// it ahead of the claim (`switch_continue::wait_for_usage_limit`). Also marks the switch as one made for the
     /// limit: once the process has come up, the account left is noted for the session
     /// (`AppState::note_left_for_limit`), under the claim.
     pub usage_limited: bool,
@@ -505,70 +505,6 @@ pub(crate) async fn switch_session_account_if(
         },
     )
     .await
-}
-
-/// How long a switch for a usage limit waits for the limit to show in the conversation record. An
-/// agent may report a failed turn (its `StopFailure` hook) before it has written the entry that
-/// says why, so a record that does not say so yet is read again for this long before the turn is
-/// judged not to have stopped on the limit. The real ordering is not measured.
-#[cfg(not(test))]
-const USAGE_LIMIT_RECORD_WAIT: Duration = Duration::from_secs(4);
-
-#[cfg(test)]
-thread_local! {
-    pub(super) static USAGE_LIMIT_RECORD_WAIT_OVERRIDE: std::cell::Cell<Option<Duration>> =
-        const { std::cell::Cell::new(None) };
-}
-
-/// Read on the caller's thread, so a test's override survives the record's blocking reads.
-fn usage_limit_record_wait() -> Duration {
-    #[cfg(test)]
-    {
-        USAGE_LIMIT_RECORD_WAIT_OVERRIDE
-            .get()
-            .unwrap_or(crate::test_support::PATIENCE)
-    }
-    #[cfg(not(test))]
-    USAGE_LIMIT_RECORD_WAIT
-}
-
-/// Whether the conversation record of `session`, found the way [`prepare_switch`] finds it, says
-/// the last turn stopped on the usage limit, read again for up to [`usage_limit_record_wait`] until
-/// it does. Meant to run ahead of the switch's claim, so that the wait holds nothing: `shell_env`
-/// is the snapshot when [`record_needs_shell_env`]. Refused as `prepare_switch` is when the record
-/// is not where it is expected; a session with no conversation has not stopped on a limit.
-///
-/// [`record_needs_shell_env`]: super::restart::record_needs_shell_env
-pub(crate) async fn wait_for_usage_limit(
-    session: &Session,
-    shell_env: Option<HashMap<String, String>>,
-) -> Result<bool> {
-    let record_wait = usage_limit_record_wait();
-    let Some(resume_id) = resumable_agent_session_id(session) else {
-        return Ok(false);
-    };
-    let (agent, source) = (session.agent, session.config_dir.clone());
-    let record = tokio::task::spawn_blocking(move || -> Result<PathBuf> {
-        if source.is_none() && shell_env.is_none() {
-            anyhow::bail!("the default account's directory needs the shell environment");
-        }
-        let from = account_dir(agent, source.as_deref(), shell_env.as_ref());
-        Ok(from.join(relocate::locate(agent, &from, &resume_id)?))
-    })
-    .await??;
-    let deadline = Instant::now() + record_wait;
-    loop {
-        let path = record.clone();
-        let agent = session.agent;
-        let stopped = tokio::task::spawn_blocking(move || {
-            switch_continue::stopped_on_usage_limit(agent, &path)
-        })
-        .await?;
-        if stopped || Instant::now() >= deadline {
-            return Ok(stopped);
-        }
-        tokio::time::sleep(Duration::from_millis(250)).await;
-    }
 }
 
 /// Brings a session a failed account switch left interrupted back up on the account it had

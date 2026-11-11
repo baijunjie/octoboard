@@ -405,6 +405,38 @@ async fn claude_is_sent_one_esc_and_the_prompt_it_restores_is_cleared() {
     assert_eq!(fixture.keys_after_marker(), [ESC, CTRL_U, CTRL_U].concat());
 }
 
+/// A session whose writes are held for the usage limit is at its prompt or in a turn like any other,
+/// so the user's interrupt of a turn it runs goes through.
+#[tokio::test]
+async fn a_session_held_for_the_usage_limit_can_be_interrupted() {
+    let fixture = working("claude-usage-limit-hold", AgentId::CLAUDE);
+    draw(&fixture.live, CLEARED);
+    let judgement = fixture.live.usage_limit.begin_judging(1);
+    fixture.live.usage_limit.judged(judgement, true);
+    assert_eq!(
+        fixture.state.write_hold("s"),
+        Some(crate::state::WriteHold::UsageLimit)
+    );
+    let live = fixture.live();
+    let back = back_at_prompt(&fixture.state);
+    let agent = respond(
+        &fixture,
+        vec![(
+            ESC,
+            Box::new(move || {
+                live.on_output(CLAUDE_AT_PROMPT_TITLE);
+                back();
+            }),
+        )],
+    );
+
+    let result = interrupt_session(&fixture.state, "s").await.unwrap();
+    agent.join().unwrap();
+
+    assert!(result.interrupted, "{result:?}");
+    assert_eq!(fixture.keys_after_marker(), ESC);
+}
+
 /// A faint placeholder in the box before the Esc is no text of the user's: the prompt Claude Code
 /// puts back is cleared as from an empty box.
 #[tokio::test]

@@ -260,6 +260,9 @@ separately.
 - **It can take a few seconds**, the time the agent is given to exit and the time the relaunched process is watched; the
   session shows as switching its account until the result is known (see "While a session is switching" above), and
   cannot be resumed or switched again meanwhile.
+- **What is queued for the session goes to the relaunched process**, behind its prompt to continue when it is sent one;
+  a switch that fails after ending the process drops it (see "What is queued crosses an account switch or a model
+  change" in `docs/product/message-delivery.md`).
 
 ## Carrying the conversation
 
@@ -375,7 +378,8 @@ rules were measured with Claude Code 2.1.310, codex-cli 0.163.0 and Grok Build 1
 
 **The prompt is delivered as the relaunch's instruction** (see "Messages held until a session can take them" in
 `docs/product/message-delivery.md`): a Claude Code session, which resumes its conversation, is launched with it as its
-prompt; a Codex or Grok Build session has it queued and delivered like any message once it can take one.
+prompt; a Codex or Grok Build session has it queued, ahead of the messages the switch carried over, and delivered
+like any message once it can take one.
 
 ## When a switch fails
 

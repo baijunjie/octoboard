@@ -259,6 +259,10 @@ mod tests {
     const CODEX_MODEL_MIGRATION: &str =
         "Meet Codex Next\n› 1. Try new model\n  2. Use existing model\nenter/esc confirm\n";
     const CODEX_RATE_LIMIT: &str = "Approaching rate limits\nSwitch to gpt-mini for lower credit usage?\n› 1. Switch to gpt-mini\n  2. Keep current model\n  3. Keep current model (never show again)\n";
+    // Codex 0.167.0's workspace usage prompt as a user saw it, and the two forms its binary holds.
+    const CODEX_CREDIT_LIMIT: &str = "You've reached your workspace credit limit\nYour workspace is out of credits. Ask your workspace owner to add more. Your included usage resets at 10:09 on 14 Nov.\n\u{203a} 1. Request credits\nPress a number to choose\n";
+    const CODEX_CREDIT_LIMIT_NOTIFY: &str = "  You've reached your workspace credit limit\n  Your workspace is out of credits. Ask your workspace owner to add more. Notify owner?\n\u{203a} 1. Yes\n  2. No (default)\n";
+    const CODEX_LIMIT_INCREASE: &str = "  Usage limit reached\n  Request a limit increase from your owner to continue using codex. Request increase?\n\u{203a} 1. Yes\n  2. No (default)\n";
     const GROK_USAGE_LIMIT: &str = "You hit your weekly limit.\n1 (○) Upgrade tier\n2 (○) Buy more credits\n3 (○) Try Again\n↑/↓ navigate · y copy Enter :submit / Shift+x :dismiss\n";
     const CLAUDE_NOTICE: &str = "⏺ Agent(Slow probe agent)\n────────\n  We're changing auto mode to no longer charge for classifier requests in Claude Code.\n  Nothing breaks: auto mode keeps working, and its classifier requests are billed as before.\n  Enter to continue · Esc to cancel\n";
     // Claude Code 2.1.307's agent screens, as measured.
@@ -301,6 +305,13 @@ mod tests {
                 "codex_model_migration",
             ),
             (AgentId::CODEX, CODEX_RATE_LIMIT, "codex_rate_limit_nudge"),
+            (AgentId::CODEX, CODEX_CREDIT_LIMIT, "codex_usage_limit"),
+            (
+                AgentId::CODEX,
+                CODEX_CREDIT_LIMIT_NOTIFY,
+                "codex_usage_limit",
+            ),
+            (AgentId::CODEX, CODEX_LIMIT_INCREASE, "codex_usage_limit"),
             (AgentId::GROK, GROK_USAGE_LIMIT, "grok_usage_limit"),
             (AgentId::CLAUDE, SUBAGENT_VIEW, "claude_subagent_view"),
             (
@@ -417,6 +428,16 @@ mod tests {
         let limit = recognise(AgentId::GROK, GROK_USAGE_LIMIT).unwrap();
         let resume = recognise(AgentId::CLAUDE, RESUME_IDLE).unwrap();
         assert!(!is_a_wait_for_the_user(&limit));
+        for screen in [
+            CODEX_CREDIT_LIMIT,
+            CODEX_CREDIT_LIMIT_NOTIFY,
+            CODEX_LIMIT_INCREASE,
+        ] {
+            let limit = recognise(AgentId::CODEX, screen).unwrap();
+            assert!(limit.is_usage_limit(), "{screen}");
+            assert!(!is_a_wait_for_the_user(&limit), "{screen}");
+            assert_eq!(limit.written, WrittenMessage::Discarded);
+        }
         assert!(is_a_wait_for_the_user(&resume));
         for screen in [SUBAGENT_VIEW, AGENTS_VIEW, AGENT_ROW_FOCUS] {
             let view = recognise(AgentId::CLAUDE, screen).unwrap();
@@ -441,6 +462,7 @@ mod tests {
             (AgentId::CODEX, CODEX_RESUME_CWD, false),
             (AgentId::CODEX, CODEX_MODEL_MIGRATION, false),
             (AgentId::CODEX, CODEX_RATE_LIMIT, false),
+            (AgentId::CODEX, CODEX_CREDIT_LIMIT, false),
             (AgentId::GROK, GROK_USAGE_LIMIT, false),
         ] {
             let dialog = recognise(agent, screen).unwrap();
@@ -465,6 +487,47 @@ mod tests {
             (session, None),
         ] {
             assert_eq!(recognise(AgentId::CODEX, screen).map(|d| d.code), code);
+        }
+    }
+
+    /// The usage prompt is recognised wrapped on a narrow terminal and drawn under the
+    /// conversation, while the errors its failed turns print in the transcript, which name the
+    /// same owner and the same limit, are no dialog.
+    #[test]
+    fn codex_s_usage_prompt_is_told_from_the_errors_of_its_failed_turns() {
+        let errors = "\u{203a} say hi\n\u{25a0} Your workspace is out of credits. Ask your workspace owner to refill in order to continue.\n\u{203a} next\n\u{25a0} Your workspace is out of credits. Ask your workspace owner to refill in order to continue.\n\u{25a0} Usage limit reached. You've reached your usage limit. Increase your limits to continue using codex.\n";
+        let narrow = format!(
+            "{errors}  You've reached your workspace\n  credit limit\n  Your workspace is out of credits. Ask\n  your workspace owner to add more.\n\u{203a} 1. Request credits\n  Press a number to choose\n"
+        );
+        assert_eq!(recognise(AgentId::CODEX, errors), None);
+        assert_eq!(
+            recognise(AgentId::CODEX, &narrow).map(|d| d.code),
+            Some("codex_usage_limit")
+        );
+    }
+
+    /// The two other forms of the usage prompt are recognised wrapped on a narrow terminal as well,
+    /// each row indented as Codex draws it.
+    #[test]
+    fn codex_s_other_usage_prompts_are_recognised_wrapped_on_a_narrow_terminal() {
+        let notify = "  You've reached your workspace\n  credit limit\n  Your workspace is out of\n  credits. Ask your workspace\n  owner to add more. Notify\n  owner?\n\u{203a} 1. Yes\n  2. No (default)\n";
+        let increase = "  Usage limit\n  reached\n  Request a limit increase\n  from your owner to continue\n  using codex. Request\n  increase?\n\u{203a} 1. Yes\n  2. No (default)\n";
+        for screen in [notify, increase] {
+            let dialog = recognise(AgentId::CODEX, screen).expect(screen);
+            assert_eq!(dialog.code, "codex_usage_limit", "{screen}");
+            assert!(dialog.is_usage_limit(), "{screen}");
+        }
+    }
+
+    /// Each error a failed turn prints in the transcript is no dialog on its own, whichever of the
+    /// two it is: they say what the prompt says in other words.
+    #[test]
+    fn a_failed_turn_s_transcript_error_alone_is_no_codex_usage_prompt() {
+        for line in [
+            "\u{25a0} Your workspace is out of credits. Ask your workspace owner to refill in order to continue.\n",
+            "\u{25a0} Usage limit reached. You've reached your usage limit. Increase your limits to continue using codex.\n",
+        ] {
+            assert_eq!(recognise(AgentId::CODEX, line), None, "{line}");
         }
     }
 }

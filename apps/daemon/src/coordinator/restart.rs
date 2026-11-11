@@ -18,8 +18,9 @@ use crate::messaging::delivery::{write_message, WhenBlocked};
 use crate::messaging::texts;
 use crate::processes::ledger::HeldForLaunch;
 use crate::protocol::{AgentId, ProcessTree, Session, SessionStatus};
+pub(crate) use crate::records::resumability::record_needs_shell_env;
 use crate::records::switch_continue;
-use crate::state::{AppState, ChangeAdmission};
+use crate::state::{AppState, ChangeAdmission, OutboxHold};
 
 use super::launch::{
     came_up, stop_process_listing_trees, wait_until_down_within, SWITCH_STOP_TIMEOUT,
@@ -88,6 +89,11 @@ pub(crate) struct Failed {
     /// the caller that brings the session back up (a restore) steps with it, and a planned stop
     /// goes on waiting for it. `None` when the process was not ended.
     pub admission: Option<ChangeAdmission>,
+    /// The hold on the session's queue, still held when the restart ended the process
+    /// (`AppState::hold_outbox_for_restart`): what was queued goes into the process a restore
+    /// starts while it lives, and goes once it is dropped with nothing relaunched. `None` when
+    /// the process was not ended.
+    pub queue: Option<OutboxHold>,
 }
 
 impl<E: Into<anyhow::Error>> From<E> for Failed {
@@ -96,6 +102,7 @@ impl<E: Into<anyhow::Error>> From<E> for Failed {
             error: error.into(),
             ended_process: false,
             admission: None,
+            queue: None,
         }
     }
 }
@@ -138,7 +145,13 @@ where
         error,
         ended_process: false,
         admission: None,
+        queue: None,
     };
+    // What is queued for the session is kept from before its process is ended and written into
+    // the relaunched one, behind the relaunch's instruction, whatever held it in the old one: what
+    // a hold for the account's usage limit kept back goes in once the relaunch has left that hold
+    // behind. Dropped with the process not ended, it goes to the process still running.
+    let queue = state.hold_outbox_for_restart(id);
     let (held, ended_a_process, running) = stop_carrying_processes(state, id)
         .await
         .map_err(not_ended)?;
@@ -151,11 +164,24 @@ where
         Vec::new()
     };
     let restarted = after_stop(ended_a_process, ended).await;
+    // A relaunch that came up and ended within its settle has its instruction taken back, as one
+    // that never started has: a restore gives the session none.
+    let queue = match &restarted {
+        Err(_) if ended_a_process => {
+            state.relaunch_failed_after_restart(id);
+            Some(queue)
+        }
+        _ => {
+            drop(queue);
+            None
+        }
+    };
     give_up_what_a_restart_held(state, id, held, restarted.is_err() && ended_a_process).await;
     restarted.map_err(|error| Failed {
         error,
         ended_process: ended_a_process,
         admission: ended_a_process.then_some(admission),
+        queue,
     })
 }
 
@@ -336,12 +362,6 @@ pub(super) fn keep_what_a_failed_restart_carried(
             tracing::warn!(session = %id, %err, "reading a session whose restart failed; what it carried is stopped");
         }
     }
-}
-
-/// Whether finding `session`'s conversation record needs the shell snapshot: the default account
-/// has no directory of its own, which is resolved from the environment.
-pub(crate) fn record_needs_shell_env(session: &Session) -> bool {
-    session.config_dir.is_none()
 }
 
 /// Whether the process an account switch (or a restore after one) relaunched is still running after

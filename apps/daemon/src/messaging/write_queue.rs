@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
-use super::outbox::{Drain, FirstTicket, PromptSignal, Ticket};
+use super::outbox::{Drain, FirstTicket, HoldKind, PromptSignal, Ticket};
 use crate::protocol::{notice_code, AgentId, Event, Notice, SessionStatus};
 use crate::session::dialogs::Sighting;
 use crate::session::LiveSession;
@@ -80,6 +80,9 @@ pub enum WriteHold {
     /// The session is being restarted for a change of its account's sharing, and is resumed
     /// afterwards.
     SharingChange,
+    /// A turn stopped on the account's usage limit, and every write would open another that fails
+    /// the same way; see [`crate::messaging::usage_limit`].
+    UsageLimit,
     /// A message written into it was not sent and is still in its input box.
     UnsentMessage,
     /// A native submission may have been accepted; it must not be submitted again.
@@ -96,6 +99,7 @@ impl WriteHold {
             Self::AgentError => "agent_error",
             Self::Handoff => "handoff",
             Self::SharingChange => "sharing_change",
+            Self::UsageLimit => "usage_limit",
             Self::UnsentMessage => "unsent_message",
             Self::SubmissionUncertain => "submission_uncertain",
         }
@@ -117,13 +121,23 @@ impl WriteHold {
 /// session without a process takes nothing and would leave the queue stranded. A queue dropped for
 /// that is announced as `handoff_messages_dropped`, or as `sharing_messages_dropped` for a hold taken
 /// for a sharing change ([`AppState::hold_outbox_for_sharing`]): these are messages held back, never
-/// ones part-written into a terminal, so the notice says nothing of an input line.
+/// ones part-written into a terminal, so the notice says nothing of an input line. One a restart
+/// held ([`AppState::hold_outbox_for_restart`]) goes as what is queued for any process that ends
+/// goes, with nothing announced.
 pub struct OutboxHold {
     state: Arc<AppState>,
     id: String,
-    /// Held for a change of an account's sharing, not a handoff; only the notice for a drop differs.
-    for_sharing: bool,
+    kind: HoldKind,
     successor: std::sync::Mutex<Option<String>>,
+}
+
+impl std::fmt::Debug for OutboxHold {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OutboxHold")
+            .field("id", &self.id)
+            .field("kind", &self.kind)
+            .finish_non_exhaustive()
+    }
 }
 
 impl OutboxHold {
@@ -136,7 +150,10 @@ impl OutboxHold {
 impl Drop for OutboxHold {
     fn drop(&mut self) {
         let successor = self.successor.lock().expect("hold lock poisoned").take();
+        let for_sharing = self.kind == HoldKind::Sharing;
         let target = match &successor {
+            // Already where it is to go.
+            Some(successor) if *successor == self.id => successor,
             Some(successor) => {
                 let mut lost = 0;
                 for (text, _) in self.state.outbox.take(&self.id) {
@@ -146,7 +163,7 @@ impl Drop for OutboxHold {
                 }
                 // Too late for the successor: a planned stop has saved the queues already.
                 self.state
-                    .tell_held_dropped(successor, lost, self.for_sharing, true);
+                    .tell_held_dropped(successor, lost, for_sharing, true);
                 successor
             }
             None => &self.id,
@@ -166,7 +183,14 @@ impl Drop for OutboxHold {
                 return;
             }
             // Nothing to write to, and a queue left in the map would be replayed on a later resume.
-            self.state.drop_held_queue(target, self.for_sharing);
+            if self.kind == HoldKind::Restart {
+                let dropped = self.state.outbox.forget(target);
+                if dropped > 0 {
+                    tracing::warn!(session = %target, dropped, "the session ended with messages still queued");
+                }
+            } else {
+                self.state.drop_held_queue(target, for_sharing);
+            }
             return;
         };
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
@@ -228,6 +252,10 @@ impl PromptSignal for HookPrompts<'_> {
 
     fn input_held(&self) -> bool {
         self.live.input_swap_active()
+    }
+
+    fn usage_limit_held(&self) -> bool {
+        self.live.usage_limit.holds()
     }
 
     fn sent(&self) -> u64 {
@@ -331,7 +359,7 @@ impl AppState {
     /// `None`, with nothing queued, once a planned stop has saved the queues for the next daemon
     /// ([`super::outbox::Outbox::push`]).
     pub fn queue_message(&self, id: &str, text: &str) -> Option<Ticket> {
-        self.cancel_recoveries_silently(id);
+        self.cancel_recoveries_for_queued(id);
         let ticket = self.outbox.push(id, text)?;
         self.note_activity(id);
         Some(ticket)
@@ -340,8 +368,17 @@ impl AppState {
     /// [`Self::queue_message`], unless a planned stop has saved the queues for the next daemon:
     /// then `None`, and nothing is queued (see [`super::outbox::Outbox::push_unless_sealed`]).
     pub fn queue_message_unless_sealed(&self, id: &str, text: &str) -> Option<Ticket> {
-        self.cancel_recoveries_silently(id);
+        self.cancel_recoveries_for_queued(id);
         let ticket = self.outbox.push_unless_sealed(id, text)?;
+        self.note_activity(id);
+        Some(ticket)
+    }
+
+    /// [`Self::queue_message_unless_sealed`] for the user's own message, which a hold for the
+    /// account's usage limit does not hold (see [`super::outbox::Outbox::push_past_usage_limit`]).
+    pub(crate) fn queue_users_message(&self, id: &str, text: &str) -> Option<Ticket> {
+        self.cancel_recoveries_silently(id);
+        let ticket = self.outbox.push_past_usage_limit(id, text)?;
         self.note_activity(id);
         Some(ticket)
     }
@@ -618,7 +655,11 @@ impl AppState {
                 SessionStatus::Idle | SessionStatus::Working
             ) && matches!(
                 self.write_hold(id),
-                None | Some(WriteHold::UnsentMessage | WriteHold::SubmissionUncertain)
+                None | Some(
+                    WriteHold::UnsentMessage
+                        | WriteHold::SubmissionUncertain
+                        | WriteHold::UsageLimit
+                )
             )
         })
     }
@@ -655,7 +696,7 @@ impl AppState {
     /// queued, none is written. A handoff holds the original's, so that nothing reaches a session
     /// whose work is being moved; see [`OutboxHold`].
     pub fn hold_outbox(self: &Arc<Self>, id: &str) -> OutboxHold {
-        self.hold_outbox_for(id, false)
+        self.hold_outbox_for(id, HoldKind::Handoff)
     }
 
     /// Pauses the session's queue for as long as the guard lives: messages are accepted and queued,
@@ -673,15 +714,25 @@ impl AppState {
     /// [`Self::hold_outbox`] for a session a change of its account's sharing restarts; the only
     /// difference is the notice for messages dropped when it is not relaunched.
     pub fn hold_outbox_for_sharing(self: &Arc<Self>, id: &str) -> OutboxHold {
-        self.hold_outbox_for(id, true)
+        self.hold_outbox_for(id, HoldKind::Sharing)
     }
 
-    fn hold_outbox_for(self: &Arc<Self>, id: &str, for_sharing: bool) -> OutboxHold {
-        self.outbox.hold(id, for_sharing);
+    /// [`Self::hold_outbox`] for a session a switch of its account or a change of its model
+    /// restarts: what is queued is kept across the end of its process and written into the process
+    /// a relaunch starts, behind that relaunch's instruction ([`Self::queue_relaunch_instruction`]),
+    /// once it has started ([`Self::relaunched_after_restart`]). It is not reported in
+    /// [`Self::write_hold`], the session being shown as switching or restarting meanwhile, and it
+    /// does not hold back what the user types into the terminal.
+    pub(crate) fn hold_outbox_for_restart(self: &Arc<Self>, id: &str) -> OutboxHold {
+        self.hold_outbox_for(id, HoldKind::Restart)
+    }
+
+    fn hold_outbox_for(self: &Arc<Self>, id: &str, kind: HoldKind) -> OutboxHold {
+        self.outbox.hold(id, kind);
         OutboxHold {
             state: self.clone(),
             id: id.to_string(),
-            for_sharing,
+            kind,
             successor: std::sync::Mutex::new(None),
         }
     }
@@ -772,10 +823,12 @@ impl AppState {
             Some(WriteHold::AgentAction)
         } else if live.agent_error() {
             Some(WriteHold::AgentError)
-        } else if self.outbox.is_held_for_sharing(id) {
+        } else if self.outbox.held_for(id) == Some(HoldKind::Sharing) {
             Some(WriteHold::SharingChange)
-        } else if self.outbox.is_held(id) {
+        } else if self.outbox.held_for(id) == Some(HoldKind::Handoff) {
             Some(WriteHold::Handoff)
+        } else if live.usage_limit.confirmed() {
+            Some(WriteHold::UsageLimit)
         } else if live.submission_uncertain() {
             Some(WriteHold::SubmissionUncertain)
         } else if live.unsent_waiting() {
@@ -783,6 +836,51 @@ impl AppState {
         } else {
             None
         }
+    }
+
+    /// Queues `instruction`, what a relaunch of the session `id` gives it: at the front, ahead of
+    /// what a restart that holds the queue carries over ([`Self::hold_outbox_for_restart`]), and
+    /// otherwise like any message.
+    pub(crate) fn queue_relaunch_instruction(&self, id: &str, instruction: &str) {
+        if self.outbox.held_for(id) == Some(HoldKind::Restart) {
+            if self
+                .outbox
+                .push_relaunch_instruction(id, instruction)
+                .is_some()
+            {
+                self.note_activity(id);
+            } else {
+                tracing::warn!(session = %id, "the relaunch instruction was refused by a sealed queue");
+            }
+        } else {
+            self.queue_message(id, instruction);
+        }
+    }
+
+    /// The relaunch of the session `id` has started its process: what a restart holds for it is
+    /// written into that process from now on, as into any session, though still kept if the
+    /// process ends. Whether a restart held its queue.
+    pub(crate) fn relaunched_after_restart(&self, id: &str) -> bool {
+        let restarted = self.outbox.held_for(id) == Some(HoldKind::Restart);
+        if restarted {
+            self.outbox.hold(id, HoldKind::Relaunched);
+        }
+        restarted
+    }
+
+    /// The relaunch of the session `id` after a restart failed: its instruction is taken back, and
+    /// what the restart carried over is held again for whatever brings the session back up.
+    /// Whether a restart holds the queue.
+    pub(crate) fn relaunch_failed_after_restart(&self, id: &str) -> bool {
+        if !matches!(
+            self.outbox.held_for(id),
+            Some(HoldKind::Restart | HoldKind::Relaunched)
+        ) {
+            return false;
+        }
+        self.outbox.withdraw_relaunch_instruction(id);
+        self.outbox.hold(id, HoldKind::Restart);
+        true
     }
 
     /// Throws away anything queued for a session that will never take it — a relaunch that failed,
@@ -828,7 +926,7 @@ mod tests {
         state.apply_hook_status("s", SessionStatus::Idle).unwrap();
         live.mark_unsent(0);
         assert!(state.permits_automatic_input("s"));
-        state.outbox.hold("s", false);
+        state.outbox.hold("s", HoldKind::Handoff);
         assert!(!state.permits_automatic_input("s"));
         state.outbox.release_hold("s");
         assert!(state.permits_automatic_input("s"));
@@ -1251,5 +1349,205 @@ mod tests {
         drop(hold);
         assert_eq!(state.outbox.len("x"), 1);
         drop(claim);
+    }
+
+    /// While a turn's usage limit holds a session, Octoboard's messages stay queued, the user's own
+    /// go past them, the hold is reported after the holds that come before it, and queuing does not
+    /// end the automatic switch's wait for quota; once it lets go the held ones follow in order.
+    #[test]
+    fn a_usage_limit_hold_keeps_octoboard_s_messages_and_lets_the_user_s_through() {
+        let (state, dir) = app_state("state-usage-limit-hold");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        let judgement = live.usage_limit.begin_judging(1);
+        live.usage_limit.judged(judgement, true);
+        assert_eq!(state.write_hold("s"), Some(WriteHold::UsageLimit));
+        assert!(
+            state.permits_automatic_input("s"),
+            "a draft is still restored"
+        );
+
+        state.quota_recovery.wait_for_test(&state, "s");
+        assert!(state.quota_recovery.is_waiting_for_test("s"));
+        state.queue_message("s", "from the owner");
+        assert!(
+            state.quota_recovery.is_waiting_for_test("s"),
+            "a held message opens no turn"
+        );
+        let before = live.input_writes();
+        assert_eq!(
+            state.flush_outbox("s", SessionStatus::Idle),
+            Drain::HeldForUsageLimit
+        );
+        assert_eq!(live.input_writes(), before);
+
+        state.queue_users_message("s", "mine");
+        assert!(!state.quota_recovery.is_waiting_for_test("s"));
+        assert_eq!(
+            state.flush_outbox("s", SessionStatus::Idle),
+            Drain::HeldForUsageLimit
+        );
+        assert_eq!(live.input_writes(), before + 1, "the user's message went");
+        assert_eq!(state.outbox.len("s"), 1);
+
+        // A handoff's hold comes first.
+        let hold = state.hold_outbox("s");
+        assert_eq!(state.write_hold("s"), Some(WriteHold::Handoff));
+        drop(hold);
+        // A restart's is not reported at all.
+        let hold = state.hold_outbox_for_restart("s");
+        assert_eq!(state.write_hold("s"), Some(WriteHold::UsageLimit));
+        hold.forward_to("s");
+        drop(hold);
+        assert_eq!(state.outbox.len("s"), 1, "kept where it was");
+
+        assert!(live.usage_limit.release_armed_at(1));
+        assert_eq!(state.write_hold("s"), None);
+        assert_eq!(state.flush_outbox("s", SessionStatus::Idle), Drain::Clear);
+        assert_eq!(live.input_writes(), before + 2);
+    }
+
+    /// A restart's hold keeps the queue across the end of the process it restarts, and leaves it
+    /// for the relaunch when told to; without a relaunch it goes, with nothing announced.
+    #[test]
+    fn a_restart_s_hold_keeps_the_queue_for_the_relaunched_process() {
+        let (state, dir) = app_state("state-restart-hold");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let hold = state.hold_outbox_for_restart("s");
+        state.queue_message("s", "one");
+        let was_current = state.remove_live(&live);
+        state.after_live_removed("s", was_current);
+        assert_eq!(state.outbox.len("s"), 1);
+        let claim = state.begin_launch("s").unwrap();
+        hold.forward_to("s");
+        drop(hold);
+        assert_eq!(state.outbox.len("s"), 1, "left for the launch to write");
+        drop(claim);
+
+        let mut events = state.subscribe();
+        let hold = state.hold_outbox_for_restart("s");
+        drop(hold);
+        assert_eq!(state.outbox.len("s"), 0);
+        assert!(events.try_recv().is_err(), "nothing announced");
+    }
+
+    /// The hold for the usage limit has its place among the reasons nothing is written: after the
+    /// agent's dialogs, actions and errors and after a sharing change or a handoff, before a
+    /// submission that may have been accepted and a message left unsent.
+    #[test]
+    fn a_usage_limit_hold_takes_its_place_among_the_reasons_for_a_hold() {
+        let (state, dir) = app_state("state-usage-limit-precedence");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let live = fake_live_session("s", AgentId::CLAUDE, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        let judgement = live.usage_limit.begin_judging(1);
+        live.usage_limit.judged(judgement, true);
+        live.mark_unsent(live.prompts_sent());
+        live.mark_submission_uncertain(live.prompts_sent());
+        assert_eq!(
+            state.write_hold("s"),
+            Some(WriteHold::UsageLimit),
+            "before an uncertain submission and an unsent message"
+        );
+        let hold = state.write_hold("s").unwrap();
+        assert_eq!(hold.code(), "usage_limit");
+        assert_eq!(hold.dialog(), None);
+
+        let handoff = state.hold_outbox("s");
+        assert_eq!(state.write_hold("s"), Some(WriteHold::Handoff));
+        let sharing = state.hold_outbox_for_sharing("s");
+        assert_eq!(state.write_hold("s"), Some(WriteHold::SharingChange));
+        live.mark_agent_error();
+        assert_eq!(state.write_hold("s"), Some(WriteHold::AgentError));
+        live.on_output(LAUNCH_DIALOG.as_bytes());
+        assert!(matches!(
+            state.write_hold("s"),
+            Some(WriteHold::AgentDialog(_))
+        ));
+        drop((handoff, sharing));
+    }
+
+    /// Codex's usage prompt, drawn as its screen shows when the account is out of credits.
+    const CODEX_CREDIT_LIMIT: &str = "You've reached your workspace credit limit\r\nYour workspace is out of credits. Ask your workspace owner to add more. Your included usage resets at 10:09 on 14 Nov.\r\n\u{203a} 1. Request credits\r\nPress a number to choose\r\n";
+
+    /// While Codex shows its usage prompt, everything Octoboard writes stays queued, since the
+    /// Enter ending a message would pick "Request credits"; the session reads as waiting for the
+    /// user, but is still one the automatic account switch may switch; once the prompt is gone the
+    /// queue is written, oldest first.
+    #[test]
+    fn codex_s_usage_prompt_holds_the_queue_until_it_is_gone() {
+        use crate::test_support::{idle_stand_in_of, AcceptingServer};
+        let (state, dir) = app_state("state-codex-usage-prompt");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let mut record = state.session_record("s").unwrap();
+        record.agent = AgentId::CODEX;
+        state.store.update_session(&record).unwrap();
+        let server = AcceptingServer::new();
+        let live = idle_stand_in_of("s", AgentId::CODEX).with_transport(server.clone());
+        state.register_live(live.clone());
+        assert_eq!(state.write_hold("s"), None);
+
+        live.on_output(CODEX_CREDIT_LIMIT.as_bytes());
+        let hold = state.write_hold("s").expect("held");
+        assert_eq!(hold.code(), "agent_dialog");
+        assert_eq!(hold.dialog(), Some("codex_usage_limit"));
+        assert_eq!(
+            state
+                .wire_session(state.session_record("s").unwrap())
+                .status,
+            SessionStatus::WaitingUser
+        );
+        assert!(live.waits_for_user());
+        assert!(
+            !live.waits_for_user_beyond_usage_limit(),
+            "the automatic switch still treats it as switchable"
+        );
+
+        state.queue_message("s", "first");
+        state.queue_message("s", "second");
+        assert_eq!(state.flush_outbox("s", SessionStatus::Idle), Drain::Pending);
+        assert!(server.offered().is_empty(), "{:?}", server.offered());
+        assert_eq!(state.outbox.len("s"), 2);
+
+        live.on_output(CLEAR_SCREEN.as_bytes());
+        assert_eq!(state.write_hold("s"), None);
+        assert_eq!(state.flush_outbox("s", SessionStatus::Idle), Drain::Clear);
+        assert_eq!(server.offered(), ["first", "second"]);
+    }
+
+    /// A relaunch after a restart puts its instruction ahead of what the restart carried over, and
+    /// what is queued is written once the relaunch has started a process; a relaunch that fails
+    /// takes its instruction back and leaves the rest held for a restore.
+    #[test]
+    fn a_relaunch_s_instruction_goes_ahead_of_what_a_restart_carried() {
+        let (state, dir) = app_state("state-relaunch-instruction");
+        insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let hold = state.hold_outbox_for_restart("s");
+        state.queue_message("s", "carried");
+        state.queue_relaunch_instruction("s", "carry on");
+        assert!(state.outbox.blocks_writes("s"));
+
+        assert!(state.relaunch_failed_after_restart("s"));
+        assert_eq!(state.outbox.len("s"), 1, "the instruction is taken back");
+        assert!(state.outbox.blocks_writes("s"));
+
+        state.queue_relaunch_instruction("s", "carry on again");
+        assert!(state.relaunched_after_restart("s"));
+        assert!(
+            !state.outbox.blocks_writes("s"),
+            "written into the relaunch"
+        );
+        assert!(state.outbox.is_held("s"), "and kept if it ends");
+        assert_eq!(state.take_queued("s"), ["carry on again", "carried"]);
+        drop(hold);
+
+        // With no restart holding the queue, an instruction is queued like any message.
+        state.queue_message("s", "first");
+        state.queue_relaunch_instruction("s", "then this");
+        assert!(!state.relaunch_failed_after_restart("s"));
+        assert_eq!(state.take_queued("s"), ["first", "then this"]);
     }
 }

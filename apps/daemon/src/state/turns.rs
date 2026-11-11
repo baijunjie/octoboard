@@ -115,6 +115,11 @@ impl AppState {
     /// credit is spent by this turn.
     pub fn turn_started(&self, id: &str, prompt: Option<&str>) {
         self.cancel_recoveries_silently(id);
+        // While Octoboard holds its writes for a usage limit, none of them opened this turn: how
+        // it ends says whether the account can run turns again.
+        if let Some(live) = self.live_session(id) {
+            live.usage_limit.turn_started();
+        }
         let mut turns = self.turns.lock().expect("turn lock poisoned");
         let turn = turns.entry(id.to_string()).or_default();
         // A prompt that arrives while the turn is open joins it, as one steered into a Codex turn
@@ -211,6 +216,10 @@ impl AppState {
     /// one.
     pub fn abandon_turn(&self, id: &str) {
         self.cancel_recoveries(id);
+        // A turn cancelled while held ran; the caller drains what that lets go.
+        if let Some(live) = self.live_session(id) {
+            live.usage_limit.turn_ended();
+        }
         if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
             turn.open = false;
             turn.reported = false;
@@ -228,6 +237,9 @@ impl AppState {
     /// still comes closes it as its real end ([`Self::close_turn`]): the title only infers the
     /// cancel.
     pub fn end_turn_off_title(&self, id: &str) {
+        // A hold for the usage limit is left alone: the cancel is only inferred, and the agent may
+        // still report the turn as stopped on the limit. The turn's real end decides it, or else
+        // whatever releases any such hold.
         if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
             if !turn.open {
                 return;

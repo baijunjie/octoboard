@@ -78,8 +78,7 @@ fn written_during_turn(written: usize) -> String {
 /// The prompt row's mark in Grok Build's composer.
 const PROMPT_MARK: char = '\u{276F}';
 
-/// The name of the dialog Grok Build raises when its plan's usage limit is reached. It is the only
-/// provider that raises one when a turn stops on the limit.
+/// The name of the dialog Grok Build raises when its plan's usage limit is reached.
 const GROK_USAGE_LIMIT: &str = "grok_usage_limit";
 
 /// The rows of Grok Build's composer: those of the last box drawn with `╭─╮` and `╰─╯`, each

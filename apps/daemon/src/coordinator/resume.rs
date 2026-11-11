@@ -16,6 +16,7 @@ use crate::protocol::{
     SessionStatus, TerminalAppearance,
 };
 use crate::records;
+pub(crate) use crate::records::resumability::resumable_agent_session_id;
 use crate::session::term;
 use crate::state::AppState;
 use crate::text::trimmed_or_none;
@@ -249,19 +250,6 @@ fn find_conversation_to_resume(
         (Some((_, location)), _) => Ok(Some(location)),
         (None, Some(err)) => Err(err),
         (None, None) => Ok(None),
-    }
-}
-
-/// The agent's id of the conversation a relaunch of this session resumes, or none when it has not
-/// got one yet. Only a session that has had a turn has something to resume: without one the agent
-/// stored no conversation, and resuming by id fails with "No conversation found" — so a launch
-/// without an id opens a fresh conversation instead, in the same project and under the same
-/// session. A switch relocates exactly the conversation a resume would ask for.
-pub(crate) fn resumable_agent_session_id(session: &Session) -> Option<String> {
-    if session.has_conversation {
-        session.agent_session_id.clone()
-    } else {
-        None
     }
 }
 

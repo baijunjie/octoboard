@@ -570,7 +570,7 @@ async fn try_switch_captured(
     } else {
         (None, Box::new(snapshot))
     };
-    if !account_switch::wait_for_usage_limit(&session, shell_env).await? {
+    if !crate::records::switch_continue::wait_for_usage_limit(&session, shell_env).await? {
         return Ok(false);
     }
     // The wait took time: what the session is doing is read again, and the account the limit was
@@ -846,15 +846,19 @@ async fn switch_to_with_recovery(
                 "switching a session off the account whose usage limit it reached failed after its \
                  process was ended; bringing it back up on the account it had"
             );
-            return restore(
+            // What was queued for the session goes into the process the restore starts, and
+            // goes with the hold if none comes up.
+            let queue = failed.queue;
+            let restored = restore(
                 state,
                 session,
                 target.as_deref(),
                 failed.admission.as_ref(),
                 launch,
             )
-            .await
-            .map(|()| false);
+            .await;
+            drop(queue);
+            return restored.map(|()| false);
         }
     };
     let account_switch::Switched { continued, ended } = switched;

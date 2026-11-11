@@ -366,7 +366,12 @@ fn judge(state: &Arc<AppState>, session: &Session) -> Result<Option<Arc<LiveSess
         Some(WriteHold::AgentAction) => return Err(waiting(id, false)),
         Some(WriteHold::Handoff | WriteHold::SharingChange) => return Err(busy(id)),
         // A session held only for these is at its prompt or in a turn like any other.
-        Some(WriteHold::AgentError | WriteHold::UnsentMessage | WriteHold::SubmissionUncertain)
+        Some(
+            WriteHold::AgentError
+            | WriteHold::UsageLimit
+            | WriteHold::UnsentMessage
+            | WriteHold::SubmissionUncertain,
+        )
         | None => {}
     }
     // A trust screen a failed press or a cursor key left up keeps its hand raised after the write

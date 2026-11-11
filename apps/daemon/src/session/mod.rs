@@ -8,7 +8,9 @@
 //! confirmation, `input_box` reads what the agent's input box holds off its screen, `draft` mirrors
 //! the input to match the prompts that were submitted, `swap` handles the native composer
 //! stashes that keep editor state inside the CLI while a message uses the input, and
-//! `paste_apart` submits a message whose Enter has to wait until the agent has taken its paste.
+//! `paste_apart` submits a message whose Enter has to wait until the agent has taken its paste,
+//! and `usage_limit` holds where the process stands with the hold on Octoboard's writes after a
+//! turn stopped on its account's usage limit.
 
 pub(crate) mod dialogs;
 mod draft;
@@ -22,6 +24,7 @@ pub(crate) mod term;
 pub(crate) mod title_activity;
 pub(crate) mod title_interrupt;
 pub(crate) mod trust;
+pub(crate) mod usage_limit;
 pub(crate) mod wait;
 
 #[cfg(test)]
@@ -138,6 +141,9 @@ pub struct LiveSession {
     /// When the agent stopped on an error. It holds the session's writes for [`AGENT_ERROR_SETTLE`]
     /// after that, or until the next prompt is sent; gone with the process.
     agent_error_at: Mutex<Option<Instant>>,
+    /// The hold on Octoboard's writes after a turn stopped on the account's usage limit; gone with
+    /// the process.
+    pub(crate) usage_limit: usage_limit::UsageLimitHold,
     /// What the screen last showed of the dialogs only a person can answer; see
     /// [`crate::session::dialogs`]. Read and updated under this lock together, so a look that read
     /// an older screen never overwrites a newer one.
@@ -253,6 +259,7 @@ impl LiveSession {
             unsent_notice: Mutex::new(None),
             uncertain_at: Mutex::new(None),
             agent_error_at: Mutex::new(None),
+            usage_limit: Default::default(),
             dialogs: Mutex::new(Sighting::default()),
             screen_watchers: AtomicU32::new(0),
             ended_on_purpose: AtomicBool::new(false),

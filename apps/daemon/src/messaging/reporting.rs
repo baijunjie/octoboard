@@ -431,11 +431,17 @@ pub fn close_turn_and_report(
     turn: hooks::TurnEnd,
 ) -> TurnClose {
     let close = state.close_turn(session_id, turn.backstop);
+    let closed = matches!(close, TurnClose::OwesReport | TurnClose::Reported);
+    // Before whatever this end releases can write into the session: a turn the usage limit stopped
+    // holds Octoboard's writes from here on.
+    if closed {
+        crate::messaging::usage_limit::turn_closed(state, session_id, turn.failed);
+    }
     // Read with the turn just closed: a turn that opens while the report waits makes it stale.
     let opened = state.turn_opened(session_id);
     // The turn stopped on an error, which may be the plan's usage limit; whether it was, and
     // whether to do anything about it, is the switch's to judge.
-    let judging = if turn.failed && matches!(close, TurnClose::OwesReport | TurnClose::Reported) {
+    let judging = if turn.failed && closed {
         state.after_failed_turn(session_id)
     } else {
         None

@@ -161,7 +161,33 @@ pub fn write_message(
     text: &str,
     when_blocked: WhenBlocked,
 ) -> Result<Delivery> {
-    write_message_inner(state, id, text, when_blocked, None)
+    write_message_inner(state, id, text, when_blocked, Origin::Automatic, None)
+}
+
+/// Who wrote a message handed to [`write_message_inner`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Origin {
+    /// Octoboard, or a session through it: held by every hold on the session's writes.
+    Automatic,
+    /// The user, from a client (`send_message`): their deliberate act, which a hold for the
+    /// account's usage limit does not hold back. How the turn it opens ends decides that hold.
+    User,
+}
+
+/// The user's own message from a client, for a caller on the runtime: refused while the session
+/// waits for them, as [`WhenBlocked::Refuse`] says, and written past a hold for the account's usage
+/// limit (see `crate::messaging::usage_limit`), ahead of what that hold keeps back.
+pub async fn write_users_message_off_runtime(
+    state: &Arc<AppState>,
+    id: &str,
+    text: String,
+) -> Result<Delivery> {
+    let state = state.clone();
+    let id = id.to_string();
+    tokio::task::spawn_blocking(move || {
+        write_message_inner(&state, &id, &text, WhenBlocked::Refuse, Origin::User, None)
+    })
+    .await?
 }
 
 /// The refusal of a message once a planned stop has saved the queues for the next daemon
@@ -191,6 +217,7 @@ fn write_message_inner(
     id: &str,
     text: &str,
     when_blocked: WhenBlocked,
+    origin: Origin,
     mut first: Option<&mut FirstMessage>,
 ) -> Result<Delivery> {
     // Written, it would be an empty prompt the agent does not send, and nobody would learn why.
@@ -255,6 +282,9 @@ fn write_message_inner(
             state.note_activity(id);
             ticket
         }
+        None if origin == Origin::User => state
+            .queue_users_message(id, text)
+            .ok_or_else(outbox_saved)?,
         None => state
             .queue_message_unless_sealed(id, text)
             .ok_or_else(outbox_saved)?,
@@ -265,6 +295,12 @@ fn write_message_inner(
     state.announce_refusals(id, session.agent);
     if let Some(reason) = state.outbox.take_refusal(ticket) {
         return Err(refused_error(session.agent, &reason));
+    }
+    // A message still on the queue is queued, whatever the drain met: the user's message goes past
+    // a hold for the usage limit, so a drain that writes it can end on it while messages queued
+    // before it are still held.
+    if state.outbox.is_queued(id, ticket) {
+        return Ok(Delivery::Queued);
     }
     delivery_of(drain, ticket, session.agent)
 }
@@ -291,7 +327,14 @@ pub(crate) async fn write_first_message_off_runtime(
     let state = state.clone();
     tokio::task::spawn_blocking(move || {
         let id = first.id().to_string();
-        write_message_inner(&state, &id, &text, WhenBlocked::Queue, Some(&mut first))
+        write_message_inner(
+            &state,
+            &id,
+            &text,
+            WhenBlocked::Queue,
+            Origin::Automatic,
+            Some(&mut first),
+        )
     })
     .await?
 }
@@ -308,7 +351,10 @@ pub(crate) fn acceptance_uncertain(error: &anyhow::Error) -> bool {
 /// session of `agent`.
 fn delivery_of(drain: Drain, ticket: Ticket, agent: AgentId) -> Result<Delivery> {
     match drain {
-        Drain::Clear => Ok(Delivery::Written),
+        // A drain that stopped at what a usage-limit hold keeps back had written every message it
+        // took, and this one is off the queue (`write_message_inner` answers one still on it).
+        Drain::Clear | Drain::HeldForUsageLimit => Ok(Delivery::Written),
+        // Another drain may still be writing it.
         Drain::Pending => Ok(Delivery::Queued),
         Drain::Unsent(unsent) if unsent == ticket => Ok(Delivery::Unsent),
         // Tickets follow the queue's order: an earlier message left unsent holds this one back, a
@@ -650,6 +696,20 @@ pub(crate) fn current_kept_messages(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A drain that stopped at what a usage-limit hold keeps back answers a message off the queue
+    /// as written; a drain left pending, which another drainer may be writing it for, does not.
+    #[test]
+    fn only_a_drain_that_stopped_at_the_usage_limit_hold_answers_a_message_off_the_queue() {
+        assert_eq!(
+            delivery_of(Drain::HeldForUsageLimit, 7, AgentId::CLAUDE).unwrap(),
+            Delivery::Written
+        );
+        assert_eq!(
+            delivery_of(Drain::Pending, 7, AgentId::CLAUDE).unwrap(),
+            Delivery::Queued
+        );
+    }
     use crate::test_support::owner_team::{interrupted_hub_state, kept_texts, team_state};
 
     /// Only the message written in part while the draft was stashed is lost to its sender: one
@@ -729,5 +789,115 @@ mod tests {
         let coded = err.downcast_ref::<CodedError>().expect("coded");
         assert_eq!(coded.code, error_code::SESSION_ARCHIVED, "{err}");
         assert!(kept_texts(&state).is_empty());
+    }
+
+    /// A held session of the usage limit: a Claude Code session `s` with a process whose own server
+    /// takes whatever is written into it, held after a failed turn the record said the limit
+    /// stopped.
+    fn held_for_the_usage_limit(
+        label: &str,
+    ) -> (
+        Arc<AppState>,
+        crate::test_support::ScratchDir,
+        crate::test_support::StandIn,
+        Arc<crate::test_support::AcceptingServer>,
+    ) {
+        let (state, dir) = crate::test_support::app_state(label);
+        crate::state::test_support::insert_record(&state, &dir, "s", SessionStatus::Idle);
+        let server = crate::test_support::AcceptingServer::new();
+        let live = crate::test_support::idle_stand_in("s").with_transport(server.clone());
+        state.register_live(live.clone());
+        let judgement = live.usage_limit.begin_judging(1);
+        live.usage_limit.judged(judgement, true);
+        (state, dir, live, server)
+    }
+
+    /// What Octoboard or another session writes into a session held for the usage limit is queued,
+    /// and answered as queued.
+    #[test]
+    fn a_message_for_a_session_held_for_the_usage_limit_is_queued() {
+        let (state, _dir, _live, server) = held_for_the_usage_limit("delivery-usage-limit-queued");
+        for when_blocked in [WhenBlocked::Queue, WhenBlocked::Refuse] {
+            let delivery = write_message(&state, "s", "from the owner", when_blocked).unwrap();
+            assert_eq!(delivery, Delivery::Queued, "{when_blocked:?}");
+        }
+        assert!(server.offered().is_empty(), "{:?}", server.offered());
+        assert_eq!(state.outbox.len("s"), 2);
+    }
+
+    /// The user's own message from a client is written past that hold, ahead of what it keeps back,
+    /// and what was queued follows it in order once the hold lets go.
+    #[tokio::test]
+    async fn the_user_s_own_message_goes_ahead_of_what_a_usage_limit_hold_keeps() {
+        let (state, _dir, live, server) = held_for_the_usage_limit("delivery-usage-limit-user");
+        write_message(&state, "s", "first", WhenBlocked::Queue).unwrap();
+        write_message(&state, "s", "second", WhenBlocked::Queue).unwrap();
+
+        write_users_message_off_runtime(&state, "s", "mine".to_string())
+            .await
+            .unwrap();
+        assert_eq!(server.offered(), ["mine"]);
+        assert_eq!(state.outbox.len("s"), 2, "the others stay queued");
+
+        let queued_after = write_message(&state, "s", "third", WhenBlocked::Queue).unwrap();
+        assert_eq!(queued_after, Delivery::Queued);
+        assert_eq!(server.offered(), ["mine"]);
+
+        assert!(live.usage_limit.release_armed_at(1));
+        state.flush_outbox("s", SessionStatus::Idle);
+        assert_eq!(server.offered(), ["mine", "first", "second", "third"]);
+    }
+
+    /// The hold for the usage limit does not excuse the other holds: while a dialog is up the user's
+    /// message waits as it ever did, and while the trust screen may be up it is refused, and
+    /// nothing is written.
+    #[tokio::test]
+    async fn the_user_s_message_is_still_refused_by_the_other_holds() {
+        let (state, _dir, live, server) = held_for_the_usage_limit("delivery-usage-limit-dialogs");
+        live.on_output(
+            "  Resume this conversation?\r\n  \u{276f} 1. Resume\r\n    2. Start a new conversation\r\n  Enter to confirm \u{b7} Esc to resume\r\n"
+                .as_bytes(),
+        );
+        let delivery = write_users_message_off_runtime(&state, "s", "mine".to_string())
+            .await
+            .unwrap();
+        assert_eq!(delivery, Delivery::Queued, "the dialog holds it");
+        assert!(server.offered().is_empty(), "{:?}", server.offered());
+
+        let (state, trust_dir) = crate::test_support::app_state("delivery-usage-limit-trust");
+        crate::state::test_support::insert_record(&state, &trust_dir, "s", SessionStatus::Idle);
+        let starting = crate::test_support::watched_live_session(
+            "s",
+            AgentId::CLAUDE,
+            80,
+            24,
+            "sleep 30",
+            None,
+        );
+        state.register_live(starting.clone());
+        let judgement = starting.usage_limit.begin_judging(1);
+        starting.usage_limit.judged(judgement, true);
+        let refused = write_users_message_off_runtime(&state, "s", "mine".to_string())
+            .await
+            .unwrap_err();
+        assert_eq!(
+            crate::test_support::code_of(&refused),
+            error_code::SESSION_TRUST_PENDING
+        );
+        assert_eq!(starting.input_writes(), 0);
+    }
+
+    /// A user's message written past the hold is answered as written, though what it keeps back is
+    /// still queued behind it.
+    #[tokio::test]
+    async fn the_user_s_message_written_past_the_hold_is_answered_as_written() {
+        let (state, _dir, _live, server) =
+            held_for_the_usage_limit("delivery-usage-limit-user-answer");
+        write_message(&state, "s", "kept back", WhenBlocked::Queue).unwrap();
+        let delivery = write_users_message_off_runtime(&state, "s", "mine".to_string())
+            .await
+            .unwrap();
+        assert_eq!(server.offered(), ["mine"], "it was written");
+        assert_eq!(delivery, Delivery::Written);
     }
 }

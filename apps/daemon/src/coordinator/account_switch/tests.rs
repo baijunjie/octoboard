@@ -696,6 +696,50 @@ async fn a_switch_carries_what_the_process_started_over_to_the_relaunch() {
     );
 }
 
+/// What a hold for the usage limit kept back is not lost with the process a switch ends: it is
+/// written into the relaunched one, which no such hold holds.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_switch_writes_what_a_usage_limit_held_into_the_relaunched_process() {
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    let (state, dir) = console_with_project_and_accounts("coordinator-switch-usage-limit-queue");
+    std::fs::create_dir_all(dir.join("claude-a")).unwrap();
+    state
+        .store
+        .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
+        .unwrap();
+    let first = crate::test_support::running(&state, "s");
+    crate::coordinator::exit_watch::watch_exit(&state, first.clone());
+    let judgement = first.usage_limit.begin_judging(1);
+    first.usage_limit.judged(judgement, true);
+    state.queue_message("s", "held-for-the-limit");
+    assert_eq!(
+        state.flush_outbox("s", SessionStatus::Idle),
+        crate::messaging::outbox::Drain::HeldForUsageLimit
+    );
+    let started = Arc::new(std::sync::Mutex::new(Vec::<StandIn>::new()));
+    let launches = Arc::new(std::sync::Mutex::new(Vec::<Launched>::new()));
+
+    switch_session_account_with(
+        &state,
+        "s",
+        Some(Some("claude-a".to_string())),
+        None,
+        None,
+        LaunchEdit::default(),
+        || Ok(HashMap::new()),
+        stand_in_launch(&started, &launches, || {}),
+    )
+    .await
+    .unwrap();
+
+    let relaunched = state.live_session("s").expect("relaunched");
+    assert!(!relaunched.usage_limit.holds());
+    let heard = crate::test_support::output_containing(&relaunched, "held-for-the-limit");
+    assert!(heard.contains("held-for-the-limit"), "{heard}");
+    assert!(!String::from_utf8_lossy(&first.recent_output(8 * 1024)).contains("held-for-the-limit"));
+    stop_process(&state, relaunched).await.unwrap();
+}
+
 /// A session whose switch ended some of the trees it had running is told which, as a notice, when
 /// the switch does not continue its turn; one that kept all of them is told nothing.
 #[tokio::test(flavor = "multi_thread")]

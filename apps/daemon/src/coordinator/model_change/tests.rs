@@ -394,6 +394,104 @@ async fn a_model_change_carries_what_the_process_started_over_to_the_relaunch() 
     );
 }
 
+/// What was queued for a session when its model is changed, and what a hold for the usage limit
+/// kept back, is not lost with the process the change ends: it is written into the relaunched one,
+/// which no such hold holds.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_model_change_writes_what_was_queued_into_the_relaunched_process() {
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    let (state, dir) = console_with_project_and_accounts("coordinator-model-queue-carried");
+    state
+        .store
+        .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
+        .unwrap();
+    let first = crate::test_support::running(&state, "s");
+    crate::coordinator::exit_watch::watch_exit(&state, first.clone());
+    let judgement = first.usage_limit.begin_judging(1);
+    first.usage_limit.judged(judgement, true);
+    state.queue_message("s", "held-for-the-limit");
+    let started = Arc::new(std::sync::Mutex::new(Vec::<StandIn>::new()));
+    let launches = Arc::new(std::sync::Mutex::new(Vec::<Launched>::new()));
+
+    set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            compatibility: Default::default(),
+            model: Some(Some("opus".to_string())),
+            effort: None,
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        stand_in_launch(&started, &launches, || {}),
+    )
+    .await
+    .unwrap();
+
+    let relaunched = state.live_session("s").expect("relaunched");
+    assert_ne!(relaunched.launch_id, first.launch_id);
+    assert!(!relaunched.usage_limit.holds());
+    let heard = crate::test_support::output_containing(&relaunched, "held-for-the-limit");
+    assert!(heard.contains("held-for-the-limit"), "{heard}");
+    assert!(!String::from_utf8_lossy(&first.recent_output(8 * 1024)).contains("held-for-the-limit"));
+    stop_process(&state, relaunched).await.unwrap();
+}
+
+/// A model change that relaunches nothing drops what was queued as the queue of any ended process
+/// goes, with nothing announced to the user.
+#[tokio::test]
+async fn a_model_change_that_relaunches_nothing_drops_the_queue_quietly() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-model-queue-dropped");
+    let mut project = state.store.get_project("project-1").unwrap().unwrap();
+    project.path = dir.to_string_lossy().into_owned();
+    state.store.update_project(&project).unwrap();
+    state
+        .store
+        .insert_session(&project_session("s", AgentId::CLAUDE, SessionStatus::Idle))
+        .unwrap();
+    let live = idle_stand_in("s");
+    state.register_live(live.clone());
+    crate::coordinator::exit_watch::watch_exit(&state, live.clone());
+    state.queue_message("s", "never delivered");
+    let mut events = state.subscribe();
+    let launch = |request: term::LaunchRequest| {
+        let gone = fake_live_session(&request.session_id, request.agent, 80, 24, "exit 1");
+        Ok(term::Launch {
+            session: (*gone).clone(),
+            agent_session_id: None,
+            notice: None,
+        })
+    };
+
+    set_session_model_with(
+        &state,
+        "s",
+        LaunchEdit {
+            compatibility: Default::default(),
+            model: Some(Some("opus".to_string())),
+            effort: None,
+        },
+        ModelAsker::User,
+        None,
+        shell_env(&dir),
+        launch,
+    )
+    .await
+    .expect_err("the relaunch ended at once");
+
+    assert_eq!(state.outbox.len("s"), 0);
+    while let Ok(event) = events.try_recv() {
+        if let Event::SessionNotice { code, .. } = event {
+            assert!(
+                code != crate::protocol::notice_code::HANDOFF_MESSAGES_DROPPED
+                    && code != crate::protocol::notice_code::SHARING_MESSAGES_DROPPED,
+                "announced {code:?}"
+            );
+        }
+    }
+}
+
 /// A model change that ended some of the trees the session had running tells it so: in the prompt
 /// that carries a cut-off turn on, else as a notice written once it is back.
 #[tokio::test(flavor = "multi_thread")]

@@ -10,6 +10,25 @@ use crate::providers::layout::layout;
 use crate::records::locate::{account_roots, plausible_id, walk_records, Hints, Locator, Step};
 use crate::records::removal::removable_record_paths;
 
+/// The agent's id of the conversation a relaunch of this session resumes, or none when it has not
+/// got one yet. Only a session that has had a turn has something to resume: without one the agent
+/// stored no conversation, and resuming by id fails with "No conversation found" — so a launch
+/// without an id opens a fresh conversation instead, in the same project and under the same
+/// session. A switch relocates exactly the conversation a resume would ask for.
+pub(crate) fn resumable_agent_session_id(session: &Session) -> Option<String> {
+    if session.has_conversation {
+        session.agent_session_id.clone()
+    } else {
+        None
+    }
+}
+
+/// Whether finding `session`'s conversation record needs the shell snapshot: the default account
+/// has no directory of its own, which is resolved from the environment.
+pub(crate) fn record_needs_shell_env(session: &Session) -> bool {
+    session.config_dir.is_none()
+}
+
 /// Whether all known account locations can prove the absence of the native records deleting this
 /// session would remove ([`removable_record_paths`]). Missing ids, unreadable or linked directories
 /// and a provider whose store recognises no record (`RecordStore::recognises_records`) cannot

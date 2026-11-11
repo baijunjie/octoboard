@@ -158,6 +158,9 @@ pub(crate) fn end_failed_turn(
         Some(Judgement::Retry(plan)) => {
             // Closed here and not through `close_turn_and_report`, which would report the failure.
             let close = state.close_turn(session_id, false);
+            if matches!(close, TurnClose::OwesReport | TurnClose::Reported) {
+                crate::messaging::usage_limit::turn_failed_otherwise(state, session_id);
+            }
             if !settle_failed_turn(state, session_id, close) {
                 state.capacity_retries.forget(session_id);
             } else {

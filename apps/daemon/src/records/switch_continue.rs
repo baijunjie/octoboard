@@ -17,10 +17,17 @@
 //! any output, which a cancel at that moment leaves looking the same as the switch's ending of it
 //! (Claude Code, Grok Build) — is therefore not continued.
 
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
+use anyhow::Result;
+
+use crate::accounts::choice::account_dir;
+use crate::accounts::relocate;
 use crate::adapter::provider;
-use crate::protocol::AgentId;
+use crate::protocol::{AgentId, Session};
+use crate::records::resumability::{record_needs_shell_env, resumable_agent_session_id};
 
 /// Whether the session whose conversation record is `record` should be sent
 /// [`crate::messaging::texts::CONTINUE_PROMPT`] once relaunched: the transcript for Claude Code,
@@ -37,6 +44,67 @@ pub fn should_continue(agent: AgentId, record: &Path) -> bool {
 /// read.
 pub fn stopped_on_usage_limit(agent: AgentId, record: &Path) -> bool {
     verdict(agent, record, true)
+}
+
+/// How long a failed turn's record is waited on to say that the usage limit stopped it. An agent
+/// may report a failed turn (its `StopFailure` hook) before it has written the entry that says
+/// why, so a record that does not say so yet is read again for this long before the turn is judged
+/// not to have stopped on the limit. The real ordering is not measured.
+#[cfg(not(test))]
+const USAGE_LIMIT_RECORD_WAIT: Duration = Duration::from_secs(4);
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static USAGE_LIMIT_RECORD_WAIT_OVERRIDE: std::cell::Cell<Option<Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Read on the caller's thread, so a test's override survives the record's blocking reads.
+fn usage_limit_record_wait() -> Duration {
+    #[cfg(test)]
+    {
+        USAGE_LIMIT_RECORD_WAIT_OVERRIDE
+            .get()
+            .unwrap_or(crate::test_support::PATIENCE)
+    }
+    #[cfg(not(test))]
+    USAGE_LIMIT_RECORD_WAIT
+}
+
+/// Whether the conversation record of `session` says its last turn stopped on the usage limit
+/// ([`stopped_on_usage_limit`]), read again for up to [`USAGE_LIMIT_RECORD_WAIT`] until it does: the
+/// one reading both the automatic account switch and the hold on Octoboard's writes after a usage
+/// limit judge a failed turn by. `shell_env` is the snapshot the default account's directory is
+/// resolved from when [`record_needs_shell_env`]. Refused when the record is not where it is
+/// expected, or when the default account comes with no environment; `false` for a session with no
+/// conversation, which has not stopped on a limit.
+pub(crate) async fn wait_for_usage_limit(
+    session: &Session,
+    shell_env: Option<HashMap<String, String>>,
+) -> Result<bool> {
+    let (agent, config_dir) = (session.agent, session.config_dir.clone());
+    let record_wait = usage_limit_record_wait();
+    let Some(resume_id) = resumable_agent_session_id(session) else {
+        return Ok(false);
+    };
+    if record_needs_shell_env(session) && shell_env.is_none() {
+        anyhow::bail!("the default account's directory needs the shell environment");
+    }
+    let record = tokio::task::spawn_blocking(move || -> Result<PathBuf> {
+        let from = account_dir(agent, config_dir.as_deref(), shell_env.as_ref());
+        Ok(from.join(relocate::locate(agent, &from, &resume_id)?))
+    })
+    .await??;
+    let deadline = Instant::now() + record_wait;
+    loop {
+        let path = record.clone();
+        let stopped =
+            tokio::task::spawn_blocking(move || stopped_on_usage_limit(agent, &path)).await?;
+        if stopped || Instant::now() >= deadline {
+            return Ok(stopped);
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
 }
 
 /// [`should_continue`], or with `usage_limit_only` the part of it that a usage limit stopped, as

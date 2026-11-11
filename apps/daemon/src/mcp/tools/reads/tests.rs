@@ -1035,6 +1035,49 @@ async fn a_session_holding_its_queue_says_why() {
     assert!(fetched["note"].is_string());
 }
 
+/// A session held for the usage limit says so, with an explanation, in the listing and in
+/// `get_session`; the hold changes neither its status nor whether it asks for the user.
+#[tokio::test]
+async fn a_session_held_for_the_usage_limit_says_so_and_keeps_its_status() {
+    let (state, _dir) = shared_console_state("tool-surface-usage-limit-hold");
+    let live = running(&state, "of-a");
+    let fetch = || async {
+        call(
+            &state,
+            "a",
+            "get_session",
+            &arguments(json!({ "session": "of-a" })),
+        )
+        .await
+        .unwrap()
+    };
+    let before = fetch().await;
+    assert_eq!(before["writes_held"], Value::Null);
+
+    let judgement = live.usage_limit.begin_judging(1);
+    live.usage_limit.judged(judgement, true);
+    state.queue_message("of-a", "go on");
+    let fetched = fetch().await;
+    assert_eq!(fetched["writes_held"]["reason"], "usage_limit");
+    assert!(fetched["writes_held"]["explanation"]
+        .as_str()
+        .is_some_and(|explanation| !explanation.is_empty()));
+    assert_eq!(fetched["writes_held"].get("dialog"), None);
+    assert_eq!(fetched["queued_messages"], 1);
+    assert_eq!(fetched["status"], before["status"]);
+    let listed = call(&state, "a", "list_sessions", &Map::new())
+        .await
+        .unwrap();
+    let listed = listed["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|session| session["session"] == "of-a")
+        .unwrap();
+    assert_eq!(listed["writes_held"]["reason"], "usage_limit");
+    assert_eq!(listed["status"], before["status"]);
+}
+
 /// The reads are the same for every role: a bound project session, an unbound one and a console
 /// session read any session, any project's archive in any console, and the projects of their
 /// own console or another, and `yours` is worked out against whoever asks.

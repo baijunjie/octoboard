@@ -3,7 +3,7 @@
 //! `docs/agent-cli-reference.md`, section "## Codex".
 
 use crate::platform::names::PathStyle;
-use crate::session::dialogs::{DialogPattern, WrittenMessage};
+use crate::session::dialogs::{DialogKind, DialogPattern, WrittenMessage};
 use crate::session::screen::{Interrupt, InterruptKey, ScreenReader};
 use crate::session::title_activity::{spinner_activity, Shown};
 use crate::session::trust::{Press, Screen, StartSignal};
@@ -478,7 +478,31 @@ const DIALOGS: &[DialogPattern] = &[
         WrittenMessage::Discarded,
         &["Approachingratelimits", "Keepcurrentmodel"],
     ),
+    // The prompt Codex raises once a workspace account's turn has failed on its usage limit,
+    // offering to ask the workspace's owner for more. Its options and the sentence on when usage
+    // resets vary with what the server sends, so only its title and the sentence naming the owner
+    // are matched; the error a failed turn prints in the transcript asks the owner "to refill",
+    // never "to add more", and does not match. No configuration key of 0.167.0 hides it.
+    DialogPattern::all_of(
+        CODEX_USAGE_LIMIT,
+        WrittenMessage::Discarded,
+        &[
+            "reachedyourworkspacecreditlimit",
+            "Askyourworkspaceownertoaddmore",
+        ],
+    )
+    .of_kind(DialogKind::UsageLimit),
+    DialogPattern::all_of(
+        CODEX_USAGE_LIMIT,
+        WrittenMessage::Discarded,
+        &["Usagelimitreached", "Requestalimitincreasefromyourowner"],
+    )
+    .of_kind(DialogKind::UsageLimit),
 ];
+
+/// The name of the prompt Codex raises when a workspace account's usage limit stops a turn, in
+/// either of its forms.
+const CODEX_USAGE_LIMIT: &str = "codex_usage_limit";
 
 #[cfg(test)]
 mod tests {

@@ -393,6 +393,42 @@ impl crate::session::term::MessageTransport for DecliningServer {
     fn stop(&self) {}
 }
 
+/// A server of the session's own that takes every message, as one does that is ready for it:
+/// nothing is written into the terminal, and the texts it was offered are kept in order, for a
+/// test to read what was delivered and when.
+pub(crate) struct AcceptingServer {
+    offered: std::sync::Mutex<Vec<String>>,
+}
+
+impl AcceptingServer {
+    pub(crate) fn new() -> Arc<Self> {
+        Arc::new(Self {
+            offered: Default::default(),
+        })
+    }
+
+    /// The texts the server was offered, in order.
+    pub(crate) fn offered(&self) -> Vec<String> {
+        self.offered.lock().unwrap().clone()
+    }
+}
+
+impl crate::session::term::MessageTransport for AcceptingServer {
+    fn send(
+        &self,
+        text: &str,
+        _: &str,
+    ) -> Result<crate::session::term::Sent, crate::platform::term::PartialWrite> {
+        self.offered.lock().unwrap().push(text.to_string());
+        Ok(crate::session::term::Sent::Queued)
+    }
+    fn attach(&self, _: crate::session::term::TransportEvents) {}
+    fn start_queue(&self) -> crate::session::term::QueueStart {
+        crate::session::term::QueueStart::Nothing
+    }
+    fn stop(&self) {}
+}
+
 pub(crate) fn fake_live_session(
     id: &str,
     agent: AgentId,

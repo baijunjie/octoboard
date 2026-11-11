@@ -22,4 +22,19 @@ impl AppState {
         self.capacity_retries.cancel(id, Cause::Silent);
         self.quota_recovery.cancel(id);
     }
+
+    /// [`Self::cancel_recoveries_silently`] for a message queued for the session, which opens a
+    /// turn once written. Not the automatic account switch's wait for quota while the session
+    /// holds Octoboard's writes for its usage limit: what is queued then opens no turn, and is
+    /// carried into the process that wait restarts.
+    pub(crate) fn cancel_recoveries_for_queued(&self, id: &str) {
+        if self
+            .live_session(id)
+            .is_some_and(|live| live.usage_limit.holds())
+        {
+            self.capacity_retries.cancel(id, Cause::Silent);
+        } else {
+            self.cancel_recoveries_silently(id);
+        }
+    }
 }

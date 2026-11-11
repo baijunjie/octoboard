@@ -158,8 +158,10 @@ notices for an interrupted owner, which are kept until the session is resumed (s
 session" in `docs/product/information-between-sessions.md` and "Reports and notices for an interrupted owner" in
 `docs/product/reporting-to-owners.md`). Anything still queued when a session's process ends goes with it, unless the
 session is being handed off to another agent, whose queue is kept for the session that takes its place (see "Messages
-for the original during a handoff" in `docs/product/handing-off-sessions.md`), or it is kept for an interrupted
-session, which stays kept for the next resume.
+for the original during a handoff" in `docs/product/handing-off-sessions.md`), its process is being restarted for a
+change of its account's sharing, or by an account switch or a change of its model or effort (see "What is queued
+crosses an account switch or a model change" below), whose relaunched process takes it, or it is kept for an
+interrupted session, which stays kept for the next resume.
 
 **What is queued crosses a planned restart.** A planned stop (see "Planned restart and planned stop" in
 `docs/product/application-lifecycle.md`) leaves every session running, and with it what is queued for it. From the
@@ -174,6 +176,26 @@ running that process any more gets none of them, as a session whose process ende
 apart from those kept for an interrupted session, which stay kept for its next resume; nor does a session whose
 process is taken over only later, once its holder can be connected to. A message written only in part when the stop
 began is not saved: it is reported lost, as a message cut short always is, and never written again whole.
+
+**What is queued crosses an account switch or a model change.** An account switch — the user's, an owner's or
+Octoboard's automatic one, its restart on the session's own account once that account's quota has recovered included —
+and a change of the session's model, reasoning effort or compatibility switches keep what is queued for the session
+from before they end its process, and what is sent meanwhile, and write it into the process their relaunch starts,
+oldest first, behind the relaunch's own instruction when it has one: the prompt to continue the session's task, with
+any notice it begins with (see "Continuing after a switch" in `docs/product/switching-session-accounts.md`). A Claude
+Code session that resumes a conversation is given that instruction as its launch prompt (see below), so what was
+carried is written after it. While the restart runs, what it keeps is written nowhere and is not reported in
+`writes_held`, the session showing as switching its account or as starting meanwhile; it holds nothing typed into the
+session's terminal. Once the relaunched process has started, what was carried is written as into any session, under
+the holds of this section; the old process's hold after a usage limit (see below) does not come along.
+
+- **A relaunched process that ends within the few seconds it is watched** has its instruction taken back. Where
+  Octoboard then brings the session back up on the account it had, after its own switch failed (see "When the switch
+  fails" in `docs/product/automatic-account-switch.md`), what was carried is written into that process, with no
+  instruction.
+- **Where nothing is brought back up** — a failed switch the user or an owner asked for, a failed change of model or
+  effort, or a restore that fails too — what was carried is dropped, with no notice: only the daemon's log records it.
+- **A switch or change refused before the process is ended** leaves the queue with the process still running.
 
 **Messages are also held while a session's trust confirmation may be up.** A message's trailing Enter would answer
 the agent's own folder-trust confirmation (see `docs/product/folder-trust.md`) — accepting it, and so trusting the
@@ -234,10 +256,12 @@ the session is queued as above. Each has a code, which the owners' tools report 
 | Codex | The choice between the session's and the current working directory, at a resume | `codex_resume_cwd` |
 | Codex | The prompt to try a newer model | `codex_model_migration` |
 | Codex | The nudge to switch to another model as a rate limit nears | `codex_rate_limit_nudge` |
+| Codex | Its usage-limit prompt: the workspace credit-limit screen ("You've reached your workspace credit limit", asking the workspace owner to add more), with or without its "Notify owner?" question, and the "Usage limit reached" form asking whether to request a limit increase from the owner. The error lines a failed turn prints in the conversation are not this screen | `codex_usage_limit` |
 | Grok Build | Its usage-limit screen, offering to upgrade, buy credits or try again | `grok_usage_limit` |
 
-Every Codex launch keeps its last three screens away as far as it can (see "Codex" in
-`docs/product/per-agent-launch-specifics.md`), so they hold messages only when one comes up all the same. While such a
+Every Codex launch keeps its working-directory choice, its prompt to try a newer model and its rate-limit nudge away as
+far as it can (see "Codex" in `docs/product/per-agent-launch-specifics.md`), so they hold messages only when one comes
+up all the same; no setting of Codex hides its usage-limit prompt (measured on Codex 0.167.0). While such a
 screen is up the session reads as *waiting for the user* and raises its hand (see "What the statuses are derived from"
 in `docs/product/session-statuses.md`) — except Claude Code's three views of its background agents
 (`claude_agent_list_focus`, `claude_subagent_view`, `claude_agents_view`), which show it *dormant* and raise no hand (see
@@ -256,6 +280,12 @@ error (`StopFailure`, or a notification of type `agent_error`), what Octoboard w
 until a prompt is sent there if that comes sooner, since Grok may be drawing its usage-limit screen. After that the
 screen holds the messages if it is up, and they go in otherwise. This hold alone raises no hand. An error of a
 subagent's, or of another agent, holds nothing.
+
+**And after a turn stopped on the account's usage limit.** From the end of a failed turn, Octoboard holds what it writes
+into the session while it reads whether the account's usage limit stopped the turn, and goes on holding it if it did,
+until the account's quota has recovered, a turn the held messages did not start ends without failing, or the session
+gets a new process. The user's own messages from a client go past it. See
+`docs/product/messages-held-after-a-usage-limit.md`.
 
 There is a second way a message Octoboard accepted does not arrive. If the agent stops taking input
 part way through a write, part of that message is left sitting in the session's input line. Whatever
@@ -293,6 +323,7 @@ because its agent reported it is waiting for the user — at a permission prompt
 | `agent_error` | The moment after a Grok Build error (above). |
 | `sharing_change` | It is being restarted for a change of its account's sharing of the default configuration, and is resumed on its conversation afterwards; what is queued for it is written into the resumed process (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`). |
 | `handoff` | It is being handed off to another agent. |
+| `usage_limit` | Its last turn stopped on its account's usage limit (see `docs/product/messages-held-after-a-usage-limit.md`). |
 | `submission_uncertain` | Codex's own queue did not confirm accepting a message; later messages wait up to three seconds or until another submitted prompt, whichever comes first (see "A message whose acceptance is uncertain" below). |
 | `unsent_message` | A message written into it was left unsent (see "A message written but not sent" below). |
 

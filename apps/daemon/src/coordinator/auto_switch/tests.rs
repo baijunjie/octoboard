@@ -1259,14 +1259,14 @@ async fn no_hold_without_a_trustworthy_reset_time() {
 /// account that reads as used up, a turn that is only running or cut off included.
 #[tokio::test]
 async fn a_session_on_a_used_up_account_is_not_switched_unless_its_turn_hit_the_limit() {
-    crate::coordinator::account_switch::USAGE_LIMIT_RECORD_WAIT_OVERRIDE
+    crate::records::switch_continue::USAGE_LIMIT_RECORD_WAIT_OVERRIDE
         .set(Some(Duration::from_millis(100)));
     let fixture = Fixture::new("auto-switch-reading-only", SessionStatus::Working);
     fixture.hold(None, 100.0);
     fixture.end_on_a_tool_call();
 
     let switched = fixture.failed_turn().await;
-    crate::coordinator::account_switch::USAGE_LIMIT_RECORD_WAIT_OVERRIDE.set(None);
+    crate::records::switch_continue::USAGE_LIMIT_RECORD_WAIT_OVERRIDE.set(None);
     assert!(!switched, "not a usage limit");
 
     assert_eq!(fixture.worker().account_id, None);
@@ -1622,6 +1622,31 @@ async fn a_failed_switch_is_undone_by_bringing_the_session_back_up() {
     assert!(notices(&mut events, notice_code::ACCOUNT_SWITCHED_AUTOMATICALLY).is_empty());
     let heard = owner_heard(&fixture).await;
     assert!(!heard.contains("could neither switch"), "{heard}");
+}
+
+/// What was queued for a session held for its usage limit is not lost when its switch fails after
+/// ending the process: the process the restore starts gets it.
+#[tokio::test(flavor = "multi_thread")]
+async fn what_was_queued_goes_into_the_process_a_restore_starts() {
+    let fixture = Fixture::new("auto-switch-restored-queue", SessionStatus::Idle);
+    let held = &fixture.worker_process.usage_limit;
+    let judgement = held.begin_judging(1);
+    held.judged(judgement, true);
+    fixture.state.queue_message("w", "held-for-the-restore");
+    let env = fixture.env();
+
+    let outcome = try_switch(
+        &fixture.state,
+        "w",
+        move || Ok(env),
+        fixture.launch_failing(1),
+    )
+    .await;
+
+    assert!(!outcome.expect("restored, so not an error"), "not moved");
+    let restored = fixture.state.live_session("w").expect("it runs again");
+    let heard = output_containing(&restored, "held-for-the-restore");
+    assert!(heard.contains("held-for-the-restore"), "{heard}");
 }
 
 /// Only when bringing the session back up fails too is an error raised: the user and the
@@ -2275,14 +2300,14 @@ async fn a_relaunch_that_dies_is_reported_as_the_outcome_not_as_ending_on_its_ow
 /// refuse an interrupt, a handoff or a rebinding for the seconds the record is waited on.
 #[tokio::test]
 async fn a_failed_turn_that_did_not_hit_the_limit_takes_no_claim() {
-    crate::coordinator::account_switch::USAGE_LIMIT_RECORD_WAIT_OVERRIDE
+    crate::records::switch_continue::USAGE_LIMIT_RECORD_WAIT_OVERRIDE
         .set(Some(Duration::from_millis(100)));
     let fixture = Fixture::new("auto-switch-no-claim", SessionStatus::Idle);
     fixture.end_on_a_tool_call();
     let mut events = fixture.state.subscribe();
 
     fixture.failed_turn().await;
-    crate::coordinator::account_switch::USAGE_LIMIT_RECORD_WAIT_OVERRIDE.set(None);
+    crate::records::switch_continue::USAGE_LIMIT_RECORD_WAIT_OVERRIDE.set(None);
 
     let mut shown_switching = false;
     while let Ok(event) = events.try_recv() {
