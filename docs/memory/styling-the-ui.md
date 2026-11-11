@@ -61,22 +61,23 @@ showing them (the jsdom tests never hover). When giving a HeroUI part a backgrou
 sticky row, say — restore each state fill on the same element with its state attribute's variant
 (`ui-hovered:bg-default`).
 
-## A `docked:` or `phone:` utility loses to an `sm:` or an `rtl:` twin on the same property
+## Two `max-` breakpoint utilities on one property: the later-declared one wins, not the narrower
 
-`docked` and `phone` are this project's custom breakpoints and their tokens are in `px`, while Tailwind's built-in
-breakpoints are in `rem`. Tailwind orders breakpoints by value only where it can compare them, so a px-valued one cannot
-be placed against the rem-valued built-ins and its media block is emitted ahead of all of them; a selector variant such
-as `rtl:` is emitted after every media variant. Either way the `docked:` or `phone:` rule comes first, so at equal
-specificity the twin wins and the custom breakpoint's value never applies — with no build warning and nothing to see in
-the source.
+`packages/ui/src/style.css` redeclares the `max-tablet`, `max-desktop`, `max-sm` and `max-md` variants with
+`@custom-variant` (so that exactly 768px counts as narrow), while `max-phone` is Tailwind's built-in one. Tailwind emits
+every built-in variant first and the `@custom-variant` ones after them, in the order `style.css` declares them. So at
+equal specificity `max-phone:` loses to a `max-tablet:` / `max-desktop:` / `max-sm:` / `max-md:` twin, and
+`max-tablet:` loses to a `max-desktop:` twin: the narrower band's value never applies, with no build warning and
+nothing to see in the source. The min-width variants (`phone:`, `tablet:`, `desktop:`, `sm:`, `md:`, `lg:`) are
+ordered by value and stack mobile-first as usual.
 
-- Never pair an `sm:` / `md:` / `lg:` utility with a `docked:` or `phone:` one for the same property. Write the narrow
-  side as `max-docked:` or `max-phone:` and leave the wide side to the inherited or the component's own value: each
-  emits `@media (width < …)` on its own token's value, the exact complement of the `docked:` or `phone:` band, and
-  being a Tailwind utility it also wins inside that band over HeroUI's own prebuilt responsive rules, which sit in
-  HeroUI's components layer.
-- `rtl:` has no `max-` form, so a `docked:` or `phone:` value for a property also set under `rtl:` needs a
-  `docked:rtl:` or `phone:rtl:` twin instead.
+- Never give one property two `max-` breakpoint utilities whose bands nest. Make the bands disjoint by stacking
+  (`phone:max-tablet:max-w-[A] max-phone:max-w-[B]`), or set a custom property, unprefixed and under the narrower
+  variant, and read it once under the wider one:
+  `[--inset:--spacing(4)] max-phone:[--inset:--spacing(3)] max-tablet:max-w-[calc(100%-2*var(--inset))]`.
+- `rtl:` is emitted after `phone:`, `tablet:` and `desktop:` but before `max-tablet:` and `max-desktop:`, so a
+  breakpoint value for a property also set under `rtl:` gets a combined twin (`tablet:rtl:`, `max-tablet:rtl:`), which
+  is emitted after both.
 
 ## Under a local override of a HeroUI token, use the token itself, not its `--color-*` alias or a token derived from it
 
@@ -92,8 +93,8 @@ subtree only the overridden token itself carries the local value:
   written in an arbitrary value or plain CSS resolves on the root and draws the page's colour inside the surface:
   `shadow-[0_-4px_0_0_var(--color-overlay)]` on a sticky row in a dialog painted a dark strip once dialogs got their
   own `--overlay`. Write `var(--<name>)` there.
-- HeroUI's tokens computed from another (`--default-hover`, `--default-soft`, `--surface-hover`, `--field-focus`,
-  `--field-border-hover`, `--field-border-focus`, in `.../dist/themes/default/variables.css`) are resolved on the root
+- HeroUI's tokens computed from another (`--default-hover`, `--default-soft`, `--surface-hover`, `--field-hover`,
+  `--field-focus`, `--field-border-hover`, `--field-border-focus`, in `.../dist/themes/default/variables.css`) are resolved on the root
   too, and neighbours such as `--surface-secondary` are values of their own, so overriding `--default` or `--surface`
   on an element moves none of them. A new local override sets, on the same element, every token the components inside
   it draw with, as the existing rules do.

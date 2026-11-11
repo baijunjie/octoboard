@@ -37,7 +37,11 @@ without outer margins, rounded corners or a shadow. Connection and update notice
 width, the row scrolls sideways, fading at the end with more beyond it (see "The surfaces that fade" in
 `docs/product/scrolling-surfaces.md`), and the selected section's tab is scrolled into view when the dialog opens.
 
-Above **768 px**, the sections stay in a vertical list beside the selected section. Below 1024 px the dialog keeps a 16
+Above **768 px**, the sections stay in a vertical list in a column beside the selected section, the search field at the
+column's top and a divider between the column and the section. When the dialog is too short to show every section,
+the list of sections scrolls up and down on its own while the search field stays in place, fading at the edge with more
+beyond it (see "The surfaces that fade" in `docs/product/scrolling-surfaces.md`), and the selected section's tab is
+scrolled into view when the dialog opens. Below 1024 px the dialog keeps a 16
 px outer margin; at **1024 px and wider** it keeps at least 48 px and is at most 1000 px wide. Every wider desktop
 window uses this same presentation. The section's horizontal padding is 16 px below 1024 px and 32 px at 1024 px and
 wider. Below **390 px**, the section padding becomes 12 px and the tab row's spacing tightens. This compact spacing

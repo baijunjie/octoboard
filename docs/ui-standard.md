@@ -33,12 +33,14 @@ it dwindles to the exit speck; on a 2x display only that last speck does. The la
 always at full contrast, and the static glyph shown under reduced motion is unaffected. Keeping the stroke at full
 weight instead would change the look the user confirmed. (Source: user decision.)
 
-An override is the Settings dialog's selected section tab while a search is on (`packages/ui/src/settings/SettingsDialog.tsx`).
+An override is the selected tab of the Settings dialog's narrow section strip (at the `tablet` breakpoint and below)
+while a search is on (`packages/ui/src/settings/SettingsDialog.tsx`).
 The tabs come and go with list motion as the query changes, and a tab the search brings back can be selected in the
 same render, which leaves HeroUI's sliding indicator stuck on the old tab. So while searching the selected tab draws
 the indicator's fill itself, with the same background, shadow and radius in both appearances, and HeroUI's indicator
-stays mounted but invisible, without its transition; with no query HeroUI's indicator is used as usual. (Source: user
-decision.)
+stays mounted but invisible, without its transition; with no query HeroUI's indicator is used as usual. The wide
+section menu has no indicator: its selected row draws its own fill at all times (see "The Settings section menu" under
+"Confirmed visual choices"). (Source: user decision.)
 
 Contrast figures are recorded only where they show a threshold is met (especially a minimum close to it), record an
 accepted shortfall, or show why a value was chosen against a threshold. Decorative fills, tints, edges and surface
@@ -268,6 +270,26 @@ focus ring's variables, so keyboard focus still shows its full ring over it. Its
 highlights in the project's `--find-match-bg`, with the current match in `--find-current-bg` and
 `--find-current-fg` and underlined, so the current one is not told by colour alone; code and document text keep 4.5:1
 on the match fill. The bar floats over its content as a `floating-surface`.
+
+#### The Settings section menu
+
+Above the `tablet` breakpoint the Settings dialog's sections are a menu column rather than HeroUI's filled vertical
+tabs, by the user's decision (`packages/ui/src/settings/SettingsDialog.tsx`). The column, search field included, stands
+on HeroUI's secondary surface (`--surface-secondary`), a step below the dialog's own, for the dialog's full height, and
+a `groove-e` at its end edge divides it from the section. The tabs keep React Aria's tab semantics but drop HeroUI's
+track and indicator: each is a rounded row the column's width, its label in HeroUI's tab colour, taking the sidebar
+rows' `--panel-hover` tint and the foreground colour on hover. The selected row and the search field stand raised on
+the ground in `--menu-raised` (`packages/ui/src/styles/surfaces.css`): the dialog's surface in light (white), and in
+dark the dialog's control fill, a step lighter than its surface, since a raised dark surface reads lighter rather than
+whiter. The selected row's label is the foreground colour. The field is HeroUI's primary variant with its field colours
+set to `--menu-raised`, since HeroUI's dark field is darker than the ground, an exception to "Form controls on a
+surface". The field's edges, icon and text line up with the rows';
+the rows sit as far from the divider as from the dialog's start edge, and the section's content as far from the divider
+as from the dialog's end edge. When the window is too short for every section, the list scrolls inside the column while
+the field, the ground and the divider stay put; its edges fade where it can scroll, and HeroUI's scroll buttons, which
+would sit over the rows' labels, are hidden. While a tab holds keyboard focus the fades give way to its ring (see
+"Visible focus"), so a keyboard user finds the rest of the list by moving through it. At the breakpoint and below the sections are the shared content-fit
+tab strip with HeroUI's look (and the search-time override under "Conformance level and exceptions").
 
 ## Third-party UI components come through the wrapper layer
 
@@ -703,9 +725,9 @@ HeroUI controls draw their own focus ring.
 
 A scrollable tab list leaves enough inner padding for the full focus ring and its offset on every side.
 `TabListContainer` clips its child list through a scroll container, so this clearance belongs to `TabList` itself;
-padding outside the scroller does not protect the ring. Each tab also needs matching horizontal scroll margin so
-keyboard navigation reveals the ring as well as the tab border. Suppress the tab scroller’s fade mask while a tab has
-visible keyboard focus, so it cannot fade out the ring.
+padding outside the scroller does not protect the ring. Each tab also needs matching scroll margin along the list's
+axis so keyboard navigation reveals the ring as well as the tab border. Suppress the tab scroller’s fade mask while a
+tab has visible keyboard focus, so it cannot fade out the ring.
 
 An invalid, focused HeroUI `Input` keeps its outline offset at zero so the error outline meets the focus ring. This
 overrides WebKit's native inset without changing the component's colours or ring.
@@ -1314,8 +1336,8 @@ the surface around it does not forbid selection. It is accepted there because th
 - The selected row of a hand-built list or tree carries `aria-current` (as the sidebar rows do).
 - HeroUI's `Tabs` and `ListBox` mark their selection themselves with `aria-selected` and get no `aria-current` on top.
 
-Every tab strip, including agent tabs, uses its content width and is start-aligned in the current reading direction.
-Constrain the painted strip as well as the list and individual tab allocation; tabs do not stretch to fill the row.
+Every horizontal tab strip, including agent tabs, uses its content width and is start-aligned in the current reading
+direction. Constrain the painted strip as well as the list and individual tab allocation; tabs do not stretch to fill the row.
 The strip is bounded by its available width and scrolls when its content does not fit. A surrounding pinned header
 and its end actions, or the divider drawn under the strip (the agent tabs of the rail's quota panel), may span the
 section while the transparent tab list keeps its content width. Keep the scrolling and focus-ring clearance specified
@@ -2216,7 +2238,8 @@ own, as in Settings and menus, keep HeroUI's size.
 
 A form control on a surface — in a dialog, a popover, a card — takes HeroUI's `variant="secondary"` (`TextField`,
 `Input`, `Select`, `Checkbox` alike), HeroUI's own variant for that case. The default variant leaves it blending into
-the surface in both appearances.
+the surface in both appearances. The one exception is the wide Settings search field, which stands raised on its
+column's darker ground (see "The Settings section menu").
 
 ### Selects while their options load
 

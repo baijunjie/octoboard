@@ -8,7 +8,7 @@ fades under its own rules (see "Names too long for their space" in `docs/product
 
 Wherever a surface scrolls content out of sight, **the edge it hides that content behind fades out**, so that there is
 something to see rather than only something to try. The fade is **24 px** deep everywhere the application draws it; a
-strip of tabs is the one exception, and fades more deeply. Which surfaces this holds for, and the scrolling it leaves
+strip of tabs and Settings' column of sections are the exceptions, and fade more deeply. Which surfaces this holds for, and the scrolling it leaves
 alone, are in "The surfaces that fade" below.
 
 - The fade is on **the edge that has more beyond it**: the bottom of a surface at its start, the top of one scrolled
@@ -39,8 +39,9 @@ scrolling beneath it. This applies to nested headings as well: each fades when p
 
 **Some surfaces draw no scrollbar at all**, so the fade is what says there is more: the rail's column of console
 avatars, too narrow for a scrollbar (see "The rail" in `docs/product/window-layout.md`), focus mode's strip of chips,
-and a strip of tabs, which also shows a small chevron at each end that has
-more beyond it, pressed to scroll the strip that way; the chevrons are not keyboard stops.
+a strip of tabs, which also shows a small chevron at each end that has
+more beyond it, pressed to scroll the strip that way (the chevrons are not keyboard stops), and Settings' column of
+sections, which shows no chevrons.
 
 The **New conversation / Resume conversation**, console **Advanced**, Settings **agent**, rail **quota agent** and
 narrow Settings **section navigation** tab lists fit their tabs' combined content and inner padding, bounded by the
@@ -79,9 +80,11 @@ Once it holds more than it can show, each of these fades at its edge:
   not 24**. While a tab has visible keyboard focus, the strip's fade is suppressed so the tab and its focus ring stay
   fully visible, including after the arrow keys scroll a tab into view. The fade's size and the chevrons'
   appearance remain the component library's own; the application supplies the chevrons' accessible names in the
-  current language. Settings' sections are such a strip only in the narrow window: in the docked layout they stand
-  as a column as tall as the sections it holds, however many there are, which therefore never scrolls and carries
-  no fade;
+  current language. Settings' sections are such a strip only in the narrow window;
+- **Settings' column of sections** above 768 px, when the dialog is too short to show every section (see "In a narrow
+  window" in `docs/product/settings.md`): the list of sections scrolls up and down beneath the search field, which
+  stays in place. It fades over 64 px, as a strip of tabs does, draws neither a scrollbar nor chevrons, and likewise
+  suppresses its fade while a tab has visible keyboard focus;
 - the **screens shown before there is anything to show** (see "The window chrome and the content panel" in
   `docs/product/window-layout.md`): the column of content of each of them;
 - an **empty-state failure** (see "Failures shown on the screen" in `docs/product/error-alerts.md`) taller than the
@@ -134,8 +137,8 @@ covers. These are:
 edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists that
 space is measured below the section heading (see "What both views show" in `docs/product/focus-mode.md` and "Folding a
 section" in `docs/product/project-pane-git-change-list.md`), in Settings' Agent accounts section below the agent tab
-strip, and in its Git and Keyboard shortcuts sections below a group's heading. A strip of tabs instead suppresses its
-fade while a tab has visible keyboard focus, as above. For focus visibility in the Files panel's header controls, see "A
+strip, and in its Git and Keyboard shortcuts sections below a group's heading. A strip of tabs and Settings' column of
+sections instead suppress their fade while a tab has visible keyboard focus, as above. For focus visibility in the Files panel's header controls, see "A
 panel's header" in `docs/product/right-pane-panels.md`.
 
 **A control in a section heading pinned at the top is not scrolled to**: in the sidebar, in focus mode and in

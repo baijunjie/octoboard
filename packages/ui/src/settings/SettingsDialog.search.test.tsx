@@ -82,6 +82,9 @@ const status = () => document.querySelector('[role="status"]')?.textContent;
 const search = async (query: string) => { type(field(), query); await act(flushPromises); };
 const escape = (target: Element) => act(async () => void target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
 const clearButton = () => document.querySelector<HTMLElement>("[data-field-clear]")!;
+const indicators = () => document.querySelectorAll('[role="tablist"] [data-slot="tabs-indicator"]');
+/** The decorative ground behind the wide section column, whose end edge is the divider from the panel. */
+const grounds = () => [...document.querySelectorAll<HTMLElement>('[aria-hidden="true"].bg-surface-secondary')];
 
 describe("the search field", () => {
   it("is named Search settings and sits before the section tabs in the Tab order", async () => {
@@ -258,6 +261,15 @@ describe("a search that finds nothing", () => {
     expect(document.querySelector('[role="status"]')?.textContent).toBe("No setting matches the search.");
   });
 
+  it("keeps the column's decorative ground, divider included, while nothing is found", async () => {
+    await open({ section: "general" });
+    expect(grounds()).toHaveLength(1);
+    await search("zzzznope");
+    expect(document.body.textContent).toContain("No matching settings");
+    expect(grounds()).toHaveLength(1);
+    expect(grounds()[0]!.textContent).toBe("");
+  });
+
   it("keeps what was typed in the section on screen, hidden with it, for when the query finds it again", async () => {
     await open({ section: "git" });
     const input = () => panel()!.querySelector<HTMLInputElement>('[data-settings-search-id="clone-dir"] input')!;
@@ -289,6 +301,36 @@ describe("a search that finds nothing", () => {
     expect(status()).toBe("3 matching settings");
     await search("markdown");
     expect(status()).toBe("1 matching setting");
+  });
+});
+
+describe("the section strip while a query is entered", () => {
+  it("keeps the narrow strip's indicator mounted but unseen, and has the selected tab draw the fill itself", async () => {
+    sizeWindow(500);
+    await open({ section: "general" });
+    expect(indicators()).toHaveLength(1);
+    expect(selectedTab()!.className).not.toContain("ui-selected:bg-segment");
+    expect(indicators()[0]!.className).not.toContain("opacity-0");
+    await search("sorting");
+    expect(indicators()).toHaveLength(1);
+    expect(selectedTab()!.querySelector('[data-slot="tabs-indicator"]')!.className).toContain("opacity-0");
+    expect(selectedTab()!.className).toContain("ui-selected:bg-segment");
+    await click(clearButton());
+    expect(indicators()).toHaveLength(1);
+    expect(selectedTab()!.className).not.toContain("ui-selected:bg-segment");
+    expect(selectedTab()!.querySelector('[data-slot="tabs-indicator"]')!.className).not.toContain("opacity-0");
+  });
+
+  it("gives the wide menu no indicator while searching, and its selected row keeps its own fill", async () => {
+    await open({ section: "general" });
+    expect(selectedTab()!.className).toContain("ui-selected:bg-(--menu-raised)");
+    await search("sorting");
+    expect(indicators()).toHaveLength(0);
+    expect(selectedTab()!.className).toContain("ui-selected:bg-(--menu-raised)");
+    expect(selectedTab()!.className).not.toContain("ui-selected:bg-segment");
+    await click(clearButton());
+    expect(indicators()).toHaveLength(0);
+    expect(selectedTab()!.className).toContain("ui-selected:bg-(--menu-raised)");
   });
 });
 

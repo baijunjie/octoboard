@@ -94,6 +94,137 @@ it("keeps iPad portrait in horizontal navigation and switches above 768px withou
   }
 });
 
+const classes = (element: Element | null | undefined) => (element?.getAttribute("class") ?? "").split(/\s+/);
+const list = () => document.querySelector<HTMLElement>('[role="tablist"]')!;
+const container = () => list().closest<HTMLElement>(".tabs__list-container")!;
+/** The wide menu column's decorative ground, whose end edge is the divider: aria-hidden, one step below the dialog. */
+const grounds = () => [...document.querySelectorAll<HTMLElement>('[aria-hidden="true"].bg-surface-secondary')];
+const searchField = () => document.querySelector<HTMLElement>(".search-field")!;
+const indicators = () => document.querySelectorAll('[role="tablist"] [data-slot="tabs-indicator"]');
+
+it("shows the wide sections as a menu column: no indicator in any tab, and a decorative ground behind it", async () => {
+  mount({ nonce: 1, section: "git", addAgent: false }, 1440);
+  await act(async () => {});
+  expect(list().getAttribute("aria-orientation")).toBe("vertical");
+  expect(document.querySelectorAll('[role="tab"]').length).toBeGreaterThan(5);
+  expect(indicators()).toHaveLength(0);
+  // Not the shared content-fit strip, which the narrow layout uses.
+  expect(classes(container())).not.toContain("w-max");
+  expect(classes(list())).not.toContain("w-max");
+  for (const tab of document.querySelectorAll('[role="tab"]')) expect(classes(tab)).not.toContain("w-auto");
+  expect(grounds()).toHaveLength(1);
+  expect(grounds()[0]!.textContent).toBe("");
+  expect(grounds()[0]!.getAttribute("role")).toBeNull();
+  // The field is the white variant, standing on the darker ground.
+  expect(classes(searchField())).toContain("search-field--primary");
+  expect(classes(searchField())).not.toContain("search-field--secondary");
+});
+
+it("shows the narrow sections as the shared content-fit tab strip with HeroUI's indicator, no ground behind it, and the filled search field", async () => {
+  const { selected } = mount({ nonce: 1, section: "git", addAgent: false }, 500);
+  await act(async () => {});
+  expect(list().getAttribute("aria-orientation")).toBe("horizontal");
+  expect(classes(container())).toEqual(expect.arrayContaining(["w-max", "max-w-full"]));
+  expect(classes(list())).toEqual(expect.arrayContaining(["w-max", "p-1"]));
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  expect(tabs.length).toBeGreaterThan(5);
+  for (const tab of tabs) {
+    expect(classes(tab)).toEqual(expect.arrayContaining(["w-auto", "flex-none"]));
+  }
+  // HeroUI keeps one indicator, in the selected tab, and slides it.
+  expect(indicators()).toHaveLength(1);
+  expect(selected()!.querySelector('[data-slot="tabs-indicator"]')).not.toBeNull();
+  expect(selected()?.textContent).toContain("Git");
+  expect(grounds()).toHaveLength(0);
+  expect(classes(searchField())).toContain("search-field--secondary");
+  expect(classes(searchField())).not.toContain("search-field--primary");
+});
+
+it("swaps the menu column and the shared strip when the window crosses the tablet breakpoint, keeping the selected section", async () => {
+  const { selected, resize } = mount({ nonce: 1, section: "git", addAgent: false }, 1440);
+  await act(async () => {});
+  /** What the swap flips: HeroUI's indicator, the column's ground, the field's variant and the strip's fit to its tabs. */
+  const layout = () => ({
+    indicators: indicators().length,
+    grounds: grounds().length,
+    field: classes(searchField()).find((name) => /^search-field--(primary|secondary)$/.test(name)),
+    stripFit: classes(list()).includes("w-max"),
+  });
+  const wide = { indicators: 0, grounds: 1, field: "search-field--primary", stripFit: false };
+  const narrow = { indicators: 1, grounds: 0, field: "search-field--secondary", stripFit: true };
+  expect(layout()).toEqual(wide);
+  await resize(500);
+  expect(layout()).toEqual(narrow);
+  expect(selected()?.textContent).toContain("Git");
+  await resize(1440);
+  expect(layout()).toEqual(wide);
+  expect(selected()?.textContent).toContain("Git");
+});
+
+const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]')!;
+
+it.each([[1440], [500]])("carries the raised fills on the dialog, which the wide menu's field and selected row read their fill from, at %ipx", async (width) => {
+  mount({ nonce: 1, section: "git", addAgent: false }, width);
+  await act(async () => {});
+  expect(classes(dialog())).toEqual(expect.arrayContaining(["control-fills", "raised-fills"]));
+});
+
+it("fills the wide menu's search field and selected row from the dialog's raised fill, and neither the narrow field nor the strip uses it", async () => {
+  const { selected, resize } = mount({ nonce: 1, section: "git", addAgent: false }, 1440);
+  await act(async () => {});
+  const raisedFill = (element: Element | null | undefined) => (element?.getAttribute("class") ?? "").includes("--menu-raised");
+  expect(raisedFill(searchField())).toBe(true);
+  expect(raisedFill(selected())).toBe(true);
+  await resize(500);
+  expect(raisedFill(searchField())).toBe(false);
+  expect(raisedFill(selected())).toBe(false);
+});
+
+it("draws the wide column's divider as the ground's groove, not as a border", async () => {
+  mount({ nonce: 1, section: "git", addAgent: false }, 1440);
+  await act(async () => {});
+  expect(classes(grounds()[0])).toContain("groove-e");
+  expect(classes(grounds()[0]).filter((name) => name.startsWith("border"))).toEqual([]);
+});
+
+// jsdom loads no stylesheet, so the geometry itself is out of reach; these are the hooks it is built from.
+it("lets the wide column's list scroll within its own stretched container, with HeroUI's scroll buttons hidden there", async () => {
+  mount({ nonce: 1, section: "git", addAgent: false }, 1440);
+  await act(async () => {});
+  const wideContainer = classes(container());
+  // Stretches over its grid row, and may shrink below its list's height so that the list scrolls rather than the dialog.
+  expect(wideContainer).toContain("tablet:self-stretch");
+  expect(wideContainer).toContain("tablet:min-h-0");
+  expect(wideContainer).not.toContain("tablet:self-start");
+  // HeroUI's scroll buttons are the container's own buttons (the start and the end one), so hiding the container's
+  // direct buttons hides exactly those two and nothing else.
+  expect(wideContainer).toContain("tablet:[&>button]:hidden");
+  const directButtons = [...container().querySelectorAll(":scope > button")];
+  expect(directButtons.flatMap((button) => classes(button).filter((name) => name.startsWith("tabs__list-container__scroll-"))).sort()).toEqual([
+    "tabs__list-container__scroll-next",
+    "tabs__list-container__scroll-prev",
+  ]);
+  expect(directButtons).toHaveLength(2);
+});
+
+it("sets the narrow strip's start margin and width cap from one inset, so that its end clears the dialog's edge by the margin at every narrow width", async () => {
+  mount({ nonce: 1, section: "git", addAgent: false }, 500);
+  await act(async () => {});
+  const stripClasses = classes(container());
+  const insets = stripClasses.filter((name) => /^(max-phone:)?\[--strip-inset:/.test(name));
+  // The inset is defined once for the narrow range and once, smaller, at phone width.
+  expect(insets).toHaveLength(2);
+  expect(insets.some((name) => name.startsWith("max-phone:"))).toBe(true);
+  const margin = stripClasses.filter((name) => /^ms-/.test(name));
+  const cap = stripClasses.filter((name) => /^max-tablet:max-w-/.test(name));
+  expect(margin).toHaveLength(1);
+  expect(cap).toHaveLength(1);
+  expect(margin[0]).toContain("--strip-inset");
+  expect(cap[0]).toContain("--strip-inset");
+  // No margin or cap fixed on its own, which would drift apart from the inset at one width.
+  expect(stripClasses.filter((name) => /^(max-phone:)?(ms-|max-tablet:max-w-|max-phone:max-w-)/.test(name)).sort()).toEqual([...margin, ...cap].sort());
+});
+
 it("opens on the section it is asked for and takes the Add agent request up once", async () => {
   const { selected } = mount({ nonce: 1, section: "accounts", addAgent: true });
   await act(async () => {});

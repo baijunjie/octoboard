@@ -71,10 +71,31 @@ export const MAX_FRAMES_TO_WAIT_FOR_MODAL = 30;
 
 /** Where the dialog's grid puts the search field, the section tabs and what fills the rest (the selected section's
  * panel, or the empty state of a search that finds nothing, beside the hidden tabs and panel): narrow, three rows down
- * the window; wide, the field over the tabs in a column on the start side and the panel beside both. */
+ * the window; wide, the field over the tabs in a column on the start side and the panel beside both, on a ground a step
+ * below the dialog's, divided from the panel (`COLUMN_GROUND_AREA`). */
 const SEARCH_AREA = "max-tablet:row-start-1 tablet:col-start-1 tablet:row-start-1";
 const TABS_AREA = "max-tablet:row-start-2 tablet:col-start-1 tablet:row-start-2";
 const PANEL_AREA = "max-tablet:row-start-3 tablet:col-start-2 tablet:row-span-2 tablet:row-start-1";
+/** The column's ground: the column's cells, the full height of the dialog, stretched across the grid's gap so that its
+ * edge, the divider (a groove), meets the panel, whose own padding then sets the content's distance from it (as from
+ * the dialog's end edge). The column ends `COLUMN_END_INSET` before the gap, so its rows sit as far from the divider as
+ * from the dialog's start edge. */
+const COLUMN_GROUND_AREA = "tablet:col-start-1 tablet:row-span-2 tablet:row-start-1 tablet:-me-2";
+/** Added to the gap at the column's end to match its 16px start margin (the field's `ms-4`, the tab list's
+ * `--strip-inset`): 8px plus the 8px gap. */
+const COLUMN_END_INSET = "tablet:me-2";
+/** The wide column's search field stands raised on the column's darker ground (`raised-fills` on the dialog sets
+ * its `--menu-raised`): HeroUI's primary field, white in light, recoloured in dark, where HeroUI's dark field is
+ * darker than the ground. Its hover and focus fills are derived on the root, so they are set again here. A user-approved departure
+ * from HeroUI's look, recorded in `docs/ui-standard.md`'s "The Settings section menu" section. Narrow, the field sits on the dialog's surface itself and is the usual filled field. */
+const MENU_SEARCH_FIELD_CLASS = "[--field-background:var(--menu-raised)] [--field-focus:var(--menu-raised)] [--field-hover:color-mix(in_oklab,var(--menu-raised)_90%,var(--foreground)_2%)]";
+/** A section's tab in the wide menu column: a row of the column's width that reads from the start, with the hover tint
+ * of a sidebar row (translucent, so in dark it stays below the selected row rather than outshining it as a menu item's
+ * fill would), and the selected row raised (`--menu-raised`), as the search field above it is, in the foreground
+ * colour. The selection is drawn on the tab itself (the tab has no indicator there), and `scroll-my-1` keeps the focus
+ * ring of a revealed tab in view inside the list's scroller. A user-approved departure from HeroUI's tab look, recorded
+ * in `docs/ui-standard.md`'s "The Settings section menu" section. */
+const MENU_TAB_CLASS = "w-full justify-start gap-2 scroll-my-1 rounded-lg px-3 whitespace-nowrap hover:bg-panel-hover hover:text-foreground ui-selected:bg-(--menu-raised) ui-selected:text-foreground ui-selected:hover:bg-(--menu-raised)";
 
 /** A section's panel. The section scrolls on its own inside the dialog and fades at the edge it can
  * still be scrolled towards, as the body of a `Dialog` does. The scroller sits inside the panel, not
@@ -102,10 +123,10 @@ function SectionPanel({ id, stickyHeadingHeight, hidden, children }: { id: strin
 }
 
 /**
- * The settings: a large modal over the whole window, the sections as vertical tabs on the start
- * side and the selected one beside it. At the `tablet` breakpoint and below the modal fills the window
- * and the sections become a row of tabs along the top, scrolling sideways when they overflow. It
- * is a plain modal, so everything under it, the terminal included, stays mounted and sized.
+ * The settings: a large modal over the whole window, the sections as a vertical menu on the start
+ * side and the selected one beside it, a divider between the two. At the `tablet` breakpoint and below the modal
+ * fills the window and the sections become the shared tab strip along the top, scrolling sideways when it overflows.
+ * It is a plain modal, so everything under it, the terminal included, stays mounted and sized.
  *
  * It is assembled from HeroUI's modal parts rather than built on `Dialog`, deliberately: a `Dialog`
  * is a titled frame around one scrolling body, where this holds a panel per section, each scrolling
@@ -161,9 +182,9 @@ function SettingsDialogContent({ initialSection = SETTINGS_SECTION_IDS[0], navig
   // While nothing matches anywhere, the section on screen keeps its tab and panel, hidden, rather than unmounting them.
   const nothingFound = listedIds.length === 0;
   const tabIds = nothingFound ? [shownId] : listedIds;
-  // Tabs that come and go slide along the column, whose height follows them so that the copies of those leaving stay
-  // inside it rather than overflowing it (which would show its scroll button), or along the strip that is as wide as
-  // its tabs when narrow.
+  // Tabs that come and go slide along the column, whose list's height follows them so that the copies of those leaving
+  // stay inside it rather than overflowing the column's scroller, which would turn its scrolling and edge fades on for
+  // the length of the motion; or along the strip that is as wide as its tabs when narrow.
   const tabListRef = useListMotion<HTMLDivElement>(isNarrow ? { contentWidth: true } : { fitHeight: true });
   const addAgentOnOpen = navigation?.addAgent ?? false;
   // Both ask the Agent accounts section to take focus, in place of the section's tab.
@@ -247,8 +268,8 @@ function SettingsDialogContent({ initialSection = SETTINGS_SECTION_IDS[0], navig
       focusedOnOpen.current = true;
       if (!sectionTakesFocus) tab.focus();
     }
-    // The row of tabs below the breakpoint scrolls, so a section picked from a link may start off
-    // screen. Only the tab row itself moves (`block: "nearest"` leaves the dialog where it is).
+    // The tab list scrolls on its own (sideways as the narrow strip, down the wide column on a short window), so a
+    // section picked from a link may start out of view; `nearest` on both axes moves only the list, not the dialog.
     tab?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [sectionTakesFocus]);
 
@@ -263,22 +284,31 @@ function SettingsDialogContent({ initialSection = SETTINGS_SECTION_IDS[0], navig
       size={fullScreen ? "full" : undefined}
       containerClassName={fullScreen ? undefined : "max-desktop:p-4"}
       label={t("settings.title")}
-      className={`control-fills grid overflow-hidden p-0 ${fullScreen ? "grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] gap-y-2" : "h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[min(1000px,calc(100vw-32px))] max-w-none grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-x-2 desktop:h-[min(85vh,calc(100vh-96px-var(--bottom-chrome-height)))] desktop:w-[min(1000px,calc(100vw-96px))]"}`}
+      className={`control-fills raised-fills grid overflow-hidden p-0 ${fullScreen ? "grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] gap-y-2" : "h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[min(1000px,calc(100vw-32px))] max-w-none grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-x-2 desktop:h-[min(85vh,calc(100vh-96px-var(--bottom-chrome-height)))] desktop:w-[min(1000px,calc(100vw-96px))]"}`}
     >
       <span ref={markerRef} hidden />
       <TitledControl title={t("common.close")}>
         {/* The panels' positioned scrollers overlap this corner. Keep the close button above them. */}
         <ModalCloseButton label={t("common.close")} data-settings-close className="z-10 max-phone:top-4.5 max-phone:end-3" />
       </TitledControl>
+      {/* The wide column's ground: HeroUI's secondary surface, the step below the dialog's own in both appearances,
+          with the divider, a groove, as its edge (recorded in `docs/ui-standard.md`'s "The Settings section menu"
+          section). Purely visual, so assistive technology meets nothing between the column and the panel; first among
+          the grid's items, so the field and the tabs paint over it. */}
+      {!isNarrow && <div aria-hidden="true" className={`pointer-events-none groove-e bg-surface-secondary ${COLUMN_GROUND_AREA}`} />}
       {/* Outside `Tabs`, whose content react-aria also renders in a hidden copy, and before the tabs in the Tab order.
-          Narrow, it is the row along the top, clear of the close button at its end. */}
-      <div className={`min-w-0 ms-4 me-12 mt-3 max-phone:ms-3 max-phone:mt-2 tablet:me-0 tablet:mt-4 tablet:w-48 desktop:mt-6 ${SEARCH_AREA}`}>
+          Narrow, it is the row along the top, clear of the close button at its end. Wide, it is inset by the menu
+          list's own padding (the room its rows' focus rings need), so the field's edges, icon and text line up with
+          the rows' below it. */}
+      <div className={`min-w-0 ms-4 me-12 mt-3 max-phone:ms-3 max-phone:mt-2 tablet:mt-4 tablet:w-48 tablet:px-1 desktop:mt-6 ${COLUMN_END_INSET} ${SEARCH_AREA}`}>
         <SearchField
           label={t("settings.search.label")}
           inputRef={searchRef}
           {...search.queryField}
           fullWidth
-          variant="secondary"
+          // Wide, the primary field on the column's ground (`MENU_SEARCH_FIELD_CLASS`); narrow, the usual filled field.
+          variant={isNarrow ? "secondary" : "primary"}
+          className={isNarrow ? undefined : MENU_SEARCH_FIELD_CLASS}
           placeholder={t("common.search")}
           clearButton={<FieldClearButton />}
         />
@@ -297,37 +327,44 @@ function SettingsDialogContent({ initialSection = SETTINGS_SECTION_IDS[0], navig
         onSelectionChange={(key) => search.select(key as SettingsSectionId)}
         className="contents"
       >
-        {/* A direct child of `Tabs`, as HeroUI's styling of it expects; it is the section column
-                itself, with no rule between it and the section. Narrow, it is the row under the search
-                field instead, scrolling sideways on its own. `self-start` keeps the column at its own
-                height rather than the dialog's, which is what bounds how many sections fit — see
-                `SETTINGS_SECTION_IDS`. */}
+        {/* A direct child of `Tabs`, as HeroUI's styling of it expects. Wide, it is the menu column itself, with no
+                track round the list, whose rows are filled by the tabs, and a divider (above) between it and the
+                section. It stretches over its grid row and scrolls its list on its own when the sections outnumber
+                what the dialog's height holds, while the field, the ground and the divider stay put; there its edge
+                fades show that it scrolls, and HeroUI's scroll buttons, which sit centred over the rows' labels, are
+                hidden. Both are user-approved departures from HeroUI's look, recorded in
+                `docs/ui-standard.md`'s "The Settings section menu" section. Narrow, it is the shared tab strip under
+                the search field (`fit="content"`), scrolling sideways on its own, and the width cap keeps its end clear
+                of the dialog's edge by the start margin, both from `--strip-inset` so that the two cannot disagree. Its
+                list pads for the focus rings, inside the scroller's clip. */}
         <TabListContainer
+          fit={isNarrow ? "content" : undefined}
           hidden={nothingFound}
-          className={`min-w-0 ms-4 max-phone:ms-3 max-phone:max-w-[calc(100%-1.5rem)] max-tablet:w-max max-tablet:max-w-[calc(100%-2rem)] max-tablet:self-start max-tablet:justify-self-start tablet:mt-2 tablet:mb-4 tablet:w-48 tablet:self-start desktop:mb-6 ${TABS_AREA}`}
+          className={`[--strip-inset:--spacing(4)] max-phone:[--strip-inset:--spacing(3)] ms-(--strip-inset) max-tablet:max-w-[calc(100%-2*var(--strip-inset))] tablet:mt-2 tablet:mb-4 tablet:min-h-0 tablet:w-48 tablet:self-stretch tablet:bg-transparent tablet:[&>button]:hidden desktop:mb-6 ${COLUMN_END_INSET} ${TABS_AREA}`}
         >
-          {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
-                  tabs read from the start like any list of names rather than centred. It is positioned, so the
+          {/* HeroUI sizes a vertical list to its widest tab; it fills the column here. It is positioned, so the
                   copy of a tab that leaves is placed in it. */}
-          <TabList ref={tabListRef} label={t("settings.sections")} className="relative max-tablet:min-w-0 tablet:w-full">
-            {/* Hovered labels take the foreground colour for clear feedback. While a search filters the list, the
-                selected tab draws HeroUI's indicator fill itself instead of the sliding indicator: a tab the search
-                brings back can be selected in the same render, which leaves that indicator's move stuck part-way, and
-                so can the motion of the tabs. The indicator stays mounted meanwhile, unseen and with no transition,
-                so that it neither slides in from where it was before the search (the move that would get stuck)
-                nor keeps a place to slide from: once the search is cleared it is simply shown in its tab. This is the
-                exception that keeps the selected tab filled while list motion moves tabs, recorded in
-                docs/ui-standard.md's "Conformance level and exceptions" section. */}
+          <TabList ref={tabListRef} label={t("settings.sections")} fit={isNarrow ? "content" : undefined} className="relative tablet:w-full">
+            {/* While a search filters the narrow strip, the selected tab draws HeroUI's indicator fill itself instead
+                of the sliding indicator: a tab the search brings back can be selected in the same render, which leaves
+                that indicator's move stuck part-way, and so can the motion of the tabs. The indicator stays mounted
+                meanwhile, unseen and with no transition, so that it neither slides in from where it was before the
+                search (the move that would get stuck) nor keeps a place to slide from: once the search is cleared it
+                is simply shown in its tab. This is the exception that keeps the selected tab filled while list motion
+                moves tabs, recorded in docs/ui-standard.md's "Conformance level and exceptions" section. The wide
+                menu has no indicator to get stuck. */}
             {tabIds.map((id) => {
               const { label, Icon } = SECTIONS[id];
               return (
                 <Tab
                   key={id}
                   id={id}
+                  size={isNarrow ? "content" : undefined}
+                  indicator={isNarrow}
                   data-list-motion={id}
                   label={searching ? t("settings.search.sectionMatches", { section: t(label), count: countOf(id) }) : undefined}
-                  indicatorClassName={searching ? "opacity-0 transition-none" : undefined}
-                  className={`justify-start gap-2 whitespace-nowrap hover:text-foreground flex-none max-tablet:w-auto max-tablet:scroll-mx-1 ${searching ? "ui-selected:bg-segment ui-selected:shadow-surface" : ""}`}
+                  indicatorClassName={isNarrow && searching ? "opacity-0 transition-none" : undefined}
+                  className={isNarrow ? `gap-2 ${searching ? "ui-selected:bg-segment ui-selected:shadow-surface" : ""}` : MENU_TAB_CLASS}
                   ref={id === shownId ? attachSelected : undefined}
                   {...(id === shownId && !sectionTakesFocus && openingFocus(true))}
                 >
