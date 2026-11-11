@@ -35,11 +35,12 @@ export function Tabs({ variant = "filled", orientation, selectedKey, defaultSele
 /** The width treatment of a horizontal strip of text tabs (a label with at most an icon or a mark beside it), from the
  * strip's start at their content's width: shared so such a strip looks the same wherever it is built. */
 const CONTENT_CONTAINER_CLASS = "w-max max-w-full self-start";
-/** The padding leaves room for the focus ring and its offset inside the scroller's clip. */
-const CONTENT_LIST_CLASS = "w-max min-w-0 p-1.5";
+/** The padding of HeroUI's filled list, restored on its underline list, which drops it: exactly the focus ring and its
+ * offset (2px each), the room they need inside the scroller's clip. */
+const CONTENT_LIST_CLASS = "w-max min-w-0 p-1";
 /** A tab of such a strip: a scroll margin (so a revealed tab keeps its ring in view), one line, and its label taking
  * the foreground colour on hover. */
-const STRIP_TAB_CLASS = "scroll-mx-1.5 whitespace-nowrap hover:text-foreground";
+const STRIP_TAB_CLASS = "scroll-mx-1 whitespace-nowrap hover:text-foreground";
 /** HeroUI marks the edges its scroll buttons sit at on the container (`data-left-scroll`, `data-right-scroll`, and
  * `data-left-right-scroll` for both). */
 const RESERVE_SCROLL_BUTTONS_CLASS = "has-[>:is([data-left-scroll=true],[data-left-right-scroll=true])]:ps-6 has-[>:is([data-right-scroll=true],[data-left-right-scroll=true])]:pe-6";

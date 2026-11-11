@@ -28,7 +28,7 @@ beforeEach(() => {
 
 const taken = vi.hoisted(() => ({ count: 0, dismiss: 0 }));
 vi.mock("./accounts/AgentAccountsSection", () => ({
-  AGENT_STRIP_HEIGHT: 45,
+  AGENT_STRIP_HEIGHT: 41,
   AgentAccountsSection: () => {
     const accountsNavigation = useContext(AccountsNavigationContext);
     taken.dismiss = accountsNavigation.dismissForms;

@@ -309,7 +309,7 @@ function SettingsDialogContent({ initialSection = SETTINGS_SECTION_IDS[0], navig
           {/* HeroUI sizes a vertical list to its widest tab; it fills the column here, and its
                   tabs read from the start like any list of names rather than centred. It is positioned, so the
                   copy of a tab that leaves is placed in it. */}
-          <TabList ref={tabListRef} label={t("settings.sections")} className="relative max-tablet:min-w-0 max-tablet:p-1.5 tablet:w-full">
+          <TabList ref={tabListRef} label={t("settings.sections")} className="relative max-tablet:min-w-0 tablet:w-full">
             {/* Hovered labels take the foreground colour for clear feedback. While a search filters the list, the
                 selected tab draws HeroUI's indicator fill itself instead of the sliding indicator: a tab the search
                 brings back can be selected in the same render, which leaves that indicator's move stuck part-way, and
@@ -327,7 +327,7 @@ function SettingsDialogContent({ initialSection = SETTINGS_SECTION_IDS[0], navig
                   data-list-motion={id}
                   label={searching ? t("settings.search.sectionMatches", { section: t(label), count: countOf(id) }) : undefined}
                   indicatorClassName={searching ? "opacity-0 transition-none" : undefined}
-                  className={`justify-start gap-2 whitespace-nowrap hover:text-foreground flex-none max-tablet:w-auto max-tablet:scroll-mx-1.5 ${searching ? "ui-selected:bg-segment ui-selected:shadow-surface" : ""}`}
+                  className={`justify-start gap-2 whitespace-nowrap hover:text-foreground flex-none max-tablet:w-auto max-tablet:scroll-mx-1 ${searching ? "ui-selected:bg-segment ui-selected:shadow-surface" : ""}`}
                   ref={id === shownId ? attachSelected : undefined}
                   {...(id === shownId && !sectionTakesFocus && openingFocus(true))}
                 >

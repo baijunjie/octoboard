@@ -43,10 +43,10 @@ import { LeadRows, SettingsLead } from "../SettingsLead";
 import { SettingsSearchBlock, useSettingsSearchFilter } from "../settingsSearchFilter";
 import { SettingsFocusContext, useSectionRefocus } from "../useSectionRefocus";
 
-/** The agent strip's height, the `p-1.5` clearance around its tabs and its 1px rule included. The strip is given
- * this height by the `h-[45px]` class below, not left to HeroUI's own sizing, so the two are one number: the
+/** The agent strip's height, the `p-1` clearance around its tabs and its 1px rule included. The strip is given
+ * this height by the `h-[41px]` class below, not left to HeroUI's own sizing, so the two are one number: the
  * Settings dialog clears its fade and the scroll padding for focus moves for this much. */
-export const AGENT_STRIP_HEIGHT = 45;
+export const AGENT_STRIP_HEIGHT = 41;
 
 /** Which of an account's dialogs is open: its read-only details, its switches, or its connectors and MCP servers. */
 type AccountView = "details" | "settings" | "mcp";
@@ -332,7 +332,7 @@ export function AgentAccountsSection(): React.ReactElement {
               notInstalledTip={(agent) => added !== null && isAgentUnavailable(availability, agent) && (
                 <Message id="settings.accounts.notInstalledTip" params={{ agent: <ProviderName agent={agent} />, ...PATH_VAR_PARAMS }} />
               )}
-              className={`sticky top-[calc(-1*var(--section-padding))] z-3 h-[45px] w-full groove-b bg-overlay ${pinnedFocus.className}`}
+              className={`sticky top-[calc(-1*var(--section-padding))] z-3 h-[41px] w-full groove-b bg-overlay ${pinnedFocus.className}`}
             />
             {agents.map((agent) => (
               <AgentAccountsPanel

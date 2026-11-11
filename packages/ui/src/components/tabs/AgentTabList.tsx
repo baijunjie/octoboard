@@ -263,7 +263,7 @@ function AgentTab({ providers, agent, tabRef, notInstalledTip, elements, onDragS
         setFocusCount((count) => count + 1);
       }}
       size="content"
-      indicatorClassName="-bottom-1.5"
+      indicatorClassName="-bottom-1"
       className={reserve ? "gap-2 pe-9" : "gap-2"}
     >
       <AgentIcon agent={agent} />
