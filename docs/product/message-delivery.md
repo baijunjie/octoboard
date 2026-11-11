@@ -567,11 +567,10 @@ one is checked too.
   screens that hold messages came up while it was written, which is told apart as in "A message a dialog discarded or a
   view took" below.
 
-A background task's completion does not count as a prompt sent. Claude Code reports a finished background task to
-itself as a `UserPromptSubmit` whose prompt contains `<task-notification>`; that prompt neither confirms a message
-written during the wait nor lifts the hold below. Neither does the report a subagent resumed with `SendMessage` hands
-back, which Claude Code submits to itself as a prompt holding an `<agent-message from="…">` block. Any other prompt
-counts, whoever sends it.
+A prompt Claude Code submits to itself does not count as a prompt sent: a completion notice (a `<task-notification>`
+or a subagent's hand-back; see "Working in background" in `docs/product/session-statuses.md`), or a message from another
+Claude session, which arrives like a hand-back in an `<agent-message from="…">` block. Such a prompt neither confirms
+a message written during the wait nor lifts the hold below. Any other prompt counts, whoever sends it.
 
 **Codex on a Windows daemon host.** There the terminal hands Codex a paste as typed keys, and Codex reads an Enter
 that arrives in the same burst as a line break in the text, so a message written together with its Enter would stay in

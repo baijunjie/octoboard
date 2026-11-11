@@ -440,9 +440,9 @@ async fn a_task_notification_does_not_lift_the_hold() {
     assert_eq!(live.input_writes(), 1);
 }
 
-/// A subagent resumed with `SendMessage` hands its report back as a prompt the agent sends
-/// itself, the way Claude Code words it, which leaves whatever waits in its input box there as a
-/// completion notice does, so it does not lift the hold either.
+/// A subagent's hand-back (a background one's, or one resumed with `SendMessage`) is a completion
+/// notice, the way Claude Code words it, which leaves whatever waits in its input box there, so it
+/// does not lift the hold either.
 #[tokio::test]
 async fn a_subagents_hand_back_does_not_lift_the_hold() {
     let (state, _dir, live, path) = checked_claude_session("server-unsent-hand-back");

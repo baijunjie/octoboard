@@ -210,8 +210,13 @@ work: `id`, and `type` and `description` where Claude Code gives them.
 
 - Every turn end Claude Code reports carries the complete list of what is still running, and replaces the one before; a
   turn end listing nothing empties it. A turn that ends in an error empties it too.
-- When a piece of work finishes, Claude Code tells the session so in a turn of its own, naming it; that work leaves the
-  list, and the session reads as *working* for that turn as for any other.
+- When a piece of work finishes, Claude Code tells the session so in a turn of its own, started by a **completion
+  notice**, and the session reads as *working* for that turn as for any other. A completion notice is either a
+  `<task-notification>`, which names the work, so that work leaves the list at once; or a subagent's hand-back, which
+  Claude Code 2.1.322 sends when a background subagent finishes and when a subagent resumed with `SendMessage` hands
+  back: the subagent's final report in an `<agent-message from="…">` block marked `[Subagent hand-back]`. A hand-back
+  names no work, so the list stays as it was until that turn ends. A message another Claude session sends comes in the
+  same block without the marker; it is new work, not a completion notice.
 - Between turns, while the session is at its prompt, a background subagent's own starts and stops keep the list current,
   since a subagent can wake to its own background work without the session taking a turn. A subagent that starts or
   resumes joins the list; one that stops leaves it, and the rest of the list becomes everything Claude Code reports as

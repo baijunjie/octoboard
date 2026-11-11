@@ -93,14 +93,20 @@ impl HookInterpreter for ClaudeHooks {
     }
 
     /// A background task's or subagent's completion, which Claude Code reports to the session as a
-    /// prompt of its own opening a `<task-notification>`.
+    /// prompt of its own: one opening a `<task-notification>`, or a subagent's final report handed
+    /// back as an `<agent-message from="…">` block marked `[Subagent hand-back]` (2.1.322, for a
+    /// background subagent as well as one resumed with `SendMessage`). A message from another
+    /// Claude session comes in the same block without the marker, and is new work, not a
+    /// completion.
     fn is_completion_notice(&self, prompt: &str) -> bool {
         prompt.contains("<task-notification>")
+            || (prompt.contains("<agent-message from=") && prompt.contains("[Subagent hand-back]"))
     }
 
-    /// A completion notice, or the report a subagent resumed with `SendMessage` hands back, which
-    /// Claude Code (2.1.316) submits as `Another Claude session sent a message:` followed by an
-    /// `<agent-message from="…">` block.
+    /// A completion notice, or any other `<agent-message from="…">` block: a message another
+    /// Claude session sent, which is new work but was not typed into the input box (the hook
+    /// schema of 2.1.317 lists peer messages among the prompts that fire `UserPromptSubmit`; not
+    /// measured).
     fn is_self_sent(&self, prompt: &str) -> bool {
         self.is_completion_notice(prompt) || prompt.contains("<agent-message from=")
     }
@@ -182,9 +188,11 @@ impl HookInterpreter for ClaudeHooks {
             "Stop" => Some(BackgroundTasksChange::Replace(background_tasks(payload))),
             "StopFailure" => Some(BackgroundTasksChange::Replace(Vec::new())),
             "UserPromptSubmit" => {
+                // A subagent's hand-back names no task: the turn's `Stop` corrects the list.
                 let prompt = self.submitted_prompt(payload)?;
-                self.is_completion_notice(prompt)
-                    .then(|| BackgroundTasksChange::Finished(task_ids(prompt)))
+                let ids = task_ids(prompt);
+                (self.is_completion_notice(prompt) && !ids.is_empty())
+                    .then_some(BackgroundTasksChange::Finished(ids))
             }
             _ => None,
         }

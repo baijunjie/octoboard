@@ -335,11 +335,61 @@ fn a_task_notification_prompt_names_the_tasks_that_finished() {
             "b2".to_string()
         ]))
     );
+    let hand_back = json!({
+        "prompt": "<agent-message from=\"abdbf855229f79d6b\">\n[Subagent hand-back] The text below \
+                   is the final report.\n</agent-message>",
+    });
+    assert_eq!(
+        of(AgentId::CLAUDE).background_tasks_change("UserPromptSubmit", &hand_back),
+        None,
+        "a hand-back names no task"
+    );
     let typed = json!({"prompt": "run the tests"});
     assert_eq!(
         of(AgentId::CLAUDE).background_tasks_change("UserPromptSubmit", &typed),
         None
     );
+}
+
+/// Claude Code hands a background subagent's final report back as an `<agent-message from="…">`
+/// prompt marked `[Subagent hand-back]` (2.1.322), sometimes after `Another Claude session sent a
+/// message:`. That is a completion notice, like a `<task-notification>`; the same wrapper without
+/// the marker is a peer's message, which is new work, though still sent by the agent itself, and
+/// the marker without the wrapper is nothing special.
+#[test]
+fn a_subagent_hand_back_is_a_completion_notice_and_a_peers_message_is_not() {
+    let hand_back = "<agent-message from=\"abdbf855229f79d6b\">\n[Subagent hand-back] The text \
+                     below is the final report of a subagent this session delegated to.\n  Done.\n\
+                     </agent-message>";
+    let prefixed = format!("Another Claude session sent a message:\n{hand_back}");
+    let peer = "Another Claude session sent a message:\n<agent-message from=\"peer-session\">\n\
+                Can you look at this?\n</agent-message>";
+    let marker_alone = "[Subagent hand-back] The text below is the final report.";
+    let claude = of(AgentId::CLAUDE);
+    // (prompt, completion notice, sent by the agent itself)
+    for (prompt, completion, self_sent) in [
+        (hand_back, true, true),
+        (prefixed.as_str(), true, true),
+        (peer, false, true),
+        (marker_alone, false, false),
+        (
+            "<task-notification><task-id>b1</task-id></task-notification>",
+            true,
+            true,
+        ),
+        ("run the tests", false, false),
+    ] {
+        assert_eq!(claude.is_completion_notice(prompt), completion, "{prompt}");
+        assert_eq!(claude.is_self_sent(prompt), self_sent, "{prompt}");
+    }
+    // Another agent's prompt is never read this way.
+    for agent in AgentId::ALL
+        .into_iter()
+        .filter(|agent| *agent != AgentId::CLAUDE)
+    {
+        assert!(!of(agent).is_completion_notice(hand_back), "{agent:?}");
+        assert!(!of(agent).is_self_sent(hand_back), "{agent:?}");
+    }
 }
 
 #[test]

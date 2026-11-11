@@ -472,8 +472,9 @@ pub fn close_turn_and_report(
 
 /// How long an owed report for an ordinary Claude Code turn waits for the agent to start another
 /// turn telling itself that background work finished. Claude Code starts that turn about 20 ms
-/// after the `Stop` (measured on 2.1.316); the rest is margin for a loaded machine, paid for by
-/// every such synthesised report reaching its owner this much later.
+/// after the `Stop` (measured on 2.1.316 for a `<task-notification>`; not measured for a subagent's
+/// hand-back); the rest is margin for a loaded machine, paid for by every such synthesised report
+/// reaching its owner this much later.
 const COMPLETION_NOTICE_SETTLE: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Whether the owed report for a turn that just ended is to be dropped, for a provider that holds
@@ -1577,6 +1578,62 @@ mod tests {
         let heard = hub_heard_of(&hub, "both-reviews-passed").await;
         assert!(heard.contains("both-reviews-passed"), "{heard}");
         assert!(!heard.contains("waiting-for-the-other-review"), "{heard}");
+    }
+
+    /// The same, for a subagent's final report handed back as an `<agent-message>` prompt (Claude
+    /// Code 2.1.322), applied as the hook it arrives as: a worker whose turn ends just as its
+    /// background subagent finishes, its `Stop` listing nothing, and which goes straight on to the
+    /// hand-back turn is not reported on for that turn, but is for the hand-back turn's end. A
+    /// message from another Claude session in the same wrapper is new work, not a notice, so the
+    /// report owed before it is still sent.
+    #[tokio::test]
+    async fn a_turn_followed_at_once_by_a_subagent_hand_back_is_not_reported_on() {
+        let (state, _dir, hub) = team_state(
+            "reporting-hand-back",
+            &[("waiting", "hub", false, SessionStatus::Working)],
+        );
+        let turn = |summary: &str| hooks::TurnEnd {
+            last_assistant_message: Some(summary.to_string()),
+            failed: false,
+            backstop: false,
+        };
+        let hand_back = serde_json::json!({
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "<agent-message from=\"abdbf855229f79d6b\">\n[Subagent hand-back] The text \
+                       below is the final report of a subagent this session delegated to.\n  \
+                       Done.\n</agent-message>",
+        });
+        let peer = serde_json::json!({
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "Another Claude session sent a message:\n\
+                       <agent-message from=\"peer-session\">\nCan you look at this?\n\
+                       </agent-message>",
+        });
+
+        state.turn_started("waiting", Some("Another Claude session sent a message"));
+        close_turn_and_report(&state, "waiting", turn("waiting-for-the-subagent"));
+        state
+            .hook_queues
+            .push("waiting", hand_back.to_string().into());
+        crate::hooks::apply::drain_hook_queue(&state, "waiting");
+        assert_eq!(state.completion_notices("waiting"), 1);
+        crate::test_support::runtime_advanced(COMPLETION_NOTICE_SETTLE).await;
+        let heard = hub_heard(&state, &hub).await;
+        assert!(!heard.contains("waiting-for-the-subagent"), "{heard}");
+
+        close_turn_and_report(&state, "waiting", turn("subagent-report-handled"));
+        let heard = hub_heard_of(&hub, "subagent-report-handled").await;
+        assert!(heard.contains("subagent-report-handled"), "{heard}");
+        assert!(!heard.contains("waiting-for-the-subagent"), "{heard}");
+
+        // A peer's message is not a notice: the report owed before it goes out.
+        state.turn_started("waiting", Some("go on"));
+        close_turn_and_report(&state, "waiting", turn("stopped-before-the-peer"));
+        state.hook_queues.push("waiting", peer.to_string().into());
+        crate::hooks::apply::drain_hook_queue(&state, "waiting");
+        assert_eq!(state.completion_notices("waiting"), 1);
+        let heard = hub_heard_of(&hub, "stopped-before-the-peer").await;
+        assert!(heard.contains("stopped-before-the-peer"), "{heard}");
     }
 
     /// A claim that outlasts the wait leaves the report refused with the owner named, from the

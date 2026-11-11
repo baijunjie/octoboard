@@ -112,6 +112,14 @@ then working in background (see "Working in background" in `docs/product/session
 The turn in which Claude Code tells the session that work has finished is judged like any other: reported on, unless it
 too ends with work still running.
 
+**No report is synthesised for a Claude Code turn followed at once by a completion notice.** A turn can end just as the
+background work it waited on finishes: its end lists nothing still running, but Claude Code has not yet told the session
+that the work finished (see completion notices under "Working in background" in `docs/product/session-statuses.md`).
+So the report owed for a Claude Code turn that did not end in an error waits **2 seconds**, and is dropped when the
+session starts a turn on a completion notice within that time; that turn is judged in its place, like any other. Every
+report synthesised for such a turn therefore reaches its owner about 2 seconds after the turn ends. A turn started by
+anything else in that time, a message from another Claude session included, does not stop the report.
+
 **No report is synthesised for a coordinator's turn while any session bound to it has a process** — running, or being
 launched or resumed: it has stopped to wait for its sessions, not stopped working. With none of them running, its turn
 is reported on as any reporting session's is.
