@@ -355,6 +355,9 @@ export function FadeOverflow({
   }, [forwarded]);
   const marqueeHolds = useRef(false);
   const [clipped, setClipped] = useState<Clipped>({ start: false, end: false, rtl: false, width: 0 });
+  // The measurement last passed to `setClipped`. A set to an equal value is not reliably dropped (right after a real
+  // update React queues it anyway, and the label then renders once more for nothing), so an unchanged one skips the set.
+  const measured = useRef(clipped);
   const [hovered, setHovered] = useState(false);
 
   useLayoutEffect(() => {
@@ -369,9 +372,10 @@ export function FadeOverflow({
         if (Math.abs(scrolledFromStart(element) - rest) > 0.5) scrollToOffset(element, rest);
       }
       const next = measure(element);
-      setClipped((prev) =>
-        prev.start === next.start && prev.end === next.end && prev.rtl === next.rtl && Math.abs(prev.width - next.width) < 0.5 ? prev : next,
-      );
+      const prev = measured.current;
+      if (prev.start === next.start && prev.end === next.end && prev.rtl === next.rtl && Math.abs(prev.width - next.width) < 0.5) return;
+      measured.current = next;
+      setClipped(next);
     };
     // A caller can change `clip` on a label that stays mounted (a branch giving way to a detached
     // commit id), and a label clipped at its end is never pinned, so it is put where it now rests.

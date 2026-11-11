@@ -142,6 +142,7 @@ function mount(
   unmount: () => void;
   label: Element;
   written: number[];
+  renders: { count: number };
   overflowBy: (width: number) => void;
   setClientWidth: (width: number) => void;
   enter: () => void;
@@ -160,6 +161,8 @@ function mount(
   let overflow = clipped ? OVERFLOW : 0;
   let boxWidth = clientWidth;
   const written: number[] = [];
+  // Counts the commits the label's subtree takes part in, an update that renders the label and bails out included.
+  const renders = { count: 0 };
   stubGeometry(
     () => boxWidth + overflow,
     () => boxWidth,
@@ -167,7 +170,13 @@ function mount(
   );
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<FadeOverflow {...props} />));
+  act(() =>
+    root.render(
+      <React.Profiler id="label" onRender={() => void (renders.count += 1)}>
+        <FadeOverflow {...props} />
+      </React.Profiler>,
+    ),
+  );
   const label = container.firstElementChild!;
   const settle = runPendingTimers;
   return {
@@ -175,6 +184,7 @@ function mount(
     unmount: () => act(() => root.unmount()),
     label,
     written,
+    renders,
     // Changes how much text is past the box, as a rename or a change of width would.
     overflowBy: (width: number) => void (overflow = width),
     setClientWidth: (width: number) => void (boxWidth = width),
@@ -429,6 +439,79 @@ it("shortens the fade when a clipped label gets narrower and keeps the full ramp
   settle();
   expect(masks.at(-1)).toContain("13px");
   expect(masks.at(-1)).not.toContain("24px");
+  finish();
+});
+
+it("does not render the label again when a re-measure finds the same geometry, and still follows the next change", () => {
+  const { masks, stop } = recordMaskWrites();
+  onTestFinished(stop);
+  const { label, renders, settle, setClientWidth, finish } = mount({ titleWhenClipped: "a-very-long-name", children: "a-very-long-name" }, true, 200);
+  // A first change of what it measured, so that the label has rendered for a measurement before the unchanged ones:
+  // the extra render of an equal set only shows after a processed update, without it React drops the equal set anyway.
+  setClientWidth(300);
+  act(() => void fireResize(label));
+  settle();
+  renders.count = 0;
+
+  // A resize report and a scroll that leave the geometry as it was, one after the other and then together.
+  act(() => void fireResize(label));
+  settle();
+  act(() => void label.dispatchEvent(new Event("scroll")));
+  settle();
+  act(() => {
+    fireResize(label);
+    label.dispatchEvent(new Event("scroll"));
+  });
+  settle();
+  expect(renders.count).toBe(0);
+
+  // What it skipped must not have left its record of the last measurement behind the label's own: the next real
+  // change is still taken up and shown.
+  setClientWidth(40);
+  act(() => void fireResize(label));
+  settle();
+  expect(renders.count).toBeGreaterThan(0);
+  expect(masks.at(-1)).toContain("20px");
+  finish();
+});
+
+it("does not render the label again for a width change under half a pixel", () => {
+  const { label, renders, settle, setClientWidth, finish } = mount({ titleWhenClipped: "a-very-long-name", children: "a-very-long-name" }, true, 200);
+  // The extra render of an equal set only shows after a processed update; without it React drops the equal set anyway.
+  setClientWidth(300);
+  act(() => void fireResize(label));
+  settle();
+  renders.count = 0;
+
+  setClientWidth(300.3);
+  act(() => void fireResize(label));
+  settle();
+  expect(renders.count).toBe(0);
+  finish();
+});
+
+it("updates the fade when a re-measure finds the box narrower, and renders again when the clipping goes", () => {
+  const { masks, stop } = recordMaskWrites();
+  onTestFinished(stop);
+  const { label, renders, settle, setClientWidth, overflowBy, finish } = mount({ titleWhenClipped: "a-very-long-name", children: "a-very-long-name" }, true, 200);
+  expect(masks.at(-1)).toContain("24px");
+  renders.count = 0;
+
+  // Clipped at its end only, a ramp is at most half the box.
+  setClientWidth(40);
+  act(() => void fireResize(label));
+  settle();
+  expect(renders.count).toBeGreaterThan(0);
+  expect(masks.at(-1)).toContain("20px");
+  expect(masks.at(-1)).not.toContain("24px");
+
+  // The text comes to fit: nothing is clipped any more, which is a change to show too, and the fade is taken off.
+  overflowBy(0);
+  renders.count = 0;
+  act(() => void fireResize(label));
+  settle();
+  expect(renders.count).toBeGreaterThan(0);
+  expect(masks.at(-1)).toBe("");
   finish();
 });
 
