@@ -2,8 +2,9 @@
 
 Codex can grant an account **usage limit resets** (Codex's own name for them; its app server calls them rate limit
 reset credits): each one, redeemed, resets the account's eligible usage windows at once. Octoboard shows how many an
-account holds and lets the user redeem one. Only Codex has them: Claude Code and Grok Build expose nothing comparable,
-so their accounts never show any.
+account holds and lets the user redeem one. Only Codex accounts show them: Grok Build exposes nothing comparable, and
+the limit resets Claude grants are not read (see "Claude's limit resets are not shown" below), so Claude Code and Grok
+Build accounts never show any.
 
 ## How resets are read
 
@@ -132,11 +133,37 @@ quota is read" and "What reading a quota leaves behind" in `docs/product/account
 - none starts once the daemon has begun shutting down, and one running when it does is stopped.
 
 The redeem is the control request `use_reset_credit`, naming the agent and the account (none for the default account).
-A redeem for an agent without usage limit resets, Claude Code or Grok Build, is refused before anything runs, with
-`provider_unsupported` (see "The error alert" in `docs/product/error-alerts.md`).
+A redeem for Claude Code or Grok Build, whose accounts never show usage limit resets, is refused before anything runs,
+with `provider_unsupported` (see "The error alert" in `docs/product/error-alerts.md`).
 
 When Codex answers that the usage was reset, the daemon takes the redeemed reset out of the reading it holds (the count
 goes down by one; with no reset named, the list is dropped and only the count kept) and sends the changed reading to
 every window before it replies, so no window offers that reset again. After every run of Codex, whatever its outcome,
 the timed-out and failed ones included, the account's quota is read again straight away, since a reset may have been
 used even when no answer came; that reading says what is left.
+
+## Claude's limit resets are not shown
+
+Claude can grant an account limit resets of its own, which claude.ai's usage page lists (a five-hour, weekly, full or
+Fable-only reset, with when it expires) and offers to use. Octoboard does not read or show them: a Claude Code account
+never shows a reset line or a **Redeem reset** button.
+
+Octoboard reads a Claude Code account's quota only through Claude Code's `get_usage` control request (see "How a quota
+is read" in `docs/product/account-quota-readings.md`), and its reply does not carry these resets: the field meant for
+them, `rate_limits.cedar_ember`, comes back null, and the request takes no option that asks for them. They come only
+from claude.ai's `GET /api/oauth/usage?cedar_ember=1&skip_spend=1`, which Claude Code requests only for its own
+`/limit-reset` command and notices. Octoboard does not request it itself, because:
+
+- it needs the account's claude.ai sign-in token, with the profile scope (a token made by `claude setup-token` cannot
+  read it). Such a token expires within hours, and refreshing it replaces the refresh token, which would invalidate
+  Claude Code's own stored sign-in, so Octoboard could only use a token while it is still valid;
+- Octoboard never handles an agent's credentials, and this would mean reading each account's Keychain entry on macOS
+  and its credentials file on Windows and Linux;
+- the parameter and the block it returns are undocumented internal names that any Claude Code release may change;
+- using a subscription sign-in token outside Claude Code is not clearly covered by the usage terms, which restrict its
+  use for inference and do not address a read-only usage request.
+
+Were `get_usage`'s reply to carry these resets, they could be read with the quota, as Codex's are.
+
+Octoboard never uses a Claude limit reset (claude.ai's `POST /api/organizations/{org}/reset_rate_limits`): using one is
+left to claude.ai and Claude Code, and any support for them would only show them.

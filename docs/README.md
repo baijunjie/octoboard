@@ -115,7 +115,7 @@ Where to start, by question:
   running processes counted per project and console session, and the jump to each one's Processes panel.
 - [Starting a usage window](product/starting-usage-windows.md) — kicking a usage window that has not begun counting.
 - [Codex usage limit resets](product/usage-limit-resets.md) — how a Codex account's usage limit resets are read and
-  shown, and redeeming one from the rail's panel or the account details dialog.
+  shown, redeeming one from the rail's panel or the account details dialog, and why Claude's limit resets are not shown.
 - [Folder trust](product/folder-trust.md) — the agents' trust confirmations, the trust permission and trusted folders.
 - [macOS privacy permissions](product/macos-privacy-permissions.md) — the Screen Recording and Accessibility
   permissions agents in terminals can need, and the other macOS consents programs in Octoboard's terminals can ask for.
