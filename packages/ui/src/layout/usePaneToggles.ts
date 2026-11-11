@@ -27,7 +27,7 @@ function releaseFocus(panel: Pane, focusTerminal: () => void): void {
 
 /** How long a floating pane waits after the pointer leaves it before sliding away, so a pointer
  * that briefly overshoots does not close it. */
-const PEEK_HIDE_DELAY_MS = 200;
+export const PEEK_HIDE_DELAY_MS = 200;
 
 /** One side's hover reveal: a hidden pane floating in over the terminal on request. */
 export interface PanePeek {

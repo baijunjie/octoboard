@@ -6,6 +6,8 @@ import { App } from "../App";
 import { PanelHeader } from "../components/panel/PanelHeader";
 import { mountForTooltip } from "../components/hint/tooltipTestSupport";
 import { resetAppPreferences } from "../appTestSupport";
+import { PEEK_HIDE_DELAY_MS } from "../layout/usePaneToggles";
+import { fakeTimers } from "../test/clock";
 import { BROWSER_HOST } from "../test/hosts";
 import { PlatformProvider } from "../platform/react";
 import { ThemeProvider } from "../preferences/theme";
@@ -13,6 +15,7 @@ import { DaemonProvider, type Daemon } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { matchesWidthQuery } from "../test/viewport";
 import type { ClientRequestBody, Project } from "../protocol";
+import { settleInAct } from "./clockTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
 import { createUi } from "./interact";
 
@@ -56,6 +59,7 @@ function stubWidth(width: number) {
 const cards = () => Array.from(document.querySelectorAll("[data-panel-card]")).filter((card) => !card.closest("[inert]")).map((card) => card.id);
 
 it("shows the group a toggle press floated in for as long as the pointer rests on its card, not hiding it when the pointer leaves the toggle", async () => {
+  fakeTimers();
   stubWidth(900);
   document.documentElement.style.setProperty("--rail-width", "48px");
   document.documentElement.style.setProperty("--peek-gap", "8px");
@@ -84,10 +88,13 @@ it("shows the group a toggle press floated in for as long as the pointer rests o
     </PlatformProvider>,
   );
   const ui = createUi(document, "en");
-  await act(async () => ui.press(ui.session("Fix header")));
-  await act(async () => ui.showPanel("files"));
+  await settleInAct(ui.press(ui.session("Fix header")));
+  await settleInAct(ui.showPanel("files"));
   expect(cards()).toEqual(["panel-files"]);
-  // The group's hide delay after a pointer leaves is 200 ms; the pointer is on the card, so it does not run.
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 600)));
+  // Well past the group's hide delay (with margin for a leave that re-arms it), the group stays, since the pointer
+  // is on its card.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(PEEK_HIDE_DELAY_MS * 3);
+  });
   expect(cards()).toEqual(["panel-files"]);
 });
