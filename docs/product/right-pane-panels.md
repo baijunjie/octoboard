@@ -53,8 +53,8 @@ size and weight, and icon buttons. Header heights and alignment are in "The wind
 - the panel's **title** — the project's name for the Files panel, "Processes" for the Processes panel, "Terminal" for
   the Terminal panel, "Report" for the report panel;
 - whatever the kind puts beside its title — the Files panel's Files and Changes tabs (see "Opening a project's files" in
-  `docs/product/project-pane.md`), the report panel's pager (see "Paging through the history" in
-  `docs/product/report-panel.md`);
+  `docs/product/project-pane.md`), the report panel's pager, page time and badges (see "Paging through the history"
+  in `docs/product/report-panel.md`);
 - the kind's own icon buttons, at the trailing side;
 - in the Report and Terminal panels' headers, **Maximize panel**, or **Restore panel size** while it is maximized, there
   whenever the panel is docked, alone or not, and not while the whole group floats or while it floats alone at
@@ -71,11 +71,12 @@ them, and the area's fades disappear while a button has keyboard focus so its fo
 In the Terminal panel, the header holds its title, with only Maximize panel or Restore panel size when offered and
 Close panel on the same row. Its tabs, New terminal and the shown terminal's actions menu occupy a separate row below
 the header (see "Tabs" in `docs/product/terminal-panel.md`). In the report panel, with one column at least 320 px wide
-or while maximized, the pager gives way while the title and trailing buttons keep their width.
+or while maximized, the page's time gives way while the pager, the badges, the title and the trailing buttons keep their
+width.
 
 With two columns, or a single-column card area narrower than **320 px**, the cards' titles can shrink and fade so
-their headers fit the narrower cards. The report pager and the kind's own icon buttons scroll horizontally in
-separate areas when needed. Maximize panel / Restore panel size and Close panel keep their width outside those
+their headers fit the narrower cards. The report pager, with the page's time and badges, and the kind's own icon
+buttons scroll horizontally in separate areas when needed; the page's time still shortens first. Maximize panel / Restore panel size and Close panel keep their width outside those
 scrolling areas. Scrolling or moving keyboard focus reveals controls beyond the edges; the fades disappear while a
 control in that area has keyboard focus. The Files panel keeps the Files and Changes tabs fully visible as
 described above. The Terminal panel keeps its tabs on their separate row.

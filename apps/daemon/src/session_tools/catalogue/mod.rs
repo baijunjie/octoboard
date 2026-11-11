@@ -33,7 +33,7 @@ use moves::{
     BIND_TO_SESSION, HANDOFF_SESSION, RELEASE_SESSION, SET_SESSION_MODEL, SWITCH_SESSION_ACCOUNT,
     TRANSFER_BRANCHES, TRANSFER_PROCESSES, TRANSFER_SESSION,
 };
-use pages::{DELETE_PAGES, LIST_PAGES, SHOW_PAGE};
+use pages::{DELETE_PAGES, LIST_PAGES, PAGE_GUIDE, SHOW_PAGE};
 use reads::{
     list_agent_models, list_agents, GET_PROJECT, GET_SESSION, LIST_ARCHIVED_SESSIONS,
     LIST_CONSOLES, LIST_PROJECTS, LIST_SESSIONS, READ_SESSION_HISTORY,
@@ -154,6 +154,7 @@ static CONSOLE_SESSION_TOOLS: LazyLock<Vec<ToolDef>> = LazyLock::new(|| {
         list_agents(),
         LIST_PAGES,
         SHOW_PAGE,
+        PAGE_GUIDE,
         DELETE_PAGES,
     ]
 });
@@ -222,6 +223,7 @@ static COORDINATOR_PROJECT_SESSION_TOOLS: LazyLock<Vec<ToolDef>> = LazyLock::new
         list_agents(),
         LIST_PAGES,
         SHOW_PAGE,
+        PAGE_GUIDE,
         DELETE_PAGES,
     ]
 });

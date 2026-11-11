@@ -22,7 +22,7 @@ export function useHeldWhileHidden(
   const [state, setState] = useState<{ held: boolean; spoken: string | undefined; silent?: boolean }>({ held: false, spoken: undefined });
   useEffect(() => {
     if (!sentence) {
-      setState((s) => (s.held || s.spoken !== undefined ? { held: false, spoken: undefined } : s));
+      if (state.held || state.spoken !== undefined) setState({ held: false, spoken: undefined });
       return;
     }
     if (hidden) {

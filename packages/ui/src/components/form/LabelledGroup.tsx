@@ -19,6 +19,7 @@ export function LabelledGroup({
   hideLabel,
   help,
   description,
+  dir,
   isDisabled,
   errorMessage,
   errorId,
@@ -30,6 +31,9 @@ export function LabelledGroup({
   hideLabel?: boolean;
   help?: React.ReactNode;
   description?: React.ReactNode;
+  /** `auto` where the label and the description are a page's or a user's text, so that they take the direction of
+   * their own text and align with the interface. */
+  dir?: "auto";
   isDisabled?: boolean;
   errorMessage?: React.ReactNode;
   /** The id the message carries, for the controls it describes. */
@@ -38,6 +42,7 @@ export function LabelledGroup({
 }): React.ReactElement {
   const labelId = useId();
   const descriptionId = useId();
+  const textClass = dir === undefined ? undefined : "align-match-parent";
   return (
     <div
       role="group"
@@ -48,14 +53,14 @@ export function LabelledGroup({
     >
       {help ? (
         <div className="flex items-center gap-2">
-          <Label id={labelId} className={hideLabel ? "sr-only" : undefined}>{label}</Label>
+          <Label id={labelId} dir={dir} className={hideLabel ? "sr-only" : textClass}>{label}</Label>
           {help}
         </div>
       ) : (
-        <Label id={labelId} className={hideLabel ? "sr-only" : undefined}>{label}</Label>
+        <Label id={labelId} dir={dir} className={hideLabel ? "sr-only" : textClass}>{label}</Label>
       )}
       {children}
-      {description && !errorMessage && <Description id={descriptionId}>{description}</Description>}
+      {description && !errorMessage && <Description id={descriptionId} dir={dir} className={textClass}>{description}</Description>}
       {errorMessage && (
         // A group is no field to hold a `FieldError`; announced as a field's is.
         <GroupFieldError id={errorId}>

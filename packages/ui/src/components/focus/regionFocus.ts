@@ -13,12 +13,12 @@ export function focusLanding(root: Element): boolean {
   return target != null && target.ownerDocument.activeElement === target;
 }
 
-/** Where a tap puts focus in `root`: the control it marks `data-touch-landing` (a report page), else
- * where `focusLanding` would unless that is a field that takes text (the Terminal panel's shell,
- * say), and then `root`'s first control that is not; says whether focus is there now. A tap must
- * not focus such a field, which would raise the on-screen keyboard (`interactionIsTouch`). */
+/** Where a tap puts focus in `root`: where `focusLanding` would unless that is a field that takes text
+ * (the Terminal panel's shell, say), and then `root`'s first control that is not; says whether focus
+ * is there now. A tap must not focus such a field, which would raise the on-screen keyboard
+ * (`interactionIsTouch`). */
 export function focusLandingWithoutText(root: Element): boolean {
-  const landing = root.querySelector<HTMLElement>("[data-touch-landing]") ?? root.querySelector<HTMLElement>("[data-region-landing]");
+  const landing = root.querySelector<HTMLElement>("[data-region-landing]");
   const target = landing && !landing.matches(TEXT_ENTRY)
     ? landing
     : Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).find((control) => !control.matches(TEXT_ENTRY));

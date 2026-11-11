@@ -13,10 +13,32 @@ export const markdownHtmlSchema: Options = {
   },
 };
 
+/** The schema for an `untrusted` document, which has no raw HTML: the one thing it adds is that an image's `src` may be
+ * a `data:` address (the renderer then draws no other, `urlTransform` and `DocumentImage` see to that). */
+export const untrustedMarkdownSchema: Options = {
+  ...markdownHtmlSchema,
+  protocols: { ...markdownHtmlSchema.protocols, src: [...(markdownHtmlSchema.protocols?.src ?? []), "data"] },
+};
+
 interface HtmlNode {
   type: string;
+  value?: string;
   properties?: Record<string, unknown>;
   children?: HtmlNode[];
+}
+
+/** For an `untrusted` document, run before the sanitizer: the raw HTML the Markdown tree carries (`raw` nodes) becomes
+ * the text it was written as, so it is shown rather than dropped by the sanitizer, which knows no `raw` node. */
+export function rawHtmlAsText() {
+  return (tree: HtmlNode) => {
+    const visit = (node: HtmlNode) => {
+      node.children?.forEach((child, index) => {
+        if (child.type === "raw") node.children![index] = { type: "text", value: child.value ?? "" };
+        else visit(child);
+      });
+    };
+    visit(tree);
+  };
 }
 
 /** The sanitizer prefixes ids and ARIA references to prevent DOM clobbering; href fragments

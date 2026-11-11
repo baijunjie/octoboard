@@ -144,7 +144,8 @@ Besides the reads in `docs/product/what-every-session-reads.md`:
 | `request_session` | `kind`, `project?`, `console?`, `brief`, `title?`, `agent?`, `account?`, `model?`, `effort?`, `compatibility?`, `branches?` | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
 | `request_resume_session` | `conversation`, `project?`, `title?`, `model?`, `effort?`, `compatibility?` | Asks the user to resume a conversation by its id, as the session dialog's Resume conversation tab does; a console session has to name the project. See `docs/product/requests-to-resume-a-conversation.md`. |
 | `inform_session` | see `docs/product/information-between-sessions.md` | As for every session. |
-| `show_page` | `html` | Pushes an HTML page to the caller's report panel, beside its own terminal. Answers with the new page's id. See "Pushing a page" in `docs/product/report-panel.md`. |
+| `show_page` | `title?`, `body` | Pushes a page — a tree of components Octoboard draws — to the caller's report panel, beside its own terminal. A page that fails the checks is refused, naming where and why, and stores nothing. Answers with the new page's id. See "Pushing a page" in `docs/product/report-panel.md`. |
+| `page_guide` | `topic` | The catalogue of a page's components, by topic, with each kind's JSON Schema; to be read before the first page. See "The page guide" in `docs/product/report-page-components.md`. |
 | `list_pages` | `page?` | Lists the pages the caller pushed, or reads one of them back in full. See "Reading back the pages pushed" in `docs/product/report-panel.md`. |
 | `delete_pages` | `pages?`, `all?` | Withdraws pages the caller pushed, for good: the ids named, or every one. Answers with the ids deleted. See "Withdrawing pages" in `docs/product/report-panel.md`. |
 
@@ -201,7 +202,7 @@ a console session. Besides the reads in `docs/product/what-every-session-reads.m
 | `report` | as in `docs/product/reporting-to-owners.md` | Offered, but refused while the session is independent: it has nobody to report to. A coordinator with a parent can report to that console session (see "Coordinators with a parent session" below). |
 | `inform_session` | see `docs/product/information-between-sessions.md` | As for every session. |
 | `get_project` | `refresh?` | Its own project's settings, read-only, as for every project session (see "A project's settings" in `docs/product/agent-settings-tools.md`), optionally with its git status checked first (see "Reading the status from a session" in `docs/product/project-git-status.md`). |
-| `show_page`, `list_pages`, `delete_pages` | as the console session's | As the console session's: it is the project session that faces the user, and its pages show in its own report panel in its project's right pane (see `docs/product/report-panel.md`). |
+| `show_page`, `page_guide`, `list_pages`, `delete_pages` | as the console session's | As the console session's: it is the project session that faces the user, and its pages show in its own report panel in its project's right pane (see `docs/product/report-panel.md`). |
 
 It has no `add_project`, and none of the tools that change a setting: `update_project`, `get_console`,
 `update_console`, `get_settings` and `update_settings` are the console session's alone.

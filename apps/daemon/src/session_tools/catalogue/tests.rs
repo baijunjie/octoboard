@@ -145,6 +145,7 @@ fn the_tools_offered_follow_from_kind_and_binding() {
             "list_agents",
             "list_pages",
             "show_page",
+            "page_guide",
             "delete_pages"
         ]
     );
@@ -189,6 +190,7 @@ fn the_tools_offered_follow_from_kind_and_binding() {
             "list_agents",
             "list_pages",
             "show_page",
+            "page_guide",
             "delete_pages"
         ]
     );
@@ -288,6 +290,10 @@ fn every_title_says_which_language_to_write_the_name_in() {
         (SessionKind::Project, false),
     ] {
         for tool in tools_for(kind, bound) {
+            // A page's title names a page, not a session.
+            if tool.name == "show_page" {
+                continue;
+            }
             let schema = (tool.schema)();
             let Some(title) = schema["properties"]["title"]["description"].as_str() else {
                 continue;

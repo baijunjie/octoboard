@@ -67,8 +67,8 @@ casts none on the right pane's side either: the right pane has no surface of its
 the terminal's area across a gap of its background (see "The panel cards" in `docs/product/right-pane-panels.md`). The
 terminal's area is the colour of the terminal's own background. The sidebar and the right pane's cards share the same
 background — a touch greyer than the terminal in the light appearance, a touch lighter in the dark one — whether docked
-or floating. A report page keeps its own light surface inside its panel (see "A report page stays on a light surface in
-both appearances" in `docs/product/appearance.md`).
+or floating. A report page has no surface of its own: it is drawn on its card's background (see "What a page may
+contain, and what it cannot do" in `docs/product/report-panel.md`).
 
 **Every docked sidebar header inside the content panel is 48 px high** — the sidebar's console header and a focus mode's
 header (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`) — and so is the archive view's header (see "The
@@ -104,8 +104,7 @@ panel's edges.
 **The sidebar and the right pane share one horizontal inset**, docked or floating alike: a
 header, a bar, a section heading, a notice or a row's content starts **16 px** from the pane's edge, and a row's hover
 or selected fill sits **8 px** from it. In the right pane this holds for every panel, measured from the card's edge, and
-for the file viewer's header; a report page's own content lines up with it by default (see "What a page may contain, and
-what it cannot do" in `docs/product/report-panel.md`).
+for the file viewer's header, and a report page's content starts at it too.
 
 On the screens shown before there is anything to show — while connecting to the daemon, and the screens for a daemon
 that could not start, for a daemon of another version, for no daemon address or key being known, or for a UI that
@@ -396,8 +395,8 @@ or editable text outside the terminal. In the terminal it shows no system menu. 
 what was clicked offers its own action menu: the sidebar's rows and headers open theirs at the pointer (see "Rows, names
 and keyboard focus" in `docs/product/sidebar.md`), and so do the consoles' avatars on the rail (see "The console
 switcher" in `docs/product/console-switcher.md`). The project pane's file and change rows also open their own menu (see
-"A row's actions" in `docs/product/project-pane.md`). A report page follows the same rule (see "Right-click inside a
-page" in `docs/product/report-panel.md`).
+"A row's actions" in `docs/product/project-pane.md`). A report page's fields are input fields and text areas like any
+other.
 
 **The terminal has its own editing menu** in both the desktop app and a browser (see "Copy, paste and selection" in
 `docs/product/session-terminal.md`), and so do the file viewer's code regions and rendered Markdown documents (see

@@ -40,3 +40,22 @@ it("keeps the accessible heading, tab and action nodes when the number of column
     expect(document.activeElement).toBe(tab);
   }
 });
+
+it("lets only a narrow card's children slot that asks for it take the room the title and controls leave free", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const slotGrows = (growChildren: boolean) => {
+    act(() => root.render(
+      <PanelFrameProvider value={{ compact: true, canMaximize: false, maximized: false, onToggleMaximized: () => {}, onClose: () => {} }}>
+        <PanelHeader title="Report" growChildren={growChildren}><b>stamp</b></PanelHeader>
+      </PanelFrameProvider>,
+    ));
+    return container.querySelector("b")!.parentElement!.classList.contains("flex-1");
+  };
+  expect(slotGrows(false)).toBe(false);
+  expect(slotGrows(true)).toBe(true);
+});

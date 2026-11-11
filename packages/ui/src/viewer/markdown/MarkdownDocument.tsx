@@ -1,11 +1,12 @@
 // The one module that touches the Markdown library (`react-markdown`, `remark-gfm`, `remark-math`).
 // It is loaded lazily by `MarkdownSurface.tsx`, the first time a document is shown. Raw HTML is parsed
-// and sanitized before it reaches a component. Diagram and formula libraries load on first use;
-// images may read project files or load HTTP(S) addresses.
+// and sanitized before it reaches a component, except in an `untrusted` document, which never parses it. Diagram and
+// formula libraries load on first use; images may read project files or load HTTP(S) addresses, except in an
+// `untrusted` document.
 // An address is never followed by the viewer itself: a project file is handed to `onOpenFile`, and
 // an absolute web or mail address to `onOpenLink`.
 import React, { memo, useEffect, useId, useMemo, useRef } from "react";
-import Markdown, { type Components, type ExtraProps, type Options } from "react-markdown";
+import Markdown, { defaultUrlTransform, type Components, type ExtraProps, type Options } from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
@@ -19,11 +20,11 @@ import { classNamesOf, codeChild, fenceOf, isImageLink, textOf, type DocumentNod
 import { DocumentImage } from "./DocumentImage";
 import { FormulaView } from "./FormulaView";
 import { LinkWithMarks } from "./linkMarks";
-import { markdownHtmlSchema, sanitizedFragments } from "./markdownHtml";
+import { markdownHtmlSchema, rawHtmlAsText, sanitizedFragments, untrustedMarkdownSchema } from "./markdownHtml";
 import { headingIds, limitRenderings, prepareMarkdown } from "./markdownPlugins";
 import { markdownStyle, type MarkdownStyle } from "./markdownStyle";
 import { MermaidBlock } from "./MermaidBlock";
-import { resolveProjectAddress } from "./projectAddress";
+import { isDataImage, resolveProjectAddress } from "./projectAddress";
 import { useFocusVisibleProps } from "../../primitives";
 
 export { openableAddress } from "./projectAddress";
@@ -49,10 +50,25 @@ export interface MarkdownDocumentProps {
   /** A heading to move to once the document is shown, from a link that opened this file. */
   anchor?: string;
   /** The document is one of several inside a view with headings of its own: its headings are
-   * demoted two levels (`h1` to `h3`, none below `h6`) so none outranks the view's, and it gives
+   * demoted (`h1` to `h3`, or to `headingLevel`, none below `h6`) so none outranks the view's, and it gives
    * no heading an id and its footnotes ids of their own, so documents side by side cannot clash.
    * It uses compact Tailwind typography rather than the standalone document's style preference. */
   embedded?: boolean;
+  /** With `embedded`, the level an `h1` of the document is drawn at; the headings under it follow, down to `h6`. */
+  headingLevel?: 2 | 3 | 4 | 5 | 6;
+  /** The text is a report page's, written by an agent for one reading and given no say over what this window
+   * loads: raw HTML is not parsed (it stays the text it was written as), an image is drawn only from a `data:`
+   * address (any other stays its description, and nothing is requested for it, nor read from the project), and a
+   * relative link or one to a heading (a footnote's own links aside) is plain text. Absolute web and mail links still go
+   * to `onOpenLink`. */
+  untrusted?: boolean;
+}
+
+/** What `untrusted` lets an address be: an image's `data:` address, which carries its own bytes; the rest is
+ * the library's default (it drops what is not a web, mail or similar address). */
+function untrustedUrl(url: string, key: string, node: { tagName?: string }): string {
+  if (key === "src" && node.tagName === "img") return isDataImage(url) ? url : "";
+  return defaultUrlTransform(url);
 }
 
 /** Puts the document's content in the frame `<div data-markdown-document>`, which takes the
@@ -250,15 +266,16 @@ const BLOCKS = {
   section: styled("section", "mt-6 border-t border-current/25 pt-3 text-xs"),
 } satisfies Components;
 
-// An embedded document's headings sit two levels down, clamped at the last.
-const DEMOTED_BLOCKS = {
-  h1: styled("h3", "", "first-strong"),
-  h2: styled("h4", "", "first-strong"),
-  h3: styled("h5", "", "first-strong"),
-  h4: styled("h6", "", "first-strong"),
-  h5: styled("h6", "", "first-strong"),
-  h6: styled("h6", "", "first-strong"),
-} satisfies Components;
+const HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"] as const;
+
+/** The headings of an embedded document whose `h1` is drawn at level `first`, each below it a level lower, clamped at
+ * the last. */
+function demotedBlocks(first: number) {
+  const at = (index: number) => styled(HEADING_TAGS[Math.min(first - 1 + index, 5)], "", "first-strong");
+  return { h1: at(0), h2: at(1), h3: at(2), h4: at(3), h5: at(4), h6: at(5) } satisfies Components;
+}
+
+const DEMOTED_BLOCKS = { 2: demotedBlocks(2), 3: demotedBlocks(3), 4: demotedBlocks(4), 5: demotedBlocks(5), 6: demotedBlocks(6) };
 
 // A task list's boxes are drawn as the checked or unchecked state they record, not as controls. The
 // library already marks them disabled; this keeps them inert whatever it does.
@@ -284,6 +301,8 @@ export const MarkdownDocument = memo(function MarkdownDocument({
   isDirectory,
   anchor,
   embedded = false,
+  headingLevel = 3,
+  untrusted = false,
 }: MarkdownDocumentProps): React.ReactElement {
   const t = useT();
   const appDirection = textDirection(useCurrentLanguage());
@@ -301,9 +320,9 @@ export const MarkdownDocument = memo(function MarkdownDocument({
   // whatever this array's identity is, so holding one would buy nothing.
   const remarkPlugins: NonNullable<Options["remarkPlugins"]> = [remarkGfm, remarkMath, prepareMarkdown(text)];
   const rehypePlugins: NonNullable<Options["rehypePlugins"]> = [
-    rehypeRaw,
+    ...(untrusted ? [rawHtmlAsText] : [rehypeRaw]),
     ...(embedded ? [scopeFootnoteLabel(idScope)] : []),
-    [rehypeSanitize, { ...markdownHtmlSchema, clobberPrefix: idPrefix }],
+    [rehypeSanitize, { ...(untrusted ? untrustedMarkdownSchema : markdownHtmlSchema), clobberPrefix: idPrefix }],
     sanitizedFragments(idPrefix),
     limitRenderings(path),
     ...(!embedded ? [headingIds] : []),
@@ -315,10 +334,10 @@ export const MarkdownDocument = memo(function MarkdownDocument({
   const components = useMemo<Components>(
     () => ({
       ...BLOCKS,
-      ...(embedded ? DEMOTED_BLOCKS : {}),
+      ...(embedded ? DEMOTED_BLOCKS[headingLevel] : {}),
       input: TaskBox,
       img: ({ src, alt, width, height, node }) => (
-        <DocumentImage src={src} alt={alt} width={width} height={height} documentPath={path} project={project} overBudget={overBudget(node)} />
+        <DocumentImage src={src} alt={alt} width={width} height={height} documentPath={path} project={project} overBudget={overBudget(node)} dataOnly={untrusted} />
       ),
       code: ({ node, className, ...props }) => {
         if (classNamesOf(node).includes("math-inline")) {
@@ -366,7 +385,7 @@ export const MarkdownDocument = memo(function MarkdownDocument({
               {children}
             </DocumentLink>
           );
-        } else if (address.kind === "anchor") {
+        } else if (address.kind === "anchor" && !untrusted) {
           link = (
             <DocumentLink {...rest} image={isImageLink(node)} href={href ?? "#"} onActivate={(event) => revealInDocument(event.currentTarget.closest("[data-markdown-document]") ?? event.currentTarget, address.id)}>
               {children}
@@ -390,7 +409,7 @@ export const MarkdownDocument = memo(function MarkdownDocument({
         return link ? <LinkWithMarks>{link}</LinkWithMarks> : <>{children}</>;
       },
     }),
-    [renderCode, onOpenLink, onOpenFile, isDirectory, path, project, theme, embedded],
+    [renderCode, onOpenLink, onOpenFile, isDirectory, path, project, theme, embedded, headingLevel, untrusted],
   );
   // The library words the footnotes' heading and each backlink's name in English.
   const remarkRehypeOptions = useMemo<Options["remarkRehypeOptions"]>(
@@ -406,7 +425,7 @@ export const MarkdownDocument = memo(function MarkdownDocument({
   );
   return (
     <div ref={frameRef} className="contents">
-      <Markdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} remarkRehypeOptions={remarkRehypeOptions} components={components}>
+      <Markdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} remarkRehypeOptions={remarkRehypeOptions} components={components} urlTransform={untrusted ? untrustedUrl : undefined}>
         {text}
       </Markdown>
     </div>

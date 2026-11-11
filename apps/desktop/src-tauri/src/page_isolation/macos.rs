@@ -1,14 +1,13 @@
-//! A second barrier under the report panel's sanitizer: the window's webview is created with a
-//! WebKit content rule list that blocks `http(s)` requests except image loads. A page in the panel
-//! is model-authored HTML, and the UI strips everything from it that could reach the network
-//! (`packages/ui/src/report/pageBridge.js`). This list keeps any non-image `http(s)` load closed if
-//! the sanitizer ever misses one. Resource hints (`<link rel="preconnect">`, `rel="dns-prefetch"`)
-//! are channels no content security policy governs in WebKit, and whether WebKit consults this list
-//! before a `preconnect` is not established (WebView2's request filter was measured not stopping
-//! one), so the sanitizer, which keeps no `<link>` and no `rel`, is what closes them. Report images
-//! are separately restricted to `data:` by the frame's content security policy. It does not cover
-//! WebRTC: ICE traffic is not a request a content rule sees, and what backs the sanitizer up there
-//! is the page's nonce-only `script-src`, under which no script of the page's own runs. The
+//! A second barrier under the UI's own rule that nothing it draws loads from the network: the
+//! window's webview is created with a WebKit content rule list that blocks `http(s)` requests except
+//! image loads. A report page is model-authored, but it is a component tree the UI renders with its
+//! own code, which writes no HTML of the page's and shows a page's image only from a `data:` URL
+//! (`docs/product/report-panel.md`'s "What a page may contain, and what it cannot do" section). This
+//! list keeps any non-image `http(s)` load closed should the UI ever start one by mistake. Resource
+//! hints (`<link rel="preconnect">`, `rel="dns-prefetch"`) are channels no content security policy
+//! governs in WebKit, and whether WebKit consults this list before a `preconnect` is not established
+//! (WebView2's request filter was measured not stopping one); a report page cannot produce one, as it
+//! carries no HTML. It does not cover WebRTC: ICE traffic is not a request a content rule sees. The
 //! application loads remote images in Markdown documents; its assets use `tauri://` and its daemon
 //! connection uses `ws://127.0.0.1` and `ipc://`, none of which the rule matches.
 //!

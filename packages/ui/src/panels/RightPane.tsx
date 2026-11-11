@@ -23,7 +23,6 @@ export function RightPane({
   selectedSessionId,
   reportSessionId,
   focusTerminal,
-  frameKeys,
   peekKind,
   onViewFile,
   onDismiss,
@@ -45,7 +44,6 @@ export function RightPane({
   /** The session whose pages the Report panel shows (`PanelContentProps`). */
   reportSessionId?: string;
   focusTerminal: () => void;
-  frameKeys: PanelContentProps["frameKeys"];
   /** The kind whose toggle the pointer is on, shown while the pane floats in with no panel open. */
   peekKind: PanelKind | undefined;
   /** Shows a project file a path in a terminal's output named, in the file viewer. */
@@ -73,7 +71,7 @@ export function RightPane({
   const hover = useLatest(onHoverChange);
   useEffect(() => { if (!overlay) clearTimeout(edgeDwell.current); }, [overlay]);
   useEffect(() => () => clearTimeout(edgeDwell.current), []);
-  const shared = { owner, project, selectedSessionId, reportSessionId, focusTerminal, peekKind, frameKeys, onViewFile, onDismiss, onPanelClose, maximizeArea, areaEasing };
+  const shared = { owner, project, selectedSessionId, reportSessionId, focusTerminal, peekKind, onViewFile, onDismiss, onPanelClose, maximizeArea, areaEasing };
   return (
     <>
       {overlay && (

@@ -47,11 +47,10 @@ export function BranchSelect({
   const title = name === undefined ? undefined : gone ? <Message id="git.branch.gone" params={{ branch: <InlineReference monospace wrap>{name}</InlineReference> }} /> : name;
   return (
     // The subgrid restates the column gap: HeroUI's `.select` sets a gap of its own, which would
-    // otherwise replace the parent grid's for this row's gutter. The secondary variant draws from
-    // the pane's `--default` fills (`.control-fills`), like the filter field.
+    // otherwise replace the parent grid's for this row's gutter. The default variant is used, as it is for a control
+    // on a pane's own background.
     <Select
       fullWidth
-      variant="secondary"
       disabled={isDisabled}
       loading={isLoading}
       value={value ?? null}

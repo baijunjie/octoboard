@@ -191,50 +191,60 @@ describe("useNavigationHistory", () => {
     expect(h.focusTerminal).toHaveBeenCalledTimes(1);
   });
 
-  describe("moveByShortcut", () => {
+  describe("the Back and Forward keys", () => {
     const windowChrome = { leftInset: () => 0, subscribe: () => () => {} };
     const macApp = { kind: "tauri", host: MAC_HOST, windowChrome } as const;
+    /** ⌘[ (Back) or ⌘] (Forward) on a host whose primary modifier is ⌘, Ctrl with the same key elsewhere. */
+    const press = (backward: boolean, platform: PlatformAdapter = macApp) =>
+      act(() => void window.dispatchEvent(new KeyboardEvent("keydown", {
+        key: backward ? "[" : "]",
+        code: backward ? "BracketLeft" : "BracketRight",
+        metaKey: platform.host.modifier === "meta",
+        ctrlKey: platform.host.modifier === "control",
+        bubbles: true,
+        cancelable: true,
+      })));
 
     it.each([
       ["a browser", { kind: "browser", host: BROWSER_HOST }],
       ["the desktop app off macOS", { kind: "tauri", host: { ...MAC_HOST, os: "windows", modifier: "control" } }],
-    ] as const)("does nothing in %s, which has no Back and Forward keys", (_, platform) => {
+    ] as const)("do nothing in %s, which has no Back and Forward keys", (_, platform) => {
       const h = mount({ platform });
       visitAll(h, "a", "b");
-      act(() => h.navigation.moveByShortcut(true));
+      press(true, platform);
       expect(h.shown().session).toBe("b");
     });
 
-    it("goes back and forward in the macOS app", () => {
+    it("go back and forward in the macOS app", () => {
       const h = mount({ platform: macApp });
       visitAll(h, "a", "b");
-      act(() => h.navigation.moveByShortcut(true));
+      press(true);
       expect(h.shown().session).toBe("a");
-      act(() => h.navigation.moveByShortcut(false));
+      press(false);
       expect(h.shown().session).toBe("b");
     });
 
-    it("moves as a keyboard interaction, for the focus it hands on to show its ring, and leaves the modality alone with nowhere to go", () => {
+    it("move as a keyboard interaction, for the focus they hand on to show its ring, and leave the modality alone with nowhere to go", () => {
       const previous = getInteractionModality();
       onTestFinished(() => Reflect.apply(setInteractionModality, undefined, [previous]));
       setInteractionModality("pointer");
       const h = mount({ platform: macApp });
       visitAll(h, "a", "b");
-      act(() => h.navigation.moveByShortcut(false));
+      press(false);
       expect(getInteractionModality()).toBe("pointer");
-      act(() => h.navigation.moveByShortcut(true));
+      press(true);
       expect(getInteractionModality()).toBe("keyboard");
     });
 
-    it.each(['<div role="dialog"></div>', '<div role="menu"></div>'])("does nothing while %s is open", (markup) => {
+    it.each(['<div role="dialog"></div>', '<div role="menu"></div>'])("do nothing while %s is open", (markup) => {
       const h = mount({ platform: macApp });
       visitAll(h, "a", "b");
       const open = document.body.appendChild(document.createElement("div"));
       open.innerHTML = markup;
-      act(() => h.navigation.moveByShortcut(true));
+      press(true);
       expect(h.shown().session).toBe("b");
       open.remove();
-      act(() => h.navigation.moveByShortcut(true));
+      press(true);
       expect(h.shown().session).toBe("a");
     });
   });

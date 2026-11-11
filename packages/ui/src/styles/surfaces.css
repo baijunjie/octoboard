@@ -151,8 +151,9 @@
    this class, so the shared tooltip and popover components carry it themselves (see "Confirmed
    visual choices" in docs/ui-standard.md). Everything a dialog, the pane or such a tooltip or
    popover draws from `--default` takes the fills: a secondary button, a tab list, a ghost button's
-   hover, a toggle button, a search field and a select in their secondary variant, and the file
-   viewer's image checkerboard (`.viewer-checkerboard`), whose squares step faintly from its ground
+   hover, a toggle button, a search field and a select in their secondary variant (a control on the
+   pane itself takes the default variant, which does not draw from these), and the file viewer's
+   image checkerboard (`.viewer-checkerboard`), whose squares step faintly from its ground
    (on HeroUI's own fill hardly at all), inside the viewer's frame surface like every other frame. */
 .control-fills {
   --default: var(--control-fill);

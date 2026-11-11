@@ -94,7 +94,6 @@ export function FileFilterField({ state, label, contextKey, ignoredToggle = fals
             value={state.filter}
             onChange={state.onFilterChange}
             fullWidth
-            variant="secondary"
             className="min-w-0 flex-1"
             inputRef={input}
             placeholder={t("common.search")}

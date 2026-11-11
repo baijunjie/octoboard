@@ -388,6 +388,20 @@ it.each([
   expect(pressed).toHaveBeenCalledTimes(pressesIt ? 1 : 0);
 });
 
+it("showPanel presses the toggle as a mouse does, so the card's first focus is not keyboard-visible", async () => {
+  document.body.innerHTML = `<button aria-label="${format("en", "titleBar.report.show")}"></button>`;
+  const events: string[] = [];
+  let click: MouseEvent | undefined;
+  const button = document.querySelector("button")!;
+  for (const type of ["pointerdown", "pointerup", "pointerout"]) button.addEventListener(type, (event) => events.push(`${type}:${(event as PointerEvent).pointerType}`));
+  button.addEventListener("click", (event) => (click = event as MouseEvent));
+  await settle(createUi(document, "en").showPanel("report"));
+  // The pointer leaves the toggle afterwards, so it does not stay hovered.
+  expect(events).toEqual(["pointerdown:mouse", "pointerup:mouse", "pointerout:mouse"]);
+  // A click with no detail is what react-aria reads as a virtual press.
+  expect(click?.detail).toBe(1);
+});
+
 it("showPanel reveals an open floating group without closing its panel", async () => {
   document.body.innerHTML = '<button aria-label="Hide files panel"></button>';
   const pressed = vi.fn();

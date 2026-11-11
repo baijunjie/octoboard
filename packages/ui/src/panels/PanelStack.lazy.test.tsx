@@ -47,7 +47,6 @@ vi.mock("./panelRegistry", () => {
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const noKeys = { onEscape: () => {}, onCycleRegion: () => {}, onMoveHistory: () => {}, onMoveConsoleSession: () => {} };
 
 it("does not slide in the first panel of a pane that was just shown, however late its code arrives", async () => {
   const container = document.body.appendChild(document.createElement("div"));
@@ -63,7 +62,6 @@ it("does not slide in the first panel of a pane that was just shown, however lat
           focusTerminal={() => {}}
           peek={undefined}
           peekKind={undefined}
-          frameKeys={noKeys}
           onDismiss={() => {}}
           maximizeArea={{ current: null }}
         />,

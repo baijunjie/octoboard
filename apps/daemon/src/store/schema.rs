@@ -17,7 +17,7 @@ use rusqlite::Connection;
 /// [`MIGRATIONS`], and the released version's schema is kept as `schema/v{N}.sql` and listed in the
 /// test-only `PAST_SCHEMAS`, for the test that migrates a database built from each and compares the
 /// result with a fresh one.
-pub(super) const SCHEMA_VERSION: i64 = 3;
+pub(super) const SCHEMA_VERSION: i64 = 4;
 
 /// The `application_id` of an Octoboard database, "OCTB" in ASCII, written into the file's header
 /// when it is created, so that a SQLite file of another program is told apart from one of ours.
@@ -55,6 +55,18 @@ pub(super) const MIGRATIONS: &[&str] = &[
      ALTER TABLE console_launches ADD COLUMN compatibility TEXT;
      ALTER TABLE project_providers ADD COLUMN compatibility TEXT;
      ALTER TABLE sessions ADD COLUMN compatibility TEXT;",
+    // 3 to 4: a report page is a tree of components with the submission of its form, in place of an
+    // HTML document. A page stored as HTML has no tree to be read as, so every one is discarded.
+    "DROP TABLE pages;
+     CREATE TABLE pages (
+         id         TEXT PRIMARY KEY,
+         session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+         content    TEXT NOT NULL,
+         submission TEXT,
+         submission_revision INTEGER NOT NULL DEFAULT 0,
+         created_at INTEGER NOT NULL
+     );
+     CREATE INDEX pages_session_id ON pages (session_id);",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -271,13 +283,21 @@ BEGIN SELECT RAISE(ABORT, 'locked sessions cannot be archived'); END;
 CREATE TABLE trusted_directories (
     path TEXT PRIMARY KEY
 );
+-- A report page. `session_id` is the session that pushed it, a console session or a project
+-- session that faces the user; deleting it takes its pages, and deleting a console or a project
+-- therefore takes all of theirs. `content` is the page's JSON, an optional title and its tree of
+-- components (`PageContent`). `submission` is what its form was submitted with, a JSON object:
+-- NULL until it is, and again when the delivery of the submission certainly failed.
+-- `submission_revision` counts the changes of `submission`, raised by the statement that makes each
+-- one, so that a client can tell which of two announcements is the later. These notes sit
+-- outside the statement because the 3 to 4 step creates the table without them, and a statement is
+-- stored with its comments.
 CREATE TABLE pages (
     id         TEXT PRIMARY KEY,
-    -- The session that pushed the page, a console session or a project session that
-    -- faces the user; deleting it takes its pages, and deleting a console or a project
-    -- therefore takes all of theirs.
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-    html       TEXT NOT NULL,
+    content    TEXT NOT NULL,
+    submission TEXT,
+    submission_revision INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL
 );
 CREATE INDEX pages_session_id ON pages (session_id);
@@ -820,8 +840,11 @@ mod tests {
 
     /// The schema of every version before the current one, each kept as `schema/v{N}.sql`:
     /// `PAST_SCHEMAS[n - 1]` is version `n`.
-    const PAST_SCHEMAS: [&str; (SCHEMA_VERSION - 1) as usize] =
-        [include_str!("schema/v1.sql"), include_str!("schema/v2.sql")];
+    const PAST_SCHEMAS: [&str; (SCHEMA_VERSION - 1) as usize] = [
+        include_str!("schema/v1.sql"),
+        include_str!("schema/v2.sql"),
+        include_str!("schema/v3.sql"),
+    ];
 
     /// The files next to `path` that are backups from before a migration.
     fn backups(path: &Path) -> Vec<PathBuf> {
@@ -896,6 +919,55 @@ mod tests {
             drop(Store::open(&path).unwrap_or_else(|e| panic!("v{version}: {e:#}")));
             assert_eq!(master(&path), master(&fresh), "v{version}");
         }
+    }
+
+    /// Upgrading from version 3, which kept a page as an HTML document, discards every page: there
+    /// is no tree to read an HTML page as, and the new table has the shape of a fresh database's.
+    #[test]
+    fn migrating_a_version_3_database_discards_its_html_pages() {
+        let path = temp_db("migrate-pages");
+        {
+            let conn = Connection::open(&path).expect("version 3 database");
+            conn.execute_batch(PAST_SCHEMAS[2])
+                .expect("version 3 schema");
+            conn.pragma_update(None, "user_version", 3)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+            // The page's session is not stored: what is read is the page table alone.
+            conn.pragma_update(None, "foreign_keys", false)
+                .expect("foreign keys");
+            conn.execute(
+                "INSERT INTO pages (id, session_id, html, created_at)
+                 VALUES ('page-1', 'session-1', '<p>old</p>', 1)",
+                [],
+            )
+            .expect("an HTML page");
+        }
+
+        let store = Store::open(&path).expect("migrated");
+        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+        assert!(store.list_pages("session-1").unwrap().is_empty());
+        assert!(store.get_page("page-1").unwrap().is_none());
+        let columns: Vec<String> = store
+            .lock()
+            .prepare("SELECT name FROM pragma_table_info('pages') ORDER BY cid")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(
+            columns,
+            [
+                "id",
+                "session_id",
+                "content",
+                "submission",
+                "submission_revision",
+                "created_at"
+            ]
+        );
     }
 
     /// A second project at a path its console already has is refused by the store, not applied.

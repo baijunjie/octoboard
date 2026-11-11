@@ -25,6 +25,9 @@ use super::history::{ConversationLocation, HistoryMessage, SessionRecordPresence
 use super::host::HostInfo;
 use super::mcp_inventory::{AccountMcpInventory, McpServerAuthOutcome};
 use super::models::{AgentModel, DefaultModelSource, ModelChangeOutcome, ModelsUnavailable};
+use super::page_content::Submission;
+#[cfg(test)]
+use super::page_content::SubmittedValue;
 use super::path_links::PathLink;
 use super::processes::{ProcessCount, ProcessTree, UnstoppedProcess};
 use super::providers::ProviderInfo;
@@ -470,8 +473,8 @@ pub enum Event {
         #[cfg_attr(test, schemars(with = "super::schema::Flattened<ImportItemState>"))]
         state: ImportItemState,
     },
-    /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole
-    /// HTML document, and only the session the user is looking at needs its pages, so the
+    /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries its whole
+    /// component tree, and only the session the user is looking at needs its pages, so the
     /// panel asks for them instead — and asks again after every `snapshot`, which is what keeps it
     /// correct across a `page_created` the client was too far behind to receive. A
     /// lagging client is sent a fresh snapshot in place of the events it missed, on the socket it
@@ -484,6 +487,24 @@ pub enum Event {
     /// A page a session just pushed. The panel showing that session refreshes to it.
     PageCreated {
         page: Page,
+    },
+    /// A page's form was submitted, or the submission was taken back. `submission` is what it was
+    /// submitted with, sent when the daemon accepts it for delivery to the session, before the
+    /// message is written; `null` when the delivery certainly failed and the page can be submitted
+    /// again. `submission_revision` is the page's revision of it (`Page::submission_revision`):
+    /// announcements of one page can arrive out of order, and a client keeps whichever of this and
+    /// what it holds has the higher revision, including for a page whose `page_list` it is still
+    /// waiting for.
+    PageSubmission {
+        session_id: String,
+        page: String,
+        #[cfg_attr(
+            test,
+            ts(as = "Option<BTreeMap<String, SubmittedValue>>"),
+            schemars(with = "Option<BTreeMap<String, SubmittedValue>>")
+        )]
+        submission: Option<Submission>,
+        submission_revision: i64,
     },
     /// Pages a session withdrew with `delete_pages`, by id. `session_id` names the session that
     /// pushed them. The panel showing that session drops them.

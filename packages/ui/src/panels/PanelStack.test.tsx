@@ -31,7 +31,6 @@ vi.mock("./panelRegistry", () => ({
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const noKeys = { onEscape: () => {}, onCycleRegion: () => {}, onMoveHistory: () => {}, onMoveConsoleSession: () => {} };
 
 function mount({ peekKind }: { peekKind?: "files" } = {}) {
   const focusTerminal = vi.fn();
@@ -56,7 +55,6 @@ function mount({ peekKind }: { peekKind?: "files" } = {}) {
           focusTerminal={focusTerminal}
           peek={peekKind ? { active: true, reveal: () => {}, keep: () => {}, leave: () => {} } : undefined}
           peekKind={peekKind}
-          frameKeys={noKeys}
           onDismiss={onDismiss}
           maximizeArea={{ current: null }}
         />

@@ -19,7 +19,7 @@ import { listPages } from "./listPages";
  * event and moves the answer with no listing.
  */
 export function useProjectReportSession(owner: AsideOwner | undefined, selected: Session | undefined): string | undefined {
-  const { request } = useDaemon();
+  const { request, store } = useDaemon();
   const connectionState = useDaemonStore((s) => s.connectionState);
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
   const session = owner?.kind === "project" && selected?.kind === "project" && selected.project_id === owner.project ? selected.id : undefined;
@@ -38,7 +38,7 @@ export function useProjectReportSession(owner: AsideOwner | undefined, selected:
     // Before the first snapshot the panel cannot be asked for yet, and the snapshot is what lists.
     if (session === undefined || connectionState !== "open" || snapshotEpoch === 0) return;
     let stale = false;
-    listPages(request, session, snapshotEpoch).then(
+    listPages({ request, store }, session, snapshotEpoch).then(
       () => {
         if (!stale) setFailed(undefined);
       },
@@ -49,7 +49,7 @@ export function useProjectReportSession(owner: AsideOwner | undefined, selected:
     return () => {
       stale = true;
     };
-  }, [session, connectionState, snapshotEpoch, request]);
+  }, [session, connectionState, snapshotEpoch, request, store]);
 
   if (session === undefined) return undefined;
   const hasPages = count !== undefined ? count > 0 : failed === session || (answer?.session === session && answer.has);

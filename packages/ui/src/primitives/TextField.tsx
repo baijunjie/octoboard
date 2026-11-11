@@ -8,7 +8,7 @@ import {
 import React from "react";
 
 import { useDisabled } from "./busy";
-import { FieldAutoFocusContext, FieldClearContext, type FieldVariant, OutsideFieldParts, useFieldAutoFocus } from "./Field";
+import { FieldAutoFocusContext, FieldClearContext, FieldLockedContext, type FieldVariant, LOCKED_FIELD_CLASS, OutsideFieldParts, useFieldAutoFocus, useFieldLocked } from "./Field";
 import { openingFocus } from "./focus";
 import { type DataAttributes, definedProps } from "./props";
 
@@ -34,8 +34,19 @@ interface TextFieldBaseProps {
  * which ties them together. With `invalid` it is marked invalid and its `FieldError` shows. Whether a form goes ahead
  * is its own decision: an invalid field never hands the submit to the browser's constraint validation, which would
  * refuse it before the form's handler — and the mark itself only ever appears from that handler. */
-export function TextField({ value, onChange, onBlur, label, describedBy, disabled, invalid, autoFocus, variant, fullWidth, className, children }: TextFieldBaseProps & {
+export function TextField({ value, onChange, onBlur, label, describedBy, disabled, invalid, readOnly, locked, type, inputMode, autoFocus, variant, fullWidth, className, children }: TextFieldBaseProps & {
   invalid?: boolean;
+  /** Shows the value and takes no edit, yet keeps the field focusable and its value selectable (and sent, in a native
+   * form): for a form that is locked while its submission is out, or shown after it. */
+  readOnly?: boolean;
+  /** Draws the input as a value to read (`LOCKED_FIELD_CLASS`), for a field that is `readOnly` because the form it is in
+   * is locked rather than because the field never takes an edit. */
+  locked?: boolean;
+  /** What the input takes, where it is not plain text: a date, a time or a local date and time pick by the system's own
+   * control. */
+  type?: "text" | "date" | "time" | "datetime-local";
+  /** The keyboard a touch device offers: `decimal` for a number typed as text. */
+  inputMode?: "decimal";
 }): React.ReactElement {
   return (
     <HeroTextField
@@ -46,13 +57,18 @@ export function TextField({ value, onChange, onBlur, label, describedBy, disable
       aria-describedby={describedBy}
       isDisabled={useDisabled(disabled)}
       isInvalid={invalid}
+      isReadOnly={readOnly}
+      type={type}
+      inputMode={inputMode}
       validationBehavior="aria"
       autoFocus={autoFocus}
       variant={variant}
       fullWidth={fullWidth}
       className={className}
     >
-      <FieldAutoFocusContext.Provider value={!!autoFocus}>{children}</FieldAutoFocusContext.Provider>
+      <FieldAutoFocusContext.Provider value={!!autoFocus}>
+        <FieldLockedContext.Provider value={!!locked}>{children}</FieldLockedContext.Provider>
+      </FieldAutoFocusContext.Provider>
     </HeroTextField>
   );
 }
@@ -63,7 +79,7 @@ export function TextField({ value, onChange, onBlur, label, describedBy, disable
  * The structure follows whether an adornment is given at all (`null` for "nothing at the moment"), so one that comes
  * and goes while the user types does not remount the input and drop its focus. */
 export function Input({
-  ref, value, onChange, onBlur, onKeyDown, label, describedBy, invalid, placeholder, dir, variant, fullWidth,
+  ref, value, onChange, onBlur, onKeyDown, label, describedBy, invalid, required, placeholder, dir, variant, fullWidth,
   autoComplete, autoCapitalize, autoCorrect, spellCheck, start, end, onHoverChange, className, inputClassName, ...data
 }: DataAttributes & {
   ref?: React.Ref<HTMLInputElement>;
@@ -75,6 +91,8 @@ export function Input({
   describedBy?: string;
   /** Marks an input on its own invalid (`aria-invalid`); inside a field, the field's `invalid` does. */
   invalid?: boolean;
+  /** Says the input needs a value (`aria-required`); no mark is drawn, and the browser's own validation is not asked. */
+  required?: boolean;
   placeholder?: string;
   dir?: "auto" | "ltr";
   variant?: FieldVariant;
@@ -90,6 +108,7 @@ export function Input({
   inputClassName?: string;
 }): React.ReactElement {
   const fieldAutoFocus = useFieldAutoFocus();
+  const locked = useFieldLocked();
   // Inside a field the field's own `disabled` reaches the input; a busy modal disables it there too.
   const disabled = useDisabled();
   const adorned = start !== undefined || end !== undefined;
@@ -104,6 +123,7 @@ export function Input({
       "aria-label": label,
       "aria-describedby": describedBy,
       "aria-invalid": invalid || undefined,
+      "aria-required": required || undefined,
       "data-invalid": invalid ? "true" : undefined,
       disabled,
       placeholder,
@@ -114,7 +134,7 @@ export function Input({
     }),
   };
   if (!adorned) {
-    return <HeroInput ref={ref} {...inputProps} {...definedProps({ dir, variant, fullWidth, className })} />;
+    return <HeroInput ref={ref} {...inputProps} {...definedProps({ dir, variant, fullWidth, className: locked ? `${className ?? ""} ${LOCKED_FIELD_CLASS}` : className })} />;
   }
   return (
     <HeroInputGroup {...definedProps({ dir, variant, fullWidth, className, onHoverChange, isDisabled: disabled })}>
@@ -126,8 +146,9 @@ export function Input({
 }
 
 /** HeroUI's text area, the multi-line input of a `TextField`; Enter adds a line rather than submitting. */
-export function TextArea({ rows, placeholder }: { rows?: number; placeholder?: string }): React.ReactElement {
-  return <HeroTextArea {...openingFocus(useFieldAutoFocus())} {...definedProps({ rows, placeholder })} />;
+export function TextArea({ rows, placeholder, dir, required }: { rows?: number; placeholder?: string; dir?: "auto"; required?: boolean }): React.ReactElement {
+  const locked = useFieldLocked();
+  return <HeroTextArea {...openingFocus(useFieldAutoFocus())} {...definedProps({ rows, placeholder, dir, "aria-required": required || undefined, className: locked ? `resize-none ${LOCKED_FIELD_CLASS}` : undefined })} />;
 }
 
 /** HeroUI's search field: a search icon, the input, and at its end `trailing` (a status mark, kept apart from the

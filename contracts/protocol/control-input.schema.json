@@ -4,7 +4,7 @@
   "title": "Octoboard control socket: client to daemon",
   "description": "One text frame a client sends on `/ws/control`: a request, or a browse request, told apart by `type`. See `apps/daemon/PROTOCOL.md`.",
   "x-octoboard-protocol": {
-    "generation": 3,
+    "generation": 4,
     "channel": "control",
     "direction": "input"
   },

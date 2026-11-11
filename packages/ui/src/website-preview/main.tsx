@@ -3,8 +3,8 @@ import { browserHost } from "../platform/host";
 import { installPreviewStorage } from "./storage";
 import { installPreviewKeyboardGuard } from "./keyboard";
 import { installPreviewFocusGuard } from "./focus";
-import { installPreviewInteractionBridge, withReportInteractionBridge } from "./interactionBridge";
-import { installPreviewScrollBridge, withReportScrollBridge } from "./scrollBridge";
+import { installPreviewInteractionBridge } from "./interactionBridge";
+import { installPreviewScrollBridge } from "./scrollBridge";
 import { PREVIEW_MESSAGE, postPreviewMessage } from "./messages";
 import { isLanguage, type Language } from "../i18n/languages";
 import { writeStartingPreferences } from "../fixtures/preferences";
@@ -29,9 +29,6 @@ window.addEventListener("pagehide", (event) => {
   }
 });
 const embedded = window.parent !== window;
-const reportDocument = embedded
-  ? (source: string) => withReportInteractionBridge(withReportScrollBridge(source))
-  : (source: string) => source;
 const params = new URLSearchParams(window.location.search);
 const requestedLanguage = params.get("lang");
 const language: Language = isLanguage(requestedLanguage)
@@ -65,7 +62,6 @@ async function start(): Promise<void> {
     { createRoot },
     { App },
     { AppRoot },
-    { PageDocumentTransform },
     { createPreviewDaemon },
     { createUi },
     { setInteractionModality },
@@ -74,7 +70,6 @@ async function start(): Promise<void> {
     import("react-dom/client"),
     import("../App"),
     import("../AppRoot"),
-    import("../report/pageDocumentTransform"),
     import("./daemon"),
     import("../fixtures/interact"),
     import("react-aria"),
@@ -88,9 +83,7 @@ async function start(): Promise<void> {
       <AppRoot platform={{ kind: "browser", host: browserHost() }} daemon={daemon} nativeSync={false}>
         {!embedded && <div className="website-preview-label groove-b">{copy.demo}</div>}
         <div className="website-preview-app">
-          <PageDocumentTransform value={reportDocument}>
-            <App />
-          </PageDocumentTransform>
+          <App />
         </div>
       </AppRoot>
     </React.StrictMode>,

@@ -1,10 +1,11 @@
 // What the fixture daemon answers for the sessions: opening, resuming, archiving and deleting them, handing one off,
 // switching its account or model, and the small changes to one (pin, lock, colour, title).
 import { applyCompatibility } from "../agents/launchCompatibility";
+import { walkComponents } from "../report/page/formModel";
 import { sameValue } from "../values/sameValue";
 import { isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents/agents";
 import { servedLabel } from "./fixtureProviders";
-import { type Agent, type ConsoleSessionColour, type Session, type SessionRecordPresence } from "../protocol";
+import { type Agent, type ConsoleSessionColour, type Session, type SessionRecordPresence, type SubmittedValue } from "../protocol";
 import { CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
 import { applyDaemonEvent } from "../store";
 import type { AccountGuards } from "./fixtureAccounts";
@@ -422,6 +423,26 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
           : { pages: new Map(state.pages).set(body.session, pages) },
       );
       return { type: "page_list", id: null, session_id: body.session, pages };
+    },
+    submit_page: (body) => {
+      // The daemon's own order: find the page, check it is its session's newest, has a form and is not yet submitted,
+      // mark it and tell every window, and only then deliver. Each mark and each clear raises the page's revision.
+      const found = [...store.getState().pages].find(([, pages]) => pages.some((page) => page.id === body.page));
+      if (!found) return fail({ code: "unknown_page", params: { page: body.page }, message: `unknown page ${body.page}` });
+      const [sessionId, pages] = found;
+      const page = pages[pages.length - 1];
+      if (page.id !== body.page) return fail({ code: "page_not_current", params: {}, message: "This page is no longer current" });
+      if (page.submission !== null) return fail({ code: "page_already_submitted", params: {}, message: "This page was already submitted" });
+      if (![...walkComponents(page.content.body)].some(({ type }) => type === "submit" || type === "choices")) {
+        return fail({ code: "unreadable_request", params: {}, message: "this page has no form: it has no `submit` or `choices`" });
+      }
+      const marked = page.submission_revision + 1;
+      applyDaemonEvent(store, { type: "page_submission", session_id: sessionId, page: body.page, submission: body.data as Record<string, SubmittedValue>, submission_revision: marked });
+      const outcome = scenario.pageSubmit;
+      if (outcome === "pending") return neverReplied();
+      if (outcome !== undefined && !outcome.delivered) applyDaemonEvent(store, { type: "page_submission", session_id: sessionId, page: body.page, submission: null, submission_revision: marked + 1 });
+      if (outcome !== undefined) return fail(outcome.error);
+      return { type: "ack", id: null };
     },
     answer_session_request: () => {
       if (scenario.sessionRequestAnswerError) return fail(scenario.sessionRequestAnswerError);

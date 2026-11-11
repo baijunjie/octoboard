@@ -36,9 +36,7 @@ function currentRegion(regions: readonly Region[]): Region | undefined {
  * Registered on the window's capture phase so the key never reaches xterm.js, which would write
  * it to the agent, nor react-aria's own landmark navigation, which would move focus out from under
  * an open dialog or menu. A dialog allows only an excursion to Retry and back; menus allow none.
- * Ignored during an input method composition. `cycle` is also what the report page's key relay
- * calls, since a key pressed inside its frame never reaches this window; it follows the same
- * dialog and menu rules.
+ * Ignored during an input method composition.
  */
 export function useRegionCycle({
   shown,
@@ -49,7 +47,7 @@ export function useRegionCycle({
   /** Whether each panel region is on screen, keyed by its `data-region`, in window order. */
   panels?: Readonly<Record<string, boolean>>;
   focusTerminal: () => void;
-}): { cycle: (backward: boolean) => void } {
+}): void {
   const latest = useLatest({ shown, panels, focusTerminal });
   const dialogFocus = useRef<Element | null>(null);
 
@@ -99,6 +97,4 @@ export function useRegionCycle({
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [cycle]);
-
-  return { cycle };
 }

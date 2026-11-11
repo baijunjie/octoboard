@@ -4,8 +4,8 @@ import { ButtonContext } from "react-aria-components";
 
 import { definedProps } from "./props";
 
-/** HeroUI's field variants: `primary` for a field on the page's background, `secondary` for one on a surface (a dialog,
- * a settings page, a pane's toolbar). */
+/** HeroUI's field variants: `primary` for a field on a pane's or the page's own background, `secondary` for one on a
+ * surface (a dialog, a popover, a menu, a card). */
 export type FieldVariant = "primary" | "secondary";
 
 /** Whether the field around an input was given `autoFocus`, for the input to carry the opening-focus mark
@@ -14,6 +14,18 @@ export const FieldAutoFocusContext = createContext(false);
 
 export function useFieldAutoFocus(): boolean {
   return useContext(FieldAutoFocusContext);
+}
+
+/** The look of a field that is shown but may not be changed (a report page that is locked): a value to read, not a
+ * control to use. The fill and the shadow that mark a control go, a plain 1px border stays, and the text keeps its full
+ * strength where HeroUI would dim it as disabled. */
+export const LOCKED_FIELD_CLASS = "border border-separator bg-transparent shadow-none data-[disabled=true]:opacity-100";
+
+/** Whether the field around an input is `locked`, for its input to take the locked look. */
+export const FieldLockedContext = createContext(false);
+
+export function useFieldLocked(): boolean {
+  return useContext(FieldLockedContext);
 }
 
 /** Content inside a field that is not one of the field's own parts (a status mark): a field hands its own button's
@@ -42,12 +54,13 @@ export function disabledGroupProps(disabled: boolean | undefined): { "data-disab
 
 /** HeroUI's description: the note under a field, which describes the field it sits in, or, given an `id`, whatever
  * points to it. Inside a menu or list item it is the item's description. */
-export function Description({ id, className, children }: {
+export function Description({ id, dir, className, children }: {
   id?: string;
+  dir?: "auto";
   className?: string;
   children: React.ReactNode;
 }): React.ReactElement {
-  return <HeroDescription {...definedProps({ id, className })}>{children}</HeroDescription>;
+  return <HeroDescription {...definedProps({ id, dir, className })}>{children}</HeroDescription>;
 }
 
 /** HeroUI's field error: what is wrong with the field it sits in, shown only while the field is invalid. */

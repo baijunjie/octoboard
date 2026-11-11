@@ -215,3 +215,10 @@ it("leaves focus on another mark in the window alone when its own mark goes", ()
   view.rerender();
   expect(document.activeElement).toBe(other);
 });
+
+it("draws the filter field in HeroUI's default field variant, as a control on the pane's own background", () => {
+  const { container } = render(true);
+  const search = container.querySelector(".search-field")!;
+  expect(search.classList.contains("search-field--primary")).toBe(true);
+  expect(search.classList.contains("search-field--secondary")).toBe(false);
+});

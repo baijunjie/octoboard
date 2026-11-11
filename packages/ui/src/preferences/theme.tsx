@@ -11,8 +11,8 @@ interface ThemeContextValue {
   /** The user's stated intent, for the sidebar control to show which of the three is active. */
   choice: ThemeChoice;
   /** What "system" resolves to right now, or just `choice` when it is not "system" — what
-   * everything that cannot use CSS alone (the terminal's xterm instance, the report panel stays
-   * deliberately out of this) needs to match the theme. */
+   * everything that cannot use CSS alone (the terminal's xterm instance, a code block's highlighting)
+   * needs to match the theme. */
   resolved: "light" | "dark";
   setChoice: (choice: ThemeChoice) => void;
 }

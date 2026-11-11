@@ -1,4 +1,5 @@
-// Fixture-only report replacement regression. Run against this checkout's gallery:
+// Fixture-only report replacement regression: where focus goes when the page it was in is replaced by a
+// newer one. Run against this checkout's gallery:
 // node scripts/gallery-report-focus.mjs http://localhost:5187
 // OCTOBOARD_CHROMIUM can select an installed Chromium; no daemon requests are made.
 import assert from "node:assert/strict";
@@ -57,11 +58,15 @@ const checkRing = (value) => {
 const append = async (session = "s-hub-2") => {
   const id = `focus-probe-${++serial}`;
   await page.evaluate(({ id, session }) => document.dispatchEvent(new CustomEvent("gallery:report-page-created", {
-    detail: { id, session_id: session, html: `<!doctype html><html><body><h1>${id}</h1><label>Version <input value="2.0"></label><button>Continue</button></body></html>`, created_at: Date.now() },
+    detail: {
+      id, session_id: session, submission: null, created_at: Date.now(),
+      content: { title: id, body: [{ type: "text", name: "version", label: "Version", default: "2.0" }, { type: "submit", label: "Continue" }] },
+    },
   })), { id, session });
   return id;
 };
-const frame = () => page.frameLocator("#panel-report iframe");
+const panel = () => page.locator("#panel-report");
+const version = () => panel().getByRole("textbox", { name: "Version" });
 const load = async (language, theme, width = 1440) => {
   console.error(`Report fixture: ${language}/${theme}/${width}`);
   await page.setViewportSize({ width, height: 900 });
@@ -69,17 +74,16 @@ const load = async (language, theme, width = 1440) => {
   await page.locator("[data-gallery-ready]").waitFor({ timeout: 60000 });
   assert.deepEqual(await page.locator("[data-gallery-failure]").allTextContents(), [], `${language}/${theme}/${width}`);
   await page.evaluate(() => document.fonts.ready);
-  await frame().getByRole("textbox", { name: "Version" }).waitFor();
+  await version().waitFor();
 };
 try {
   for (const language of ["en", "zh-Hans", "ar"]) for (const theme of ["light", "dark"]) {
     await load(language, theme);
-    const old = await page.locator("#panel-report iframe").elementHandle();
-    await frame().getByRole("textbox", { name: "Version" }).focus();
-    assert.equal(await frame().getByRole("textbox", { name: "Version" }).evaluate((el) => el === document.activeElement), true);
-    assert.equal(await page.evaluate(() => document.activeElement === document.querySelector("#panel-report iframe")), true);
+    const old = await version().elementHandle();
+    await version().focus();
+    assert.equal(await version().evaluate((el) => el === document.activeElement), true);
     const id = await append();
-    await frame().getByRole("heading", { name: id }).waitFor();
+    await panel().getByRole("heading", { name: id }).waitFor();
     assert.equal(await old.evaluate((el) => el.isConnected), false);
     const destination = await settledActive();
     checkRing(destination); // Deliberately before F6: recovery alone must not pass this check.
@@ -93,7 +97,7 @@ try {
   const outside = page.locator('[data-region="topbar"] button').first();
   await outside.focus();
   const elsewhereId = await append();
-  await frame().getByRole("heading", { name: elsewhereId }).waitFor();
+  await panel().getByRole("heading", { name: elsewhereId }).waitFor();
   assert.equal(await outside.evaluate((el) => el === document.activeElement), true);
   results.push({ focusElsewhere: await active() });
 
@@ -101,35 +105,35 @@ try {
   const pager = page.getByRole("button", { name: "Previous page", exact: true });
   await pager.focus();
   const pagerId = await append();
-  await frame().getByRole("heading", { name: pagerId }).waitFor();
+  await panel().getByRole("heading", { name: pagerId }).waitFor();
   assert.equal(await pager.evaluate((el) => el === document.activeElement), true);
   results.push({ pagerFocusPreserved: true });
 
   await load("en", "light");
-  await frame().getByRole("textbox", { name: "Version" }).focus();
+  await version().focus();
   await page.getByRole("button", { name: "Previous page", exact: true }).click();
   checkRing(await settledActive());
-  const historical = await page.locator("#panel-report iframe").elementHandle();
+  const historical = await panel().getByRole("heading", { name: "Hub 2, second" }).elementHandle();
   const manualId = await append();
   await page.waitForTimeout(100);
   assert.equal(await historical.evaluate((el) => el.isConnected), true);
-  assert.equal(await frame().getByRole("heading", { name: "Hub 2, second" }).count(), 1);
+  assert.equal(await panel().getByRole("heading", { name: "Hub 2, second" }).count(), 1);
   await page.getByRole("button", { name: "Next page", exact: true }).click();
-  assert.equal(await frame().getByRole("textbox", { name: "Version" }).isDisabled(), true);
+  assert.equal(await version().isEditable(), false);
   await page.getByRole("button", { name: "Next page", exact: true }).click();
-  await frame().getByRole("heading", { name: manualId }).waitFor();
-  await frame().getByRole("textbox", { name: "Version" }).focus();
+  await panel().getByRole("heading", { name: manualId }).waitFor();
+  await version().focus();
   const rearmedId = await append();
-  await frame().getByRole("heading", { name: rearmedId }).waitFor();
+  await panel().getByRole("heading", { name: rearmedId }).waitFor();
   checkRing(await settledActive());
-  const sessionFrame = await page.locator("#panel-report iframe").elementHandle();
+  const sessionPage = await panel().getByRole("heading", { name: rearmedId }).elementHandle();
   const otherSessionId = await append("s-hub-1");
   await page.waitForTimeout(100);
-  assert.equal(await sessionFrame.evaluate((el) => el.isConnected), true);
+  assert.equal(await sessionPage.evaluate((el) => el.isConnected), true);
   await page.getByText("Hub", { exact: true }).click();
-  await frame().getByRole("heading", { name: otherSessionId }).waitFor();
+  await panel().getByRole("heading", { name: otherSessionId }).waitFor();
   await page.getByText("Hub 2", { exact: true }).click();
-  await frame().getByRole("heading", { name: rearmedId }).waitFor();
+  await panel().getByRole("heading", { name: rearmedId }).waitFor();
   results.push({ manualHistoryPreserved: true, followingRearmed: true, otherSessionIndependent: true });
 
   await load("en", "light");
@@ -144,9 +148,9 @@ try {
   results.push({ modalFocusPreserved: true });
 
   await load("ar", "dark", 760);
-  await frame().getByRole("textbox", { name: "Version" }).focus();
+  await version().focus();
   const narrowId = await append();
-  await frame().getByRole("heading", { name: narrowId }).waitFor();
+  await panel().getByRole("heading", { name: narrowId }).waitFor();
   checkRing(await settledActive());
   if (screenshots) await page.screenshot({ path: path.join(screenshots, "ar-dark-narrow.png") });
   const geometry = await page.evaluate(() => {

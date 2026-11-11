@@ -24,16 +24,26 @@ in "What the right pane shows" in `docs/product/window-layout.md`. How the panel
 maximized is in `docs/product/right-pane-panels.md`, and how wide the pane is and how the user resizes it in
 "Resizing the sidebar and the right pane" in `docs/product/pane-docking.md`.
 
-A page is a whole HTML document the session wrote, for anything better shown than typed into the terminal — a table, a
-comparison, a set of choices. A page may carry a form, and what the user submits comes back into the session as a
-message.
+A page is a tree of components the session builds from a fixed catalogue — Markdown, callouts, tables, charts, form
+fields and the rest — which Octoboard draws with its own interface components, for anything better shown than typed
+into the terminal: a table, a comparison, a report, a set of choices, a question with a form. The catalogue is in
+`docs/product/report-page-components.md`. A page may carry a form, and what the user submits comes back into the
+session as a message, once.
 
 ## Pushing a page
 
 The session pushes a page with its `show_page` tool (see "The console session's tools" and "Project coordinators' tools"
-in `docs/product/hub-orchestration.md`). The call answers with the new page's **id**, which is what a later form
-submission names, so a session that has pushed several pages can tell which one a submission came from. An `html`
-argument that is empty or only whitespace is refused.
+in `docs/product/hub-orchestration.md`), whose arguments are the page itself: an optional `title` and `body`, the
+components top to bottom (see "The page object" in `docs/product/report-page-components.md`). The call answers with the
+new page's **id**, which is what a later form submission names, so a session that has pushed several pages can tell
+which one a submission came from. Its description tells the session to read the catalogue with `page_guide` before its
+first page (see "The page guide" in `docs/product/report-page-components.md`).
+
+**A page that does not pass the daemon's checks is refused, and nothing is stored or announced** (see "Checking a page
+when it is pushed" in `docs/product/report-page-components.md`). The refusal names the failing location as a JSON path
+(such as `body[2].children[0].options[1].value`) and what is wrong there, and carries the JSON Schema of the failing
+component's kind, or of the page object when the failure is in it, so the session can correct the page and push it
+again without another call. Nothing in a page is silently dropped.
 
 A push is also refused, and leaves no page, when the session is a worker by the time the page is
 stored — a binding made while the call was under way. A page withdrawn while it is being pushed — by such a binding,
@@ -51,12 +61,13 @@ It reads only the caller's own pages, the same ones its report panel pages throu
 readable to it than they are in that session's panel.
 
 - Without arguments it answers with `pages`, every page the caller pushed, oldest first, each as `page` (its id, as
-  `show_page` returned it), `created_at` (milliseconds since the epoch), `html_bytes` (the size of its HTML in bytes)
-  and `title` (the text of its `<title>`, with runs of whitespace collapsed to one space; `null` when it has none or
-  only a blank one). The HTML itself is left out.
-- With `page`, a page's id, it answers with that one page in full: `page`, `created_at`, `title` and `html`. An id
-  that is not one of the caller's pages — another session's included — is refused, the same way as an id that names
-  no page, so the answer does not reveal that the page exists.
+  `show_page` returned it), `created_at` (milliseconds since the epoch), `content_bytes` (the size of its content as
+  JSON, in bytes) and `title` (the page's `title`; `null` when it has none). The content itself is left out.
+- With `page`, a page's id, it answers with that one page in full: `page`, `created_at`, `title`, `content` (the page
+  as it was pushed, its title and component tree) and `submission` (what its form was submitted with, `null` until it
+  is; see "Submitting a form back to the session" below). An id that is not one of the caller's pages — another
+  session's included — is refused, the same way as an id that names no page, so the answer does not reveal that the
+  page exists.
 
 It is how a session finds the id of an earlier page, which tells a form submission from that page apart from one from
 another, and builds on what an earlier page showed.
@@ -87,8 +98,8 @@ project session's Report panel goes, its toggle with it (see "A project session'
 
 A session that pushed pages can come to have the worker role in two ways: an independent project session binding
 itself to a project session with `bind_to_session`, and a coordinator with a parent handed to a project session with
-`transfer_session` (see `docs/product/changing-session-owners.md`). Either takes `show_page`, `list_pages` and
-`delete_pages` away from it, and **every page it pushed is withdrawn at once**, as `delete_pages` with `all: true`
+`transfer_session` (see `docs/product/changing-session-owners.md`). Either takes `show_page`, `page_guide`,
+`list_pages` and `delete_pages` away from it, and **every page it pushed is withdrawn at once**, as `delete_pages` with `all: true`
 withdraws them: the panel follows in every window as in "Withdrawing pages" above, so no form is left offered that the
 session could no longer read the submission of. Nothing brings the pages back, a later release included.
 
@@ -114,20 +125,30 @@ and "Deleting a console" in `docs/product/consoles.md`). Nothing else deletes a 
 
 The panel's header (see "A panel's header" in `docs/product/right-pane-panels.md`) carries, after its title, left to
 right (mirrored under a right-to-left language, except for what `docs/product/right-to-left-layout.md` lists as keeping
-its order): ◀ and ▶ to step one page back and one forward, and between them the position as "current / total", counted
-from 1 with the oldest page first. A thin row under the header carries the page's creation time formatted for the UI's
-current language (see "What follows the language" in `docs/product/language.md`) and — on any page but the newest — a
-"Read-only" badge. The position, the total and the badge all count the selected session's pages only. The place
-the user has paged to is not kept: whenever the report panel gives way in the right pane — another session selected, or
-Open panel in a project's action menu putting a project's panel in its place — coming back to it shows its newest page
-again, started over from its markup, with anything typed into its form and not submitted gone.
+its order):
+
+- ◀ and ▶ to step one page back and one forward, and between them the position as "current / total", counted from 1
+  with the oldest page first;
+- the time the page was pushed, to the minute: the time alone for a page pushed today, the date and the time for an
+  earlier one, formatted for the UI's current language (see "What follows the language" in
+  `docs/product/language.md`);
+- a "Read-only" badge on any page but the newest (see "History pages are read-only" below), and a "Submitted" badge on
+  a page whose form was submitted (see "Submitting a form back to the session" below).
+
+The position, the total and the badges all count the selected session's pages only. Where the header is short of room,
+the time is what shortens first (see "A panel's header" in `docs/product/right-pane-panels.md`).
+
+The page itself fills the card under the header and scrolls within it (see `docs/product/scrolling-surfaces.md`). The
+place the user has paged to is not kept: whenever the report panel gives way in the right pane — another session
+selected, or Open panel in a project's action menu putting a project's panel in its place — coming back to it shows its
+newest page again, with anything typed into any page's form and not submitted gone.
 
 - The panel follows the newest page: a page pushed while the user is on the newest one moves the view
   to it.
 - A page pushed while the user is reading **history** does not move them. The view stays on the page
   they paged to, and only the total grows.
-- Paging away from a page discards it: paging back to it starts the page over from its markup, and whatever had
-  been typed into its form is gone.
+- Paging away from a page keeps what was typed into its form: paging back to it shows those values again, for as
+  long as the panel stays in the right pane. A page that is withdrawn takes what was typed into it with it.
 - A console session with no pages — none pushed yet, or all withdrawn — shows, under the panel's header, an empty panel
   filling the card, saying there are no pages yet (see "The full panel" in `docs/product/empty-states.md`). While the
   console session's pages are first being listed, the card shows its header alone; keyboard focus on a header control
@@ -153,88 +174,94 @@ stays within it instead. Replacing a page leaves focus elsewhere in the window w
 
 Only a session's **newest** page can be submitted from. On every older page:
 
-- the page's form controls are disabled, and submitting its form sends nothing;
-- the "Read-only" badge is shown in the row under the panel's header.
+- the page's form is locked: its fields show what they hold — what the page was submitted with, where it was — as
+  values to read (see "Input fields" in `docs/product/report-page-components.md`), and its submitters are
+  unavailable, so nothing can be submitted;
+- the "Read-only" badge is shown in the panel's header.
 
-The rule does not depend on the panel: the daemon refuses any submission naming a page that is not
-its session's newest, whatever that page's own markup does.
+What changes nothing on the page still works on a history page: copying a block's text, sorting and filtering a table,
+switching tabs and a chart's own interactions. The rule does not depend on the panel: the daemon refuses any submission
+naming a page that is not its session's newest.
 
 ## What a page may contain, and what it cannot do
 
-A page is a **static, self-contained HTML document**. None of its own scripts run, nothing external
-loads, and the only way data leaves it is a form the user submits (see "Submitting a form back to the session"
-below).
+A page is **data, not a document**: a tree of components from the fixed catalogue in
+`docs/product/report-page-components.md`, with no HTML, no styling and no script of its own anywhere in it. Octoboard
+draws every component with its own interface components, so a page follows the chosen appearance (see "What follows
+the choice" in `docs/product/appearance.md`), the window's keyboard and assistive-technology behavior, and, for every
+word Octoboard supplies itself, the UI's language and direction (see "Language and direction in a page" in
+`docs/product/report-page-components.md`). The page's own words are the session's, shown as written. The page has no
+surface of its own: it sits on its card's background, its content starting 16 px from the card's edge like every
+panel's (see "The window chrome and the content panel" in `docs/product/window-layout.md`).
 
-Before a page is shown, its HTML is cleaned inside the page's frame. Removed, silently — the push is
-not refused, and the rest of the page is shown without them:
+**What a page can do is Octoboard's own interaction**, with no code of the page's involved: showing or hiding a part as
+the user picks (see "Conditional display" in `docs/product/report-page-components.md`), checking its fields before it
+is sent, locking its form once submitted, sorting and filtering a table, switching tabs, copying a block's text, and a
+chart's tooltip, legend and zoom. A page cannot submit by itself, nor send anything but the fields of its form.
 
-- scripts of every kind: `<script>` elements, event-handler attributes (`onclick` and the like) and
-  `javascript:` URLs;
-- elements that load or embed something: `<link>`, `<iframe>`, `<frame>`, `<object>`, `<embed>`,
-  `<meta>`, `<base>`, `<audio>`, `<video>`, `<source>` and `<track>`; `<noscript>` and `<template>` go
-  as well;
-- a form's `action`, `method`, `enctype` and `target`, and a button's `formaction`; `ping`, `srcset`,
-  `sizes` and `nonce`; `rel` on any element, which carries the resource hints;
-- any URL with a scheme — `http:`, `https:`, `mailto:`, `data:` and the like — and any scheme-relative
-  `//host` URL, wherever a URL is given (`href`, `src` and the like). The one exception is a `data:`
-  URL as an image's source.
+**A page's content makes no network request**, so that a page written under prompt injection cannot carry what the
+user typed out in an address:
 
-What stays: the document's structure and text, `<style>` elements and inline `style` attributes,
-inline SVG, images given as `data:` URLs (`<img>`, and `<image>` inside SVG), native form controls
-with their `required` and `pattern` validation, links to anchors within the page (`#…`), and the
-page's own `lang` and `dir`. Stylesheets and fonts cannot be loaded, so a page has to stick to generic
-font families. If what remains after cleaning still contains anything from the removed list, the
-page is not rendered at all and the panel shows an empty page.
+- an image in its Markdown is shown only from a `data:` URL; any other stays its description and nothing is requested
+  for it;
+- a link to an absolute web or mail address opens in the system browser only when the user clicks it, the user's own
+  act; a relative link or a link to a heading is plain text;
+- a chart loads and opens nothing: the chart subset leaves out every option that would (see "Charts" in
+  `docs/product/report-page-components.md`).
 
-**What a page cannot do, as a consequence:** react to what the user does — no live calculation, no
-showing or hiding parts depending on input, no client-side sorting or filtering, no chart drawn by
-script (a chart has to be static, for example inline SVG) — submit by itself, or send anything but
-the flat text fields of a form. A form never navigates the frame, and a page cannot navigate its own
-frame to an external URL either.
+The only way data leaves a page is a form the user submits (see "Submitting a form back to the session" below).
 
-**A page has no route to the network.** No `fetch`, `XMLHttpRequest`, WebSocket, `sendBeacon` or WebRTC,
-since no script of the page's own runs, and no connection opened or name looked up ahead of time by a
-resource hint (`preconnect`, `dns-prefetch`, `prefetch`, `prerender`, `modulepreload`, `preload`), since
-no `<link>` is kept, no element of the page keeps a `rel` attribute, and an element the cleaning does
-not know, a custom one, is dropped with only its text kept. In the desktop application the window adds a
-second barrier underneath: it blocks non-image `http` and `https` requests (on Windows by answering them
-with a 403). Under WebView2 that barrier sees requests, not the connections a browser opens ahead of
-them: a `preconnect` was measured opening its connection to an address the barrier refuses (no request
-was sent on it). Whether WebKit consults its rule list before a `preconnect` is not established. So on
-both systems it is the page's cleaning alone that keeps resource hints out. HTTP(S) images are allowed
-for Markdown documents elsewhere in the window; a report page's own content security policy restricts
-its images to `data:` URLs, so report images still cannot load from the network. Development builds also
-allow the local development server's resources. If the window's block cannot be set up at launch, the
-window opens without it; the page's cleaning, sandbox and content security policy still apply.
-
-Each page is rendered in a sandboxed frame of its own, with no access to the application around it or
-to any other page, and on a light surface whatever the window's appearance is — see "A report page
-stays on a light surface in both appearances" in `docs/product/appearance.md`. It also keeps its own
-language and writing direction whatever the UI's language is — see "What follows the language" in
-`docs/product/language.md`.
-
-A page's body gets a default inline margin of **16 px** on each side, in place of the browser's 8 px, so its content
-starts where the panel's header does. Any margin the page sets itself takes precedence, a universal reset such as
-`* { margin: 0 }` included; the default leaves the body's top and bottom margins to the browser.
+In the desktop application the window adds a second barrier underneath: it blocks non-image `http` and `https`
+requests (on Windows by answering them with a 403). HTTP(S) images are allowed for Markdown documents elsewhere in the
+window, so it is the page's own drawing that keeps its images to `data:` URLs. Development builds also allow the local
+development server's resources. If the window's block cannot be set up at launch, the window opens without it.
 
 ## Submitting a form back to the session
 
-A page sends data back **only through a native HTML form**, and only when the user submits it —
-pressing a submit button, or pressing Enter in a field where the browser submits the form. Native
-validation runs first: a `required` field left empty or a value not matching its `pattern` stops the
-submission. Nothing on a page can submit on its own.
+A page sends data back **only through its form**, and only when the user submits it: pressing a `submit` button or one
+of a `choices` component's buttons, or pressing Enter in a single-line field, which presses the page's first shown
+`submit` button (see "Submitters" in `docs/product/report-page-components.md`). Nothing on a page can submit on its own,
+and a page without a submitter has no form and takes no submission. The press first checks the page's shown fields;
+while any is wrong nothing is sent (see "Checking a form before it is sent" in
+`docs/product/report-page-components.md`).
 
-A submission carries the form's fields in document order, the way a browser builds a form
-submission: each field is named by its `name` attribute, so a field without one is not sent, and
-neither is a disabled field or an unchecked checkbox or radio button. The submit button the user
-pressed is included as one more field when it has a `name` and `value`, which is how a set of choices
-is offered: `<button name="choice" value="…">`. Several fields sharing one name — a group of
-checkboxes, say — become one field whose values are joined with ", ". A file field sends only the
-chosen file's name, never its contents.
+**A page takes one submission, and it is never sent twice.**
 
-The submission is written into the session that pushed the page as a **user message**: a line naming
-the page it came from, then one `key: value` line per field. A form with no named fields is still
-delivered, with `{}` in place of the field lines.
+- Pressing a submitter **locks the page's form** at once: the pressed button shows the submission is under way, the
+  other submitters are unavailable, the fields are locked (see "Input fields" in
+  `docs/product/report-page-components.md`), and assistive technology is told the form is being submitted.
+- The daemon **marks the page submitted before it delivers the message**, in one step that also checks that the page
+  is its session's newest and not submitted yet, and tells every window. So however often the user presses, and from
+  however many windows, the session gets exactly one message; every other attempt is refused as one whose page was
+  already submitted (`page_already_submitted`). Every window ends up showing the same state of the page, whatever
+  order the news of its changes reaches it in.
+- **A submitted page is read-only**, in every window and after any reload: its fields show the values it was submitted
+  with, which are stored with the page, the button that sent it stays highlighted, and the header shows the
+  "Submitted" badge — in the window that sent it, once its submission is no longer under way.
+- A submitter that holds keyboard focus as it turns unavailable hands focus to the report panel's first control
+  rather than losing it.
+
+**What is sent**: one field per shown input field, keyed by its `name`, and, for a pressed submitter with a `name`,
+`name: value`. An optional field left empty — a text of only blanks, no option chosen, no box ticked — is left out, and
+so is a hidden field (see "Conditional display" in `docs/product/report-page-components.md`), so the message has no line
+for them. How each kind of field's value is sent is in "Input fields" in `docs/product/report-page-components.md`.
+
+The submission is written into the session that pushed the page as a **user message**: a line naming the page it came
+from by its id (see "The headers" in `docs/product/message-headers.md`), a blank line, then one `key: value` line
+per field in the page's order, a multiple choice's values joined with ", ", a boolean as `true` or `false` and a number
+as its plain figure:
+
+```text
+Report panel form submission — page 1f0e…
+
+name: Ada
+topics: rust, sqlite
+subscribe: true
+action: approve
+```
+
+A submission with no field — every field hidden or left empty, and a submitter with no name — is the opening line
+alone.
 
 Delivery takes the same path as every other write into a running session (see "Messages held until a session can take
 them" in `docs/product/message-delivery.md`): written while the session can take a message, and **queued** while a hold
@@ -242,56 +269,19 @@ applies or the session is waiting for the user — queued rather than refused, b
 and there is nobody to ask to answer the session's prompt first.
 
 The submission goes to the session that pushed the page, found from the page itself, whichever session the user happens
-to be looking at. It fails, and the failure is shown to the user, when the page is no longer its session's newest, when
-the session's process is not running, or when the session is a worker by then, which has no tool to read
-the submission — the daemon refuses that page as one that does not exist. On a Codex session whose messages go into
-Codex's own queue, it also fails when Codex refuses the submission (`message_refused`, see "A message Codex's own queue
-refuses" in `docs/product/message-delivery.md`), or when Codex may have taken it without confirming it
-(`message_acceptance_unconfirmed`, see "A message whose acceptance is uncertain" in
-`docs/product/message-delivery.md`). A failed submission changes nothing, except that one Codex may have taken without
-confirming it may already have reached the session; it is not sent again. The
-message names which session the submission was meant for, so that it cannot be read as being about whichever session the
-user happens to be looking at.
+to be looking at. It fails, and the failure is shown to the user as an error alert, when the page is no longer its
+session's newest, when it was already submitted, when the session's process is not running, or when the session is a
+worker by then, which has no tool to read the submission — the daemon refuses that page as one that does not exist. On
+a Codex session whose messages go into Codex's own queue, it also fails when Codex refuses the submission
+(`message_refused`, see "A message Codex's own queue refuses" in `docs/product/message-delivery.md`), or when Codex may
+have taken it without confirming it (`message_acceptance_unconfirmed`, see "A message whose acceptance is uncertain" in
+`docs/product/message-delivery.md`). The message names which session the submission was meant for, so that it cannot be
+read as being about whichever session the user happens to be looking at. What a failure leaves:
 
-## Escape and F6 inside a page
-
-Pressing Escape while focus is inside a page also tells the window so, on a history page too. The
-key never reaches the window from inside the frame, so without this it could not send away a floating
-report panel or close the sidebar's narrow-window drawer. It closes whatever overlay is open, as Escape does
-anywhere else, and with nothing open it does nothing. An Escape pressed during an input
-method's composition, where it cancels the composition, is not relayed. Inside the page the key keeps
-its usual effect either way, such as closing an open drop-down list.
-
-`F6` and `Shift+F6` pressed while focus is inside a page are likewise passed to the window, on a
-history page too, and move focus to the next or previous region of the window (see "Moving focus
-between regions with F6" in `docs/product/moving-focus-between-regions.md`); the browser's own handling
-of the key inside the frame is cancelled. The signal is acted on only while focus is inside the page's frame.
-Neither this signal nor Escape's carries anything from the page.
-
-## Window shortcuts inside a page
-
-In the desktop application, two of the window's keyboard shortcuts are passed to the window when pressed while focus
-is inside a page, on a history page too, and are kept from the page itself, each where the window has it:
-
-- Back and Forward's shortcuts, `Cmd+[` and `Cmd+]` by default, go back and forward (see "Keyboard shortcuts" in
-  `docs/product/navigation-history.md`); in the macOS application only.
-- Next and Previous console session's shortcuts, `Ctrl+Tab` and `Ctrl+Shift+Tab` by default (`⌃Tab` and `⌃⇧Tab` on a
-  Mac), move to the next or previous console session (see "The switch strip" in `docs/product/focus-mode.md`); in the
-  desktop application on any system. The page never gets them, even when the window has nowhere to move at that
-  moment; a key held down is passed on once.
-
-As with Escape and `F6`, neither is passed on during an input method's composition, the signal is acted on only while
-focus is inside the page's frame, and it carries nothing from the page. Where the window does not have a shortcut —
-in a browser neither, in the Windows application Back and Forward — it is not passed on, and the page keeps the
-browser's own handling of the keys.
-
-The keys are passed on only as the exact combinations they are bound to, as the window matches them (see "How a
-combination is written and matched" in `docs/product/keyboard-shortcuts.md`). Changing one of these four shortcuts
-starts the page the panel shows over again from its markup, so anything typed into its form and not submitted is gone;
-setting a shortcut to the keys it already has does not.
-
-## Right-click inside a page
-
-A page follows the window's rule (see "Right-click menus" in `docs/product/window-layout.md`): in the desktop app a
-right-click on a page shows nothing, except in its input fields and text areas, which keep the system's menu for copy
-and paste; in a browser the frame keeps the browser's own menu.
+- **A delivery that certainly did not happen** — the session not running, the daemon stopping, or Codex refusing the
+  message — takes the page's submitted mark off again, in every window, and the form unlocks with the values the user
+  entered, to be submitted again.
+- **One Codex may have taken without confirming** keeps the mark: the message may already be in the session, so the
+  page stays submitted, showing what was sent, and nothing is sent again.
+- A submission refused before the page was marked — not the newest page, already submitted, or a worker's — changes
+  nothing on the page.

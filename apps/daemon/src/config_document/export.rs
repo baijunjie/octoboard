@@ -926,7 +926,9 @@ mod tests {
             .insert_page(&Page {
                 id: "page-1".to_string(),
                 session_id: "session-2".to_string(),
-                html: "<p>Distinctive page body</p>".to_string(),
+                content: crate::test_support::test_page_content("Distinctive page body"),
+                submission: None,
+                submission_revision: 0,
                 created_at: 0,
             })
             .unwrap();

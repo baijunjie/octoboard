@@ -111,30 +111,34 @@ pub(crate) fn takeover_prompt(original: &Session, package: &Path, note: Option<&
 /// What a report panel form submission is written into the console session as. Plain prose, like
 /// a report: a header line naming the page, then the submitted data.
 ///
-/// `data` is arbitrary JSON from the form, so it is rendered readably only in the shape a form
-/// normally takes — an object of scalar values, one `key: value` line each — and falls back to
-/// pretty-printed JSON for anything else, rather than guessing at a layout for nested data.
-pub(crate) fn render_page_submission(page_id: &str, data: &serde_json::Value) -> String {
+/// `submission` is what the page's form sent: one `key: value` line per field, in the order sent, a
+/// multiple choice joined by `, ` and a boolean or a number as its JSON text. An object holding
+/// anything else, nested data included, which a checked submission never does, falls back to
+/// pretty-printed JSON rather than a guessed layout.
+pub(crate) fn render_page_submission(
+    page_id: &str,
+    submission: &crate::protocol::Submission,
+) -> String {
     let mut message = format!("{PAGE_SUBMISSION_OPENING} — page {page_id}\n\n");
-    match data.as_object().filter(|fields| {
-        !fields.is_empty()
-            && fields
-                .values()
-                .all(|value| !value.is_object() && !value.is_array())
-    }) {
-        Some(fields) => {
-            for (key, value) in fields {
-                let shown = match value {
-                    serde_json::Value::String(text) => text.clone(),
-                    other => other.to_string(),
-                };
-                message.push_str(&format!("{key}: {shown}\n"));
-            }
-        }
-        None => {
-            message
-                .push_str(&serde_json::to_string_pretty(data).unwrap_or_else(|_| data.to_string()));
-        }
+    let shown = |value: &serde_json::Value| match value {
+        serde_json::Value::String(text) => Some(text.clone()),
+        serde_json::Value::Array(items) => items
+            .iter()
+            .map(|item| item.as_str().map(str::to_string))
+            .collect::<Option<Vec<_>>>()
+            .map(|items| items.join(", ")),
+        serde_json::Value::Object(_) => None,
+        other => Some(other.to_string()),
+    };
+    let lines: Option<Vec<String>> = submission
+        .iter()
+        .map(|(key, value)| shown(value).map(|shown| format!("{key}: {shown}")))
+        .collect();
+    match lines {
+        Some(lines) => message.push_str(&lines.join("\n")),
+        None => message.push_str(
+            &serde_json::to_string_pretty(submission).unwrap_or_else(|_| format!("{submission:?}")),
+        ),
     }
     message.trim_end().to_string()
 }
@@ -516,18 +520,30 @@ mod tests {
         assert!(!bare.contains("## Acceptance"));
     }
 
-    /// The normal case: a form submits an object of scalar fields, rendered as readable
-    /// `key: value` lines.
+    /// A submission as the map the daemon stores it as.
+    fn submission(value: serde_json::Value) -> crate::protocol::Submission {
+        value.as_object().expect("an object").clone()
+    }
+
+    /// The normal case: a form submits an object of fields, rendered as readable `key: value`
+    /// lines, a multiple choice joined by `, ` and a number or a boolean as its JSON text.
     #[test]
-    fn a_submission_of_scalar_fields_renders_as_key_value_lines() {
+    fn a_submission_renders_as_key_value_lines() {
         let rendered = render_page_submission(
             "page-7",
-            &serde_json::json!({ "name": "Ada", "age": 30, "subscribe": true }),
+            &submission(serde_json::json!({
+                "name": "Ada",
+                "age": 30,
+                "ratio": 0.5,
+                "subscribe": true,
+                "topics": ["rust", "sqlite"],
+            })),
         );
-        assert!(rendered.contains("page page-7"));
-        assert!(rendered.contains("name: Ada"));
-        assert!(rendered.contains("age: 30"));
-        assert!(rendered.contains("subscribe: true"));
+        assert_eq!(
+            rendered,
+            "Report panel form submission — page page-7\n\n\
+             name: Ada\nage: 30\nratio: 0.5\nsubscribe: true\ntopics: rust, sqlite"
+        );
     }
 
     /// A form's field order is the author's reading order, not alphabetical — `serde_json` is
@@ -537,7 +553,7 @@ mod tests {
     fn a_submission_keeps_the_fields_in_their_sent_order() {
         let rendered = render_page_submission(
             "page-1",
-            &serde_json::json!({ "who": "Ada", "page": "page-1" }),
+            &submission(serde_json::json!({ "who": "Ada", "page": "page-1" })),
         );
         let who_at = rendered
             .find("who: Ada")
@@ -551,15 +567,19 @@ mod tests {
         );
     }
 
-    /// Anything that is not an object of scalars — nested data, an array, a bare value — falls back
-    /// to pretty-printed JSON rather than a guessed layout.
+    /// Anything a checked submission never holds (nested data, an array of non-strings) falls back
+    /// to pretty-printed JSON rather than a guessed layout. A submission of no field, from a form
+    /// whose fields were all hidden and whose submitter has no name, is the opening line alone.
     #[test]
     fn a_submission_of_nested_data_falls_back_to_pretty_json() {
-        let rendered =
-            render_page_submission("page-7", &serde_json::json!({ "answers": ["a", "b"] }));
+        let rendered = render_page_submission(
+            "page-7",
+            &submission(serde_json::json!({ "answers": { "a": 1 }, "n": [1] })),
+        );
         assert!(rendered.contains('{'));
         assert!(rendered.contains("\"answers\""));
-        assert!(rendered.contains("\"a\""));
+        let empty = render_page_submission("page-7", &submission(serde_json::json!({})));
+        assert_eq!(empty, "Report panel form submission — page page-7");
     }
 
     /// Several sessions in one project have to be told apart in the menu, and the goal is the only

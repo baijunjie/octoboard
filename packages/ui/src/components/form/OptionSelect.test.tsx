@@ -308,3 +308,40 @@ it("preserves a stored choice while loading and blocks the clear button and clea
   expect(trigger.disabled).toBe(false);
   expect(clear.disabled).toBe(false);
 });
+
+it.each([[undefined, "secondary"], ["secondary", "secondary"], ["primary", "primary"]] as const)("draws the select as variant %s: %s", (variant, drawn) => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  act(() => root.render(<OptionSelect label="Owner" variant={variant} value="a" onChange={() => {}} options={[{ value: "a", label: "A" }]} />));
+  const select = container.querySelector("[data-slot=select]")!;
+  expect(select.classList.contains(`select--${drawn}`)).toBe(true);
+  expect(select.classList.contains(`select--${drawn === "primary" ? "secondary" : "primary"}`)).toBe(false);
+});
+
+it("draws a locked, disabled select as a value to read, and an unlocked disabled one as a control", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  const render = (locked: boolean) => act(() => root.render(<OptionSelect label="Owner" isDisabled locked={locked} value="a" onChange={() => {}} options={[{ value: "a", label: "A" }]} />));
+  render(false);
+  const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  expect(trigger.disabled).toBe(true);
+  expect(trigger.classList.contains("bg-transparent")).toBe(false);
+  render(true);
+  expect(trigger.disabled).toBe(true);
+  expect(trigger.textContent).toBe("A");
+  for (const name of ["border", "border-separator", "bg-transparent", "shadow-none"]) expect(trigger.classList.contains(name)).toBe(true);
+});
+
+it("gives the label and the description of a select the direction of their text when asked", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  const render = (textDir?: "auto") => act(() => root.render(<OptionSelect label="Owner" description="Who" textDir={textDir} value="a" onChange={() => {}} options={[{ value: "a", label: "A" }]} />));
+  render();
+  expect(container.querySelector("[data-slot=label]")!.hasAttribute("dir")).toBe(false);
+  render("auto");
+  expect(container.querySelector("[data-slot=label]")!.getAttribute("dir")).toBe("auto");
+  expect(container.querySelector("[data-slot=description]")!.getAttribute("dir")).toBe("auto");
+});

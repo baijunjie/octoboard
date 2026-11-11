@@ -1,10 +1,6 @@
-import { PREVIEW_MESSAGE, isModality, postPreviewMessage, type Modality } from "./messages";
-import { isReportBridgeSource, withReportBridge } from "./reportBridge";
+import { PREVIEW_MESSAGE, postPreviewMessage, type Modality } from "./messages";
 
-const REPORT_INTERACTION_MESSAGE = "octoboard-preview-report-interaction";
-const INJECTED_MARKER = "data-website-preview-interaction-bridge";
-
-// Serialized into the report's opaque sandbox, so this function must have no module dependencies.
+/** Reports the last kind of input in `win` (a key, or a pointer press) to `send`. */
 export function installInteractionRelay(
   win: Window,
   send: (modality: Modality) => void,
@@ -22,25 +18,9 @@ export function installInteractionRelay(
   };
 }
 
-export function withReportInteractionBridge(srcdoc: string): string {
-  const source = `(${installInteractionRelay.toString()})(window, function(modality) { parent.postMessage({ type: "${REPORT_INTERACTION_MESSAGE}", modality: modality }, "*"); });`;
-  return withReportBridge(srcdoc, INJECTED_MARKER, source);
-}
-
 export function installPreviewInteractionBridge(win: Window = window): () => void {
   if (win.parent === win) return () => {};
   const send = (modality: Modality) =>
     postPreviewMessage(win.parent, { type: PREVIEW_MESSAGE.interaction, modality });
-  const removeRelay = installInteractionRelay(win, send);
-  const onMessage = (event: MessageEvent) => {
-    const data = event.data as { type?: unknown; modality?: unknown } | null;
-    if (data?.type !== REPORT_INTERACTION_MESSAGE || !isModality(data.modality)) return;
-    if (isReportBridgeSource(win.document, event.source, INJECTED_MARKER))
-      send(data.modality);
-  };
-  win.addEventListener("message", onMessage);
-  return () => {
-    removeRelay();
-    win.removeEventListener("message", onMessage);
-  };
+  return installInteractionRelay(win, send);
 }

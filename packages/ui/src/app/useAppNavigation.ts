@@ -122,6 +122,6 @@ export function useAppNavigation({
   const stableCommitPreview = useStableHandler(commitPreview);
   const stableBack = useStableHandler(navigation.back);
   const stableForward = useStableHandler(navigation.forward);
-  const { canGoBack, canGoForward, moveByShortcut } = navigation;
-  return { canGoBack, canGoForward, moveByShortcut, stableBack, stableForward, stableCommitPreview };
+  const { canGoBack, canGoForward } = navigation;
+  return { canGoBack, canGoForward, stableBack, stableForward, stableCommitPreview };
 }

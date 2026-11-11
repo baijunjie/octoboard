@@ -1,8 +1,8 @@
 //! The tools with which a session that faces the user, a console session or a project session that
-//! is unbound or a coordinator with a parent, pushes pages to its report panel, `show_page`, reads
-//! back the ones it pushed, `list_pages`, and withdraws them, `delete_pages`. A session reads and
-//! deletes only its own pages. A session that becomes a worker has them all withdrawn
-//! ([`crate::coordinator::pages::withdraw_pages`]).
+//! is unbound or a coordinator with a parent, reads up on the pages of its report panel,
+//! `page_guide`, pushes them, `show_page`, reads back the ones it pushed, `list_pages`, and
+//! withdraws them, `delete_pages`. A session reads and deletes only its own pages. A session that
+//! becomes a worker has them all withdrawn ([`crate::coordinator::pages::withdraw_pages`]).
 
 use std::sync::Arc;
 
@@ -11,7 +11,8 @@ use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use crate::coordinator::pages::announce_deleted;
-use crate::protocol::{Event, Page, Session};
+use crate::protocol::{Event, Page, PageContent, PageContentError, Session};
+use crate::session_tools::page_guide as guide;
 use crate::state::AppState;
 use crate::time::now_millis;
 
@@ -22,11 +23,15 @@ pub(in crate::mcp) fn show_page(
     session: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let html = required_str(arguments, "html")?.to_string();
+    // The arguments are the page: its `title` and its `body`. Nothing is stored or announced for a
+    // page that does not match the schemas of its kinds.
+    let content = PageContent::parse(&Value::Object(arguments.clone())).map_err(refused_page)?;
     let page = Page {
         id: Uuid::new_v4().to_string(),
         session_id: session.id.clone(),
-        html,
+        content,
+        submission: None,
+        submission_revision: 0,
         created_at: now_millis(),
     };
     // The role is checked in the insert itself: this call's `session` was read before a binding
@@ -68,6 +73,17 @@ pub(in crate::mcp) fn show_page(
     Ok(json!({ "page": page.id }))
 }
 
+/// The refusal of a page: where it is wrong, and the schema of the part that is, so that the agent
+/// can correct it without another call.
+fn refused_page(error: PageContentError) -> anyhow::Error {
+    let schema = serde_json::to_string_pretty(&error.schema()).unwrap_or_default();
+    let of = match error.kind {
+        Some(kind) => format!("the `{kind}` component"),
+        None => "the page object".to_string(),
+    };
+    anyhow!("the page was not pushed: {error}\n\nThe schema of {of}:\n{schema}")
+}
+
 /// What a test runs after `show_page` stores a page and before it announces it, in place of the
 /// binding, transfer or `delete_pages` that would withdraw the session's pages at that point.
 #[cfg(test)]
@@ -79,10 +95,21 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+/// What `page_guide` answers: the guide of the topic asked for and the schemas of the kinds of
+/// component it covers.
+pub(in crate::mcp) fn page_guide(arguments: &Map<String, Value>) -> Result<Value> {
+    let wanted = required_str(arguments, "topic")?;
+    let topic = guide::topic(wanted).ok_or_else(|| {
+        let known: Vec<&str> = guide::TOPICS.iter().map(|topic| topic.name).collect();
+        anyhow!("no topic `{wanted}`; the topics are {}", known.join(", "))
+    })?;
+    Ok(guide::read(topic))
+}
+
 /// The pages the caller pushed, oldest first, and only those: a page of another session is no more
 /// readable here than it is in that session's report panel. Without `page` each is listed
-/// by id, time, size and title, since a page carries a whole document; with it, that one page in
-/// full.
+/// by id, time, size and title, since a page carries a whole component tree; with it, that one
+/// page in full, with its submission.
 pub(in crate::mcp) fn list_pages(
     state: &Arc<AppState>,
     session: &Session,
@@ -98,8 +125,9 @@ pub(in crate::mcp) fn list_pages(
         return Ok(json!({
             "page": page.id,
             "created_at": page.created_at,
-            "title": page_title(&page.html),
-            "html": page.html,
+            "title": page.content.title,
+            "content": page.content,
+            "submission": page.submission,
         }));
     }
     let listed: Vec<Value> = state
@@ -110,8 +138,8 @@ pub(in crate::mcp) fn list_pages(
             json!({
                 "page": page.id,
                 "created_at": page.created_at,
-                "html_bytes": page.html.len(),
-                "title": page_title(&page.html),
+                "content_bytes": serde_json::to_string(&page.content).map_or(0, |text| text.len()),
+                "title": page.content.title,
             })
         })
         .collect();
@@ -141,50 +169,38 @@ pub(in crate::mcp) fn delete_pages(
     Ok(json!({ "deleted": deleted }))
 }
 
-/// The text of a page's `<title>`, when it has a non-blank one.
-fn page_title(html: &str) -> Option<String> {
-    let lower = html.to_ascii_lowercase();
-    let start = lower.find("<title")?;
-    let open_end = start + lower[start..].find('>')? + 1;
-    let end = open_end + lower[open_end..].find("</title")?;
-    // Lowercasing ASCII keeps every byte offset, so the same range of the original is the title.
-    let title = html[open_end..end]
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-    (!title.is_empty()).then_some(title)
-}
-
 #[cfg(test)]
 mod tests {
     use crate::mcp::dispatch::call;
     use crate::mcp::test_support::{arguments, bound_coordinator_state, peer_state};
     use crate::protocol::{Event, Role};
-    use serde_json::{json, Map};
+    use serde_json::{json, Map, Value};
+
+    /// The arguments of a `show_page` of one Markdown component.
+    fn page(text: &str) -> Value {
+        json!({ "body": [{ "type": "markdown", "text": text }] })
+    }
 
     /// A console session lists, and reads in full, the pages it pushed, and no other session's.
     #[tokio::test]
     async fn a_console_session_lists_only_its_own_pages() {
         let (state, _dir) = peer_state("peer-list-pages");
-        let push = |caller: &'static str, html: &'static str| {
+        let push = |caller: &'static str, args: Value| {
             let state = state.clone();
             async move {
-                call(
-                    &state,
-                    caller,
-                    "show_page",
-                    &arguments(json!({ "html": html })),
-                )
-                .await
-                .unwrap()["page"]
+                call(&state, caller, "show_page", &arguments(args))
+                    .await
+                    .unwrap()["page"]
                     .as_str()
                     .unwrap()
                     .to_string()
             }
         };
-        let first = push("a", "<html><head><title> Plan\n b </title></head></html>").await;
-        let second = push("a", "<p>no title</p>").await;
-        let other = push("b", "<p>b's</p>").await;
+        let mut titled = page("plan");
+        titled["title"] = json!("Plan b");
+        let first = push("a", titled.clone()).await;
+        let second = push("a", page("no title")).await;
+        let other = push("b", page("b's")).await;
 
         let listed = call(&state, "a", "list_pages", &Map::new()).await.unwrap();
         let pages = listed["pages"].as_array().unwrap();
@@ -198,8 +214,12 @@ mod tests {
         let page_of = |id: &str| pages.iter().find(|page| page["page"] == id).unwrap();
         assert_eq!(page_of(&first)["title"], "Plan b");
         assert!(page_of(&second)["title"].is_null());
-        assert_eq!(page_of(&second)["html_bytes"], "<p>no title</p>".len());
-        assert!(page_of(&first).get("html").is_none());
+        assert_eq!(
+            page_of(&second)["content_bytes"],
+            page("no title").to_string().len()
+        );
+        assert!(page_of(&first).get("content").is_none());
+        assert!(page_of(&first).get("html_bytes").is_none());
 
         let one = call(
             &state,
@@ -209,7 +229,19 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(one["html"], "<p>no title</p>");
+        assert_eq!(one["content"], page("no title"));
+        assert!(one["submission"].is_null());
+        assert!(one["title"].is_null());
+        let titled_page = call(
+            &state,
+            "a",
+            "list_pages",
+            &arguments(json!({ "page": first })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(titled_page["title"], "Plan b");
+        assert_eq!(titled_page["content"], titled);
         let err = call(
             &state,
             "a",
@@ -219,6 +251,156 @@ mod tests {
         .await
         .expect_err("another session's page");
         assert!(err.to_string().contains("no page"), "{err}");
+    }
+
+    /// A page of Markdown, a section and a form is stored as the content it was pushed with,
+    /// announced to the panels with that content and no submission, and its id answered.
+    #[tokio::test]
+    async fn a_valid_page_is_stored_and_announced() {
+        let (state, _dir) = peer_state("peer-show-page");
+        let mut events = state.subscribe();
+        let sent = json!({
+            "title": "Decide",
+            "body": [
+                { "type": "markdown", "text": "## Pick" },
+                { "type": "section", "children": [
+                    { "type": "radio", "name": "color", "label": "Colour",
+                      "options": [{ "value": "red" }, { "value": "blue", "label": "Blue" }] },
+                ] },
+                { "type": "choices", "name": "action", "options": [{ "value": "ok" }] },
+            ],
+        });
+        let result = call(&state, "a", "show_page", &arguments(sent.clone()))
+            .await
+            .unwrap();
+        let id = result["page"].as_str().unwrap();
+        assert_eq!(result.as_object().unwrap().len(), 1);
+        let stored = state.store.get_page(id).unwrap().unwrap();
+        assert_eq!(serde_json::to_value(&stored.content).unwrap(), sent);
+        assert!(stored.submission.is_none());
+        let Event::PageCreated { page } = events.try_recv().unwrap() else {
+            panic!("the panels must be told");
+        };
+        assert_eq!(page.id, id);
+        assert_eq!(page.content, stored.content);
+        assert!(events.try_recv().is_err());
+    }
+
+    /// A page that breaks the schemas is refused with the path of the failing part and the schema
+    /// of its kind, whatever the arguments are, and nothing is stored or announced.
+    #[tokio::test]
+    async fn an_invalid_page_is_refused_with_its_path_and_schema_and_stores_nothing() {
+        let (state, _dir) = peer_state("peer-refused-page");
+        let mut events = state.subscribe();
+        let refused = |args: Value| {
+            let state = state.clone();
+            async move {
+                call(&state, "a", "show_page", &arguments(args))
+                    .await
+                    .expect_err("an invalid page")
+                    .to_string()
+            }
+        };
+
+        let message = refused(json!({ "body": [
+            { "type": "section", "children": [
+                { "type": "radio", "name": "c", "label": "C",
+                  "options": [{ "value": "a" }, { "label": "no value" }] },
+                ] },
+            { "type": "submit" },
+        ] }))
+        .await;
+        assert!(
+            message.contains("`body[0].children[0].options[1]`"),
+            "{message}"
+        );
+        assert!(
+            message.contains("missing required property `value`"),
+            "{message}"
+        );
+        assert!(
+            message.contains("The schema of the `radio` component"),
+            "{message}"
+        );
+        assert!(
+            message.contains("\"additionalProperties\": false"),
+            "{message}"
+        );
+        assert!(message.contains("\"options\""), "{message}");
+
+        // A failure at the top is read against the page object's schema; the old `html` argument
+        // is named as the unknown property it now is.
+        let message = refused(json!({ "html": "<p>x</p>" })).await;
+        assert!(message.contains("`html`: unknown property"), "{message}");
+        assert!(
+            message.contains("The schema of the page object"),
+            "{message}"
+        );
+        let message = refused(json!({})).await;
+        assert!(
+            message.contains("missing required property `body`"),
+            "{message}"
+        );
+        let message =
+            refused(json!({ "body": [{ "type": "text", "name": "a", "label": "A" }] })).await;
+        assert!(
+            message.contains("needs a `submit` or `choices`"),
+            "{message}"
+        );
+
+        let listed = call(&state, "a", "list_pages", &Map::new()).await.unwrap();
+        assert_eq!(listed["pages"], json!([]));
+        assert!(events.try_recv().is_err(), "nothing was announced");
+    }
+
+    /// `page_guide` answers each topic with its prose and schemas, and refuses one it has not.
+    #[tokio::test]
+    async fn the_page_guide_answers_by_topic() {
+        let (state, _dir) = peer_state("peer-page-guide");
+        let guide = |topic: &str| {
+            let state = state.clone();
+            let args = arguments(json!({ "topic": topic }));
+            async move { call(&state, "a", "page_guide", &args).await }
+        };
+        let forms = guide("forms").await.unwrap();
+        assert_eq!(forms["topic"], "forms");
+        assert!(forms["guide"].as_str().unwrap().contains("# Forms"));
+        assert!(forms["schemas"]["checkboxes"]["properties"]["options"].is_object());
+        let pages = guide("pages").await.unwrap();
+        assert!(pages["schemas"]["page"]["properties"]["body"].is_object());
+        let charts = guide("charts").await.unwrap();
+        assert!(charts["schemas"]["chart"]["properties"]["option"].is_object());
+        let err = guide("maps").await.expect_err("no such topic");
+        assert!(
+            err.to_string()
+                .contains("the topics are pages, forms, report-components, charts"),
+            "{err}"
+        );
+        let err = call(&state, "a", "page_guide", &Map::new())
+            .await
+            .expect_err("no topic");
+        assert!(err.to_string().contains("topic"), "{err}");
+    }
+
+    /// A submitted page is listed with its submission when it is read in full.
+    #[tokio::test]
+    async fn a_page_read_in_full_carries_its_submission() {
+        let (state, _dir) = peer_state("peer-page-submission");
+        let id = call(&state, "a", "show_page", &arguments(page("x")))
+            .await
+            .unwrap()["page"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let submission = json!({ "who": "Ada", "topics": ["a", "b"] });
+        state
+            .store
+            .mark_page_submitted(&id, submission.as_object().unwrap())
+            .unwrap();
+        let read = call(&state, "a", "list_pages", &arguments(json!({ "page": id })))
+            .await
+            .unwrap();
+        assert_eq!(read["submission"], submission);
     }
 
     /// A page withdrawn between its insert and its announcement, whose `pages_deleted` therefore
@@ -234,13 +416,7 @@ mod tests {
                 crate::coordinator::pages::withdraw_pages(state, session).unwrap();
             }));
         });
-        let refused = call(
-            &state,
-            "starter",
-            "show_page",
-            &arguments(json!({ "html": "<p>x</p>" })),
-        )
-        .await;
+        let refused = call(&state, "starter", "show_page", &arguments(page("x"))).await;
         super::BEFORE_PAGE_CREATED.with(|hook| *hook.borrow_mut() = None);
         let err = refused.expect_err("the page was withdrawn");
         assert!(err.to_string().contains("was withdrawn while"), "{err}");
@@ -269,21 +445,13 @@ mod tests {
     #[tokio::test]
     async fn only_a_project_session_facing_the_user_has_the_page_tools() {
         let (state, _dir) = bound_coordinator_state("peer-project-pages");
-        let page = |caller: &'static str, html: &'static str| {
+        let push = |caller: &'static str, text: &'static str| {
             let state = state.clone();
-            async move {
-                call(
-                    &state,
-                    caller,
-                    "show_page",
-                    &arguments(json!({ "html": html })),
-                )
-                .await
-            }
+            async move { call(&state, caller, "show_page", &arguments(page(text))).await }
         };
         // `starter` is a coordinator with a parent, `other-project` an unbound one.
         for caller in ["starter", "other-project"] {
-            let id = page(caller, "<p>mine</p>").await.unwrap()["page"]
+            let id = push(caller, "mine").await.unwrap()["page"]
                 .as_str()
                 .unwrap()
                 .to_string();
@@ -294,7 +462,7 @@ mod tests {
             let page = state.store.get_page(&id).unwrap().unwrap();
             assert_eq!(page.session_id, caller);
         }
-        let err = page("mine", "<p>x</p>").await.expect_err("bound");
+        let err = push("mine", "x").await.expect_err("bound");
         assert!(err.to_string().contains("is not a tool"), "{err}");
         for tool in ["list_pages", "delete_pages"] {
             let err = call(&state, "mine", tool, &arguments(json!({ "all": true })))
@@ -318,14 +486,9 @@ mod tests {
             let state = state.clone();
             async move {
                 crate::test_support::next_millisecond().await;
-                call(
-                    &state,
-                    caller,
-                    "show_page",
-                    &arguments(json!({ "html": "<p>x</p>" })),
-                )
-                .await
-                .unwrap()["page"]
+                call(&state, caller, "show_page", &arguments(page("x")))
+                    .await
+                    .unwrap()["page"]
                     .as_str()
                     .unwrap()
                     .to_string()
@@ -409,12 +572,8 @@ mod tests {
             .unwrap();
         let mut events = state.subscribe();
 
-        let err = super::show_page(
-            &state,
-            &before_binding,
-            &arguments(json!({ "html": "<p>x</p>" })),
-        )
-        .expect_err("bound by now");
+        let err = super::show_page(&state, &before_binding, &arguments(page("x")))
+            .expect_err("bound by now");
         assert!(err.to_string().contains("role of a worker"), "{err}");
         assert!(state.store.list_pages("other-project").unwrap().is_empty());
         assert!(events.try_recv().is_err(), "no page was announced");
@@ -422,12 +581,7 @@ mod tests {
         // A coordinator with a parent is bound too, and keeps its pages.
         let (state, _dir) = bound_coordinator_state("peer-push-coordinator");
         let coordinator = state.session_record("starter").unwrap();
-        super::show_page(
-            &state,
-            &coordinator,
-            &arguments(json!({ "html": "<p>x</p>" })),
-        )
-        .unwrap();
+        super::show_page(&state, &coordinator, &arguments(page("x"))).unwrap();
         assert_eq!(state.store.list_pages("starter").unwrap().len(), 1);
     }
 

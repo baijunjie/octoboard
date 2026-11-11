@@ -144,11 +144,12 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            `console`, `project`, `owner`, `yours`, `kind` or `branch`; `status` is `live` \
            (the running ones) by default, `interrupted` for the interrupted ones, or `any` for \
            both), and telling one of them something.\n\
-         - `show_page` — push an HTML page to the report panel beside you, for anything better \
-           shown than typed: a table, a rich comparison, many items, a form. It is a static \
-           document with native forms: scripts do not run, and a submitted form comes back to \
-           you as a message. `list_pages` lists the pages you pushed, and reads one back in \
-           full; `delete_pages` withdraws pages you pushed.\n\
+         - `show_page` — push a page to the report panel beside you, for anything better \
+           shown than typed: a table, a rich comparison, many items, a form. A page is a tree of \
+           components the app draws itself, not an HTML document; read `page_guide` before your \
+           first one. A submitted form comes back to you as a message. `list_pages` lists the \
+           pages you pushed, and reads one back in full; `delete_pages` withdraws pages you \
+           pushed.\n\
          \n\
          ## Settings\n\
          \n\

@@ -106,6 +106,13 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   schema files), unless `GENERATION` is raised. `mod.rs` holds the record, the check and the test on the real files,
   `norm.rs` reads a schema node as the values it accepts, `compare.rs` compares two of them by direction, and
   `release:version` refreshes the snapshot ([`apps/desktop/scripts/`](../../apps/desktop/scripts/README.md)).
+  `page_content/` is a report page's content: the `Component` tree a session pushes with `show_page` and the
+  `Submission` a form on it comes back with. `kinds.rs` holds every kind with the JSON Schema `show_page` enforces and
+  `page_guide` hands out, `check.rs` is the validator that reads those schemas and names the failing path (and kind),
+  `rules.rs` the cross-checks a schema cannot state (names, defaults and ranges, `visible_when`, a form's submitters,
+  the `pattern` of a text field compiled with `regress`), `chart.rs` the chart kind's allow-listed ECharts subset, and
+  `submission.rs` what a submission may carry; `PageContent::parse` and `PageContent::check_submission` in `mod.rs` are
+  the entry points.
 - `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode and `background.rs` the user's `start`, `stop`, `restart` and `status`, and the start of a planned restart's successor, and `installation.rs` the path the daemon launches a successor, or `start` its daemon, from.
 
 ### Coordinator role
@@ -115,7 +122,7 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   `restart` (what the restarts of a session's process share: `run` drives the stop and relaunch of an account switch and
   a model change, the other helpers also serve a sharing change), `bindings`, `lifecycle` (archiving, deleting, and a
   session's own archive when its work is finished: `lifecycle/finished.rs`), `handoff`, `account_switch`,
-  `model_change`, `account_sharing`, `accounts`, `settings`, `pages`, `processes` (listing, stopping and keeping the
+  `model_change`, `account_sharing`, `accounts`, `settings`, `pages` (a session's page list and a form's submission), `processes` (listing, stopping and keeping the
   process trees a client sees), `messages`, `auto_switch` (moving a session off an account whose usage limit stopped a
   turn; lower layers reach it through `AppState`'s hooks), `validate` for the checks of request text fields; the
   requests that edit settings, a console, a project or an account carry `base_versions` and run through
@@ -489,8 +496,9 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
 - `src/session_tools/` — the static description of the Octoboard MCP tools and what sessions are told of them:
   `catalogue/` the tool catalogue (`mod.rs` which tools a role sees, then one file per tool family and `schemas.rs`
   the shared schema builders), `role.rs` the role description, `console_instructions.rs` the console session's
-  instruction text (written to the console's directory by `coordinator/console_workdir.rs`), and `Owner` and
-  `CALL_TIMEOUT` in `mod.rs`.
+  instruction text (written to the console's directory by `coordinator/console_workdir.rs`), `page_guide.rs` the
+  topics of the `page_guide` tool (the usage of report pages and the schemas of the component kinds, taken from
+  `protocol/page_content/`), and `Owner` and `CALL_TIMEOUT` in `mod.rs`.
 - `src/mcp/` — the Octoboard MCP server a session drives Octoboard with, over the catalogue in `src/session_tools/`:
   - `dispatch.rs` checks and runs one call through the same coordinator and reporting functions the control socket uses.
   - `tools/` has one file per tool or small group of related tools, named for it — for example `sessions.rs`,
@@ -620,6 +628,10 @@ new site is never excused: it goes under `platform`.
 - A new MCP tool: the catalogue in `src/session_tools/catalogue/`, its dispatch in `src/mcp/dispatch.rs` and the tool
   in a file of `src/mcp/tools/`; it calls the coordinator or reporting function the control socket uses rather than
   reimplementing it.
+- A new kind of report-page component: a type and a row of `KINDS` in `src/protocol/page_content/` (with its arms in
+  the accessors of `Component` and, for an input field or a submitter, in `rules.rs`), and a topic entry in
+  `src/session_tools/page_guide.rs`; the UI's renderer registry fails type checking until it has its renderer (see the
+  UI structure doc).
 - A new table or column: version changes and migration code are written only between released versions. While the schema
   version has not been released, change `SCHEMA` in `src/store/schema.rs` in place, with no version bump or new step (a
   step that already brings a released version up to it is amended instead). Changing the schema of a released version
@@ -724,6 +736,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Poll a condition, or wait for a session's output to go quiet | `src/session/wait.rs` (`wait_for`, `wait_quiet`) |
 | Resolve the user's shell environment and binaries | `src/env_shell/` (`resolve_binary`; `capture_failed` words the refusal of a request that needed the environment and could not take it) |
 | How a provider's CLI is installed and updated; the installed and latest version of a CLI, and its update | `AgentProvider::cli_packaging` (`CliPackaging`, `src/adapter/mod.rs`), read only by `src/agents/cli/` |
+| Read a page a session pushed, or a form's submission, against the page's kinds | `PageContent::parse` and `PageContent::check_submission` (`src/protocol/page_content/mod.rs`); a refusal is a `PageContentError` naming the path and the kind's schema |
 | Name a failure or notice on the wire | `Code` in `src/protocol/codes.rs`; failure to `error` reply through `src/protocol/errors.rs` |
 
 The wire contract is held by five checks: `protocol::bindings` (the generated TypeScript must match the Rust types),

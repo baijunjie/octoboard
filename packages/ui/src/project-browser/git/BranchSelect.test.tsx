@@ -66,3 +66,12 @@ it("retains a branch name while its choices load and does not allow changing it"
   expect(document.querySelector("[role=listbox]")).toBeNull();
   expect(changed).not.toHaveBeenCalled();
 });
+
+it("draws the branch choice in HeroUI's default field variant, as a control on the pane's own background", () => {
+  const container = mountRows(
+    <BranchSelect label="From" branches={branches} value="main" gone={false} selectedSessionId={undefined} onChange={() => {}} />,
+  );
+  const select = container.querySelector("[data-slot=select]")!;
+  expect(select.classList.contains("select--primary")).toBe(true);
+  expect(select.classList.contains("select--secondary")).toBe(false);
+});

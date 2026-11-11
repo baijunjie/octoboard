@@ -65,11 +65,6 @@ const EXEMPTIONS: Exemption[] = [
     reason: "The scrollback viewport is xterm's own DOM; the wrapper this package renders is `overflow-hidden`, and there is no element to put the fade on.",
     seen: false,
   },
-  {
-    surface: "The report page",
-    reason: "A document the console session's model wrote, inside an `<iframe srcDoc>`; it scrolls as a document.",
-    seen: false,
-  },
 ];
 
 const SCROLL_UTILITY = /\boverflow-(?:[xy]-)?(?:auto|scroll)\b/g;

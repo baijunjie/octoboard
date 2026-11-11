@@ -43,7 +43,8 @@ use schemars::{json_schema, JsonSchema, Schema, SchemaGenerator};
 use serde_json::{Map, Value};
 
 use super::{
-    BrowseRequest, Change, Code, Event, PerAgent, Request, TermControl, TermEvent, GENERATION,
+    BrowseRequest, Change, Code, Event, PageNumber, PerAgent, Request, TermControl, TermEvent,
+    GENERATION,
 };
 
 /// Where the files are committed. The test writes them instead of comparing with them under the
@@ -84,6 +85,21 @@ impl JsonSchema for Code {
 
     fn json_schema(_: &mut SchemaGenerator) -> Schema {
         json_schema!({ "type": "string" })
+    }
+}
+
+/// A number a page carries is a plain JSON number, as in the TypeScript bindings.
+impl JsonSchema for PageNumber {
+    fn inline_schema() -> bool {
+        true
+    }
+
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "PageNumber".into()
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({ "type": "number" })
     }
 }
 

@@ -87,6 +87,8 @@ What follows the current language:
   current name, a shell terminal's being its title (by its id when the UI does not know the record). A report the UI has
   no wording for — one from a daemon newer than the UI — is shown in the daemon's own English;
 - numbers and dates the UI formats, such as a report page's creation time in the report panel;
+- in a report page, every word Octoboard supplies and every number it formats; the page's own words stay the session's,
+  as written (see "Language and direction in a page" in `docs/product/report-page-components.md`);
 - the UI components' own built-in text and formatting;
 - in the macOS application, the application menu: every item Octoboard defines in it — the Octoboard menu's About,
   Settings…, Services, Hide, Hide Others, Show All and Quit, and the Edit, View and Window menus with their items.
@@ -112,9 +114,6 @@ What does not follow it:
 
 - **Existing session names.** A created name keeps its saved wording when the UI's language changes, including one that
   used the localized default when it was created (see "The session dialog" in `docs/product/opening-sessions.md`).
-- **A report page.** It is content the console session's model wrote, with its own language and direction, and it is
-  never mirrored under a right-to-left language; only the panel around it follows the UI (see
-  `docs/product/report-panel.md`).
 - **The terminal.** What the agent draws is laid out left to right whatever the language, and is never mirrored.
 - **Text aimed at the agents** — the console session's instructions, the tool descriptions and the tools' replies, the
   prompts injected into a launch — stays English whatever the language. Only what the user reads in Octoboard's own UI

@@ -111,14 +111,10 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
         if (!region.contains(next)) origin = null;
         return;
       }
-      // No `relatedTarget` means focus went nowhere (to `<body>`), into another document (the
-      // report panel's iframe, whose focus `document.activeElement` shows as the iframe element),
-      // or the window itself lost focus. Only the first is answered, once focus has settled; going
-      // into the iframe is a move out of the region like any other, so it forgets the origin.
+      // No `relatedTarget` means focus went nowhere (to `<body>`) or the window itself lost focus.
+      // Only the first is answered, once focus has settled.
       setTimeout(() => {
-        const active = document.activeElement;
-        if (active === document.body && document.hasFocus()) handBack();
-        else if (active instanceof HTMLIFrameElement) origin = null;
+        if (document.activeElement === document.body && document.hasFocus()) handBack();
       });
     });
 

@@ -48,6 +48,7 @@
 @import "@heroui/styles/components/tag-group.css" layer(components);
 @import "@heroui/styles/components/tag.css" layer(components);
 @import "@heroui/styles/components/color-swatch-picker.css" layer(components);
+@import "@heroui/styles/components/slider.css" layer(components);
 @import "@heroui/styles/components/switch.css" layer(components);
 @import "@heroui/styles/components/badge.css" layer(components);
 @import "@heroui/styles/components/chip.css" layer(components);

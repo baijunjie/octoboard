@@ -293,6 +293,8 @@ pub mod error_code {
     /// `detail`.
     pub const MESSAGE_REFUSED: Code = Code("message_refused");
     pub const PAGE_NOT_CURRENT: Code = Code("page_not_current");
+    /// The page's form was already submitted: it takes one submission, whichever window sent it.
+    pub const PAGE_ALREADY_SUBMITTED: Code = Code("page_already_submitted");
     pub const BINARY_NOT_FOUND: Code = Code("binary_not_found");
     pub const SHELL_ENVIRONMENT_TIMEOUT: Code = Code("shell_environment_timeout");
     /// A session's resolved agent has been determined unavailable (its binary does not resolve on

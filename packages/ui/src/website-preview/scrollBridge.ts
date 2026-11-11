@@ -1,11 +1,7 @@
-import { PREVIEW_MESSAGE, postPreviewMessage, readScrollParts } from "./messages";
-import { isReportBridgeSource, withReportBridge } from "./reportBridge";
+import { PREVIEW_MESSAGE, postPreviewMessage } from "./messages";
 
-const REPORT_SCROLL_MESSAGE = "octoboard-preview-report-scroll";
-const INJECTED_MARKER = "data-website-preview-scroll-bridge";
-
-/** Kept self-contained because the same function is serialized into our sample report's opaque
- * sandbox. It depends only on its arguments and browser APIs, never application internals. */
+/** Relays a wheel or touch gesture that reaches the edge of every scroller under it in `win` to `send`, so the
+ * website around the preview takes it over. */
 export function installBoundaryScrollRelay(
   win: Window,
   send: (deltaY: number, velocity?: number, stop?: boolean) => void,
@@ -206,36 +202,12 @@ export function installBoundaryScrollRelay(
   };
 }
 
-/** Add a relay only to our own report fixture, after the product has composed its nonce-protected
- * srcdoc. The report's normal sanitizer deliberately removes author scripts, so
- * putting a script in the fixture HTML would never run. This leaves product rendering unchanged. */
-export function withReportScrollBridge(srcdoc: string): string {
-  const source = `(${installBoundaryScrollRelay.toString()})(window, function(deltaY, velocity, stop) { parent.postMessage({ type: "${REPORT_SCROLL_MESSAGE}", deltaY: deltaY, velocity: velocity, stop: stop }, "*"); });`;
-  return withReportBridge(srcdoc, INJECTED_MARKER, source);
-}
-
 /** Website-only boundary handoff. An independently opened preview keeps ordinary application
- * scrolling and never cancels wheel events or modifies the report's document. */
+ * scrolling and never cancels wheel events. */
 export function installPreviewScrollBridge(win: Window = window): () => void {
   if (win.parent === win) return () => {};
-  const doc = win.document;
   // The website accepts this only from its own preview iframe's contentWindow.
   const send = (deltaY: number, velocity?: number, stop?: boolean) =>
     postPreviewMessage(win.parent, { type: PREVIEW_MESSAGE.scroll, deltaY, velocity, stop });
-  const removeRelay = installBoundaryScrollRelay(win, send);
-  const onMessage = (event: MessageEvent) => {
-    const data = event.data as { type?: unknown; deltaY?: unknown; velocity?: unknown; stop?: unknown } | null;
-    const parts = data?.type === REPORT_SCROLL_MESSAGE ? readScrollParts(data) : undefined;
-    if (!parts) return;
-    // A message carries a scroll delta, a release velocity, or a stop signal.
-    const { deltaY, velocity, stop } = parts;
-    if (deltaY === 0 && !velocity && !stop) return;
-    if (isReportBridgeSource(doc, event.source, INJECTED_MARKER))
-      send(deltaY, velocity, stop || undefined);
-  };
-  win.addEventListener("message", onMessage);
-  return () => {
-    removeRelay();
-    win.removeEventListener("message", onMessage);
-  };
+  return installBoundaryScrollRelay(win, send);
 }

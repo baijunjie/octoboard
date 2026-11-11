@@ -217,20 +217,13 @@ screen a UI defect and ordinary agent behaviour are indistinguishable: "Ctrl+C i
 state" all look exactly alike, and only the side-by-side comparison tells them apart. Do this before filing a symptom
 against an agent or against `xterm.js`.
 
-## Watch for a report page's blocked navigation on the window, not inside the frame
-
-What stops a page in the panel from navigating its frame somewhere external is the *embedder's* `frame-src`, so WebKit
-reports the refusal to the embedder: the `securitypolicyviolation` event fires on the window's own document and the
-frame's document never sees it. Instrument the window — a listener there is both the only way to observe a page
-attempting to leave and a standing health signal for the window's own policy.
-
 ## Give a network-level probe a positive control the window actually permits
 
 Before interpreting an empty network capture as proof of isolation, check both the window's content security policy
-and its native content rules against the probe's resource type. Use an HTTP(S) image in the main document as the
-positive control, and confirm its request reaches the observer; a report frame's image is restricted separately, so
-it cannot serve as that control. See "What a page may contain, and what it cannot do" in
-`docs/product/report-panel.md`. A fetch, frame or socket refused by policy establishes no network baseline. Where a
+and its native content rules against the probe's resource type. Use an HTTP(S) image in a Markdown document outside
+the report panel as the positive control, and confirm its request reaches the observer; an
+image in a report page cannot serve, since the page's renderer draws images from `data:` addresses only and requests
+nothing else. See "What a page may contain, and what it cannot do" in `docs/product/report-panel.md`. A fetch, frame or socket refused by policy establishes no network baseline. Where a
 permitted control cannot be generated inside the app, generate one in Safari through the same WebKit networking path.
 
 ## Prove that no key reached the terminal against an agent that echoes every byte

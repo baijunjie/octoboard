@@ -45,7 +45,7 @@ export function ProcessSessionSelect({ projectId, value, onChange, landing, show
   return (
     <div className="contents" {...handoff}>
       {shown && <PaneToolbar ref={toolbar} onBlur={onBlur}>
-        <OptionSelect hideLabel landing={landing} label={t("processes.sessionFilter")} placeholder={t("processes.allSessions")} options={options} value={value ?? null} onChange={(id: string | null) => onChange(id ?? undefined)} />
+        <OptionSelect hideLabel variant="primary" landing={landing} label={t("processes.sessionFilter")} placeholder={t("processes.allSessions")} options={options} value={value ?? null} onChange={(id: string | null) => onChange(id ?? undefined)} />
       </PaneToolbar>}
     </div>
   );

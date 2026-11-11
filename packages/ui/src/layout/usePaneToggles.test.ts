@@ -239,7 +239,7 @@ it("opens the floating group on a press on a touch-only medium screen", () => {
   expect(panes().asidePeek.active).toBe(false);
   act(() => panes().asidePeek.reveal(true));
   expect(panes().asidePeek.active).toBe(true);
-  act(() => panes().dismissOverlays());
+  act(() => void document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   expect(panes().asidePeek.active).toBe(false);
 });
 

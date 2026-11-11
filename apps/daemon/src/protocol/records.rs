@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 use super::agents::{AgentId, Launch, PerAgent};
 use super::fields::present_option;
 use super::git_workflow::GitWorkflowOverride;
+#[cfg(test)]
+use super::page_content::SubmittedValue;
+use super::page_content::{PageContent, Submission};
 
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -615,7 +618,20 @@ impl Session {
 pub struct Page {
     pub id: String,
     pub session_id: String,
-    pub html: String,
+    pub content: PageContent,
+    /// What the page's form was submitted with, or `null` while it has not been: set when the
+    /// submission is accepted for delivery, before the message is written, and cleared again only
+    /// when the delivery certainly failed (`page_submission`).
+    #[cfg_attr(
+        test,
+        ts(as = "Option<BTreeMap<String, SubmittedValue>>"),
+        schemars(with = "Option<BTreeMap<String, SubmittedValue>>")
+    )]
+    pub submission: Option<Submission>,
+    /// How many times `submission` has changed: 0 for a page never submitted, raised by one with
+    /// each mark and each clearing. A client that hears of the submission twice, from `page_list`
+    /// and `page_submission` in either order, keeps the one with the higher revision.
+    pub submission_revision: i64,
     pub created_at: i64,
 }
 

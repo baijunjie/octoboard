@@ -83,8 +83,9 @@ product docs name for parts of the window:
   command it names, and the stack trace on the screen for a failed UI, which also keeps its left alignment and so its
   indentation.
 - **The terminal**, which is never mirrored (see "What follows the language" in `docs/product/language.md`).
-- **A report page**, which keeps its own direction; only the panel around it is mirrored (see "What follows the
-  language" in `docs/product/language.md`).
+- **A report page's own text**: the page is mirrored with the panel around it, but each block of the session's text
+  takes the direction of its own text, aligned with the interface, and code and a diff read left to right (see
+  "Language and direction in a page" in `docs/product/report-page-components.md`).
 - **A file's content in the file viewer**: code, a diff — whose split layout keeps the old side on the left — the file's
   name and path, and the paths a change names, read left to right, and a binary change's sizes run from before to after
   left to right; only the viewer around them is mirrored. A file or folder name in the file tree, a name and what

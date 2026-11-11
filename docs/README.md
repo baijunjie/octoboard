@@ -228,7 +228,9 @@ Where to start, by question:
 - [Finding in the file viewer](product/finding-in-the-file-viewer.md) — Find in file: opening the find bar, what is
   searched, its switches and count, how matches are highlighted and stepped through, and closing it.
 - [Report panel](product/report-panel.md) — the panel where a console session, or a project session that faces the
-  user, pushes, withdraws and pages through its pages and receives form submissions.
+  user, pushes, withdraws and pages through its pages and receives form submissions, each page submitted at most once.
+- [Report page components](product/report-page-components.md) — what a report page is built from: the component
+  catalogue, the daemon's checks on a pushed page, form checks, tables and charts.
 
 ### Desktop app and website
 

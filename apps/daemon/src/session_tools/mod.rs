@@ -1,13 +1,14 @@
 //! The static description of the Octoboard MCP tools and what sessions are told about them: the
 //! tool catalogue ([`catalogue`]), the role description a session is launched with ([`role`]), the
-//! text of the console session's instruction file ([`console_instructions`]), whom a project
-//! session reports to as that text depends on it ([`Owner`]), and the limit on a forwarded call
-//! ([`CALL_TIMEOUT`]).
+//! text of the console session's instruction file ([`console_instructions`]), the guide to the
+//! pages a session pushes ([`page_guide`]), whom a project session reports to as that text depends
+//! on it ([`Owner`]), and the limit on a forwarded call ([`CALL_TIMEOUT`]).
 //! Pure data and text, with no behavior of its own: whoever announces or runs the tools, or tells a
 //! session about them, reads it from here.
 
 pub mod catalogue;
 pub mod console_instructions;
+pub mod page_guide;
 pub mod role;
 
 use std::time::Duration;

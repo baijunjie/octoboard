@@ -55,15 +55,26 @@ menu bar's list take the queue as their `queuedSwitches` argument, next to `dele
 shows sessions selects the queue itself (`useQueuedAccountSwitches`, or `s.queuedAccountSwitches` inside its
 selector): otherwise it does not render again when a session joins or leaves the queue, and nothing fails.
 
-## Deduplicate polling answers before scheduling state
+## Skip a state set that changes nothing: React does not reliably skip it for you
 
-For daemon polling whose hook runs in `App`, compare each answer with the latest committed state before calling
-the setter: returning the previous state from a functional updater can still execute `App` once after a changed
-update. Read that state through `useLatest`, never a ref assigned during render, and skip the setter for unchanged
-answers, repeated refresh failures included. Compare the error's message and displayed diagnostics explicitly:
-`sameValue` compares enumerable properties, which omit an Error's message and stack. A successful answer must still
-clear a previous failure even when its list is unchanged. Count executions of the hook's caller to verify this;
-unchanged DOM or a skipped child does not prove that `App` stayed idle.
+React drops a set to the value a state already holds only while the component has no update pending, and right
+after it processed a real one it still counts as having one; otherwise the set, a functional updater returning `prev`
+too, queues an update in its lane
+(a `useEffect`'s is the default lane) and the component runs once more to process it, often later, when something in
+another lane renders it. So in `packages/ui`, wherever a set may well not change the state — a daemon polling answer, a
+reset in an effect that runs on mount or on a dependency change, a measurement taken on every commit, a reconcile after
+a daemon event — compare against the current state and skip the setter when nothing moved, or clear it during render
+behind the same check (a render-phase set queues no update).
+
+For daemon polling whose hook runs in `App`, read the latest committed state through `useLatest`, never a ref assigned
+during render, and skip the setter for unchanged answers, repeated refresh failures included. Compare the error's
+message and displayed diagnostics explicitly: `sameValue` compares enumerable properties, which omit an Error's message
+and stack. A successful answer must still clear a previous failure even when its list is unchanged.
+
+Count executions of the component to verify it, as `packages/ui/src/App.renderCounts.test.tsx` does for `App` and the
+children it lays out; unchanged DOM or a skipped child does not prove the component stayed idle. When that test's
+bounds break after a change that only moved memoization, look for an unguarded set first: the extra run it costs
+lands wherever the next render in another lane falls.
 
 ## An empty collection means "nothing has arrived yet" until `hosts` is set
 

@@ -779,14 +779,27 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     );
   };
 
-  /** Presses `element` with a finger: the pointer events react-aria's `usePress` reads, then the click
+  /** Moves the mouse pointer from `control` onto `pane`'s card, as a person does to look at what the control brought in. A
+   * floating pane's frame passes pointer events through, so the pointer lands on a card. The control is unhovered, and
+   * the pane hovered, which keeps a floating group that a toggle revealed from hiding when the pointer leaves the toggle. */
+  const movePointerOnto = (control: HTMLElement, pane: HTMLElement) => {
+    const target = pane.querySelector<HTMLElement>("[data-panel-card]") ?? pane;
+    const box = target.getBoundingClientRect();
+    const init = { bubbles: true, pointerType: "mouse", clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 } as const;
+    control.dispatchEvent(new PointerEvent("pointerout", { ...init, relatedTarget: target }));
+    target.dispatchEvent(new PointerEvent("pointerover", { ...init, relatedTarget: control }));
+    target.dispatchEvent(new PointerEvent("pointermove", init));
+  };
+
+  /** Presses `element` as a `pointerType` pointer does: the pointer events react-aria's `usePress` reads, then the click
    * that ends the press. The box has a size, since react-aria reads a pointer event of no size as a virtual one. */
-  const touch = (element: HTMLElement) => {
-    const init: PointerEventInit = { bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true, pointerType: "touch", width: 20, height: 20 };
+  const pressAs = (element: HTMLElement, pointerType: "touch" | "mouse") => {
+    const init: PointerEventInit = { bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true, pointerType, width: 20, height: 20 };
     element.dispatchEvent(new PointerEvent("pointerdown", init));
     element.dispatchEvent(new PointerEvent("pointerup", init));
     element.dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0, detail: 1 }));
   };
+  const touch = (element: HTMLElement) => pressAs(element, "touch");
 
   /** The popover a touch press opens in place of a tooltip, drawn like it, once it is up: the touch popover
    * of an indicator or a control (`TouchPopover`, the surface itself the dialog) or the press form of a popover
@@ -1096,13 +1109,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
         }
         return undefined;
       }, `The control matching ${String(toggle)} floated in no pane under the pointer`);
-      // The floating pane's frame passes pointer events through, so the pointer lands on a card.
-      const target = pane.querySelector<HTMLElement>("[data-panel-card]") ?? pane;
-      const box = target.getBoundingClientRect();
-      const init = { bubbles: true, pointerType: "mouse", clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 } as const;
-      control.dispatchEvent(new PointerEvent("pointerout", { ...init, relatedTarget: target }));
-      target.dispatchEvent(new PointerEvent("pointerover", { ...init, relatedTarget: control }));
-      target.dispatchEvent(new PointerEvent("pointermove", init));
+      movePointerOnto(control, pane);
       await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
     },
     async hoverSessionContext(row) {
@@ -1352,8 +1359,18 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     async showPanel(kind) {
       const [show, hide] = [t(`titleBar.${kind}.show`), t(`titleBar.${kind}.hide`)];
       const toggle = await waitFor(() => find((name) => name === show || name === hide), `Nothing is named ${show} or ${hide} to bring the panel in with`);
-      if (nameOf(toggle) === show) await clickWhenFound(() => toggle, "");
-      else {
+      if (nameOf(toggle) === show) {
+        // A person presses the toggle with a mouse. A bare `click()` is a virtual press, which would leave the focus a
+        // floating card gives its Close panel button keyboard-visible, and that button's tooltip drawn over the card for
+        // as long as the focus stays. The pointer then moves onto the card, as it would to look at it, so the toggle does not
+        // stay hovered in the picture and a floating group does not hide for the pointer having left the toggle.
+        pointAt(toggle);
+        pressAs(toggle, "mouse");
+        await wait(150);
+        const pane = doc.querySelector<HTMLElement>("[data-pane=aside]");
+        if (pane) movePointerOnto(toggle, pane);
+        else toggle.dispatchEvent(new PointerEvent("pointerout", { bubbles: true, pointerType: "mouse", relatedTarget: doc.body }));
+      } else {
         // An open panel can belong to a floating group that is currently hidden. Reveal that
         // group without pressing its toggle, which would close the panel in the saved stack.
         const pane = doc.querySelector<HTMLElement>("[data-pane=aside]");

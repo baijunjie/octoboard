@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { composePageDocument } from "../report/pageDocument";
 import { PREVIEW_MESSAGE } from "./messages";
-import {
-  installInteractionRelay,
-  installPreviewInteractionBridge,
-  withReportInteractionBridge,
-} from "./interactionBridge";
-import { withReportScrollBridge } from "./scrollBridge";
+import { installInteractionRelay, installPreviewInteractionBridge } from "./interactionBridge";
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -16,11 +10,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const reportDocument = () => composePageDocument(
-  "<body data-website-preview-report><p>Sample report</p></body>",
-  false,
-  "abcdef012345",
-);
 const key = (target: EventTarget, value: string) => {
   const event = new KeyboardEvent("keydown", {
     key: value,
@@ -86,77 +75,24 @@ describe("preview interaction relay", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("forwards only its own live report's valid messages and cleans up the embedded relay", () => {
+  it("forwards its own window's input to the website and stops after cleanup", () => {
     const preview = document.createElement("iframe");
     document.body.appendChild(preview);
     const child = preview.contentWindow!;
-    child.document.body.innerHTML = '<div class="website-preview-app"></div>';
-    const report = child.document.createElement("iframe");
-    report.srcdoc = withReportInteractionBridge(reportDocument());
-    child.document.body.firstElementChild!.appendChild(report);
     const send = vi.spyOn(child.parent, "postMessage").mockImplementation(() => {});
     const remove = installPreviewInteractionBridge(child);
     cleanups.push(remove);
-    const message = (source: Window, modality: unknown) => child.dispatchEvent(new MessageEvent("message", {
-      source,
-      data: { type: "octoboard-preview-report-interaction", modality },
-    }));
 
     pointer(child.document.body);
     key(child.document.body, "Tab");
-    message(report.contentWindow!, "pointer");
-    message(report.contentWindow!, "keyboard");
-    expect(send.mock.calls).toEqual(["pointer", "keyboard", "pointer", "keyboard"].map((modality) => [
+    expect(send.mock.calls).toEqual(["pointer", "keyboard"].map((modality) => [
       { type: PREVIEW_MESSAGE.interaction, modality }, "/",
     ]));
     send.mockClear();
-    message(window, "keyboard");
-    message(report.contentWindow!, "mouse");
-    message(report.contentWindow!, true);
-    report.srcdoc = reportDocument();
-    message(report.contentWindow!, "keyboard");
-    report.srcdoc = withReportInteractionBridge(reportDocument());
-    const oldReport = report.contentWindow!;
-    report.remove();
-    message(oldReport, "keyboard");
-    expect(send).not.toHaveBeenCalled();
 
     remove();
     pointer(child.document.body);
     key(child.document.body, "Tab");
     expect(send).not.toHaveBeenCalled();
-  });
-});
-
-describe("report interaction script", () => {
-  it("only augments the known nonce-protected fixture once and preserves its scroll bridge", () => {
-    const source = withReportScrollBridge(reportDocument());
-    const injected = withReportInteractionBridge(source);
-    expect(injected).toContain(source);
-    expect(injected).toContain('<script nonce="abcdef012345" data-website-preview-interaction-bridge>');
-    expect(withReportInteractionBridge(injected)).toBe(injected);
-    for (const other of [
-      source.replaceAll("data-website-preview-report", "other-report"),
-      source.replaceAll('nonce="abcdef012345"', ""),
-      "<body data-website-preview-report>",
-    ]) expect(withReportInteractionBridge(other)).toBe(other);
-  });
-
-  it("runs the serialized relay without module dependencies", () => {
-    const injected = withReportInteractionBridge(reportDocument());
-    const script = injected.slice(injected.lastIndexOf('<script nonce="abcdef012345" data-website-preview-interaction-bridge>'))
-      .replace(/^<script[^>]+>/, "").replace(/<\/script>$/, "");
-    const send = vi.spyOn(window, "postMessage").mockImplementation(() => {});
-    const add = vi.spyOn(window, "addEventListener");
-    window.eval(script);
-    for (const type of ["keydown", "pointerdown"] as const) {
-      const listener = add.mock.calls.find(([name]) => name === type)![1];
-      cleanups.push(() => window.removeEventListener(type, listener, true));
-    }
-    pointer(document.body);
-    key(document.body, "Tab");
-    expect(send.mock.calls).toEqual(["pointer", "keyboard"].map((modality) => [
-      { type: "octoboard-preview-report-interaction", modality }, "*",
-    ]));
   });
 });

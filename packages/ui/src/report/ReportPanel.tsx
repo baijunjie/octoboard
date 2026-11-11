@@ -1,6 +1,6 @@
 import { errorPresentation, type ErrorPresentation } from "../errors/errorPresentation";
 import { FileText } from "lucide-react";
-import React, { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useState } from "react";
 
 import { PagerButton } from "../components/controls/PagerButton";
 import { PaneFailure } from "../components/alerts/PaneFailure";
@@ -12,26 +12,17 @@ import { HandoffOnUnmount } from "../components/focus/HandoffOnUnmount";
 import { handFocusToRegionStart } from "../components/focus/modalFocus";
 import { PanelHeader } from "../components/panel/PanelHeader";
 import { CenteredEmptyPanel } from "../components/panel/EmptyPanel";
+import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
 import { FadeOverflow } from "../components/text/FadeOverflow";
+import { CodedError } from "../errors/codedError";
 import { useCurrentLanguage, useT } from "../i18n/react";
-import type { PanePeek } from "../layout/usePaneToggles";
-import { usePlatform } from "../platform/react";
-import type { Page } from "../protocol";
+import type { Page, SubmittedValue } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
-import { eventKey } from "../shortcuts/binding";
-import { commandExists } from "../shortcuts/commands";
-import { useStableBinding } from "../shortcuts/store";
 import { listPages } from "./listPages";
-import { PageDocumentTransform } from "./pageDocumentTransform";
-import {
-  composePageDocument,
-  ESCAPE_MESSAGE_SOURCE,
-  HISTORY_MESSAGE_SOURCE,
-  REGION_MESSAGE_SOURCE,
-  SUBMIT_MESSAGE_SOURCE,
-  SWITCH_MESSAGE_SOURCE,
-  submissionFromEntries,
-} from "./pageDocument";
+import { formatPageTime } from "./pageTime";
+import type { Pressed } from "./page/PageFormContext";
+import { defaultValues, type FormValues } from "./page/formModel";
+import { PageView } from "./page/PageView";
 
 /**
  * A session's report panel: the Report panel of the right pane (`panels/panelRegistry.tsx`) while
@@ -42,34 +33,10 @@ import {
  * from one. Switching to another session mounting a fresh instance, so that its position is
  * not carried over from the previous one, is the call site's concern, not this component's.
  */
-export function ReportPanel({
-  sessionId,
-  peek,
-  onEscape,
-  onCycleRegion,
-  onMoveHistory,
-  onMoveConsoleSession,
-}: {
-  sessionId: string;
-  /** The floating pane's pointer callbacks, wired onto the page's frame, which sends this document
-   * no pointer events of its own; `undefined` while the pane is docked. */
-  peek: Pick<PanePeek, "keep" | "leave"> | undefined;
-  /** Escape was pressed inside the page's frame, where this document never sees the key. The
-   * owner closes whichever overlay is open, as Escape does elsewhere. */
-  onEscape: () => void;
-  /** F6 (`backward` with Shift) was pressed inside the page's frame; the owner moves focus to the
-   * neighbouring region of the window. */
-  onCycleRegion: (backward: boolean) => void;
-  /** ⌘[ (`backward`) or ⌘] was pressed inside the page's frame; the owner moves through the
-   * navigation history, where the window has that shortcut. */
-  onMoveHistory: (backward: boolean) => void;
-  /** ⌃⇧Tab (`backward`) or ⌃Tab was pressed inside the page's frame; the owner moves to the
-   * neighbouring console session, where the window has that shortcut. */
-  onMoveConsoleSession: (backward: boolean) => void;
-}): React.ReactElement {
+export function ReportPanel({ sessionId }: { sessionId: string }): React.ReactElement {
   const t = useT();
+  const { request, store } = useDaemon();
   const language = useCurrentLanguage();
-  const { request } = useDaemon();
   const sessionPages = useDaemonStore((s) => s.pages.get(sessionId));
   const connectionState = useDaemonStore((s) => s.connectionState);
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
@@ -105,7 +72,7 @@ export function ReportPanel({
     // Guards against a slow reply for a session the user has since switched away from (and
     // possibly back to) landing a now-stale error after the fact.
     let stale = false;
-    listPages(request, sessionId, snapshotEpoch).then(
+    listPages({ request, store }, sessionId, snapshotEpoch).then(
       () => {
         if (stale) return;
         setListFailure(undefined);
@@ -121,7 +88,56 @@ export function ReportPanel({
     return () => {
       stale = true;
     };
-  }, [sessionId, connectionState, snapshotEpoch, attempt, request]);
+  }, [sessionId, connectionState, snapshotEpoch, attempt, request, store]);
+
+  // The submission whose `submit_page` is out, if any: the page's own id, as the user may have paged away by the reply,
+  // and the key of the button that was pressed (`submitterKeys`), which unlike the component survives the page being
+  // listed anew, and tells a button with no name from another.
+  const [pending, setPending] = useState<{ page: string; pressed: string }>();
+  // What this window sent and the daemon accepted, by page, for the moments before the daemon's own `page_submission`
+  // reaches the store: the reply and the event are not ordered against each other, and the form must not unlock between
+  // them.
+  const [acceptedById, setAcceptedById] = useState<Readonly<Record<string, Record<string, SubmittedValue>>>>({});
+
+  // What the user has entered into each page's form, by page id, so that it outlives the page's view: paging away
+  // unmounts it, and a failed submission unlocks the form on a page the user may not be looking at. A page
+  // that has left the list loses its draft and what was accepted for it.
+  const [drafts, setDrafts] = useState<Readonly<Record<string, FormValues>>>({});
+  useEffect(() => {
+    if (sessionPages === undefined) return;
+    function listed<T>(held: Readonly<Record<string, T>>): Readonly<Record<string, T>> {
+      const kept = Object.keys(held).filter((id) => sessionPages!.some((p) => p.id === id));
+      return kept.length === Object.keys(held).length ? held : Object.fromEntries(kept.map((id) => [id, held[id]]));
+    }
+    setDrafts(listed);
+    setAcceptedById(listed);
+  }, [sessionPages]);
+
+  const submit = (id: string, data: Record<string, SubmittedValue>, pressed: Pressed) => {
+    const done = () => setPending((current) => (current?.page === id ? undefined : current));
+    const accept = () => setAcceptedById((held) => ({ ...held, [id]: data }));
+    setPending({ page: id, pressed: pressed.key });
+    // The daemon refuses `submit_page` for any page that is not this session's newest or that is already submitted
+    // (see "Client to daemon" in `apps/daemon/PROTOCOL.md`), so a stale submission in flight from a page the user has
+    // since paged away from, or one raced by another window, is caught there, not here: this forwards it and reports
+    // whatever comes back.
+    //
+    // A submission is delivered to the session that pushed the page, which is this panel's, so that is what the daemon's
+    // refusals are about ("This session is not running.", "This session is waiting for you."): naming it keeps the user
+    // from reading the message as being about whatever session they are looking at.
+    request({ type: "submit_page", page: id, data }).then(
+      () => {
+        accept();
+        done();
+      },
+      (err: unknown) => {
+        // The message may be in the session: the daemon keeps the page submitted, and so does this.
+        if (err instanceof CodedError && err.code === "message_acceptance_unconfirmed") accept();
+        done();
+        raiseError(err, { title: t("report.submitFailedTitle"), session: sessionId });
+      },
+    );
+  };
 
   if (listFailure !== undefined && !showsPages && spokenAsCard !== failures) setSpokenAsCard(failures);
 
@@ -129,24 +145,6 @@ export function ReportPanel({
     setRetrying(true);
     setAttempt((n) => n + 1);
   };
-
-  const handleSubmit = useCallback(
-    (page: Page, data: unknown) => {
-      // The daemon refuses `submit_page` for any page that is not this session's newest (see
-      // "Client to daemon" in `apps/daemon/PROTOCOL.md`), so a stale submission in flight from a page
-      // the user has since paged away from is caught there, not here — this just forwards it and
-      // reports whatever comes back.
-      //
-      // A submission is delivered to the session that pushed the page, which is this
-      // panel's, so that is what the daemon's refusals are about ("This session is not running.",
-      // "This session is waiting for you."): naming it keeps the user from reading the message as being
-      // about whatever session they are looking at.
-      request({ type: "submit_page", page: page.id, data }).catch((err) => {
-        raiseError(err, { title: t("report.submitFailedTitle"), session: sessionId });
-      });
-    },
-    [request, sessionId, t],
-  );
 
   // Pages already here stay usable, so the failure to refresh them is a warning at the title, not an
   // Alert above them. A failure with no pages is the whole-card one, which announces itself.
@@ -200,54 +198,64 @@ export function ReportPanel({
       setAnchorId(index === sessionPages.length - 1 ? undefined : sessionPages[index].id);
     };
 
+    const submission = page.submission ?? acceptedById[page.id] ?? null;
+    const submitting = pending?.page === page.id;
+
     return (
       <>
-        {/* A previous / next pager with "n / m", hand-assembled from buttons: HeroUI's `Pagination`
-          is a list of numbered pages, which neither reads as nor behaves like this. */}
-        <PanelHeader title={t("panel.report.name")} titleMark={listingFailureMark || undefined}>
-          <div className="flex shrink-0 items-center gap-1 text-xs text-app-muted">
-            <PagerButton
-              label={t("report.previous")}
-              direction="previous"
-              isDisabled={displayIndex === 0}
-              onPress={() => goTo(displayIndex - 1)}
-            />
-            {/* The page count is a range written with `/`, which reads left to right whatever the
-              interface direction is: mirrored, "1 / 12" would say page 12 of 1. */}
-            <span dir="ltr" className="whitespace-nowrap">
-              {t("report.position", { index: displayIndex + 1, total: sessionPages.length })}
-            </span>
-            <PagerButton
-              label={t("report.next")}
-              direction="next"
-              isDisabled={displayIndex === sessionPages.length - 1}
-              onPress={() => goTo(displayIndex + 1)}
-            />
+        {/* A previous / next pager with "n / m", hand-assembled from buttons: HeroUI's `Pagination` is a list of
+          numbered pages, which neither reads as nor behaves like this. After it comes the page's timestamp and the
+          states it is in. The timestamp's width is whatever the user's locale makes of it, so it is the element that
+          gives way, down to nothing, rather than pushing the pager, the badges or the header's buttons off the panel's
+          edge when narrow. */}
+        <PanelHeader title={t("panel.report.name")} titleMark={listingFailureMark || undefined} growChildren>
+          <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-app-muted">
+            <div className="flex shrink-0 items-center gap-1">
+              <PagerButton
+                label={t("report.previous")}
+                direction="previous"
+                isDisabled={displayIndex === 0}
+                onPress={() => goTo(displayIndex - 1)}
+              />
+              {/* The page count is a range written with `/`, which reads left to right whatever the
+                interface direction is: mirrored, "1 / 12" would say page 12 of 1. */}
+              <span dir="ltr" className="whitespace-nowrap">
+                {t("report.position", { index: displayIndex + 1, total: sessionPages.length })}
+              </span>
+              <PagerButton
+                label={t("report.next")}
+                direction="next"
+                isDisabled={displayIndex === sessionPages.length - 1}
+                onPress={() => goTo(displayIndex + 1)}
+              />
+            </div>
+            <FadeOverflow as="span" className="min-w-0 flex-1 contain-inline-size">
+              {formatPageTime(page.created_at, language)}
+            </FadeOverflow>
+            {isHistory && (
+              <StatusBadge variant="soft" color="warning">
+                {t("report.readOnly")}
+              </StatusBadge>
+            )}
+            {/* Not while this window's submission is out: the daemon marks the page before delivering, so its record
+              arrives before the outcome is known. */}
+            {submission !== null && !submitting && (
+              <StatusBadge variant="soft" color="success">
+                {t("report.submitted")}
+              </StatusBadge>
+            )}
           </div>
         </PanelHeader>
-        {/* The timestamp's width is whatever the user's locale makes of it, so it is the element
-          that gives way, rather than pushing the badge off the panel's edge when narrow. */}
-        <div className="flex h-8 shrink-0 items-center gap-2 px-(--pane-inset) text-xs text-app-muted">
-          <FadeOverflow as="span" className="min-w-0">
-            {new Date(page.created_at).toLocaleString(language)}
-          </FadeOverflow>
-          {isHistory && (
-            <StatusBadge variant="soft" color="warning">
-              {t("report.readOnly")}
-            </StatusBadge>
-          )}
-        </div>
-        <PageFrame
+        <PageSection
           key={page.id}
           page={page}
+          submission={submission}
           isHistory={isHistory}
-          onSubmit={handleSubmit}
-          onEscape={onEscape}
-          onCycleRegion={onCycleRegion}
-          onMoveHistory={onMoveHistory}
-          onMoveConsoleSession={onMoveConsoleSession}
-          onPointerEnter={peek?.keep}
-          onPointerLeave={peek?.leave}
+          pending={submitting}
+          pressed={submitting ? pending.pressed : undefined}
+          draft={drafts[page.id]}
+          onDraft={(update) => setDrafts((held) => ({ ...held, [page.id]: update(held[page.id] ?? defaultValues(page.content)) }))}
+          onSubmit={(data, pressed) => submit(page.id, data, pressed)}
         />
       </>
     );
@@ -264,13 +272,6 @@ export function ReportPanel({
   );
 }
 
-/** A fresh unguessable value for one frame's script nonce. */
-function newNonce(): string {
-  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-}
-
 /** Holds a failure shown in the panel, and hands focus on when it goes while it holds focus (the
  * listing answered after Try again was pressed from the keyboard): its button goes with it, and
  * the focus would fall to the page. */
@@ -285,117 +286,39 @@ function FailureGoes({ className, children }: { className: string; children: Rea
 }
 
 /**
- * The sandboxed render of one page. Keyed by `page.id` at the call site so React remounts this
- * (and so the iframe) rather than mutating it across a page change, which also gives each page its
- * own script nonce.
+ * One page's content as a form, in a scroller of its own. Keyed by `page.id` at the call site, so another page starts
+ * with a view of its own; the values entered live in the panel's `drafts`, so they outlive it.
+ *
+ * A page with a `submission` (the daemon's record, which every window has, or what this window sent and the daemon
+ * accepted) is read-only and shows what it was submitted with, so a page submitted from another window, or before a
+ * reload, looks the same as one submitted here. A history page is read-only too (the daemon refuses a submission from
+ * one). While this window's `submit_page` is out (`pending`) the form is locked. A failure the daemon says certainly did
+ * not deliver unlocks it, with the values the user entered (the daemon has cleared the mark and told every window); one
+ * whose acceptance is unconfirmed leaves the page submitted, as the daemon keeps its mark, and its error says the
+ * message may have arrived.
  */
-function PageFrame({
-  page,
-  isHistory,
-  onSubmit,
-  onEscape,
-  onCycleRegion,
-  onMoveHistory,
-  onMoveConsoleSession,
-  onPointerEnter,
-  onPointerLeave,
-}: {
+function PageSection({ page, submission, isHistory, pending, pressed, draft, onDraft, onSubmit }: {
   page: Page;
+  submission: Page["submission"];
   isHistory: boolean;
-  onSubmit: (page: Page, data: unknown) => void;
-  onEscape: () => void;
-  onCycleRegion: (backward: boolean) => void;
-  onMoveHistory: (backward: boolean) => void;
-  onMoveConsoleSession: (backward: boolean) => void;
-  onPointerEnter?: () => void;
-  onPointerLeave?: () => void;
+  pending: boolean;
+  pressed: string | undefined;
+  /** What the user has entered, `undefined` while nothing has been. */
+  draft: FormValues | undefined;
+  onDraft: (update: (held: FormValues) => FormValues) => void;
+  onSubmit: (data: Record<string, SubmittedValue>, pressed: Pressed) => void;
 }): React.ReactElement {
   const t = useT();
-  const platform = usePlatform();
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const frameId = useId();
-  const transformDocument = useContext(PageDocumentTransform);
-  // State rather than a memo: React may drop a memo's cache, and a new nonce reloads the frame,
-  // losing whatever the user has typed into the page.
-  const [nonce] = useState(newNonce);
-  // The window's own keys are baked into the document, so rebinding one reloads the frame; a
-  // binding that is set again to the same keys (an import, a replace) does not.
-  const back = useStableBinding("back");
-  const forward = useStableBinding("forward");
-  const next = useStableBinding("nextConsoleSession");
-  const previous = useStableBinding("previousConsoleSession");
-  // The page relays the window's keys on the clients that have those commands: Back and Forward in the macOS app,
-  // the console-session switch in the desktop app on any system.
-  const history = commandExists("back", platform);
-  const switching = commandExists("nextConsoleSession", platform);
-  const noContextMenu = platform.kind === "tauri";
-  const host = platform.host;
-  const srcDoc = useMemo(
-    () => transformDocument(composePageDocument(page.html, isHistory, nonce, {
-      noContextMenu,
-      historyKeys: history ? { back: eventKey(back, host), forward: eventKey(forward, host) } : undefined,
-      switchKeys: switching ? { next: eventKey(next, host), previous: eventKey(previous, host) } : undefined,
-    })),
-    [page.html, isHistory, nonce, noContextMenu, history, switching, host, back, forward, next, previous, transformDocument],
-  );
-
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      // `sandbox="allow-scripts allow-forms"` without `allow-same-origin` gives the frame an opaque origin, so
-      // its messages arrive with `event.origin === "null"` — a string every opaque frame shares,
-      // not something that identifies this one. The only reliable check is that the message came
-      // from this iframe's own window.
-      if (event.source !== iframeRef.current?.contentWindow) return;
-      const data = event.data as { source?: unknown } | null;
-      if (!data) return;
-      // The relay carries nothing from the page, so a page forging it can only ask for what the
-      // user's own Escape would do.
-      if (data.source === ESCAPE_MESSAGE_SOURCE) return onEscape();
-      // Likewise only moves focus, as the user's own F6 would, and only while focus is in the frame:
-      // a page posting it at any other time would pull focus off wherever the user is.
-      if (data.source === REGION_MESSAGE_SOURCE) {
-        if (document.activeElement !== iframeRef.current) return;
-        return onCycleRegion((data as { backward?: unknown }).backward === true);
-      }
-      // Likewise only what the user's own ⌘[ or ⌘] would do, and only while focus is in the frame.
-      if (data.source === HISTORY_MESSAGE_SOURCE) {
-        if (document.activeElement !== iframeRef.current) return;
-        return onMoveHistory((data as { backward?: unknown }).backward === true);
-      }
-      // Likewise only what the user's own ⌃Tab would do, and only while focus is in the frame.
-      if (data.source === SWITCH_MESSAGE_SOURCE) {
-        if (document.activeElement !== iframeRef.current) return;
-        return onMoveConsoleSession((data as { backward?: unknown }).backward === true);
-      }
-      // A history page's bridge already posts nothing, and the daemon refuses a `submit_page` for
-      // one regardless (it is the enforcement point), but a forged message would surface that
-      // refusal as an error notification for an action the user never took, so a history page's
-      // messages are not forwarded.
-      if (isHistory || data.source !== SUBMIT_MESSAGE_SOURCE) return;
-      const submission = submissionFromEntries((data as { entries?: unknown }).entries);
-      if (submission) onSubmit(page, submission);
-    };
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [page, isHistory, onSubmit, onEscape, onCycleRegion, onMoveHistory, onMoveConsoleSession]);
+  const pageId = useId();
+  const values = useMemo(() => draft ?? defaultValues(page.content), [draft, page.content]);
+  const region = useFadeRegion({ label: page.content.title ?? t("panel.report.name") });
 
   return (
     <>
-      <HandoffOnUnmount from={`[id="${frameId}"]`} to={() => handFocusToRegionStart("panel-report")} />
-      {/* Where a tap's opening of the panel puts focus: on the page, its content. F6, and an
-          opening from a mouse or the keyboard, land on the header's first control instead, the
-          sandboxed page passing on only some of the window's shortcuts. */}
-      <iframe
-        id={frameId}
-        ref={iframeRef}
-        data-touch-landing=""
-        className="min-h-0 flex-1 border-0 bg-white"
-        title={t("report.frameTitle")}
-        sandbox="allow-scripts allow-forms"
-        onPointerEnter={onPointerEnter}
-        onPointerLeave={onPointerLeave}
-        srcDoc={srcDoc}
-      />
+      <HandoffOnUnmount from={`[id="${pageId}"]`} to={() => handFocusToRegionStart("panel-report")} />
+      <FadedScroller id={pageId} region={region} className="min-h-0 flex-1 px-(--pane-inset) pt-2 pb-3">
+        <PageView content={page.content} submission={submission} history={isHistory} pending={pending} pressed={pressed} draft={values} onDraft={onDraft} onSubmit={onSubmit} />
+      </FadedScroller>
     </>
   );
 }

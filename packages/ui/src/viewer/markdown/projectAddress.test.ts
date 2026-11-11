@@ -36,3 +36,10 @@ it("refuses a path that leaves the project, a scheme, or an absolute address", (
   }
   expect(resolveProjectAddress("README.md", "../outside.md")).toEqual({ kind: "refused" });
 });
+
+it("lets only an image's own data address be drawn by an untrusted document", async () => {
+  const { isDataImage } = await import("./projectAddress");
+  for (const href of ["data:image/png;base64,AAAA", "DATA:image/svg+xml,%3Csvg%3E", "data:image/jpeg;charset=utf-8,x"]) expect(isDataImage(href), href).toBe(true);
+  for (const href of ["data:text/html,hi", "data:image/png", "data:imageX/png;base64,AA", "https://example.com/a.png", "docs/a.png", "//example.com/a.png", "javascript:alert(1)", ""]) expect(isDataImage(href), href).toBe(false);
+  expect(isDataImage(undefined)).toBe(false);
+});

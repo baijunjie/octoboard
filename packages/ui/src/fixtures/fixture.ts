@@ -236,6 +236,11 @@ export interface Fixture {
   sessionHistory?: Record<string, HistoryMessage[] | "unavailable" | "pending" | FixtureError>;
   /** Console sessions whose `list_pages` the daemon refuses, by id, with that error; every other one is listed. */
   pageListErrors?: Record<string, FixtureError>;
+  /** How the daemon ends a `submit_page` it accepted (the page is marked submitted and `page_submission` is sent
+   * first, as the daemon does): `"pending"` never answers; `{ error, delivered: false }` is a delivery that certainly
+   * failed, so the mark is taken off again and the error refuses the request; `{ error, delivered: true }` is one
+   * whose acceptance is unconfirmed, which keeps the mark. Without it the submission is delivered. */
+  pageSubmit?: "pending" | { error: FixtureError; delivered: boolean };
   /** Sessions whose `resume_session` is never answered, so a resume stays in flight and the terminal
    * keeps its "Resuming session…" cover. Other sessions resume at once. */
   sessionResumes?: Record<string, "pending">;

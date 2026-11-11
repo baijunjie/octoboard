@@ -7,7 +7,7 @@ import { currentLanguage, t } from "../i18n/language";
 import type { NotificationRequest, State, WindowNotification } from "../store";
 import { broadcastNotification } from "../store/notifications";
 
-import type { Agent, ClientRequestBody, Settings, SettingsSection } from "../protocol";
+import type { Agent, ClientRequestBody, PageContent, Settings, SettingsSection } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
 import { SAMPLE_CLAUDE_MODELS, SAMPLE_CLAUDE_MODELS_PRO } from "./agentModels";
 import { fakeTimers } from "../test/clock";
@@ -21,7 +21,7 @@ import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./restoreSample";
 import type { FixtureFile } from "./sampleFiles";
 import { SAMPLE_GIT } from "./sampleGit";
 import { quotaFailure, quotaOf, quotaWindow, resetCreditOf, resetCreditsOf } from "./quotas";
-import { accountOf, accountSharingOf, branchItemOf, broadcastErrorNotification, consoleOf, gitStatusOf, keptOf, leftoverOf, pageOf, processTreeOf, projectOf, sessionNoticeNotification, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./builders";
+import { accountOf, accountSharingOf, branchItemOf, broadcastErrorNotification, consoleOf, gitStatusOf, keptOf, leftoverOf, markdownContent, pageOf, processTreeOf, projectOf, sessionNoticeNotification, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./builders";
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 
 /** A listener that adds each notification to `list`, a scenario's notifications being shown ones, never withdrawals. */
@@ -221,6 +221,72 @@ describe("the fixture daemon's listings that the scenario refuses", () => {
     await expect(daemon.request({ type: "list_pages", session: hub.id })).rejects.toMatchObject({ code: "permission_denied" });
     expect(daemon.store.getState().pages.has(hub.id)).toBe(false);
     await expect(daemon.request({ type: "list_pages", session: other.id })).resolves.toMatchObject({ type: "page_list", pages: [] });
+  });
+});
+
+describe("the fixture daemon's page submissions", () => {
+  const hub = sessionOf("hub", "c", undefined, "Hub", "idle");
+  const survey: PageContent = { body: [{ type: "markdown", text: "Survey" }, { type: "submit" }] };
+  const held = (daemon: ReturnType<typeof createFixtureDaemon>) => daemon.store.getState().pages.get(hub.id)!.map((page) => page.submission);
+  const revisions = (daemon: ReturnType<typeof createFixtureDaemon>) => daemon.store.getState().pages.get(hub.id)!.map((page) => page.submission_revision);
+  const daemonWith = (extra: Partial<Parameters<typeof createFixtureDaemon>[0]> = {}) => createFixtureDaemon({
+    state: snapshotState({ sessions: [hub], pages: { [hub.id]: [pageOf("old", hub.id, survey, 2), pageOf("new", hub.id, survey, 1)] } }),
+    ...extra,
+  });
+
+  it("marks the newest page submitted with the data and refuses a second submission of it, whoever sends it", async () => {
+    const daemon = daemonWith();
+    await expect(daemon.request({ type: "submit_page", page: "new", data: { note: "Ada" } })).resolves.toMatchObject({ type: "ack" });
+    expect(held(daemon)).toEqual([null, { note: "Ada" }]);
+    await expect(daemon.request({ type: "submit_page", page: "new", data: { note: "again" } })).rejects.toMatchObject({ code: "page_already_submitted" });
+    expect(held(daemon)).toEqual([null, { note: "Ada" }]);
+  });
+
+  it("raises the page's revision on the mark and again on a clear, as the daemon does", async () => {
+    const refusal = { code: "session_not_running", params: { session: hub.id }, message: "This session is not running." };
+    const daemon = daemonWith({ pageSubmit: { error: refusal, delivered: false } });
+    expect(revisions(daemon)).toEqual([0, 0]);
+    await expect(daemon.request({ type: "submit_page", page: "new", data: {} })).rejects.toMatchObject({ code: "session_not_running" });
+    expect(revisions(daemon)).toEqual([0, 2]);
+    await expect(daemon.request({ type: "submit_page", page: "new", data: {} })).rejects.toMatchObject({ code: "session_not_running" });
+    expect(revisions(daemon)).toEqual([0, 4]);
+    const marked = daemonWith();
+    await expect(marked.request({ type: "submit_page", page: "new", data: {} })).resolves.toMatchObject({ type: "ack" });
+    expect(revisions(marked)).toEqual([0, 1]);
+  });
+
+  it("refuses a submission of a page with no form, marking nothing", async () => {
+    const daemon = createFixtureDaemon({ state: snapshotState({ sessions: [hub], pages: { [hub.id]: [pageOf("report", hub.id, markdownContent("Report"), 1)] } }) });
+    await expect(daemon.request({ type: "submit_page", page: "report", data: {} })).rejects.toMatchObject({ code: "unreadable_request" });
+    expect(daemon.store.getState().pages.get(hub.id)![0]).toMatchObject({ submission: null, submission_revision: 0 });
+  });
+
+  it("refuses a page that is not its session's newest, and one it does not hold, marking neither", async () => {
+    const daemon = daemonWith();
+    await expect(daemon.request({ type: "submit_page", page: "old", data: {} })).rejects.toMatchObject({ code: "page_not_current" });
+    await expect(daemon.request({ type: "submit_page", page: "nowhere", data: {} })).rejects.toMatchObject({ code: "unknown_page" });
+    expect(held(daemon)).toEqual([null, null]);
+  });
+
+  it("takes the mark off again when the delivery certainly failed, so the page can be submitted again", async () => {
+    const refusal = { code: "session_not_running", params: { session: hub.id }, message: "This session is not running." };
+    const daemon = daemonWith({ pageSubmit: { error: refusal, delivered: false } });
+    await expect(daemon.request({ type: "submit_page", page: "new", data: { note: "Ada" } })).rejects.toMatchObject({ code: "session_not_running" });
+    expect(held(daemon)).toEqual([null, null]);
+    await expect(daemon.request({ type: "submit_page", page: "new", data: { note: "Ada" } })).rejects.toMatchObject({ code: "session_not_running" });
+  });
+
+  it("keeps the mark when the delivery may have arrived, and when it never answers", async () => {
+    const unconfirmed = { code: "message_acceptance_unconfirmed", params: { agent: "Codex" }, message: "Codex did not confirm." };
+    const daemon = daemonWith({ pageSubmit: { error: unconfirmed, delivered: true } });
+    await expect(daemon.request({ type: "submit_page", page: "new", data: { note: "Ada" } })).rejects.toMatchObject({ code: "message_acceptance_unconfirmed" });
+    expect(held(daemon)).toEqual([null, { note: "Ada" }]);
+    await expect(daemon.request({ type: "submit_page", page: "new", data: {} })).rejects.toMatchObject({ code: "page_already_submitted" });
+
+    const silent = daemonWith({ pageSubmit: "pending" });
+    void silent.request({ type: "submit_page", page: "new", data: { note: "Ada" } });
+    await Promise.resolve();
+    expect(held(silent)).toEqual([null, { note: "Ada" }]);
   });
 });
 
@@ -1342,7 +1408,7 @@ describe("the fixture daemon's settings and rail removals", () => {
     const project = projectOf("p", console_.id, "Website");
     const session = sessionOf("s", console_.id, project.id, "Work", "working");
     const hub = sessionOf("hub", console_.id, undefined, "Hub", "archived");
-    const daemon = createFixtureDaemon({ state: snapshotState({ consoles: [console_, other], projects: [project], sessions: [session, hub], pages: { [hub.id]: [pageOf("report", hub.id, "<p>Report</p>", 1)] }, gitStatuses: [gitStatusOf(project.id)] }) });
+    const daemon = createFixtureDaemon({ state: snapshotState({ consoles: [console_, other], projects: [project], sessions: [session, hub], pages: { [hub.id]: [pageOf("report", hub.id, markdownContent("Report"), 1)] }, gitStatuses: [gitStatusOf(project.id)] }) });
     await expect(daemon.request({ type: "delete_console", console: console_.id })).rejects.toMatchObject({ code: "console_has_running_sessions" });
     daemon.store.setState({ sessions: new Map([[session.id, { ...session, status: "archived" }], [hub.id, hub]]) });
     await daemon.request({ type: "delete_console", console: console_.id });

@@ -18,7 +18,7 @@ only appears in the running page.
 
 Hiding a region with CSS (`hidden`, a `docked:hidden` variant) while focus is inside it drops focus to `<body>` the
 same way, with no event, and `focusOnPress={false}` does not help there: focus reaches a pane by Tab or by a click into
-an iframe. So every code path that hides a region able to hold focus — a toggle, a scrim, Escape, a breakpoint change
+a field. So every code path that hides a region able to hold focus — a toggle, a scrim, Escape, a breakpoint change
 — first hands focus to the terminal if the region contains `document.activeElement`. The sidebar does this through
 `releaseFocus` in `packages/ui/src/layout/usePaneToggles.ts`, and a right-pane card through the `HandoffOnUnmount`
 that `packages/ui/src/panels/PanelStack.tsx` renders with it; hide a new pane or card the same way rather than beside
@@ -209,23 +209,21 @@ since each leaves the restore somewhere else, and the effect-driven close with t
 is what makes React render it in a task of its own (`notifyLater` in
 `packages/ui/src/settings/SettingsDialog.dialogsInFront.test.tsx`).
 
-## "Focus left" is three things: check the window's focus before answering a `focusout` with no `relatedTarget`
+## "Focus left" is two things: check the window's focus before answering a `focusout` with no `relatedTarget`
 
 Applies to `packages/ui`, to any rule of the shape "hide this, close this, hand focus on once focus leaves it". A
-`focusout` (React's `onBlur`) carrying no `relatedTarget` has three causes, and only one of them is the user moving
-on: focus fell to `<body>` in this document; focus went into another document — the report panel's iframe, which this
-document then shows as its own active element; or the window itself lost focus, with the element still active and the
-user about to come back to it (in a browser; the packaged macOS app fires no `focusout` as it is deactivated). A rule
-that answers all three takes its region off the screen while the user is in another application, and moves keyboard
-focus behind their back with it.
+`focusout` (React's `onBlur`) carrying no `relatedTarget` has two causes, and only one of them is the user moving
+on: focus fell to `<body>`; or the window itself lost focus, with the element still active and the user about to come
+back to it (in a browser; the packaged macOS app fires no `focusout` as it is deactivated). A rule that answers both
+takes its region off the screen while the user is in another application, and moves keyboard focus behind their back
+with it.
 
-So gate such a rule on whether the window has focus, which is false in the third case alone, and follow the window's
+So gate such a rule on whether the window has focus, which is false in the second case alone, and follow the window's
 focus only through `packages/ui/src/components/hooks/windowFocus.ts` (`docs/structure/ui.md`, "Shared entry points").
 The macOS app's webview fires the window's own `focus` / `blur` as the app is deactivated and reactivated, with
 `document.hasFocus()` already matching when they arrive, as a browser does; do not reach for `visibilitychange`, which
 fires there only at launch and when the window is covered, nor for `focusin` / `focusout`, none of which deactivation
-fires. Where the iframe has to be told apart from `<body>` as well, read `document.activeElement` a task later, once
-focus has settled — the iframe element is what it shows then.
+fires.
 
 jsdom (30) has no window focus to report: its `hasFocus()` answers whether anything in the document has been focused,
 so it is `false` in a test that never focuses anything and `true` from the first focus on, whatever the test means the
@@ -408,15 +406,11 @@ through `isPrimaryModifier` (and, for showing the key, `IS_MAC`) from `packages/
 derive the platform again (from `navigator.userAgent` or anything else) and do not accept `metaKey || ctrlKey`: the
 helper also requires the *other* modifier to be up, so every shortcut and click in the window agrees on which key it is.
 
-Registering does not reach two places the window's listeners never see:
-
-- a report page is a document of its own, and relays to the window only the keys passed in `composePageDocument`'s
-  options (`packages/ui/src/report/pageDocument.ts`, from `ReportPanel.tsx`); add a command there if it should work
-  while a page holds focus;
-- a native menu item's key is the menu's accelerator, so a command that is one has its binding pushed to the shell as
-  the Settings item's is (`useNativeMenuLabels`, `set_menu_labels` in `apps/desktop/src-tauri/src/menu/mod.rs`), and is
-  refused ⇧ with a number or symbol key in `validate.ts` as `openSettings` is: AppKit matches a menu key against the
-  character with Shift applied, so such a combination never fires.
+Registering does not reach a native menu item, whose key the window's listeners never see: its key is the menu's
+accelerator, so a command that is one has its binding pushed to the shell as the Settings item's is
+(`useNativeMenuLabels`, `set_menu_labels` in `apps/desktop/src-tauri/src/menu/mod.rs`), and is refused ⇧ with a number
+or symbol key in `validate.ts` as `openSettings` is: AppKit matches a menu key against the character with Shift
+applied, so such a combination never fires.
 
 Add a window `keydown` listener in an effect (`useWindowShortcut`), never as a module is evaluated:
 `packages/ui/src/shortcuts/recording.ts` installs its capture listener at module load so that it runs first and keeps

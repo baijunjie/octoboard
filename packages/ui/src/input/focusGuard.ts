@@ -1,12 +1,11 @@
-// Works around a react-aria defect that surfaces when a frame holds keyboard focus.
+// Works around a react-aria defect that surfaces when the window is activated by a press.
 //
 // While a press on a control that keeps focus where it was (`focusOnPress={false}`) is in flight, react-aria listens on
 // the window (capture phase) for focus events and asks whether each event's target is, or lies inside, the control
-// (`Node.contains(target)`). When keyboard focus sat inside an iframe (the report panel's page, once the user clicked
-// in it), the press moves focus out of that frame and the window itself receives `focus`/`blur`/`focusin`/`focusout`
-// with the Window as the event target. A Window is not a Node, so `contains` throws a TypeError out of the listener,
-// the refocusing that follows never runs, and focus ends up on `<body>` — off the terminal, which must keep keyboard
-// focus.
+// (`Node.contains(target)`). When the press is the click that activates the window, the browser can deliver its
+// `mousedown` before the window's own `focus`, and the window then receives `focus`/`blur`/`focusin`/`focusout` with the
+// Window as the event target. A Window is not a Node, so `contains` throws a TypeError out of the listener, the
+// refocusing that follows never runs, and focus ends up on `<body>` — off the terminal, which must keep keyboard focus.
 //
 // The guard is a capture listener on the window, and at the target capture listeners run before non-capture ones
 // whatever the order of registration, so while it is armed it silences every non-capture window listener, and the

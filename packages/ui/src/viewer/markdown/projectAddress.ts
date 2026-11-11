@@ -16,6 +16,11 @@ export function openableAddress(href: string | undefined): string | undefined {
   }
 }
 
+/** An image's `data:` address, which carries its own bytes: the only image address an `untrusted` document may draw. */
+export function isDataImage(href: string | undefined): href is string {
+  return href !== undefined && /^data:image\/[a-z0-9.+-]+[;,]/i.test(href);
+}
+
 export type ProjectAddress =
   | { kind: "anchor"; id: string }
   | { kind: "external"; href: string }

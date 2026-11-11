@@ -10,7 +10,7 @@ import { PanelHeader } from "./components/panel/PanelHeader";
 import { mountForTooltip } from "./components/hint/tooltipTestSupport";
 import { visibility } from "./layout/panelVisibility";
 import { PANE_INSET_MS } from "./layout/paneDockMotion";
-import { consoleOf, pageOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
+import { consoleOf, markdownContent, pageOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 import { PlatformProvider } from "./platform/react";
 import type { Event, Project } from "./protocol";
 import { applyDaemonEvent, DaemonProvider, type Daemon } from "./store";
@@ -79,7 +79,7 @@ function mountApp(narrow = false) {
       agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], agent_cli_statuses: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings", keep_awake: false }, keep_awake_held: false, shell_terminals: [],
     });
   };
-  const push = (session: string, id: string) => receive({ type: "page_created", page: pageOf(id, session, `<p>${id}</p>`, 0) });
+  const push = (session: string, id: string) => receive({ type: "page_created", page: pageOf(id, session, markdownContent(id), 0) });
   return { request, receive, push, resnapshot };
 }
 
@@ -224,7 +224,7 @@ it("clears a failed listing once the store holds a list, so a later snapshot doe
 
   // Try again answers, and then every page is deleted; the daemon answers listings from here on.
   request.mockImplementation(async () => ({ type: "ack", id: null }));
-  await receive({ type: "page_list", id: null, session_id: "s-one", pages: [pageOf("page-1", "s-one", "<p>1</p>", 0)] });
+  await receive({ type: "page_list", id: null, session_id: "s-one", pages: [pageOf("page-1", "s-one", markdownContent("1"), 0)] });
   await receive({ type: "pages_deleted", session_id: "s-one", pages: ["page-1"] });
   expect(reportCard()).toBeNull();
 

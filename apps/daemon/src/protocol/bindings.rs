@@ -31,8 +31,8 @@ use std::path::PathBuf;
 use ts_rs::{Config, TypeVisitor, TS};
 
 use super::{
-    BrowseRequest, Change, Code, Event, PerAgent, Request, RequestBody, TermControl, TermEvent,
-    GENERATION,
+    BrowseRequest, Change, Code, Event, PageNumber, PerAgent, Request, RequestBody, TermControl,
+    TermEvent, GENERATION,
 };
 
 /// Where the rendering is committed, and the variable that makes this test and the schema's
@@ -54,6 +54,20 @@ impl TS for Code {
 
     fn name(_: &Config) -> String {
         "string".to_string()
+    }
+
+    fn inline(cfg: &Config) -> String {
+        Self::name(cfg)
+    }
+}
+
+/// A number a page carries is a plain `number`.
+impl TS for PageNumber {
+    type WithoutGenerics = Self;
+    type OptionInnerType = Self;
+
+    fn name(_: &Config) -> String {
+        "number".to_string()
     }
 
     fn inline(cfg: &Config) -> String {

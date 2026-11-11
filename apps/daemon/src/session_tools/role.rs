@@ -819,11 +819,12 @@ fn coordinator_project_session_description(agent: AgentId, parent: bool) -> Stri
          - `{get_project}` reads this project's settings in Octoboard, read-only; `refresh` \
            checks its git status first.\n\
          {quota}\
-         - `{show_page}` pushes an HTML page to a report panel the user sees beside you, for \
-           anything better shown than typed: a table, a comparison, a form. It is a static \
-           document with native forms: scripts do not run, and a submitted form comes back to you \
-           as a message. `{list_pages}` lists the pages you pushed and reads one back in full, and \
-           `{delete_pages}` withdraws pages you pushed.\n\
+         - `{show_page}` pushes a page to a report panel the user sees beside you, for \
+           anything better shown than typed: a table, a comparison, a form. A page is a tree of \
+           components the app draws itself, not an HTML document; read `{page_guide}` before your \
+           first one. A submitted form comes back to you as a message. `{list_pages}` lists the \
+           pages you pushed and reads one back in full, and `{delete_pages}` withdraws pages you \
+           pushed.\n\
          \n\
          How you relate to other sessions:\n\
          \n\
@@ -838,6 +839,7 @@ fn coordinator_project_session_description(agent: AgentId, parent: bool) -> Stri
         set_session_pinned = tool("set_session_pinned"),
         get_project = tool("get_project"),
         show_page = tool("show_page"),
+        page_guide = tool("page_guide"),
         list_pages = tool("list_pages"),
         delete_pages = tool("delete_pages"),
         relationships = relationships(agent, true),
@@ -1068,7 +1070,7 @@ mod tests {
                 "{independent}"
             );
             assert!(under.contains(&format!("`{}` starts a session here", tool("open_session"))));
-            assert!(under.contains(&format!("`{}` pushes an HTML page", tool("show_page"))));
+            assert!(under.contains(&format!("`{}` pushes a page", tool("show_page"))));
             assert!(!under.contains(&format!("`{}` ends and archives you", tool("archive_self"))));
             assert!(independent.contains("You answer directly to the user in this terminal"));
             assert!(

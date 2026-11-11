@@ -208,9 +208,7 @@ Where a configurable shortcut is shown it is the command's current one, and it c
 - the selected session menu's Focus mode item and the Leave focus mode button's tooltip;
 - the tooltips that name a shortcut: the **+** that the New session commands act on, which shows the shortcut of
   whichever of the two it would take (see "Creating sessions from the keyboard" in `docs/product/focus-mode.md`);
-- the macOS desktop app's native menu, whose **Settings…** item carries Open settings' shortcut;
-- a report page, which passes the window's Back, Forward and console-session keys on as they are bound (see "Window
-  shortcuts inside a page" in `docs/product/report-panel.md`).
+- the macOS desktop app's native menu, whose **Settings…** item carries Open settings' shortcut.
 
 ## Where the shortcuts are kept
 

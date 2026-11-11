@@ -1,5 +1,4 @@
 import type { Session } from "../protocol";
-import { MODAL_OPEN } from "../components/focus/selectors";
 import type { HostFacts } from "../platform/host";
 import { usePlatform } from "../platform/react";
 import { commandExists } from "../shortcuts/commands";
@@ -26,9 +25,6 @@ function matchSwitchShortcut(event: KeyboardEvent, host: HostFacts): { backward:
  * and never hands it to the page. Elsewhere the key is left alone, for the terminal's agent. Where it
  * exists it is taken on the window's capture phase (`useWindowShortcut`), before a focused terminal
  * sees it, on every system alike.
- *
- * Returns the move itself, for the same key press arriving another way (the report page's relay);
- * it does nothing where the shortcut does not exist, or while a dialog or menu is open.
  */
 export function useSwitchShortcut({
   focus,
@@ -40,22 +36,18 @@ export function useSwitchShortcut({
   strip: Session[];
   shown: boolean;
   onSwitch: (session: Session) => void;
-}): (backward: boolean) => void {
+}): void {
   const platform = usePlatform();
   const { host } = platform;
   const currentId = focus && "consoleSession" in focus ? focus.consoleSession.id : undefined;
   const available = commandExists("nextConsoleSession", platform) && shown && currentId !== undefined && strip.length > 1;
-  const move = (backward: boolean) => {
-    if (!available || document.querySelector(MODAL_OPEN)) return;
-    const next = cycleConsoleSession(strip, currentId, backward);
-    if (next) onSwitch(next);
-  };
   useWindowShortcut(
     (event) => matchSwitchShortcut(event, host),
     ({ backward, repeat }) => {
-      if (!repeat) move(backward);
+      if (repeat || currentId === undefined) return;
+      const next = cycleConsoleSession(strip, currentId, backward);
+      if (next) onSwitch(next);
     },
     available,
   );
-  return move;
 }

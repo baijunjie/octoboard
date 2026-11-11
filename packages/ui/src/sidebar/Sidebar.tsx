@@ -149,8 +149,11 @@ export function Sidebar({
 
   // Opening or closing the last project, or a project arriving or leaving, can make a console
   // uniformly open or shut without a press of the heading's button. The pin follows that; a
-  // mixed console is left as it was.
+  // mixed console is left as it was. It sets the pins only when they change: a set that changes nothing still leaves
+  // an update queued in this effect's lane, and the next render in another lane (a daemon event's) then costs the
+  // sidebar a second render to process it.
   useEffect(() => {
+    if (!reconcileExpandPins(expandPinned, projects, collapsed)) return;
     setExpandPinned((prev) => reconcileExpandPins(prev, projects, collapsed) ?? prev);
   }, [projects, collapsed]);
 

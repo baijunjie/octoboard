@@ -35,15 +35,14 @@ function mount({
   shown = true,
 }: { platform?: PlatformAdapter; focus?: FocusTarget; strip?: Session[]; shown?: boolean } = {}) {
   const onSwitch = vi.fn<(session: Session) => void>();
-  let move!: (backward: boolean) => void;
   function Host() {
-    move = useSwitchShortcut({ focus, strip, shown, onSwitch });
+    useSwitchShortcut({ focus, strip, shown, onSwitch });
     return null;
   }
   container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() => root!.render(<PlatformProvider value={platform}><Host /></PlatformProvider>));
-  return { onSwitch, move: (backward: boolean) => move(backward) };
+  return { onSwitch };
 }
 
 // The key the shortcut takes: Control, on every keyboard.
@@ -140,34 +139,11 @@ describe("useSwitchShortcut", () => {
   });
 
   it("does nothing while a dialog is open, though it still takes the key", () => {
-    const { onSwitch, move } = mount();
+    const { onSwitch } = mount();
     const dialog = document.body.appendChild(document.createElement("div"));
     dialog.setAttribute("role", "dialog");
     dialog.setAttribute("aria-modal", "true");
     expect(press({ ...control }).defaultPrevented).toBe(true);
-    move(false);
     expect(onSwitch).not.toHaveBeenCalled();
-  });
-
-  it("returns a move that does nothing where the shortcut does not exist", () => {
-    for (const options of [
-      { platform: { kind: "browser", host: BROWSER_HOST } as PlatformAdapter },
-      { focus: { project: {} } as FocusTarget },
-      { strip: hubs.slice(0, 1) },
-      { shown: false },
-    ]) {
-      const { onSwitch, move } = mount(options);
-      move(false);
-      move(true);
-      expect(onSwitch).not.toHaveBeenCalled();
-      act(() => root?.unmount());
-      container?.remove();
-    }
-  });
-
-  it("returns the move for a key press that arrives another way", () => {
-    const { onSwitch, move } = mount();
-    move(true);
-    expect(onSwitch).toHaveBeenCalledWith(hubs[2]);
   });
 });

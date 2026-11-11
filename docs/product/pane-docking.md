@@ -193,8 +193,7 @@ above).
   events nor determines whether the pane stays revealed. A pointer that moves from the card into its gap, or rests in
   it, keeps the card up for as long as it stays. Moving past these areas, or out of the window altogether, sends the
   card away. `Escape` starts its exit without that delay and **does not reach the running agent**, except that in a
-  field holding text (the project pane's change filter) it only clears the field, and the next one sends the pane away;
-  so does `Escape` pressed inside a report page (see "Escape and F6 inside a page" in `docs/product/report-panel.md`).
+  field holding text (the project pane's change filter) it only clears the field, and the next one sends the pane away.
   Inside a shell terminal of the Terminal panel `Escape` goes to the shell and never sends the pane away (see "The shell
   terminal" in `docs/product/terminal-panel.md`). A floating pane that holds keyboard focus as it goes away hands focus
   to the terminal, except a floating right pane that goes because the pane's column takes its place — a panel docked, a

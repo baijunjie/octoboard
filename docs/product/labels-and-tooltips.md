@@ -268,13 +268,15 @@ outline (see "The find bar" in `docs/product/finding-in-the-file-viewer.md`).
 A copy button is an icon button that puts a text on the clipboard and says it did so on the button itself rather than in
 a toast. These are the file viewer's Copy path (see "The header" in `docs/product/file-viewer.md`), the button after the
 worktree's name on the Git mode's change list (see "Uncommitted changes" in
-`docs/product/project-pane-git-change-list.md`), and each diagnostic block's Copy (see "Names and diagnostic details" in
-`docs/product/error-alerts.md`). For all of them:
+`docs/product/project-pane-git-change-list.md`), each diagnostic block's Copy (see "Names and diagnostic details" in
+`docs/product/error-alerts.md`), and the copy button of a report page's code, diff and copyable blocks (see "Content"
+in `docs/product/report-page-components.md`). For all of them:
 
 - Before a press, its tooltip and name say what it copies — "Copy path", "Copy worktree path" — and its icon is the
-  copy glyph. A diagnostic block's says simply "Copy".
+  copy glyph. A diagnostic block's says simply "Copy", and so does a report page block's, which adds the block's label
+  where it has one: "Copy" and the label.
 - Once the text is on the clipboard, **the tooltip turns to the copied wording and stays open through the press**: "Path
-  copied" for Copy path, "Copied" for the worktree's and the diagnostic block's. The name assistive technology is given
+  copied" for Copy path, "Copied" for the worktree's, the diagnostic block's and a report page block's. The name assistive technology is given
   changes with it, and the copied wording is also announced as a status message, since a control that keeps focus is not
   reliably read again. The icon changes to a check that fades in.
 - **It goes back once the tooltip has closed** — the pointer or keyboard focus leaving it — its copy glyph fading in

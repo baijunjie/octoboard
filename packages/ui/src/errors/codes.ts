@@ -240,6 +240,7 @@ const CORE_CODES = {
   not_a_git_repository: { origin: "daemon", recovery: "repository", recordIds: ["project"], nameParams: ["project"] },
   not_on_a_branch: { origin: "daemon", recovery: "branch" },
   outside_scope: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { open: { codeParams: ["path"] } }, variantOf: (params) => params.action === "open" ? "open" : undefined },
+  page_already_submitted: { origin: "daemon", recovery: "refresh" },
   page_not_current: { origin: "daemon", recovery: "refresh" },
   path_already_exists: { origin: "daemon", recovery: "pathExists", codeParams: ["path"] },
   // A path link the daemon will not open; its `cause` picks the remedy (`PATH_LINK_REFUSED_RECOVERY`), which is

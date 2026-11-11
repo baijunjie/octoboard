@@ -1,7 +1,7 @@
-import type { Daemon } from "../store";
+import { trackPagesListing, type Daemon } from "../store";
 
 /** The listings asked for, per daemon and then per `snapshotEpoch` and session: the answer is one
- * full `page_list` reply with every page's HTML, so it is asked for once and shared. */
+ * full `page_list` reply with every page's content, so it is asked for once and shared. */
 const listings = new WeakMap<Daemon["request"], Map<string, Promise<void>>>();
 
 /**
@@ -11,18 +11,25 @@ const listings = new WeakMap<Daemon["request"], Map<string, Promise<void>>>();
  * (`ReportPanel.tsx`) then cost one reply between them. A page pushed or deleted since reaches the
  * store as an event, so a held answer is current until the next `snapshot`, which bumps `epoch`.
  * A failed listing is not held, so Try again lists afresh.
+ *
+ * While a listing is out the store notes it (`trackPagesListing`), so that a `page_submission` heard before the reply is
+ * kept for the list to land; a failure takes the note back, and the `page_list` itself does when it arrives.
  */
-export function listPages(request: Daemon["request"], session: string, epoch: number): Promise<void> {
+export function listPages({ request, store }: Pick<Daemon, "request" | "store">, session: string, epoch: number): Promise<void> {
   let held = listings.get(request);
   if (!held) listings.set(request, (held = new Map()));
   const key = `${epoch}\0${session}`;
   const known = held.get(key);
   if (known) return known;
   for (const other of held.keys()) if (!other.startsWith(`${epoch}\0`)) held.delete(other);
+  trackPagesListing(store, session, true);
   const listing = request({ type: "list_pages", session }).then(() => undefined);
   held.set(key, listing);
   listing.catch(() => {
     if (held.get(key) === listing) held.delete(key);
+    // A newer listing of this session (after a `snapshot`) keeps the note this one took.
+    const newer = [...held].some(([other, out]) => other.endsWith(`\0${session}`) && out !== listing);
+    if (!newer) trackPagesListing(store, session, false);
   });
   return listing;
 }

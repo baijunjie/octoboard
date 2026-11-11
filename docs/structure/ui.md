@@ -143,7 +143,14 @@ their cascade order does not depend on which screen opened first.
   output as text, path `links/`, project `shell/` terminals (with their tabs), archived-session `history/`;
   xterm's private members are reached from two adapters only: `xtermInternals.ts` (`watchUserInput`, the mark that
   tells the user's input from xterm's own replies) and `links/terminalLinks.ts` (OSC 8 link data).
-- `src/report/` — a session's report panel and its sandboxed page frame.
+- `src/report/` — a session's report panel: `ReportPanel.tsx` (pager, header badges, the drafts and the pending or
+  accepted submission of each page), `listPages.ts`, `useProjectReportSession.ts`, `pageTime.ts`; `page/` renders a
+  page, which is a component tree the daemon has validated, with native components rather than a frame: `PageView.tsx`
+  (the page and its form), `registry.tsx` (`COMPONENT_RENDERERS`: the renderer of every kind of component), `formModel.ts`
+  (the pure form: values, visibility, issues and the submission), `fields.tsx`, `submitters.tsx`, `layout.tsx`,
+  `content.tsx`, `copyable.tsx`, `PageTable.tsx`, `PageMarkdown.tsx` (untrusted Markdown), `ChartView.tsx` with `chart/`
+  (ECharts, loaded only when a page shows a chart), and `patternCheck.ts` with `patternWorker.ts`, which test a
+  field's `pattern` in a Web Worker under a time limit, never on the window's own thread.
 - `src/panels/` — the right pane, a stack of inset panel cards, and the registry of panel kinds.
 - `src/project-browser/` — the Files panel's content: `files/` (tree, listings, search, and the linked-file viewer
   `App` opens for a path a terminal names) and `git/` (changes, branch comparison, commits, following a session's
@@ -285,6 +292,8 @@ dependency).
   regenerated; it is never written by hand in the UI. What a client has to do with the wire in general is
   `apps/daemon/PROTOCOL.md`'s "What every client implements" section. A rule of the UI about a wire value (a predicate, a list of
   codes, a parser of a cause) goes in the layer that owns it, not in `protocol.ts`.
+- A new kind of report-page component is added to the daemon's `page_content` first (see the daemon structure doc);
+  `src/report/page/registry.tsx` then fails type checking until the kind has its renderer there.
 - A new UI state worth seeing is a scenario under `src/gallery/fixtures/`; data used by both the gallery and the website
   preview or application tests belongs in `src/fixtures/`.
 - Tests sit beside the code (`*.test.ts(x)`); application tests take their data from `src/fixtures/`, not from gallery
@@ -308,6 +317,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Keep unchanged data by identity when a reducer rebuilds it | `sameValue` (`src/values/sameValue.ts`), as the `settings_updated` reducer does |
 | A tree row in a list, with its icon and mark buttons | `TreeRow`, `RowIconButton`, `RowMarkButton` and `HOVER_ACTIONS_CLASS` in `src/components/rows/`; a list that animates its reordering, and rows it hides with `hidden` while they stay mounted (a Settings search), uses `useListMotion` (`src/components/motion/`), not a row-level FLIP; a nested list keeps its own rows |
 | A section heading that pins while its section scrolls (sidebar row groups, Settings section groups, a side pane's categories with a note and the session groups beneath them) | `StickyHeading` with `variant` `list`, `group`, `category` or `subcategory` (a nested heading pinned below its category), and `STICKY_HEADING_HEIGHT` for fixed-height headings; the pane measures its category and subcategory headings for the scroller (`src/components/scroll/StickyHeading.tsx`); a plain section heading over a scroller goes through it, as `SettingsGroup` and the Processes panel do. The virtualized Git change list's foldable section headings are positioned by the virtualizer (`ChangeSectionHeading`, `src/project-browser/git/changeSectionHeading.tsx`) and marked by `TreeHeader` in `src/primitives/Tree.tsx`. A pinned row or strip that is not a heading (the `DirectoryPicker`'s parent-directory row, the agent strip in `src/settings/accounts/AgentAccountsSection.tsx`) calls `useStickyHeadingFocus` (`src/components/scroll/stickyHeadingFocus.ts`) directly. Its `data-sticky-heading` marker also lets `FadedScroller` (with `stickyHeadingHeight`) and `useStickyScrollFade` apply the shared exit fade automatically: `src/components/scroll/scrollFade.tsx` owns the watch, and its co-located `scrollFade.css`, loaded by `src/style.css`, paints the surface-coloured overlay |
+| Test a report page's `pattern` against a value | `checkPattern` (`src/report/page/patternCheck.ts`), the only route: it runs in a Web Worker with a time limit and never on the main thread |
 | A strip of text tabs | the tab wrappers in `src/primitives/Tabs.tsx`, with `fit="content"` on `TabListContainer` and `TabList`, shared by every such strip (`TextTabStrip`, `RegionTabs`, `AgentTabList`, the console launch fields, the project browser); `Tab size="content"` is the tab for every strip, `size="compact"` only for a strip in a pane header beside the pane's title, as the project browser's Files / Changes tabs |
 | The frame of the sidebar's console and focus headers and the archive header | `PANE_HEADER_FRAME_CLASS` (`src/components/panel/paneHeaderFrame.ts`) |
 | A previous / next pager button | `PagerButton` (`src/components/controls/PagerButton.tsx`) |

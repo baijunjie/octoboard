@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { composePageDocument } from "../report/pageDocument";
 import { PREVIEW_MESSAGE } from "./messages";
-import {
-  installBoundaryScrollRelay,
-  installPreviewScrollBridge,
-  withReportScrollBridge,
-} from "./scrollBridge";
-import { afterQueuedWork } from "../test/clock";
+import { installBoundaryScrollRelay, installPreviewScrollBridge } from "./scrollBridge";
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -84,12 +78,6 @@ function touchRelay() {
   );
   return send;
 }
-const reportDocument = () =>
-  composePageDocument(
-    "<body data-website-preview-report><p>Sample report</p></body>",
-    false,
-    "abcdef012345",
-  );
 
 describe("preview wheel boundary handoff", () => {
   it("keeps inner scrolling in both directions and hands off only at the boundary, including small deltas", () => {
@@ -328,170 +316,24 @@ describe("preview touch drag handoff", () => {
   });
 });
 
-// Mutation observers run as microtasks, which a timer set afterwards comes after: an order, not a stretch of time.
-const mutationsObserved = afterQueuedWork;
-
-// A preview window with the bridge installed and one injected report iframe inside it.
-async function liveReport() {
-  const preview = document.createElement("iframe");
-  document.body.appendChild(preview);
-  const child = preview.contentWindow!;
-  child.document.body.innerHTML = '<div class="website-preview-app"></div>';
-  const wrapper = child.document.body.firstElementChild!;
-  const send = vi
-    .spyOn(child.parent, "postMessage")
-    .mockImplementation(() => {});
-  const cleanup = installPreviewScrollBridge(child);
-  cleanups.push(cleanup);
-  const frame = child.document.createElement("iframe");
-  frame.srcdoc = withReportScrollBridge(reportDocument());
-  wrapper.appendChild(frame);
-  await mutationsObserved();
-  return { child, wrapper, frame, send, cleanup };
-}
-
-describe("sample report relay", () => {
-  it("only injects once into the known nonce-protected fixture", () => {
-    const source = reportDocument();
-    const injected = withReportScrollBridge(source)!;
-    expect(injected).toContain(
-      '<script nonce="abcdef012345" data-website-preview-scroll-bridge>',
-    );
-    expect(withReportScrollBridge(injected)).toBe(injected);
-    expect(
-      withReportScrollBridge(
-        source.replaceAll("data-website-preview-report", "other-report"),
-      ),
-    ).toBe(source.replaceAll("data-website-preview-report", "other-report"));
-    expect(withReportScrollBridge("<body data-website-preview-report>")).toBe(
-      "<body data-website-preview-report>",
-    );
-  });
-  it("serializes executable code with no module closure dependencies", () => {
-    const injected = withReportScrollBridge(reportDocument())!;
-    const script = injected
-      .slice(
-        injected.lastIndexOf(
-          '<script nonce="abcdef012345" data-website-preview-scroll-bridge>',
-        ),
-      )
-      .replace(/^<script[^>]+>/, "")
-      .replace(/<\/script>$/, "");
-    const send = vi.spyOn(window, "postMessage").mockImplementation(() => {});
-    // The actual injected script installs a window handler. Track and remove it after exercising it.
-    const add = vi.spyOn(window, "addEventListener");
-    window.eval(script);
-    const listener = add.mock.calls.find(([type]) => type === "wheel")![1];
-    cleanups.push(() => window.removeEventListener("wheel", listener, true));
-    wheel(document.body, -27);
-    expect(send).toHaveBeenCalledWith(
-      { type: "octoboard-preview-report-scroll", deltaY: -27 },
-      "*",
-    );
+describe("preview scroll bridge", () => {
+  it("hands a boundary wheel gesture of an embedded preview to the website, until cleanup", () => {
+    const preview = document.createElement("iframe");
+    document.body.appendChild(preview);
+    const child = preview.contentWindow!;
+    const send = vi.spyOn(child.parent, "postMessage").mockImplementation(() => {});
+    const cleanup = installPreviewScrollBridge(child);
+    cleanups.push(cleanup);
+    child.document.body.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, bubbles: true, cancelable: true }));
+    expect(send).toHaveBeenCalledExactlyOnceWith({ type: PREVIEW_MESSAGE.scroll, deltaY: 40 }, "/");
     send.mockClear();
-    for (const type of [
-      "touchstart",
-      "touchmove",
-      "touchend",
-      "touchcancel",
-    ] as const) {
-      const touchListener = add.mock.calls.find(([name]) => name === type)![1];
-      cleanups.push(() =>
-        window.removeEventListener(type, touchListener, true),
-      );
-    }
-    touch("touchstart", document.body, [[10, 300]]);
-    touch("touchmove", document.body, [[10, 270]]);
-    expect(send).toHaveBeenCalledWith(
-      { type: "octoboard-preview-report-scroll", deltaY: 30 },
-      "*",
-    );
-  });
-  it("forwards a report's release velocity and rejects invalid ones", async () => {
-    const { child, frame, send } = await liveReport();
-    const message = (deltaY: unknown, velocity?: unknown) =>
-      child.dispatchEvent(
-        new MessageEvent("message", {
-          source: frame.contentWindow,
-          data: { type: "octoboard-preview-report-scroll", deltaY, velocity },
-        }),
-      );
-    message(0);
-    message(0, Infinity);
-    message(0, "1");
+    cleanup();
+    child.document.body.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, bubbles: true, cancelable: true }));
     expect(send).not.toHaveBeenCalled();
-    message(0, 0.5);
-    expect(send).toHaveBeenCalledExactlyOnceWith(
-      { type: PREVIEW_MESSAGE.scroll, deltaY: 0, velocity: 0.5 },
-      "/",
-    );
-    send.mockClear();
-    const stopMessage = (stop: unknown) =>
-      child.dispatchEvent(
-        new MessageEvent("message", {
-          source: frame.contentWindow,
-          data: { type: "octoboard-preview-report-scroll", deltaY: 0, stop },
-        }),
-      );
-    stopMessage(false);
-    stopMessage("true");
-    stopMessage(1);
-    expect(send).not.toHaveBeenCalled();
-    stopMessage(true);
-    expect(send).toHaveBeenCalledExactlyOnceWith(
-      { type: PREVIEW_MESSAGE.scroll, deltaY: 0, stop: true },
-      "/",
-    );
   });
-  it("leaves independently opened previews and their reports untouched", () => {
-    const report = document.createElement("iframe");
-    report.srcdoc = reportDocument();
-    document.body.innerHTML = '<div class="website-preview-app"></div>';
-    document.body.firstElementChild!.appendChild(report);
+
+  it("leaves an independently opened preview untouched", () => {
     cleanups.push(installPreviewScrollBridge(window));
     expect(wheel(document.body, 40).defaultPrevented).toBe(false);
-    expect(report.srcdoc).not.toContain("data-website-preview-scroll-bridge");
-  });
-  it("validates live report sources without rewriting their documents and cleans up", async () => {
-    const { child, frame, send, wrapper, cleanup } = await liveReport();
-    const injected = frame.srcdoc;
-    expect(injected).toContain("data-website-preview-scroll-bridge");
-    await mutationsObserved();
-    expect(frame.srcdoc).toBe(injected);
-    const message = (source: Window, deltaY: unknown = 10) =>
-      child.dispatchEvent(
-        new MessageEvent("message", {
-          source,
-          data: { type: "octoboard-preview-report-scroll", deltaY },
-        }),
-      );
-    message(window);
-    message(frame.contentWindow!, Infinity);
-    message(frame.contentWindow!, "20");
-    expect(send).not.toHaveBeenCalled();
-    message(frame.contentWindow!);
-    expect(send).toHaveBeenCalledExactlyOnceWith(
-      { type: PREVIEW_MESSAGE.scroll, deltaY: 10 },
-      "/",
-    );
-    frame.srcdoc = reportDocument();
-    await mutationsObserved();
-    expect(frame.srcdoc).not.toContain("data-website-preview-scroll-bridge");
-    message(frame.contentWindow!);
-    expect(send).toHaveBeenCalledTimes(1);
-    const reportWindow = frame.contentWindow!;
-    frame.remove();
-    message(reportWindow);
-    expect(send).toHaveBeenCalledTimes(1);
-    cleanup();
-    const replacement = child.document.createElement("iframe");
-    replacement.srcdoc = reportDocument();
-    wrapper.appendChild(replacement);
-    await mutationsObserved();
-    expect(replacement.srcdoc).not.toContain(
-      "data-website-preview-scroll-bridge",
-    );
-    message(replacement.contentWindow!);
-    expect(send).toHaveBeenCalledTimes(1);
   });
 });

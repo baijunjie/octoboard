@@ -42,6 +42,7 @@ export function PanelHeader({
   actions,
   children,
   prioritizeChildren = false,
+  growChildren = false,
 }: {
   title: string;
   /** A mark (`StatusMark`) about what the panel shows, right after the title; it stays whole when the title clips. */
@@ -51,6 +52,9 @@ export function PanelHeader({
   children?: React.ReactNode;
   /** Keep the mode switch and close visible, giving up the title before the scrollable actions. */
   prioritizeChildren?: boolean;
+  /** Let a narrow card's children slot take the room the title and the controls leave free, for children that stretch
+   * to fill it (a label that shortens before anything else does) and so have no width of their own to claim it with. */
+  growChildren?: boolean;
 }): React.ReactElement {
   const t = useT();
   const frame = useContext(PanelFrameContext);
@@ -86,7 +90,7 @@ export function PanelHeader({
       ) : (
         <div className={compact ? "flex min-w-0 items-center gap-2" : "contents"}>
           {heading}
-          {children && <FadedScroller orientation="horizontal" fade={compact} className={compact ? SCROLLING_SLOT_CLASS : "contents"}>{children}</FadedScroller>}
+          {children && <FadedScroller orientation="horizontal" fade={compact} className={compact ? (growChildren ? `${SCROLLING_SLOT_CLASS} flex-1` : SCROLLING_SLOT_CLASS) : "contents"}>{children}</FadedScroller>}
         </div>
       )}
       {actions && (

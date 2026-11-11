@@ -63,6 +63,10 @@ notify = "8.2"
 # SOCKS proxies, which the user's shell may name (`ALL_PROXY=socks5://...`): without
 # `socks-proxy` ureq panics at connect on one.
 ureq = { version = "3", default-features = false, features = ["rustls", "platform-verifier", "socks-proxy"] }
+# Compiles a report page's text field `pattern` with ECMAScript's syntax, which the panel tests it
+# with as a JavaScript regular expression, to refuse one that does not compile when the page is
+# pushed (`crate::protocol::page_content`). The `regex` crate's syntax differs from JavaScript's.
+regress = "0.12"
 
 # The platform layer's Unix modules (`src/platform`), the PTY backend of `platform::term` among
 # them.

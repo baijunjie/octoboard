@@ -8,10 +8,14 @@ import { Description, type FieldVariant } from "./Field";
  * `description` is drawn under the label, indented with it, and describes the checkbox ahead of `describedBy`.
  * `contentClassName` is the class of the row holding the box and the label (what a press lands on), `labelClassName`
  * the label's. */
-export function Checkbox({ selected, onSelectedChange, describedBy, variant, className, contentClassName, labelClassName, description, children }: {
+export function Checkbox({ selected, onSelectedChange, readOnly, describedBy, dir, variant, className, contentClassName, labelClassName, description, children }: {
   selected: boolean;
   onSelectedChange: (selected: boolean) => void;
+  /** Shows the state and takes no press, yet keeps the box focusable. */
+  readOnly?: boolean;
   describedBy?: string;
+  /** `auto` for a label that is a page's or a user's text. */
+  dir?: "auto";
   variant?: FieldVariant;
   className?: string;
   contentClassName?: string;
@@ -26,15 +30,16 @@ export function Checkbox({ selected, onSelectedChange, describedBy, variant, cla
       isSelected={selected}
       onChange={onSelectedChange}
       isDisabled={useDisabled()}
+      isReadOnly={readOnly}
       aria-describedby={describedBy}
     >
       <HeroCheckbox.Content className={contentClassName}>
         <HeroCheckbox.Control>
           <HeroCheckbox.Indicator />
         </HeroCheckbox.Control>
-        <HeroLabel className={labelClassName}>{children}</HeroLabel>
+        <HeroLabel dir={dir} className={labelClassName}>{children}</HeroLabel>
       </HeroCheckbox.Content>
-      {description !== undefined && <Description>{description}</Description>}
+      {description !== undefined && <Description dir={dir}>{description}</Description>}
     </HeroCheckbox>
   );
 }

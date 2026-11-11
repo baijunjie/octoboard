@@ -1,5 +1,5 @@
-//! A second barrier under the report panel's sanitizer: the window's webview blocks `http(s)`
-//! requests other than image loads. How it does is the platform's own. Where it has to be in place
+//! A second barrier under the UI's own rule that nothing it draws loads from the network: the window's
+//! webview blocks `http(s)` requests other than image loads. How it does is the platform's own. Where it has to be in place
 //! before the window is built, `prepare` hands over what the window's builder takes (possibly only
 //! once something has been compiled) and `apply` puts it on the builder; where it is installed on the
 //! webview itself, `install` does that once the window is built. Each platform does one of the two and

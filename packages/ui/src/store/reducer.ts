@@ -2,9 +2,9 @@ import type { ConnectionState } from "../daemon-client";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { accountKey, loginIsActive } from "../accounts/accountRecords";
 import { sameValue } from "../values/sameValue";
-import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type Event, type Project, type ShellTerminal } from "../protocol";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type Event, type Page, type Project, type ShellTerminal } from "../protocol";
 import { CODE } from "../errors/codes";
-import type { State, TrustPrompt } from "./state";
+import type { PageSubmission, State, TrustPrompt } from "./state";
 import { sessionRequestOf, withRequest } from "./sessionRequests";
 
 export type Action =
@@ -13,6 +13,7 @@ export type Action =
   | { kind: "dismiss_trust_prompt"; session: string }
   | { kind: "track_account_login"; key: string; tracked: boolean }
   | { kind: "track_agent_cli_update"; agent: Agent; from: number | null | undefined }
+  | { kind: "track_pages_listing"; session: string; listing: boolean }
   | { kind: "dismiss_account_login"; login: AccountLogin }
   | { kind: "queue_account_switches"; ids: readonly string[]; queued: boolean };
 
@@ -84,6 +85,31 @@ function withoutRemovedProjectTerminals(terminals: Map<string, ShellTerminal>, p
   return new Map(Array.from(terminals).filter(([, terminal]) => projects.has(terminal.project_id)));
 }
 
+/** `page` with the submission of `heard` when that is a later revision than its own, else `page` itself. The daemon raises
+ * a page's revision with every mark and clearing, and its announcements of one page (a `page_list` computed at some
+ * moment, each `page_submission`) can arrive in any order, so only the revision tells which is the later. */
+function withLaterSubmission(page: Page, heard: PageSubmission | undefined): Page {
+  if (!heard || heard.submission_revision <= page.submission_revision) return page;
+  return { ...page, submission: heard.submission, submission_revision: heard.submission_revision };
+}
+
+/** `early` without the entries for the pages in `ids`; `early` itself when it has none of them. */
+function withoutEarlySubmissions(early: ReadonlyMap<string, PageSubmission> | undefined, ids: Iterable<string>): ReadonlyMap<string, PageSubmission> | undefined {
+  if (!early) return early;
+  const left = new Map(early);
+  for (const id of ids) left.delete(id);
+  return left.size === early.size ? early : left;
+}
+
+/** `state.earlySubmissions` with the entry of `session` set to `early`, dropped when that is empty. */
+function withEarlySubmissionsOf(state: State, session: string, early: ReadonlyMap<string, PageSubmission> | undefined): Map<string, ReadonlyMap<string, PageSubmission>> {
+  if (early === state.earlySubmissions.get(session)) return state.earlySubmissions;
+  const earlySubmissions = new Map(state.earlySubmissions);
+  if (early && early.size > 0) earlySubmissions.set(session, early);
+  else earlySubmissions.delete(session);
+  return earlySubmissions;
+}
+
 /** `state` without the sessions in `ids` and what is held for them: their pages, the pages they had
  * deleted, and any confirmation, request or account switch of theirs, none of which anyone can act
  * on once the session is gone. The daemon announces a session's deletion through one event for the
@@ -96,6 +122,8 @@ function withoutSessions(state: State, ids: ReadonlySet<string>): State {
     sessions: new Map(Array.from(state.sessions).filter(kept)),
     pages: new Map(Array.from(state.pages).filter(kept)),
     deletedPages: new Map(Array.from(state.deletedPages).filter(kept)),
+    earlySubmissions: new Map(Array.from(state.earlySubmissions).filter(kept)),
+    pagesListing: new Set(Array.from(state.pagesListing).filter((id) => !ids.has(id))),
     trustPrompts: state.trustPrompts.filter((p) => !ids.has(p.session)),
     sessionRequests: state.sessionRequests.filter((r) => !ids.has(r.session)),
   };
@@ -113,6 +141,10 @@ export function reducer(state: State, action: Action): State {
       const held = state.loginsStartedHere.includes(action.key);
       if (held === action.tracked) return state;
       return { ...state, loginsStartedHere: action.tracked ? [...state.loginsStartedHere, action.key] : state.loginsStartedHere.filter((key) => key !== action.key) };
+    }
+    case "track_pages_listing": {
+      const pagesListing = withMember(state.pagesListing, action.session, action.listing);
+      return pagesListing === state.pagesListing ? state : { ...state, pagesListing };
     }
     case "track_agent_cli_update": {
       if (state.cliUpdatesStartedHere.get(action.agent) === action.from) return state;
@@ -148,6 +180,8 @@ export function reducer(state: State, action: Action): State {
             // longer lists.
             pages: new Map(),
             deletedPages: new Map(),
+            earlySubmissions: new Map(),
+            pagesListing: new Set(),
             snapshotEpoch: state.snapshotEpoch + 1,
             trustPrompts: [],
             trustedDirectories: event.trusted_directories,
@@ -287,22 +321,57 @@ export function reducer(state: State, action: Action): State {
           // A `page_created` is always the newest page, so appending after keeps the merged order
           // correct. Pages can also be deleted, and a reply computed before a deletion can be
           // applied after its `pages_deleted`: the deleted ids are remembered and filtered out.
+          // A listed page's submission may be older than the one held, or than a `page_submission`
+          // heard before the page was held: of the three, the latest revision is kept.
           const existing = state.pages.get(event.session_id) ?? [];
           const deleted = state.deletedPages.get(event.session_id);
-          const listed = deleted ? event.pages.filter((p) => !deleted.has(p.id)) : event.pages;
+          const early = state.earlySubmissions.get(event.session_id);
+          const held = new Map(existing.map((p) => [p.id, p]));
+          const listed = (deleted ? event.pages.filter((p) => !deleted.has(p.id)) : event.pages).map((p) =>
+            withLaterSubmission(withLaterSubmission(p, held.get(p.id)), early?.get(p.id)),
+          );
           const seen = new Set(listed.map((p) => p.id));
           const pages = new Map(state.pages);
           pages.set(event.session_id, [...listed, ...existing.filter((p) => !seen.has(p.id))]);
-          return { ...state, pages };
+          const earlySubmissions = withEarlySubmissionsOf(state, event.session_id, withoutEarlySubmissions(early, seen));
+          return { ...state, pages, earlySubmissions, pagesListing: withMember(state.pagesListing, event.session_id, false) };
         }
         case "page_created": {
           // Appended even with no baseline yet: that window is exactly the first `list_pages`
           // being in flight, and dropping the event here would mean waiting for a second push to
           // ever see it. The transient "1 / 1" this produces is corrected once that reply's merge
           // (above) lands.
-          const existing = state.pages.get(event.page.session_id) ?? [];
+          // A `page_submission` for the page can come before it, from a window that listed the page as soon as it
+          // was stored.
+          const session = event.page.session_id;
+          const existing = state.pages.get(session) ?? [];
+          const early = state.earlySubmissions.get(session);
           const pages = new Map(state.pages);
-          pages.set(event.page.session_id, [...existing, event.page]);
+          pages.set(session, [...existing, withLaterSubmission(event.page, early?.get(event.page.id))]);
+          const earlySubmissions = withEarlySubmissionsOf(state, session, withoutEarlySubmissions(early, [event.page.id]));
+          return { ...state, pages, earlySubmissions };
+        }
+        case "page_submission": {
+          // Applied only when it is a later revision than the page's: a late announcement of an earlier change
+          // (a clearing heard after the next mark) must not undo the later one.
+          const heard: PageSubmission = { submission: event.submission, submission_revision: event.submission_revision };
+          const existing = state.pages.get(event.session_id);
+          const index = existing?.findIndex((p) => p.id === event.page) ?? -1;
+          if (!existing || index === -1) {
+            // A page this window does not hold yet (its list is still in flight, or computed before the page was
+            // stored): remembered until the page arrives, as the list may carry an earlier submission than this.
+            // Only for a session this window lists or holds the pages of: for any other the entry would never be
+            // taken, and a window hears the submissions of every session.
+            if (!existing && !state.pagesListing.has(event.session_id)) return state;
+            const early = state.earlySubmissions.get(event.session_id);
+            const remembered = early?.get(event.page);
+            if (remembered && remembered.submission_revision >= heard.submission_revision) return state;
+            return { ...state, earlySubmissions: withEarlySubmissionsOf(state, event.session_id, new Map(early).set(event.page, heard)) };
+          }
+          const page = withLaterSubmission(existing[index], heard);
+          if (page === existing[index]) return state;
+          const pages = new Map(state.pages);
+          pages.set(event.session_id, existing.map((p, i) => (i === index ? page : p)));
           return { ...state, pages };
         }
         case "pages_deleted": {
@@ -312,11 +381,12 @@ export function reducer(state: State, action: Action): State {
           const gone = new Set([...(state.deletedPages.get(event.session_id) ?? []), ...event.pages]);
           const deletedPages = new Map(state.deletedPages);
           deletedPages.set(event.session_id, gone);
+          const earlySubmissions = withEarlySubmissionsOf(state, event.session_id, withoutEarlySubmissions(state.earlySubmissions.get(event.session_id), event.pages));
           const existing = state.pages.get(event.session_id);
-          if (!existing) return { ...state, deletedPages };
+          if (!existing) return { ...state, deletedPages, earlySubmissions };
           const pages = new Map(state.pages);
           pages.set(event.session_id, existing.filter((page) => !gone.has(page.id)));
-          return { ...state, pages, deletedPages };
+          return { ...state, pages, deletedPages, earlySubmissions };
         }
         case "project_git_status": {
           if (sameValue(state.gitStatuses.get(event.status.project), event.status)) return state;

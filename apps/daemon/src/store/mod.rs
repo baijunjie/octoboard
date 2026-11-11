@@ -62,6 +62,7 @@ pub use agents::ReorderOutcome;
 pub use branch_origins::{BranchMove, BranchOrigin};
 pub use failure::{Result, StoreError};
 pub use held_terminals::{HeldKind, HeldTerminalRecord};
+pub use pages::PageMark;
 pub use sessions::{cuts_turn_short, RecordUpdate};
 
 /// The single local host record every project and session points at. There is no other host yet,

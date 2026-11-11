@@ -42,7 +42,7 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
 - `chrome=1` in a frame URL gives the page the desktop window's `windowChrome` capability (the top bar's drag region, and
   on a macOS host the window's own Back and Forward keys), while keeping the browser platform kind. It does not make the
   page the desktop app: what the app alone has by its platform kind (the console-session switch, which exists in the app on
-  any system; the Back and Forward rows of Settings, on macOS; a report page's relay of those keys) needs the scenario's
+  any system; the Back and Forward rows of Settings, on macOS) needs the scenario's
   `desktopApp`, which gives the page that kind, the window chrome and the native menu bar, for a view that exists only in
   the app (the full Keyboard shortcuts list). A scenario's `host` gives the page the facts a desktop shell reports about its machine (`HostFacts`: the
   system's words such as Recycle Bin, which Settings sections exist, no window controls over a native chrome), with the
@@ -59,7 +59,7 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   the steps, which is how the sweep runs every one.
 - Report scenarios expose the document event `gallery:report-page-created` through `reportPageFixture.ts`, applying
   fixture pages through the store's `applyDaemonEvent`. `node scripts/gallery-report-focus.mjs <gallery-origin>`, run in
-  `packages/ui`, drives report replacement and focus checks against a served gallery;
+  `packages/ui`, drives the checks of where focus goes when a report page is replaced by a newer one, against a served gallery;
   `scripts/gallery-chip-geometry.mjs` is a standalone check of the same kind. Both are run by hand.
 - `src/gallery/preview/` is git-ignored, so it exists per checkout: every `.ts` or `.tsx` file directly in it (not in a
   subdirectory) must default-export a `Scenario[]`, which `fixtures/index.ts` appends to `SCENARIOS`; anything else goes

@@ -24,8 +24,7 @@ order:
 10. the toasts, only while at least one toast is shown.
 
 It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` still go to the agent, and `F6` and
-`Shift+F6` never do. The same holds in a shell terminal of the Terminal panel, for the shell. It works from inside a
-report page too (see "Escape and F6 inside a page" in `docs/product/report-panel.md`). With focus in none of the
+`Shift+F6` never do. The same holds in a shell terminal of the Terminal panel, for the shell. With focus in none of the
 regions, `F6` goes to the first region shown and `Shift+F6` to the last.
 
 The rail's account quota panel is not a region and does not change the cycle: both keys work as usual while the mouse
@@ -105,7 +104,7 @@ treats a device whose primary input cannot hover, such as a phone, as if the las
   panel's first control that takes no text; otherwise to the archive view while it is open (see "The archive view" in
   `docs/product/archive-view.md`), and else to the top bar's first enabled control.
 - **A panel that floats over the terminal opened by a tap** takes focus on its first control that takes no text: in the
-  Terminal panel a control of its header, not the shell; in the report panel the report page.
+  Terminal panel a control of its header, not the shell.
 - **Focus moved on the window's own initiative** — handed on as the part holding it goes away, returned after a press
   elsewhere — shows no focus ring.
 

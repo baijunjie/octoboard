@@ -68,7 +68,6 @@ function mount(overlay = false) {
             peek={peek}
             overlay={overlay}
             peekKind="files"
-            frameKeys={{ onEscape: () => {}, onCycleRegion: () => {}, onMoveHistory: () => {}, onMoveConsoleSession: () => {} }}
             onDismiss={dismiss}
             maximizeArea={{ current: null }}
           />

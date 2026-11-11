@@ -735,3 +735,11 @@ it("hands focus to the next row's first action when a refresh takes the tree out
   expect(document.activeElement).toBe(button("Keep", rows()[1]));
   expect(rows()[1].textContent).toContain("node third.js");
 });
+
+it("draws the session filter in HeroUI's default field variant, as a control on the pane's own background", async () => {
+  await mount({ project }, async () => ({ type: "processes_listed", id: null, trees: [tree("1:1")] }));
+  act(() => panel().querySelector<HTMLButtonElement>('button[aria-label="Filter by session"]')!.click());
+  const select = panel().querySelector('[data-slot="select"]')!;
+  expect(select.classList.contains("select--primary")).toBe(true);
+  expect(select.classList.contains("select--secondary")).toBe(false);
+});

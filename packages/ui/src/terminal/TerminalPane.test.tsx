@@ -170,6 +170,36 @@ it("still lets a silent, connected terminal go bare after the loading limit", ()
   expect(status(container)).toBe("");
 });
 
+it("covers a session again when it is shown once more while it reconnects, though its first wait ran out", () => {
+  const other = sessionOf("s-2", "c-1", undefined, "Other", "working");
+  const { container, root } = mount();
+  FakeController.last.settle("open");
+  act(() => void vi.advanceTimersByTime(LOADING_LIMIT_MS + 1));
+  expect(status(container)).toBe("");
+  // Another session is shown, then the first again, whose terminal is not painted yet.
+  render(root, other);
+  render(root, session);
+  expect(status(container)).toBe("Loading terminal…");
+  // Its wait begins afresh: the earlier expiry does not uncover it.
+  FakeController.last.settle("open");
+  act(() => void vi.advanceTimersByTime(LOADING_LIMIT_MS - 1));
+  expect(status(container)).toBe("Loading terminal…");
+  act(() => void vi.advanceTimersByTime(2));
+  expect(status(container)).toBe("");
+});
+
+it("does not let the wait of a session left behind uncover the one shown next", () => {
+  const other = sessionOf("s-2", "c-1", undefined, "Other", "working");
+  const { container, root } = mount();
+  FakeController.last.settle("open");
+  act(() => void vi.advanceTimersByTime(LOADING_LIMIT_MS - 1));
+  render(root, other);
+  FakeController.last.settle("open");
+  // The first session's limit falls due now, while the second is shown and has waited only a moment.
+  act(() => void vi.advanceTimersByTime(2));
+  expect(status(container)).toBe("Loading terminal…");
+});
+
 it("shows a static disconnected cover with a Reconnect button once the attempts are spent", () => {
   const { container } = mount();
   for (let i = 0; i < 5; i++) failAttempt();

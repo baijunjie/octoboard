@@ -239,7 +239,7 @@ confirmations, settings and sessions would each need an owner and an authorizati
 | Desktop application | Tauri 2 | The daemon ships as a sidecar; native macOS and Windows APIs are callable from the Rust side. |
 | Frontend | React + HeroUI + Tailwind CSS + TypeScript, state in a Zustand store | One component library for the whole UI; a vanilla Zustand store can be read and subscribed to outside React. |
 | Terminal | `xterm.js` | macOS cannot embed a Terminal.app or iTerm window in another application; PTY + `xterm.js` is the standard approach and terminal compatibility is its job. |
-| Report panel | sandboxed iframe (`srcdoc`) + `postMessage` | Independent of the desktop framework. |
+| Report panel | a component tree the daemon validates, rendered by the UI's own React components (ECharts, loaded on demand, for charts) | A page holds no markup or script of an agent's, so nothing needs a sandbox. |
 | File viewer | `@pierre/diffs` (Shiki on its JavaScript regex engine) | One library for files and diffs; loads offline in the packaged WebView under the app's CSP, no WebAssembly. Behind an application-owned interface. |
 | Storage | SQLite (`rusqlite`, coordinator side) | — |
 

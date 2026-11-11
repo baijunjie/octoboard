@@ -70,8 +70,7 @@ user has changed them (see `docs/product/keyboard-shortcuts.md`), matched on the
 layout, and only with no other modifier held.
 
 - They work wherever keyboard focus is, the terminal included, and the keys never reach the terminal, so the agent
-  never receives them. Pressed inside a report page they are passed to the window (see "Window shortcuts inside a
-  page" in `docs/product/report-panel.md`).
+  never receives them.
 - They do nothing while a dialog or a menu is open, and are left alone during an input-method composition.
 - In a browser there are no such shortcuts: the keys are left to the browser and the terminal. The buttons work
   everywhere.

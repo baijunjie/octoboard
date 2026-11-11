@@ -32,6 +32,7 @@ export { Radio, RadioGroup } from "./Radio";
 export { mergeRefs } from "./refs";
 export { ScrollShadow, scrollShadowAutoProps, scrollShadowClassName, scrollShadowStripStyle, type ScrollShadowVisibility, useScrollShadow } from "./ScrollShadow";
 export { Select, SelectClearButton, SelectPopover, SelectTrigger } from "./Select";
+export { Slider } from "./Slider";
 export { Spinner } from "./Spinner";
 export { Surface } from "./Surface";
 export { Switch } from "./Switch";

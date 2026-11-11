@@ -857,7 +857,7 @@ in "What Octoboard never modifies" in `docs/product/launching-agents.md`.
 
 ### The database's schema version
 
-The database records the version of its schema — this build's is **3** — and a mark in the file's header (its SQLite
+The database records the version of its schema — this build's is **4** — and a mark in the file's header (its SQLite
 application ID, `0x4F435442`, "OCTB") that identifies it as Octoboard's. On every start, before using an existing
 `~/.octoboard/octoboard.db`, the daemon decides what to do with it:
 
@@ -892,6 +892,9 @@ application ID, `0x4F435442`, "OCTB") that identifies it as Octoboard's. On ever
     untouched.
   - The upgrade is all or nothing: if any part of it fails, the database is left exactly as it was, and the daemon fails
     to start, with a reason that names the database, the versions it was being taken from and to, and the backup.
+  - Upgrading from version 3 discards every report panel page it holds: version 3 kept a page as an HTML document,
+    which has no tree of components to be read as (see `docs/product/report-page-components.md`). Everything else is
+    kept.
 - **A database at a newer version than this build reads, or at a version below 1**, and **a file with no tables that
   records a version** are refused and left untouched: the daemon fails to start, with a reason that names the file, its
   version, and that renaming the named file moves it aside, which deletes nothing and has this build start a fresh

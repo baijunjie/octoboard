@@ -6,7 +6,7 @@ import { RENDER_BUDGETS } from "../code/budgets";
 import { bodyFromFileContent } from "../content";
 import { readDocumentImage } from "./documentImageReads";
 import { SpotNotice } from "../notices";
-import { resolveProjectAddress } from "./projectAddress";
+import { isDataImage, resolveProjectAddress } from "./projectAddress";
 
 type Read = { path: string; url?: string; failed?: boolean; tooLarge?: boolean };
 
@@ -16,7 +16,9 @@ type Read = { path: string; url?: string; failed?: boolean; tooLarge?: boolean }
  * own read; the read is let go of when the image goes, with its document or its path. The bytes
  * are shown as a `data:` URL the way a file opened as an image is, which does not run a script or
  * fetch anything further. HTTP(S) images load directly in the browser, with no referrer, and
- * never through the daemon. Other addresses stay their description and are never requested.
+ * never through the daemon. Other addresses stay their description and are never requested. With `dataOnly`
+ * (an untrusted document) the only image drawn is one whose address is a `data:` one, and no project file is
+ * read nor web address loaded.
  *
  * While the read is out, the description is what is shown, so there is no empty gap. A read that
  * fails, or a file that is not an image, says so once it has failed. One past the byte cap, or a
@@ -30,6 +32,7 @@ export function DocumentImage({
   documentPath,
   project,
   overBudget,
+  dataOnly = false,
 }: {
   src?: string;
   alt?: string;
@@ -38,12 +41,14 @@ export function DocumentImage({
   documentPath: string;
   project?: string;
   overBudget: boolean;
+  dataOnly?: boolean;
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
   const address = resolveProjectAddress(documentPath, src);
-  const path = address.kind === "file" ? address.path : undefined;
-  const remote = address.kind === "external" && /^https?:/.test(address.href) ? address.href : undefined;
+  const path = !dataOnly && address.kind === "file" ? address.path : undefined;
+  const remote = !dataOnly && address.kind === "external" && /^https?:/.test(address.href) ? address.href : undefined;
+  const inline = dataOnly && isDataImage(src) ? src : undefined;
   const [read, setRead] = useState<Read>();
   const [failedRemote, setFailedRemote] = useState<string>();
   useEffect(() => {
@@ -71,7 +76,7 @@ export function DocumentImage({
 
   const current = read?.path === path ? read : undefined;
   const remoteFailed = !!remote && failedRemote === remote;
-  const url = !overBudget ? current?.url ?? (remoteFailed ? undefined : remote) : undefined;
+  const url = !overBudget ? inline ?? current?.url ?? (remoteFailed ? undefined : remote) : undefined;
   if (url) return (
     <img
       src={url}

@@ -3,7 +3,10 @@
 use std::path::{Path, PathBuf};
 
 use super::move_modification_time_back;
-use crate::protocol::{AgentId, Origin, Page, Role, Session, SessionKind, SessionStatus};
+use crate::protocol::{
+    AgentId, Component, Markdown, Origin, Page, PageContent, Role, Session, SessionKind,
+    SessionStatus,
+};
 
 pub(crate) fn project_session(id: &str, agent: AgentId, status: SessionStatus) -> Session {
     Session {
@@ -172,7 +175,22 @@ pub(crate) fn test_page(id: &str, session_id: &str, created_at: i64) -> Page {
     Page {
         id: id.to_string(),
         session_id: session_id.to_string(),
-        html: "<p>page</p>".to_string(),
+        content: test_page_content("page"),
+        submission: None,
+        submission_revision: 0,
         created_at,
+    }
+}
+
+/// The content of a page of one Markdown component reading `text`.
+pub(crate) fn test_page_content(text: &str) -> PageContent {
+    PageContent {
+        title: None,
+        body: vec![Component::Markdown {
+            component: Markdown {
+                text: text.to_string(),
+                visible_when: None,
+            },
+        }],
     }
 }

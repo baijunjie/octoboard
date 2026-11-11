@@ -1,4 +1,4 @@
-export { applyDaemonEvent, dismissAccountLogin, seedShellTerminal, setAccountSwitchesQueued, trackAccountLogin, trackAgentCliUpdate } from "./actions";
+export { applyDaemonEvent, dismissAccountLogin, seedShellTerminal, setAccountSwitchesQueued, trackAccountLogin, trackAgentCliUpdate, trackPagesListing } from "./actions";
 export { createDaemon } from "./connection";
 export type { Daemon } from "./connection";
 export { createImportProgressListeners } from "./importProgressListeners";

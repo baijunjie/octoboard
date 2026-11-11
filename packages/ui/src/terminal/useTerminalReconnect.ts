@@ -154,7 +154,9 @@ export function useTerminalReconnect({
   // already has the new one's. A first connect that has not failed yet is not trouble (typing
   // meanwhile is queued); once an attempt has failed, `connecting` is the reconnect cycle's middle
   // and stays `reconnecting`. Stored with the target it was worked out for, so that the first render
-  // after a switch does not show the previous target's.
+  // after a switch does not show the previous target's. Set only when it changes: a set that changes nothing still
+  // leaves an update queued in this effect's lane, and the next render in another lane (a daemon event's) then costs
+  // the terminal a second render to process it.
   const [troubleOf, setTroubleOf] = useState<{ target: string; state: "reconnecting" | "disconnected" }>();
   useEffect(() => {
     const controller = controllerRef.current;
@@ -166,10 +168,9 @@ export function useTerminalReconnect({
       else if (failed && attemptsRef.current >= MAX_AUTO_RECONNECT_ATTEMPTS) next = "disconnected";
       else next = "reconnecting";
     }
-    setTroubleOf((prev) => {
-      if (targetId === undefined || !next) return undefined;
-      return prev?.target === targetId && prev.state === next ? prev : { target: targetId, state: next };
-    });
+    const target = next ? targetId : undefined;
+    if (troubleOf?.target === target && troubleOf?.state === next) return;
+    setTroubleOf(target === undefined || !next ? undefined : { target, state: next });
   }, [status, targetId, live, suspended]);
   const trouble = troubleOf?.target === targetId ? troubleOf?.state : undefined;
 

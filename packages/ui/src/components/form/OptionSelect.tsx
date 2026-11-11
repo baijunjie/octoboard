@@ -127,6 +127,8 @@ export function OptionSelect<T extends string>({
   joined,
   hideLabel,
   isDisabled,
+  locked,
+  textDir,
   isLoading = false,
   description,
   describedBy,
@@ -136,6 +138,7 @@ export function OptionSelect<T extends string>({
   mark,
   labelMark,
   landing,
+  variant = "secondary",
 }: {
   label: string;
   options: Option<T>[];
@@ -144,6 +147,12 @@ export function OptionSelect<T extends string>({
   joined?: "start" | "end";
   hideLabel?: boolean;
   isDisabled?: boolean;
+  /** Draws the disabled select as a value to read rather than a dimmed control: for a select locked with the form it
+   * is in. */
+  locked?: boolean;
+  /** `auto` where the label and the description are a page's or a user's text, so that they take the direction of
+   * their own text and align with the interface. */
+  textDir?: "auto";
   /** Locks the select while its options load; an empty value shows the loading placeholder. */
   isLoading?: boolean;
   /** Extra explanation shown under the field. */
@@ -167,6 +176,9 @@ export function OptionSelect<T extends string>({
   labelMark?: (markId: string) => React.ReactElement;
   /** Makes the trigger where F6 lands in its region (`data-region-landing`). */
   landing?: boolean;
+  /** HeroUI's field variant: `secondary` for a field on a surface (the default), `primary` (HeroUI's default) for one
+   * on a pane's own background. */
+  variant?: "primary" | "secondary";
 } & (
   | { value: T; onChange: (value: T) => void; placeholder?: undefined }
   | { value: T | null; onChange: (value: T | null) => void; placeholder: string }
@@ -181,14 +193,14 @@ export function OptionSelect<T extends string>({
   const badge = current ? current.badge : isLoading ? undefined : placeholderBadge;
   const badgeInLabel = current ? current.badgeInLabel : true;
   const invalid = isInvalid === true || (errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "");
+  const textProps = textDir === undefined ? {} : { dir: textDir, className: "align-match-parent" };
   const hasReason = options.some((option) => option.reason);
   // Decided once the commit has set the trigger's `disabled`, and before the effects of a caller's own handoff.
   const handoffFrom = useHandoffAfterRemoval(() => trigger.current);
   const handoffToTrigger = (id: string) => handoffFrom(`[data-status-mark-id="${id}"]`);
   return (
-    // HeroUI's variant for a field on a surface: in a dialog, or in the Processes panel's toolbar.
     <Select
-      variant="secondary"
+      variant={variant}
       fullWidth={!inline && !joined}
       // A joined half that holds keyboard focus is raised, as its focus ring is drawn outside the
       // trigger and the later half would otherwise paint over it along the shared edge. The raise
@@ -201,6 +213,7 @@ export function OptionSelect<T extends string>({
       // children alone change. Keep the association stable for notes that appear dynamically.
       describedBy={[description ? descriptionId : undefined, describedBy].filter(Boolean).join(" ") || undefined}
       disabled={isDisabled}
+      locked={locked}
       loading={isLoading}
       invalid={invalid}
       value={value}
@@ -214,14 +227,14 @@ export function OptionSelect<T extends string>({
     >
       {!inline && !joined && !hideLabel && (labelMark ? (
         <div className="flex items-start gap-1">
-          <Label>{label}</Label>
+          <Label {...textProps}>{label}</Label>
           {handoffToTrigger(labelMarkId)}
           {/* The mark is not a part of the select, as for `mark` below. */}
           <MarkLineBox size="text-sm">
             <OutsideFieldParts>{labelMark(labelMarkId)}</OutsideFieldParts>
           </MarkLineBox>
         </div>
-      ) : <Label>{label}</Label>)}
+      ) : <Label {...textProps}>{label}</Label>)}
       {/* The trigger and the mark share a box, as the mark is laid over the trigger's trailing room. */}
       <div className="relative">
         {/* Joined: the two parts square the corners they meet at and touch. Nothing is drawn between
@@ -311,7 +324,7 @@ export function OptionSelect<T extends string>({
           ))}
         </MotionListBox>
       </SelectPopover>
-      {description && <Description id={descriptionId}>{description}</Description>}
+      {description && <Description id={descriptionId} {...textProps}>{description}</Description>}
       {errorMessage !== undefined && (
         <FieldErrorMessage>{invalid ? errorMessage : null}</FieldErrorMessage>
       )}

@@ -11,6 +11,13 @@ export function trackAccountLogin(store: StoreApi<State>, agent: Agent, account:
   store.setState((state) => reducer(state, { kind: "track_account_login", key: accountKey(agent, account), tracked }));
 }
 
+/** Notes that this window asked for `session`'s pages (`listing`) and has no `page_list` for them yet, or that it no
+ * longer waits for one: the request failed. A `page_submission` heard for a page of a session in neither case, nor
+ * holding pages, is dropped rather than remembered. */
+export function trackPagesListing(store: StoreApi<State>, session: string, listing: boolean): void {
+  store.setState((state) => reducer(state, { kind: "track_pages_listing", session, listing }));
+}
+
 /** Notes that this window asked for an update of `agent`'s CLI, `from` being the `started_at` of the update its status
  * held then (null for none), or that it has not any more (`from` undefined): the update ended, or the request was
  * refused. */

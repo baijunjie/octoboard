@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type Console, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
+import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type Console, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PageContent, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
 import { type MessageParams } from "../errors/codedError";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import type { NotificationFixture } from "./fixture";
@@ -277,8 +277,15 @@ export function keptOf(
   return leftoverOf(id, command, minutes, { kept: true, cwd: "/Users/dev/code/website", cwd_missing: false, ...extra });
 }
 
-export function pageOf(id: string, sessionId: string, html: string, minutes: number): Page {
-  return { id, session_id: sessionId, html, created_at: minutesAgo(minutes) };
+/** A page's content that is one Markdown block, for a test or a scenario that needs a page and not its components. */
+export function markdownContent(text: string, title?: string): PageContent {
+  return { ...(title === undefined ? {} : { title }), body: [{ type: "markdown", text }] };
+}
+
+/** A page pushed `minutes` ago, not yet submitted unless a `submission` is given, which the daemon would have marked
+ * once, so it is revision 1 (a page never marked is 0). */
+export function pageOf(id: string, sessionId: string, content: PageContent, minutes: number, submission: Page["submission"] = null): Page {
+  return { id, session_id: sessionId, content, submission, submission_revision: submission === null ? 0 : 1, created_at: minutesAgo(minutes) };
 }
 
 export function gitStatusOf(projectId: string, extra: Partial<GitStatus> = {}): GitStatus {

@@ -6,7 +6,6 @@ import type { ViewedFile } from "../viewer/viewedFile";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { AsideOwner } from "../layout/asideOwner";
-import type { PanePeek } from "../layout/usePaneToggles";
 import { ProcessesPanel } from "../process/ProcessesPanel";
 import type { Project } from "../protocol";
 import { ReportPanel } from "../report/ReportPanel";
@@ -33,19 +32,9 @@ export interface PanelContentProps {
   switching: boolean;
   /** Where keyboard focus goes when what held it in the panel goes away. */
   focusTerminal: () => void;
-  /** The floating pane's pointer callbacks, for a panel whose content sends this document no pointer
-   * events of its own; `undefined` while the pane is docked. */
-  peek: Pick<PanePeek, "keep" | "leave"> | undefined;
   /** The panel is being resized every frame (a maximized card while the sidebar's dock eases): a
    * terminal keeps its size until this ends, then fits once. */
   resizing: boolean;
-  /** What a key pressed inside a report page's frame asks of the window. */
-  frameKeys: {
-    onEscape: () => void;
-    onCycleRegion: (backward: boolean) => void;
-    onMoveHistory: (backward: boolean) => void;
-    onMoveConsoleSession: (backward: boolean) => void;
-  };
   /** Shows a project file a path in a terminal's output named, in the file viewer. `returnFocus`
    * puts focus back where the click came from once the viewer closes, and says whether it took
    * it; the agent terminal takes it when `returnFocus` is absent or returns false. */
@@ -77,9 +66,9 @@ function TerminalContent({ project, switching, resizing, onViewFile }: PanelCont
   return project ? <ShellTerminalPanel project={project} switching={switching} resizing={resizing} onViewFile={onViewFile} /> : null;
 }
 
-function ReportContent({ reportSessionId, peek, frameKeys }: PanelContentProps): React.ReactElement | null {
+function ReportContent({ reportSessionId }: PanelContentProps): React.ReactElement | null {
   // Keyed by the session, so another session's panel starts afresh, on its newest page.
-  return reportSessionId ? <ReportPanel key={reportSessionId} sessionId={reportSessionId} peek={peek} {...frameKeys} /> : null;
+  return reportSessionId ? <ReportPanel key={reportSessionId} sessionId={reportSessionId} /> : null;
 }
 
 /** Every kind of panel the stack can hold, in the order they stack: a later kind is one more entry here and in

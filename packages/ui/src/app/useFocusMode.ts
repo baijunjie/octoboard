@@ -13,8 +13,7 @@ import { useDaemonStore } from "../store";
 
 /**
  * The sidebar's focus mode from the keyboard: ⇧⌘F enters the selected session's context or leaves focus mode, and
- * ⌃Tab moves along a console session's switch strip. `moveConsoleSession` is the move for a key press that reaches
- * the window another way, and `stableFocus` sets the focus mode for the sidebar's rows.
+ * ⌃Tab moves along a console session's switch strip. `stableFocus` sets the focus mode for the sidebar's rows.
  */
 export function useFocusMode({
   focus,
@@ -63,12 +62,12 @@ export function useFocusMode({
     flushSync(() => selectSession(session, KEY_SWITCH_SELECTION));
     focusTerminal();
   };
-  const moveConsoleSession = useSwitchShortcut({
+  useSwitchShortcut({
     focus,
     strip: switchableConsoleSessions,
     shown: sidebarShown,
     onSwitch: switchConsoleSessionByKey,
   });
   const stableFocus = useStableHandler(setFocus);
-  return { moveConsoleSession, stableFocus };
+  return { stableFocus };
 }

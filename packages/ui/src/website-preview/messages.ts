@@ -1,6 +1,5 @@
 /** The messages the website preview's frames post to the website page that embeds them, and how the page reads them.
- * Imported by both sides (the page by relative path), so it imports nothing, and a message is spelled in one place.
- * The report-internal messages the bridges exchange inside the preview never reach the page and stay in the bridges. */
+ * Imported by both sides (the page by relative path), so it imports nothing, and a message is spelled in one place. */
 
 export const PREVIEW_MESSAGE = {
   /** The visitor last used the keyboard or a pointer in the frame. */
@@ -46,13 +45,13 @@ export function postFeatureMessage(parent: Window, message: FeatureMessage): voi
 const isFinitePart = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
 
 /** Whether `value` is an interaction message's modality. */
-export function isModality(value: unknown): value is Modality {
+function isModality(value: unknown): value is Modality {
   return value === "keyboard" || value === "pointer";
 }
 
 /** The scroll parts of a message, or `undefined` without a finite `deltaY`; `stop` is set only by `true`, and
- * `velocity` only by a finite number. Shared by the page reading a scroll message and the bridge relaying one. */
-export function readScrollParts(data: { deltaY?: unknown; velocity?: unknown; stop?: unknown }): { deltaY: number; velocity?: number; stop: boolean } | undefined {
+ * `velocity` only by a finite number. */
+function readScrollParts(data: { deltaY?: unknown; velocity?: unknown; stop?: unknown }): { deltaY: number; velocity?: number; stop: boolean } | undefined {
   if (!isFinitePart(data.deltaY)) return undefined;
   return { deltaY: data.deltaY, ...(isFinitePart(data.velocity) ? { velocity: data.velocity } : {}), stop: data.stop === true };
 }

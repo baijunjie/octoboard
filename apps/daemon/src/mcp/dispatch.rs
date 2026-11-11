@@ -135,6 +135,7 @@ async fn dispatch(
             .await
         }
         "show_page" => pages::show_page(state, &session, arguments),
+        "page_guide" => pages::page_guide(arguments),
         "list_pages" => pages::list_pages(state, &session, arguments),
         "delete_pages" => pages::delete_pages(state, &session, arguments),
         "report" => report(state, &session, arguments).await,
@@ -220,6 +221,7 @@ mod tests {
             ("of-a", "archive_session"),
             ("starter", "add_project"),
             ("mine", "show_page"),
+            ("mine", "page_guide"),
             ("mine", "list_pages"),
             ("mine", "delete_pages"),
             ("a", "report"),

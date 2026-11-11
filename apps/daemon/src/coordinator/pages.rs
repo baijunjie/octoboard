@@ -1,7 +1,8 @@
 //! A session's pages on the report panel, apart from the tools with which it pushes, lists and
-//! deletes them: the panel's list of a session's pages and its form submission, withdrawing every
-//! page of a session that has become a worker, the sweep at daemon start of the pages left on
-//! workers, and telling the panel which pages are gone.
+//! deletes them: the panel's list of a session's pages and its form submission, which marks the
+//! page submitted before it delivers and takes the mark back only when the delivery certainly
+//! failed, withdrawing every page of a session that has become a worker, the sweep at daemon start
+//! of the pages left on workers, and telling the panel which pages are gone.
 
 use std::sync::Arc;
 
@@ -11,6 +12,7 @@ use crate::messaging::delivery;
 use crate::messaging::texts;
 use crate::protocol::{error_code, CodedError, Event};
 use crate::state::AppState;
+use crate::store::PageMark;
 
 /// Withdraws every page `session_id` pushed, as `delete_pages` with `all` does, for a session that
 /// has just lost the report panel's tools by becoming a worker: its pages would stay
@@ -55,6 +57,13 @@ pub(crate) fn announce_deleted(state: &Arc<AppState>, session_id: &str, deleted:
 /// only reflecting the rule, not the source of it. Refused too when the session that pushed it
 /// has the role of a worker and so has no tool to read the submission through; a bound coordinator,
 /// though it reports to an owner too, keeps its pages.
+///
+/// A page takes one submission. It is marked submitted, in the store and in every window
+/// (`page_submission`), before the message is delivered, so that of several submissions racing for
+/// the page exactly one is delivered and the others are refused with `page_already_submitted`. A
+/// delivery that certainly failed takes the mark off again, so the form can be submitted again; one
+/// whose acceptance is unconfirmed, or that may have been written, keeps it, as the message may
+/// already be there.
 pub(super) async fn submit_page(
     state: &Arc<AppState>,
     page_id: &str,
@@ -69,11 +78,7 @@ pub(super) async fn submit_page(
     })?;
     let newest = state.store.newest_page_id(&page.session_id)?;
     if newest.as_deref() != Some(page.id.as_str()) {
-        return Err(CodedError::raised(
-            error_code::PAGE_NOT_CURRENT,
-            "this page is no longer current; its form can no longer be submitted",
-            &[],
-        ));
+        return Err(not_current());
     }
     // A worker has no tool to read what the page sent; its pages are withdrawn when it
     // becomes one, so this holds for one left behind by a failed withdrawal, until the daemon's
@@ -89,17 +94,90 @@ pub(super) async fn submit_page(
             &[("page", page_id)],
         ));
     }
-    let message = texts::render_page_submission(&page.id, &data);
+    let submission = page.content.check_submission(&data).map_err(|reason| {
+        CodedError::raised(
+            error_code::UNREADABLE_REQUEST,
+            format!("the submission does not fit the page: {reason}"),
+            &[],
+        )
+    })?;
+    let revision = match state.store.mark_page_submitted(&page.id, &submission)? {
+        PageMark::Marked(revision) => revision,
+        PageMark::Unknown => {
+            return Err(CodedError::raised(
+                error_code::UNKNOWN_PAGE,
+                format!("unknown page {page_id}"),
+                &[("page", page_id)],
+            ))
+        }
+        PageMark::NotCurrent => return Err(not_current()),
+        PageMark::AlreadySubmitted => {
+            return Err(CodedError::raised(
+                error_code::PAGE_ALREADY_SUBMITTED,
+                "this page's form was already submitted",
+                &[],
+            ))
+        }
+    };
+    state.broadcast(Event::PageSubmission {
+        session_id: page.session_id.clone(),
+        page: page.id.clone(),
+        submission: Some(submission.clone()),
+        submission_revision: revision,
+    });
+    let message = texts::render_page_submission(&page.id, &submission);
     // The write blocks on the PTY. Queued rather than refused: the user is the one submitting, so
     // there is nobody to tell to answer a prompt first, and the submission must not be dropped.
-    delivery::write_message_off_runtime(
+    let delivered = delivery::write_message_off_runtime(
         state,
         &page.session_id,
         message,
         delivery::WhenBlocked::Queue,
     )
-    .await?;
-    Ok(())
+    .await;
+    let Err(err) = delivered else {
+        return Ok(());
+    };
+    if !may_have_written(&err) {
+        release_submission(state, &page.session_id, &page.id, revision);
+    }
+    Err(err)
+}
+
+fn not_current() -> anyhow::Error {
+    CodedError::raised(
+        error_code::PAGE_NOT_CURRENT,
+        "this page is no longer current; its form can no longer be submitted",
+        &[],
+    )
+}
+
+/// Whether the message may have reached the session though the write failed: its agent's own queue
+/// did not confirm taking it, or the blocking task that wrote it did not come back, and may have
+/// written it before it did not.
+fn may_have_written(err: &anyhow::Error) -> bool {
+    delivery::acceptance_uncertain(err) || err.downcast_ref::<tokio::task::JoinError>().is_some()
+}
+
+/// Takes the mark set at `revision` off a page whose submission certainly was not delivered, and
+/// tells the windows, so the form can be submitted again. Only that mark: the page may have been
+/// deleted, or its submission changed, since. The announcement carries the revision the store
+/// gave the clearing, so a window that hears of a later mark first keeps that one. A store that
+/// cannot clear it leaves the page marked, which refuses a retry rather than risking a second
+/// delivery.
+fn release_submission(state: &Arc<AppState>, session_id: &str, page_id: &str, revision: i64) {
+    match state.store.clear_page_submission(page_id, revision) {
+        Ok(Some(cleared)) => state.broadcast(Event::PageSubmission {
+            session_id: session_id.to_string(),
+            page: page_id.to_string(),
+            submission: None,
+            submission_revision: cleared,
+        }),
+        Ok(None) => {}
+        Err(err) => {
+            tracing::warn!(page = %page_id, %err, "taking the submission mark off a page failed")
+        }
+    }
 }
 
 /// Answers a `list_pages` request with the pages `session` has pushed. A project session can have

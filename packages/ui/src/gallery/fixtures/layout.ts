@@ -1,6 +1,6 @@
 import { describing, type Matcher, type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { consoleOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
+import { consoleOf, markdownContent, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Window layout";
 
@@ -35,7 +35,7 @@ const railState = snapshotState({
     sessionOf("s-docs-1", docs.id, manual.id, "Old draft", "archived"),
     sessionOf("s-lab-1", lab.id, experiments.id, "Asks which branch to use", "waiting_user"),
   ],
-  pages: { [hub.id]: [pageOf("pg-hub", hub.id, "<h1>Report</h1><p>Two sessions need you.</p>", 5)] },
+  pages: { [hub.id]: [pageOf("pg-hub", hub.id, markdownContent("Two sessions need you.", "Report"), 5)] },
 });
 // More consoles than the rail holds in any window, so its column of them scrolls whatever the
 // window's height: forty tiles are taller than a browser window the gallery is opened in.

@@ -11,7 +11,7 @@ import { fakeTimers } from "./test/clock";
 import { App } from "./App";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "./components/announce/StatusAnnouncer";
 import { byLabel, fakeDaemon, row, stubWindow } from "./appTestSupport";
-import { consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./fixtures/builders";
+import { consoleOf, gitStatusOf, markdownContent, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
 import type { Event, ClientRequestBody } from "./protocol";
@@ -137,7 +137,7 @@ const hover = (element: HTMLElement, type: "pointerover" | "pointerout") => {
 it.each<[string, Event]>([
   ["a status change of a session that is not selected", { type: "session_upserted", session: { ...plan, status: "working" } }],
   ["a project's git status", { type: "project_git_status", status: gitStatusOf(site.id, { ahead: 2 }) }],
-  ["a page of a session that is not selected", { type: "page_created", page: pageOf("pg-1", plan.id, "<p>Done</p>", 1) }],
+  ["a page of a session that is not selected", { type: "page_created", page: pageOf("pg-1", plan.id, markdownContent("Done"), 1) }],
   ["a shell terminal of a project that does not own the aside", { type: "shell_terminal_upserted", shell_terminal: shellTerminalOf("t-api", api, "zsh", 1) }],
 ])("does not render App for %s", async (_, event) => {
   const daemon = mountApp();
@@ -181,7 +181,7 @@ it("renders App and its children no more often than the baseline over a scripted
     ["opening its archive submenu", () => openSubmenu(menuItem("View archive")), bound(0, 0)],
     ["opening the archive", () => menuItem("View all").click(), bound(3, 3, { ...UNREACHED, ArchiveLayer: 5 })],
     ["closing the archive", () => found(document.querySelector<HTMLElement>("[data-region=archive] [aria-label=Close]")).click(), bound(2, 2, UNREACHED)],
-    ["switching the console from the rail", () => found(rail(second.name)).click(), bound(3, 2, { ...UNREACHED, TitleBar: 1, RightPane: 0 })],
+    ["switching the console from the rail", () => found(rail(second.name)).click(), bound(3, 2, { ...UNREACHED, TitleBar: 1, RightPane: 0, Sidebar: 1, ArchiveLayer: 1 })],
   ];
   for (const [name, step, limit] of steps) {
     const counts = await rendersOf(step);

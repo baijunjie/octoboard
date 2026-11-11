@@ -5,6 +5,9 @@ import { DEFAULT_SETTINGS } from "./defaultSettings";
 import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus, type Console, type GitStatus, type Host, type HostInfo, type Page, type Project, type ProviderInfo, type Session, type Settings, type ShellTerminal } from "../protocol";
 import type { SessionRequest } from "./sessionRequests";
 
+/** A page's submission at one of its revisions, as `Page` and `page_submission` carry it. */
+export type PageSubmission = Pick<Page, "submission" | "submission_revision">;
+
 /** A session waiting at its agent's folder-trust confirmation for the user's say-so. */
 export interface TrustPrompt {
   session: string;
@@ -39,6 +42,14 @@ export interface State {
    * before a deletion but applied after it does not bring them back. Cleared on a `snapshot`,
    * which clears `pages` too, and with the session. */
   deletedPages: Map<string, ReadonlySet<string>>;
+  /** The latest `page_submission` heard for each page this window did not hold yet, by session and then page id,
+   * kept until the page arrives (`page_list` or `page_created`), so that a list computed before the submission
+   * changed cannot hide the change. Cleared on a `snapshot`, which clears `pages` too, and with the session. */
+  earlySubmissions: Map<string, ReadonlyMap<string, PageSubmission>>;
+  /** The sessions whose `list_pages` this window has asked for and has no `page_list` for yet, so that a
+   * `page_submission` for a page of one is remembered (`earlySubmissions`) while one for a session this window never
+   * lists is not. Cleared on a `snapshot`, which re-lists, and with the session. */
+  pagesListing: ReadonlySet<string>;
   /** Bumped on every `snapshot`. A snapshot arrives on the same socket for a lag recovery, not
    * just a fresh connection (see the `page_list` row under "Daemon to client" in
    * `apps/daemon/PROTOCOL.md`), so `connectionState` alone does not change — a consumer that needs to
@@ -127,6 +138,8 @@ const initialState: State = {
   sessions: new Map(),
   pages: new Map(),
   deletedPages: new Map(),
+  earlySubmissions: new Map(),
+  pagesListing: new Set(),
   snapshotEpoch: 0,
   trustPrompts: [],
   trustedDirectories: [],

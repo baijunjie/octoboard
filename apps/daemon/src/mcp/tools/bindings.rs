@@ -533,7 +533,7 @@ mod tests {
             &state,
             "loose",
             "show_page",
-            &arguments(json!({ "html": "<p>plan</p>" })),
+            &arguments(json!({ "body": [{ "type": "markdown", "text": "plan" }] })),
         )
         .await
         .unwrap();

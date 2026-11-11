@@ -376,16 +376,18 @@ export function TerminalPane({
   // open, so the limit never uncovers a terminal that is not connected (a first connect that
   // hangs, a manual Reconnect under way, a resume still starting the process).
   const awaitingOutput = session !== undefined && !painted && (resuming || !noProcess);
-  const [loadingExpired, setLoadingExpired] = useState(false);
+  // The session whose wait ran out. It is cleared during render (which queues no update) once nothing is awaited or
+  // another session is shown, so a later wait, or a return to that session while it reconnects, starts afresh; a timer
+  // for the session left behind that fires after the switch is cleared the same way.
+  const [expiredFor, setExpiredFor] = useState<string>();
+  if (expiredFor !== undefined && (!awaitingOutput || expiredFor !== session?.id)) setExpiredFor(undefined);
   useEffect(() => {
-    setLoadingExpired(false);
-  }, [awaitingOutput, session?.id]);
-  useEffect(() => {
-    if (!awaitingOutput || status !== "open") return;
-    const timer = setTimeout(() => setLoadingExpired(true), LOADING_LIMIT_MS);
+    if (!awaitingOutput || status !== "open" || !session) return;
+    const id = session.id;
+    const timer = setTimeout(() => setExpiredFor(id), LOADING_LIMIT_MS);
     return () => clearTimeout(timer);
   }, [awaitingOutput, session?.id, status]);
-  const loading = awaitingOutput && !loadingExpired;
+  const loading = awaitingOutput && expiredFor !== session?.id;
   // The bar offering to resume a session without a process or reopen an archived one.
   const noProcessBar =
     session && noProcess && !resuming && !switching
@@ -417,8 +419,8 @@ export function TerminalPane({
   const [afterPending, setAfterPending] = useState(false);
   const covered = cover !== undefined;
   useLayoutEffect(() => {
-    if (livePending) setAfterPending(true);
-    else if (!covered) setAfterPending(false);
+    const next = livePending || (covered && afterPending);
+    if (next !== afterPending) setAfterPending(next);
   }, [livePending, covered]);
   const recoveredSaid = useAnnouncedOnRise(session?.id, session?.screen_inexact === true, t("terminal.recovered.title"), livePending || afterPending || !exposed);
   // The cover's and the pending sentences are lost the same way while the pane is not exposed, a live

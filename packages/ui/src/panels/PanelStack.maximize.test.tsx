@@ -64,7 +64,6 @@ function mount({ open, peek, floating }: { open: string[]; peek?: PanePeek; floa
             focusTerminal={() => {}}
             peek={peek}
             peekKind={peek ? ("fake" as PanelKind) : undefined}
-            frameKeys={{ onEscape: () => {}, onCycleRegion: () => {}, onMoveHistory: () => {}, onMoveConsoleSession: () => {} }}
             onDismiss={() => {}}
             onPanelClose={onPanelClose}
             maximizeArea={area}

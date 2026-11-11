@@ -167,8 +167,8 @@ Where a component in `packages/ui` styles itself from a measurement of layout â€
 edge of a line is cut off â€” take that measurement in an effect with **no dependency array**, so it runs on every commit
 of the component, and keep a `ResizeObserver` alongside it for what moves between commits (a lazy render finishing, the
 window resizing). Use a layout effect where the first paint already has to carry the style, an ordinary one otherwise.
-Measuring that often costs nothing when the answer has not moved: write it back through `useState` and React bails out
-of a set to the value already there.
+Measuring that often costs nothing as long as the answer is written back to state only when it has moved; an
+unconditional set, even to the same value, can cost the component another render.
 
 An observer on its own is not enough, in two ways that each look from the outside like nothing happening:
 

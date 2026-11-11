@@ -65,8 +65,9 @@ Everything the window shows follows the chosen appearance, including:
   operating system rather than pinning it to whatever System resolved to at that moment, so it keeps following a
   live system change too. A client with no native window, such as the UI opened in a browser, has nothing native to
   match and ignores this.
-
-The one deliberate exception is a report page — see below.
+- **A report page**, every component of which is Octoboard's own and drawn in the chosen appearance: its code, diff
+  and copyable blocks on the code highlighting scheme's own surface, and its charts in a palette stepped for each
+  appearance (see `docs/product/report-page-components.md`). A page carries no colours of its own.
 
 ## The link colour
 
@@ -95,15 +96,3 @@ same daemon, each keep their own; a client whose storage has been cleared is bac
 that includes the General section carries the exporting client's choice, and an import asked to apply that section sets
 it on the client that runs the import alone (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`).
-
-## A report page stays on a light surface in both appearances
-
-A page in the report panel is rendered on a **light surface whatever the window's appearance is**, and its
-own unstyled form controls stay light as well, regardless of the operating system's preference. The panel's own
-chrome around the page — the header bar with the paging controls — follows the chosen appearance like everything
-else.
-
-This is a decision, not an oversight. A page is arbitrary HTML the console session's model wrote (see "What a page may
-contain, and what it cannot do" in `docs/product/report-panel.md`), and one that hard-codes dark text would
-become unreadable if the surface under it went dark. Holding the surface light keeps every page legible, at
-the cost of a page not matching a dark window.

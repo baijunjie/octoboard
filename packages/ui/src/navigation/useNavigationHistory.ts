@@ -3,7 +3,6 @@ import { flushSync } from "react-dom";
 
 import { refocusIfLost } from "../components/focus/refocusIfLost";
 import { onWindowFocusLoss } from "../components/hooks/windowFocus";
-import { MODAL_OPEN } from "../components/focus/selectors";
 import type { HostFacts } from "../platform/host";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
@@ -26,10 +25,6 @@ export interface Navigation {
   canGoForward: boolean;
   back: () => void;
   forward: () => void;
-  /** Back or Forward as the shortcut does it, for a key press that reaches the window another way
-   * (the report page's relay): nothing where the shortcut does not exist, or while a dialog or
-   * menu is open. */
-  moveByShortcut: (backward: boolean) => void;
   /** The console is about to change because a press inside the previewing sidebar committed it, and
    * that press may go on to select something in it: the visit the console change makes and the one
    * the selection makes are then recorded as one, so Back does not stop between them. Only a change
@@ -149,14 +144,9 @@ export function useNavigationHistory({
     endJoin.current = stop;
   };
 
-  // react-aria does not count a ⌘ chord as a keyboard interaction (and the relay's key comes from
-  // another page), so a move the shortcut makes sets the modality itself, for focus it hands on to
-  // show its ring; one with nowhere to go leaves it alone.
-  const moveByShortcut = (backward: boolean) => {
-    if (!shortcutExists || document.querySelector(MODAL_OPEN)) return;
-    move(backward ? -1 : 1, true);
-  };
-  useWindowShortcut((event) => shortcutDirection(event, host), (direction) => moveByShortcut(direction === -1), shortcutExists);
+  // react-aria does not count a ⌘ chord as a keyboard interaction, so a move the shortcut makes sets the
+  // modality itself, for focus it hands on to show its ring; one with nowhere to go leaves it alone.
+  useWindowShortcut((event) => shortcutDirection(event, host), (direction) => move(direction, true), shortcutExists);
 
   const canGoBack = useDaemonStore((s) => canGo(history, -1, (target) => isLive(target, s.sessions)));
   const canGoForward = useDaemonStore((s) => canGo(history, 1, (target) => isLive(target, s.sessions)));
@@ -166,7 +156,6 @@ export function useNavigationHistory({
     canGoForward,
     back: () => move(-1),
     forward: () => move(1),
-    moveByShortcut,
     joinPressVisits,
   };
 }

@@ -131,10 +131,6 @@ export interface PaneToggles {
   sidebarShown: boolean;
   toggleSidebar: () => void;
   closeSidebar: () => void;
-  /** Closes every overlay that is open, the sidebar's drawer, a floating pane or the panel floating
-   * over the terminal in a window too narrow to dock the aside, as Escape does;
-   * does nothing while none is, so focus inside a docked pane stays put. */
-  dismissOverlays: () => void;
 }
 
 /**
@@ -174,7 +170,7 @@ export function usePaneToggles({
   asidePeekable: boolean;
   focusTerminal: () => void;
   /** A panel floats over the agent terminal in a window too narrow to dock the aside: an overlay
-   * like the drawer, which Escape and `dismissOverlays` close (`closeFloatingPanel`). */
+   * like the drawer, which Escape closes (`closeFloatingPanel`). */
   floatingPanel?: boolean;
   closeFloatingPanel?: () => void;
   drawer?: readonly [boolean, (open: boolean) => void];
@@ -229,6 +225,8 @@ export function usePaneToggles({
     setSidebarOpen(false);
   };
 
+  // Closes every overlay that is open, the sidebar's drawer, a floating pane or the panel floating over the terminal
+  // in a window too narrow to dock the aside; does nothing while none is, so focus inside a docked pane stays put.
   const dismissOverlays = () => {
     if (!sidebarOpen && !sidebarPeek.active && !asidePeek.active && !floatingPanel) return;
     if (floatingPanel) closeFloating.current?.();
@@ -325,6 +323,5 @@ export function usePaneToggles({
     sidebarShown: isNarrow ? sidebarOpen || (!mobile && sidebarPeek.active) : sidebarDocked,
     toggleSidebar,
     closeSidebar,
-    dismissOverlays,
   };
 }

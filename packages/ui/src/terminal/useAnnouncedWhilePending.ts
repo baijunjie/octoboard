@@ -26,8 +26,9 @@ export function useAnnouncedWhilePending(
   useEffect(() => {
     const was = previous.current;
     previous.current = { subject, pending };
-    if (!pending || subject === undefined) setPeriod(undefined);
-    else if (was?.subject === subject && !was.pending) setPeriod(coverHasFocus() ? undefined : { subject, immediate: true });
+    if (!pending || subject === undefined) {
+      if (period !== undefined) setPeriod(undefined);
+    } else if (was?.subject === subject && !was.pending) setPeriod(coverHasFocus() ? undefined : { subject, immediate: true });
     else setPeriod({ subject, immediate: false });
   }, [subject, pending]);
   const current = pending && period !== undefined && period.subject === subject ? period : undefined;

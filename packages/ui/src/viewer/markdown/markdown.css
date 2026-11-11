@@ -91,6 +91,48 @@
     margin: 0;
   }
 
+  /* A report page's text, set in the narrow report panel, reads at 1.5 rather than the 1.71 of `prose-sm`,
+     with the block spacing scaled by the same ratio. The wrapper `report-markdown` scopes it, so the
+     document elsewhere keeps the plugin's rhythm. */
+  .report-markdown .markdown-prose.prose-sm {
+    line-height: 1.5;
+  }
+
+  .report-markdown .markdown-prose.prose-sm p,
+  .report-markdown .markdown-prose.prose-sm ul,
+  .report-markdown .markdown-prose.prose-sm ol,
+  .report-markdown .markdown-prose.prose-sm blockquote {
+    margin-block: 0.75em;
+  }
+
+  .report-markdown .markdown-prose.prose-sm li {
+    margin-block: 0.2em;
+  }
+
+  /* A text block that takes the direction of its own text still aligns with the interface, as the page's other text does,
+     so a callout's body or an opening paragraph lines up with the heading above it: the document's root resolves
+     `match-parent` against the page around it, and its text blocks against it in turn. `match-parent` computes to a
+     physical side, which is inherited, so what keeps its own layout (code, a diagram's source, a formula's fallback, a
+     table, a task list) starts at its own start again. The prefixed value comes first, as Chromium understands only
+     that one. */
+  .report-markdown .markdown-prose[dir],
+  .report-markdown :is(h1, h2, h3, h4, h5, h6, p, blockquote, ul, ol):not(.contains-task-list)[dir] {
+    text-align: -webkit-match-parent;
+    text-align: match-parent;
+  }
+
+  .report-markdown .markdown-prose :is(pre, table, .contains-task-list, [dir="ltr"]:not(:is(h1, h2, h3, h4, h5, h6, p, blockquote, ul, ol))) {
+    text-align: start;
+  }
+
+  .report-markdown .markdown-prose.prose-sm > :first-child {
+    margin-block-start: 0;
+  }
+
+  .report-markdown .markdown-prose.prose-sm > :last-child {
+    margin-block-end: 0;
+  }
+
   /* The styles other than Tailwind. The base restores what the reset strips and sets the rhythm; each
      style then sets its own face, headings and the few blocks that set it apart. */
   .markdown-prose.markdown-styled {

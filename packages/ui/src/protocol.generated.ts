@@ -3,7 +3,7 @@
 // The UI imports it only through `protocol.ts`, which re-exports it.
 
 /** The protocol generation this file describes; see `hello`. */
-export const PROTOCOL_GENERATION = 3;
+export const PROTOCOL_GENERATION = 4;
 
 /**
  * A named config directory of one agent, kept once for the whole application and referred to by
@@ -617,6 +617,11 @@ export type BrowseRequest = {
 });
 
 /**
+ * What a callout says of itself: neutral information, a success, a warning or a danger.
+ */
+export type CalloutTone = "info" | "success" | "warning" | "danger";
+
+/**
  * What a provider can do that not every provider can, declared so that code and the UI branch
  * on it rather than on which provider it is.
  */
@@ -653,6 +658,12 @@ export type Capabilities = {
   mcp_inventory: boolean,
   delivery: DeliveryQuirks,
 };
+
+/**
+ * A plain value a report shows: a string, a number or a boolean, as a table cell or a key–value
+ * pair's value holds it.
+ */
+export type CellValue = string | boolean | number;
 
 /**
  * One entry of a change listing: a change between two sides, or a path in conflict, which is
@@ -724,6 +735,14 @@ export type ChangeSide = {
 };
 
 /**
+ * One option of a choice: the `value` that is submitted, shown as `label` where there is one.
+ */
+export type ChoiceOption = {
+  value: string,
+  label?: string,
+};
+
+/**
  * How an agent's CLI was installed, which decides the command that updates it.
  */
 export type CliInstallMethod = "native" | "npm" | "homebrew" | "unknown";
@@ -732,6 +751,11 @@ export type CliInstallMethod = "native" | "npm" | "homebrew" | "unknown";
  * Where an update of a CLI is.
  */
 export type CliUpdateState = "running" | "succeeded" | "failed";
+
+/**
+ * Which side of its cells a table column's values sit on, in the reading direction.
+ */
+export type ColumnAlign = "start" | "end";
 
 /**
  * One commit a branch made since it forked, as `list_project_commits` lists it: its full id, its
@@ -770,6 +794,240 @@ export type ComparisonEndpoint = {
    * tree's id, which is the comparison's `base` too.
    */
   empty?: boolean,
+};
+
+/**
+ * One component of a page: an object of the kind its `type` names, with that kind's properties
+ * beside it. Every kind takes an optional `visible_when`.
+ */
+export type Component = {
+  "type": "section",
+  children: Array<Component>,
+  heading?: string,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "markdown",
+  text: string,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "text",
+  name: string,
+  label: string,
+  description?: string,
+  required?: boolean,
+  visible_when?: VisibleWhen,
+  default?: string,
+  placeholder?: string,
+  pattern?: string,
+  min_length?: number,
+  max_length?: number,
+}
+| {
+  "type": "textarea",
+  name: string,
+  label: string,
+  description?: string,
+  required?: boolean,
+  visible_when?: VisibleWhen,
+  default?: string,
+  placeholder?: string,
+  min_length?: number,
+  max_length?: number,
+  rows?: number,
+}
+| {
+  "type": "number",
+  name: string,
+  label: string,
+  description?: string,
+  required?: boolean,
+  visible_when?: VisibleWhen,
+  default?: number,
+  min?: number,
+  max?: number,
+  step?: number,
+}
+| {
+  "type": "date",
+  name: string,
+  label: string,
+  description?: string,
+  required?: boolean,
+  visible_when?: VisibleWhen,
+  default?: string,
+  min?: string,
+  max?: string,
+}
+| {
+  "type": "time",
+  name: string,
+  label: string,
+  description?: string,
+  required?: boolean,
+  visible_when?: VisibleWhen,
+  default?: string,
+  min?: string,
+  max?: string,
+}
+| {
+  "type": "datetime",
+  name: string,
+  label: string,
+  description?: string,
+  required?: boolean,
+  visible_when?: VisibleWhen,
+  default?: string,
+  min?: string,
+  max?: string,
+}
+| {
+  "type": "radio",
+  name: string,
+  label: string,
+  options: Array<ChoiceOption>,
+  description?: string,
+  required?: boolean,
+  visible_when?: VisibleWhen,
+  default?: string,
+}
+| {
+  "type": "select",
+  name: string,
+  label: string,
+  options: Array<ChoiceOption>,
+  description?: string,
+  required?: boolean,
+  visible_when?: VisibleWhen,
+  default?: string,
+  placeholder?: string,
+}
+| {
+  "type": "checkboxes",
+  name: string,
+  label: string,
+  options: Array<ChoiceOption>,
+  description?: string,
+  required?: boolean,
+  visible_when?: VisibleWhen,
+  default?: Array<string>,
+  min_selected?: number,
+  max_selected?: number,
+}
+| {
+  "type": "toggle",
+  name: string,
+  label: string,
+  description?: string,
+  visible_when?: VisibleWhen,
+  default?: boolean,
+}
+| {
+  "type": "slider",
+  name: string,
+  label: string,
+  min: number,
+  max: number,
+  description?: string,
+  visible_when?: VisibleWhen,
+  step?: number,
+  default?: number,
+}
+| {
+  "type": "submit",
+  label?: string,
+  name?: string,
+  value?: string,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "choices",
+  name: string,
+  options: Array<ChoiceOption>,
+  label?: string,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "columns",
+  children: Array<Component>,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "tabs",
+  tabs: Array<TabPane>,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "divider",
+  label?: string,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "callout",
+  text: string,
+  title?: string,
+  tone?: CalloutTone,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "key_values",
+  items: Array<KeyValueItem>,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "stat",
+  label: string,
+  value: StatValue,
+  change?: string,
+  trend?: StatTrend,
+  sentiment?: StatSentiment,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "code",
+  code: string,
+  language?: string,
+  label?: string,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "diff",
+  diff: string,
+  label?: string,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "copyable",
+  text: string,
+  label?: string,
+  monospace?: boolean,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "table",
+  columns: Array<TableColumn>,
+  rows: Array<Array<CellValue | null>>,
+  caption?: string,
+  sortable?: boolean,
+  filterable?: boolean,
+  visible_when?: VisibleWhen,
+}
+| {
+  "type": "chart",
+  /**
+   * The ECharts option, as the schema of the `chart` kind allows it.
+   */
+  option: Record<string, unknown>,
+  /**
+   * The height of the drawing in pixels; the width is the page's.
+   */
+  height?: number,
+  /**
+   * What the chart shows, in words: its accessible name.
+   */
+  summary?: string,
+  visible_when?: VisibleWhen,
 };
 
 export type ConfigurationDocument = {
@@ -1700,6 +1958,15 @@ export type Event = {
   page: Page,
 }
 | {
+  "type": "page_submission",
+  session_id: string,
+  page: string,
+  submission: {
+    [key in string]: SubmittedValue
+  } | null,
+  submission_revision: number,
+}
+| {
   "type": "pages_deleted",
   session_id: string,
   pages: Array<string>,
@@ -2425,6 +2692,14 @@ export type InspectedSettings = {
 export type KeepAwakeWhen = "always" | "working";
 
 /**
+ * One pair of a [`KeyValueList`].
+ */
+export type KeyValueItem = {
+  key: string,
+  value: CellValue,
+};
+
+/**
  * The model and reasoning effort an agent's sessions are launched with, in the agent's own
  * spelling, and the compatibility switches the level holds. `null` leaves the choice to the
  * agent.
@@ -2606,8 +2881,30 @@ export type Origin = "console" | "user";
 export type Page = {
   id: string,
   session_id: string,
-  html: string,
+  content: PageContent,
+  /**
+   * What the page's form was submitted with, or `null` while it has not been: set when the
+   * submission is accepted for delivery, before the message is written, and cleared again only
+   * when the delivery certainly failed (`page_submission`).
+   */
+  submission: {
+    [key in string]: SubmittedValue
+  } | null,
+  /**
+   * How many times `submission` has changed: 0 for a page never submitted, raised by one with
+   * each mark and each clearing. A client that hears of the submission twice, from `page_list`
+   * and `page_submission` in either order, keeps the one with the higher revision.
+   */
+  submission_revision: number,
   created_at: number,
+};
+
+/**
+ * A page: an optional title and the components that make up its body, top to bottom.
+ */
+export type PageContent = {
+  title?: string,
+  body: Array<Component>,
 };
 
 export type PathLink = {
@@ -5471,9 +5768,46 @@ export type SideVersion = {
 };
 
 /**
+ * Whether a stat's change is good news, bad news or neither, shown as its colour.
+ */
+export type StatSentiment = "positive" | "negative" | "neutral";
+
+/**
+ * Which way a stat's change went, shown as an arrow.
+ */
+export type StatTrend = "up" | "down" | "flat";
+
+/**
+ * A stat's figure: a number, or a string carrying its unit.
+ */
+export type StatValue = string | number;
+
+/**
+ * One value of a [`Submission`]: the text of a text-like field or the pressed button's value, a
+ * number, a toggle, or the chosen values of a multiple choice in the order of its options.
+ */
+export type SubmittedValue = string | boolean | number | Array<string>;
+
+/**
  * What a switch is while the user has made no choice for it.
  */
 export type SwitchDefault = "on" | "off";
+
+/**
+ * One tab of a [`TabsLayout`]: its label and what it shows.
+ */
+export type TabPane = {
+  label: string,
+  children: Array<Component>,
+};
+
+/**
+ * One column of a [`DataTable`].
+ */
+export type TableColumn = {
+  label: string,
+  align?: ColumnAlign,
+};
 
 /**
  * Client-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY input
@@ -5555,6 +5889,20 @@ export type UnstoppedReason = "access_denied" | "other";
 export type UpstreamInfo = {
   name: string,
   commit: string,
+};
+
+/**
+ * What a [`VisibleWhen`] compares a field's value with.
+ */
+export type VisibleEquals = string | boolean | number;
+
+/**
+ * Shows its component only while the input field named `field` holds `equals`: a multiple
+ * choice while its selection contains it, a toggle while it is that boolean.
+ */
+export type VisibleWhen = {
+  field: string,
+  equals: VisibleEquals,
 };
 
 export type WorktreeInfo = {

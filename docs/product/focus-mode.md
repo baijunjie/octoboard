@@ -247,8 +247,6 @@ included; a browser keeps the keys for its own tabs.
   resume an interrupted console session**: it only shows it, with its "Not running" card (see "Interrupted and archived
   sessions" in `docs/product/session-terminal.md`), so stepping through the chips never starts a process.
 - Wherever keyboard focus was, it goes to the terminal of the console session moved to, an interrupted one's included.
-- Pressed while focus is inside a report page it is passed to the window (see "Window shortcuts inside a page" in
-  `docs/product/report-panel.md`).
 
 ## Leaving focus mode, and what is remembered
 

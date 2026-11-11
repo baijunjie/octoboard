@@ -202,7 +202,7 @@ export function App(): React.ReactElement {
   const updateNoticeShown = useUpdateSelector((state) => updateNoticeKind(state) !== undefined) ?? false;
   // F6 includes only regions currently on screen, including a revealed floating group.
   // The top bar is always available.
-  const regionCycle = useRegionCycle({
+  useRegionCycle({
     shown: {
       topbar: true,
       rail: !railAway,
@@ -387,7 +387,7 @@ export function App(): React.ReactElement {
     }
   }, [selectedSession?.id, selectedSession?.status, selectedSession?.bound_to, consoleSessionAboveSelection]);
 
-  const { moveConsoleSession, stableFocus } = useFocusMode({
+  const { stableFocus } = useFocusMode({
     focus: sidebarView.focus,
     setFocus: sidebarView.setFocus,
     selectConsole: sidebarView.selectConsole,
@@ -398,7 +398,7 @@ export function App(): React.ReactElement {
     focusTerminal,
   });
 
-  const { canGoBack, canGoForward, moveByShortcut, stableBack, stableForward, stableCommitPreview } = useAppNavigation({
+  const { canGoBack, canGoForward, stableBack, stableForward, stableCommitPreview } = useAppNavigation({
     ready: hosts !== undefined,
     focus: sidebarView.focus,
     setFocus: sidebarView.setFocus,
@@ -701,12 +701,6 @@ export function App(): React.ReactElement {
                         selectedSessionId={selectedSessionId}
                         reportSessionId={reportSessionId}
                         focusTerminal={focusTerminal}
-                        frameKeys={{
-                          onEscape: panes.dismissOverlays,
-                          onCycleRegion: regionCycle.cycle,
-                          onMoveHistory: moveByShortcut,
-                          onMoveConsoleSession: moveConsoleSession,
-                        }}
                         peekKind={peekKind}
                         onViewFile={viewLinkedFile}
                         onDismiss={() => panes.asidePeek.hide()}

@@ -21,7 +21,8 @@ import { projectGitScenarios } from "./projectGit";
 import { noticeScenarios } from "./notices";
 import { quotaGatingScenarios } from "./quotaGating";
 import { railQuotaScenarios } from "./railQuota";
-import { reportScenarios } from "./report";
+import { reportScenarios, reportVisualScenarios } from "./report";
+import { reportChartScenarios } from "./reportCharts";
 import { sessionHistoryScenarios } from "./sessionHistory";
 import { sessionModelScenarios } from "./sessionModel";
 import { settingsScenarios } from "./settings";
@@ -60,6 +61,8 @@ export const SCENARIOS: Scenario[] = [
   ...archiveScenarios,
   ...processScenarios,
   ...reportScenarios,
+  ...reportVisualScenarios,
+  ...reportChartScenarios,
   ...projectFilesScenarios,
   ...projectGitScenarios,
   ...settingsScenarios,

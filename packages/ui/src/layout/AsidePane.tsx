@@ -71,9 +71,7 @@ function motionOf(shown: boolean, preparing: boolean): "shown" | "away" | "prepa
  *
  * `data-escape-scope`: one of the origins `usePaneToggles`'s capture-phase Escape listener closes a
  * floating pane for. The pointer handlers, with `usePanePeekPointer` (called here) for the gap
- * around the pane, keep a floating pane up while the pointer is on it; a panel whose content sends
- * this document no pointer events of its own (a report page's sandboxed frame) wires the same
- * `peek` callbacks onto that element too.
+ * around the pane, keep a floating pane up while the pointer is on it.
  */
 export function AsidePane({ layout, children, resizeHandle }: { layout: AsideLayout; children?: React.ReactNode | ((peek: PanePeek | undefined) => React.ReactNode); resizeHandle?: React.ReactNode }): React.ReactElement | null {
   const { width, minWidth = 320, peek: hoverPeek, folded = false, overlay = false, floatingKind, keepMounted = false } = layout;

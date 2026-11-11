@@ -28,9 +28,10 @@ alone, are in "The surfaces that fade" below.
   `docs/product/settings.md`).
 - Only the **top and bottom** edges fade, apart from the strips that scroll sideways and fade at their sideways
   edges: focus mode's strip of console session chips (see "The switch strip" in `docs/product/focus-mode.md`), a
-  strip of tabs, and the Files panel's header controls (see "A panel's header" in
-  `docs/product/right-pane-panels.md`). The file viewer's long lines, read by scrolling sideways while
-  wrapping is off, fade at neither side (see "Wrapping long lines" in `docs/product/file-viewer.md`).
+  strip of tabs, the Files panel's header controls (see "A panel's header" in
+  `docs/product/right-pane-panels.md`) and a report page's blocks that scroll sideways. The file viewer's long lines,
+  read by scrolling sideways while wrapping is off, fade at neither side (see "Wrapping long lines" in
+  `docs/product/file-viewer.md`).
 
 A heading or strip pinned at the top of a vertically scrolling surface stays clear while it is pinned or approaching
 its pinned position. When its section pushes it upward past that position, its contents fade from the upper edge as
@@ -67,6 +68,9 @@ Once it holds more than it can show, each of these fades at its edge:
   `docs/product/right-pane-panels.md`);
 - the **file viewer's** reading surfaces — a file shown as plain text, a highlighted file, a diff and a rendered
   Markdown document (see "What it shows" in `docs/product/file-viewer.md` and `docs/product/markdown-documents.md`);
+- a **report page** in the report panel, and inside it the blocks that scroll sideways rather than wrap — a code block,
+  a diff, monospaced copyable text and a table wider than the page — which fade at their sideways edges (see
+  `docs/product/report-page-components.md`);
 - the **lists inside a popover**: the list of branches of the Git mode's branch selector (see "The branch
   selector" in `docs/product/project-pane-git-mode.md`), and the tags offered by the project filter (see "Filtering
   the project list" in `docs/product/sidebar.md`);
@@ -96,8 +100,7 @@ Once it holds more than it can show, each of these fades at its edge:
 Three kinds of scrolling show no fade:
 
 - **What scrolls as a document of its own**: the terminal's scrollback (see "Output, scrollback and size" in
-  `docs/product/session-terminal.md`) and a report page, which the console session's model wrote (see
-  `docs/product/report-panel.md`).
+  `docs/product/session-terminal.md`).
 - **Settings' accounts table**, which scrolls sideways in a narrow window with its actions column pinned at its end
   edge, where a fade would dim that column (see "The accounts table" in `docs/product/agent-accounts.md`).
 - **A menu's or a selector's own list of choices** — an action menu, the account and option selects — which scrolls
@@ -129,6 +132,10 @@ covers. These are:
 - **an empty-state failure taller than the pane, panel or dialog body it fills**, named by its heading. Nothing around
   it scrolls, and its lines and details hold little or nothing that takes focus, so without it what is scrolled out of
   view there would be out of the keyboard's reach.
+- **a report page**, named by the page's title, or "Report" for a page with none, and inside it **a block that scrolls
+  sideways** — a code block, a diff and monospaced copyable text, named by its label or, without one, as code, a diff
+  or text to copy, and a table wider than the page, named by its caption or as a table (see
+  `docs/product/report-page-components.md`).
 - **the list of accounts in the rail's account quota panel**, named "Accounts". Its rows hold nothing that takes focus,
   so nothing else would scroll it. In Tab order it comes after the agent tabs and before Manage accounts (see "What the
   panel shows" in `docs/product/account-quota-panel.md`).

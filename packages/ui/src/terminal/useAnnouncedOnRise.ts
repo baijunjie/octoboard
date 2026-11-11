@@ -23,11 +23,13 @@ export function useAnnouncedOnRise(subject: string | undefined, flag: boolean, s
   useEffect(() => {
     const { subject: was, flag: wasOn, deferred: wasDeferred } = previous.current;
     previous.current = { subject, flag, deferred };
-    if (!flag || was !== subject) setRisen(undefined);
+    let next = risen;
+    if (!flag || was !== subject) next = undefined;
     else if (!wasOn) {
       saidRef.current = false;
-      setRisen(subject);
-    } else if (deferred && !wasDeferred && saidRef.current) setRisen(undefined);
+      next = subject;
+    } else if (deferred && !wasDeferred && saidRef.current) next = undefined;
+    if (next !== risen) setRisen(next);
   }, [subject, flag, deferred]);
   const queued = flag && !deferred && risen !== undefined && risen === subject ? subject : undefined;
   const said = useAttendedDelivery(queued, sentence);

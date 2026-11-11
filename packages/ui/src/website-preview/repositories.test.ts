@@ -372,7 +372,7 @@ describe("the website's eight independent repository fixtures", () => {
     },
   );
 
-  it("preserves all scenes, the report bridge marker and project branch metadata", () => {
+  it("preserves all scenes, the sample report page and project branch metadata", () => {
     for (const lang of ["en", "zh-Hans"] as const)
       for (const scene of ["overview", "focus", "changes"] as const) {
         const { scenario } = createPreviewScenario(scene, lang);
@@ -380,8 +380,8 @@ describe("the website's eight independent repository fixtures", () => {
         expect(scenario.files).toBeUndefined();
         expect(scenario.git).toBeUndefined();
         expect(
-          scenario.state!.pages!.get("preview-coordinator")![0].html,
-        ).toContain("data-website-preview-report");
+          scenario.state!.pages!.get("preview-coordinator")![0].content.body[0],
+        ).toMatchObject({ type: "markdown" });
         for (const [id, repo] of previewRepositories)
           expect(scenario.state!.gitStatuses!.get(id)?.branch).toBe(
             repo.branch,
@@ -424,8 +424,8 @@ describe("the website's eight independent repository fixtures", () => {
           expect(output(id)).toBeDefined();
           expect(screenOf(output(id))).toBe(screenOf(overview.output(id)));
         }
-        expect(scenario.state!.pages!.get("preview-coordinator")![0].html).toBe(
-          overview.scenario.state!.pages!.get("preview-coordinator")![0].html,
+        expect(scenario.state!.pages!.get("preview-coordinator")![0].content).toEqual(
+          overview.scenario.state!.pages!.get("preview-coordinator")![0].content,
         );
       }
     },

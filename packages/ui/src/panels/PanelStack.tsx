@@ -118,7 +118,6 @@ export function PanelStack({
   focusTerminal,
   peek,
   peekKind,
-  frameKeys,
   onViewFile,
   onDismiss,
   onPanelClose,
@@ -138,7 +137,6 @@ export function PanelStack({
   /** The floating pane's hover reveal; `undefined` while the pane is docked. */
   peek: PanePeek | undefined;
   peekKind: PanelKind | undefined;
-  frameKeys: PanelContentProps["frameKeys"];
   onViewFile?: PanelContentProps["onViewFile"];
   /** Closing a panel that was only floating in dismisses the floating pane. */
   onDismiss: () => void;
@@ -274,7 +272,8 @@ export function PanelStack({
         const lowerHeight = heights[upperPosition + 1] ?? 0;
         const available = upperHeight + lowerHeight;
         // Cards share one grid cell per column. Insets divide that cell independently, without
-        // reparenting a report frame or terminal when maximizing or changing the open kinds.
+        // reparenting a panel's content when maximizing or changing the open kinds: remounting the report panel
+        // would lose the drafts it holds, and a terminal would be rebuilt.
         const placement = { gridColumn: columnIndex + 1, gridRow: 1 };
         const split = `clamp(${MIN_PANEL_HEIGHT}px, calc((100% - var(--panel-stack-gap)) * ${shares[0] ?? 1}), calc(100% - var(--panel-stack-gap) - ${MIN_PANEL_HEIGHT}px))`;
         return (
@@ -334,7 +333,7 @@ export function PanelStack({
                   onClose: () => close(kind as PanelKind),
                 }}
               >
-                <CardContent Content={Content} owner={owner} project={project} active={active} selectedSessionId={selectedSessionId} reportSessionId={reportSessionId} focusTerminal={focusTerminal} peek={peek} frameKeys={frameKeys} onViewFile={onViewFile} resizing={covering && areaEasing} />
+                <CardContent Content={Content} owner={owner} project={project} active={active} selectedSessionId={selectedSessionId} reportSessionId={reportSessionId} focusTerminal={focusTerminal} onViewFile={onViewFile} resizing={covering && areaEasing} />
               </PanelFrameProvider>
             </section>
           </React.Fragment>

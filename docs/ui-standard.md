@@ -348,6 +348,11 @@ comes from the platform adapter's `kind`, independently of where sessions run.
 
 ## Keyboard
 
+A chart in a report page is the one place the mouse has an interaction the keyboard does not: the tooltip on hover, the
+legend's toggling of a series and the zoom are mouse-only. The chart is a single `role="img"` named by its summary, so
+what it shows reaches a screen reader as text, and the page's own table or key-value blocks are where an agent puts the
+numbers a keyboard user needs. (Source: user decision.)
+
 Session, project and console action menus show fixed single-letter shortcuts at the trailing edge of direct actions,
 using the standard menu key caps. Entries that open a submenu or a custom panel have no letter shortcut. The letters
 act only while that menu is open, on the item the menu belongs to; a key pressed inside a submenu never activates a
@@ -403,6 +408,8 @@ A form dialog opens with focus in its first text field, so the user can type at 
 field opens with focus on its submit button instead. That holds however it was opened, by a press without a pointer (an
 assistive technology's press) as much as by the keyboard or the mouse, and for a dialog opened over another one. A field that appears later, after a tab or a choice has changed
 what the form holds, does not take focus, so it never pulls it off the control the user is on.
+
+Report page fields draw no required mark: a required field is `aria-required` only, and the radio group's wrapper hides HeroUI's mark. (Source: user decision.)
 
 ### Reaching a control with Tab
 
@@ -696,7 +703,8 @@ for an open dialog, menu or popup.
 
 ## Input placeholders
 
-Every editable text input has a non-empty placeholder, including fields whose current value hides it.
+Every editable text input has a non-empty placeholder, including fields whose current value hides it. The fields of a
+report page are the exception: their content is the agent's, which may give a placeholder or none.
 
 - A required input shows a valid example with the localized example prefix: `例如：XXX` in Simplified Chinese
   and `Ex. XXX` in English. This applies to format examples such as paths, URLs and email addresses too.
@@ -2244,10 +2252,22 @@ own, as in Settings and menus, keep HeroUI's size.
 
 ### Form controls on a surface
 
-A form control on a surface — in a dialog, a popover, a card — takes HeroUI's `variant="secondary"` (`TextField`,
-`Input`, `Select`, `Checkbox` alike), HeroUI's own variant for that case. The default variant leaves it blending into
-the surface in both appearances. The one exception is the wide Settings search field, which stands raised on its
-column's darker ground (see "The Settings section menu").
+A form control on a surface — in a dialog, a popover, a menu, a card — takes HeroUI's `variant="secondary"`
+(`TextField`, `Input`, `Select`, `Checkbox` alike), HeroUI's own variant for that case. The default variant leaves it
+blending into the surface in both appearances. A control on a pane's own background instead — the sidebar, a
+right-pane panel, the file viewer, a report page — takes the default variant, the white field in light, as the grey
+secondary fill reads muddy on a pane. The one exception among dialog fields is the wide Settings search field, which
+stands raised on its column's darker ground (see "The Settings section menu").
+
+### Locked report page controls
+
+The controls of a report page that cannot be edited — a history page, a submitted one, one whose submission is out —
+have a read-only look: a value to read rather than a control to use. Text fields, text areas and selects are drawn with
+a plain 1px border, a transparent fill, no shadow and text at full strength, all three alike, and a slider is drawn at
+full strength instead of dimmed; a text field's value stays selectable. The wrapper components draw the look from a
+`locked` prop (`TextField`, `Select` and `OptionSelect`, `Slider`), so no page code reaches into HeroUI's classes.
+Checkboxes, radios and switches have no separate read-only look: HeroUI draws them undimmed already, and they simply
+take no press.
 
 ### Selects while their options load
 
@@ -2578,7 +2598,9 @@ stacking context). The formula sets `unicode-bidi: isolate` itself (`FormulaView
   keeps its alignment class as well. The default `text-align: start`, though, resolves against the element's own
   direction, so a value drawn on a line of its own with `dir="ltr"` inside right-to-left UI lines up on the opposite
   edge from its siblings; it takes `align-match-parent` (in `packages/ui/src/style.css`) to line up with its parent,
-  which `FadeOverflow` adds whenever it is given a `dir`.
+  which `FadeOverflow` adds whenever it is given a `dir`. `align-match-parent` resolves to a physical side, which its
+  descendants inherit, so a left-to-right block inside it that keeps its own layout (code, a table) takes
+  `text-align: start` again.
 - A tooltip is portalled out of the element it describes, so it inherits the window's direction, not the value's. A
   tooltip that is the value itself in full — a clipped path's or branch name's, a field's expanded path, a terminal
   link's URI — says `dir="ltr"` again on the value inside it, and on a block of its own (`ValueTooltipText`): as a run

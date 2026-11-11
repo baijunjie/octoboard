@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 
-import { accountOf, pageOf, sessionOf } from "../fixtures/builders";
+import { accountOf, markdownContent, pageOf, sessionOf } from "../fixtures/builders";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
 import type { ConnectionState } from "../daemon-client";
 import type { Event, Project, ProviderInfo, ShellTerminal } from "../protocol";
 import { TEST_PROVIDERS } from "../test/testProviders";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
-import { createDaemon, dismissAccountLogin, setAccountSwitchesQueued, trackAccountLogin, trackAgentCliUpdate } from ".";
+import { createDaemon, dismissAccountLogin, setAccountSwitchesQueued, trackAccountLogin, trackAgentCliUpdate, trackPagesListing } from ".";
 
 const client = vi.hoisted(() => ({
   onEvent: undefined as ((event: Event) => void) | undefined,
@@ -377,9 +377,9 @@ it("does not offer a session request that lacks what its action needs or has an 
 it("drops the pages a pages_deleted event names from that session's list only, keeping an emptied list as a known one", () => {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   client.onEvents!([
-    { type: "page_created", page: pageOf("a-1", "session-a", "<p>1</p>", 3) },
-    { type: "page_created", page: pageOf("a-2", "session-a", "<p>2</p>", 2) },
-    { type: "page_created", page: pageOf("b-1", "session-b", "<p>1</p>", 1) },
+    { type: "page_created", page: pageOf("a-1", "session-a", markdownContent("1"), 3) },
+    { type: "page_created", page: pageOf("a-2", "session-a", markdownContent("2"), 2) },
+    { type: "page_created", page: pageOf("b-1", "session-b", markdownContent("1"), 1) },
   ]);
   const ids = (session: string) => daemon.store.getState().pages.get(session)?.map((page) => page.id);
 
@@ -395,11 +395,126 @@ it("drops the pages a pages_deleted event names from that session's list only, k
   expect(daemon.store.getState().pages.has("session-c")).toBe(false);
 });
 
+it("sets and clears a page's submission from page_submission in every window's store, for the page it names only", () => {
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+  client.onEvents!([
+    { type: "page_created", page: pageOf("a-1", "session-a", markdownContent("1"), 2) },
+    { type: "page_created", page: pageOf("a-2", "session-a", markdownContent("2"), 1) },
+  ]);
+  const submissions = () => daemon.store.getState().pages.get("session-a")?.map((page) => page.submission);
+
+  client.onEvents!([{ type: "page_submission", session_id: "session-a", page: "a-2", submission: { note: "Ada", tags: ["x"] }, submission_revision: 1 }]);
+  expect(submissions()).toEqual([null, { note: "Ada", tags: ["x"] }]);
+
+  // The mark taken off after a delivery that certainly failed.
+  client.onEvents!([{ type: "page_submission", session_id: "session-a", page: "a-2", submission: null, submission_revision: 2 }]);
+  expect(submissions()).toEqual([null, null]);
+
+  // A page this window does not hold, or a session it has not listed, has nothing to mark yet.
+  const before = daemon.store.getState().pages;
+  client.onEvents!([
+    { type: "page_submission", session_id: "session-a", page: "a-9", submission: { note: "x" }, submission_revision: 1 },
+    { type: "page_submission", session_id: "session-z", page: "z-1", submission: { note: "x" }, submission_revision: 1 },
+  ]);
+  expect(daemon.store.getState().pages).toBe(before);
+});
+
+describe("a page's submission heard more than once", () => {
+  const page = (submission: Record<string, string> | null, revision: number) => ({ ...pageOf("a-1", "session-a", markdownContent("1"), 1, submission), submission_revision: revision });
+  const list = (submission: Record<string, string> | null, revision: number): Event => ({ type: "page_list", id: "r", session_id: "session-a", pages: [page(submission, revision)] });
+  const heard = (submission: Record<string, string> | null, revision: number): Event => ({ type: "page_submission", session_id: "session-a", page: "a-1", submission, submission_revision: revision });
+  const held = (daemon: ReturnType<typeof createDaemon>) => {
+    const page = daemon.store.getState().pages.get("session-a")?.[0];
+    return page && { submission: page.submission, revision: page.submission_revision };
+  };
+
+  it("keeps the later of two page_submission events, whichever arrives first", () => {
+    const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+    client.onEvents!([list(null, 0)]);
+    // The second mark arrives before the clearing of the first.
+    client.onEvents!([heard({ who: "Grace" }, 3), heard(null, 2), heard({ who: "Ada" }, 1)]);
+    expect(held(daemon)).toEqual({ submission: { who: "Grace" }, revision: 3 });
+  });
+
+  it.each([
+    { name: "a mark", now: { submission: { who: "Ada" }, revision: 1 }, stale: { submission: null, revision: 0 } },
+    { name: "a clearing", now: { submission: null, revision: 2 }, stale: { submission: { who: "Ada" }, revision: 1 } },
+  ])("does not let a list computed before $name undo it, in either order", ({ now, stale }) => {
+    for (const order of ["event-first", "list-first"] as const) {
+      const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+      trackPagesListing(daemon.store, "session-a", true);
+      const events = [list(stale.submission, stale.revision), heard(now.submission, now.revision)];
+      // Event first: the page is not held yet, so the event is remembered until the list arrives.
+      client.onEvents!(order === "event-first" ? events.reverse() : events);
+      expect(held(daemon), order).toEqual(now);
+      // Once held, a stale list again does not undo it.
+      client.onEvents!([list(stale.submission, stale.revision)]);
+      expect(held(daemon), order).toEqual(now);
+      expect(daemon.store.getState().earlySubmissions.size, order).toBe(0);
+    }
+  });
+
+  it("applies a later list's submission over an earlier event", () => {
+    const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+    trackPagesListing(daemon.store, "session-a", true);
+    client.onEvents!([heard({ who: "Ada" }, 1), list(null, 2)]);
+    expect(held(daemon)).toEqual({ submission: null, revision: 2 });
+  });
+
+  it("remembers an event only for a session whose list is pending or whose pages are held", () => {
+    const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+    const early = () => daemon.store.getState().earlySubmissions.size;
+    // A session this window never lists: nothing accumulates.
+    client.onEvents!([heard({ who: "Ada" }, 1)]);
+    expect(early()).toBe(0);
+    // Its list is out: remembered; and no longer once the request failed.
+    trackPagesListing(daemon.store, "session-a", true);
+    client.onEvents!([heard({ who: "Ada" }, 1)]);
+    expect(early()).toBe(1);
+    trackPagesListing(daemon.store, "session-a", false);
+    client.onEvents!([{ type: "pages_deleted", session_id: "session-a", pages: ["a-1"] }]);
+    expect(early()).toBe(0);
+    client.onEvents!([heard({ who: "Ada" }, 2)]);
+    expect(early()).toBe(0);
+    // Its pages are held, but not this one: remembered for a page about to be created.
+    client.onEvents!([list(null, 0)]);
+    client.onEvents!([{ type: "page_submission", session_id: "session-a", page: "a-2", submission: { who: "Ada" }, submission_revision: 1 }]);
+    expect(early()).toBe(1);
+  });
+
+  it("applies an event heard before the page's page_created to the page it creates", () => {
+    const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+    trackPagesListing(daemon.store, "session-a", true);
+    client.onEvents!([heard({ who: "Ada" }, 1), { type: "page_created", page: page(null, 0) }]);
+    expect(held(daemon)).toEqual({ submission: { who: "Ada" }, revision: 1 });
+    expect(daemon.store.getState().earlySubmissions.size).toBe(0);
+  });
+
+  it("forgets an event remembered for a page not held on a snapshot and when the page is deleted", () => {
+    const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+    trackPagesListing(daemon.store, "session-a", true);
+    client.onEvents!([heard({ who: "Ada" }, 1)]);
+    expect(daemon.store.getState().earlySubmissions.get("session-a")?.has("a-1")).toBe(true);
+    client.onEvents!([{ type: "pages_deleted", session_id: "session-a", pages: ["a-1"] }]);
+    expect(daemon.store.getState().earlySubmissions.size).toBe(0);
+
+    trackPagesListing(daemon.store, "session-a", true);
+    client.onEvents!([heard({ who: "Ada" }, 1)]);
+    client.onEvents!([{
+      type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
+      agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], agent_cli_statuses: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings", keep_awake: false }, keep_awake_held: false, shell_terminals: [],
+    } as unknown as Event]);
+    expect(daemon.store.getState().earlySubmissions.size).toBe(0);
+    client.onEvents!([list(null, 0)]);
+    expect(held(daemon)).toEqual({ submission: null, revision: 0 });
+  });
+});
+
 it("does not bring back a deleted page when a list computed before the deletion is applied after it", () => {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const stale: Event = {
     type: "page_list", id: "r", session_id: "session-a",
-    pages: [pageOf("a-1", "session-a", "<p>1</p>", 2), pageOf("a-2", "session-a", "<p>2</p>", 1)],
+    pages: [pageOf("a-1", "session-a", markdownContent("1"), 2), pageOf("a-2", "session-a", markdownContent("2"), 1)],
   };
   const ids = () => daemon.store.getState().pages.get("session-a")?.map((page) => page.id);
 
@@ -424,11 +539,14 @@ it.each([
 ] as Event[])("drops what is held for the sessions a $type takes with it, and only theirs", (deletion) => {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const request = { compatibility: {}, type: "session_request" as const, kind: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1, action: "start" as const, target: null, owner: null, reopened_owners: [], account: null, conversation: null };
+  trackPagesListing(daemon.store, "a", true);
+  trackPagesListing(daemon.store, "b", true);
   client.onEvents!(["a", "b"].flatMap((id): Event[] => [
     { type: "session_upserted", session: sessionOf(id, id === "a" ? "c" : "d", id === "a" ? "p" : "q", id, "waiting_user") },
-    { type: "page_created", page: pageOf(`${id}-1`, id, "<p>1</p>", 2) },
-    { type: "page_created", page: pageOf(`${id}-2`, id, "<p>2</p>", 1) },
+    { type: "page_created", page: pageOf(`${id}-1`, id, markdownContent("1"), 2) },
+    { type: "page_created", page: pageOf(`${id}-2`, id, markdownContent("2"), 1) },
     { type: "pages_deleted", session_id: id, pages: [`${id}-2`] },
+    { type: "page_submission", session_id: id, page: `${id}-9`, submission: null, submission_revision: 2 },
     { type: "trust_prompt", session: id, agent: "claude", project: "p", path: "/work/app", trust_dir: null },
     { ...request, session: id, request_id: `r-${id}` },
   ]));
@@ -437,6 +555,7 @@ it.each([
   expect([...state.sessions.keys()]).toEqual(["b"]);
   expect([...state.pages.keys()]).toEqual(["b"]);
   expect([...state.deletedPages.keys()]).toEqual(["b"]);
+  expect([...state.earlySubmissions.keys()]).toEqual(["b"]);
   expect(state.trustPrompts.map((p) => p.session)).toEqual(["b"]);
   expect(state.sessionRequests.map((r) => r.session)).toEqual(["b"]);
 });
