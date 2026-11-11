@@ -37,10 +37,12 @@ a small grey badge (the badge described in "Which agents the agent pickers list"
 no badge for a removed account that recorded no directory; it shows the same account, and wraps a long one, as above.
 Confirmations provide the agent and account as hidden accessible text beside the icon.
 
-A live session's action menu separates these groups, in order: Lock / Unlock, Pin / Unpin and Focus mode; Rename and
-Colour; Copy session ID alone; Change model, Switch account, Hand off and Unbind; then Archive or Delete. Items appear
-only where available as described below. An archived session's menu offers Reopen, Copy session ID and Delete, each in a
-group of its own.
+A live session's action menu separates these groups, in order: Lock / Unlock, Pin / Unpin and Focus mode; Copy session
+ID alone; Change model, Switch account, Hand off and Unbind; then Rename on its own; then Archive or Delete. A live
+console session inserts Colour as its own group between the first of these and Copy session ID. Rename sits above
+Archive, or above Delete when Delete is offered instead, with a divider between them, and Archive or Delete stays
+last. Items appear only where available as described below. An archived session's menu offers Reopen, Copy
+session ID and Delete, each in a group of its own.
 
 A session row's action menu offers:
 
@@ -55,7 +57,7 @@ A session row's action menu offers:
 - **Colour** — a console session's row only: a submenu of swatches where the user chooses the console session's colour
   (see "The binding badge" below). A project session's row has no such entry, and neither has an archived console
   session's.
-- **Copy session ID** — in its own group after Rename and Colour, shows the session ID below its label in muted
+- **Copy session ID** — in its own group, shows the session ID below its label in muted
   monospace text, left to right on one line within the same menu item, fading where it overflows. An overflowing ID
   scrolls while the pointer is over the ID line and returns to its beginning when the pointer leaves; it stays still
   under reduced motion. While the ID is cut off, resting the pointer on the ID line shows the full ID as its tooltip,
@@ -205,7 +207,7 @@ which is the other reason nothing is ever told apart by colour alone. Each colou
 `docs/product/appearance.md`).
 
 **Choosing the colour.** **Colour** in a console session's action menu — wherever that menu is offered, its sidebar row
-and its own card in its focus mode among them, after **Rename**, before the copy group — is a submenu entry, marked with
+and its own card in its focus mode among them, in its own group before the copy group — is a submenu entry, marked with
 the same chevron as **Switch account**. Its submenu holds the palette as swatches in two rows of eight, in the order
 above. The console session's current colour is selected, marked with a check mark and a ring in its own colour. Pointing
 at **Colour** opens the submenu without moving keyboard focus; `ArrowRight` (`ArrowLeft` under a right-to-left language)

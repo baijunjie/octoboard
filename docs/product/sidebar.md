@@ -42,8 +42,8 @@ including when opened from its avatar on the rail, under "Menu keyboard shortcut
 
 Under the header comes the **console sessions** section: every console session of the console that is not archived,
 each as a session row (see "Session rows" in `docs/product/sidebar-session-rows.md`, which a console session's row
-otherwise follows exactly — pin, rename, colour, focus mode, switch account, hand off, archive), in the order of "Order
-of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`. What a console session is, what selecting
+otherwise follows exactly), in the order of "Order of projects and sessions" in
+`docs/product/order-of-projects-and-sessions.md`. What a console session is, what selecting
 one does, and what its row's menu offers are in "Console sessions and project sessions" in `docs/product/sessions.md`.
 
 The console sessions heading appends the number of console sessions listed in parentheses, including interrupted

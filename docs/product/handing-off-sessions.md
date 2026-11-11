@@ -65,12 +65,12 @@ deleted.
 
 ## Handing off from the window
 
-A session's action menu offers **Hand off** right after Switch account (where that is offered), before Archive, for a
-project session or a console session that is not archived, wherever that menu is offered. It is disabled while the
-session is locked, as Archive is, while it is *working* or *starting*, while no agent other than the session's own can
-be picked (see "Which agents the agent pickers list" in `docs/product/consoles.md`), while a switch of its account holds
-it and while its own account's sharing is being changed; which of these show a reason under the item is in "Session
-rows" in `docs/product/sidebar-session-rows.md`.
+A session's action menu offers **Hand off** right after Switch account (where that is offered), in the group before
+Rename, for a project session or a console session that is not archived, wherever that menu is offered. It is disabled
+while the session is locked, as Archive is, while it is *working* or *starting*, while no agent other than the
+session's own can be picked (see "Which agents the agent pickers list" in `docs/product/consoles.md`), while a switch of
+its account holds it and while its own account's sharing is being changed; which of these show a reason under the item
+is in "Session rows" in `docs/product/sidebar-session-rows.md`.
 
 It opens the **handoff dialog**, titled "Hand off session", which opens with keyboard focus on its **Hand off**
 button, or on **Cancel** while Hand off cannot be pressed. Its first sentence names the session to be handed off; it

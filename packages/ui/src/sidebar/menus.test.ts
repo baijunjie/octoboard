@@ -283,6 +283,115 @@ describe("a session that is still starting", () => {
   });
 });
 
+describe("the order of a session's action menu", () => {
+  // A run of separators is one boundary: the menu draws a separator only between two items.
+  const groups = (menu: ActionMenuEntry[]): string[][] => {
+    const grouped: string[][] = [];
+    let current: string[] = [];
+    for (const entry of menu) {
+      if (entry === "separator") {
+        if (current.length > 0) grouped.push(current);
+        current = [];
+      } else current.push(entry.label);
+    }
+    if (current.length > 0) grouped.push(current);
+    return grouped;
+  };
+  const focusTarget = { consoleSession: sessionOf("owner", "c", undefined, "Owner", "idle") };
+  const stored = [account("w", "claude")];
+  const project = (extra: Partial<Session> = {}) => sessionOf("s", "c", "p", "Title", "idle", extra);
+  const hub = (extra: Partial<Session> = {}) => sessionOf("h", "c", undefined, "Hub", "idle", extra);
+  const menuFor = (session: Session, placement: MenuPlacement, offeredFocus: boolean, accounts: Account[]) =>
+    sessionMenu(t, {} as SidebarHandlers, session, accounts, {}, {
+      host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, placement, ...(offeredFocus ? { focusTarget } : {}),
+    });
+
+  it.each<[string, Session, MenuPlacement, boolean, Account[], string[][]]>([
+    ["a live project session in the list", project(), "list", true, stored, [
+      ["Lock", "Pin", "Focus mode"],
+      ["Copy session ID"],
+      ["Change model", "Switch account", "Hand off"],
+      ["Rename"],
+      ["Archive"],
+    ]],
+    ["a live project session in its focus mode", project(), "focused", true, stored, [
+      ["Lock"],
+      ["Copy session ID"],
+      ["Change model", "Switch account", "Hand off"],
+      ["Rename"],
+      ["Archive"],
+    ]],
+    ["a live project session with nowhere to focus", project(), "list", false, stored, [
+      ["Lock", "Pin"],
+      ["Copy session ID"],
+      ["Change model", "Switch account", "Hand off"],
+      ["Rename"],
+      ["Archive"],
+    ]],
+    ["a live console session", hub(), "list", true, stored, [
+      ["Lock", "Pin", "Focus mode"],
+      ["Colour"],
+      ["Copy session ID"],
+      ["Change model", "Switch account", "Hand off"],
+      ["Rename"],
+      ["Archive"],
+    ]],
+    ["a live console session in its focus mode", hub(), "focused", true, stored, [
+      ["Lock"],
+      ["Colour"],
+      ["Copy session ID"],
+      ["Change model", "Switch account", "Hand off"],
+      ["Rename"],
+      ["Archive"],
+    ]],
+    ["an unused project session", project({ has_conversation: false }), "list", true, stored, [
+      ["Lock", "Pin", "Focus mode"],
+      ["Copy session ID"],
+      ["Change model", "Switch account", "Hand off"],
+      ["Rename"],
+      ["Delete"],
+    ]],
+    ["a bound project session", project({ bound_to: "hub" }), "list", true, stored, [
+      ["Lock", "Pin", "Focus mode"],
+      ["Copy session ID"],
+      ["Change model", "Switch account", "Hand off", "Unbind"],
+      ["Rename"],
+      ["Archive"],
+    ]],
+    ["a session that is still starting", sessionOf("s", "c", "p", "Title", "starting", { has_conversation: false }), "list", true, stored, [
+      ["Lock", "Pin", "Focus mode"],
+      ["Copy session ID"],
+      ["Change model", "Hand off"],
+      ["Rename"],
+      ["Archive"],
+    ]],
+    ["an archived project session", project({ status: "archived" }), "list", true, stored, [
+      ["Reopen"],
+      ["Copy session ID"],
+      ["Delete"],
+    ]],
+    ["an archived console session", hub({ status: "archived" }), "list", true, stored, [
+      ["Reopen"],
+      ["Copy session ID"],
+      ["Delete"],
+    ]],
+  ])("groups %s", (_name, session, placement, offeredFocus, accounts, expected) => {
+    expect(groups(menuFor(session, placement, offeredFocus, accounts))).toEqual(expected);
+  });
+
+  it("keeps Rename a direct action on R that opens the rename dialog", () => {
+    const session = project();
+    const handlers = { onOpenDialog: vi.fn() } as unknown as SidebarHandlers;
+    const menu = sessionMenu(t, handlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false });
+    const rename = menu.find((entry): entry is ActionMenuItem => typeof entry === "object" && entry.label === "Rename");
+    expect(rename).toMatchObject({ shortcut: "R" });
+    expect(rename).not.toHaveProperty("items");
+    expect(rename).not.toHaveProperty("panel");
+    rename!.onClick();
+    expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "rename-session", session });
+  });
+});
+
 
 describe("the Colour entry", () => {
   const hub = sessionOf("h", "c", undefined, "Hub", "idle", { colour: "cyan" });

@@ -324,9 +324,7 @@ export function sessionMenu(
     ...(archived ? [{ label: t("sidebar.session.reopen"), shortcut: "O", icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
     ...(archived || focused ? [] : [{ ...pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned)), shortcut: "P" }]),
     ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, commandShortcut: { label: focusShortcut ?? ariaBinding(bindingFor("focusMode"), host), matches: (event: KeyboardEvent) => matchesCommand("focusMode", event, host) }, onClick: () => handlers.onFocus(focusTarget) }] : []),
-    ...(!archived ? ["separator" as const] : []),
-    ...(!archived ? [{ label: t("sidebar.session.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }] : []),
-    ...(session.kind === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
+    ...(session.kind === "console" && !archived ? ["separator" as const, colourSubmenu(t, handlers, session)] : []),
     "separator",
     {
       label: t("sidebar.session.copyId"),
@@ -353,6 +351,7 @@ export function sessionMenu(
     ...(archived ? [] : [{ ...handoffItem(t, handlers, session, canHandoff, { switching, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined }), shortcut: "H" }]),
     ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), shortcut: "U", icon: Unlink, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
     "separator",
+    ...(!archived ? [{ label: t("sidebar.session.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }, "separator" as const] : []),
     offersDelete(session, hasBoundSessions)
       ? { label: t("sidebar.session.delete"), shortcut: "D", icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, ...lockedItemState(t, session, "sidebar.session.deleteLocked") }
       : { label: t("sidebar.session.archive"), icon: Archive, shortcut: "A", onClick: () => handlers.onArchiveSession(session), ...lockedItemState(t, session, "sidebar.session.archiveLocked") },

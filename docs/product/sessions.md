@@ -19,11 +19,10 @@ in the console sessions section above the project list (see "The console session
 
 A console session's row follows a session row exactly — the same status glyph, its agent's icon, its title, a pin button
 when pinned, and selecting it resumes it when it is interrupted, as selecting an interrupted session's row does. Its
-action menu offers **Lock**/**Unlock**, **Pin**/**Unpin**, **Focus mode** (see `docs/product/focus-mode.md`),
-**Rename**, **Copy session ID** (see "Session rows" in `docs/product/sidebar-session-rows.md`), **Colour** (see "The
-binding badge" in `docs/product/sidebar-session-rows.md`), **Change model**, **Switch account**, **Hand off** and
-**Archive** — **Delete** in its place while the console session has never been used (see "Deleting an unused session" in
-`docs/product/deleting-sessions.md`); there is no Resume item, for the same reason. A console session's title is
+action menu is a session row's (see "Session rows" in `docs/product/sidebar-session-rows.md`), including **Colour**
+(see "The binding badge" in `docs/product/sidebar-session-rows.md`). **Delete** takes the place of **Archive** while
+the console session has never been used (see "Deleting an unused session" in `docs/product/deleting-sessions.md`);
+there is no Resume item, for the same reason. A console session's title is
 renameable, like a project session's; its default is under **Name** in "The session dialog" in
 `docs/product/opening-sessions.md`.
 
