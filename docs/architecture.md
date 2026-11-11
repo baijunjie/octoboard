@@ -23,25 +23,30 @@ Octoboard is deployed in one of two forms, and the other documents name them as 
 
 - **The desktop form**: the macOS and Windows applications. The window, the daemon and the projects are on one machine, used by
   one person, and the daemon starts and stops with the application.
-- **The server form**: the daemon alone, on a machine without a display — a Linux server, Ubuntu say — started and
-  kept running there, listening on a port, and reached by its owner from a browser on another machine over the
-  network. The machine showing the window and the machine holding the daemon and the projects are two different ones.
-  This is what Linux is for: there is no Linux desktop application, and in this form the browser is not a development
-  convenience but the only client there is.
+- **The server form**: the daemon alone, on a machine without a display — a Linux server, Ubuntu say — started and kept
+  running there, listening on the server's loopback on a fixed port, and reached by its owner from another machine over
+  SSH: from a browser through the owner's own SSH port forward, or from the macOS or Windows application through an SSH
+  tunnel the application builds itself. The machine showing the window and the machine holding the daemon and the
+  projects are two different ones. This is what Linux is for: there is no Linux desktop application.
+
+In both forms the daemon **never listens beyond loopback**. Reaching it from another machine — the server form, or
+another device of the owner's reaching their desktop — goes through SSH, which authenticates and encrypts; Octoboard
+builds no network surface, TLS or device credential of its own (see "Constraint: access from another machine goes
+through SSH").
 
 Both forms are **one user's**. The server form is the same user reaching their own daemon from elsewhere, not a group
-sharing one daemon: the daemon does not tell clients apart, whoever holds a credential for it is taken for its owner,
-and a credential lets its holder do everything the owner can — so a credential is to be kept like a password. That is
-this version's design boundary, not a gap left for later; what several users would take is in "Why the daemon is
-split out".
+sharing one daemon: the daemon does not tell clients apart, whoever reaches it with its key is taken for its owner and
+can do everything the owner can — and from another machine that means whoever can log in over SSH as the daemon's Unix
+user, so that login is to be kept like a password. That is this version's design boundary, not a gap left for later;
+what several users would take is in "Why the daemon is split out".
 
 The server form is **not built yet**. Today the daemon binds to loopback only, on a fixed port when it is given one
-(`--port`) and runs in the background from the command line or as a systemd user service, but it has no credential
-of any kind and does not serve the UI. What the form asks of the
-design is stated below, where each constraint comes up.
+(`--port`) and runs in the background from the command line or as a systemd user service, but it does not serve the UI,
+a daemon run as a service has no way yet to hand its key to its owner, and the application cannot connect to a remote
+daemon. What the form asks of the design is stated below, where each constraint comes up.
 
-"Server" names where the daemon lives: a machine kept running for others to reach over the network, with nobody
-sitting at it. The word *host* is not free for it. A host is any machine that runs sessions — the server is one, and
+"Server" names where the daemon lives: a machine kept running for its owner to reach from elsewhere, with nobody sitting
+at it. The word *host* is not free for it. A host is any machine that runs sessions — the server is one, and
 so is the desktop — and a *remote host* is a different arrangement again: a second host, reached by the daemon the
 user is talking to, so that sessions run on a machine other than the daemon's (see "Why the daemon is split out"). The
 server form is the reverse: one host, and what is remote is the clients.
@@ -52,7 +57,7 @@ server form is the reverse: one host, and what is remote is the clients.
 |---|---|
 | Console | A management unit for a group of projects, independent of other consoles. It has its own working directory and its own default agent, which its console sessions run and the sessions under its projects fall back to. |
 | Host | A machine that runs sessions: the user's own machine in the desktop form, the server in the server form. Only the daemon's own machine exists today; every project and session still carries a `host_id`. |
-| Client | A window or browser tab the user operates the daemon through: the desktop application's window, or a browser on any machine that can reach the daemon. Any number of them may be connected at once — the desktop window and a browser tab on a laptop, say — and the daemon does not tell them apart: every client is the same user, sees the same consoles, projects and sessions, and may do everything. |
+| Client | A window or browser tab the user operates the daemon through: the desktop application's window, the application on another machine reaching the daemon through its SSH tunnel, or a browser reaching it at a loopback address (on the daemon's machine, or on another one through an SSH port forward). Any number of them may be connected at once — the desktop window and a browser tab on a laptop, say — and the daemon does not tell them apart: every client is the same user, sees the same consoles, projects and sessions, and may do everything. |
 | Project | A directory on some host, associated with a console. |
 | Session | An agent CLI process running in a console or project directory, created by the user or a coordinator session. |
 | Console session | The agent process running in the console's working directory, given the orchestration tools. |
@@ -80,10 +85,10 @@ with no status and no automatic reporting.
 
 ```
    The desktop form                            The server form
-┌──── Desktop application (Tauri) ────┐   ┌──── Browser on another machine ──┐
+┌──── Desktop application (Tauri) ────┐   ┌──── Browser or app elsewhere ────┐
 │ menu tree · terminal · report panel │   │ the same UI, for the same user   │
 └──────────────────┬──────────────────┘   └────────────────┬─────────────────┘
-          on the same machine                       over the network
+          on the same machine                   over SSH, to loopback
                    └───────────────┬───────────────────────┘
                                    │ WebSocket
                         ┌──────────▼──────────┐
@@ -120,10 +125,10 @@ apps have their own UI.
 secure context**: the Notifications API, which the raised hand's notification goes through, and the async Clipboard
 API. A page over plain `http` is a secure context only at a loopback address (`localhost`, `127.0.0.1`); at any other
 address it is not, so a browser reaching a server over bare `http` never tells anyone that an agent is waiting — and
-the whole point of the orchestration is that an agent raises its hand and a person answers. The UI also opens `wss:`
-only from an `https:` page, and an `https:` page may not open `ws:` at all. In the server form, then, TLS is a
-requirement of the browser before it is anything else, and the UI has to be served from the same `https` origin as the
-daemon's WebSocket endpoints.
+the whole point of the orchestration is that an agent raises its hand and a person answers. This is one more reason the
+daemon stays on loopback: through an SSH port forward the browser opens `http://localhost:<port>`, a secure context with
+no TLS, and the UI is to be served from that same origin as the daemon's WebSocket endpoints (the daemon does not serve
+it yet).
 
 ## Why the daemon is split out
 
@@ -195,22 +200,28 @@ terminal. These choices are not visible from any one module:
 - **A holder's crash is the limit of crash survival**: its programs end with it, through its own crash table and the
   terminals closing.
 
-**Constraint: the UI and the daemon interact only over the network protocol (`apps/daemon/PROTOCOL.md`) — no Tauri
-IPC, no shared state.** Hooks and the MCP server of a session point at the daemon on the host the session runs on. The
-server form is what makes this a hard constraint rather than a tidy one: a browser on another machine has nothing but
-the network. What any client of that protocol must implement — framing, replies and broadcasts, absent and null fields,
-the key, and the protocol generation the daemon's first frame states — is PROTOCOL.md's "What every client implements".
+**Constraint: the UI and the daemon interact only over the network protocol (`apps/daemon/PROTOCOL.md`) — no Tauri IPC,
+no shared state.** Hooks and the MCP server of a session point at the daemon on the host the session runs on. The server
+form is what makes this a hard constraint rather than a tidy one: a client on another machine has nothing but the
+protocol, carried through SSH. What any client of that protocol must implement — framing, replies and broadcasts, absent
+and null fields, the key, and the protocol generation the daemon's first frame states — is PROTOCOL.md's "What every
+client implements".
 
-**Constraint: in the server form, access has to be a credential, not reachability.** Today it is reachability: the
-daemon trusts whatever connects and is safe only because it binds to loopback — the access guard (`access.rs`) keeps a
-web page on another site out, and does nothing more. That holds in the desktop form, where whoever can connect already
-has the machine. In the server form anyone who can reach the port can start agents and type into their terminals, or
-open a shell terminal and run any command, as the server's own user, so the daemon as it stands must not be exposed
-beyond loopback. What the form needs is authentication on every route, the UI and the WebSocket upgrades included; a
-credential per device, so that a device the owner loses or retires can be revoked without re-issuing the rest; and
-TLS, for the browser's own reasons above.
-None of it exists. A credential identifies a device of the owner's, never a person: the daemon stays one user's, and
-every client is that user.
+**Constraint: access from another machine goes through SSH.** Anyone who reaches the daemon can start agents and type
+into their terminals, or open a shell terminal and run any command, as the daemon's own user. It therefore binds to
+loopback only, in both forms, and the access guard (`access.rs`) with the per-launch key keeps out web pages on other
+sites and pages served from `localhost`. Another machine reaches it only through SSH — the owner's port forward for a
+browser, the application's own tunnel for the application — so SSH does the authentication and encryption, and the
+daemon gains no external surface, TLS or device credential of its own. A device is let in by its SSH key and revoked by
+removing that key (a connection already open lasts until it drops); such a key identifies a device of the owner's, never
+a person: the daemon stays one user's, and every client is that user. What the daemon must still provide is a way for
+its owner, logged in as its user, to obtain its address and key, including for a daemon a service manager runs; that
+does not exist yet.
+
+**Known gap: other users of the same machine share its loopback.** The key is what keeps their processes out, so it must
+reach only the daemon's own Unix user. Today keys the daemon accepts are carried in the command lines of a session's
+agent CLI (its hook and MCP configuration) and of the `octoboardd` helpers it runs, which other users of the machine can
+list, so a server shared with other users is not yet protected from them.
 
 **Known boundary: several users on one daemon are outside this design**, and authentication per person would be the
 smallest part of it: every session runs as the daemon's own Unix user, with that user's agent logins, quotas and SSH
@@ -494,8 +505,8 @@ Each has an established solution unless noted; any outstanding manual verificati
   tell them apart, so holding a confirmation up in front of a logout is the unavoidable price of asking before the
   Dock's Quit.
 - **WebView differences.** Tauri uses the system WebView (WKWebView on macOS, WebView2 on Windows). There is no Linux shell to pick one:
-  Linux is the server form, reached from whichever browser the user has, which the UI treats as a plain browser like
-  any other.
+  Linux is the server form, reached from the desktop application or from whichever browser the user has, which the UI
+  treats as a plain browser like any other.
 - **Windows refuses to replace or delete a file another process holds open.** Unless the holder opened it with
   delete sharing, a rename over it or a removal fails with a sharing violation, where Unix would unlink the name and let
   the holder keep its file. A dying process can hold its files a moment after it is reported gone, so cleanup that runs

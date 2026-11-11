@@ -71,9 +71,10 @@ Status: not implemented. The privacy page identifies remote host support as runn
 computer, says it is planned and unavailable, and excludes it from the policy's scope.
 
 Remote host support runs in one direction only: the daemon the user is talking to reaching a second machine to run
-sessions there. The server form runs the other way — one daemon, on a server, with the user's browser on another machine
-— and is not what this section or the privacy page's remote-host disclosure describe. The homepage's platform
-information describes that planned server (see `docs/product/website.md`, "Platform availability"). The privacy page
-does not. The site's local-data statements describe the machine the daemon runs on, which in the server form is the
-server rather than the machine in front of the user, and a privacy page covering that form has to say that the interface
-then travels over the network between the server and the user's browser. That addition has not been written.
+sessions there. The server form runs the other way — one daemon, on a server, reached over SSH from the user's browser
+or application on another machine — and is not what this section or the privacy page's remote-host disclosure describe.
+The homepage's platform information describes that planned server (see `docs/product/website.md`, "Platform
+availability"). The privacy page does not. The site's local-data statements describe the machine the daemon runs on,
+which in the server form is the server rather than the machine in front of the user, and a privacy page covering that
+form has to say that the interface then travels over the network, inside the user's SSH connection, between the server
+and the user's machine. That addition has not been written.

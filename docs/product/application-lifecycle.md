@@ -6,7 +6,7 @@ that keep them running through a daemon that goes down without stopping (see `do
 background processes the user chose to keep are managed by the user instead (see "Automatic stopping and its
 boundaries" in `docs/product/background-processes.md`). Closing the window quits the application unless the user has
 turned on keeping it running in the background, a setting that is off to begin with (see "Closing the window" below). What the **server form** — the daemon alone, on a
-Linux server without a display, reached by its owner from a browser on another machine — changes is said where it
+Linux server without a display, reached by its owner from another machine over SSH — changes is said where it
 applies, and in "The daemon on its own" below. That form is not built yet, so those passages state what already follows
 from it and what the daemon does today, not a finished behaviour.
 
@@ -122,32 +122,42 @@ consoles and sessions, start agents, type into their terminals, and open a shell
 (see `docs/product/shell-terminals.md`). It is safe there only because the daemon listens on loopback, so whoever can
 reach it already has the machine.
 
-In the server form the same sentence reads **anyone who can reach the port can do everything** — start agents, type into
-terminals and run any command in a shell terminal on the server, as the Unix user the daemon runs as — which is no
-access model for a machine on a network. So the daemon as it is today must not be put beyond loopback, and nothing in it
-lets it be: it binds to loopback and nowhere else, and it refuses any request whose `Host` names it by anything but a
-loopback address. A reverse proxy in front of it does not change that: the daemon also refuses a request whose `Origin`
-— which a browser sends on every WebSocket upgrade — is neither the application's, nor loopback, nor the same as `Host`,
-so a proxy would have to rewrite both headers, and the daemon behind it would be open to whatever the proxy lets through
-with nothing of its own to tell it apart but the key, which is one for every client and changes on every start, while
-the credentials above lie within reach of processes on the server: each launch's key in its agent's and helpers'
-environment and command lines, the secret of each holder's connection in a registry file any process of the same user
-can read, and, where no holder could be set up, the daemon's own key in the command lines and environment of the agents
-and helpers it starts. What the form still lacks is the whole of an access model: a credential that lasts and is kept
-like one, checked on every route, the UI and the WebSocket upgrades included; one credential per device of the
-owner's, so that a lost or retired device can be revoked without re-issuing the rest; and TLS, which a browser needs
-before it will show a notification or touch the clipboard from a page at a network address at all. None of that exists
-yet.
+In the server form the same sentence reads **anyone who reaches the daemon with its key can do everything** — start
+agents, type into terminals and run any command in a shell terminal on the server, as the Unix user the daemon runs
+as. So in both forms the daemon listens on loopback and nowhere else, and nothing in it lets it be put beyond loopback:
+it binds to loopback only, and it refuses any request whose `Host` names it by anything but a loopback address. A
+reverse proxy in front of it does not change that: the daemon also refuses a request whose `Origin` — which a browser
+sends on every WebSocket upgrade — is neither the application's, nor loopback, nor the same as `Host`, so a proxy would
+have to rewrite both headers, and the daemon behind it would be open to whatever the proxy lets through with nothing of
+its own to tell it apart but the key, which is one for every client and changes on every start. As in the desktop form,
+any program running on the server as that user can do everything too, through the keys and the holder secrets above.
+
+**Another machine reaches the daemon through SSH, and only through SSH.** SSH authenticates and encrypts; the daemon
+has no listener beyond loopback, no TLS and no credential of its own for a device. Whoever can log in over SSH as the
+daemon's Unix user can reach it, so that login is the credential: a device of the owner's is let in by its SSH key and
+revoked by removing that key — a connection already open lasts until it drops — and the login is to be kept like a
+password.
+
+- **A browser** reaches the server form's daemon through the owner's own SSH port forward,
+  `ssh -L <port>:127.0.0.1:<port> <server>`, and opens `http://localhost:<port>` (with the daemon's port fixed by
+  `--port`, see "Choosing the port" below). That is a loopback address, which the checks below admit once the page
+  carries the key of the daemon's current launch, and which a browser treats as a secure context, so notifications and
+  the clipboard work through it with no TLS. The daemon does not serve the UI itself yet, and a daemon the example
+  systemd unit runs has no way yet to hand its key to its owner (see "Running as a systemd user service" below).
+- **The macOS and Windows applications** — Status: not implemented. The application will reach a remote daemon, a
+  Linux server's or another of the owner's desktops', through an SSH tunnel it builds itself. Setting a device up is
+  helped by a QR code that carries the remote machine's host, SSH port, user and host key fingerprint, and no secret. A
+  desktop that is to be reached this way needs its SSH server on — Remote Login on macOS, OpenSSH Server on Windows —
+  and the application will guide the owner to turn it on. Today the application only ever runs its own local daemon.
 
 The server form is the same user reaching their own daemon from another machine, not a daemon shared by several people.
-The daemon will not tell clients apart even then: whoever holds a credential is taken for the owner and can do
-everything the owner can, so a credential is to be kept like a password. That is this version's design boundary, not a
-gap left open.
+The daemon does not tell clients apart: whoever reaches it with its key is taken for the owner and can do everything the
+owner can. That is this version's design boundary, not a gap left open.
 
-The one way a browser on another machine reaches today's daemon is a tunnel that ends on the server's loopback — an
-SSH port forward. The page is then at `http://localhost:<port>`, a loopback address, which the checks below admit once
-the page carries the key of the daemon's current launch, and which a browser treats as a secure context, so
-notifications and the clipboard work through it.
+**Other users of the same machine share its loopback, and a shared server is not yet protected from them.** A key is
+what keeps their processes out, but the keys above sit in the command lines of a session's agent and helpers, which
+other Unix users of the machine may be able to list, and use as those helpers can — or, where no holder could be set
+up, as any client can, since it is then the daemon's own key.
 
 **A web page open in a browser cannot, unless it is Octoboard's own.** Every request, on every route and every
 WebSocket upgrade, passes two checks in turn:

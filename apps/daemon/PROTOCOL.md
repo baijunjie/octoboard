@@ -1,9 +1,9 @@
 # octoboardd protocol
 
-The only interface between a client and the daemon — the desktop application today, and in the server form the
-owner's browser on another machine (see "Two deployment forms" in `docs/architecture.md`). There is no Tauri IPC
-channel and no shared state between them (see "Why the daemon is split out" there), so everything the UI can do is in
-here.
+The only interface between a client and the daemon — the desktop application today, and in the server form the owner's
+browser or application on another machine, through SSH (see "Two deployment forms" in `docs/architecture.md`). There is
+no Tauri IPC channel and no shared state between them (see "Why the daemon is split out" there), so everything the UI
+can do is in here.
 
 The daemon binds to `127.0.0.1` on the port it is started with (`--port <port>`, 1–65535), else on an ephemeral port
 the operating system assigns, which is what the application uses, and generates a key for this launch (see "Who may connect"). It
@@ -127,8 +127,7 @@ do the same (see "The heartbeat").
 ### The key
 
 Every request on every route carries the daemon's key as `?key=`, the WebSocket upgrade included (see "Who may
-connect"). Looking ahead, not yet in the protocol: a device credential, when one comes, is to travel the same way, so a
-client implements one path.
+connect").
 
 ### Versions and compatibility
 
@@ -2844,9 +2843,9 @@ the daemon.
 - A project may have any number of terminals. Each is attached to on `GET /ws/term/:session` by its `id`.
 
 A shell terminal runs whatever a client types, as the daemon's own user, one request away for any client. That is no
-new kind of exposure on a daemon that already lets anything local type into an agent's terminal, but it makes the
-server form's want of credentials sharper: it must not be offered beyond loopback before that form has them (see "Why
-the daemon is split out" in `docs/architecture.md`).
+new kind of exposure on a daemon that already lets anything local type into an agent's terminal, and it is one more
+reason the daemon never listens beyond loopback (see "Constraint: access from another machine goes through SSH" in
+`docs/architecture.md`).
 
 ### Browsing a project
 
