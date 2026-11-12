@@ -2461,6 +2461,11 @@ three models are served on every plan, that `low` is accepted by each of them on
 accepted far enough to be refused for credits), that a capped reply still ends with status 0, and that an unstarted
 Codex or Grok Build window reports no reset time were not measured.
 
+With a model it does not know, Claude Code's print mode wrote its failure to standard output, not error output (measured
+on **Claude Code 2.1.322** on 2026-11-12, from the home directory): it exited with status 1, while its error output held
+only warnings, ending in the untrusted-workspace notice about the home directory's `.claude/settings.json`. Where a
+quota refusal goes was not measured.
+
 ## Injecting Octoboard into each agent
 
 How each agent is given Octoboard's status hooks, its MCP server and a role description, with the condition each one

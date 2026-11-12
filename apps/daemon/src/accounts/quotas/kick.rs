@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use anyhow::bail;
 
+use super::diagnostics::{redact, truncate, LINE_LIMIT};
 use crate::adapter::account_cli::{self, NotRun};
 use crate::adapter::provider;
 use crate::processes::subprocess::BoundedFailure;
@@ -46,8 +47,9 @@ pub(crate) fn strings(args: &[&str]) -> Vec<String> {
 }
 
 /// Runs `agent`'s kick, the way [`super::probe::probe`] runs its probe, and waits for it to end.
-/// Blocking. The reply is not read: the request having been served is all a kick is for. Setting
-/// `cancel` stops the CLI and fails the kick, which is how a shutdown reaches one.
+/// Blocking. The reply of a kick that succeeds is not read: the request having been served is all
+/// a kick is for; a failed one is read only for the last lines that say why. Setting `cancel`
+/// stops the CLI and fails the kick, which is how a shutdown reaches one.
 pub(super) fn kick(
     agent: AgentId,
     shell_env: &HashMap<String, String>,
@@ -82,10 +84,26 @@ pub(super) fn kick(
             "{} exited with {}: {}",
             agent.label(),
             output.status,
-            account_cli::last_stderr_line(&output)
+            failure_reason(&output)
         );
     }
     Ok(())
+}
+
+/// What says why a kick failed: the last line on stdout and the last on stderr, whichever were
+/// printed, each redacted and the whole cut as any agent text bound for the log is. Claude Code in
+/// print mode writes its error (a model it does not know) to stdout, while its stderr can end in
+/// unrelated warnings, such as the settings an untrusted directory ignores. Neither line is
+/// dropped, since which one holds the reason is not known for every CLI.
+fn failure_reason(output: &std::process::Output) -> String {
+    let stdout = redact(&account_cli::last_line(&output.stdout));
+    let stderr = redact(&account_cli::last_line(&output.stderr));
+    let reason = match (stdout.is_empty(), stderr.is_empty()) {
+        (false, false) => format!("{stdout} (stderr: {stderr})"),
+        (false, true) => stdout,
+        _ => stderr,
+    };
+    truncate(&reason, LINE_LIMIT)
 }
 
 #[cfg(test)]
@@ -268,6 +286,50 @@ mod tests {
         let env = HashMap::from([("PATH".to_string(), empty.display().to_string())]);
         let err = kick(AgentId::CODEX, &env, None, SHORT, &AtomicBool::new(false)).unwrap_err();
         assert!(err.to_string().contains("was not found"), "{err}");
+    }
+
+    /// A failed kick's error carries the last line of each stream that printed one, redacted and
+    /// cut for the log.
+    #[test]
+    fn a_failed_kick_says_why_from_either_stream() {
+        let dir = ScratchDir::new("quota-kick-reason");
+        let failure = |body: &str| {
+            let env = fake(&dir, AgentId::CLAUDE, body);
+            kick(
+                AgentId::CLAUDE,
+                &env,
+                None,
+                crate::test_support::PATIENCE,
+                &AtomicBool::new(false),
+            )
+            .unwrap_err()
+            .to_string()
+        };
+
+        // A reason on stdout is kept beside a warning that ends stderr, as Claude Code prints them.
+        let err = failure(
+            "echo 'usage limit reached'; echo 'Ignoring settings: not trusted' >&2; exit 1",
+        );
+        assert!(
+            err.ends_with(": usage limit reached (stderr: Ignoring settings: not trusted)"),
+            "{err}"
+        );
+
+        // A secret's name ending stdout does not mask the label of the stderr line.
+        let err = failure("echo 'invalid token'; echo 'warn' >&2; exit 1");
+        assert!(err.ends_with(": invalid token (stderr: warn)"), "{err}");
+
+        let err = failure("echo 'model refused'; exit 1");
+        assert!(err.ends_with(": model refused"), "{err}");
+
+        let err = failure("echo 'not allowed for someone@example.com'; exit 1");
+        assert!(!err.contains("someone@example.com"), "{err}");
+
+        let err = failure("head -c 2000 /dev/zero | tr '\\0' x; exit 1");
+        assert!(
+            err.ends_with(&format!(": {}…", "x".repeat(LINE_LIMIT))),
+            "{err}"
+        );
     }
 
     /// A kick run with the cancel flag already set fails as cancelled, without waiting out its CLI.

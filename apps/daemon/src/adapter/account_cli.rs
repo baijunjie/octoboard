@@ -261,8 +261,12 @@ pub(crate) fn query(
 
 /// The last line of what a query printed on stderr, trimmed; empty when it printed none.
 pub(crate) fn last_stderr_line(output: &Output) -> String {
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    stderr
+    last_line(&output.stderr)
+}
+
+/// The last line of a stream an agent CLI printed, trimmed; empty when it printed none.
+pub(crate) fn last_line(stream: &[u8]) -> String {
+    String::from_utf8_lossy(stream)
         .trim()
         .lines()
         .next_back()
