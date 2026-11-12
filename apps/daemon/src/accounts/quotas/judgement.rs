@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 
+use super::probe::WEEK_MINUTES;
 use super::{Entry, Key};
 use crate::protocol::{
     quota_unavailable_code as code, AgentId, Code, QuotaWindow, QuotaWindowKind,
@@ -132,13 +133,14 @@ impl ExpiringWeekly {
     }
 }
 
-/// A weekly window that still has quota and whose reset is still ahead.
-/// Account-wide `Weekly`, or `CreditPeriod` whose `window_minutes` is in
-/// [`ABOUT_A_WEEK`]. A model's own weekly window never counts.
-/// `used_percent` must be finite and below 100. A reset that is missing or
-/// not strictly after `now` does not rank. Among the windows of one account,
-/// the soonest reset wins, so quota about to reset is spent first, then the
-/// larger remaining (`(100 - used_percent).max(0)`).
+/// A weekly window that still has quota and whose reset is still ahead, or not yet started.
+/// Account-wide `Weekly`, or `CreditPeriod` whose `window_minutes` is in [`ABOUT_A_WEEK`]. A
+/// model's own weekly window never counts. `used_percent` must be finite and below 100. A window
+/// with no reset has not started, so its whole length is still ahead: it ranks as resetting one
+/// window length (a week when not given) from `now`, behind a running window of the same length. A
+/// reset not strictly after `now` does not rank. Among the windows of one account, the soonest
+/// reset wins, so quota about to reset is spent first, then the larger remaining (`(100 -
+/// used_percent).max(0)`).
 fn expiring_weekly(windows: &[QuotaWindow], now: i64) -> Option<ExpiringWeekly> {
     let mut best: Option<ExpiringWeekly> = None;
     for window in windows {
@@ -152,9 +154,9 @@ fn expiring_weekly(windows: &[QuotaWindow], now: i64) -> Option<ExpiringWeekly> 
         if !weekly || !window.used_percent.is_finite() || window.used_percent >= 100.0 {
             continue;
         }
-        let Some(resets_at) = window.resets_at else {
-            continue;
-        };
+        let resets_at = window.resets_at.unwrap_or_else(|| {
+            now + i64::from(window.window_minutes.unwrap_or(WEEK_MINUTES)) * 60_000
+        });
         if resets_at <= now {
             continue;
         }
@@ -208,7 +210,7 @@ impl AccountSignal {
 const SESSION_WINDOW_TOLERANCE_MS: i64 = 5 * 60 * 60 * 1000;
 
 /// When the session window of `windows` that is running resets: one with quota left and a reset
-/// still ahead. The agents report a reset only once the window has started, so a window with
+/// still ahead. A reading holds a reset only once the window has started, so a window with
 /// none has not. With several, the soonest reset.
 fn running_session_reset(windows: &[QuotaWindow], now: i64) -> Option<i64> {
     windows

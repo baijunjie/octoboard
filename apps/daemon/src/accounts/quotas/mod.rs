@@ -31,18 +31,18 @@
 //! ordinary interval brings it back.
 //!
 //! A window that has reset only begins counting at the account's next request, and until then the
-//! agent reports it with no reset time. While the user's setting asks for it, a successful reading
-//! that shows such a window is followed by a kick (`kick.rs`): one minimal request on the account,
-//! and then a reading of it again. The kick and that reading run in the background, detached from
-//! the refresh that found the window, so the other accounts' readings are not held up behind a
-//! model round trip. A window is kicked once per episode, which ends only when a reading shows it
-//! with a reset time again, so a window that a kick does not start (a credit pool with no period,
-//! say) is not kicked over and over, and neither is one whose kick failed. A model's own weekly
-//! window is never kicked: the request goes to one cheap model and cannot start another's. A kick
-//! holds the account's claim and a slot like a reading does. A reading a session asked for over
-//! MCP ([`refresh_on_demand`]) is the exception: it starts no kick itself, and marks an account
-//! whose reading calls for one due instead, so that the poller's next tick reads it again and
-//! kicks it, as it would have after any other reading.
+//! reading holds it with no reset time (Codex's placeholder reset is read as none). While the
+//! user's setting asks for it, a successful reading that shows such a window is followed by a kick
+//! (`kick.rs`): one minimal request on the account, and then a reading of it again. The kick and
+//! that reading run in the background, detached from the refresh that found the window, so the
+//! other accounts' readings are not held up behind a model round trip. A window is kicked once per
+//! episode, which ends only when a reading shows it with a reset time again, so a window that a
+//! kick does not start (a credit pool with no period, say) is not kicked over and over, and neither
+//! is one whose kick failed. A model's own weekly window is never kicked: the request goes to one
+//! cheap model and cannot start another's. A kick holds the account's claim and a slot like a
+//! reading does. A reading a session asked for over MCP ([`refresh_on_demand`]) is the exception:
+//! it starts no kick itself, and marks an account whose reading calls for one due instead, so that
+//! the poller's next tick reads it again and kicks it, as it would have after any other reading.
 //!
 //! A reading of a provider that has them also carries the account's rate limit reset credits. Using
 //! one (`reset_credit.rs`, `use_credit.rs`) is only ever the user's own request

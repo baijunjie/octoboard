@@ -46,11 +46,32 @@ describe("preferExpiringWeekly", () => {
     ["a window that is used up", windowOf({ used_percent: 100 })],
     ["a window whose reset is not still ahead", windowOf({ resets_at: NOW })],
     ["a window whose reset is in the past", windowOf({ resets_at: NOW - 1 })],
-    ["a window with no reset", windowOf({ resets_at: null })],
+    ["a used-up window with no reset", windowOf({ used_percent: 100, resets_at: null })],
+    ["a model-specific weekly window with no reset", windowOf({ kind: "weekly_model", label: "Fable", resets_at: null })],
     ["a window whose used percent is not a number", windowOf({ used_percent: Number.NaN })],
   ] as const)("ignores %s", (_, window) => {
     expect(preferExpiringWeekly(entries([reading("w", [window])]), NOW)).toBeUndefined();
     expect(expiringWeekly(reading("w", [window]), NOW)).toBeUndefined();
+  });
+
+  it("ranks a weekly window with no reset as resetting a whole window from now, a week when its length is not given", () => {
+    const unstarted = (patch: Partial<QuotaWindow>) => reading("w", [windowOf({ used_percent: 0, resets_at: null, ...patch })]);
+    expect(expiringWeekly(unstarted({}), NOW)).toEqual({ resetsAt: NOW + 7 * DAY, remaining: 100 });
+    expect(expiringWeekly(unstarted({ window_minutes: null }), NOW)).toEqual({ resetsAt: NOW + 7 * DAY, remaining: 100 });
+    expect(expiringWeekly(unstarted({ kind: "credit_period", window_minutes: 6 * 24 * 60 }), NOW)).toEqual({ resetsAt: NOW + 6 * DAY, remaining: 100 });
+    expect(preferExpiringWeekly(entries([unstarted({})]), NOW)?.account).toBe("w");
+  });
+
+  it("ranks an account with a running weekly window ahead of one whose weekly window has not started", () => {
+    const unstarted = reading("w", [windowOf({ used_percent: 0, resets_at: null })]);
+    const running = reading("soon", [windowOf({ used_percent: 50, resets_at: NOW + 6 * DAY })]);
+    expect(preferExpiringWeekly(entries([unstarted, running]), NOW)?.account).toBe("soon");
+    expect(preferExpiringWeekly(entries([running, unstarted]), NOW)?.account).toBe("soon");
+    // Within one account the running window is the one it ranks by.
+    expect(expiringWeekly(reading("w", [
+      windowOf({ used_percent: 0, resets_at: null }),
+      windowOf({ used_percent: 50, resets_at: NOW + DAY }),
+    ]), NOW)).toEqual({ resetsAt: NOW + DAY, remaining: 50 });
   });
 
   it("ranks a credit period of 6 to 8 days and ignores one a minute outside that", () => {

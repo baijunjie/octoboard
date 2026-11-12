@@ -324,7 +324,11 @@ fn a_used_up_non_finite_or_passed_weekly_window_does_not_rank() {
         window(QuotaWindowKind::Weekly, f64::NEG_INFINITY, Some(NOW + 1)),
         window(QuotaWindowKind::Weekly, 10.0, Some(NOW)),
         window(QuotaWindowKind::Weekly, 10.0, Some(NOW - 1)),
-        window(QuotaWindowKind::Weekly, 10.0, None),
+        // Used up, with no reset to wait for: not started, but there is nothing left to spend.
+        window(QuotaWindowKind::Weekly, 100.0, None),
+        window(QuotaWindowKind::Weekly, f64::NAN, None),
+        // A model's own weekly window never ranks, started or not.
+        window(QuotaWindowKind::WeeklyModel, 10.0, None),
     ];
     for window in ignored {
         assert!(expiring_weekly(&[window], NOW).is_none());
@@ -334,7 +338,6 @@ fn a_used_up_non_finite_or_passed_weekly_window_does_not_rank() {
             window(QuotaWindowKind::Weekly, 100.0, Some(NOW + 1)),
             window(QuotaWindowKind::Weekly, f64::NAN, Some(NOW + 1)),
             window(QuotaWindowKind::Weekly, 10.0, Some(NOW)),
-            window(QuotaWindowKind::Weekly, 10.0, None),
             window(QuotaWindowKind::Weekly, 25.0, Some(NOW + 20)),
         ],
         NOW,
@@ -346,6 +349,65 @@ fn a_used_up_non_finite_or_passed_weekly_window_does_not_rank() {
             remaining: 75.0
         })
     );
+}
+
+/// A weekly window with quota left and no reset time has not started, so its whole length is
+/// still ahead: it ranks as resetting one window length from now, behind a running window of the same length.
+#[test]
+fn an_unstarted_weekly_window_ranks_a_whole_window_from_now() {
+    let week_ms = i64::from(WEEK_MINUTES) * 60_000;
+    let unstarted = expiring_weekly(&[window(QuotaWindowKind::Weekly, 0.0, None)], NOW);
+    assert_eq!(
+        unstarted,
+        Some(ExpiringWeekly {
+            resets_at: NOW + week_ms,
+            remaining: 100.0
+        })
+    );
+    // The window's own length decides when it is given.
+    let six_days = 6 * 24 * 60;
+    assert_eq!(
+        expiring_weekly(&[credit(six_days, 0.0, None)], NOW),
+        Some(ExpiringWeekly {
+            resets_at: NOW + i64::from(six_days) * 60_000,
+            remaining: 100.0
+        })
+    );
+    // Within an account, a running weekly window comes before an unstarted one.
+    let running = ExpiringWeekly {
+        resets_at: NOW + 24 * HOUR,
+        remaining: 50.0,
+    };
+    assert_eq!(
+        expiring_weekly(
+            &[
+                window(QuotaWindowKind::Weekly, 0.0, None),
+                window(QuotaWindowKind::Weekly, 50.0, Some(NOW + 24 * HOUR)),
+            ],
+            NOW
+        ),
+        Some(running)
+    );
+}
+
+/// An account whose weekly window has not started is still a candidate, but one with a running
+/// weekly window is chosen ahead of it, in either order.
+#[test]
+fn an_account_with_a_running_weekly_window_is_chosen_ahead_of_one_whose_weekly_window_has_not_started(
+) {
+    let running = AccountSignal::of(
+        &[window(
+            QuotaWindowKind::Weekly,
+            50.0,
+            Some(NOW + 6 * 24 * HOUR),
+        )],
+        NOW,
+    )
+    .unwrap();
+    let unstarted = AccountSignal::of(&[window(QuotaWindowKind::Weekly, 0.0, None)], NOW).unwrap();
+    assert_eq!(preferred_signal(&[unstarted, running]), Some(1));
+    assert_eq!(preferred_signal(&[running, unstarted]), Some(0));
+    assert_eq!(preferred_signal(&[unstarted]), Some(0));
 }
 
 #[test]

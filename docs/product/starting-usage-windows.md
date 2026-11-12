@@ -7,6 +7,13 @@ automatically** on (see "Start usage windows automatically" below), Octoboard ma
 **kick** — and then reads the account again, so the window starts counting and its countdown shows. A kick uses a little
 of the account's quota. The setting is off by default and applies to every agent alike.
 
+Codex reports such a window differently: nothing used, and a reset one whole window length from the moment it answers.
+So Octoboard reads a Codex window whose length is known as having no reset time when nothing of it is used and its reset
+is within one minute of a whole window length from now, either side. This includes a window a kick started only seconds
+before the reading; a reading more than about a minute after the kick shows its reset time. So for Codex the countdown
+may first show at the next background reading after the kick, up to about 5 minutes later (see "When quotas are read"
+in `docs/product/account-quota-readings.md`), rather than at the reading right after it.
+
 ## Start usage windows automatically
 
 The switch is a row of Settings' Agent accounts section (where it sits is in `docs/product/agent-accounts.md`). A

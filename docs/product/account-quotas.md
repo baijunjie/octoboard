@@ -70,7 +70,8 @@ account details dialog, says whether the account is logged in (see "The accounts
 - when it resets, "resets in <countdown>": days and hours from a day away ("2d 3h"), hours and minutes from an hour
   away ("1h 57m"), minutes below that ("12m"), always rounded up to the next minute. It counts down by itself, moving
   at least every 30 seconds, and reads "resets now" once the reset time has passed and a newer reading has not arrived
-  yet. A window the agent gives no reset time for has no countdown;
+  yet. A window the agent gives no reset time for has no countdown, and neither has a Codex window read as not yet
+  started (see "Starting a usage window that has not begun counting" in `docs/product/starting-usage-windows.md`);
 - a bar of what remains, full when nothing is used. The bar has one colour per agent: an orange for Claude Code, a
   blue for Codex, and the text colour for Grok Build, each set off against the bar's track in both light and dark
   appearance. In the rail's panel, in Settings' accounts table and in the menu bar icon's quota submenus a used-up

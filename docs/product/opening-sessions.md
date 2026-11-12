@@ -442,8 +442,9 @@ The dialog and the daemon rank the same way:
   window, a model-specific weekly window, and a monthly credit pool are not that window. How much of the five-hour
   window remains is not a key, but whether it is running and when it resets decides between accounts tied on the
   weekly reset, as below.
-- The share used must be a finite number below 100, and the reset must be strictly in the future. A reset that has
-  passed or is missing does not rank.
+- The share used must be a finite number below 100. A reset that has passed (one at or before now) does not rank. A
+  window with no reset time has not started counting, so its whole quota is still ahead: it ranks as if it reset one
+  whole window length from now (a week when its length is not given), and the rules below apply to that time.
 - On one account, the soonest such reset wins, then the larger remainder.
 - Across accounts, the soonest weekly reset wins, so quota about to reset is spent first, with one exception: weekly
   resets less than **5 hours** (one five-hour window) after the soonest one count as the same deadline, and among those

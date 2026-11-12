@@ -2788,6 +2788,7 @@ describe("the fixture daemon's rate limit reset credits", () => {
     expect(reading(daemon)).toMatchObject({ fetched_at: fetched, windows: [{ used_percent: 40 }, { used_percent: 100 }], reset_credits: { available_count: 1, credits: [expect.objectContaining({ id: "b" })] } });
     await rereadDone();
     expect(reading(daemon).windows.map((window) => window.used_percent)).toEqual([0, 0]);
+    expect(reading(daemon).windows.map((window) => window.resets_at)).toEqual([null, null]);
     expect(reading(daemon).fetched_at).toBeGreaterThan(fetched);
     await daemon.request({ type: "use_reset_credit", agent: "codex", account: "personal" });
     expect(reading(daemon).reset_credits).toBeUndefined();
@@ -2847,6 +2848,7 @@ describe("the fixture daemon's rate limit reset credits", () => {
     expect(reading(later).windows[1]!.used_percent).toBe(100);
     await vi.advanceTimersByTimeAsync(LATER_MS - RESET_CREDIT_REREAD_MS);
     expect(reading(later).windows[1]!.used_percent).toBe(0);
+    expect(reading(later).windows[1]!.resets_at).toBeNull();
     const never = createFixtureDaemon({ ...withCredits(credits), resetCreditReading: "never" });
     await never.request({ type: "use_reset_credit", agent: "codex", account: "personal" });
     await rereadDone();

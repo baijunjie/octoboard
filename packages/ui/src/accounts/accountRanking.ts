@@ -12,15 +12,23 @@ function isWeeklyQuota(window: QuotaWindow): boolean {
 /** The weekly window an account is ranked by: when it resets and how much of it is left. */
 type WeeklySignal = { resetsAt: number; remaining: number };
 
-/** The weekly window of `quota` that resets soonest and still has quota left. Of several, the soonest
- * reset wins, then the larger remainder. Nothing rankable returns undefined. */
+/** How long a week is, for a weekly window that does not give its own length. */
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** The weekly window of `quota` that resets soonest and still has quota left. A window with no reset has not
+ * started, so its whole length is still ahead: it ranks as resetting one window length (a week when not given)
+ * from `now`. Of several, the soonest reset wins, then the larger remainder. Nothing rankable returns undefined. */
 export function expiringWeekly(quota: AccountQuota | undefined, now: number): WeeklySignal | undefined {
   if (!quota) return undefined;
   let best: WeeklySignal | undefined;
   for (const window of quota.windows) {
     if (!isWeeklyQuota(window) || !Number.isFinite(window.used_percent) || window.used_percent >= 100) continue;
-    if (typeof window.resets_at !== "number" || !(window.resets_at > now)) continue;
-    const candidate = { resetsAt: window.resets_at, remaining: Math.max(0, 100 - window.used_percent) };
+    const resetsAt =
+      typeof window.resets_at === "number"
+        ? window.resets_at
+        : now + (window.window_minutes != null ? window.window_minutes * 60_000 : WEEK_MS);
+    if (!(resetsAt > now)) continue;
+    const candidate = { resetsAt, remaining: Math.max(0, 100 - window.used_percent) };
     if (!best || candidate.resetsAt < best.resetsAt || (candidate.resetsAt === best.resetsAt && candidate.remaining > best.remaining)) {
       best = candidate;
     }
@@ -35,7 +43,7 @@ export function expiringWeekly(quota: AccountQuota | undefined, now: number): We
 const SESSION_WINDOW_TOLERANCE_MS = 5 * 60 * 60 * 1000;
 
 /** When the session window of `quota` that is running resets: one with quota left and a reset still ahead.
- * The agents report a reset only once the window has started, so a window with none has not. Of several,
+ * A reading holds a reset only once the window has started, so a window with none has not. Of several,
  * the soonest. */
 function runningSessionReset(quota: AccountQuota | undefined, now: number): number | undefined {
   let soonest: number | undefined;

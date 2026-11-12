@@ -12,6 +12,7 @@ use crate::accounts::quotas::probe::{
 };
 use crate::agents::json_rpc;
 use crate::protocol::{AgentId, QuotaWindow, QuotaWindowKind, ResetCredit, ResetCredits};
+use crate::time::now_millis;
 
 pub(super) struct CodexQuota;
 
@@ -162,6 +163,15 @@ pub(crate) fn read_codex(
     reply: &Value,
     account_reply: Option<&Value>,
 ) -> Result<Reading, ReplyProblem> {
+    read_codex_at(reply, account_reply, now_millis())
+}
+
+/// [`read_codex`] judged at `now`, in milliseconds since the epoch.
+fn read_codex_at(
+    reply: &Value,
+    account_reply: Option<&Value>,
+    now: i64,
+) -> Result<Reading, ReplyProblem> {
     if is_codex_auth_refusal(reply) {
         return Err(refusal_problem(
             codex_signed_out(account_reply),
@@ -191,14 +201,17 @@ pub(crate) fn read_codex(
                 None if position == 0 => QuotaWindowKind::Session,
                 None => QuotaWindowKind::Weekly,
             };
+            let used_percent = window.get("usedPercent").and_then(Value::as_f64)?;
+            let resets_at = window
+                .get("resetsAt")
+                .and_then(Value::as_i64)
+                .map(|seconds| seconds.saturating_mul(1000))
+                .filter(|&at| !is_unstarted(used_percent, at, minutes, now));
             Some(QuotaWindow {
                 kind,
                 label: None,
-                used_percent: window.get("usedPercent").and_then(Value::as_f64)?,
-                resets_at: window
-                    .get("resetsAt")
-                    .and_then(Value::as_i64)
-                    .map(|seconds| seconds.saturating_mul(1000)),
+                used_percent,
+                resets_at,
                 window_minutes: minutes,
             })
         })
@@ -208,6 +221,26 @@ pub(crate) fn read_codex(
         .pointer("/result/rateLimitResetCredits")
         .and_then(codex_reset_credits);
     Ok(reading)
+}
+
+/// How far either side of a whole window from now a reset time may fall and still be read as
+/// Codex's placeholder for a window that has not started: short of it by the time between Codex
+/// answering and the reading being judged, and either way by skew between its clock and this
+/// machine's.
+const UNSTARTED_SLACK_MS: i64 = 60_000;
+
+/// Whether a window Codex reports as reset at `resets_at` (milliseconds) has not begun counting.
+/// Codex gives such a window no empty reset time: it reports nothing used and a reset one whole
+/// window from the moment it answers, moving with each reading, so a window that ends a full length
+/// from now (within the slack either way) with nothing used is one no request has started yet.
+fn is_unstarted(used_percent: f64, resets_at: i64, minutes: Option<u32>, now: i64) -> bool {
+    let Some(minutes) = minutes else {
+        return false;
+    };
+    let length = i64::from(minutes) * 60_000;
+    let ahead = resets_at.saturating_sub(now);
+    used_percent == 0.0
+        && (length - UNSTARTED_SLACK_MS..=length + UNSTARTED_SLACK_MS).contains(&ahead)
 }
 
 /// The usable credits in Codex's `rateLimitResetCredits` (`availableCount` and `credits`, which
@@ -267,4 +300,127 @@ fn codex_reset_credit(credit: &Value) -> Option<ResetCredit> {
 /// expiry last.
 fn reset_credit_order(credit: &ResetCredit) -> (bool, i64) {
     (credit.expires_at.is_none(), credit.expires_at.unwrap_or(0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SESSION_MINUTES: u32 = 300;
+    const SESSION_MS: i64 = SESSION_MINUTES as i64 * 60_000;
+    const WEEK_MS: i64 = WEEK_MINUTES as i64 * 60_000;
+    const NOW: i64 = 1_800_000_000_000;
+
+    /// A window that ends `ahead_ms` after `NOW` is unstarted only when nothing is used, its length
+    /// is known, and `ahead_ms` is within the slack of that length either way.
+    #[test]
+    fn a_window_is_unstarted_only_with_nothing_used_and_a_reset_a_whole_window_away() {
+        let session = Some(SESSION_MINUTES);
+        let week = Some(WEEK_MINUTES);
+        let cases = [
+            ("the whole window", 0.0, SESSION_MS, session, true),
+            (
+                "the lower boundary, inclusive",
+                0.0,
+                SESSION_MS - UNSTARTED_SLACK_MS,
+                session,
+                true,
+            ),
+            (
+                "1 ms under the lower boundary",
+                0.0,
+                SESSION_MS - UNSTARTED_SLACK_MS - 1,
+                session,
+                false,
+            ),
+            (
+                "the upper boundary, inclusive",
+                0.0,
+                SESSION_MS + UNSTARTED_SLACK_MS,
+                session,
+                true,
+            ),
+            (
+                "1 ms over the upper boundary",
+                0.0,
+                SESSION_MS + UNSTARTED_SLACK_MS + 1,
+                session,
+                false,
+            ),
+            (
+                "a 5-hour window resetting in a week",
+                0.0,
+                WEEK_MS,
+                session,
+                false,
+            ),
+            ("some use", 17.0, SESSION_MS, session, false),
+            (
+                "the least use",
+                f64::MIN_POSITIVE,
+                SESSION_MS,
+                session,
+                false,
+            ),
+            (
+                "no length, a session's worth ahead",
+                0.0,
+                SESSION_MS,
+                None,
+                false,
+            ),
+            ("no length, a week ahead", 0.0, WEEK_MS, None, false),
+            ("a week window, a whole week", 0.0, WEEK_MS, week, true),
+            (
+                "a week window, a session's worth",
+                0.0,
+                SESSION_MS,
+                week,
+                false,
+            ),
+        ];
+        for (name, used_percent, ahead_ms, minutes, expected) in cases {
+            assert_eq!(
+                is_unstarted(used_percent, NOW + ahead_ms, minutes, NOW),
+                expected,
+                "{name}"
+            );
+        }
+    }
+
+    /// A reply whose `primary` (5 hours) and `secondary` (a week) reset `primary_in_ms` and
+    /// `secondary_in_ms` after `NOW`, as Codex words them (seconds since the epoch).
+    fn reply(
+        primary_used: f64,
+        primary_in_ms: i64,
+        secondary_used: f64,
+        secondary_in_ms: i64,
+    ) -> Value {
+        let at = |in_ms: i64| (NOW + in_ms) / 1000;
+        json!({"id": 2, "result": {"rateLimits": {
+            "primary": {"usedPercent": primary_used, "windowDurationMins": SESSION_MINUTES,
+                "resetsAt": at(primary_in_ms)},
+            "secondary": {"usedPercent": secondary_used, "windowDurationMins": WEEK_MINUTES,
+                "resetsAt": at(secondary_in_ms)},
+            "planType": "plus"}}})
+    }
+
+    #[test]
+    fn a_reading_gives_an_unstarted_window_no_reset_time_and_keeps_the_rest() {
+        let reading = read_codex_at(&reply(0.0, SESSION_MS, 46.0, WEEK_MS / 2), None, NOW).unwrap();
+        assert_eq!(reading.windows[0].used_percent, 0.0);
+        assert_eq!(reading.windows[0].window_minutes, Some(SESSION_MINUTES));
+        assert_eq!(reading.windows[0].resets_at, None);
+        assert_eq!(reading.windows[1].kind, QuotaWindowKind::Weekly);
+        assert_eq!(reading.windows[1].resets_at, Some(NOW + WEEK_MS / 2));
+    }
+
+    #[test]
+    fn a_reading_judges_each_window_against_its_own_length() {
+        // Both reset a session's length from now with nothing used: a whole window for the
+        // 5-hour one, five hours into a week for the other.
+        let reading = read_codex_at(&reply(0.0, SESSION_MS, 0.0, SESSION_MS), None, NOW).unwrap();
+        assert_eq!(reading.windows[0].resets_at, None);
+        assert_eq!(reading.windows[1].resets_at, Some(NOW + SESSION_MS));
+    }
 }

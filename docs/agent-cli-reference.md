@@ -2353,13 +2353,13 @@ signed-in account of each (Claude Code 2.1.312, Codex 0.163.0, Grok Build 1.0.70
 ## Starting a quota window
 
 A window only starts counting at the account's first request after it resets; until then the CLI reports it with no
-reset time. A **kick** is one one-word request on that account that starts it. How Octoboard runs one (the environment,
-the time and output limits, what counts as success) is under "How a kick runs" in
-`docs/product/starting-usage-windows.md`. Each agent is run with stdin closed and its reply not read. Each takes the
-cheapest model its catalogue offers and its lowest reasoning effort, and is made as small as the CLI allows: a one-line
-system prompt in place of its own, no tools, one turn, a capped reply, and as little of the user's setup as can be left
-out without changing which sign-in is used. No agent is run with an option that changes the credentials it reads (Claude
-Code's `--bare` skips the Keychain).
+reset time, except Codex, which reports a placeholder reset (see the Codex measurement at the end of this section). A
+**kick** is one one-word request on that account that starts it. How Octoboard runs one (the environment, the time and
+output limits, what counts as success) is under "How a kick runs" in `docs/product/starting-usage-windows.md`. Each
+agent is run with stdin closed and its reply not read. Each takes the cheapest model its catalogue offers and its lowest
+reasoning effort, and is made as small as the CLI allows: a one-line system prompt in place of its own, no tools, one
+turn, a capped reply, and as little of the user's setup as can be left out without changing which sign-in is used. No
+agent is run with an option that changes the credentials it reads (Claude Code's `--bare` skips the Keychain).
 
 ```
 claude -p hi --model haiku --effort low --no-session-persistence --system-prompt "Reply with one word." --tools "" \
@@ -2459,12 +2459,19 @@ still without a reset time afterwards), Codex's only window (a weekly one) was u
 credits`, exit status 1, no 5-hour window listed, its reset time set) and Grok Build's sign-in had expired. So that the
 three models are served on every plan, that `low` is accepted by each of them on the server's side (Codex's request was
 accepted far enough to be refused for credits), that a capped reply still ends with status 0, and that an unstarted
-Codex or Grok Build window reports no reset time were not measured.
+Grok Build window reports no reset time were not measured then (Codex was measured later, below).
 
 With a model it does not know, Claude Code's print mode wrote its failure to standard output, not error output (measured
 on **Claude Code 2.1.322** on 2026-11-12, from the home directory): it exited with status 1, while its error output held
 only warnings, ending in the untrusted-workspace notice about the home directory's `.claude/settings.json`. Where a
 quota refusal goes was not measured.
+
+An unstarted Codex window does not report an empty reset time (measured on **Codex 0.167.1** on 2026-11-12, reading
+`account/rateLimits/read` every 20 seconds for 15 minutes after the 5-hour window reset, with no request made on the
+account): the window was listed with `usedPercent` 0 and a `resetsAt` exactly `windowDurationMins` after the moment of
+each answer, so it moved forward with every reading. Octoboard reads a Codex window with nothing used and a reset a
+whole window away (within a minute) as not started. Whether an unstarted Grok Build window reports a reset time is still
+not measured.
 
 ## Injecting Octoboard into each agent
 
